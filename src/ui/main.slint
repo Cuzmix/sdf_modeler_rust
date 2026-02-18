@@ -1,0 +1,92 @@
+export component MainWindow inherits Window {
+    title: "SDF Modeler";
+    preferred-width: 1280px;
+    preferred-height: 720px;
+    background: #1a1a2e;
+
+    // Viewport texture rendered by wgpu
+    in-out property <image> viewport-texture;
+
+    // Viewport size for resize handling
+    out property <float> viewport-width: viewport-area.width / 1px;
+    out property <float> viewport-height: viewport-area.height / 1px;
+
+    // Pointer interaction callbacks
+    callback on-pointer-down(float, float, int);
+    callback on-pointer-move(float, float);
+    callback on-pointer-up();
+    callback on-scroll(float);
+
+    VerticalLayout {
+        // Toolbar placeholder
+        Rectangle {
+            height: 36px;
+            background: #2d2d2d;
+            HorizontalLayout {
+                padding-left: 12px;
+                alignment: start;
+                Text {
+                    text: "SDF Modeler";
+                    color: #ccc;
+                    font-size: 14px;
+                    vertical-alignment: center;
+                }
+            }
+        }
+
+        // Main viewport area
+        viewport-area := Rectangle {
+            background: #111;
+
+            Image {
+                source: root.viewport-texture;
+                width: parent.width;
+                height: parent.height;
+                image-fit: fill;
+            }
+
+            TouchArea {
+                mouse-cursor: crosshair;
+
+                pointer-event(e) => {
+                    if (e.kind == PointerEventKind.down) {
+                        // button: left=0, right=1, middle=2
+                        root.on-pointer-down(
+                            self.mouse-x / 1px,
+                            self.mouse-y / 1px,
+                            e.button == PointerEventButton.left ? 0 :
+                            e.button == PointerEventButton.right ? 1 : 2
+                        );
+                    }
+                    if (e.kind == PointerEventKind.up) {
+                        root.on-pointer-up();
+                    }
+                }
+
+                moved => {
+                    root.on-pointer-move(self.mouse-x / 1px, self.mouse-y / 1px);
+                }
+
+                scroll-event(e) => {
+                    root.on-scroll(e.delta-y / 1px);
+                    return accept;
+                }
+            }
+        }
+
+        // Status bar placeholder
+        Rectangle {
+            height: 24px;
+            background: #2d2d2d;
+            HorizontalLayout {
+                padding-left: 12px;
+                Text {
+                    text: "Phase 2 — SDF Raymarching";
+                    color: #888;
+                    font-size: 11px;
+                    vertical-alignment: center;
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,14 @@
+[package]
+name = "sdf_modeler"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+slint = { version = "~1.15", features = ["unstable-wgpu-28"] }
+bytemuck = { version = "1", features = ["derive"] }
+glam = { version = "0.29", features = ["bytemuck"] }
+log = "0.4"
+env_logger = "0.11"
+
+[build-dependencies]
+slint-build = "~1.15"
