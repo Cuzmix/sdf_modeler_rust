@@ -109,7 +109,7 @@ impl OrbitCamera {
 
     /// Zoom: adjust distance (multiplicative for smooth feel).
     pub fn zoom(&mut self, delta: f32) {
-        let factor = 1.0 + delta * 0.001;
+        let factor = 1.0 - delta * 0.001;
         self.distance = (self.distance * factor).clamp(0.1, 100.0);
     }
 }
