@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use glam::Vec3;
 
 // ── Primitive and Operation types ───────────────────────────────
@@ -21,20 +23,19 @@ pub enum SdfOperation {
     Intersect = 3,
 }
 
-// ── Scene Node ──────────────────────────────────────────────────
+// ── Node-based Scene Graph ──────────────────────────────────────
 
-pub struct SdfNode {
-    pub name: String,
+pub type NodeId = u64;
+
+pub struct PrimitiveData {
     pub primitive: SdfPrimitive,
-    pub operation: SdfOperation,
     pub position: Vec3,
     pub scale: Vec3,
     pub color: Vec3,
-    pub smooth_k: f32,
 }
 
-impl SdfNode {
-    pub fn new(primitive: SdfPrimitive, name: impl Into<String>) -> Self {
+impl PrimitiveData {
+    pub fn new(primitive: SdfPrimitive) -> Self {
         let (default_scale, default_color) = match primitive {
             SdfPrimitive::Sphere => (Vec3::splat(0.5), Vec3::new(0.8, 0.55, 0.4)),
             SdfPrimitive::Box => (Vec3::splat(0.4), Vec3::new(0.4, 0.6, 0.8)),
@@ -44,38 +45,99 @@ impl SdfNode {
         };
 
         Self {
-            name: name.into(),
             primitive,
-            operation: SdfOperation::SmoothUnion,
             position: Vec3::new(0.0, 0.5, 0.0),
             scale: default_scale,
             color: default_color,
-            smooth_k: 0.1,
         }
     }
+}
 
+pub struct OperationData {
+    pub operation: SdfOperation,
+    pub smooth_k: f32,
+    pub left: NodeId,
+    pub right: NodeId,
+}
+
+pub enum NodeData {
+    Primitive(PrimitiveData),
+    Operation(OperationData),
+}
+
+pub struct SceneNode {
+    pub id: NodeId,
+    pub name: String,
+    pub data: NodeData,
 }
 
 // ── Scene ───────────────────────────────────────────────────────
 
 pub struct Scene {
-    pub nodes: Vec<SdfNode>,
-    pub selected: Option<usize>,
-    node_counter: u32, // for auto-naming
+    nodes: HashMap<NodeId, SceneNode>,
+    root: Option<NodeId>,
+    next_id: u64,
+    pub selected: Option<NodeId>,
+    node_counter: u32,
+    gpu_index_to_node_id: Vec<Option<NodeId>>,
 }
 
 impl Scene {
     pub fn default_scene() -> Self {
         let mut scene = Self {
-            nodes: Vec::new(),
+            nodes: HashMap::new(),
+            root: None,
+            next_id: 1,
             selected: None,
             node_counter: 0,
+            gpu_index_to_node_id: Vec::new(),
         };
-        scene.add_node(SdfPrimitive::Sphere);
+        scene.add_primitive(SdfPrimitive::Sphere);
         scene
     }
 
-    pub fn add_node(&mut self, primitive: SdfPrimitive) -> usize {
+    fn alloc_id(&mut self) -> NodeId {
+        let id = self.next_id;
+        self.next_id += 1;
+        id
+    }
+
+    pub fn get_node(&self, id: NodeId) -> Option<&SceneNode> {
+        self.nodes.get(&id)
+    }
+
+    pub fn get_node_mut(&mut self, id: NodeId) -> Option<&mut SceneNode> {
+        self.nodes.get_mut(&id)
+    }
+
+    /// Map a GPU array index (from pick result) back to a NodeId.
+    pub fn node_id_from_gpu_index(&self, gpu_idx: usize) -> Option<NodeId> {
+        self.gpu_index_to_node_id.get(gpu_idx).copied().flatten()
+    }
+
+    /// Get the position of the selected primitive node.
+    pub fn selected_primitive_position(&self) -> Option<Vec3> {
+        let sel_id = self.selected?;
+        let node = self.nodes.get(&sel_id)?;
+        match &node.data {
+            NodeData::Primitive(prim) => Some(prim.position),
+            _ => None,
+        }
+    }
+
+    /// Set the position of the selected primitive node.
+    pub fn set_selected_position(&mut self, pos: Vec3) {
+        if let Some(sel_id) = self.selected {
+            if let Some(node) = self.nodes.get_mut(&sel_id) {
+                if let NodeData::Primitive(ref mut prim) = node.data {
+                    prim.position = pos;
+                }
+            }
+        }
+    }
+
+    /// Add a new primitive. If a root exists, wrap in a SmoothUnion operation.
+    pub fn add_primitive(&mut self, primitive: SdfPrimitive) -> NodeId {
         self.node_counter += 1;
         let name = match primitive {
             SdfPrimitive::Sphere => format!("Sphere {}", self.node_counter),
@@ -84,53 +146,246 @@ impl Scene {
             SdfPrimitive::Torus => format!("Torus {}", self.node_counter),
             SdfPrimitive::Plane => format!("Plane {}", self.node_counter),
         };
-        self.nodes.push(SdfNode::new(primitive, name));
-        let idx = self.nodes.len() - 1;
-        self.selected = Some(idx);
-        idx
-    }
 
-    pub fn remove_selected(&mut self) {
-        if let Some(idx) = self.selected {
-            if idx < self.nodes.len() {
-                self.nodes.remove(idx);
+        let prim_id = self.alloc_id();
+        self.nodes.insert(
+            prim_id,
+            SceneNode {
+                id: prim_id,
+                name,
+                data: NodeData::Primitive(PrimitiveData::new(primitive)),
+            },
+        );
+
+        match self.root {
+            None => {
+                self.root = Some(prim_id);
             }
-            self.selected = None;
+            Some(old_root) => {
+                let op_id = self.alloc_id();
+                self.nodes.insert(
+                    op_id,
+                    SceneNode {
+                        id: op_id,
+                        name: format!("SmoothUnion {}", self.node_counter),
+                        data: NodeData::Operation(OperationData {
+                            operation: SdfOperation::SmoothUnion,
+                            smooth_k: 0.1,
+                            left: old_root,
+                            right: prim_id,
+                        }),
+                    },
+                );
+                self.root = Some(op_id);
+            }
         }
+
+        self.selected = Some(prim_id);
+        prim_id
     }
 
-    /// Pack all nodes into GPU-ready structs.
-    pub fn pack_nodes(&self) -> Vec<SdfNodeGpu> {
-        self.nodes
-            .iter()
-            .enumerate()
-            .map(|(i, node)| {
-                let selected = if self.selected == Some(i) { 1.0 } else { 0.0 };
-                SdfNodeGpu {
-                    type_op: [
-                        node.primitive as u32 as f32,
-                        node.operation as u32 as f32,
-                        node.smooth_k,
-                        selected,
-                    ],
-                    position: [node.position.x, node.position.y, node.position.z, 0.0],
-                    scale: [node.scale.x, node.scale.y, node.scale.z, 0.0],
-                    color: [node.color.x, node.color.y, node.color.z, 1.0],
-                    _reserved: [0.0; 4],
+    /// Remove the selected primitive and its parent operation.
+    pub fn remove_selected(&mut self) {
+        let Some(sel_id) = self.selected else {
+            return;
+        };
+
+        let parent = self.find_parent(sel_id);
+
+        match parent {
+            None => {
+                // Selected is root
+                if self.root == Some(sel_id) {
+                    self.root = None;
+                    self.nodes.remove(&sel_id);
                 }
-            })
-            .collect()
+            }
+            Some(parent_id) => {
+                // Find the sibling
+                let sibling_id = {
+                    let parent_node = &self.nodes[&parent_id];
+                    match &parent_node.data {
+                        NodeData::Operation(op) => {
+                            if op.left == sel_id {
+                                op.right
+                            } else {
+                                op.left
+                            }
+                        }
+                        _ => unreachable!("parent must be an operation"),
+                    }
+                };
+
+                // Find grandparent and rewire
+                let grandparent = self.find_parent(parent_id);
+                match grandparent {
+                    None => {
+                        // Parent was root — sibling becomes root
+                        self.root = Some(sibling_id);
+                    }
+                    Some(gp_id) => {
+                        let gp_node = self.nodes.get_mut(&gp_id).unwrap();
+                        if let NodeData::Operation(ref mut op) = gp_node.data {
+                            if op.left == parent_id {
+                                op.left = sibling_id;
+                            } else {
+                                op.right = sibling_id;
+                            }
+                        }
+                    }
+                }
+
+                self.nodes.remove(&sel_id);
+                self.nodes.remove(&parent_id);
+            }
+        }
+
+        self.selected = None;
     }
 
-    /// Pack scene metadata for the GPU.
-    pub fn pack_info(&self) -> SceneInfoGpu {
-        SceneInfoGpu {
-            node_count: self.nodes.len() as u32,
-            selected_idx: self.selected.map_or(-1, |i| i as i32),
+    /// Find the operation node that has `child_id` as a child.
+    fn find_parent(&self, child_id: NodeId) -> Option<NodeId> {
+        for (id, node) in &self.nodes {
+            if let NodeData::Operation(op) = &node.data {
+                if op.left == child_id || op.right == child_id {
+                    return Some(*id);
+                }
+            }
+        }
+        None
+    }
+
+    /// Flatten the tree to GPU format via post-order traversal (RPN).
+    /// Also updates `gpu_index_to_node_id` for pick result mapping.
+    pub fn flatten_for_gpu(&mut self) -> (Vec<SdfNodeGpu>, SceneInfoGpu) {
+        let mut gpu_nodes = Vec::new();
+        self.gpu_index_to_node_id.clear();
+        let mut selected_gpu_idx: i32 = -1;
+
+        if let Some(root_id) = self.root {
+            flatten_recursive(
+                &self.nodes,
+                root_id,
+                self.selected,
+                &mut gpu_nodes,
+                &mut self.gpu_index_to_node_id,
+                &mut selected_gpu_idx,
+            );
+        }
+
+        let info = SceneInfoGpu {
+            node_count: gpu_nodes.len() as u32,
+            selected_idx: selected_gpu_idx,
             _pad: [0; 2],
+        };
+
+        (gpu_nodes, info)
+    }
+}
+
+/// Post-order recursive flattening (free function to avoid borrow issues).
+fn flatten_recursive(
+    nodes: &HashMap<NodeId, SceneNode>,
+    node_id: NodeId,
+    selected: Option<NodeId>,
+    out: &mut Vec<SdfNodeGpu>,
+    gpu_map: &mut Vec<Option<NodeId>>,
+    selected_gpu_idx: &mut i32,
+) {
+    let node = &nodes[&node_id];
+
+    match &node.data {
+        NodeData::Primitive(prim) => {
+            let gpu_idx = out.len();
+            let is_selected = selected == Some(node_id);
+            if is_selected {
+                *selected_gpu_idx = gpu_idx as i32;
+            }
+            out.push(SdfNodeGpu {
+                type_op: [
+                    0.0, // 0 = primitive
+                    prim.primitive as u32 as f32,
+                    0.0,
+                    if is_selected { 1.0 } else { 0.0 },
+                ],
+                position: [prim.position.x, prim.position.y, prim.position.z, 0.0],
+                scale: [prim.scale.x, prim.scale.y, prim.scale.z, 0.0],
+                color: [prim.color.x, prim.color.y, prim.color.z, 1.0],
+                _reserved: [0.0; 4],
+            });
+            gpu_map.push(Some(node_id));
+        }
+        NodeData::Operation(op) => {
+            let left = op.left;
+            let right = op.right;
+            let operation = op.operation;
+            let smooth_k = op.smooth_k;
+
+            // Post-order: left, right, then operation
+            flatten_recursive(nodes, left, selected, out, gpu_map, selected_gpu_idx);
+            flatten_recursive(nodes, right, selected, out, gpu_map, selected_gpu_idx);
+
+            out.push(SdfNodeGpu {
+                type_op: [
+                    1.0, // 1 = operation
+                    operation as u32 as f32,
+                    smooth_k,
+                    0.0,
+                ],
+                position: [0.0; 4],
+                scale: [0.0; 4],
+                color: [0.0; 4],
+                _reserved: [0.0; 4],
+            });
+            gpu_map.push(None); // operations don't have a NodeId for picking
         }
     }
+}
 
+// ── Tree items for UI ─────────────────────────────────────────
+
+pub struct TreeItemData {
+    pub depth: i32,
+    pub name: String,
+    pub node_type: i32,
+    pub is_selected: bool,
+    pub node_id: NodeId,
+}
+
+impl Scene {
+    pub fn build_tree_items(&self) -> Vec<TreeItemData> {
+        let mut items = Vec::new();
+        if let Some(root_id) = self.root {
+            self.build_tree_recursive(root_id, 0, &mut items);
+        }
+        items
+    }
+
+    fn build_tree_recursive(&self, node_id: NodeId, depth: i32, out: &mut Vec<TreeItemData>) {
+        let node = &self.nodes[&node_id];
+        match &node.data {
+            NodeData::Primitive(prim) => {
+                out.push(TreeItemData {
+                    depth,
+                    name: node.name.clone(),
+                    node_type: prim.primitive as i32,
+                    is_selected: self.selected == Some(node_id),
+                    node_id,
+                });
+            }
+            NodeData::Operation(op) => {
+                out.push(TreeItemData {
+                    depth,
+                    name: node.name.clone(),
+                    node_type: 10 + op.operation as i32,
+                    is_selected: self.selected == Some(node_id),
+                    node_id,
+                });
+                self.build_tree_recursive(op.left, depth + 1, out);
+                self.build_tree_recursive(op.right, depth + 1, out);
+            }
+        }
+    }
 }
 
 // ── Pick result ────────────────────────────────────────────────

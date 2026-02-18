@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 mod gpu;
 
-use gpu::scene::{GizmoAxis, PickResult, Scene, SdfPrimitive};
+use gpu::scene::{GizmoAxis, NodeData, NodeId, PickResult, Scene, SdfPrimitive};
 
 slint::include_modules!();
 
@@ -100,27 +100,59 @@ fn closest_point_on_axis(
 
 /// Push the selected node's properties to the Slint UI.
 fn push_selection_to_ui(app: &MainWindow, scene: &Scene) {
-    if let Some(idx) = scene.selected {
-        if let Some(node) = scene.nodes.get(idx) {
-            app.set_has_selection(true);
-            app.set_selected_name(slint::format!("{}", node.name));
-            app.set_prop_pos_x(node.position.x);
-            app.set_prop_pos_y(node.position.y);
-            app.set_prop_pos_z(node.position.z);
-            app.set_prop_scale_x(node.scale.x);
-            app.set_prop_scale_y(node.scale.y);
-            app.set_prop_scale_z(node.scale.z);
-            return;
+    if let Some(node_id) = scene.selected {
+        if let Some(node) = scene.get_node(node_id) {
+            if let NodeData::Primitive(prim) = &node.data {
+                app.set_has_selection(true);
+                app.set_selected_name(slint::format!("{}", node.name));
+                app.set_prop_pos_x(prim.position.x);
+                app.set_prop_pos_y(prim.position.y);
+                app.set_prop_pos_z(prim.position.z);
+                app.set_prop_scale_x(prim.scale.x);
+                app.set_prop_scale_y(prim.scale.y);
+                app.set_prop_scale_z(prim.scale.z);
+                return;
+            }
         }
     }
     app.set_has_selection(false);
 }
 
+/// Push the scene tree structure to the Slint UI.
+fn push_tree_to_ui(app: &MainWindow, scene: &Scene, tree_node_ids: &mut Vec<NodeId>) {
+    let items = scene.build_tree_items();
+    tree_node_ids.clear();
+    let slint_items: Vec<TreeItem> = items
+        .iter()
+        .enumerate()
+        .map(|(idx, item)| {
+            tree_node_ids.push(item.node_id);
+            TreeItem {
+                depth: item.depth,
+                name: slint::format!("{}", item.name),
+                node_type: item.node_type,
+                is_selected: item.is_selected,
+                item_index: idx as i32,
+            }
+        })
+        .collect();
+    let model = Rc::new(slint::VecModel::from(slint_items));
+    app.set_tree_items(slint::ModelRc::from(model));
+}
+
 fn main() {
     env_logger::init();
 
+    // Request storage buffer support from wgpu
+    let mut wgpu_settings = slint::wgpu_28::WGPUSettings::default();
+    wgpu_settings
+        .device_required_limits
+        .max_storage_buffers_per_shader_stage = 4;
+    wgpu_settings
+        .device_required_limits
+        .max_storage_buffer_binding_size = 1 << 20; // 1 MB
     slint::BackendSelector::new()
-        .require_wgpu_28(slint::wgpu_28::WGPUConfiguration::default())
+        .require_wgpu_28(slint::wgpu_28::WGPUConfiguration::Automatic(wgpu_settings))
         .select()
         .expect("Failed to select wgpu 28 backend");
 
@@ -133,10 +165,12 @@ fn main() {
         Rc::new(RefCell::new(gpu::camera::OrbitCamera::new()));
     let input: Rc<RefCell<InputState>> = Rc::new(RefCell::new(InputState::new()));
     let scene: Rc<RefCell<Scene>> = Rc::new(RefCell::new(Scene::default_scene()));
+    let tree_node_ids: Rc<RefCell<Vec<NodeId>>> = Rc::new(RefCell::new(Vec::new()));
     let start_time = std::time::Instant::now();
 
-    // Push initial selection
+    // Push initial selection and tree
     push_selection_to_ui(&app, &scene.borrow());
+    push_tree_to_ui(&app, &scene.borrow(), &mut tree_node_ids.borrow_mut());
 
     // Grab device+queue from Slint's wgpu backend
     let gpu_for_notifier = gpu_state.clone();
@@ -167,6 +201,7 @@ fn main() {
         let scene_add = scene.clone();
         let input_add = input.clone();
         let app_add = app.as_weak();
+        let tree_ids_add = tree_node_ids.clone();
         app.on_on_add_primitive(move |prim_type| {
             let prim = match prim_type {
                 0 => SdfPrimitive::Sphere,
@@ -176,12 +211,13 @@ fn main() {
                 _ => SdfPrimitive::Sphere,
             };
             let mut s = scene_add.borrow_mut();
-            s.add_node(prim);
+            s.add_primitive(prim);
             let mut inp = input_add.borrow_mut();
             inp.scene_dirty = true;
             inp.needs_redraw = true;
             if let Some(app) = app_add.upgrade() {
                 push_selection_to_ui(&app, &s);
+                push_tree_to_ui(&app, &s, &mut tree_ids_add.borrow_mut());
             }
         });
     }
@@ -191,6 +227,7 @@ fn main() {
         let scene_del = scene.clone();
         let input_del = input.clone();
         let app_del = app.as_weak();
+        let tree_ids_del = tree_node_ids.clone();
         app.on_on_delete_selected(move || {
             let mut s = scene_del.borrow_mut();
             s.remove_selected();
@@ -199,6 +236,7 @@ fn main() {
             inp.needs_redraw = true;
             if let Some(app) = app_del.upgrade() {
                 push_selection_to_ui(&app, &s);
+                push_tree_to_ui(&app, &s, &mut tree_ids_del.borrow_mut());
             }
         });
     }
@@ -209,16 +247,20 @@ fn main() {
         let input_prop = input.clone();
         let app_prop = app.as_weak();
         app.on_on_property_changed(move || {
-            let Some(app) = app_prop.upgrade() else { return };
+            let Some(app) = app_prop.upgrade() else {
+                return;
+            };
             let mut s = scene_prop.borrow_mut();
-            if let Some(idx) = s.selected {
-                if let Some(node) = s.nodes.get_mut(idx) {
-                    node.position.x = app.get_prop_pos_x();
-                    node.position.y = app.get_prop_pos_y();
-                    node.position.z = app.get_prop_pos_z();
-                    node.scale.x = app.get_prop_scale_x();
-                    node.scale.y = app.get_prop_scale_y();
-                    node.scale.z = app.get_prop_scale_z();
+            if let Some(node_id) = s.selected {
+                if let Some(node) = s.get_node_mut(node_id) {
+                    if let NodeData::Primitive(ref mut prim) = node.data {
+                        prim.position.x = app.get_prop_pos_x();
+                        prim.position.y = app.get_prop_pos_y();
+                        prim.position.z = app.get_prop_pos_z();
+                        prim.scale.x = app.get_prop_scale_x();
+                        prim.scale.y = app.get_prop_scale_y();
+                        prim.scale.z = app.get_prop_scale_z();
+                    }
                 }
             }
             let mut inp = input_prop.borrow_mut();
@@ -261,27 +303,24 @@ fn main() {
 
                 if let PickResult::GizmoAxis(axis) = pick {
                     let sc = scene_down.borrow();
-                    if let Some(idx) = sc.selected {
-                        if let Some(node) = sc.nodes.get(idx) {
-                            let cam = cam_down.borrow();
-                            let (ro, rd) = screen_to_ray(x, y, vp_w, vp_h, &cam);
-                            drop(cam);
+                    if let Some(pos) = sc.selected_primitive_position() {
+                        let cam = cam_down.borrow();
+                        let (ro, rd) = screen_to_ray(x, y, vp_w, vp_h, &cam);
+                        drop(cam);
 
-                            let axis_dir = match axis {
-                                GizmoAxis::X => glam::Vec3::X,
-                                GizmoAxis::Y => glam::Vec3::Y,
-                                GizmoAxis::Z => glam::Vec3::Z,
-                            };
+                        let axis_dir = match axis {
+                            GizmoAxis::X => glam::Vec3::X,
+                            GizmoAxis::Y => glam::Vec3::Y,
+                            GizmoAxis::Z => glam::Vec3::Z,
+                        };
 
-                            let drag_origin =
-                                closest_point_on_axis(node.position, axis_dir, ro, rd);
+                        let drag_origin = closest_point_on_axis(pos, axis_dir, ro, rd);
 
-                            let mut s = input_down.borrow_mut();
-                            s.gizmo_axis = Some(axis);
-                            s.gizmo_node_start = node.position;
-                            s.gizmo_drag_origin = drag_origin;
-                            s.dragging = true; // immediately start drag
-                        }
+                        let mut s = input_down.borrow_mut();
+                        s.gizmo_axis = Some(axis);
+                        s.gizmo_node_start = pos;
+                        s.gizmo_drag_origin = drag_origin;
+                        s.dragging = true; // immediately start drag
                     }
                 }
             }
@@ -337,11 +376,7 @@ fn main() {
                 let new_pos = node_start + delta;
 
                 let mut sc = scene_move.borrow_mut();
-                if let Some(idx) = sc.selected {
-                    if let Some(node) = sc.nodes.get_mut(idx) {
-                        node.position = new_pos;
-                    }
-                }
+                sc.set_selected_position(new_pos);
                 drop(sc);
 
                 if let Some(app) = app_move.upgrade() {
@@ -367,6 +402,7 @@ fn main() {
         let scene_up = scene.clone();
         let gpu_up = gpu_state.clone();
         let app_up = app.as_weak();
+        let tree_ids_up = tree_node_ids.clone();
         app.on_on_pointer_up(move || {
             let s = input_up.borrow();
             let was_click = !s.dragging && s.drag_button == 0;
@@ -392,8 +428,8 @@ fn main() {
 
                 let mut sc = scene_up.borrow_mut();
                 match pick_result {
-                    PickResult::Node(i) => {
-                        sc.selected = Some(i);
+                    PickResult::Node(gpu_idx) => {
+                        sc.selected = sc.node_id_from_gpu_index(gpu_idx);
                     }
                     _ => {
                         sc.selected = None;
@@ -407,6 +443,7 @@ fn main() {
 
                 if let Some(app) = app_up.upgrade() {
                     push_selection_to_ui(&app, &sc);
+                    push_tree_to_ui(&app, &sc, &mut tree_ids_up.borrow_mut());
                 }
             }
 
@@ -422,6 +459,32 @@ fn main() {
         app.on_on_scroll(move |delta| {
             cam_scroll.borrow_mut().zoom(delta);
             input_scroll.borrow_mut().needs_redraw = true;
+        });
+    }
+
+    // ── Tree Item Clicked ──────────────────────────────────────
+    {
+        let scene_tree = scene.clone();
+        let input_tree = input.clone();
+        let tree_ids_tree = tree_node_ids.clone();
+        let app_tree = app.as_weak();
+        app.on_on_tree_item_clicked(move |item_index| {
+            let node_id = {
+                let ids = tree_ids_tree.borrow();
+                ids.get(item_index as usize).copied()
+            };
+            if let Some(node_id) = node_id {
+                let mut s = scene_tree.borrow_mut();
+                s.selected = Some(node_id);
+                let mut inp = input_tree.borrow_mut();
+                inp.scene_dirty = true;
+                inp.needs_redraw = true;
+                drop(inp);
+                if let Some(app) = app_tree.upgrade() {
+                    push_selection_to_ui(&app, &s);
+                    push_tree_to_ui(&app, &s, &mut tree_ids_tree.borrow_mut());
+                }
+            }
         });
     }
 
@@ -472,9 +535,8 @@ fn main() {
 
                 // Upload scene data when changed
                 if scene_dirty {
-                    let sc = scene_for_timer.borrow();
-                    let gpu_nodes = sc.pack_nodes();
-                    let gpu_info = sc.pack_info();
+                    let mut sc = scene_for_timer.borrow_mut();
+                    let (gpu_nodes, gpu_info) = sc.flatten_for_gpu();
                     gs.update_scene(&gpu_nodes, &gpu_info);
                 }
 

@@ -53,7 +53,9 @@
       "Bash(rustup update:*)",
       "Bash(cargo build:*)",
       "Bash(cargo doc:*)",
-      "WebFetch(domain:sotrh.github.io)"
+      "WebFetch(domain:sotrh.github.io)",
+      "Bash(grep:*)",
+      "Bash(taskkill:*)"
     ]
   }
 }

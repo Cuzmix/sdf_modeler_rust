@@ -1,4 +1,12 @@
-import { Button, Slider, VerticalBox, HorizontalBox, GroupBox } from "std-widgets.slint";
+import { Button, Slider, VerticalBox, HorizontalBox, GroupBox, ScrollView } from "std-widgets.slint";
+
+export struct TreeItem {
+    depth: int,
+    name: string,
+    node-type: int,
+    is-selected: bool,
+    item-index: int,
+}
 
 component LabeledSlider inherits HorizontalLayout {
     in property <string> label;
@@ -58,6 +66,10 @@ export component MainWindow inherits Window {
     in-out property <float>  prop-scale-x: 0.5;
     in-out property <float>  prop-scale-y: 0.5;
     in-out property <float>  prop-scale-z: 0.5;
+
+    // Scene graph tree
+    in-out property <[TreeItem]> tree-items;
+    callback on-tree-item-clicked(int);
 
     // Callbacks
     callback on-pointer-down(float, float, int);
@@ -149,80 +161,141 @@ export component MainWindow inherits Window {
                 }
             }
 
-            // ── Properties Panel ────────────────────────────
-            if root.has-selection: Rectangle {
-                width: 240px;
+            // ── Right Panel: Scene Graph + Properties ─────
+            Rectangle {
+                width: 260px;
                 background: #252530;
 
                 VerticalLayout {
                     padding: 12px;
-                    spacing: 8px;
-                    alignment: start;
+                    spacing: 0px;
 
-                    // Node name
+                    // ── Scene Graph header ──
                     Text {
-                        text: root.selected-name;
-                        color: #ddd;
-                        font-size: 13px;
+                        text: "Scene Graph";
+                        color: #888;
+                        font-size: 11px;
                         font-weight: 600;
                     }
+                    Rectangle { height: 6px; }
 
-                    // Position
-                    Text {
-                        text: "Position";
-                        color: #888;
-                        font-size: 11px;
-                    }
-                    LabeledSlider {
-                        label: "X";
-                        value <=> root.prop-pos-x;
-                        changed(v) => { root.on-property-changed(); }
-                    }
-                    LabeledSlider {
-                        label: "Y";
-                        value <=> root.prop-pos-y;
-                        changed(v) => { root.on-property-changed(); }
-                    }
-                    LabeledSlider {
-                        label: "Z";
-                        value <=> root.prop-pos-z;
-                        changed(v) => { root.on-property-changed(); }
-                    }
+                    // ── Tree items (scrollable) ──
+                    ScrollView {
+                        min-height: 80px;
+                        VerticalLayout {
+                            spacing: 0px;
+                            for item[idx] in root.tree-items: Rectangle {
+                                height: 26px;
+                                background: item.is-selected ? #3a3a5a : transparent;
+                                border-radius: 3px;
 
-                    // Scale
-                    Rectangle { height: 4px; }
-                    Text {
-                        text: "Scale";
-                        color: #888;
-                        font-size: 11px;
-                    }
-                    LabeledSlider {
-                        label: "X";
-                        minimum: 0.05;
-                        maximum: 3.0;
-                        value <=> root.prop-scale-x;
-                        changed(v) => { root.on-property-changed(); }
-                    }
-                    LabeledSlider {
-                        label: "Y";
-                        minimum: 0.05;
-                        maximum: 3.0;
-                        value <=> root.prop-scale-y;
-                        changed(v) => { root.on-property-changed(); }
-                    }
-                    LabeledSlider {
-                        label: "Z";
-                        minimum: 0.05;
-                        maximum: 3.0;
-                        value <=> root.prop-scale-z;
-                        changed(v) => { root.on-property-changed(); }
+                                HorizontalLayout {
+                                    padding-left: (item.depth * 16 + 4) * 1px;
+                                    spacing: 6px;
+                                    alignment: start;
+
+                                    // Type badge (colored dot)
+                                    Rectangle {
+                                        width: 10px;
+                                        height: 10px;
+                                        border-radius: item.node-type < 10 ? 5px : 2px;
+                                        background: item.node-type == 0 ? #cc8c66 :
+                                                    item.node-type == 1 ? #6699cc :
+                                                    item.node-type == 2 ? #99cc66 :
+                                                    item.node-type == 3 ? #cc66aa :
+                                                    #666666;
+                                    }
+
+                                    // Node name
+                                    Text {
+                                        text: item.name;
+                                        color: item.is-selected ? #fff : #ccc;
+                                        font-size: 11px;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                TouchArea {
+                                    clicked => { root.on-tree-item-clicked(idx); }
+                                }
+                            }
+                        }
                     }
 
-                    // Delete button
-                    Rectangle { height: 12px; }
-                    Button {
-                        text: "Delete";
-                        clicked => { root.on-delete-selected(); }
+                    // ── Properties section (conditional) ──
+                    if root.has-selection: Rectangle {
+                        height: 1px;
+                        background: #444;
+                    }
+                    if root.has-selection: VerticalLayout {
+                        padding-top: 8px;
+                        spacing: 8px;
+
+                        // Node name
+                        Text {
+                            text: root.selected-name;
+                            color: #ddd;
+                            font-size: 13px;
+                            font-weight: 600;
+                        }
+
+                        // Position
+                        Text {
+                            text: "Position";
+                            color: #888;
+                            font-size: 11px;
+                        }
+                        LabeledSlider {
+                            label: "X";
+                            value <=> root.prop-pos-x;
+                            changed(v) => { root.on-property-changed(); }
+                        }
+                        LabeledSlider {
+                            label: "Y";
+                            value <=> root.prop-pos-y;
+                            changed(v) => { root.on-property-changed(); }
+                        }
+                        LabeledSlider {
+                            label: "Z";
+                            value <=> root.prop-pos-z;
+                            changed(v) => { root.on-property-changed(); }
+                        }
+
+                        // Scale
+                        Rectangle { height: 4px; }
+                        Text {
+                            text: "Scale";
+                            color: #888;
+                            font-size: 11px;
+                        }
+                        LabeledSlider {
+                            label: "X";
+                            minimum: 0.05;
+                            maximum: 3.0;
+                            value <=> root.prop-scale-x;
+                            changed(v) => { root.on-property-changed(); }
+                        }
+                        LabeledSlider {
+                            label: "Y";
+                            minimum: 0.05;
+                            maximum: 3.0;
+                            value <=> root.prop-scale-y;
+                            changed(v) => { root.on-property-changed(); }
+                        }
+                        LabeledSlider {
+                            label: "Z";
+                            minimum: 0.05;
+                            maximum: 3.0;
+                            value <=> root.prop-scale-z;
+                            changed(v) => { root.on-property-changed(); }
+                        }
+
+                        // Delete button
+                        Rectangle { height: 12px; }
+                        Button {
+                            text: "Delete";
+                            clicked => { root.on-delete-selected(); }
+                        }
                     }
                 }
             }
@@ -236,7 +309,7 @@ export component MainWindow inherits Window {
                 padding-left: 12px;
                 padding-right: 12px;
                 Text {
-                    text: "Phase 4 — GPU Pick + Gizmo";
+                    text: "Phase 6 — Scene Graph";
                     color: #888;
                     font-size: 11px;
                     vertical-alignment: center;

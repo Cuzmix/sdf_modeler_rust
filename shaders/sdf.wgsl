@@ -1,4 +1,4 @@
-// Phase 3: Dynamic SDF Raymarching — scene driven by storage buffer
+// Phase 5: Node-based SDF Raymarching — binary tree with stack evaluator
 
 // ── Camera Uniform (group 0) ───────────────────────────────────
 struct Camera {
@@ -14,11 +14,14 @@ struct Camera {
 @group(0) @binding(0) var<uniform> camera: Camera;
 
 // ── Scene Data (group 1) ───────────────────────────────────────
+// Node types in type_op.x:  0.0 = primitive,  1.0 = operation
+// Primitives: type_op = [0, prim_type, unused, selected]
+// Operations: type_op = [1, op_type,   smooth_k, 0]
 struct SdfNodeGpu {
-    type_op:   vec4f,   // x=primitive_type, y=operation, z=smooth_k, w=selected
-    position:  vec4f,   // xyz=position
-    scale:     vec4f,   // xyz=scale
-    color:     vec4f,   // xyz=rgb, w=alpha
+    type_op:   vec4f,
+    position:  vec4f,   // xyz=position (primitives only)
+    scale:     vec4f,   // xyz=scale (primitives only)
+    color:     vec4f,   // xyz=rgb (primitives only)
     _reserved: vec4f,
 };
 
@@ -29,8 +32,7 @@ struct SceneInfo {
     _pad1:        u32,
 };
 
-const MAX_NODES: u32 = 64u;
-@group(1) @binding(0) var<uniform> nodes: array<SdfNodeGpu, 64>;
+@group(1) @binding(0) var<storage, read> nodes: array<SdfNodeGpu>;
 @group(1) @binding(1) var<uniform> scene_info: SceneInfo;
 
 // ── Pick Pass (group 2) ──────────────────────────────────────────
@@ -103,63 +105,75 @@ fn op_intersect(a: f32, b: f32) -> f32 {
     return max(a, b);
 }
 
-// ── Scene Evaluation ────────────────────────────────────────────
+// ── Scene Evaluation (stack-based RPN for binary tree) ──────────
 
-// Returns (distance, node_index_as_float). node_index = -1 for floor.
+// Returns (distance, gpu_index_as_float). gpu_index = -1 for floor.
 fn scene_sdf(p: vec3f) -> vec2f {
-    // Evaluate scene nodes separately (operations apply between nodes only)
-    var scene_dist = 1e10;
-    var scene_mat = -1.0;
+    var stack_d: array<f32, 32>;  // distance stack
+    var stack_m: array<f32, 32>;  // material ID stack (GPU array index)
+    var sp = 0;
 
     let count = scene_info.node_count;
     for (var i = 0u; i < count; i++) {
         let node = nodes[i];
-        let prim_type = u32(node.type_op.x);
-        let op_type   = u32(node.type_op.y);
-        let smooth_k  = node.type_op.z;
+        let is_op = node.type_op.x > 0.5;
 
-        // Transform to local space
-        let local = p - node.position.xyz;
+        if !is_op {
+            // Primitive: evaluate SDF and push onto stack
+            let prim_type = u32(node.type_op.y);
+            let local = p - node.position.xyz;
 
-        // Evaluate primitive
-        var d: f32;
-        switch prim_type {
-            case 0u: { d = sdf_sphere(local, node.scale.xyz); }
-            case 1u: { d = sdf_box(local, node.scale.xyz); }
-            case 2u: { d = sdf_cylinder(local, node.scale.xyz); }
-            case 3u: { d = sdf_torus(local, node.scale.xyz); }
-            default: { d = sdf_plane_y(local); }
-        }
+            var d: f32;
+            switch prim_type {
+                case 0u: { d = sdf_sphere(local, node.scale.xyz); }
+                case 1u: { d = sdf_box(local, node.scale.xyz); }
+                case 2u: { d = sdf_cylinder(local, node.scale.xyz); }
+                case 3u: { d = sdf_torus(local, node.scale.xyz); }
+                default: { d = sdf_plane_y(local); }
+            }
 
-        // First node: use directly
-        if i == 0u {
-            scene_dist = d;
-            scene_mat = 0.0;
-            continue;
-        }
+            stack_d[sp] = d;
+            stack_m[sp] = f32(i);  // mat_id = GPU array index of this primitive
+            sp++;
+        } else {
+            // Binary operation: pop 2, combine, push result
+            sp--;
+            let b_d = stack_d[sp];
+            let b_m = stack_m[sp];
+            sp--;
+            let a_d = stack_d[sp];
+            let a_m = stack_m[sp];
 
-        // Combine with previous scene nodes
-        let prev = scene_dist;
-        switch op_type {
-            case 0u: { scene_dist = op_union(scene_dist, d); }
-            case 1u: { scene_dist = op_smooth_union(scene_dist, d, smooth_k); }
-            case 2u: { scene_dist = op_subtract(scene_dist, d); }
-            case 3u: { scene_dist = op_intersect(scene_dist, d); }
-            default: { scene_dist = op_union(scene_dist, d); }
-        }
+            let op_type = u32(node.type_op.y);
+            let smooth_k = node.type_op.z;
 
-        // Track closest node for material
-        if d < prev {
-            scene_mat = f32(i);
+            var combined_d: f32;
+            switch op_type {
+                case 0u: { combined_d = op_union(a_d, b_d); }
+                case 1u: { combined_d = op_smooth_union(a_d, b_d, smooth_k); }
+                case 2u: { combined_d = op_subtract(a_d, b_d); }
+                case 3u: { combined_d = op_intersect(a_d, b_d); }
+                default: { combined_d = op_union(a_d, b_d); }
+            }
+
+            // Material: subtract keeps A's material, others pick closer
+            var combined_m = select(a_m, b_m, b_d < a_d);
+            if op_type == 2u {
+                combined_m = a_m;
+            }
+
+            stack_d[sp] = combined_d;
+            stack_m[sp] = combined_m;
+            sp++;
         }
     }
 
     // Combine scene with ground plane using hard union
-    let floor_dist = sdf_plane_y(p);
-    if count == 0u || floor_dist < scene_dist {
-        return vec2f(floor_dist, -1.0);
+    let floor_d = sdf_plane_y(p);
+    if sp == 0 || floor_d < stack_d[0] {
+        return vec2f(floor_d, -1.0);
     }
-    return vec2f(scene_dist, scene_mat);
+    return vec2f(stack_d[0], stack_m[0]);
 }
 
 fn scene_dist(p: vec3f) -> f32 {

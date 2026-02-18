@@ -3,8 +3,8 @@ use slint::wgpu_28::wgpu;
 use super::camera::CameraUniforms;
 use super::scene::{GizmoAxis, PickResult, SceneInfoGpu, SdfNodeGpu};
 
-const MAX_NODES: usize = 64;
-const NODE_BUFFER_SIZE: u64 = (MAX_NODES * std::mem::size_of::<SdfNodeGpu>()) as u64;
+/// Initial storage buffer size (enough for ~50 nodes).
+const INITIAL_SCENE_BUFFER_SIZE: u64 = 4096;
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -20,10 +20,12 @@ pub struct GpuState {
     // Camera (group 0)
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
-    // Scene (group 1)
+    // Scene (group 1) — storage buffer for nodes, uniform for info
     scene_buffer: wgpu::Buffer,
+    scene_buffer_capacity: u64,
     scene_info_buffer: wgpu::Buffer,
     scene_bind_group: wgpu::BindGroup,
+    scene_bind_group_layout: wgpu::BindGroupLayout,
     // Pick pass (group 2)
     pick_pipeline: wgpu::RenderPipeline,
     pick_texture: wgpu::Texture,
@@ -76,11 +78,11 @@ impl GpuState {
             }],
         });
 
-        // ── Group 1: Scene ──────────────────────────────────────
+        // ── Group 1: Scene (storage buffer for nodes) ────────────
         let scene_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("scene_uniform_buffer"),
-            size: NODE_BUFFER_SIZE,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            label: Some("scene_storage_buffer"),
+            size: INITIAL_SCENE_BUFFER_SIZE,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
@@ -95,12 +97,12 @@ impl GpuState {
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("scene_bind_group_layout"),
                 entries: &[
-                    // @binding(0): uniform buffer (nodes array)
+                    // @binding(0): storage buffer (nodes array)
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
                         visibility: wgpu::ShaderStages::FRAGMENT,
                         ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
                             has_dynamic_offset: false,
                             min_binding_size: None,
                         },
@@ -275,8 +277,10 @@ impl GpuState {
             camera_buffer,
             camera_bind_group,
             scene_buffer,
+            scene_buffer_capacity: INITIAL_SCENE_BUFFER_SIZE,
             scene_info_buffer,
             scene_bind_group,
+            scene_bind_group_layout,
             pick_pipeline,
             pick_texture,
             pick_staging,
@@ -295,8 +299,40 @@ impl GpuState {
     }
 
     /// Write scene node data and info to the GPU buffers.
-    pub fn update_scene(&self, nodes: &[SdfNodeGpu], info: &SceneInfoGpu) {
+    /// Dynamically resizes the storage buffer if needed.
+    pub fn update_scene(&mut self, nodes: &[SdfNodeGpu], info: &SceneInfoGpu) {
         if !nodes.is_empty() {
+            let required_size = (nodes.len() * std::mem::size_of::<SdfNodeGpu>()) as u64;
+
+            // Grow buffer if needed
+            if required_size > self.scene_buffer_capacity {
+                let new_capacity = required_size.next_power_of_two();
+                self.scene_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("scene_storage_buffer"),
+                    size: new_capacity,
+                    usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                    mapped_at_creation: false,
+                });
+                self.scene_buffer_capacity = new_capacity;
+
+                // Recreate bind group with new buffer
+                self.scene_bind_group =
+                    self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                        label: Some("scene_bind_group"),
+                        layout: &self.scene_bind_group_layout,
+                        entries: &[
+                            wgpu::BindGroupEntry {
+                                binding: 0,
+                                resource: self.scene_buffer.as_entire_binding(),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 1,
+                                resource: self.scene_info_buffer.as_entire_binding(),
+                            },
+                        ],
+                    });
+            }
+
             self.queue
                 .write_buffer(&self.scene_buffer, 0, bytemuck::cast_slice(nodes));
         }
