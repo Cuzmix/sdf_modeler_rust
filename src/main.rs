@@ -3,11 +3,11 @@ use std::rc::Rc;
 
 mod gpu;
 
-use gpu::scene::{Scene, SdfPrimitive};
+use gpu::scene::{GizmoAxis, PickResult, Scene, SdfPrimitive};
 
 slint::include_modules!();
 
-/// Tracks mouse drag state, dirty flag, and click detection.
+/// Tracks mouse drag state, dirty flag, click detection, and gizmo interaction.
 struct InputState {
     dragging: bool,
     drag_button: i32,
@@ -22,6 +22,10 @@ struct InputState {
     // FPS tracking
     frame_count: u32,
     fps_accum_start: std::time::Instant,
+    // Gizmo drag state
+    gizmo_axis: Option<GizmoAxis>,
+    gizmo_node_start: glam::Vec3,
+    gizmo_drag_origin: glam::Vec3,
 }
 
 impl InputState {
@@ -39,8 +43,59 @@ impl InputState {
             last_vp_h: 0,
             frame_count: 0,
             fps_accum_start: std::time::Instant::now(),
+            gizmo_axis: None,
+            gizmo_node_start: glam::Vec3::ZERO,
+            gizmo_drag_origin: glam::Vec3::ZERO,
         }
     }
+}
+
+/// Generate a world-space ray from a pixel position.
+fn screen_to_ray(
+    x: f32,
+    y: f32,
+    vp_w: u32,
+    vp_h: u32,
+    camera: &gpu::camera::OrbitCamera,
+) -> (glam::Vec3, glam::Vec3) {
+    let aspect = vp_w as f32 / vp_h.max(1) as f32;
+    let view = camera.view_matrix();
+    let proj = camera.projection_matrix(aspect);
+    let inv_vp = (proj * view).inverse();
+
+    let ndc_x = (x / vp_w as f32) * 2.0 - 1.0;
+    let ndc_y = 1.0 - (y / vp_h as f32) * 2.0;
+
+    let near = inv_vp * glam::Vec4::new(ndc_x, ndc_y, 0.0, 1.0);
+    let far = inv_vp * glam::Vec4::new(ndc_x, ndc_y, 1.0, 1.0);
+
+    let origin = near.truncate() / near.w;
+    let target = far.truncate() / far.w;
+    let dir = (target - origin).normalize();
+
+    (origin, dir)
+}
+
+/// Find closest point on an axis line to a camera ray (line-line closest point).
+fn closest_point_on_axis(
+    axis_origin: glam::Vec3,
+    axis_dir: glam::Vec3,
+    ray_origin: glam::Vec3,
+    ray_dir: glam::Vec3,
+) -> glam::Vec3 {
+    let w = axis_origin - ray_origin;
+    let a = axis_dir.dot(axis_dir);
+    let b = axis_dir.dot(ray_dir);
+    let c = ray_dir.dot(ray_dir);
+    let d = axis_dir.dot(w);
+    let e = ray_dir.dot(w);
+    let denom = a * c - b * b;
+    let t = if denom.abs() < 1e-6 {
+        0.0
+    } else {
+        (b * e - c * d) / denom
+    };
+    axis_origin + axis_dir * t
 }
 
 /// Push the selected node's properties to the Slint UI.
@@ -59,33 +114,6 @@ fn push_selection_to_ui(app: &MainWindow, scene: &Scene) {
         }
     }
     app.set_has_selection(false);
-}
-
-/// Generate a world-space ray from a pixel position.
-fn screen_to_ray(
-    x: f32,
-    y: f32,
-    vp_w: u32,
-    vp_h: u32,
-    camera: &gpu::camera::OrbitCamera,
-) -> (glam::Vec3, glam::Vec3) {
-    let aspect = vp_w as f32 / vp_h.max(1) as f32;
-    let view = camera.view_matrix();
-    let proj = camera.projection_matrix(aspect);
-    let inv_vp = (proj * view).inverse();
-
-    // Pixel to NDC
-    let ndc_x = (x / vp_w as f32) * 2.0 - 1.0;
-    let ndc_y = 1.0 - (y / vp_h as f32) * 2.0; // flip Y (screen Y is top-down)
-
-    let near = inv_vp * glam::Vec4::new(ndc_x, ndc_y, 0.0, 1.0);
-    let far = inv_vp * glam::Vec4::new(ndc_x, ndc_y, 1.0, 1.0);
-
-    let origin = near.truncate() / near.w;
-    let target = far.truncate() / far.w;
-    let dir = (target - origin).normalize();
-
-    (origin, dir)
 }
 
 fn main() {
@@ -202,19 +230,68 @@ fn main() {
     // ── Pointer Events ──────────────────────────────────────────
     {
         let input_down = input.clone();
+        let gpu_down = gpu_state.clone();
+        let scene_down = scene.clone();
+        let cam_down = camera.clone();
         app.on_on_pointer_down(move |x, y, button| {
             let mut s = input_down.borrow_mut();
-            s.dragging = false; // will become true on first move
+            s.dragging = false;
             s.drag_button = button;
             s.last_x = x;
             s.last_y = y;
             s.down_x = x;
             s.down_y = y;
+            s.gizmo_axis = None;
+
+            // On left-click, check if a gizmo axis was hit
+            if button == 0 && s.last_vp_w > 0 && s.last_vp_h > 0 {
+                let ndc_x = (x / s.last_vp_w as f32) * 2.0 - 1.0;
+                let ndc_y = 1.0 - (y / s.last_vp_h as f32) * 2.0;
+                let vp_w = s.last_vp_w;
+                let vp_h = s.last_vp_h;
+                drop(s);
+
+                let gpu_ref = gpu_down.borrow();
+                let pick = if let Some(gs) = gpu_ref.as_ref() {
+                    gs.pick_at(ndc_x, ndc_y)
+                } else {
+                    PickResult::Background
+                };
+                drop(gpu_ref);
+
+                if let PickResult::GizmoAxis(axis) = pick {
+                    let sc = scene_down.borrow();
+                    if let Some(idx) = sc.selected {
+                        if let Some(node) = sc.nodes.get(idx) {
+                            let cam = cam_down.borrow();
+                            let (ro, rd) = screen_to_ray(x, y, vp_w, vp_h, &cam);
+                            drop(cam);
+
+                            let axis_dir = match axis {
+                                GizmoAxis::X => glam::Vec3::X,
+                                GizmoAxis::Y => glam::Vec3::Y,
+                                GizmoAxis::Z => glam::Vec3::Z,
+                            };
+
+                            let drag_origin =
+                                closest_point_on_axis(node.position, axis_dir, ro, rd);
+
+                            let mut s = input_down.borrow_mut();
+                            s.gizmo_axis = Some(axis);
+                            s.gizmo_node_start = node.position;
+                            s.gizmo_drag_origin = drag_origin;
+                            s.dragging = true; // immediately start drag
+                        }
+                    }
+                }
+            }
         });
     }
     {
         let input_move = input.clone();
         let cam_move = camera.clone();
+        let scene_move = scene.clone();
+        let app_move = app.as_weak();
         app.on_on_pointer_move(move |x, y| {
             let mut s = input_move.borrow_mut();
             let dx = x - s.last_x;
@@ -233,6 +310,49 @@ fn main() {
                 return;
             }
 
+            // Gizmo drag mode
+            if let Some(axis) = s.gizmo_axis {
+                let vp_w = s.last_vp_w;
+                let vp_h = s.last_vp_h;
+                let node_start = s.gizmo_node_start;
+                let drag_origin = s.gizmo_drag_origin;
+                s.needs_redraw = true;
+                s.scene_dirty = true;
+                drop(s);
+
+                let axis_dir = match axis {
+                    GizmoAxis::X => glam::Vec3::X,
+                    GizmoAxis::Y => glam::Vec3::Y,
+                    GizmoAxis::Z => glam::Vec3::Z,
+                };
+
+                let cam = cam_move.borrow();
+                let (ro, rd) = screen_to_ray(x, y, vp_w, vp_h, &cam);
+                drop(cam);
+
+                let current = closest_point_on_axis(node_start, axis_dir, ro, rd);
+                let displacement = current - drag_origin;
+                // Only take the component along the axis
+                let delta = axis_dir * displacement.dot(axis_dir);
+                let new_pos = node_start + delta;
+
+                let mut sc = scene_move.borrow_mut();
+                if let Some(idx) = sc.selected {
+                    if let Some(node) = sc.nodes.get_mut(idx) {
+                        node.position = new_pos;
+                    }
+                }
+                drop(sc);
+
+                if let Some(app) = app_move.upgrade() {
+                    let sc = scene_move.borrow();
+                    push_selection_to_ui(&app, &sc);
+                }
+
+                return;
+            }
+
+            // Camera control mode
             let mut cam = cam_move.borrow_mut();
             match s.drag_button {
                 0 => cam.orbit(dx, dy),
@@ -245,7 +365,7 @@ fn main() {
     {
         let input_up = input.clone();
         let scene_up = scene.clone();
-        let cam_up = camera.clone();
+        let gpu_up = gpu_state.clone();
         let app_up = app.as_weak();
         app.on_on_pointer_up(move || {
             let s = input_up.borrow();
@@ -257,13 +377,28 @@ fn main() {
             drop(s);
 
             if was_click && vp_w > 0 && vp_h > 0 {
-                // Click-to-select via CPU raymarching
-                let cam = cam_up.borrow();
-                let (origin, dir) = screen_to_ray(click_x, click_y, vp_w, vp_h, &cam);
-                drop(cam);
+                // Pixel → NDC
+                let ndc_x = (click_x / vp_w as f32) * 2.0 - 1.0;
+                let ndc_y = 1.0 - (click_y / vp_h as f32) * 2.0;
+
+                // GPU pick
+                let gpu_ref = gpu_up.borrow();
+                let pick_result = if let Some(gs) = gpu_ref.as_ref() {
+                    gs.pick_at(ndc_x, ndc_y)
+                } else {
+                    PickResult::Background
+                };
+                drop(gpu_ref);
 
                 let mut sc = scene_up.borrow_mut();
-                sc.selected = sc.pick(origin, dir);
+                match pick_result {
+                    PickResult::Node(i) => {
+                        sc.selected = Some(i);
+                    }
+                    _ => {
+                        sc.selected = None;
+                    }
+                }
 
                 let mut inp = input_up.borrow_mut();
                 inp.scene_dirty = true;
@@ -278,6 +413,7 @@ fn main() {
             let mut s = input_up.borrow_mut();
             s.dragging = false;
             s.drag_button = -1;
+            s.gizmo_axis = None;
         });
     }
     {

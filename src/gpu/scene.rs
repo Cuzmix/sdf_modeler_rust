@@ -54,28 +54,6 @@ impl SdfNode {
         }
     }
 
-    /// CPU-side SDF evaluation for picking.
-    pub fn evaluate(&self, p: Vec3) -> f32 {
-        let local = p - self.position;
-        match self.primitive {
-            SdfPrimitive::Sphere => local.length() - self.scale.x,
-            SdfPrimitive::Box => {
-                let q = local.abs() - self.scale;
-                q.max(Vec3::ZERO).length() + q.x.max(q.y.max(q.z)).min(0.0)
-            }
-            SdfPrimitive::Cylinder => {
-                let d = Vec3::new(local.x, 0.0, local.z).length() - self.scale.x;
-                let h = local.y.abs() - self.scale.y;
-                d.max(h).min(0.0) + Vec3::new(d.max(0.0), h.max(0.0), 0.0).length()
-            }
-            SdfPrimitive::Torus => {
-                let q_x = Vec3::new(local.x, 0.0, local.z).length() - self.scale.x;
-                let q = glam::Vec2::new(q_x, local.y);
-                q.length() - self.scale.y
-            }
-            SdfPrimitive::Plane => local.y,
-        }
-    }
 }
 
 // ── Scene ───────────────────────────────────────────────────────
@@ -153,36 +131,23 @@ impl Scene {
         }
     }
 
-    /// CPU raymarch to find which node was clicked.
-    /// Returns the index of the hit node, or None.
-    pub fn pick(&self, ray_origin: Vec3, ray_dir: Vec3) -> Option<usize> {
-        let mut t = 0.0_f32;
-        let max_dist = 50.0_f32;
-        let epsilon = 0.002_f32;
+}
 
-        for _ in 0..64 {
-            let p = ray_origin + ray_dir * t;
-            let mut min_dist = f32::MAX;
-            let mut _closest = None;
+// ── Pick result ────────────────────────────────────────────────
 
-            for (i, node) in self.nodes.iter().enumerate() {
-                let d = node.evaluate(p);
-                if d < min_dist {
-                    min_dist = d;
-                    _closest = Some(i);
-                }
-            }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GizmoAxis {
+    X,
+    Y,
+    Z,
+}
 
-            if min_dist < epsilon {
-                return _closest;
-            }
-            if t > max_dist {
-                break;
-            }
-            t += min_dist;
-        }
-        None
-    }
+#[derive(Clone, Copy, Debug)]
+pub enum PickResult {
+    Background,
+    Floor,
+    Node(usize),
+    GizmoAxis(GizmoAxis),
 }
 
 // ── GPU-side structs (bytemuck) ─────────────────────────────────

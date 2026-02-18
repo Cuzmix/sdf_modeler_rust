@@ -51,7 +51,9 @@
       "WebFetch(domain:crates.io)",
       "WebFetch(domain:docs.rs)",
       "Bash(rustup update:*)",
-      "Bash(cargo build:*)"
+      "Bash(cargo build:*)",
+      "Bash(cargo doc:*)",
+      "WebFetch(domain:sotrh.github.io)"
     ]
   }
 }

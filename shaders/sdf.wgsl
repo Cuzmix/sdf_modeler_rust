@@ -33,6 +33,13 @@ const MAX_NODES: u32 = 64u;
 @group(1) @binding(0) var<uniform> nodes: array<SdfNodeGpu, 64>;
 @group(1) @binding(1) var<uniform> scene_info: SceneInfo;
 
+// ── Pick Pass (group 2) ──────────────────────────────────────────
+struct PickInfo {
+    click_ndc: vec2f,
+    _pad:      vec2f,
+};
+@group(2) @binding(0) var<uniform> pick_info: PickInfo;
+
 // ── Vertex ──────────────────────────────────────────────────────
 struct VertexOutput {
     @builtin(position) position: vec4f,
@@ -231,6 +238,55 @@ fn calc_ao(p: vec3f, n: vec3f) -> f32 {
     return clamp(1.0 - 2.0 * occ, 0.0, 1.0);
 }
 
+// ── Gizmo (screen-space lines) ─────────────────────────────────
+
+// Project world point to screen pixel coordinates
+fn world_to_screen(p: vec3f) -> vec3f {
+    let clip = camera.projection * camera.view * vec4f(p, 1.0);
+    if clip.w <= 0.0 { return vec3f(-1000.0, -1000.0, -1.0); } // behind camera
+    let ndc = clip.xy / clip.w;
+    return vec3f((ndc * 0.5 + 0.5) * camera.resolution, clip.w);
+}
+
+// Distance from 2D point to 2D line segment
+fn dist_to_segment_2d(p: vec2f, a: vec2f, b: vec2f) -> f32 {
+    let pa = p - a;
+    let ba = b - a;
+    let h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-8), 0.0, 1.0);
+    return length(pa - ba * h);
+}
+
+// Gizmo axis colors
+fn gizmo_axis_color(axis: u32) -> vec3f {
+    if axis == 1u { return vec3f(1.0, 0.2, 0.2); } // X = red
+    if axis == 2u { return vec3f(0.2, 1.0, 0.2); } // Y = green
+    return vec3f(0.4, 0.4, 1.0);                     // Z = blue
+}
+
+// Compute gizmo endpoints in screen space.
+// Returns axis hit (0=none, 1=X, 2=Y, 3=Z) and pixel distance.
+fn gizmo_hit_axis(pixel: vec2f, center: vec3f, threshold: f32) -> vec2f {
+    let cam_dist = length(camera.eye - center);
+    let gizmo_len = cam_dist * 0.25;
+
+    let cs = world_to_screen(center).xy;
+    let xe = world_to_screen(center + vec3f(gizmo_len, 0.0, 0.0)).xy;
+    let ye = world_to_screen(center + vec3f(0.0, gizmo_len, 0.0)).xy;
+    let ze = world_to_screen(center + vec3f(0.0, 0.0, gizmo_len)).xy;
+
+    let dx = dist_to_segment_2d(pixel, cs, xe);
+    let dy = dist_to_segment_2d(pixel, cs, ye);
+    let dz = dist_to_segment_2d(pixel, cs, ze);
+
+    // Find closest axis within threshold
+    var min_d = threshold;
+    var axis = 0.0;
+    if dz < min_d { min_d = dz; axis = 3.0; }
+    if dy < min_d { min_d = dy; axis = 2.0; }
+    if dx < min_d { min_d = dx; axis = 1.0; }
+    return vec2f(axis, min_d);
+}
+
 // ── Lighting ────────────────────────────────────────────────────
 fn shade(p: vec3f, n: vec3f, rd: vec3f, mat_id: f32) -> vec3f {
     // Material color
@@ -298,19 +354,81 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
     let hit = raymarch(ro, rd);
 
+    // Sky background
+    var col: vec3f;
+    var scene_t = hit.t;
+
     if hit.t < 0.0 {
         let sky_t = rd.y * 0.5 + 0.5;
-        let bg = mix(vec3f(0.08, 0.08, 0.12), vec3f(0.15, 0.18, 0.25), sky_t);
-        return vec4f(bg, 1.0);
+        col = mix(vec3f(0.08, 0.08, 0.12), vec3f(0.15, 0.18, 0.25), sky_t);
+        scene_t = 1e10;
+    } else {
+        let p = ro + rd * hit.t;
+        let n = calc_normal(p);
+        col = shade(p, n, rd, hit.mat_id);
     }
 
-    let p = ro + rd * hit.t;
-    let n = calc_normal(p);
-
-    var col = shade(p, n, rd, hit.mat_id);
+    // Gizmo overlay (screen-space lines, always on top)
+    if scene_info.selected_idx >= 0 {
+        let sel_idx = u32(scene_info.selected_idx);
+        let gizmo_center = nodes[sel_idx].position.xyz;
+        let pixel = in.uv * camera.resolution;
+        let line_width = 2.0;  // visual line width in pixels
+        let aa_width = 1.5;    // anti-alias feather
+        let g = gizmo_hit_axis(pixel, gizmo_center, line_width + aa_width);
+        if g.x > 0.0 {
+            let axis_col = gizmo_axis_color(u32(g.x));
+            let alpha = 1.0 - smoothstep(line_width - 0.5, line_width + aa_width, g.y);
+            col = mix(col, axis_col, alpha);
+        }
+    }
 
     // Gamma correction
     col = pow(col, vec3f(1.0 / 2.2));
 
     return vec4f(col, 1.0);
+}
+
+// ── Pick Fragment (outputs encoded node ID) ─────────────────────
+@fragment
+fn pick_fs_main(in: VertexOutput) -> @location(0) vec4f {
+    // Use click NDC instead of fragment UV for ray generation
+    let ndc = pick_info.click_ndc;
+
+    let clip_near = vec4f(ndc.x, ndc.y, 0.0, 1.0);
+    let clip_far  = vec4f(ndc.x, ndc.y, 1.0, 1.0);
+
+    let world_near = camera.inv_view_proj * clip_near;
+    let world_far  = camera.inv_view_proj * clip_far;
+
+    let ro = world_near.xyz / world_near.w;
+    let rd = normalize(world_far.xyz / world_far.w - ro);
+
+    let hit = raymarch(ro, rd);
+
+    // Encode: 0=background, 1=floor, 2+=node(index+2), 253=X, 254=Y, 255=Z
+    var id = 0u;
+    if hit.t >= 0.0 {
+        if hit.mat_id < 0.0 {
+            id = 1u;  // floor
+        } else {
+            id = u32(hit.mat_id) + 2u;  // node
+        }
+    }
+
+    // Check gizmo lines (takes priority over scene)
+    if scene_info.selected_idx >= 0 {
+        let sel_idx = u32(scene_info.selected_idx);
+        let gizmo_center = nodes[sel_idx].position.xyz;
+        // Convert click NDC to pixel coordinates
+        let click_pixel = (pick_info.click_ndc * 0.5 + 0.5) * camera.resolution;
+        let pick_threshold = 8.0; // wider hitbox for picking
+        let g = gizmo_hit_axis(click_pixel, gizmo_center, pick_threshold);
+        if g.x > 0.0 {
+            // 253=X, 254=Y, 255=Z
+            id = 252u + u32(g.x);
+        }
+    }
+
+    return vec4f(f32(id) / 255.0, 0.0, 0.0, 1.0);
 }

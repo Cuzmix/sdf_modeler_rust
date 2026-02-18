@@ -1,10 +1,17 @@
 use slint::wgpu_28::wgpu;
 
 use super::camera::CameraUniforms;
-use super::scene::{SceneInfoGpu, SdfNodeGpu};
+use super::scene::{GizmoAxis, PickResult, SceneInfoGpu, SdfNodeGpu};
 
 const MAX_NODES: usize = 64;
 const NODE_BUFFER_SIZE: u64 = (MAX_NODES * std::mem::size_of::<SdfNodeGpu>()) as u64;
+
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct PickInfoGpu {
+    click_ndc: [f32; 2],
+    _pad: [f32; 2],
+}
 
 pub struct GpuState {
     device: wgpu::Device,
@@ -17,6 +24,12 @@ pub struct GpuState {
     scene_buffer: wgpu::Buffer,
     scene_info_buffer: wgpu::Buffer,
     scene_bind_group: wgpu::BindGroup,
+    // Pick pass (group 2)
+    pick_pipeline: wgpu::RenderPipeline,
+    pick_texture: wgpu::Texture,
+    pick_staging: wgpu::Buffer,
+    pick_info_buffer: wgpu::Buffer,
+    pick_bind_group: wgpu::BindGroup,
     // Offscreen texture
     render_texture: Option<wgpu::Texture>,
     tex_width: u32,
@@ -122,7 +135,39 @@ impl GpuState {
             ],
         });
 
-        // ── Pipeline ────────────────────────────────────────────
+        // ── Group 2: Pick Info ──────────────────────────────────
+        let pick_info_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("pick_info_buffer"),
+            size: std::mem::size_of::<PickInfoGpu>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let pick_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("pick_bind_group_layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+
+        let pick_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("pick_bind_group"),
+            layout: &pick_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: pick_info_buffer.as_entire_binding(),
+            }],
+        });
+
+        // ── Main Pipeline (groups 0, 1) ────────────────────────
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("sdf_pipeline_layout"),
             bind_group_layouts: &[&camera_bind_group_layout, &scene_bind_group_layout],
@@ -158,6 +203,71 @@ impl GpuState {
             cache: None,
         });
 
+        // ── Pick Pipeline (groups 0, 1, 2) ─────────────────────
+        let pick_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("pick_pipeline_layout"),
+                bind_group_layouts: &[
+                    &camera_bind_group_layout,
+                    &scene_bind_group_layout,
+                    &pick_bind_group_layout,
+                ],
+                immediate_size: 0,
+            });
+
+        let pick_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("pick_pipeline"),
+            layout: Some(&pick_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader_module,
+                entry_point: Some("vs_main"),
+                buffers: &[],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader_module,
+                entry_point: Some("pick_fs_main"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: wgpu::TextureFormat::Rgba8Unorm,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                ..Default::default()
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        });
+
+        // ── Pick Texture + Staging ─────────────────────────────
+        let pick_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("pick_texture"),
+            size: wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+
+        // 256 bytes minimum due to COPY_BYTES_PER_ROW_ALIGNMENT
+        let pick_staging = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("pick_staging"),
+            size: 256,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
         Self {
             device,
             queue,
@@ -167,6 +277,11 @@ impl GpuState {
             scene_buffer,
             scene_info_buffer,
             scene_bind_group,
+            pick_pipeline,
+            pick_texture,
+            pick_staging,
+            pick_info_buffer,
+            pick_bind_group,
             render_texture: None,
             tex_width: 0,
             tex_height: 0,
@@ -187,6 +302,104 @@ impl GpuState {
         }
         self.queue
             .write_buffer(&self.scene_info_buffer, 0, bytemuck::bytes_of(info));
+    }
+
+    /// GPU pick: render a single pixel at the click position and read back the node ID.
+    pub fn pick_at(&self, ndc_x: f32, ndc_y: f32) -> PickResult {
+        // Upload click NDC
+        let info = PickInfoGpu {
+            click_ndc: [ndc_x, ndc_y],
+            _pad: [0.0; 2],
+        };
+        self.queue
+            .write_buffer(&self.pick_info_buffer, 0, bytemuck::bytes_of(&info));
+
+        // Render pick pass to 1x1 texture
+        let view = self
+            .pick_texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("pick_encoder"),
+            });
+
+        {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("pick_pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+
+            pass.set_pipeline(&self.pick_pipeline);
+            pass.set_bind_group(0, &self.camera_bind_group, &[]);
+            pass.set_bind_group(1, &self.scene_bind_group, &[]);
+            pass.set_bind_group(2, &self.pick_bind_group, &[]);
+            pass.draw(0..3, 0..1);
+        }
+
+        // Copy texture to staging buffer
+        encoder.copy_texture_to_buffer(
+            wgpu::TexelCopyTextureInfo {
+                texture: &self.pick_texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::TexelCopyBufferInfo {
+                buffer: &self.pick_staging,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(256),
+                    rows_per_image: None,
+                },
+            },
+            wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+        );
+
+        self.queue.submit(std::iter::once(encoder.finish()));
+
+        // Read back the pixel
+        let buffer_slice = self.pick_staging.slice(..4);
+        let (sender, receiver) = std::sync::mpsc::channel();
+        buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
+            let _ = sender.send(result);
+        });
+        self.device.poll(wgpu::PollType::wait_indefinitely()).ok();
+
+        if receiver.recv().ok().and_then(|r| r.ok()).is_none() {
+            return PickResult::Background;
+        }
+
+        let data = buffer_slice.get_mapped_range();
+        let id = data[0];
+        drop(data);
+        self.pick_staging.unmap();
+
+        match id {
+            0 => PickResult::Background,
+            1 => PickResult::Floor,
+            253 => PickResult::GizmoAxis(GizmoAxis::X),
+            254 => PickResult::GizmoAxis(GizmoAxis::Y),
+            255 => PickResult::GizmoAxis(GizmoAxis::Z),
+            n => PickResult::Node((n - 2) as usize),
+        }
     }
 
     /// Ensure the offscreen render texture matches the requested size.
