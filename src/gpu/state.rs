@@ -1,13 +1,23 @@
 use slint::wgpu_28::wgpu;
 
 use super::camera::CameraUniforms;
+use super::scene::{SceneInfoGpu, SdfNodeGpu};
+
+const MAX_NODES: usize = 64;
+const NODE_BUFFER_SIZE: u64 = (MAX_NODES * std::mem::size_of::<SdfNodeGpu>()) as u64;
 
 pub struct GpuState {
     device: wgpu::Device,
     queue: wgpu::Queue,
     pipeline: wgpu::RenderPipeline,
+    // Camera (group 0)
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
+    // Scene (group 1)
+    scene_buffer: wgpu::Buffer,
+    scene_info_buffer: wgpu::Buffer,
+    scene_bind_group: wgpu::BindGroup,
+    // Offscreen texture
     render_texture: Option<wgpu::Texture>,
     tex_width: u32,
     tex_height: u32,
@@ -21,7 +31,7 @@ impl GpuState {
             source: wgpu::ShaderSource::Wgsl(shader_src.into()),
         });
 
-        // Camera uniform buffer
+        // ── Group 0: Camera ─────────────────────────────────────
         let camera_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("camera_uniform_buffer"),
             size: std::mem::size_of::<CameraUniforms>() as u64,
@@ -29,7 +39,6 @@ impl GpuState {
             mapped_at_creation: false,
         });
 
-        // Bind group layout: @group(0) @binding(0) = camera uniforms
         let camera_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("camera_bind_group_layout"),
@@ -54,10 +63,69 @@ impl GpuState {
             }],
         });
 
-        // Pipeline layout with the camera bind group
+        // ── Group 1: Scene ──────────────────────────────────────
+        let scene_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("scene_uniform_buffer"),
+            size: NODE_BUFFER_SIZE,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let scene_info_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("scene_info_uniform_buffer"),
+            size: std::mem::size_of::<SceneInfoGpu>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let scene_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("scene_bind_group_layout"),
+                entries: &[
+                    // @binding(0): uniform buffer (nodes array)
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    // @binding(1): uniform buffer (scene info)
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ],
+            });
+
+        let scene_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("scene_bind_group"),
+            layout: &scene_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: scene_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: scene_info_buffer.as_entire_binding(),
+                },
+            ],
+        });
+
+        // ── Pipeline ────────────────────────────────────────────
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("sdf_pipeline_layout"),
-            bind_group_layouts: &[&camera_bind_group_layout],
+            bind_group_layouts: &[&camera_bind_group_layout, &scene_bind_group_layout],
             immediate_size: 0,
         });
 
@@ -96,6 +164,9 @@ impl GpuState {
             pipeline,
             camera_buffer,
             camera_bind_group,
+            scene_buffer,
+            scene_info_buffer,
+            scene_bind_group,
             render_texture: None,
             tex_width: 0,
             tex_height: 0,
@@ -106,6 +177,16 @@ impl GpuState {
     pub fn update_camera(&self, uniforms: &CameraUniforms) {
         self.queue
             .write_buffer(&self.camera_buffer, 0, bytemuck::bytes_of(uniforms));
+    }
+
+    /// Write scene node data and info to the GPU buffers.
+    pub fn update_scene(&self, nodes: &[SdfNodeGpu], info: &SceneInfoGpu) {
+        if !nodes.is_empty() {
+            self.queue
+                .write_buffer(&self.scene_buffer, 0, bytemuck::cast_slice(nodes));
+        }
+        self.queue
+            .write_buffer(&self.scene_info_buffer, 0, bytemuck::bytes_of(info));
     }
 
     /// Ensure the offscreen render texture matches the requested size.
@@ -137,7 +218,7 @@ impl GpuState {
         self.tex_height = h;
     }
 
-    /// Render one frame: update texture, run SDF raymarching, return as Slint Image.
+    /// Render one frame: run SDF raymarching, return as Slint Image.
     pub fn render_frame(&mut self, width: u32, height: u32) -> Option<slint::Image> {
         self.ensure_texture(width, height);
 
@@ -175,6 +256,7 @@ impl GpuState {
 
             pass.set_pipeline(&self.pipeline);
             pass.set_bind_group(0, &self.camera_bind_group, &[]);
+            pass.set_bind_group(1, &self.scene_bind_group, &[]);
             pass.draw(0..3, 0..1);
         }
 

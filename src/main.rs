@@ -3,15 +3,20 @@ use std::rc::Rc;
 
 mod gpu;
 
+use gpu::scene::{Scene, SdfPrimitive};
+
 slint::include_modules!();
 
-/// Tracks mouse drag state and dirty flag for rendering.
+/// Tracks mouse drag state, dirty flag, and click detection.
 struct InputState {
     dragging: bool,
     drag_button: i32,
     last_x: f32,
     last_y: f32,
+    down_x: f32,
+    down_y: f32,
     needs_redraw: bool,
+    scene_dirty: bool,
     last_vp_w: u32,
     last_vp_h: u32,
     // FPS tracking
@@ -26,7 +31,10 @@ impl InputState {
             drag_button: -1,
             last_x: 0.0,
             last_y: 0.0,
-            needs_redraw: true, // draw the initial frame
+            down_x: 0.0,
+            down_y: 0.0,
+            needs_redraw: true,
+            scene_dirty: true,
             last_vp_w: 0,
             last_vp_h: 0,
             frame_count: 0,
@@ -35,10 +43,54 @@ impl InputState {
     }
 }
 
+/// Push the selected node's properties to the Slint UI.
+fn push_selection_to_ui(app: &MainWindow, scene: &Scene) {
+    if let Some(idx) = scene.selected {
+        if let Some(node) = scene.nodes.get(idx) {
+            app.set_has_selection(true);
+            app.set_selected_name(slint::format!("{}", node.name));
+            app.set_prop_pos_x(node.position.x);
+            app.set_prop_pos_y(node.position.y);
+            app.set_prop_pos_z(node.position.z);
+            app.set_prop_scale_x(node.scale.x);
+            app.set_prop_scale_y(node.scale.y);
+            app.set_prop_scale_z(node.scale.z);
+            return;
+        }
+    }
+    app.set_has_selection(false);
+}
+
+/// Generate a world-space ray from a pixel position.
+fn screen_to_ray(
+    x: f32,
+    y: f32,
+    vp_w: u32,
+    vp_h: u32,
+    camera: &gpu::camera::OrbitCamera,
+) -> (glam::Vec3, glam::Vec3) {
+    let aspect = vp_w as f32 / vp_h.max(1) as f32;
+    let view = camera.view_matrix();
+    let proj = camera.projection_matrix(aspect);
+    let inv_vp = (proj * view).inverse();
+
+    // Pixel to NDC
+    let ndc_x = (x / vp_w as f32) * 2.0 - 1.0;
+    let ndc_y = 1.0 - (y / vp_h as f32) * 2.0; // flip Y (screen Y is top-down)
+
+    let near = inv_vp * glam::Vec4::new(ndc_x, ndc_y, 0.0, 1.0);
+    let far = inv_vp * glam::Vec4::new(ndc_x, ndc_y, 1.0, 1.0);
+
+    let origin = near.truncate() / near.w;
+    let target = far.truncate() / far.w;
+    let dir = (target - origin).normalize();
+
+    (origin, dir)
+}
+
 fn main() {
     env_logger::init();
 
-    // Require wgpu 28 backend so we can share the Device
     slint::BackendSelector::new()
         .require_wgpu_28(slint::wgpu_28::WGPUConfiguration::default())
         .select()
@@ -52,7 +104,11 @@ fn main() {
     let camera: Rc<RefCell<gpu::camera::OrbitCamera>> =
         Rc::new(RefCell::new(gpu::camera::OrbitCamera::new()));
     let input: Rc<RefCell<InputState>> = Rc::new(RefCell::new(InputState::new()));
+    let scene: Rc<RefCell<Scene>> = Rc::new(RefCell::new(Scene::default_scene()));
     let start_time = std::time::Instant::now();
+
+    // Push initial selection
+    push_selection_to_ui(&app, &scene.borrow());
 
     // Grab device+queue from Slint's wgpu backend
     let gpu_for_notifier = gpu_state.clone();
@@ -78,15 +134,82 @@ fn main() {
         })
         .expect("Failed to set rendering notifier");
 
+    // ── Add Primitive ───────────────────────────────────────────
+    {
+        let scene_add = scene.clone();
+        let input_add = input.clone();
+        let app_add = app.as_weak();
+        app.on_on_add_primitive(move |prim_type| {
+            let prim = match prim_type {
+                0 => SdfPrimitive::Sphere,
+                1 => SdfPrimitive::Box,
+                2 => SdfPrimitive::Cylinder,
+                3 => SdfPrimitive::Torus,
+                _ => SdfPrimitive::Sphere,
+            };
+            let mut s = scene_add.borrow_mut();
+            s.add_node(prim);
+            let mut inp = input_add.borrow_mut();
+            inp.scene_dirty = true;
+            inp.needs_redraw = true;
+            if let Some(app) = app_add.upgrade() {
+                push_selection_to_ui(&app, &s);
+            }
+        });
+    }
+
+    // ── Delete Selected ─────────────────────────────────────────
+    {
+        let scene_del = scene.clone();
+        let input_del = input.clone();
+        let app_del = app.as_weak();
+        app.on_on_delete_selected(move || {
+            let mut s = scene_del.borrow_mut();
+            s.remove_selected();
+            let mut inp = input_del.borrow_mut();
+            inp.scene_dirty = true;
+            inp.needs_redraw = true;
+            if let Some(app) = app_del.upgrade() {
+                push_selection_to_ui(&app, &s);
+            }
+        });
+    }
+
+    // ── Property Changed (from sliders) ─────────────────────────
+    {
+        let scene_prop = scene.clone();
+        let input_prop = input.clone();
+        let app_prop = app.as_weak();
+        app.on_on_property_changed(move || {
+            let Some(app) = app_prop.upgrade() else { return };
+            let mut s = scene_prop.borrow_mut();
+            if let Some(idx) = s.selected {
+                if let Some(node) = s.nodes.get_mut(idx) {
+                    node.position.x = app.get_prop_pos_x();
+                    node.position.y = app.get_prop_pos_y();
+                    node.position.z = app.get_prop_pos_z();
+                    node.scale.x = app.get_prop_scale_x();
+                    node.scale.y = app.get_prop_scale_y();
+                    node.scale.z = app.get_prop_scale_z();
+                }
+            }
+            let mut inp = input_prop.borrow_mut();
+            inp.scene_dirty = true;
+            inp.needs_redraw = true;
+        });
+    }
+
     // ── Pointer Events ──────────────────────────────────────────
     {
         let input_down = input.clone();
         app.on_on_pointer_down(move |x, y, button| {
             let mut s = input_down.borrow_mut();
-            s.dragging = true;
+            s.dragging = false; // will become true on first move
             s.drag_button = button;
             s.last_x = x;
             s.last_y = y;
+            s.down_x = x;
+            s.down_y = y;
         });
     }
     {
@@ -94,18 +217,26 @@ fn main() {
         let cam_move = camera.clone();
         app.on_on_pointer_move(move |x, y| {
             let mut s = input_move.borrow_mut();
-            if !s.dragging {
-                return;
-            }
             let dx = x - s.last_x;
             let dy = y - s.last_y;
             s.last_x = x;
             s.last_y = y;
 
+            // Detect drag (> 3px from down position)
+            let total_dx = x - s.down_x;
+            let total_dy = y - s.down_y;
+            if total_dx * total_dx + total_dy * total_dy > 9.0 {
+                s.dragging = true;
+            }
+
+            if !s.dragging {
+                return;
+            }
+
             let mut cam = cam_move.borrow_mut();
             match s.drag_button {
-                0 => cam.orbit(dx, dy),          // left = orbit
-                1 | 2 => cam.pan(dx, dy),        // right/middle = pan
+                0 => cam.orbit(dx, dy),
+                1 | 2 => cam.pan(dx, dy),
                 _ => {}
             }
             s.needs_redraw = true;
@@ -113,7 +244,37 @@ fn main() {
     }
     {
         let input_up = input.clone();
+        let scene_up = scene.clone();
+        let cam_up = camera.clone();
+        let app_up = app.as_weak();
         app.on_on_pointer_up(move || {
+            let s = input_up.borrow();
+            let was_click = !s.dragging && s.drag_button == 0;
+            let click_x = s.down_x;
+            let click_y = s.down_y;
+            let vp_w = s.last_vp_w;
+            let vp_h = s.last_vp_h;
+            drop(s);
+
+            if was_click && vp_w > 0 && vp_h > 0 {
+                // Click-to-select via CPU raymarching
+                let cam = cam_up.borrow();
+                let (origin, dir) = screen_to_ray(click_x, click_y, vp_w, vp_h, &cam);
+                drop(cam);
+
+                let mut sc = scene_up.borrow_mut();
+                sc.selected = sc.pick(origin, dir);
+
+                let mut inp = input_up.borrow_mut();
+                inp.scene_dirty = true;
+                inp.needs_redraw = true;
+                drop(inp);
+
+                if let Some(app) = app_up.upgrade() {
+                    push_selection_to_ui(&app, &sc);
+                }
+            }
+
             let mut s = input_up.borrow_mut();
             s.dragging = false;
             s.drag_button = -1;
@@ -132,6 +293,7 @@ fn main() {
     let gpu_for_timer = gpu_state.clone();
     let cam_for_timer = camera.clone();
     let input_for_timer = input.clone();
+    let scene_for_timer = scene.clone();
     let timer = slint::Timer::default();
     timer.start(
         slint::TimerMode::Repeated,
@@ -150,19 +312,20 @@ fn main() {
 
             let mut inp = input_for_timer.borrow_mut();
 
-            // Mark dirty on viewport resize
+            // Track viewport size for click-to-select
             if vp_w != inp.last_vp_w || vp_h != inp.last_vp_h {
                 inp.last_vp_w = vp_w;
                 inp.last_vp_h = vp_h;
                 inp.needs_redraw = true;
             }
 
-            // Skip GPU work when nothing changed
             if !inp.needs_redraw {
                 return;
             }
             inp.needs_redraw = false;
-            drop(inp); // release borrow before GPU work
+            let scene_dirty = inp.scene_dirty;
+            inp.scene_dirty = false;
+            drop(inp);
 
             let elapsed = start_time.elapsed().as_secs_f32();
             let uniforms = cam_for_timer.borrow().uniforms(vp_w, vp_h, elapsed);
@@ -170,6 +333,15 @@ fn main() {
             let mut gpu_ref = gpu_for_timer.borrow_mut();
             if let Some(gs) = gpu_ref.as_mut() {
                 gs.update_camera(&uniforms);
+
+                // Upload scene data when changed
+                if scene_dirty {
+                    let sc = scene_for_timer.borrow();
+                    let gpu_nodes = sc.pack_nodes();
+                    let gpu_info = sc.pack_info();
+                    gs.update_scene(&gpu_nodes, &gpu_info);
+                }
+
                 if let Some(image) = gs.render_frame(vp_w, vp_h) {
                     app.set_viewport_texture(image);
                 }
