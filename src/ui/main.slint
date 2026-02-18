@@ -11,6 +11,9 @@ export component MainWindow inherits Window {
     out property <float> viewport-width: viewport-area.width / 1px;
     out property <float> viewport-height: viewport-area.height / 1px;
 
+    // FPS counter
+    in-out property <string> fps-text: "0 fps";
+
     // Pointer interaction callbacks
     callback on-pointer-down(float, float, int);
     callback on-pointer-move(float, float);
@@ -80,8 +83,16 @@ export component MainWindow inherits Window {
             background: #2d2d2d;
             HorizontalLayout {
                 padding-left: 12px;
+                padding-right: 12px;
                 Text {
                     text: "Phase 2 — SDF Raymarching";
+                    color: #888;
+                    font-size: 11px;
+                    vertical-alignment: center;
+                }
+                Rectangle {}  // spacer
+                Text {
+                    text: root.fps-text;
                     color: #888;
                     font-size: 11px;
                     vertical-alignment: center;

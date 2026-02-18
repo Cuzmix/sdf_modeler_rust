@@ -14,6 +14,9 @@ struct InputState {
     needs_redraw: bool,
     last_vp_w: u32,
     last_vp_h: u32,
+    // FPS tracking
+    frame_count: u32,
+    fps_accum_start: std::time::Instant,
 }
 
 impl InputState {
@@ -26,6 +29,8 @@ impl InputState {
             needs_redraw: true, // draw the initial frame
             last_vp_w: 0,
             last_vp_h: 0,
+            frame_count: 0,
+            fps_accum_start: std::time::Instant::now(),
         }
     }
 }
@@ -168,6 +173,18 @@ fn main() {
                 if let Some(image) = gs.render_frame(vp_w, vp_h) {
                     app.set_viewport_texture(image);
                 }
+            }
+            drop(gpu_ref);
+
+            // Update FPS counter every ~500ms
+            let mut inp = input_for_timer.borrow_mut();
+            inp.frame_count += 1;
+            let fps_elapsed = inp.fps_accum_start.elapsed().as_secs_f32();
+            if fps_elapsed >= 0.5 {
+                let fps = inp.frame_count as f32 / fps_elapsed;
+                app.set_fps_text(slint::format!("{:.0} fps", fps));
+                inp.frame_count = 0;
+                inp.fps_accum_start = std::time::Instant::now();
             }
         },
     );
