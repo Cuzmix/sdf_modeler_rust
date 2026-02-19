@@ -1,7 +1,7 @@
 use slint::wgpu_28::wgpu;
 
 use super::camera::CameraUniforms;
-use super::scene::{GizmoAxis, PickResult, SceneInfoGpu, SdfNodeGpu};
+use super::scene::{GizmoAxis, PickResult, Scene, SceneInfoGpu, SdfNodeGpu};
 
 /// Initial storage buffer size (enough for ~50 nodes).
 const INITIAL_SCENE_BUFFER_SIZE: u64 = 4096;
@@ -20,6 +20,7 @@ pub struct GpuState {
     // Camera (group 0)
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
+    camera_bind_group_layout: wgpu::BindGroupLayout,
     // Scene (group 1) — storage buffer for nodes, uniform for info
     scene_buffer: wgpu::Buffer,
     scene_buffer_capacity: u64,
@@ -32,6 +33,7 @@ pub struct GpuState {
     pick_staging: wgpu::Buffer,
     pick_info_buffer: wgpu::Buffer,
     pick_bind_group: wgpu::BindGroup,
+    pick_bind_group_layout: wgpu::BindGroupLayout,
     // Offscreen texture
     render_texture: Option<wgpu::Texture>,
     tex_width: u32,
@@ -39,8 +41,8 @@ pub struct GpuState {
 }
 
 impl GpuState {
-    pub fn new(device: wgpu::Device, queue: wgpu::Queue) -> Self {
-        let shader_src = include_str!("../../shaders/sdf.wgsl");
+    pub fn new(device: wgpu::Device, queue: wgpu::Queue, scene: &Scene) -> Self {
+        let shader_src = super::codegen::compose_shader(scene);
         let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("sdf_shader"),
             source: wgpu::ShaderSource::Wgsl(shader_src.into()),
@@ -276,6 +278,7 @@ impl GpuState {
             pipeline,
             camera_buffer,
             camera_bind_group,
+            camera_bind_group_layout,
             scene_buffer,
             scene_buffer_capacity: INITIAL_SCENE_BUFFER_SIZE,
             scene_info_buffer,
@@ -286,10 +289,109 @@ impl GpuState {
             pick_staging,
             pick_info_buffer,
             pick_bind_group,
+            pick_bind_group_layout,
             render_texture: None,
             tex_width: 0,
             tex_height: 0,
         }
+    }
+
+    /// Rebuild both main and pick pipelines with a new shader source.
+    /// Called on the slow path when graph topology changes.
+    pub fn rebuild_pipelines(&mut self, shader_src: &str) {
+        let shader_module = self.device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("sdf_shader"),
+            source: wgpu::ShaderSource::Wgsl(shader_src.into()),
+        });
+
+        // Main pipeline (groups 0, 1)
+        let pipeline_layout =
+            self.device
+                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: Some("sdf_pipeline_layout"),
+                    bind_group_layouts: &[
+                        &self.camera_bind_group_layout,
+                        &self.scene_bind_group_layout,
+                    ],
+                    immediate_size: 0,
+                });
+
+        self.pipeline = self
+            .device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("sdf_pipeline"),
+                layout: Some(&pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &shader_module,
+                    entry_point: Some("vs_main"),
+                    buffers: &[],
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader_module,
+                    entry_point: Some("fs_main"),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: wgpu::TextureFormat::Rgba8Unorm,
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                }),
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::TriangleList,
+                    ..Default::default()
+                },
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState::default(),
+                multiview_mask: None,
+                cache: None,
+            });
+
+        // Pick pipeline (groups 0, 1, 2)
+        let pick_pipeline_layout =
+            self.device
+                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: Some("pick_pipeline_layout"),
+                    bind_group_layouts: &[
+                        &self.camera_bind_group_layout,
+                        &self.scene_bind_group_layout,
+                        &self.pick_bind_group_layout,
+                    ],
+                    immediate_size: 0,
+                });
+
+        self.pick_pipeline =
+            self.device
+                .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                    label: Some("pick_pipeline"),
+                    layout: Some(&pick_pipeline_layout),
+                    vertex: wgpu::VertexState {
+                        module: &shader_module,
+                        entry_point: Some("vs_main"),
+                        buffers: &[],
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    },
+                    fragment: Some(wgpu::FragmentState {
+                        module: &shader_module,
+                        entry_point: Some("pick_fs_main"),
+                        targets: &[Some(wgpu::ColorTargetState {
+                            format: wgpu::TextureFormat::Rgba8Unorm,
+                            blend: None,
+                            write_mask: wgpu::ColorWrites::ALL,
+                        })],
+                        compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    }),
+                    primitive: wgpu::PrimitiveState {
+                        topology: wgpu::PrimitiveTopology::TriangleList,
+                        ..Default::default()
+                    },
+                    depth_stencil: None,
+                    multisample: wgpu::MultisampleState::default(),
+                    multiview_mask: None,
+                    cache: None,
+                });
+
+        log::debug!("Pipelines rebuilt with new shader");
     }
 
     /// Write camera uniform data to the GPU buffer.
