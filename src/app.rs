@@ -4,9 +4,11 @@ use egui_dock::DockState;
 
 use crate::gpu::camera::Camera;
 use crate::gpu::codegen;
+use crate::gpu::picking::PendingPick;
 use crate::graph::history::History;
 use crate::graph::scene::Scene;
 use crate::ui::dock::{self, SdfTabViewer, Tab};
+use crate::ui::gizmo::{GizmoMode, GizmoState};
 use crate::ui::node_graph::NodeGraphState;
 use crate::ui::viewport::ViewportResources;
 
@@ -20,6 +22,9 @@ pub struct SdfApp {
     history: History,
     last_time: f64,
     show_debug: bool,
+    pending_pick: Option<PendingPick>,
+    gizmo_state: GizmoState,
+    gizmo_mode: GizmoMode,
 }
 
 impl SdfApp {
@@ -31,12 +36,14 @@ impl SdfApp {
 
         let scene = Scene::new();
         let shader_src = codegen::generate_shader(&scene);
+        let pick_shader_src = codegen::generate_pick_shader(&scene);
         let structure_key = scene.structure_key();
 
         let resources = ViewportResources::new(
             &render_state.device,
             render_state.target_format,
             &shader_src,
+            &pick_shader_src,
         );
 
         // Upload initial scene buffer
@@ -64,6 +71,9 @@ impl SdfApp {
             history: History::new(),
             last_time: 0.0,
             show_debug: true,
+            pending_pick: None,
+            gizmo_state: GizmoState::Idle,
+            gizmo_mode: GizmoMode::Translate,
         }
     }
 
@@ -139,16 +149,46 @@ impl eframe::App for SdfApp {
             }
         }
 
+        // --- Save/Load keyboard shortcuts ---
+        let save_pressed = ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::S));
+        let open_pressed = ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::O));
+
+        if save_pressed {
+            if let Some(path) = crate::io::save_dialog() {
+                if let Err(e) = crate::io::save_project(&self.scene, &self.camera, &path) {
+                    log::error!("Failed to save project: {}", e);
+                }
+            }
+        } else if open_pressed {
+            if let Some(path) = crate::io::open_dialog() {
+                match crate::io::load_project(&path) {
+                    Ok(project) => {
+                        self.scene = project.scene;
+                        self.camera = project.camera;
+                        self.history = History::new();
+                        self.node_graph_state.selected = None;
+                        self.node_graph_state.layout_dirty = true;
+                        // Force pipeline rebuild
+                        self.current_structure_key = 0;
+                    }
+                    Err(e) => {
+                        log::error!("Failed to load project: {}", e);
+                    }
+                }
+            }
+        }
+
         // --- Frame-start: check for topology changes and update GPU ---
         let new_key = self.scene.structure_key();
         if new_key != self.current_structure_key {
             let shader_src = codegen::generate_shader(&self.scene);
+            let pick_shader_src = codegen::generate_pick_shader(&self.scene);
             let mut renderer = self.render_state.renderer.write();
             if let Some(res) = renderer
                 .callback_resources
                 .get_mut::<ViewportResources>()
             {
-                res.rebuild_pipeline(&self.render_state.device, &shader_src);
+                res.rebuild_pipeline(&self.render_state.device, &shader_src, &pick_shader_src);
             }
             self.current_structure_key = new_key;
         }
@@ -170,14 +210,49 @@ impl eframe::App for SdfApp {
             }
         }
 
+        // --- Process pending GPU pick from previous frame ---
+        if let Some(pending) = self.pending_pick.take() {
+            let topo_order = self.scene.topo_order();
+            let renderer = self.render_state.renderer.read();
+            if let Some(res) = renderer
+                .callback_resources
+                .get::<ViewportResources>()
+            {
+                if let Some(result) = res.execute_pick(
+                    &self.render_state.device,
+                    &self.render_state.queue,
+                    &pending,
+                ) {
+                    // Map material_id (topo_order index) → NodeId
+                    let idx = result.material_id as usize;
+                    if idx < topo_order.len() {
+                        self.node_graph_state.selected = Some(topo_order[idx]);
+                    }
+                } else {
+                    // Clicked empty space → deselect
+                    self.node_graph_state.selected = None;
+                }
+            }
+        }
+
+        // --- Gizmo mode shortcuts ---
+        if ctx.input(|i| i.key_pressed(egui::Key::W)) {
+            self.gizmo_mode = GizmoMode::Translate;
+        }
+        // Future: E = Rotate, R = Scale
+
         // --- UI ---
         self.show_debug_window(ctx, dt);
 
+        let mut pending_pick = None;
         let mut tab_viewer = SdfTabViewer {
             camera: &mut self.camera,
             scene: &mut self.scene,
             node_graph_state: &mut self.node_graph_state,
+            gizmo_state: &mut self.gizmo_state,
+            gizmo_mode: &self.gizmo_mode,
             time: now as f32,
+            pending_pick: &mut pending_pick,
         };
 
         egui::CentralPanel::default()
@@ -186,6 +261,11 @@ impl eframe::App for SdfApp {
                 egui_dock::DockArea::new(&mut self.dock_state)
                     .show_inside(ui, &mut tab_viewer);
             });
+
+        // Store pending pick for next frame processing
+        if pending_pick.is_some() {
+            self.pending_pick = pending_pick;
+        }
 
         // --- Undo/Redo: end-of-frame commit ---
         let is_dragging = ctx.dragged_id().is_some();

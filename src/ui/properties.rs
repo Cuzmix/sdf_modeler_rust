@@ -35,6 +35,7 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, selected: Option<NodeId>) {
         NodeData::Primitive {
             kind,
             mut position,
+            mut rotation,
             mut scale,
             mut color,
         } => {
@@ -44,6 +45,8 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, selected: Option<NodeId>) {
                 SdfPrimitive::Cylinder => "Cylinder",
                 SdfPrimitive::Torus => "Torus",
                 SdfPrimitive::Plane => "Plane",
+                SdfPrimitive::Cone => "Cone",
+                SdfPrimitive::Capsule => "Capsule",
             };
             ui.label(format!("Type: {}", type_str));
             ui.separator();
@@ -57,6 +60,26 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, selected: Option<NodeId>) {
                 ui.label("Z:");
                 ui.add(egui::DragValue::new(&mut position.z).speed(0.05));
             });
+
+            ui.label("Rotation");
+            let mut rot_deg = glam::Vec3::new(
+                rotation.x.to_degrees(),
+                rotation.y.to_degrees(),
+                rotation.z.to_degrees(),
+            );
+            ui.horizontal(|ui| {
+                ui.label("X:");
+                ui.add(egui::DragValue::new(&mut rot_deg.x).speed(1.0).suffix("°"));
+                ui.label("Y:");
+                ui.add(egui::DragValue::new(&mut rot_deg.y).speed(1.0).suffix("°"));
+                ui.label("Z:");
+                ui.add(egui::DragValue::new(&mut rot_deg.z).speed(1.0).suffix("°"));
+            });
+            rotation = glam::Vec3::new(
+                rot_deg.x.to_radians(),
+                rot_deg.y.to_radians(),
+                rot_deg.z.to_radians(),
+            );
 
             ui.label("Scale");
             ui.horizontal(|ui| {
@@ -89,12 +112,14 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, selected: Option<NodeId>) {
             if let Some(node) = scene.nodes.get_mut(&id) {
                 if let NodeData::Primitive {
                     position: ref mut p,
+                    rotation: ref mut r,
                     scale: ref mut s,
                     color: ref mut c,
                     ..
                 } = node.data
                 {
                     *p = position;
+                    *r = rotation;
                     *s = scale;
                     *c = color;
                 }

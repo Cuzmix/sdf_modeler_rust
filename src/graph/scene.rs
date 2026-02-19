@@ -1,19 +1,22 @@
 use glam::Vec3;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 
 pub type NodeId = u64;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SdfPrimitive {
     Sphere,
     Box,
     Cylinder,
     Torus,
     Plane,
+    Cone,
+    Capsule,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum CsgOp {
     Union,
     SmoothUnion,
@@ -21,11 +24,12 @@ pub enum CsgOp {
     Intersect,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum NodeData {
     Primitive {
         kind: SdfPrimitive,
         position: Vec3,
+        rotation: Vec3,
         scale: Vec3,
         color: Vec3,
     },
@@ -37,19 +41,19 @@ pub enum NodeData {
     },
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SceneNode {
     pub id: NodeId,
     pub name: String,
     pub data: NodeData,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Scene {
     pub nodes: HashMap<NodeId, SceneNode>,
     pub root: Option<NodeId>,
-    next_id: u64,
-    name_counters: HashMap<String, u32>,
+    pub(crate) next_id: u64,
+    pub(crate) name_counters: HashMap<String, u32>,
 }
 
 impl Scene {
@@ -115,6 +119,7 @@ impl Scene {
             NodeData::Primitive {
                 kind: SdfPrimitive::Sphere,
                 position: Vec3::ZERO,
+                rotation: Vec3::ZERO,
                 scale: Vec3::ONE,
                 color: Vec3::new(0.8, 0.3, 0.2),
             },
@@ -128,6 +133,7 @@ impl Scene {
             NodeData::Primitive {
                 kind: SdfPrimitive::Box,
                 position: Vec3::new(2.0, 0.0, 0.0),
+                rotation: Vec3::ZERO,
                 scale: Vec3::ONE,
                 color: Vec3::new(0.2, 0.5, 0.8),
             },
@@ -141,6 +147,7 @@ impl Scene {
             NodeData::Primitive {
                 kind: SdfPrimitive::Cylinder,
                 position: Vec3::new(0.0, 0.0, 2.0),
+                rotation: Vec3::ZERO,
                 scale: Vec3::new(0.5, 1.0, 0.5),
                 color: Vec3::new(0.2, 0.8, 0.3),
             },
@@ -154,8 +161,37 @@ impl Scene {
             NodeData::Primitive {
                 kind: SdfPrimitive::Torus,
                 position: Vec3::new(-2.0, 0.0, 0.0),
+                rotation: Vec3::ZERO,
                 scale: Vec3::new(1.0, 0.3, 1.0),
                 color: Vec3::new(0.8, 0.6, 0.2),
+            },
+        )
+    }
+
+    pub fn create_cone(&mut self) -> NodeId {
+        let name = self.next_name("Cone");
+        self.add_node(
+            name,
+            NodeData::Primitive {
+                kind: SdfPrimitive::Cone,
+                position: Vec3::new(0.0, 0.0, -2.0),
+                rotation: Vec3::ZERO,
+                scale: Vec3::new(0.5, 1.0, 0.5),
+                color: Vec3::new(0.7, 0.3, 0.7),
+            },
+        )
+    }
+
+    pub fn create_capsule(&mut self) -> NodeId {
+        let name = self.next_name("Capsule");
+        self.add_node(
+            name,
+            NodeData::Primitive {
+                kind: SdfPrimitive::Capsule,
+                position: Vec3::new(-2.0, 0.0, 2.0),
+                rotation: Vec3::ZERO,
+                scale: Vec3::new(0.3, 1.0, 0.3),
+                color: Vec3::new(0.3, 0.7, 0.7),
             },
         )
     }
@@ -324,11 +360,11 @@ impl Scene {
             }
             match (&node.data, &other_node.data) {
                 (
-                    NodeData::Primitive { kind: k1, position: p1, scale: s1, color: c1 },
-                    NodeData::Primitive { kind: k2, position: p2, scale: s2, color: c2 },
+                    NodeData::Primitive { kind: k1, position: p1, rotation: r1, scale: s1, color: c1 },
+                    NodeData::Primitive { kind: k2, position: p2, rotation: r2, scale: s2, color: c2 },
                 ) => {
                     if std::mem::discriminant(k1) != std::mem::discriminant(k2)
-                        || p1 != p2 || s1 != s2 || c1 != c2
+                        || p1 != p2 || r1 != r2 || s1 != s2 || c1 != c2
                     {
                         return false;
                     }

@@ -4,8 +4,11 @@ use eframe::wgpu;
 
 use crate::gpu::camera::{Camera, CameraUniform};
 use crate::gpu::codegen::SdfNodeGpu;
+use crate::gpu::picking::{PendingPick, PickResult};
+use crate::graph::scene::NodeId;
 
 pub struct ViewportResources {
+    // --- Render pipeline ---
     pub pipeline: wgpu::RenderPipeline,
     pub camera_buffer: wgpu::Buffer,
     pub camera_bind_group: wgpu::BindGroup,
@@ -15,6 +18,14 @@ pub struct ViewportResources {
     pub scene_bgl: wgpu::BindGroupLayout,
     pub scene_buffer_capacity: usize,
     pub target_format: wgpu::TextureFormat,
+
+    // --- Pick compute pipeline ---
+    pub pick_pipeline: wgpu::ComputePipeline,
+    pub pick_input_buffer: wgpu::Buffer,
+    pub pick_output_buffer: wgpu::Buffer,
+    pub pick_staging_buffer: wgpu::Buffer,
+    pub pick_bind_group: wgpu::BindGroup,
+    pub pick_bgl: wgpu::BindGroupLayout,
 }
 
 impl ViewportResources {
@@ -22,6 +33,7 @@ impl ViewportResources {
         device: &wgpu::Device,
         target_format: wgpu::TextureFormat,
         shader_src: &str,
+        pick_shader_src: &str,
     ) -> Self {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("SDF Shader"),
@@ -35,11 +47,12 @@ impl ViewportResources {
             mapped_at_creation: false,
         });
 
+        // Camera BGL: accessible from vertex, fragment, AND compute
         let camera_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Camera BGL"),
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT | wgpu::ShaderStages::COMPUTE,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
@@ -67,11 +80,12 @@ impl ViewportResources {
             mapped_at_creation: false,
         });
 
+        // Scene BGL: accessible from fragment AND compute
         let scene_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Scene BGL"),
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
-                visibility: wgpu::ShaderStages::FRAGMENT,
+                visibility: wgpu::ShaderStages::FRAGMENT | wgpu::ShaderStages::COMPUTE,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Storage { read_only: true },
                     has_dynamic_offset: false,
@@ -90,15 +104,17 @@ impl ViewportResources {
             }],
         });
 
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("SDF Pipeline Layout"),
-            bind_group_layouts: &[&camera_bgl, &scene_bgl],
-            push_constant_ranges: &[],
-        });
+        // --- Render pipeline ---
+        let render_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("SDF Pipeline Layout"),
+                bind_group_layouts: &[&camera_bgl, &scene_bgl],
+                push_constant_ranges: &[],
+            });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("SDF Pipeline"),
-            layout: Some(&pipeline_layout),
+            layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
@@ -125,6 +141,90 @@ impl ViewportResources {
             cache: None,
         });
 
+        // --- Pick compute resources ---
+        let pick_input_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Pick Input"),
+            size: 16, // vec2f mouse_pos + vec2f pad
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let pick_output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Pick Output"),
+            size: 32, // 8 x f32
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+
+        let pick_staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Pick Staging"),
+            size: 32,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let pick_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Pick BGL"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ],
+        });
+
+        let pick_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Pick BG"),
+            layout: &pick_bgl,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: pick_input_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: pick_output_buffer.as_entire_binding(),
+                },
+            ],
+        });
+
+        let pick_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Pick Compute Shader"),
+            source: wgpu::ShaderSource::Wgsl(pick_shader_src.into()),
+        });
+
+        let pick_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Pick Pipeline Layout"),
+                bind_group_layouts: &[&camera_bgl, &scene_bgl, &pick_bgl],
+                push_constant_ranges: &[],
+            });
+
+        let pick_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("Pick Compute Pipeline"),
+            layout: Some(&pick_pipeline_layout),
+            module: &pick_shader,
+            entry_point: "cs_pick",
+            compilation_options: Default::default(),
+            cache: None,
+        });
+
         Self {
             pipeline,
             camera_buffer,
@@ -135,24 +235,37 @@ impl ViewportResources {
             scene_bgl,
             scene_buffer_capacity: initial_capacity,
             target_format,
+            pick_pipeline,
+            pick_input_buffer,
+            pick_output_buffer,
+            pick_staging_buffer,
+            pick_bind_group,
+            pick_bgl,
         }
     }
 
-    pub fn rebuild_pipeline(&mut self, device: &wgpu::Device, shader_src: &str) {
+    pub fn rebuild_pipeline(
+        &mut self,
+        device: &wgpu::Device,
+        shader_src: &str,
+        pick_shader_src: &str,
+    ) {
+        // Rebuild render pipeline
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("SDF Shader (rebuilt)"),
             source: wgpu::ShaderSource::Wgsl(shader_src.into()),
         });
 
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("SDF Pipeline Layout"),
-            bind_group_layouts: &[&self.camera_bgl, &self.scene_bgl],
-            push_constant_ranges: &[],
-        });
+        let render_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("SDF Pipeline Layout"),
+                bind_group_layouts: &[&self.camera_bgl, &self.scene_bgl],
+                push_constant_ranges: &[],
+            });
 
         self.pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("SDF Pipeline"),
-            layout: Some(&pipeline_layout),
+            layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
@@ -176,6 +289,28 @@ impl ViewportResources {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
+            cache: None,
+        });
+
+        // Rebuild pick compute pipeline
+        let pick_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Pick Compute Shader (rebuilt)"),
+            source: wgpu::ShaderSource::Wgsl(pick_shader_src.into()),
+        });
+
+        let pick_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Pick Pipeline Layout"),
+                bind_group_layouts: &[&self.camera_bgl, &self.scene_bgl, &self.pick_bgl],
+                push_constant_ranges: &[],
+            });
+
+        self.pick_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("Pick Compute Pipeline"),
+            layout: Some(&pick_pipeline_layout),
+            module: &pick_shader,
+            entry_point: "cs_pick",
+            compilation_options: Default::default(),
             cache: None,
         });
     }
@@ -207,6 +342,75 @@ impl ViewportResources {
         if !node_data.is_empty() {
             queue.write_buffer(&self.scene_buffer, 0, bytemuck::cast_slice(node_data));
         }
+    }
+
+    /// Dispatch pick compute shader and synchronously read back the result.
+    pub fn execute_pick(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        pending: &PendingPick,
+    ) -> Option<PickResult> {
+        // Write camera uniform
+        queue.write_buffer(
+            &self.camera_buffer,
+            0,
+            bytemuck::bytes_of(&pending.camera_uniform),
+        );
+
+        // Write pick input (mouse_pos + padding)
+        let pick_input: [f32; 4] = [pending.mouse_pos[0], pending.mouse_pos[1], 0.0, 0.0];
+        queue.write_buffer(&self.pick_input_buffer, 0, bytemuck::cast_slice(&pick_input));
+
+        // Encode compute dispatch + copy
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Pick Encoder"),
+        });
+
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("Pick Pass"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&self.pick_pipeline);
+            pass.set_bind_group(0, &self.camera_bind_group, &[]);
+            pass.set_bind_group(1, &self.scene_bind_group, &[]);
+            pass.set_bind_group(2, &self.pick_bind_group, &[]);
+            pass.dispatch_workgroups(1, 1, 1);
+        }
+
+        encoder.copy_buffer_to_buffer(&self.pick_output_buffer, 0, &self.pick_staging_buffer, 0, 32);
+
+        queue.submit(std::iter::once(encoder.finish()));
+
+        // Synchronous readback
+        let buffer_slice = self.pick_staging_buffer.slice(..);
+        let (tx, rx) = std::sync::mpsc::channel();
+        buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
+            let _ = tx.send(result);
+        });
+        device.poll(wgpu::Maintain::Wait);
+
+        if rx.recv().ok()?.ok().is_none() {
+            return None;
+        }
+
+        let data = buffer_slice.get_mapped_range();
+        let floats: &[f32] = bytemuck::cast_slice(&data);
+        let result = PickResult {
+            material_id: floats[0] as i32,
+            distance: floats[1],
+            world_pos: [floats[2], floats[3], floats[4]],
+        };
+        drop(data);
+        self.pick_staging_buffer.unmap();
+
+        // material_id < 0 means no hit
+        if result.material_id < 0 || result.distance > 49.0 {
+            return None;
+        }
+
+        Some(result)
     }
 }
 
@@ -250,25 +454,23 @@ impl egui_wgpu::CallbackTrait for ViewportCallback {
     }
 }
 
-pub fn draw(ui: &mut egui::Ui, camera: &mut Camera, time: f32) {
+use crate::graph::scene::Scene;
+use crate::ui::gizmo::{self, GizmoMode, GizmoState};
+
+/// Returns an optional PendingPick if the user clicked in the viewport.
+pub fn draw(
+    ui: &mut egui::Ui,
+    camera: &mut Camera,
+    scene: &mut Scene,
+    selected: Option<NodeId>,
+    gizmo_state: &mut GizmoState,
+    gizmo_mode: &GizmoMode,
+    time: f32,
+) -> Option<PendingPick> {
     let rect = ui.available_rect_before_wrap();
     let response = ui.allocate_rect(rect, egui::Sense::click_and_drag());
 
-    if response.dragged_by(egui::PointerButton::Primary) {
-        let delta = response.drag_delta();
-        camera.orbit(delta.x, delta.y);
-    }
-    if response.dragged_by(egui::PointerButton::Secondary) {
-        let delta = response.drag_delta();
-        camera.pan(delta.x, delta.y);
-    }
-    if response.hovered() {
-        let scroll = ui.input(|i| i.smooth_scroll_delta.y);
-        if scroll != 0.0 {
-            camera.zoom(scroll);
-        }
-    }
-
+    // --- Paint the SDF viewport (WGPU callback) ---
     let ppp = ui.ctx().pixels_per_point();
     let viewport = [
         rect.min.x * ppp,
@@ -282,4 +484,54 @@ pub fn draw(ui: &mut egui::Ui, camera: &mut Camera, time: f32) {
         rect,
         ViewportCallback { uniform },
     ));
+
+    // --- Gizmo overlay (drawn on top of WGPU content) ---
+    let gizmo_consumed = gizmo::draw_and_interact(
+        ui.painter(),
+        &response,
+        camera,
+        scene,
+        selected,
+        gizmo_state,
+        gizmo_mode,
+        rect,
+    );
+
+    // --- Interaction priority: gizmo > pick > orbit ---
+    let mut pending_pick = None;
+
+    if !gizmo_consumed {
+        // Click to pick (only on click without drag)
+        if response.clicked() {
+            if let Some(pos) = response.interact_pointer_pos() {
+                let mouse_px = [
+                    (pos.x - rect.min.x) * ppp,
+                    (pos.y - rect.min.y) * ppp,
+                ];
+                let pick_uniform = camera.to_uniform(viewport, time);
+                pending_pick = Some(PendingPick {
+                    mouse_pos: mouse_px,
+                    camera_uniform: pick_uniform,
+                });
+            }
+        }
+
+        if response.dragged_by(egui::PointerButton::Primary) {
+            let delta = response.drag_delta();
+            camera.orbit(delta.x, delta.y);
+        }
+    }
+
+    if response.dragged_by(egui::PointerButton::Secondary) {
+        let delta = response.drag_delta();
+        camera.pan(delta.x, delta.y);
+    }
+    if response.hovered() {
+        let scroll = ui.input(|i| i.smooth_scroll_delta.y);
+        if scroll != 0.0 {
+            camera.zoom(scroll);
+        }
+    }
+
+    pending_pick
 }

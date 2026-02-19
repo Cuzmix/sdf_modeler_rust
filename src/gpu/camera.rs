@@ -1,6 +1,8 @@
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Vec3};
+use serde::{Deserialize, Serialize};
 
+#[derive(Serialize, Deserialize)]
 pub struct Camera {
     pub yaw: f32,
     pub pitch: f32,

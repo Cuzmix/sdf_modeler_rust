@@ -1,6 +1,7 @@
 mod app;
 mod gpu;
 mod graph;
+mod io;
 mod ui;
 
 use eframe::egui;

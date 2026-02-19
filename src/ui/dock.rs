@@ -2,7 +2,9 @@ use eframe::egui;
 use egui_dock::{DockState, Node, NodeIndex, Split, TabViewer};
 
 use crate::gpu::camera::Camera;
+use crate::gpu::picking::PendingPick;
 use crate::graph::scene::Scene;
+use crate::ui::gizmo::{GizmoMode, GizmoState};
 use crate::ui::node_graph::{self, NodeGraphState};
 use crate::ui::{properties, scene_tree, viewport};
 
@@ -46,7 +48,10 @@ pub struct SdfTabViewer<'a> {
     pub camera: &'a mut Camera,
     pub scene: &'a mut Scene,
     pub node_graph_state: &'a mut NodeGraphState,
+    pub gizmo_state: &'a mut GizmoState,
+    pub gizmo_mode: &'a GizmoMode,
     pub time: f32,
+    pub pending_pick: &'a mut Option<PendingPick>,
 }
 
 impl<'a> TabViewer for SdfTabViewer<'a> {
@@ -64,7 +69,17 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
     fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
         match tab {
             Tab::Viewport => {
-                viewport::draw(ui, self.camera, self.time);
+                if let Some(pick) = viewport::draw(
+                    ui,
+                    self.camera,
+                    self.scene,
+                    self.node_graph_state.selected,
+                    self.gizmo_state,
+                    self.gizmo_mode,
+                    self.time,
+                ) {
+                    *self.pending_pick = Some(pick);
+                }
             }
             Tab::NodeGraph => {
                 node_graph::draw(ui, self.scene, self.node_graph_state);

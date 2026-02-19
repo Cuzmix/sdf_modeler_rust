@@ -4,13 +4,18 @@ use bytemuck::{Pod, Zeroable};
 
 use crate::graph::scene::{CsgOp, NodeData, NodeId, Scene, SdfPrimitive};
 
+/// 128-byte GPU node (8 x vec4f). Expanded for rotation + future growth.
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]
 pub struct SdfNodeGpu {
-    pub type_op: [f32; 4],
-    pub position: [f32; 4],
-    pub scale: [f32; 4],
-    pub color: [f32; 4],
+    pub type_op: [f32; 4],   // [type_val, smooth_k, 0, 0]
+    pub position: [f32; 4],  // [x, y, z, 0]
+    pub rotation: [f32; 4],  // [rx, ry, rz, 0] (radians)
+    pub scale: [f32; 4],     // [sx, sy, sz, 0]
+    pub color: [f32; 4],     // [r, g, b, is_selected]
+    pub extra0: [f32; 4],    // reserved: future material
+    pub extra1: [f32; 4],    // reserved: future modifiers
+    pub extra2: [f32; 4],    // reserved: future flags
 }
 
 // ---------------------------------------------------------------------------
@@ -28,8 +33,12 @@ struct Camera {
 struct SdfNode {
     type_op: vec4f,
     position: vec4f,
+    rotation: vec4f,
     scale: vec4f,
     color: vec4f,
+    extra0: vec4f,
+    extra1: vec4f,
+    extra2: vec4f,
 }
 
 @group(0) @binding(0) var<uniform> camera: Camera;
@@ -46,6 +55,22 @@ fn vs_main(@builtin(vertex_index) vi: u32) -> VertexOutput {
     let y = f32(i32(vi >> 1u)) * 4.0 - 1.0;
     out.position = vec4f(x, y, 0.0, 1.0);
     return out;
+}
+
+// --- Euler rotation (XYZ order) ---
+
+fn rotate_euler(p: vec3f, r: vec3f) -> vec3f {
+    var q = p;
+    // Rotate X
+    let cx = cos(r.x); let sx = sin(r.x);
+    q = vec3f(q.x, cx * q.y - sx * q.z, sx * q.y + cx * q.z);
+    // Rotate Y
+    let cy = cos(r.y); let sy = sin(r.y);
+    q = vec3f(cy * q.x + sy * q.z, q.y, -sy * q.x + cy * q.z);
+    // Rotate Z
+    let cz = cos(r.z); let sz = sin(r.z);
+    q = vec3f(cz * q.x - sz * q.y, sz * q.x + cz * q.y, q.z);
+    return q;
 }
 
 // --- SDF Primitives ---
@@ -71,6 +96,30 @@ fn sdf_torus(p: vec3f, s: vec3f) -> f32 {
 
 fn sdf_plane(p: vec3f, s: vec3f) -> f32 {
     return p.y;
+}
+
+fn sdf_cone(p: vec3f, s: vec3f) -> f32 {
+    // Cone with radius s.x and height s.y, tip at origin pointing up
+    let q = vec2f(length(p.xz), p.y);
+    let tip = vec2f(0.0, s.y);
+    let base = vec2f(s.x, 0.0);
+    let ab = base - tip;
+    let aq = q - tip;
+    let t = clamp(dot(aq, ab) / dot(ab, ab), 0.0, 1.0);
+    let closest = tip + ab * t;
+    let d_side = length(q - closest);
+    // Inside/outside sign
+    let cross2d = ab.x * aq.y - ab.y * aq.x;
+    let sign_val = select(1.0, -1.0, cross2d < 0.0 && q.y > 0.0 && q.y < s.y);
+    return d_side * sign_val;
+}
+
+fn sdf_capsule(p: vec3f, s: vec3f) -> f32 {
+    // Capsule along Y axis: radius s.x, half-height s.y
+    let h = s.y;
+    let r = s.x;
+    let py = clamp(p.y, -h, h);
+    return length(p - vec3f(0.0, py, 0.0)) - r;
 }
 
 // --- CSG Operations (operate on vec2f: x=distance, y=material_id) ---
@@ -101,6 +150,13 @@ fn op_intersect(a: vec2f, b: vec2f, k: f32) -> vec2f {
 // ---------------------------------------------------------------------------
 
 const SHADER_POSTLUDE: &str = r#"
+// --- Rendering quality constants ---
+const SHADOW_STEPS: i32 = 32;
+const SHADOW_PENUMBRA_K: f32 = 8.0;
+const AO_SAMPLES: i32 = 5;
+const AO_STEP: f32 = 0.08;
+const AO_DECAY: f32 = 0.95;
+
 fn ray_march(ro: vec3f, rd: vec3f) -> vec2f {
     var t = 0.0;
     var mat_id = -1.0;
@@ -127,6 +183,33 @@ fn calc_normal(p: vec3f) -> vec3f {
     ));
 }
 
+fn soft_shadow(ro: vec3f, rd: vec3f, mint: f32, maxt: f32, k: f32) -> f32 {
+    var res = 1.0;
+    var t = mint;
+    for (var i = 0; i < SHADOW_STEPS; i++) {
+        let h = scene_sdf(ro + rd * t).x;
+        if h < 0.001 {
+            return 0.0;
+        }
+        res = min(res, k * h / t);
+        t += clamp(h, 0.02, 0.2);
+        if t > maxt { break; }
+    }
+    return clamp(res, 0.0, 1.0);
+}
+
+fn calc_ao(p: vec3f, n: vec3f) -> f32 {
+    var occ = 0.0;
+    var weight = 1.0;
+    for (var i = 1; i <= AO_SAMPLES; i++) {
+        let dist = AO_STEP * f32(i);
+        let d = scene_sdf(p + n * dist).x;
+        occ += (dist - d) * weight;
+        weight *= AO_DECAY;
+    }
+    return clamp(1.0 - 3.0 * occ, 0.0, 1.0);
+}
+
 fn get_node_color(mat_id: i32) -> vec3f {
     if mat_id < 0 { return vec3f(0.5); }
     return nodes[mat_id].color.xyz;
@@ -151,22 +234,34 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
     let t = hit.x;
     let mat_id = i32(hit.y + 0.5);
 
+    // Sky gradient
     if t > 49.0 {
-        let bg = mix(vec3f(0.08, 0.08, 0.12), vec3f(0.02, 0.02, 0.04), uv.y * 0.5 + 0.5);
+        let sky_t = uv.y * 0.5 + 0.5;
+        let bg = mix(vec3f(0.10, 0.10, 0.16), vec3f(0.02, 0.02, 0.05), sky_t);
         return vec4f(bg, 1.0);
     }
 
     let p = ro + rd * t;
     let n = calc_normal(p);
-    let light_dir = normalize(vec3f(1.0, 2.0, 3.0));
-    let h = normalize(light_dir - rd);
 
-    let ambient = 0.08;
-    let diffuse = max(dot(n, light_dir), 0.0);
-    let specular = pow(max(dot(n, h), 0.0), 32.0);
+    // Key light
+    let key_dir = normalize(vec3f(1.0, 2.0, 3.0));
+    let key_h = normalize(key_dir - rd);
+    let key_diff = max(dot(n, key_dir), 0.0);
+    let key_spec = pow(max(dot(n, key_h), 0.0), 32.0);
+    let shadow = soft_shadow(p + n * 0.01, key_dir, 0.02, 20.0, SHADOW_PENUMBRA_K);
+
+    // Fill light (opposite side, dimmer, no shadow)
+    let fill_dir = normalize(vec3f(-1.0, 0.5, -1.0));
+    let fill_diff = max(dot(n, fill_dir), 0.0) * 0.25;
+
+    // Ambient occlusion
+    let ao = calc_ao(p, n);
 
     let albedo = get_node_color(mat_id);
-    var color = albedo * (ambient + diffuse * 0.9) + vec3f(1.0) * specular * 0.5;
+    let ambient = 0.06 * ao;
+    var color = albedo * (ambient + key_diff * shadow * 0.85 + fill_diff)
+              + vec3f(1.0) * key_spec * shadow * 0.4;
 
     if is_selected(mat_id) {
         let rim = 1.0 - max(dot(n, -rd), 0.0);
@@ -179,12 +274,76 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
 "#;
 
 // ---------------------------------------------------------------------------
+// Pick compute shader postlude
+// ---------------------------------------------------------------------------
+
+const PICK_COMPUTE_POSTLUDE: &str = r#"
+fn pick_ray_march(ro: vec3f, rd: vec3f) -> vec2f {
+    var t = 0.0;
+    var mat_id = -1.0;
+    for (var i = 0; i < 128; i++) {
+        let p = ro + rd * t;
+        let hit = scene_sdf(p);
+        if hit.x < 0.001 {
+            mat_id = hit.y;
+            break;
+        }
+        t += hit.x * 0.8;
+        mat_id = hit.y;
+        if t > 50.0 {
+            mat_id = -1.0;
+            break;
+        }
+    }
+    return vec2f(t, mat_id);
+}
+
+struct PickInput {
+    mouse_pos: vec2f,
+    _pad: vec2f,
+}
+
+@group(2) @binding(0) var<uniform> pick_in: PickInput;
+@group(2) @binding(1) var<storage, read_write> pick_out: array<f32, 8>;
+
+@compute @workgroup_size(1)
+fn cs_pick() {
+    // Generate ray from mouse position (same logic as fs_main)
+    let uv = pick_in.mouse_pos / camera.viewport.zw * 2.0 - 1.0;
+    let ndc = vec4f(uv.x, -uv.y, 1.0, 1.0);
+    let world = camera.inv_view_proj * ndc;
+    let rd = normalize(world.xyz / world.w - camera.eye.xyz);
+    let ro = camera.eye.xyz;
+
+    let hit = pick_ray_march(ro, rd);
+    let t = hit.x;
+    let mat_id = hit.y;
+
+    let p = ro + rd * t;
+
+    pick_out[0] = mat_id;
+    pick_out[1] = t;
+    pick_out[2] = p.x;
+    pick_out[3] = p.y;
+    pick_out[4] = p.z;
+    pick_out[5] = 0.0;
+    pick_out[6] = 0.0;
+    pick_out[7] = 0.0;
+}
+"#;
+
+// ---------------------------------------------------------------------------
 // Code generation
 // ---------------------------------------------------------------------------
 
 pub fn generate_shader(scene: &Scene) -> String {
     let scene_sdf = generate_scene_sdf(scene);
     format!("{}\n{}\n{}", SHADER_PRELUDE, scene_sdf, SHADER_POSTLUDE)
+}
+
+pub fn generate_pick_shader(scene: &Scene) -> String {
+    let scene_sdf = generate_scene_sdf(scene);
+    format!("{}\n{}\n{}", SHADER_PRELUDE, scene_sdf, PICK_COMPUTE_POSTLUDE)
 }
 
 fn generate_scene_sdf(scene: &Scene) -> String {
@@ -211,9 +370,15 @@ fn generate_scene_sdf(scene: &Scene) -> String {
                     SdfPrimitive::Cylinder => "sdf_cylinder",
                     SdfPrimitive::Torus => "sdf_torus",
                     SdfPrimitive::Plane => "sdf_plane",
+                    SdfPrimitive::Cone => "sdf_cone",
+                    SdfPrimitive::Capsule => "sdf_capsule",
                 };
+                // Apply rotation: translate to local space, then rotate
                 lines.push(format!(
-                    "    let n{i} = vec2f({sdf_fn}(p - nodes[{i}].position.xyz, nodes[{i}].scale.xyz), f32({i}));"
+                    "    let lp{i} = rotate_euler(p - nodes[{i}].position.xyz, nodes[{i}].rotation.xyz);"
+                ));
+                lines.push(format!(
+                    "    let n{i} = vec2f({sdf_fn}(lp{i}, nodes[{i}].scale.xyz), f32({i}));"
                 ));
             }
             NodeData::Operation { op, left, right, .. } => {
@@ -258,6 +423,7 @@ pub fn build_node_buffer(scene: &Scene, selected: Option<NodeId>) -> Vec<SdfNode
             NodeData::Primitive {
                 kind,
                 position,
+                rotation,
                 scale,
                 color,
             } => {
@@ -267,12 +433,18 @@ pub fn build_node_buffer(scene: &Scene, selected: Option<NodeId>) -> Vec<SdfNode
                     SdfPrimitive::Cylinder => 2.0,
                     SdfPrimitive::Torus => 3.0,
                     SdfPrimitive::Plane => 4.0,
+                    SdfPrimitive::Cone => 5.0,
+                    SdfPrimitive::Capsule => 6.0,
                 };
                 buffer.push(SdfNodeGpu {
                     type_op: [type_val, 0.0, 0.0, 0.0],
                     position: [position.x, position.y, position.z, 0.0],
+                    rotation: [rotation.x, rotation.y, rotation.z, 0.0],
                     scale: [scale.x, scale.y, scale.z, 0.0],
                     color: [color.x, color.y, color.z, is_sel],
+                    extra0: [0.0; 4],
+                    extra1: [0.0; 4],
+                    extra2: [0.0; 4],
                 });
             }
             NodeData::Operation { op, smooth_k, .. } => {
@@ -285,8 +457,12 @@ pub fn build_node_buffer(scene: &Scene, selected: Option<NodeId>) -> Vec<SdfNode
                 buffer.push(SdfNodeGpu {
                     type_op: [op_val, *smooth_k, 0.0, 0.0],
                     position: [0.0; 4],
+                    rotation: [0.0; 4],
                     scale: [1.0, 1.0, 1.0, 0.0],
                     color: [0.0, 0.0, 0.0, is_sel],
+                    extra0: [0.0; 4],
+                    extra1: [0.0; 4],
+                    extra2: [0.0; 4],
                 });
             }
         }

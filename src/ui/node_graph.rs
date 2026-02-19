@@ -171,6 +171,8 @@ fn node_type_label(data: &NodeData) -> &str {
             SdfPrimitive::Cylinder => "Cylinder",
             SdfPrimitive::Torus => "Torus",
             SdfPrimitive::Plane => "Plane",
+            SdfPrimitive::Cone => "Cone",
+            SdfPrimitive::Capsule => "Capsule",
         },
         NodeData::Operation { op, .. } => match op {
             CsgOp::Union => "Union",
@@ -210,6 +212,14 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState) {
         }
         if ui.small_button("+Torus").clicked() {
             scene.create_torus();
+            state.layout_dirty = true;
+        }
+        if ui.small_button("+Cone").clicked() {
+            scene.create_cone();
+            state.layout_dirty = true;
+        }
+        if ui.small_button("+Capsule").clicked() {
+            scene.create_capsule();
             state.layout_dirty = true;
         }
         ui.separator();

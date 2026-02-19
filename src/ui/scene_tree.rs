@@ -132,6 +132,8 @@ fn format_node_label(node: &SceneNode, is_root: bool) -> String {
             SdfPrimitive::Cylinder => "[Cyl]",
             SdfPrimitive::Torus => "[Tor]",
             SdfPrimitive::Plane => "[Pln]",
+            SdfPrimitive::Cone => "[Con]",
+            SdfPrimitive::Capsule => "[Cap]",
         },
         NodeData::Operation { op, .. } => match op {
             CsgOp::Union => "[Uni]",
