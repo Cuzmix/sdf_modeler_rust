@@ -1,7 +1,9 @@
 use eframe::egui;
-use egui_dock::{DockState, NodeIndex, Split, TabViewer, Node};
+use egui_dock::{DockState, Node, NodeIndex, Split, TabViewer};
 
 use crate::gpu::camera::Camera;
+use crate::graph::scene::Scene;
+use crate::ui::node_graph::{self, NodeGraphState};
 use crate::ui::viewport;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -42,6 +44,8 @@ pub fn create_dock_state() -> DockState<Tab> {
 
 pub struct SdfTabViewer<'a> {
     pub camera: &'a mut Camera,
+    pub scene: &'a mut Scene,
+    pub node_graph_state: &'a mut NodeGraphState,
     pub time: f32,
 }
 
@@ -63,9 +67,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                 viewport::draw(ui, self.camera, self.time);
             }
             Tab::NodeGraph => {
-                ui.centered_and_justified(|ui| {
-                    ui.label("Node Graph — coming in Milestone 2");
-                });
+                node_graph::draw(ui, self.scene, self.node_graph_state);
             }
             Tab::Properties => {
                 ui.centered_and_justified(|ui| {

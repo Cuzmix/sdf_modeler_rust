@@ -1,35 +1,65 @@
 use eframe::egui;
+use eframe::egui_wgpu::RenderState;
 use egui_dock::DockState;
 
 use crate::gpu::camera::Camera;
+use crate::gpu::codegen;
 use crate::graph::scene::Scene;
 use crate::ui::dock::{self, SdfTabViewer, Tab};
+use crate::ui::node_graph::NodeGraphState;
 use crate::ui::viewport::ViewportResources;
 
 pub struct SdfApp {
     camera: Camera,
     scene: Scene,
     dock_state: DockState<Tab>,
+    node_graph_state: NodeGraphState,
+    render_state: RenderState,
+    current_structure_key: u64,
     last_time: f64,
     show_debug: bool,
 }
 
 impl SdfApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        if let Some(wgpu_state) = &cc.wgpu_render_state {
-            let resources =
-                ViewportResources::new(&wgpu_state.device, wgpu_state.target_format);
-            wgpu_state
-                .renderer
-                .write()
+        let render_state = cc
+            .wgpu_render_state
+            .clone()
+            .expect("WGPU render state required");
+
+        let scene = Scene::new();
+        let shader_src = codegen::generate_shader(&scene);
+        let structure_key = scene.structure_key();
+
+        let resources = ViewportResources::new(
+            &render_state.device,
+            render_state.target_format,
+            &shader_src,
+        );
+
+        // Upload initial scene buffer
+        let node_data = codegen::build_node_buffer(&scene, None);
+        {
+            let mut renderer = render_state.renderer.write();
+            renderer.callback_resources.insert(resources);
+        }
+        // Write initial buffer data
+        {
+            let mut renderer = render_state.renderer.write();
+            let res = renderer
                 .callback_resources
-                .insert(resources);
+                .get_mut::<ViewportResources>()
+                .unwrap();
+            res.update_scene_buffer(&render_state.device, &render_state.queue, &node_data);
         }
 
         Self {
             camera: Camera::default(),
-            scene: Scene::new(),
+            scene,
             dock_state: dock::create_dock_state(),
+            node_graph_state: NodeGraphState::new(),
+            render_state,
+            current_structure_key: structure_key,
             last_time: 0.0,
             show_debug: true,
         }
@@ -60,6 +90,11 @@ impl SdfApp {
                 ));
                 ui.separator();
                 ui.label(format!("Nodes: {}", self.scene.nodes.len()));
+                if let Some(root) = self.scene.root {
+                    ui.label(format!("Root: {}", root));
+                } else {
+                    ui.label("Root: none");
+                }
             });
     }
 }
@@ -74,10 +109,44 @@ impl eframe::App for SdfApp {
             self.show_debug = !self.show_debug;
         }
 
+        // --- Frame-start: check for topology changes and update GPU ---
+        let new_key = self.scene.structure_key();
+        if new_key != self.current_structure_key {
+            let shader_src = codegen::generate_shader(&self.scene);
+            let mut renderer = self.render_state.renderer.write();
+            if let Some(res) = renderer
+                .callback_resources
+                .get_mut::<ViewportResources>()
+            {
+                res.rebuild_pipeline(&self.render_state.device, &shader_src);
+            }
+            self.current_structure_key = new_key;
+        }
+
+        // Update scene buffer every frame (parameters may have changed)
+        let node_data =
+            codegen::build_node_buffer(&self.scene, self.node_graph_state.selected);
+        {
+            let mut renderer = self.render_state.renderer.write();
+            if let Some(res) = renderer
+                .callback_resources
+                .get_mut::<ViewportResources>()
+            {
+                res.update_scene_buffer(
+                    &self.render_state.device,
+                    &self.render_state.queue,
+                    &node_data,
+                );
+            }
+        }
+
+        // --- UI ---
         self.show_debug_window(ctx, dt);
 
         let mut tab_viewer = SdfTabViewer {
             camera: &mut self.camera,
+            scene: &mut self.scene,
+            node_graph_state: &mut self.node_graph_state,
             time: now as f32,
         };
 
