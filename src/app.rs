@@ -4,6 +4,7 @@ use egui_dock::DockState;
 
 use crate::gpu::camera::Camera;
 use crate::gpu::codegen;
+use crate::graph::history::History;
 use crate::graph::scene::Scene;
 use crate::ui::dock::{self, SdfTabViewer, Tab};
 use crate::ui::node_graph::NodeGraphState;
@@ -16,6 +17,7 @@ pub struct SdfApp {
     node_graph_state: NodeGraphState,
     render_state: RenderState,
     current_structure_key: u64,
+    history: History,
     last_time: f64,
     show_debug: bool,
 }
@@ -43,7 +45,6 @@ impl SdfApp {
             let mut renderer = render_state.renderer.write();
             renderer.callback_resources.insert(resources);
         }
-        // Write initial buffer data
         {
             let mut renderer = render_state.renderer.write();
             let res = renderer
@@ -60,6 +61,7 @@ impl SdfApp {
             node_graph_state: NodeGraphState::new(),
             render_state,
             current_structure_key: structure_key,
+            history: History::new(),
             last_time: 0.0,
             show_debug: true,
         }
@@ -109,6 +111,34 @@ impl eframe::App for SdfApp {
             self.show_debug = !self.show_debug;
         }
 
+        // --- Undo/Redo: capture "before" snapshot ---
+        self.history
+            .begin_frame(&self.scene, self.node_graph_state.selected);
+
+        // --- Undo/Redo keyboard shortcuts ---
+        let undo_pressed = ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Z));
+        let redo_pressed = ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Y));
+
+        if undo_pressed {
+            if let Some((restored_scene, restored_sel)) = self
+                .history
+                .undo(&self.scene, self.node_graph_state.selected)
+            {
+                self.scene = restored_scene;
+                self.node_graph_state.selected = restored_sel;
+                self.node_graph_state.layout_dirty = true;
+            }
+        } else if redo_pressed {
+            if let Some((restored_scene, restored_sel)) = self
+                .history
+                .redo(&self.scene, self.node_graph_state.selected)
+            {
+                self.scene = restored_scene;
+                self.node_graph_state.selected = restored_sel;
+                self.node_graph_state.layout_dirty = true;
+            }
+        }
+
         // --- Frame-start: check for topology changes and update GPU ---
         let new_key = self.scene.structure_key();
         if new_key != self.current_structure_key {
@@ -156,6 +186,14 @@ impl eframe::App for SdfApp {
                 egui_dock::DockArea::new(&mut self.dock_state)
                     .show_inside(ui, &mut tab_viewer);
             });
+
+        // --- Undo/Redo: end-of-frame commit ---
+        let is_dragging = ctx.dragged_id().is_some();
+        self.history.end_frame(
+            &self.scene,
+            self.node_graph_state.selected,
+            is_dragging,
+        );
 
         ctx.request_repaint();
     }

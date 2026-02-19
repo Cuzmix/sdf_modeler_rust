@@ -44,6 +44,7 @@ pub struct SceneNode {
     pub data: NodeData,
 }
 
+#[derive(Clone)]
 pub struct Scene {
     pub nodes: HashMap<NodeId, SceneNode>,
     pub root: Option<NodeId>,
@@ -284,5 +285,67 @@ impl Scene {
             self.topo_visit(*right, visited, result);
         }
         result.push(id);
+    }
+
+    // --- Reachability ---
+
+    /// Returns the set of all NodeIds reachable from root via DFS.
+    pub fn reachable_from_root(&self) -> HashSet<NodeId> {
+        let mut visited = HashSet::new();
+        if let Some(root) = self.root {
+            self.visit_reachable(root, &mut visited);
+        }
+        visited
+    }
+
+    fn visit_reachable(&self, id: NodeId, visited: &mut HashSet<NodeId>) {
+        if !visited.insert(id) {
+            return;
+        }
+        if let Some(node) = self.nodes.get(&id) {
+            if let NodeData::Operation { left, right, .. } = &node.data {
+                self.visit_reachable(*left, visited);
+                self.visit_reachable(*right, visited);
+            }
+        }
+    }
+
+    /// Deep equality check (topology + parameters). Used by undo system.
+    pub fn content_eq(&self, other: &Scene) -> bool {
+        if self.root != other.root || self.nodes.len() != other.nodes.len() {
+            return false;
+        }
+        for (id, node) in &self.nodes {
+            let Some(other_node) = other.nodes.get(id) else {
+                return false;
+            };
+            if node.name != other_node.name {
+                return false;
+            }
+            match (&node.data, &other_node.data) {
+                (
+                    NodeData::Primitive { kind: k1, position: p1, scale: s1, color: c1 },
+                    NodeData::Primitive { kind: k2, position: p2, scale: s2, color: c2 },
+                ) => {
+                    if std::mem::discriminant(k1) != std::mem::discriminant(k2)
+                        || p1 != p2 || s1 != s2 || c1 != c2
+                    {
+                        return false;
+                    }
+                }
+                (
+                    NodeData::Operation { op: o1, smooth_k: k1, left: l1, right: r1 },
+                    NodeData::Operation { op: o2, smooth_k: k2, left: l2, right: r2 },
+                ) => {
+                    if std::mem::discriminant(o1) != std::mem::discriminant(o2)
+                        || k1 != k2 || l1 != l2 || r1 != r2
+                    {
+                        return false;
+                    }
+                }
+                _ => return false,
+            }
+        }
+        true
     }
 }

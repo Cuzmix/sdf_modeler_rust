@@ -4,7 +4,7 @@ use egui_dock::{DockState, Node, NodeIndex, Split, TabViewer};
 use crate::gpu::camera::Camera;
 use crate::graph::scene::Scene;
 use crate::ui::node_graph::{self, NodeGraphState};
-use crate::ui::viewport;
+use crate::ui::{properties, scene_tree, viewport};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Tab {
@@ -70,14 +70,10 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                 node_graph::draw(ui, self.scene, self.node_graph_state);
             }
             Tab::Properties => {
-                ui.centered_and_justified(|ui| {
-                    ui.label("Properties — coming in Milestone 3");
-                });
+                properties::draw(ui, self.scene, self.node_graph_state.selected);
             }
             Tab::SceneTree => {
-                ui.centered_and_justified(|ui| {
-                    ui.label("Scene Tree — coming in Milestone 3");
-                });
+                scene_tree::draw(ui, self.scene, &mut self.node_graph_state.selected);
             }
         }
     }
