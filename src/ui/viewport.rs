@@ -29,92 +29,27 @@ pub struct ViewportResources {
 }
 
 impl ViewportResources {
-    pub fn new(
+    fn create_render_pipeline(
         device: &wgpu::Device,
-        target_format: wgpu::TextureFormat,
         shader_src: &str,
-        pick_shader_src: &str,
-    ) -> Self {
+        camera_bgl: &wgpu::BindGroupLayout,
+        scene_bgl: &wgpu::BindGroupLayout,
+        target_format: wgpu::TextureFormat,
+    ) -> wgpu::RenderPipeline {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("SDF Shader"),
             source: wgpu::ShaderSource::Wgsl(shader_src.into()),
         });
 
-        let camera_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Camera Uniform"),
-            size: std::mem::size_of::<CameraUniform>() as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
+        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("SDF Pipeline Layout"),
+            bind_group_layouts: &[camera_bgl, scene_bgl],
+            push_constant_ranges: &[],
         });
 
-        // Camera BGL: accessible from vertex, fragment, AND compute
-        let camera_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Camera BGL"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT | wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
-        });
-
-        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Camera BG"),
-            layout: &camera_bgl,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: camera_buffer.as_entire_binding(),
-            }],
-        });
-
-        // Scene storage buffer
-        let initial_capacity = 16usize;
-        let scene_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Scene Storage"),
-            size: (initial_capacity * std::mem::size_of::<SdfNodeGpu>()) as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        // Scene BGL: accessible from fragment AND compute
-        let scene_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Scene BGL"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::FRAGMENT | wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: true },
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
-        });
-
-        let scene_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Scene BG"),
-            layout: &scene_bgl,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: scene_buffer.as_entire_binding(),
-            }],
-        });
-
-        // --- Render pipeline ---
-        let render_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("SDF Pipeline Layout"),
-                bind_group_layouts: &[&camera_bgl, &scene_bgl],
-                push_constant_ranges: &[],
-            });
-
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("SDF Pipeline"),
-            layout: Some(&render_pipeline_layout),
+            layout: Some(&layout),
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
@@ -139,7 +74,107 @@ impl ViewportResources {
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
             cache: None,
+        })
+    }
+
+    fn create_pick_pipeline(
+        device: &wgpu::Device,
+        pick_shader_src: &str,
+        camera_bgl: &wgpu::BindGroupLayout,
+        scene_bgl: &wgpu::BindGroupLayout,
+        pick_bgl: &wgpu::BindGroupLayout,
+    ) -> wgpu::ComputePipeline {
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Pick Compute Shader"),
+            source: wgpu::ShaderSource::Wgsl(pick_shader_src.into()),
         });
+
+        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Pick Pipeline Layout"),
+            bind_group_layouts: &[camera_bgl, scene_bgl, pick_bgl],
+            push_constant_ranges: &[],
+        });
+
+        device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("Pick Compute Pipeline"),
+            layout: Some(&layout),
+            module: &shader,
+            entry_point: "cs_pick",
+            compilation_options: Default::default(),
+            cache: None,
+        })
+    }
+
+    pub fn new(
+        device: &wgpu::Device,
+        target_format: wgpu::TextureFormat,
+        shader_src: &str,
+        pick_shader_src: &str,
+    ) -> Self {
+        let camera_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Camera Uniform"),
+            size: std::mem::size_of::<CameraUniform>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let camera_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Camera BGL"),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT | wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
+
+        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Camera BG"),
+            layout: &camera_bgl,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: camera_buffer.as_entire_binding(),
+            }],
+        });
+
+        let initial_capacity = 16usize;
+        let scene_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Scene Storage"),
+            size: (initial_capacity * std::mem::size_of::<SdfNodeGpu>()) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let scene_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Scene BGL"),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT | wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
+
+        let scene_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Scene BG"),
+            layout: &scene_bgl,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: scene_buffer.as_entire_binding(),
+            }],
+        });
+
+        let pipeline = Self::create_render_pipeline(
+            device, shader_src, &camera_bgl, &scene_bgl, target_format,
+        );
 
         // --- Pick compute resources ---
         let pick_input_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -204,26 +239,9 @@ impl ViewportResources {
             ],
         });
 
-        let pick_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Pick Compute Shader"),
-            source: wgpu::ShaderSource::Wgsl(pick_shader_src.into()),
-        });
-
-        let pick_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Pick Pipeline Layout"),
-                bind_group_layouts: &[&camera_bgl, &scene_bgl, &pick_bgl],
-                push_constant_ranges: &[],
-            });
-
-        let pick_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("Pick Compute Pipeline"),
-            layout: Some(&pick_pipeline_layout),
-            module: &pick_shader,
-            entry_point: "cs_pick",
-            compilation_options: Default::default(),
-            cache: None,
-        });
+        let pick_pipeline = Self::create_pick_pipeline(
+            device, pick_shader_src, &camera_bgl, &scene_bgl, &pick_bgl,
+        );
 
         Self {
             pipeline,
@@ -250,69 +268,12 @@ impl ViewportResources {
         shader_src: &str,
         pick_shader_src: &str,
     ) {
-        // Rebuild render pipeline
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("SDF Shader (rebuilt)"),
-            source: wgpu::ShaderSource::Wgsl(shader_src.into()),
-        });
-
-        let render_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("SDF Pipeline Layout"),
-                bind_group_layouts: &[&self.camera_bgl, &self.scene_bgl],
-                push_constant_ranges: &[],
-            });
-
-        self.pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("SDF Pipeline"),
-            layout: Some(&render_pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: "vs_main",
-                buffers: &[],
-                compilation_options: Default::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: "fs_main",
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: self.target_format,
-                    blend: None,
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: Default::default(),
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                ..Default::default()
-            },
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            multiview: None,
-            cache: None,
-        });
-
-        // Rebuild pick compute pipeline
-        let pick_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Pick Compute Shader (rebuilt)"),
-            source: wgpu::ShaderSource::Wgsl(pick_shader_src.into()),
-        });
-
-        let pick_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Pick Pipeline Layout"),
-                bind_group_layouts: &[&self.camera_bgl, &self.scene_bgl, &self.pick_bgl],
-                push_constant_ranges: &[],
-            });
-
-        self.pick_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("Pick Compute Pipeline"),
-            layout: Some(&pick_pipeline_layout),
-            module: &pick_shader,
-            entry_point: "cs_pick",
-            compilation_options: Default::default(),
-            cache: None,
-        });
+        self.pipeline = Self::create_render_pipeline(
+            device, shader_src, &self.camera_bgl, &self.scene_bgl, self.target_format,
+        );
+        self.pick_pipeline = Self::create_pick_pipeline(
+            device, pick_shader_src, &self.camera_bgl, &self.scene_bgl, &self.pick_bgl,
+        );
     }
 
     pub fn update_scene_buffer(
@@ -471,12 +432,12 @@ pub fn draw(
     let response = ui.allocate_rect(rect, egui::Sense::click_and_drag());
 
     // --- Paint the SDF viewport (WGPU callback) ---
-    let ppp = ui.ctx().pixels_per_point();
+    let pixels_per_point = ui.ctx().pixels_per_point();
     let viewport = [
-        rect.min.x * ppp,
-        rect.min.y * ppp,
-        rect.width() * ppp,
-        rect.height() * ppp,
+        rect.min.x * pixels_per_point,
+        rect.min.y * pixels_per_point,
+        rect.width() * pixels_per_point,
+        rect.height() * pixels_per_point,
     ];
     let uniform = camera.to_uniform(viewport, time);
 
@@ -505,8 +466,8 @@ pub fn draw(
         if response.clicked() {
             if let Some(pos) = response.interact_pointer_pos() {
                 let mouse_px = [
-                    (pos.x - rect.min.x) * ppp,
-                    (pos.y - rect.min.y) * ppp,
+                    (pos.x - rect.min.x) * pixels_per_point,
+                    (pos.y - rect.min.y) * pixels_per_point,
                 ];
                 let pick_uniform = camera.to_uniform(viewport, time);
                 pending_pick = Some(PendingPick {

@@ -1,6 +1,33 @@
 use eframe::egui;
 
-use crate::graph::scene::{CsgOp, NodeData, NodeId, Scene, SdfPrimitive};
+use crate::graph::scene::{NodeData, NodeId, Scene};
+
+const SCALE_MIN: f32 = 0.01;
+const SCALE_MAX: f32 = 100.0;
+
+fn vec3_editor(
+    ui: &mut egui::Ui,
+    label: &str,
+    value: &mut glam::Vec3,
+    speed: f32,
+    range: Option<std::ops::RangeInclusive<f32>>,
+    suffix: &str,
+) {
+    ui.label(label);
+    ui.horizontal(|ui| {
+        for (axis_label, component) in [("X:", &mut value.x), ("Y:", &mut value.y), ("Z:", &mut value.z)] {
+            ui.label(axis_label);
+            let mut drag = egui::DragValue::new(component).speed(speed);
+            if !suffix.is_empty() {
+                drag = drag.suffix(suffix);
+            }
+            if let Some(ref r) = range {
+                drag = drag.range(r.clone());
+            }
+            ui.add(drag);
+        }
+    });
+}
 
 pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, selected: Option<NodeId>) {
     let Some(id) = selected else {
@@ -39,69 +66,25 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, selected: Option<NodeId>) {
             mut scale,
             mut color,
         } => {
-            let type_str = match kind {
-                SdfPrimitive::Sphere => "Sphere",
-                SdfPrimitive::Box => "Box",
-                SdfPrimitive::Cylinder => "Cylinder",
-                SdfPrimitive::Torus => "Torus",
-                SdfPrimitive::Plane => "Plane",
-                SdfPrimitive::Cone => "Cone",
-                SdfPrimitive::Capsule => "Capsule",
-            };
-            ui.label(format!("Type: {}", type_str));
+            ui.label(format!("Type: {}", kind.base_name()));
             ui.separator();
 
-            ui.label("Position");
-            ui.horizontal(|ui| {
-                ui.label("X:");
-                ui.add(egui::DragValue::new(&mut position.x).speed(0.05));
-                ui.label("Y:");
-                ui.add(egui::DragValue::new(&mut position.y).speed(0.05));
-                ui.label("Z:");
-                ui.add(egui::DragValue::new(&mut position.z).speed(0.05));
-            });
+            vec3_editor(ui, "Position", &mut position, 0.05, None, "");
 
-            ui.label("Rotation");
+            // Rotation: display in degrees, store in radians
             let mut rot_deg = glam::Vec3::new(
                 rotation.x.to_degrees(),
                 rotation.y.to_degrees(),
                 rotation.z.to_degrees(),
             );
-            ui.horizontal(|ui| {
-                ui.label("X:");
-                ui.add(egui::DragValue::new(&mut rot_deg.x).speed(1.0).suffix("°"));
-                ui.label("Y:");
-                ui.add(egui::DragValue::new(&mut rot_deg.y).speed(1.0).suffix("°"));
-                ui.label("Z:");
-                ui.add(egui::DragValue::new(&mut rot_deg.z).speed(1.0).suffix("°"));
-            });
+            vec3_editor(ui, "Rotation", &mut rot_deg, 1.0, None, "\u{00B0}");
             rotation = glam::Vec3::new(
                 rot_deg.x.to_radians(),
                 rot_deg.y.to_radians(),
                 rot_deg.z.to_radians(),
             );
 
-            ui.label("Scale");
-            ui.horizontal(|ui| {
-                ui.label("X:");
-                ui.add(
-                    egui::DragValue::new(&mut scale.x)
-                        .speed(0.05)
-                        .range(0.01..=100.0),
-                );
-                ui.label("Y:");
-                ui.add(
-                    egui::DragValue::new(&mut scale.y)
-                        .speed(0.05)
-                        .range(0.01..=100.0),
-                );
-                ui.label("Z:");
-                ui.add(
-                    egui::DragValue::new(&mut scale.z)
-                        .speed(0.05)
-                        .range(0.01..=100.0),
-                );
-            });
+            vec3_editor(ui, "Scale", &mut scale, 0.05, Some(SCALE_MIN..=SCALE_MAX), "");
 
             ui.label("Color");
             let mut color_arr = [color.x, color.y, color.z];
@@ -131,13 +114,7 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, selected: Option<NodeId>) {
             left,
             right,
         } => {
-            let op_str = match op {
-                CsgOp::Union => "Union",
-                CsgOp::SmoothUnion => "Smooth Union",
-                CsgOp::Subtract => "Subtract",
-                CsgOp::Intersect => "Intersect",
-            };
-            ui.label(format!("Operation: {}", op_str));
+            ui.label(format!("Operation: {}", op.base_name()));
             ui.separator();
 
             ui.horizontal(|ui| {

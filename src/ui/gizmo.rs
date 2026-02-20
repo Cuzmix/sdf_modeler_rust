@@ -21,6 +21,40 @@ pub enum GizmoAxis {
     Z,
 }
 
+impl GizmoAxis {
+    fn direction(&self) -> Vec3 {
+        match self {
+            Self::X => Vec3::X,
+            Self::Y => Vec3::Y,
+            Self::Z => Vec3::Z,
+        }
+    }
+
+    fn color(&self) -> Color32 {
+        match self {
+            Self::X => COLOR_X,
+            Self::Y => COLOR_Y,
+            Self::Z => COLOR_Z,
+        }
+    }
+
+    fn hover_color(&self) -> Color32 {
+        match self {
+            Self::X => COLOR_X_HOVER,
+            Self::Y => COLOR_Y_HOVER,
+            Self::Z => COLOR_Z_HOVER,
+        }
+    }
+}
+
+fn axis_color(axis: &GizmoAxis, active: &Option<GizmoAxis>, hovered: &Option<GizmoAxis>) -> Color32 {
+    if active.as_ref() == Some(axis) || hovered.as_ref() == Some(axis) {
+        axis.hover_color()
+    } else {
+        axis.color()
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum GizmoState {
     Idle,
@@ -150,27 +184,9 @@ pub fn draw_and_interact(
         _ => None,
     };
 
-    let x_color = if dragging_axis.as_ref() == Some(&GizmoAxis::X)
-        || hovered_axis.as_ref() == Some(&GizmoAxis::X)
-    {
-        COLOR_X_HOVER
-    } else {
-        COLOR_X
-    };
-    let y_color = if dragging_axis.as_ref() == Some(&GizmoAxis::Y)
-        || hovered_axis.as_ref() == Some(&GizmoAxis::Y)
-    {
-        COLOR_Y_HOVER
-    } else {
-        COLOR_Y
-    };
-    let z_color = if dragging_axis.as_ref() == Some(&GizmoAxis::Z)
-        || hovered_axis.as_ref() == Some(&GizmoAxis::Z)
-    {
-        COLOR_Z_HOVER
-    } else {
-        COLOR_Z
-    };
+    let x_color = axis_color(&GizmoAxis::X, &dragging_axis, &hovered_axis);
+    let y_color = axis_color(&GizmoAxis::Y, &dragging_axis, &hovered_axis);
+    let z_color = axis_color(&GizmoAxis::Z, &dragging_axis, &hovered_axis);
 
     // Draw axis lines
     painter.line_segment(
@@ -216,11 +232,7 @@ pub fn draw_and_interact(
         } = gizmo_state
         {
             let drag_node = *drag_node;
-            let axis_dir = match axis {
-                GizmoAxis::X => Vec3::X,
-                GizmoAxis::Y => Vec3::Y,
-                GizmoAxis::Z => Vec3::Z,
-            };
+            let axis_dir = axis.direction();
 
             // Project axis direction to screen space
             let axis_screen_dir = {

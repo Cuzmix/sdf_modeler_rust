@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use eframe::egui;
 
-use crate::graph::scene::{CsgOp, NodeData, NodeId, Scene, SceneNode, SdfPrimitive};
+use crate::graph::scene::{NodeData, NodeId, Scene, SceneNode};
 
 const COLOR_SELECTED: egui::Color32 = egui::Color32::from_rgb(255, 200, 60);
 const COLOR_NORMAL: egui::Color32 = egui::Color32::from_rgb(200, 200, 210);
@@ -125,23 +125,10 @@ fn draw_leaf_item_with_root(
 }
 
 fn format_node_label(node: &SceneNode, is_root: bool) -> String {
-    let type_badge = match &node.data {
-        NodeData::Primitive { kind, .. } => match kind {
-            SdfPrimitive::Sphere => "[Sph]",
-            SdfPrimitive::Box => "[Box]",
-            SdfPrimitive::Cylinder => "[Cyl]",
-            SdfPrimitive::Torus => "[Tor]",
-            SdfPrimitive::Plane => "[Pln]",
-            SdfPrimitive::Cone => "[Con]",
-            SdfPrimitive::Capsule => "[Cap]",
-        },
-        NodeData::Operation { op, .. } => match op {
-            CsgOp::Union => "[Uni]",
-            CsgOp::SmoothUnion => "[SmU]",
-            CsgOp::Subtract => "[Sub]",
-            CsgOp::Intersect => "[Int]",
-        },
+    let badge = match &node.data {
+        NodeData::Primitive { kind, .. } => kind.badge(),
+        NodeData::Operation { op, .. } => op.badge(),
     };
     let root_marker = if is_root { " (R)" } else { "" };
-    format!("{} {}{}", type_badge, node.name, root_marker)
+    format!("{} {}{}", badge, node.name, root_marker)
 }

@@ -147,7 +147,7 @@ fn node_screen_rect(node_pos: Pos2, pan: Vec2) -> Rect {
 }
 
 // ---------------------------------------------------------------------------
-// Drawing
+// Drawing helpers
 // ---------------------------------------------------------------------------
 
 fn draw_bezier(painter: &egui::Painter, from: Pos2, to: Pos2, color: Color32) {
@@ -165,21 +165,8 @@ fn draw_bezier(painter: &egui::Painter, from: Pos2, to: Pos2, color: Color32) {
 
 fn node_type_label(data: &NodeData) -> &str {
     match data {
-        NodeData::Primitive { kind, .. } => match kind {
-            SdfPrimitive::Sphere => "Sphere",
-            SdfPrimitive::Box => "Box",
-            SdfPrimitive::Cylinder => "Cylinder",
-            SdfPrimitive::Torus => "Torus",
-            SdfPrimitive::Plane => "Plane",
-            SdfPrimitive::Cone => "Cone",
-            SdfPrimitive::Capsule => "Capsule",
-        },
-        NodeData::Operation { op, .. } => match op {
-            CsgOp::Union => "Union",
-            CsgOp::SmoothUnion => "Smooth U",
-            CsgOp::Subtract => "Subtract",
-            CsgOp::Intersect => "Intersect",
-        },
+        NodeData::Primitive { kind, .. } => kind.base_name(),
+        NodeData::Operation { op, .. } => op.base_name(),
     }
 }
 
@@ -191,51 +178,41 @@ fn badge_color(data: &NodeData) -> Color32 {
 }
 
 // ---------------------------------------------------------------------------
-// Main draw function
+// Toolbar
 // ---------------------------------------------------------------------------
 
-pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState) {
-    // Toolbar
+fn draw_toolbar(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState) {
     ui.horizontal(|ui| {
         ui.style_mut().spacing.button_padding = Vec2::new(4.0, 2.0);
-        if ui.small_button("+Sphere").clicked() {
-            scene.create_sphere();
-            state.layout_dirty = true;
-        }
-        if ui.small_button("+Box").clicked() {
-            scene.create_box();
-            state.layout_dirty = true;
-        }
-        if ui.small_button("+Cyl").clicked() {
-            scene.create_cylinder();
-            state.layout_dirty = true;
-        }
-        if ui.small_button("+Torus").clicked() {
-            scene.create_torus();
-            state.layout_dirty = true;
-        }
-        if ui.small_button("+Cone").clicked() {
-            scene.create_cone();
-            state.layout_dirty = true;
-        }
-        if ui.small_button("+Capsule").clicked() {
-            scene.create_capsule();
-            state.layout_dirty = true;
+
+        // Primitive buttons
+        for kind in [
+            SdfPrimitive::Sphere,
+            SdfPrimitive::Box,
+            SdfPrimitive::Cylinder,
+            SdfPrimitive::Torus,
+            SdfPrimitive::Cone,
+            SdfPrimitive::Capsule,
+        ] {
+            let label = format!("+{}", kind.base_name());
+            if ui.small_button(&label).clicked() {
+                scene.create_primitive(kind);
+                state.layout_dirty = true;
+            }
         }
         ui.separator();
 
-        // Operation buttons: need two selected/existing primitives
-        if ui.small_button("+Union").clicked() {
-            create_op_from_selection(scene, state, |s, l, r| s.create_union(l, r));
-        }
-        if ui.small_button("+SmoothU").clicked() {
-            create_op_from_selection(scene, state, |s, l, r| s.create_smooth_union(l, r));
-        }
-        if ui.small_button("+Sub").clicked() {
-            create_op_from_selection(scene, state, |s, l, r| s.create_subtract(l, r));
-        }
-        if ui.small_button("+Inter").clicked() {
-            create_op_from_selection(scene, state, |s, l, r| s.create_intersect(l, r));
+        // Operation buttons
+        for op in [
+            CsgOp::Union,
+            CsgOp::SmoothUnion,
+            CsgOp::Subtract,
+            CsgOp::Intersect,
+        ] {
+            let label = format!("+{}", op.base_name());
+            if ui.small_button(&label).clicked() {
+                create_op_from_selection(scene, state, op);
+            }
         }
         ui.separator();
 
@@ -253,51 +230,25 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState) {
             }
         }
     });
+}
 
-    // Canvas
-    let canvas_rect = ui.available_rect_before_wrap();
-    let response = ui.allocate_rect(canvas_rect, egui::Sense::click_and_drag());
-    let painter = ui.painter_at(canvas_rect);
+// ---------------------------------------------------------------------------
+// Connections (wires between nodes)
+// ---------------------------------------------------------------------------
 
-    // Background
-    painter.rect_filled(canvas_rect, 0.0, COLOR_BG);
-
-    // Auto-layout if dirty
-    if state.layout_dirty {
-        auto_layout(scene, state);
-    }
-
-    // Pan: right-drag, middle-drag, or scroll
-    if response.dragged_by(egui::PointerButton::Secondary)
-        || response.dragged_by(egui::PointerButton::Middle)
-    {
-        if !matches!(state.drag, DragState::WireDrag { .. }) {
-            state.pan_offset += response.drag_delta();
-        }
-    }
-    if response.hovered() {
-        let scroll = ui.input(|i| i.smooth_scroll_delta);
-        if scroll != Vec2::ZERO {
-            state.pan_offset += scroll;
-        }
-    }
-
-    let pan = state.pan_offset;
-
-    // Draw connections
-    let node_snapshot: Vec<(NodeId, NodeData)> = scene
-        .nodes
-        .values()
-        .map(|n| (n.id, n.data.clone()))
-        .collect();
-
-    for (id, data) in &node_snapshot {
+fn draw_connections(
+    painter: &egui::Painter,
+    node_snapshot: &[(NodeId, NodeData)],
+    state: &NodeGraphState,
+    pan: Vec2,
+) {
+    for (id, data) in node_snapshot {
         if let NodeData::Operation { left, right, .. } = data {
             if let (Some(&left_pos), Some(&op_pos)) =
                 (state.node_positions.get(left), state.node_positions.get(id))
             {
                 draw_bezier(
-                    &painter,
+                    painter,
                     output_port_pos(left_pos, pan),
                     input_left_port_pos(op_pos, pan),
                     COLOR_WIRE,
@@ -307,7 +258,7 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState) {
                 (state.node_positions.get(right), state.node_positions.get(id))
             {
                 draw_bezier(
-                    &painter,
+                    painter,
                     output_port_pos(right_pos, pan),
                     input_right_port_pos(op_pos, pan),
                     COLOR_WIRE,
@@ -316,7 +267,7 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState) {
         }
     }
 
-    // Draw wire drag preview
+    // Wire drag preview
     if let DragState::WireDrag {
         from_node,
         from_port,
@@ -328,88 +279,100 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState) {
                 PortKind::InputLeft => input_left_port_pos(from_pos, pan),
                 PortKind::InputRight => input_right_port_pos(from_pos, pan),
             };
-            if let Some(mouse) = response.hover_pos() {
-                draw_bezier(&painter, start, mouse, COLOR_WIRE_DRAG);
+            if let Some(mouse) = painter.ctx().pointer_hover_pos() {
+                draw_bezier(painter, start, mouse, COLOR_WIRE_DRAG);
             }
         }
     }
+}
 
-    // Draw node cards + ports
-    let mut node_rects: Vec<(NodeId, Rect)> = Vec::new();
+// ---------------------------------------------------------------------------
+// Single node card
+// ---------------------------------------------------------------------------
 
-    for (id, data) in &node_snapshot {
-        let Some(&node_pos) = state.node_positions.get(id) else {
-            continue;
-        };
-        let rect = node_screen_rect(node_pos, pan);
-        if !canvas_rect.intersects(rect) {
-            continue;
-        }
-        node_rects.push((*id, rect));
+fn draw_node_card(
+    painter: &egui::Painter,
+    scene: &Scene,
+    id: NodeId,
+    data: &NodeData,
+    node_pos: Pos2,
+    pan: Vec2,
+    is_selected: bool,
+    is_root: bool,
+) -> Rect {
+    let rect = node_screen_rect(node_pos, pan);
 
-        let is_selected = state.selected == Some(*id);
-        let is_root = scene.root == Some(*id);
-
-        // Node body
-        let bg = if is_selected { COLOR_NODE_SEL } else { COLOR_NODE };
-        painter.rect_filled(rect, 4.0, bg);
-        if is_selected {
-            painter.rect_stroke(rect, 4.0, Stroke::new(2.0, COLOR_SEL_BORDER));
-        } else {
-            painter.rect_stroke(rect, 4.0, Stroke::new(1.0, Color32::from_rgb(70, 70, 80)));
-        }
-
-        // Badge bar
-        let badge_rect =
-            Rect::from_min_size(rect.min, Vec2::new(NODE_WIDTH, 18.0));
-        painter.rect_filled(badge_rect, egui::Rounding { nw: 4.0, ne: 4.0, sw: 0.0, se: 0.0 }, badge_color(data));
-
-        // Type label
-        let label = node_type_label(data);
-        painter.text(
-            badge_rect.center(),
-            egui::Align2::CENTER_CENTER,
-            label,
-            egui::FontId::proportional(11.0),
-            Color32::WHITE,
-        );
-
-        // Node name
-        let name = scene.nodes.get(id).map(|n| n.name.as_str()).unwrap_or("?");
-        painter.text(
-            Pos2::new(rect.center().x, rect.min.y + 32.0),
-            egui::Align2::CENTER_CENTER,
-            name,
-            egui::FontId::proportional(10.0),
-            Color32::from_rgb(200, 200, 210),
-        );
-
-        // Root badge
-        if is_root {
-            painter.text(
-                Pos2::new(rect.max.x - 8.0, rect.min.y + 32.0),
-                egui::Align2::RIGHT_CENTER,
-                "R",
-                egui::FontId::proportional(9.0),
-                COLOR_ROOT_BADGE,
-            );
-        }
-
-        // Output port (all nodes)
-        let out_pos = output_port_pos(node_pos, pan);
-        painter.circle_filled(out_pos, PORT_RADIUS, COLOR_PORT_OUT);
-
-        // Input ports (operations only)
-        if matches!(data, NodeData::Operation { .. }) {
-            let in_l = input_left_port_pos(node_pos, pan);
-            let in_r = input_right_port_pos(node_pos, pan);
-            painter.circle_filled(in_l, PORT_RADIUS, COLOR_PORT_IN);
-            painter.circle_filled(in_r, PORT_RADIUS, COLOR_PORT_IN);
-        }
+    // Node body
+    let bg = if is_selected { COLOR_NODE_SEL } else { COLOR_NODE };
+    painter.rect_filled(rect, 4.0, bg);
+    if is_selected {
+        painter.rect_stroke(rect, 4.0, Stroke::new(2.0, COLOR_SEL_BORDER));
+    } else {
+        painter.rect_stroke(rect, 4.0, Stroke::new(1.0, Color32::from_rgb(70, 70, 80)));
     }
 
-    // --- Interaction handling ---
+    // Badge bar
+    let badge_rect = Rect::from_min_size(rect.min, Vec2::new(NODE_WIDTH, 18.0));
+    painter.rect_filled(
+        badge_rect,
+        egui::Rounding { nw: 4.0, ne: 4.0, sw: 0.0, se: 0.0 },
+        badge_color(data),
+    );
 
+    // Type label
+    painter.text(
+        badge_rect.center(),
+        egui::Align2::CENTER_CENTER,
+        node_type_label(data),
+        egui::FontId::proportional(11.0),
+        Color32::WHITE,
+    );
+
+    // Node name
+    let name = scene.nodes.get(&id).map(|n| n.name.as_str()).unwrap_or("?");
+    painter.text(
+        Pos2::new(rect.center().x, rect.min.y + 32.0),
+        egui::Align2::CENTER_CENTER,
+        name,
+        egui::FontId::proportional(10.0),
+        Color32::from_rgb(200, 200, 210),
+    );
+
+    // Root badge
+    if is_root {
+        painter.text(
+            Pos2::new(rect.max.x - 8.0, rect.min.y + 32.0),
+            egui::Align2::RIGHT_CENTER,
+            "R",
+            egui::FontId::proportional(9.0),
+            COLOR_ROOT_BADGE,
+        );
+    }
+
+    // Output port (all nodes)
+    painter.circle_filled(output_port_pos(node_pos, pan), PORT_RADIUS, COLOR_PORT_OUT);
+
+    // Input ports (operations only)
+    if matches!(data, NodeData::Operation { .. }) {
+        painter.circle_filled(input_left_port_pos(node_pos, pan), PORT_RADIUS, COLOR_PORT_IN);
+        painter.circle_filled(input_right_port_pos(node_pos, pan), PORT_RADIUS, COLOR_PORT_IN);
+    }
+
+    rect
+}
+
+// ---------------------------------------------------------------------------
+// Interaction handling
+// ---------------------------------------------------------------------------
+
+fn handle_interaction(
+    response: &egui::Response,
+    scene: &mut Scene,
+    state: &mut NodeGraphState,
+    node_rects: &[(NodeId, Rect)],
+    node_snapshot: &[(NodeId, NodeData)],
+    pan: Vec2,
+) {
     let pointer = response
         .interact_pointer_pos()
         .or_else(|| response.hover_pos());
@@ -420,7 +383,7 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState) {
             let mut handled = false;
 
             // Check ports (output ports for wire dragging)
-            for (id, data) in &node_snapshot {
+            for (id, data) in node_snapshot {
                 let Some(&np) = state.node_positions.get(id) else {
                     continue;
                 };
@@ -502,7 +465,7 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState) {
             let from_node = *from_node;
             let from_port = from_port.clone();
             if let Some(pos) = pointer {
-                try_complete_wire(scene, state, &node_snapshot, from_node, &from_port, pos);
+                try_complete_wire(scene, state, node_snapshot, from_node, &from_port, pos);
             }
         }
         state.drag = DragState::None;
@@ -510,14 +473,72 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState) {
 }
 
 // ---------------------------------------------------------------------------
+// Main draw function
+// ---------------------------------------------------------------------------
+
+pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState) {
+    draw_toolbar(ui, scene, state);
+
+    // Canvas setup
+    let canvas_rect = ui.available_rect_before_wrap();
+    let response = ui.allocate_rect(canvas_rect, egui::Sense::click_and_drag());
+    let painter = ui.painter_at(canvas_rect);
+    painter.rect_filled(canvas_rect, 0.0, COLOR_BG);
+
+    if state.layout_dirty {
+        auto_layout(scene, state);
+    }
+
+    // Pan: right-drag, middle-drag, or scroll
+    if response.dragged_by(egui::PointerButton::Secondary)
+        || response.dragged_by(egui::PointerButton::Middle)
+    {
+        if !matches!(state.drag, DragState::WireDrag { .. }) {
+            state.pan_offset += response.drag_delta();
+        }
+    }
+    if response.hovered() {
+        let scroll = ui.input(|i| i.smooth_scroll_delta);
+        if scroll != Vec2::ZERO {
+            state.pan_offset += scroll;
+        }
+    }
+
+    let pan = state.pan_offset;
+
+    // Snapshot node data for drawing (avoids borrow conflicts)
+    let node_snapshot: Vec<(NodeId, NodeData)> = scene
+        .nodes
+        .values()
+        .map(|n| (n.id, n.data.clone()))
+        .collect();
+
+    draw_connections(&painter, &node_snapshot, state, pan);
+
+    // Draw node cards + collect rects for hit testing
+    let mut node_rects: Vec<(NodeId, Rect)> = Vec::new();
+    for (id, data) in &node_snapshot {
+        let Some(&node_pos) = state.node_positions.get(id) else {
+            continue;
+        };
+        let rect = node_screen_rect(node_pos, pan);
+        if !canvas_rect.intersects(rect) {
+            continue;
+        }
+        let is_selected = state.selected == Some(*id);
+        let is_root = scene.root == Some(*id);
+        draw_node_card(&painter, scene, *id, data, node_pos, pan, is_selected, is_root);
+        node_rects.push((*id, rect));
+    }
+
+    handle_interaction(&response, scene, state, &node_rects, &node_snapshot, pan);
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn create_op_from_selection(
-    scene: &mut Scene,
-    state: &mut NodeGraphState,
-    factory: impl FnOnce(&mut Scene, NodeId, NodeId) -> NodeId,
-) {
+fn create_op_from_selection(scene: &mut Scene, state: &mut NodeGraphState, op: CsgOp) {
     // Get two most recently created primitives, or use first two nodes
     let mut prim_ids: Vec<NodeId> = scene
         .nodes
@@ -530,7 +551,7 @@ fn create_op_from_selection(
     if prim_ids.len() >= 2 {
         let left = prim_ids[prim_ids.len() - 2];
         let right = prim_ids[prim_ids.len() - 1];
-        let op_id = factory(scene, left, right);
+        let op_id = scene.create_operation(op, left, right);
         scene.root = Some(op_id);
         state.selected = Some(op_id);
         state.layout_dirty = true;

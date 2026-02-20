@@ -7,11 +7,11 @@ use crate::gpu::codegen;
 use crate::gpu::picking::PendingPick;
 use crate::graph::history::History;
 use crate::graph::scene::Scene;
+use crate::settings::Settings;
 use crate::ui::dock::{self, SdfTabViewer, Tab};
 use crate::ui::gizmo::{GizmoMode, GizmoState};
 use crate::ui::node_graph::NodeGraphState;
 use crate::ui::viewport::ViewportResources;
-use crate::settings::Settings;
 
 pub struct SdfApp {
     camera: Camera,
@@ -82,55 +82,13 @@ impl SdfApp {
         }
     }
 
-    fn show_debug_window(&self, ctx: &egui::Context, dt: f64) {
-        if !self.show_debug {
-            return;
-        }
-        egui::Window::new("Debug")
-            .default_pos([10.0, 10.0])
-            .default_size([220.0, 160.0])
-            .show(ctx, |ui| {
-                let fps = if dt > 0.0 { 1.0 / dt } else { 0.0 };
-                ui.label(format!("FPS: {:.0}", fps));
-                ui.separator();
-                let eye = self.camera.eye();
-                ui.label(format!("Eye: ({:.2}, {:.2}, {:.2})", eye.x, eye.y, eye.z));
-                ui.label(format!(
-                    "Target: ({:.2}, {:.2}, {:.2})",
-                    self.camera.target.x, self.camera.target.y, self.camera.target.z
-                ));
-                ui.label(format!("Distance: {:.2}", self.camera.distance));
-                ui.label(format!(
-                    "Yaw: {:.1}°  Pitch: {:.1}°",
-                    self.camera.yaw.to_degrees(),
-                    self.camera.pitch.to_degrees(),
-                ));
-                ui.separator();
-                ui.label(format!("Nodes: {}", self.scene.nodes.len()));
-                if let Some(root) = self.scene.root {
-                    ui.label(format!("Root: {}", root));
-                } else {
-                    ui.label("Root: none");
-                }
-            });
-    }
-}
-
-impl eframe::App for SdfApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let now = ctx.input(|i| i.time);
-        let dt = now - self.last_time;
-        self.last_time = now;
-
+    fn handle_keyboard_input(&mut self, ctx: &egui::Context) {
+        // Debug toggle
         if ctx.input(|i| i.key_pressed(egui::Key::F3)) {
             self.show_debug = !self.show_debug;
         }
 
-        // --- Undo/Redo: capture "before" snapshot ---
-        self.history
-            .begin_frame(&self.scene, self.node_graph_state.selected);
-
-        // --- Undo/Redo keyboard shortcuts ---
+        // Undo / Redo
         let undo_pressed = ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Z));
         let redo_pressed = ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Y));
 
@@ -154,7 +112,7 @@ impl eframe::App for SdfApp {
             }
         }
 
-        // --- Save/Load keyboard shortcuts ---
+        // Save / Load
         let save_pressed = ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::S));
         let open_pressed = ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::O));
 
@@ -173,8 +131,7 @@ impl eframe::App for SdfApp {
                         self.history = History::new();
                         self.node_graph_state.selected = None;
                         self.node_graph_state.layout_dirty = true;
-                        // Force pipeline rebuild
-                        self.current_structure_key = 0;
+                        self.current_structure_key = 0; // Force pipeline rebuild
                     }
                     Err(e) => {
                         log::error!("Failed to load project: {}", e);
@@ -183,7 +140,14 @@ impl eframe::App for SdfApp {
             }
         }
 
-        // --- Frame-start: check for topology changes and update GPU ---
+        // Gizmo mode
+        if ctx.input(|i| i.key_pressed(egui::Key::W)) {
+            self.gizmo_mode = GizmoMode::Translate;
+        }
+        // Future: E = Rotate, R = Scale
+    }
+
+    fn sync_gpu_pipeline(&mut self) {
         let new_key = self.scene.structure_key();
         if new_key != self.current_structure_key {
             let shader_src = codegen::generate_shader(&self.scene);
@@ -197,58 +161,83 @@ impl eframe::App for SdfApp {
             }
             self.current_structure_key = new_key;
         }
+    }
 
-        // Update scene buffer every frame (parameters may have changed)
+    fn upload_scene_buffer(&mut self) {
         let node_data =
             codegen::build_node_buffer(&self.scene, self.node_graph_state.selected);
+        let mut renderer = self.render_state.renderer.write();
+        if let Some(res) = renderer
+            .callback_resources
+            .get_mut::<ViewportResources>()
         {
-            let mut renderer = self.render_state.renderer.write();
-            if let Some(res) = renderer
-                .callback_resources
-                .get_mut::<ViewportResources>()
-            {
-                res.update_scene_buffer(
-                    &self.render_state.device,
-                    &self.render_state.queue,
-                    &node_data,
-                );
-            }
+            res.update_scene_buffer(
+                &self.render_state.device,
+                &self.render_state.queue,
+                &node_data,
+            );
         }
+    }
 
-        // --- Process pending GPU pick from previous frame ---
-        if let Some(pending) = self.pending_pick.take() {
-            let topo_order = self.scene.topo_order();
-            let renderer = self.render_state.renderer.read();
-            if let Some(res) = renderer
-                .callback_resources
-                .get::<ViewportResources>()
-            {
-                if let Some(result) = res.execute_pick(
-                    &self.render_state.device,
-                    &self.render_state.queue,
-                    &pending,
-                ) {
-                    // Map material_id (topo_order index) → NodeId
-                    let idx = result.material_id as usize;
-                    if idx < topo_order.len() {
-                        self.node_graph_state.selected = Some(topo_order[idx]);
-                    }
+    fn process_pending_pick(&mut self) {
+        let Some(pending) = self.pending_pick.take() else {
+            return;
+        };
+        let topo_order = self.scene.topo_order();
+        let renderer = self.render_state.renderer.read();
+        let Some(res) = renderer.callback_resources.get::<ViewportResources>() else {
+            return;
+        };
+        if let Some(result) = res.execute_pick(
+            &self.render_state.device,
+            &self.render_state.queue,
+            &pending,
+        ) {
+            // Map material_id (topo_order index) to NodeId
+            let idx = result.material_id as usize;
+            if idx < topo_order.len() {
+                self.node_graph_state.selected = Some(topo_order[idx]);
+            }
+        } else {
+            // Clicked empty space — deselect
+            self.node_graph_state.selected = None;
+        }
+    }
+
+    fn show_debug_window(&self, ctx: &egui::Context, dt: f64) {
+        if !self.show_debug {
+            return;
+        }
+        egui::Window::new("Debug")
+            .default_pos([10.0, 10.0])
+            .default_size([220.0, 160.0])
+            .show(ctx, |ui| {
+                let fps = if dt > 0.0 { 1.0 / dt } else { 0.0 };
+                ui.label(format!("FPS: {:.0}", fps));
+                ui.separator();
+                let eye = self.camera.eye();
+                ui.label(format!("Eye: ({:.2}, {:.2}, {:.2})", eye.x, eye.y, eye.z));
+                ui.label(format!(
+                    "Target: ({:.2}, {:.2}, {:.2})",
+                    self.camera.target.x, self.camera.target.y, self.camera.target.z
+                ));
+                ui.label(format!("Distance: {:.2}", self.camera.distance));
+                ui.label(format!(
+                    "Yaw: {:.1}\u{00B0}  Pitch: {:.1}\u{00B0}",
+                    self.camera.yaw.to_degrees(),
+                    self.camera.pitch.to_degrees(),
+                ));
+                ui.separator();
+                ui.label(format!("Nodes: {}", self.scene.nodes.len()));
+                if let Some(root) = self.scene.root {
+                    ui.label(format!("Root: {}", root));
                 } else {
-                    // Clicked empty space → deselect
-                    self.node_graph_state.selected = None;
+                    ui.label("Root: none");
                 }
-            }
-        }
+            });
+    }
 
-        // --- Gizmo mode shortcuts ---
-        if ctx.input(|i| i.key_pressed(egui::Key::W)) {
-            self.gizmo_mode = GizmoMode::Translate;
-        }
-        // Future: E = Rotate, R = Scale
-
-        // --- UI ---
-        self.show_debug_window(ctx, dt);
-
+    fn show_menu_bar(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("Settings", |ui| {
@@ -263,6 +252,26 @@ impl eframe::App for SdfApp {
                 });
             });
         });
+    }
+}
+
+impl eframe::App for SdfApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let now = ctx.input(|i| i.time);
+        let dt = now - self.last_time;
+        self.last_time = now;
+
+        self.history
+            .begin_frame(&self.scene, self.node_graph_state.selected);
+
+        self.handle_keyboard_input(ctx);
+        self.sync_gpu_pipeline();
+        self.upload_scene_buffer();
+        self.process_pending_pick();
+
+        // --- UI ---
+        self.show_debug_window(ctx, dt);
+        self.show_menu_bar(ctx);
 
         let mut pending_pick = None;
         let mut tab_viewer = SdfTabViewer {
@@ -282,12 +291,11 @@ impl eframe::App for SdfApp {
                     .show_inside(ui, &mut tab_viewer);
             });
 
-        // Store pending pick for next frame processing
         if pending_pick.is_some() {
             self.pending_pick = pending_pick;
         }
 
-        // --- Undo/Redo: end-of-frame commit ---
+        // Undo/Redo: end-of-frame commit
         let is_dragging = ctx.dragged_id().is_some();
         self.history.end_frame(
             &self.scene,

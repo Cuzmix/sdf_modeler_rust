@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use bytemuck::{Pod, Zeroable};
 
-use crate::graph::scene::{CsgOp, NodeData, NodeId, Scene, SdfPrimitive};
+use crate::graph::scene::{NodeData, NodeId, Scene};
 
 /// 128-byte GPU node (8 x vec4f). Expanded for rotation + future growth.
 #[repr(C)]
@@ -364,15 +364,7 @@ fn generate_scene_sdf(scene: &Scene) -> String {
         };
         match &node.data {
             NodeData::Primitive { kind, .. } => {
-                let sdf_fn = match kind {
-                    SdfPrimitive::Sphere => "sdf_sphere",
-                    SdfPrimitive::Box => "sdf_box",
-                    SdfPrimitive::Cylinder => "sdf_cylinder",
-                    SdfPrimitive::Torus => "sdf_torus",
-                    SdfPrimitive::Plane => "sdf_plane",
-                    SdfPrimitive::Cone => "sdf_cone",
-                    SdfPrimitive::Capsule => "sdf_capsule",
-                };
+                let sdf_fn = kind.sdf_function_name();
                 // Apply rotation: translate to local space, then rotate
                 lines.push(format!(
                     "    let lp{i} = rotate_euler(p - nodes[{i}].position.xyz, nodes[{i}].rotation.xyz);"
@@ -384,12 +376,7 @@ fn generate_scene_sdf(scene: &Scene) -> String {
             NodeData::Operation { op, left, right, .. } => {
                 let li = idx_map.get(left).copied().unwrap_or(0);
                 let ri = idx_map.get(right).copied().unwrap_or(0);
-                let op_fn = match op {
-                    CsgOp::Union => "op_union",
-                    CsgOp::SmoothUnion => "op_smooth_union",
-                    CsgOp::Subtract => "op_subtract",
-                    CsgOp::Intersect => "op_intersect",
-                };
+                let op_fn = op.wgsl_function_name();
                 lines.push(format!(
                     "    let n{i} = {op_fn}(n{li}, n{ri}, nodes[{i}].type_op.y);"
                 ));
@@ -427,15 +414,7 @@ pub fn build_node_buffer(scene: &Scene, selected: Option<NodeId>) -> Vec<SdfNode
                 scale,
                 color,
             } => {
-                let type_val = match kind {
-                    SdfPrimitive::Sphere => 0.0,
-                    SdfPrimitive::Box => 1.0,
-                    SdfPrimitive::Cylinder => 2.0,
-                    SdfPrimitive::Torus => 3.0,
-                    SdfPrimitive::Plane => 4.0,
-                    SdfPrimitive::Cone => 5.0,
-                    SdfPrimitive::Capsule => 6.0,
-                };
+                let type_val = kind.gpu_type_id();
                 buffer.push(SdfNodeGpu {
                     type_op: [type_val, 0.0, 0.0, 0.0],
                     position: [position.x, position.y, position.z, 0.0],
@@ -448,12 +427,7 @@ pub fn build_node_buffer(scene: &Scene, selected: Option<NodeId>) -> Vec<SdfNode
                 });
             }
             NodeData::Operation { op, smooth_k, .. } => {
-                let op_val = match op {
-                    CsgOp::Union => 10.0,
-                    CsgOp::SmoothUnion => 11.0,
-                    CsgOp::Subtract => 12.0,
-                    CsgOp::Intersect => 13.0,
-                };
+                let op_val = op.gpu_op_id();
                 buffer.push(SdfNodeGpu {
                     type_op: [op_val, *smooth_k, 0.0, 0.0],
                     position: [0.0; 4],

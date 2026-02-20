@@ -2,6 +2,13 @@ use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Vec3};
 use serde::{Deserialize, Serialize};
 
+const ORBIT_SENSITIVITY: f32 = 0.005;
+const PAN_SPEED_FACTOR: f32 = 0.002;
+const ZOOM_SENSITIVITY: f32 = 0.001;
+const MIN_DISTANCE: f32 = 0.1;
+const MAX_DISTANCE: f32 = 100.0;
+const PITCH_LIMIT_RAD: f32 = 89.0 * (std::f32::consts::PI / 180.0);
+
 #[derive(Serialize, Deserialize)]
 pub struct Camera {
     pub yaw: f32,
@@ -55,25 +62,23 @@ impl Camera {
     }
 
     pub fn orbit(&mut self, dx: f32, dy: f32) {
-        self.yaw -= dx * 0.005;
-        self.pitch += dy * 0.005;
-        self.pitch = self
-            .pitch
-            .clamp(-89.0_f32.to_radians(), 89.0_f32.to_radians());
+        self.yaw -= dx * ORBIT_SENSITIVITY;
+        self.pitch += dy * ORBIT_SENSITIVITY;
+        self.pitch = self.pitch.clamp(-PITCH_LIMIT_RAD, PITCH_LIMIT_RAD);
     }
 
     pub fn pan(&mut self, dx: f32, dy: f32) {
         let forward = (self.target - self.eye()).normalize();
         let right = forward.cross(Vec3::Y).normalize();
         let up = right.cross(forward).normalize();
-        let speed = self.distance * 0.002;
+        let speed = self.distance * PAN_SPEED_FACTOR;
         self.target -= right * dx * speed;
         self.target += up * dy * speed;
     }
 
     pub fn zoom(&mut self, delta: f32) {
-        self.distance *= 1.0 - delta * 0.001;
-        self.distance = self.distance.clamp(0.1, 100.0);
+        self.distance *= 1.0 - delta * ZOOM_SENSITIVITY;
+        self.distance = self.distance.clamp(MIN_DISTANCE, MAX_DISTANCE);
     }
 }
 

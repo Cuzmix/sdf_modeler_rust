@@ -16,12 +16,139 @@ pub enum SdfPrimitive {
     Capsule,
 }
 
+impl SdfPrimitive {
+    pub fn base_name(&self) -> &'static str {
+        match self {
+            Self::Sphere => "Sphere",
+            Self::Box => "Box",
+            Self::Cylinder => "Cylinder",
+            Self::Torus => "Torus",
+            Self::Plane => "Plane",
+            Self::Cone => "Cone",
+            Self::Capsule => "Capsule",
+        }
+    }
+
+    pub fn default_position(&self) -> Vec3 {
+        match self {
+            Self::Sphere => Vec3::ZERO,
+            Self::Box => Vec3::new(2.0, 0.0, 0.0),
+            Self::Cylinder => Vec3::new(0.0, 0.0, 2.0),
+            Self::Torus => Vec3::new(-2.0, 0.0, 0.0),
+            Self::Cone => Vec3::new(0.0, 0.0, -2.0),
+            Self::Capsule => Vec3::new(-2.0, 0.0, 2.0),
+            Self::Plane => Vec3::ZERO,
+        }
+    }
+
+    pub fn default_scale(&self) -> Vec3 {
+        match self {
+            Self::Sphere | Self::Box | Self::Torus | Self::Plane => Vec3::ONE,
+            Self::Cylinder | Self::Cone => Vec3::new(0.5, 1.0, 0.5),
+            Self::Capsule => Vec3::new(0.3, 1.0, 0.3),
+        }
+    }
+
+    pub fn default_color(&self) -> Vec3 {
+        match self {
+            Self::Sphere => Vec3::new(0.8, 0.3, 0.2),
+            Self::Box => Vec3::new(0.2, 0.5, 0.8),
+            Self::Cylinder => Vec3::new(0.2, 0.8, 0.3),
+            Self::Torus => Vec3::new(0.8, 0.6, 0.2),
+            Self::Cone => Vec3::new(0.7, 0.3, 0.7),
+            Self::Capsule => Vec3::new(0.3, 0.7, 0.7),
+            Self::Plane => Vec3::new(0.5, 0.5, 0.5),
+        }
+    }
+
+    pub fn gpu_type_id(&self) -> f32 {
+        match self {
+            Self::Sphere => 0.0,
+            Self::Box => 1.0,
+            Self::Cylinder => 2.0,
+            Self::Torus => 3.0,
+            Self::Plane => 4.0,
+            Self::Cone => 5.0,
+            Self::Capsule => 6.0,
+        }
+    }
+
+    pub fn sdf_function_name(&self) -> &'static str {
+        match self {
+            Self::Sphere => "sdf_sphere",
+            Self::Box => "sdf_box",
+            Self::Cylinder => "sdf_cylinder",
+            Self::Torus => "sdf_torus",
+            Self::Plane => "sdf_plane",
+            Self::Cone => "sdf_cone",
+            Self::Capsule => "sdf_capsule",
+        }
+    }
+
+    pub fn badge(&self) -> &'static str {
+        match self {
+            Self::Sphere => "[Sph]",
+            Self::Box => "[Box]",
+            Self::Cylinder => "[Cyl]",
+            Self::Torus => "[Tor]",
+            Self::Plane => "[Pln]",
+            Self::Cone => "[Con]",
+            Self::Capsule => "[Cap]",
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum CsgOp {
     Union,
     SmoothUnion,
     Subtract,
     Intersect,
+}
+
+impl CsgOp {
+    pub fn base_name(&self) -> &'static str {
+        match self {
+            Self::Union => "Union",
+            Self::SmoothUnion => "Smooth Union",
+            Self::Subtract => "Subtract",
+            Self::Intersect => "Intersect",
+        }
+    }
+
+    pub fn default_smooth_k(&self) -> f32 {
+        match self {
+            Self::SmoothUnion => 0.5,
+            _ => 0.0,
+        }
+    }
+
+    pub fn gpu_op_id(&self) -> f32 {
+        match self {
+            Self::Union => 10.0,
+            Self::SmoothUnion => 11.0,
+            Self::Subtract => 12.0,
+            Self::Intersect => 13.0,
+        }
+    }
+
+    pub fn wgsl_function_name(&self) -> &'static str {
+        match self {
+            Self::Union => "op_union",
+            Self::SmoothUnion => "op_smooth_union",
+            Self::Subtract => "op_subtract",
+            Self::Intersect => "op_intersect",
+        }
+    }
+
+    pub fn badge(&self) -> &'static str {
+        match self {
+            Self::Union => "[Uni]",
+            Self::SmoothUnion => "[SmU]",
+            Self::Subtract => "[Sub]",
+            Self::Intersect => "[Int]",
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -64,7 +191,7 @@ impl Scene {
             next_id: 0,
             name_counters: HashMap::new(),
         };
-        let id = scene.create_sphere();
+        let id = scene.create_primitive(SdfPrimitive::Sphere);
         scene.root = Some(id);
         scene
     }
@@ -110,140 +237,29 @@ impl Scene {
         node
     }
 
-    // --- Primitive factories ---
+    // --- Factories ---
 
-    pub fn create_sphere(&mut self) -> NodeId {
-        let name = self.next_name("Sphere");
+    pub fn create_primitive(&mut self, kind: SdfPrimitive) -> NodeId {
+        let name = self.next_name(kind.base_name());
         self.add_node(
             name,
             NodeData::Primitive {
-                kind: SdfPrimitive::Sphere,
-                position: Vec3::ZERO,
+                position: kind.default_position(),
                 rotation: Vec3::ZERO,
-                scale: Vec3::ONE,
-                color: Vec3::new(0.8, 0.3, 0.2),
+                scale: kind.default_scale(),
+                color: kind.default_color(),
+                kind,
             },
         )
     }
 
-    pub fn create_box(&mut self) -> NodeId {
-        let name = self.next_name("Box");
-        self.add_node(
-            name,
-            NodeData::Primitive {
-                kind: SdfPrimitive::Box,
-                position: Vec3::new(2.0, 0.0, 0.0),
-                rotation: Vec3::ZERO,
-                scale: Vec3::ONE,
-                color: Vec3::new(0.2, 0.5, 0.8),
-            },
-        )
-    }
-
-    pub fn create_cylinder(&mut self) -> NodeId {
-        let name = self.next_name("Cylinder");
-        self.add_node(
-            name,
-            NodeData::Primitive {
-                kind: SdfPrimitive::Cylinder,
-                position: Vec3::new(0.0, 0.0, 2.0),
-                rotation: Vec3::ZERO,
-                scale: Vec3::new(0.5, 1.0, 0.5),
-                color: Vec3::new(0.2, 0.8, 0.3),
-            },
-        )
-    }
-
-    pub fn create_torus(&mut self) -> NodeId {
-        let name = self.next_name("Torus");
-        self.add_node(
-            name,
-            NodeData::Primitive {
-                kind: SdfPrimitive::Torus,
-                position: Vec3::new(-2.0, 0.0, 0.0),
-                rotation: Vec3::ZERO,
-                scale: Vec3::new(1.0, 0.3, 1.0),
-                color: Vec3::new(0.8, 0.6, 0.2),
-            },
-        )
-    }
-
-    pub fn create_cone(&mut self) -> NodeId {
-        let name = self.next_name("Cone");
-        self.add_node(
-            name,
-            NodeData::Primitive {
-                kind: SdfPrimitive::Cone,
-                position: Vec3::new(0.0, 0.0, -2.0),
-                rotation: Vec3::ZERO,
-                scale: Vec3::new(0.5, 1.0, 0.5),
-                color: Vec3::new(0.7, 0.3, 0.7),
-            },
-        )
-    }
-
-    pub fn create_capsule(&mut self) -> NodeId {
-        let name = self.next_name("Capsule");
-        self.add_node(
-            name,
-            NodeData::Primitive {
-                kind: SdfPrimitive::Capsule,
-                position: Vec3::new(-2.0, 0.0, 2.0),
-                rotation: Vec3::ZERO,
-                scale: Vec3::new(0.3, 1.0, 0.3),
-                color: Vec3::new(0.3, 0.7, 0.7),
-            },
-        )
-    }
-
-    // --- Operation factories ---
-
-    pub fn create_union(&mut self, left: NodeId, right: NodeId) -> NodeId {
-        let name = self.next_name("Union");
+    pub fn create_operation(&mut self, op: CsgOp, left: NodeId, right: NodeId) -> NodeId {
+        let name = self.next_name(op.base_name());
         self.add_node(
             name,
             NodeData::Operation {
-                op: CsgOp::Union,
-                smooth_k: 0.0,
-                left,
-                right,
-            },
-        )
-    }
-
-    pub fn create_smooth_union(&mut self, left: NodeId, right: NodeId) -> NodeId {
-        let name = self.next_name("Smooth Union");
-        self.add_node(
-            name,
-            NodeData::Operation {
-                op: CsgOp::SmoothUnion,
-                smooth_k: 0.5,
-                left,
-                right,
-            },
-        )
-    }
-
-    pub fn create_subtract(&mut self, left: NodeId, right: NodeId) -> NodeId {
-        let name = self.next_name("Subtract");
-        self.add_node(
-            name,
-            NodeData::Operation {
-                op: CsgOp::Subtract,
-                smooth_k: 0.0,
-                left,
-                right,
-            },
-        )
-    }
-
-    pub fn create_intersect(&mut self, left: NodeId, right: NodeId) -> NodeId {
-        let name = self.next_name("Intersect");
-        self.add_node(
-            name,
-            NodeData::Operation {
-                op: CsgOp::Intersect,
-                smooth_k: 0.0,
+                smooth_k: op.default_smooth_k(),
+                op,
                 left,
                 right,
             },
