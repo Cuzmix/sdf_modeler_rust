@@ -11,6 +11,7 @@ use crate::ui::dock::{self, SdfTabViewer, Tab};
 use crate::ui::gizmo::{GizmoMode, GizmoState};
 use crate::ui::node_graph::NodeGraphState;
 use crate::ui::viewport::ViewportResources;
+use crate::settings::Settings;
 
 pub struct SdfApp {
     camera: Camera,
@@ -25,10 +26,12 @@ pub struct SdfApp {
     pending_pick: Option<PendingPick>,
     gizmo_state: GizmoState,
     gizmo_mode: GizmoMode,
+    settings: Settings,
+    initial_vsync: bool,
 }
 
 impl SdfApp {
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, settings: Settings) -> Self {
         let render_state = cc
             .wgpu_render_state
             .clone()
@@ -74,6 +77,8 @@ impl SdfApp {
             pending_pick: None,
             gizmo_state: GizmoState::Idle,
             gizmo_mode: GizmoMode::Translate,
+            initial_vsync: settings.vsync_enabled,
+            settings,
         }
     }
 
@@ -243,6 +248,21 @@ impl eframe::App for SdfApp {
 
         // --- UI ---
         self.show_debug_window(ctx, dt);
+
+        egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
+            egui::menu::bar(ui, |ui| {
+                ui.menu_button("Settings", |ui| {
+                    let mut vsync = self.settings.vsync_enabled;
+                    if ui.checkbox(&mut vsync, "VSync").changed() {
+                        self.settings.vsync_enabled = vsync;
+                        self.settings.save();
+                    }
+                    if self.settings.vsync_enabled != self.initial_vsync {
+                        ui.weak("(restart required)");
+                    }
+                });
+            });
+        });
 
         let mut pending_pick = None;
         let mut tab_viewer = SdfTabViewer {
