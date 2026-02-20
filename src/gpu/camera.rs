@@ -62,7 +62,7 @@ impl Camera {
     }
 
     pub fn orbit(&mut self, dx: f32, dy: f32) {
-        self.yaw -= dx * ORBIT_SENSITIVITY;
+        self.yaw += dx * ORBIT_SENSITIVITY;
         self.pitch += dy * ORBIT_SENSITIVITY;
         self.pitch = self.pitch.clamp(-PITCH_LIMIT_RAD, PITCH_LIMIT_RAD);
     }
