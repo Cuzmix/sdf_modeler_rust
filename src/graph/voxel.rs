@@ -1,7 +1,7 @@
 use glam::{Vec2, Vec3, Vec3Swizzles};
 use serde::{Deserialize, Serialize};
 
-use crate::graph::scene::SdfPrimitive;
+use crate::graph::scene::{CsgOp, NodeData, NodeId, Scene, SdfPrimitive};
 
 pub const DEFAULT_RESOLUTION: u32 = 64;
 const GRID_PADDING: f32 = 0.5;
@@ -48,6 +48,18 @@ impl VoxelGrid {
         self.bounds_min + norm * (self.bounds_max - self.bounds_min)
     }
 
+    /// Bit-exact equality check for undo system.
+    pub fn content_eq(&self, other: &VoxelGrid) -> bool {
+        self.resolution == other.resolution
+            && self.bounds_min == other.bounds_min
+            && self.bounds_max == other.bounds_max
+            && self.data.len() == other.data.len()
+            && self.data
+                .iter()
+                .zip(other.data.iter())
+                .all(|(a, b)| a.to_bits() == b.to_bits())
+    }
+
     /// CPU-side trilinear interpolation at a local-space position.
     pub fn sample(&self, local_pos: Vec3) -> f32 {
         let gc = self.world_to_grid(local_pos);
@@ -89,6 +101,17 @@ impl VoxelGrid {
 // ---------------------------------------------------------------------------
 // CPU-side SDF evaluation (mirrors WGSL functions exactly)
 // ---------------------------------------------------------------------------
+
+fn rotate_euler(p: Vec3, r: Vec3) -> Vec3 {
+    let mut q = p;
+    let (sx, cx) = r.x.sin_cos();
+    q = Vec3::new(q.x, cx * q.y - sx * q.z, sx * q.y + cx * q.z);
+    let (sy, cy) = r.y.sin_cos();
+    q = Vec3::new(cy * q.x + sy * q.z, q.y, -sy * q.x + cy * q.z);
+    let (sz, cz) = r.z.sin_cos();
+    q = Vec3::new(cz * q.x - sz * q.y, sz * q.x + cz * q.y, q.z);
+    q
+}
 
 fn evaluate_sdf(kind: &SdfPrimitive, p: Vec3, s: Vec3) -> f32 {
     match kind {
@@ -133,6 +156,118 @@ fn evaluate_sdf(kind: &SdfPrimitive, p: Vec3, s: Vec3) -> f32 {
     }
 }
 
+// ---------------------------------------------------------------------------
+// CSG operations (CPU mirrors of WGSL)
+// ---------------------------------------------------------------------------
+
+fn csg_union(a: f32, b: f32) -> f32 {
+    a.min(b)
+}
+
+fn csg_smooth_union(a: f32, b: f32, k: f32) -> f32 {
+    let h = (0.5 + 0.5 * (b - a) / k.max(0.0001)).clamp(0.0, 1.0);
+    b + (a - b) * h - k * h * (1.0 - h)
+}
+
+fn csg_subtract(a: f32, b: f32) -> f32 {
+    a.max(-b)
+}
+
+fn csg_intersect(a: f32, b: f32) -> f32 {
+    a.max(b)
+}
+
+// ---------------------------------------------------------------------------
+// Recursive SDF tree evaluator
+// ---------------------------------------------------------------------------
+
+/// Evaluate the combined SDF of a subtree at a world-space point.
+pub fn evaluate_sdf_tree(scene: &Scene, node_id: NodeId, p: Vec3) -> f32 {
+    let Some(node) = scene.nodes.get(&node_id) else {
+        return FAR_DISTANCE;
+    };
+    match &node.data {
+        NodeData::Primitive {
+            kind,
+            position,
+            rotation,
+            scale,
+            ..
+        } => {
+            let local_p = rotate_euler(p - *position, *rotation);
+            evaluate_sdf(kind, local_p, *scale)
+        }
+        NodeData::Operation {
+            op,
+            smooth_k,
+            left,
+            right,
+        } => {
+            let a = evaluate_sdf_tree(scene, *left, p);
+            let b = evaluate_sdf_tree(scene, *right, p);
+            match op {
+                CsgOp::Union => csg_union(a, b),
+                CsgOp::SmoothUnion => csg_smooth_union(a, b, *smooth_k),
+                CsgOp::Subtract => csg_subtract(a, b),
+                CsgOp::Intersect => csg_intersect(a, b),
+            }
+        }
+        NodeData::Sculpt {
+            position,
+            rotation,
+            voxel_grid,
+            ..
+        } => {
+            let local_p = rotate_euler(p - *position, *rotation);
+            voxel_grid.sample(local_p)
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Bounds estimation
+// ---------------------------------------------------------------------------
+
+/// Estimate the world-space bounding box of a subtree.
+fn collect_bounds(scene: &Scene, id: NodeId, all_min: &mut Vec3, all_max: &mut Vec3) {
+    let Some(node) = scene.nodes.get(&id) else {
+        return;
+    };
+    match &node.data {
+        NodeData::Primitive {
+            position, scale, ..
+        } => {
+            let extent = *scale * 1.5;
+            *all_min = all_min.min(*position - extent);
+            *all_max = all_max.max(*position + extent);
+        }
+        NodeData::Operation { left, right, .. } => {
+            collect_bounds(scene, *left, all_min, all_max);
+            collect_bounds(scene, *right, all_min, all_max);
+        }
+        NodeData::Sculpt {
+            position,
+            voxel_grid,
+            ..
+        } => {
+            *all_min = all_min.min(*position + voxel_grid.bounds_min);
+            *all_max = all_max.max(*position + voxel_grid.bounds_max);
+        }
+    }
+}
+
+fn bounds_for_subtree(scene: &Scene, root_id: NodeId) -> (Vec3, Vec3) {
+    let mut all_min = Vec3::splat(f32::MAX);
+    let mut all_max = Vec3::splat(f32::MIN);
+    collect_bounds(scene, root_id, &mut all_min, &mut all_max);
+    let pad = Vec3::splat(GRID_PADDING);
+    (all_min - pad, all_max + pad)
+}
+
+// ---------------------------------------------------------------------------
+// Baking
+// ---------------------------------------------------------------------------
+
 /// Sample the analytical SDF of a primitive into a VoxelGrid.
 pub fn bake_from_analytical(kind: &SdfPrimitive, scale: Vec3, resolution: u32) -> VoxelGrid {
     let extent = scale * (1.0 + GRID_PADDING);
@@ -153,4 +288,31 @@ pub fn bake_from_analytical(kind: &SdfPrimitive, scale: Vec3, resolution: u32) -
     }
 
     grid
+}
+
+/// Bake any subtree's SDF into a VoxelGrid.
+/// Returns (grid in local space, center position in world space).
+pub fn bake_subtree(scene: &Scene, subtree_root: NodeId, resolution: u32) -> (VoxelGrid, Vec3) {
+    let (world_min, world_max) = bounds_for_subtree(scene, subtree_root);
+    let center = (world_min + world_max) * 0.5;
+    let half_extent = (world_max - world_min) * 0.5;
+
+    let local_min = -half_extent;
+    let local_max = half_extent;
+
+    let mut grid = VoxelGrid::new(resolution, local_min, local_max);
+    let res = resolution;
+
+    for z in 0..res {
+        for y in 0..res {
+            for x in 0..res {
+                let local_pos = grid.grid_to_world(x as f32, y as f32, z as f32);
+                let world_pos = local_pos + center;
+                let dist = evaluate_sdf_tree(scene, subtree_root, world_pos);
+                grid.data[VoxelGrid::index(x, y, z, res)] = dist;
+            }
+        }
+    }
+
+    (grid, center)
 }

@@ -398,21 +398,14 @@ fn generate_scene_sdf(scene: &Scene) -> String {
             continue;
         };
         match &node.data {
-            NodeData::Primitive { kind, voxel_grid, .. } => {
-                // Apply rotation: translate to local space, then rotate
+            NodeData::Primitive { kind, .. } => {
                 lines.push(format!(
                     "    let lp{i} = rotate_euler(p - nodes[{i}].position.xyz, nodes[{i}].rotation.xyz);"
                 ));
-                if voxel_grid.is_some() {
-                    lines.push(format!(
-                        "    let n{i} = vec2f(sdf_voxel_grid(lp{i}, {i}u), f32({i}));"
-                    ));
-                } else {
-                    let sdf_fn = kind.sdf_function_name();
-                    lines.push(format!(
-                        "    let n{i} = vec2f({sdf_fn}(lp{i}, nodes[{i}].scale.xyz), f32({i}));"
-                    ));
-                }
+                let sdf_fn = kind.sdf_function_name();
+                lines.push(format!(
+                    "    let n{i} = vec2f({sdf_fn}(lp{i}, nodes[{i}].scale.xyz), f32({i}));"
+                ));
             }
             NodeData::Operation { op, left, right, .. } => {
                 let li = idx_map.get(left).copied().unwrap_or(0);
@@ -420,6 +413,14 @@ fn generate_scene_sdf(scene: &Scene) -> String {
                 let op_fn = op.wgsl_function_name();
                 lines.push(format!(
                     "    let n{i} = {op_fn}(n{li}, n{ri}, nodes[{i}].type_op.y);"
+                ));
+            }
+            NodeData::Sculpt { .. } => {
+                lines.push(format!(
+                    "    let lp{i} = rotate_euler(p - nodes[{i}].position.xyz, nodes[{i}].rotation.xyz);"
+                ));
+                lines.push(format!(
+                    "    let n{i} = vec2f(sdf_voxel_grid(lp{i}, {i}u), f32({i}));"
                 ));
             }
         }
@@ -445,14 +446,10 @@ pub fn build_voxel_buffer(scene: &Scene) -> (Vec<f32>, HashMap<NodeId, u32>) {
 
     for &node_id in &order {
         if let Some(node) = scene.nodes.get(&node_id) {
-            if let NodeData::Primitive {
-                voxel_grid: Some(ref grid),
-                ..
-            } = node.data
-            {
+            if let NodeData::Sculpt { ref voxel_grid, .. } = node.data {
                 let offset = flat_data.len() as u32;
                 offsets.insert(node_id, offset);
-                flat_data.extend_from_slice(&grid.data);
+                flat_data.extend_from_slice(&voxel_grid.data);
             }
         }
     }
@@ -482,38 +479,22 @@ pub fn build_node_buffer(
                 rotation,
                 scale,
                 color,
-                voxel_grid,
+                ..
             } => {
-                let type_val = kind.gpu_type_id();
-
-                // Pack voxel grid metadata into extra fields
-                let (extra0, extra1, extra2) = match voxel_grid {
-                    Some(grid) => {
-                        let offset = voxel_offsets.get(&node_id).copied().unwrap_or(0);
-                        (
-                            [offset as f32, grid.resolution as f32, 0.0, 0.0],
-                            [grid.bounds_min.x, grid.bounds_min.y, grid.bounds_min.z, 0.0],
-                            [grid.bounds_max.x, grid.bounds_max.y, grid.bounds_max.z, 0.0],
-                        )
-                    }
-                    None => ([0.0; 4], [0.0; 4], [0.0; 4]),
-                };
-
                 buffer.push(SdfNodeGpu {
-                    type_op: [type_val, 0.0, 0.0, 0.0],
+                    type_op: [kind.gpu_type_id(), 0.0, 0.0, 0.0],
                     position: [position.x, position.y, position.z, 0.0],
                     rotation: [rotation.x, rotation.y, rotation.z, 0.0],
                     scale: [scale.x, scale.y, scale.z, 0.0],
                     color: [color.x, color.y, color.z, is_sel],
-                    extra0,
-                    extra1,
-                    extra2,
+                    extra0: [0.0; 4],
+                    extra1: [0.0; 4],
+                    extra2: [0.0; 4],
                 });
             }
             NodeData::Operation { op, smooth_k, .. } => {
-                let op_val = op.gpu_op_id();
                 buffer.push(SdfNodeGpu {
-                    type_op: [op_val, *smooth_k, 0.0, 0.0],
+                    type_op: [op.gpu_op_id(), *smooth_k, 0.0, 0.0],
                     position: [0.0; 4],
                     rotation: [0.0; 4],
                     scale: [1.0, 1.0, 1.0, 0.0],
@@ -521,6 +502,25 @@ pub fn build_node_buffer(
                     extra0: [0.0; 4],
                     extra1: [0.0; 4],
                     extra2: [0.0; 4],
+                });
+            }
+            NodeData::Sculpt {
+                position,
+                rotation,
+                color,
+                voxel_grid,
+                ..
+            } => {
+                let offset = voxel_offsets.get(&node_id).copied().unwrap_or(0);
+                buffer.push(SdfNodeGpu {
+                    type_op: [20.0, 0.0, 0.0, 0.0],
+                    position: [position.x, position.y, position.z, 0.0],
+                    rotation: [rotation.x, rotation.y, rotation.z, 0.0],
+                    scale: [1.0, 1.0, 1.0, 0.0],
+                    color: [color.x, color.y, color.z, is_sel],
+                    extra0: [offset as f32, voxel_grid.resolution as f32, 0.0, 0.0],
+                    extra1: [voxel_grid.bounds_min.x, voxel_grid.bounds_min.y, voxel_grid.bounds_min.z, 0.0],
+                    extra2: [voxel_grid.bounds_max.x, voxel_grid.bounds_max.y, voxel_grid.bounds_max.z, 0.0],
                 });
             }
         }

@@ -263,12 +263,10 @@ impl SdfApp {
             if self.node_graph_state.selected != Some(active_node) {
                 self.sculpt_state = SculptState::Inactive;
             }
-            // Also deactivate if the node no longer has a voxel grid
+            // Also deactivate if the node is no longer a Sculpt node
             if let Some(node) = self.scene.nodes.get(&active_node) {
-                if let NodeData::Primitive { ref voxel_grid, .. } = node.data {
-                    if voxel_grid.is_none() {
-                        self.sculpt_state = SculptState::Inactive;
-                    }
+                if !matches!(node.data, NodeData::Sculpt { .. }) {
+                    self.sculpt_state = SculptState::Inactive;
                 }
             }
         }

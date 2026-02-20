@@ -90,6 +90,22 @@ fn draw_node_recursive(
         NodeData::Primitive { .. } => {
             draw_leaf_item_with_root(ui, node, id, selected, is_root);
         }
+        NodeData::Sculpt { input, .. } => {
+            let header_text = format_node_label(node, is_root);
+            let color = if is_selected { COLOR_SELECTED } else { COLOR_NORMAL };
+            let header = egui::CollapsingHeader::new(
+                egui::RichText::new(&header_text).color(color),
+            )
+            .default_open(true)
+            .id_salt(id)
+            .show(ui, |ui| {
+                let input = *input;
+                draw_node_recursive(ui, scene, input, selected, visited, false);
+            });
+            if header.header_response.clicked() {
+                *selected = Some(id);
+            }
+        }
     }
 }
 
@@ -126,10 +142,9 @@ fn draw_leaf_item_with_root(
 
 fn format_node_label(node: &SceneNode, is_root: bool) -> String {
     let badge = match &node.data {
-        NodeData::Primitive { kind, voxel_grid, .. } => {
-            if voxel_grid.is_some() { "[Vox]" } else { kind.badge() }
-        }
+        NodeData::Primitive { kind, .. } => kind.badge(),
         NodeData::Operation { op, .. } => op.badge(),
+        NodeData::Sculpt { .. } => "[Scl]",
     };
     let root_marker = if is_root { " (R)" } else { "" };
     format!("{} {}{}", badge, node.name, root_marker)

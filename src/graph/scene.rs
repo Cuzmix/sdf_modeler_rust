@@ -162,7 +162,8 @@ pub enum NodeData {
         rotation: Vec3,
         scale: Vec3,
         color: Vec3,
-        #[serde(default)]
+        /// Legacy: kept for v2 save file migration only. Always None at runtime.
+        #[serde(default, skip_serializing)]
         voxel_grid: Option<VoxelGrid>,
     },
     Operation {
@@ -170,6 +171,13 @@ pub enum NodeData {
         smooth_k: f32,
         left: NodeId,
         right: NodeId,
+    },
+    Sculpt {
+        input: NodeId,
+        position: Vec3,
+        rotation: Vec3,
+        color: Vec3,
+        voxel_grid: VoxelGrid,
     },
 }
 
@@ -186,23 +194,6 @@ pub struct Scene {
     pub root: Option<NodeId>,
     pub(crate) next_id: u64,
     pub(crate) name_counters: HashMap<String, u32>,
-}
-
-fn voxel_grids_eq(a: &Option<VoxelGrid>, b: &Option<VoxelGrid>) -> bool {
-    match (a, b) {
-        (None, None) => true,
-        (Some(ga), Some(gb)) => {
-            ga.resolution == gb.resolution
-                && ga.bounds_min == gb.bounds_min
-                && ga.bounds_max == gb.bounds_max
-                && ga.data.len() == gb.data.len()
-                && ga.data
-                    .iter()
-                    .zip(gb.data.iter())
-                    .all(|(a, b)| a.to_bits() == b.to_bits())
-        }
-        _ => false,
-    }
 }
 
 impl Scene {
@@ -240,8 +231,8 @@ impl Scene {
         if self.root == Some(id) {
             self.root = None;
         }
-        // Disconnect any operations referencing this node
-        let ops_to_fix: Vec<NodeId> = self
+        // Disconnect any nodes referencing this node as a child
+        let to_remove: Vec<NodeId> = self
             .nodes
             .values()
             .filter_map(|n| match &n.data {
@@ -250,11 +241,12 @@ impl Scene {
                 {
                     Some(n.id)
                 }
+                NodeData::Sculpt { input, .. } if *input == id => Some(n.id),
                 _ => None,
             })
             .collect();
-        for op_id in ops_to_fix {
-            self.remove_node(op_id);
+        for dep_id in to_remove {
+            self.remove_node(dep_id);
         }
         node
     }
@@ -289,6 +281,92 @@ impl Scene {
         )
     }
 
+    pub fn create_sculpt(
+        &mut self,
+        input: NodeId,
+        position: Vec3,
+        rotation: Vec3,
+        color: Vec3,
+        voxel_grid: VoxelGrid,
+    ) -> NodeId {
+        let name = self.next_name("Sculpt");
+        self.add_node(
+            name,
+            NodeData::Sculpt {
+                input,
+                position,
+                rotation,
+                color,
+                voxel_grid,
+            },
+        )
+    }
+
+    /// Insert a Sculpt modifier above `target_id`.
+    /// Creates a Sculpt node with `input = target_id` and rewires all parents.
+    pub fn insert_sculpt_above(
+        &mut self,
+        target_id: NodeId,
+        position: Vec3,
+        rotation: Vec3,
+        color: Vec3,
+        voxel_grid: VoxelGrid,
+    ) -> NodeId {
+        let sculpt_id = self.create_sculpt(target_id, position, rotation, color, voxel_grid);
+
+        // Rewire root
+        if self.root == Some(target_id) {
+            self.root = Some(sculpt_id);
+        }
+
+        // Rewire all parents that referenced target_id
+        let parents: Vec<(NodeId, bool, bool)> = self
+            .nodes
+            .values()
+            .filter_map(|n| {
+                if n.id == sculpt_id {
+                    return None;
+                }
+                match &n.data {
+                    NodeData::Operation { left, right, .. } => {
+                        let is_left = *left == target_id;
+                        let is_right = *right == target_id;
+                        if is_left || is_right {
+                            Some((n.id, is_left, is_right))
+                        } else {
+                            None
+                        }
+                    }
+                    NodeData::Sculpt { input, .. } if *input == target_id => {
+                        Some((n.id, true, false))
+                    }
+                    _ => None,
+                }
+            })
+            .collect();
+
+        for (parent_id, is_left, is_right) in parents {
+            if let Some(parent) = self.nodes.get_mut(&parent_id) {
+                match &mut parent.data {
+                    NodeData::Operation { left, right, .. } => {
+                        if is_left {
+                            *left = sculpt_id;
+                        }
+                        if is_right {
+                            *right = sculpt_id;
+                        }
+                    }
+                    NodeData::Sculpt { input, .. } => {
+                        *input = sculpt_id;
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        sculpt_id
+    }
+
     // --- Topology mutation ---
 
     pub fn set_left_child(&mut self, op_id: NodeId, child_id: NodeId) {
@@ -307,6 +385,14 @@ impl Scene {
         }
     }
 
+    pub fn set_sculpt_input(&mut self, sculpt_id: NodeId, child_id: NodeId) {
+        if let Some(node) = self.nodes.get_mut(&sculpt_id) {
+            if let NodeData::Sculpt { input, .. } = &mut node.data {
+                *input = child_id;
+            }
+        }
+    }
+
     // --- Graph analysis ---
 
     /// Hash of graph topology only (not parameter values).
@@ -320,10 +406,9 @@ impl Scene {
             let node = &self.nodes[&id];
             id.hash(&mut hasher);
             match &node.data {
-                NodeData::Primitive { kind, voxel_grid, .. } => {
+                NodeData::Primitive { kind, .. } => {
                     0u8.hash(&mut hasher);
                     std::mem::discriminant(kind).hash(&mut hasher);
-                    voxel_grid.is_some().hash(&mut hasher);
                 }
                 NodeData::Operation {
                     op, left, right, ..
@@ -332,6 +417,13 @@ impl Scene {
                     std::mem::discriminant(op).hash(&mut hasher);
                     left.hash(&mut hasher);
                     right.hash(&mut hasher);
+                }
+                NodeData::Sculpt {
+                    input, voxel_grid, ..
+                } => {
+                    2u8.hash(&mut hasher);
+                    input.hash(&mut hasher);
+                    voxel_grid.resolution.hash(&mut hasher);
                 }
             }
         }
@@ -356,9 +448,15 @@ impl Scene {
         let Some(node) = self.nodes.get(&id) else {
             return;
         };
-        if let NodeData::Operation { left, right, .. } = &node.data {
-            self.topo_visit(*left, visited, result);
-            self.topo_visit(*right, visited, result);
+        match &node.data {
+            NodeData::Operation { left, right, .. } => {
+                self.topo_visit(*left, visited, result);
+                self.topo_visit(*right, visited, result);
+            }
+            NodeData::Sculpt { input, .. } => {
+                self.topo_visit(*input, visited, result);
+            }
+            NodeData::Primitive { .. } => {}
         }
         result.push(id);
     }
@@ -379,9 +477,15 @@ impl Scene {
             return;
         }
         if let Some(node) = self.nodes.get(&id) {
-            if let NodeData::Operation { left, right, .. } = &node.data {
-                self.visit_reachable(*left, visited);
-                self.visit_reachable(*right, visited);
+            match &node.data {
+                NodeData::Operation { left, right, .. } => {
+                    self.visit_reachable(*left, visited);
+                    self.visit_reachable(*right, visited);
+                }
+                NodeData::Sculpt { input, .. } => {
+                    self.visit_reachable(*input, visited);
+                }
+                NodeData::Primitive { .. } => {}
             }
         }
     }
@@ -400,22 +504,75 @@ impl Scene {
             }
             match (&node.data, &other_node.data) {
                 (
-                    NodeData::Primitive { kind: k1, position: p1, rotation: r1, scale: s1, color: c1, voxel_grid: v1 },
-                    NodeData::Primitive { kind: k2, position: p2, rotation: r2, scale: s2, color: c2, voxel_grid: v2 },
+                    NodeData::Primitive {
+                        kind: k1,
+                        position: p1,
+                        rotation: r1,
+                        scale: s1,
+                        color: c1,
+                        ..
+                    },
+                    NodeData::Primitive {
+                        kind: k2,
+                        position: p2,
+                        rotation: r2,
+                        scale: s2,
+                        color: c2,
+                        ..
+                    },
                 ) => {
                     if std::mem::discriminant(k1) != std::mem::discriminant(k2)
-                        || p1 != p2 || r1 != r2 || s1 != s2 || c1 != c2
-                        || !voxel_grids_eq(v1, v2)
+                        || p1 != p2
+                        || r1 != r2
+                        || s1 != s2
+                        || c1 != c2
                     {
                         return false;
                     }
                 }
                 (
-                    NodeData::Operation { op: o1, smooth_k: k1, left: l1, right: r1 },
-                    NodeData::Operation { op: o2, smooth_k: k2, left: l2, right: r2 },
+                    NodeData::Operation {
+                        op: o1,
+                        smooth_k: k1,
+                        left: l1,
+                        right: r1,
+                    },
+                    NodeData::Operation {
+                        op: o2,
+                        smooth_k: k2,
+                        left: l2,
+                        right: r2,
+                    },
                 ) => {
                     if std::mem::discriminant(o1) != std::mem::discriminant(o2)
-                        || k1 != k2 || l1 != l2 || r1 != r2
+                        || k1 != k2
+                        || l1 != l2
+                        || r1 != r2
+                    {
+                        return false;
+                    }
+                }
+                (
+                    NodeData::Sculpt {
+                        input: i1,
+                        position: p1,
+                        rotation: r1,
+                        color: c1,
+                        voxel_grid: v1,
+                    },
+                    NodeData::Sculpt {
+                        input: i2,
+                        position: p2,
+                        rotation: r2,
+                        color: c2,
+                        voxel_grid: v2,
+                    },
+                ) => {
+                    if i1 != i2
+                        || p1 != p2
+                        || r1 != r2
+                        || c1 != c2
+                        || !v1.content_eq(v2)
                     {
                         return false;
                     }

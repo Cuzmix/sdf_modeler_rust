@@ -128,9 +128,10 @@ pub fn draw_and_interact(
         return false;
     };
 
-    // Only show gizmo for primitives (they have position)
+    // Show gizmo for nodes that have position
     let origin = match scene.nodes.get(&node_id).map(|n| &n.data) {
         Some(NodeData::Primitive { position, .. }) => *position,
+        Some(NodeData::Sculpt { position, .. }) => *position,
         _ => {
             *gizmo_state = GizmoState::Idle;
             return false;
@@ -252,11 +253,14 @@ pub fn draw_and_interact(
             let world_delta = axis_dir * projected * world_scale;
 
             if let Some(node) = scene.nodes.get_mut(&drag_node) {
-                if let NodeData::Primitive {
-                    ref mut position, ..
-                } = node.data
-                {
-                    *position += world_delta;
+                match &mut node.data {
+                    NodeData::Primitive { ref mut position, .. } => {
+                        *position += world_delta;
+                    }
+                    NodeData::Sculpt { ref mut position, .. } => {
+                        *position += world_delta;
+                    }
+                    _ => {}
                 }
             }
 

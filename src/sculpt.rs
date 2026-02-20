@@ -79,7 +79,7 @@ pub fn apply_brush(
 ) {
     // Read transform to convert hit point to local space
     let (position, rotation) = match scene.nodes.get(&node_id).map(|n| &n.data) {
-        Some(NodeData::Primitive {
+        Some(NodeData::Sculpt {
             position, rotation, ..
         }) => (*position, *rotation),
         _ => return,
@@ -91,12 +91,11 @@ pub fn apply_brush(
     let Some(node) = scene.nodes.get_mut(&node_id) else {
         return;
     };
-    if let NodeData::Primitive {
-        voxel_grid: Some(ref mut grid),
-        ..
+    if let NodeData::Sculpt {
+        ref mut voxel_grid, ..
     } = node.data
     {
-        apply_brush_to_grid(grid, local_hit, brush_mode, brush_radius, brush_strength);
+        apply_brush_to_grid(voxel_grid, local_hit, brush_mode, brush_radius, brush_strength);
     }
 }
 
