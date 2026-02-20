@@ -43,7 +43,8 @@ impl SdfPrimitive {
 
     pub fn default_scale(&self) -> Vec3 {
         match self {
-            Self::Sphere | Self::Box | Self::Torus | Self::Plane => Vec3::ONE,
+            Self::Sphere | Self::Box | Self::Plane => Vec3::ONE,
+            Self::Torus => Vec3::new(1.0, 0.3, 1.0),
             Self::Cylinder | Self::Cone => Vec3::new(0.5, 1.0, 0.5),
             Self::Capsule => Vec3::new(0.3, 1.0, 0.3),
         }
