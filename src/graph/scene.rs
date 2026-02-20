@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 
+use super::voxel::VoxelGrid;
+
 pub type NodeId = u64;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -160,6 +162,8 @@ pub enum NodeData {
         rotation: Vec3,
         scale: Vec3,
         color: Vec3,
+        #[serde(default)]
+        voxel_grid: Option<VoxelGrid>,
     },
     Operation {
         op: CsgOp,
@@ -182,6 +186,23 @@ pub struct Scene {
     pub root: Option<NodeId>,
     pub(crate) next_id: u64,
     pub(crate) name_counters: HashMap<String, u32>,
+}
+
+fn voxel_grids_eq(a: &Option<VoxelGrid>, b: &Option<VoxelGrid>) -> bool {
+    match (a, b) {
+        (None, None) => true,
+        (Some(ga), Some(gb)) => {
+            ga.resolution == gb.resolution
+                && ga.bounds_min == gb.bounds_min
+                && ga.bounds_max == gb.bounds_max
+                && ga.data.len() == gb.data.len()
+                && ga.data
+                    .iter()
+                    .zip(gb.data.iter())
+                    .all(|(a, b)| a.to_bits() == b.to_bits())
+        }
+        _ => false,
+    }
 }
 
 impl Scene {
@@ -250,6 +271,7 @@ impl Scene {
                 scale: kind.default_scale(),
                 color: kind.default_color(),
                 kind,
+                voxel_grid: None,
             },
         )
     }
@@ -298,9 +320,10 @@ impl Scene {
             let node = &self.nodes[&id];
             id.hash(&mut hasher);
             match &node.data {
-                NodeData::Primitive { kind, .. } => {
+                NodeData::Primitive { kind, voxel_grid, .. } => {
                     0u8.hash(&mut hasher);
                     std::mem::discriminant(kind).hash(&mut hasher);
+                    voxel_grid.is_some().hash(&mut hasher);
                 }
                 NodeData::Operation {
                     op, left, right, ..
@@ -377,11 +400,12 @@ impl Scene {
             }
             match (&node.data, &other_node.data) {
                 (
-                    NodeData::Primitive { kind: k1, position: p1, rotation: r1, scale: s1, color: c1 },
-                    NodeData::Primitive { kind: k2, position: p2, rotation: r2, scale: s2, color: c2 },
+                    NodeData::Primitive { kind: k1, position: p1, rotation: r1, scale: s1, color: c1, voxel_grid: v1 },
+                    NodeData::Primitive { kind: k2, position: p2, rotation: r2, scale: s2, color: c2, voxel_grid: v2 },
                 ) => {
                     if std::mem::discriminant(k1) != std::mem::discriminant(k2)
                         || p1 != p2 || r1 != r2 || s1 != s2 || c1 != c2
+                        || !voxel_grids_eq(v1, v2)
                     {
                         return false;
                     }

@@ -7,6 +7,9 @@ use crate::gpu::codegen::SdfNodeGpu;
 use crate::gpu::picking::{PendingPick, PickResult};
 use crate::graph::scene::NodeId;
 
+const INITIAL_SCENE_CAPACITY: usize = 16;
+const INITIAL_VOXEL_CAPACITY: usize = 4; // in f32 elements (minimum valid buffer)
+
 pub struct ViewportResources {
     // --- Render pipeline ---
     pub pipeline: wgpu::RenderPipeline,
@@ -14,9 +17,11 @@ pub struct ViewportResources {
     pub camera_bind_group: wgpu::BindGroup,
     pub camera_bgl: wgpu::BindGroupLayout,
     pub scene_buffer: wgpu::Buffer,
+    pub voxel_buffer: wgpu::Buffer,
     pub scene_bind_group: wgpu::BindGroup,
     pub scene_bgl: wgpu::BindGroupLayout,
     pub scene_buffer_capacity: usize,
+    pub voxel_buffer_capacity: usize, // in f32 elements
     pub target_format: wgpu::TextureFormat,
 
     // --- Pick compute pipeline ---
@@ -105,6 +110,51 @@ impl ViewportResources {
         })
     }
 
+    fn create_scene_bgl(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Scene BGL"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT | wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT | wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ],
+        })
+    }
+
+    fn rebuild_scene_bind_group(&mut self, device: &wgpu::Device) {
+        self.scene_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Scene BG"),
+            layout: &self.scene_bgl,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: self.scene_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: self.voxel_buffer.as_entire_binding(),
+                },
+            ],
+        });
+    }
+
     pub fn new(
         device: &wgpu::Device,
         target_format: wgpu::TextureFormat,
@@ -141,35 +191,35 @@ impl ViewportResources {
             }],
         });
 
-        let initial_capacity = 16usize;
         let scene_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Scene Storage"),
-            size: (initial_capacity * std::mem::size_of::<SdfNodeGpu>()) as u64,
+            size: (INITIAL_SCENE_CAPACITY * std::mem::size_of::<SdfNodeGpu>()) as u64,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
-        let scene_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Scene BGL"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::FRAGMENT | wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: true },
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
+        let voxel_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Voxel Storage"),
+            size: (INITIAL_VOXEL_CAPACITY * std::mem::size_of::<f32>()) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
         });
+
+        let scene_bgl = Self::create_scene_bgl(device);
 
         let scene_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Scene BG"),
             layout: &scene_bgl,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: scene_buffer.as_entire_binding(),
-            }],
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: scene_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: voxel_buffer.as_entire_binding(),
+                },
+            ],
         });
 
         let pipeline = Self::create_render_pipeline(
@@ -249,9 +299,11 @@ impl ViewportResources {
             camera_bind_group,
             camera_bgl,
             scene_buffer,
+            voxel_buffer,
             scene_bind_group,
             scene_bgl,
-            scene_buffer_capacity: initial_capacity,
+            scene_buffer_capacity: INITIAL_SCENE_CAPACITY,
+            voxel_buffer_capacity: INITIAL_VOXEL_CAPACITY,
             target_format,
             pick_pipeline,
             pick_input_buffer,
@@ -290,18 +342,33 @@ impl ViewportResources {
                 usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             });
-            self.scene_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("Scene BG"),
-                layout: &self.scene_bgl,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: self.scene_buffer.as_entire_binding(),
-                }],
-            });
             self.scene_buffer_capacity = needed;
+            self.rebuild_scene_bind_group(device);
         }
         if !node_data.is_empty() {
             queue.write_buffer(&self.scene_buffer, 0, bytemuck::cast_slice(node_data));
+        }
+    }
+
+    pub fn update_voxel_buffer(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        voxel_data: &[f32],
+    ) {
+        let needed = voxel_data.len().max(INITIAL_VOXEL_CAPACITY);
+        if needed > self.voxel_buffer_capacity {
+            self.voxel_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Voxel Storage"),
+                size: (needed * std::mem::size_of::<f32>()) as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            self.voxel_buffer_capacity = needed;
+            self.rebuild_scene_bind_group(device);
+        }
+        if !voxel_data.is_empty() {
+            queue.write_buffer(&self.voxel_buffer, 0, bytemuck::cast_slice(voxel_data));
         }
     }
 
@@ -416,9 +483,12 @@ impl egui_wgpu::CallbackTrait for ViewportCallback {
 }
 
 use crate::graph::scene::Scene;
+use crate::sculpt::SculptState;
 use crate::ui::gizmo::{self, GizmoMode, GizmoState};
 
-/// Returns an optional PendingPick if the user clicked in the viewport.
+const BRUSH_CURSOR_COLOR: egui::Color32 = egui::Color32::from_rgba_premultiplied(200, 200, 200, 128);
+
+/// Returns an optional PendingPick if the user clicked/dragged in the viewport.
 pub fn draw(
     ui: &mut egui::Ui,
     camera: &mut Camera,
@@ -426,6 +496,7 @@ pub fn draw(
     selected: Option<NodeId>,
     gizmo_state: &mut GizmoState,
     gizmo_mode: &GizmoMode,
+    sculpt_state: &SculptState,
     time: f32,
 ) -> Option<PendingPick> {
     let rect = ui.available_rect_before_wrap();
@@ -447,22 +518,66 @@ pub fn draw(
     ));
 
     // --- Gizmo overlay (drawn on top of WGPU content) ---
-    let gizmo_consumed = gizmo::draw_and_interact(
-        ui.painter(),
-        &response,
-        camera,
-        scene,
-        selected,
-        gizmo_state,
-        gizmo_mode,
-        rect,
-    );
+    let sculpt_active = sculpt_state.is_active();
 
-    // --- Interaction priority: gizmo > pick > orbit ---
+    let gizmo_consumed = if sculpt_active {
+        false // Gizmo is disabled during sculpt mode
+    } else {
+        gizmo::draw_and_interact(
+            ui.painter(),
+            &response,
+            camera,
+            scene,
+            selected,
+            gizmo_state,
+            gizmo_mode,
+            rect,
+        )
+    };
+
+    // --- Interaction priority: sculpt > gizmo > pick > orbit ---
     let mut pending_pick = None;
 
-    if !gizmo_consumed {
-        // Click to pick (only on click without drag)
+    if sculpt_active {
+        // Sculpt mode: drag applies brush continuously via pick
+        if response.dragged_by(egui::PointerButton::Primary) {
+            if let Some(pos) = ui.input(|i| i.pointer.hover_pos()) {
+                if rect.contains(pos) {
+                    let mouse_px = [
+                        (pos.x - rect.min.x) * pixels_per_point,
+                        (pos.y - rect.min.y) * pixels_per_point,
+                    ];
+                    pending_pick = Some(PendingPick {
+                        mouse_pos: mouse_px,
+                        camera_uniform: camera.to_uniform(viewport, time),
+                    });
+                }
+            }
+        }
+
+        // Brush cursor preview
+        if let SculptState::Active { brush_radius, .. } = sculpt_state {
+            if let Some(hover_pos) = response.hover_pos() {
+                let screen_radius = brush_radius / camera.distance * rect.height() * 0.5;
+                ui.painter().circle_stroke(
+                    hover_pos,
+                    screen_radius,
+                    egui::Stroke::new(1.5, BRUSH_CURSOR_COLOR),
+                );
+            }
+        }
+
+        // Right-click still orbits in sculpt mode, secondary drag pans
+        if response.dragged_by(egui::PointerButton::Secondary) {
+            let delta = response.drag_delta();
+            camera.pan(delta.x, delta.y);
+        }
+        if response.dragged_by(egui::PointerButton::Middle) {
+            let delta = response.drag_delta();
+            camera.orbit(delta.x, delta.y);
+        }
+    } else if !gizmo_consumed {
+        // Normal mode: click to pick
         if response.clicked() {
             if let Some(pos) = response.interact_pointer_pos() {
                 let mouse_px = [
@@ -481,12 +596,13 @@ pub fn draw(
             let delta = response.drag_delta();
             camera.orbit(delta.x, delta.y);
         }
+
+        if response.dragged_by(egui::PointerButton::Secondary) {
+            let delta = response.drag_delta();
+            camera.pan(delta.x, delta.y);
+        }
     }
 
-    if response.dragged_by(egui::PointerButton::Secondary) {
-        let delta = response.drag_delta();
-        camera.pan(delta.x, delta.y);
-    }
     if response.hovered() {
         let scroll = ui.input(|i| i.smooth_scroll_delta.y);
         if scroll != 0.0 {

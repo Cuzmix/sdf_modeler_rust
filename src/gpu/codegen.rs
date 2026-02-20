@@ -43,6 +43,41 @@ struct SdfNode {
 
 @group(0) @binding(0) var<uniform> camera: Camera;
 @group(1) @binding(0) var<storage, read> nodes: array<SdfNode>;
+@group(1) @binding(1) var<storage, read> voxel_data: array<f32>;
+
+fn sdf_voxel_grid(local_p: vec3f, node_idx: u32) -> f32 {
+    let offset = u32(nodes[node_idx].extra0.x);
+    let res    = u32(nodes[node_idx].extra0.y);
+    let bmin   = nodes[node_idx].extra1.xyz;
+    let bmax   = nodes[node_idx].extra2.xyz;
+
+    let size = bmax - bmin;
+    let norm = (local_p - bmin) / size;
+    let max_c = f32(res - 1u);
+    let gc = clamp(norm * max_c, vec3f(0.0), vec3f(max_c));
+
+    let i0 = vec3<u32>(vec3f(floor(gc.x), floor(gc.y), floor(gc.z)));
+    let i1 = min(i0 + vec3<u32>(1u), vec3<u32>(res - 1u));
+    let f = fract(gc);
+
+    let r2 = res * res;
+    let c000 = voxel_data[offset + i0.z * r2 + i0.y * res + i0.x];
+    let c100 = voxel_data[offset + i0.z * r2 + i0.y * res + i1.x];
+    let c010 = voxel_data[offset + i0.z * r2 + i1.y * res + i0.x];
+    let c110 = voxel_data[offset + i0.z * r2 + i1.y * res + i1.x];
+    let c001 = voxel_data[offset + i1.z * r2 + i0.y * res + i0.x];
+    let c101 = voxel_data[offset + i1.z * r2 + i0.y * res + i1.x];
+    let c011 = voxel_data[offset + i1.z * r2 + i1.y * res + i0.x];
+    let c111 = voxel_data[offset + i1.z * r2 + i1.y * res + i1.x];
+
+    let c00 = mix(c000, c100, f.x);
+    let c10 = mix(c010, c110, f.x);
+    let c01 = mix(c001, c101, f.x);
+    let c11 = mix(c011, c111, f.x);
+    let c0  = mix(c00, c10, f.y);
+    let c1  = mix(c01, c11, f.y);
+    return mix(c0, c1, f.z);
+}
 
 struct VertexOutput {
     @builtin(position) position: vec4f,
@@ -363,15 +398,21 @@ fn generate_scene_sdf(scene: &Scene) -> String {
             continue;
         };
         match &node.data {
-            NodeData::Primitive { kind, .. } => {
-                let sdf_fn = kind.sdf_function_name();
+            NodeData::Primitive { kind, voxel_grid, .. } => {
                 // Apply rotation: translate to local space, then rotate
                 lines.push(format!(
                     "    let lp{i} = rotate_euler(p - nodes[{i}].position.xyz, nodes[{i}].rotation.xyz);"
                 ));
-                lines.push(format!(
-                    "    let n{i} = vec2f({sdf_fn}(lp{i}, nodes[{i}].scale.xyz), f32({i}));"
-                ));
+                if voxel_grid.is_some() {
+                    lines.push(format!(
+                        "    let n{i} = vec2f(sdf_voxel_grid(lp{i}, {i}u), f32({i}));"
+                    ));
+                } else {
+                    let sdf_fn = kind.sdf_function_name();
+                    lines.push(format!(
+                        "    let n{i} = vec2f({sdf_fn}(lp{i}, nodes[{i}].scale.xyz), f32({i}));"
+                    ));
+                }
             }
             NodeData::Operation { op, left, right, .. } => {
                 let li = idx_map.get(left).copied().unwrap_or(0);
@@ -395,7 +436,35 @@ fn generate_scene_sdf(scene: &Scene) -> String {
 // GPU buffer builder
 // ---------------------------------------------------------------------------
 
-pub fn build_node_buffer(scene: &Scene, selected: Option<NodeId>) -> Vec<SdfNodeGpu> {
+/// Build the concatenated voxel data buffer.
+/// Returns (flat_data, offset_map) where offset_map maps NodeId → offset in flat_data (f32 elements).
+pub fn build_voxel_buffer(scene: &Scene) -> (Vec<f32>, HashMap<NodeId, u32>) {
+    let order = scene.topo_order();
+    let mut flat_data = Vec::new();
+    let mut offsets = HashMap::new();
+
+    for &node_id in &order {
+        if let Some(node) = scene.nodes.get(&node_id) {
+            if let NodeData::Primitive {
+                voxel_grid: Some(ref grid),
+                ..
+            } = node.data
+            {
+                let offset = flat_data.len() as u32;
+                offsets.insert(node_id, offset);
+                flat_data.extend_from_slice(&grid.data);
+            }
+        }
+    }
+
+    (flat_data, offsets)
+}
+
+pub fn build_node_buffer(
+    scene: &Scene,
+    selected: Option<NodeId>,
+    voxel_offsets: &HashMap<NodeId, u32>,
+) -> Vec<SdfNodeGpu> {
     let order = scene.topo_order();
     let mut buffer = Vec::with_capacity(order.len().max(1));
 
@@ -413,17 +482,32 @@ pub fn build_node_buffer(scene: &Scene, selected: Option<NodeId>) -> Vec<SdfNode
                 rotation,
                 scale,
                 color,
+                voxel_grid,
             } => {
                 let type_val = kind.gpu_type_id();
+
+                // Pack voxel grid metadata into extra fields
+                let (extra0, extra1, extra2) = match voxel_grid {
+                    Some(grid) => {
+                        let offset = voxel_offsets.get(&node_id).copied().unwrap_or(0);
+                        (
+                            [offset as f32, grid.resolution as f32, 0.0, 0.0],
+                            [grid.bounds_min.x, grid.bounds_min.y, grid.bounds_min.z, 0.0],
+                            [grid.bounds_max.x, grid.bounds_max.y, grid.bounds_max.z, 0.0],
+                        )
+                    }
+                    None => ([0.0; 4], [0.0; 4], [0.0; 4]),
+                };
+
                 buffer.push(SdfNodeGpu {
                     type_op: [type_val, 0.0, 0.0, 0.0],
                     position: [position.x, position.y, position.z, 0.0],
                     rotation: [rotation.x, rotation.y, rotation.z, 0.0],
                     scale: [scale.x, scale.y, scale.z, 0.0],
                     color: [color.x, color.y, color.z, is_sel],
-                    extra0: [0.0; 4],
-                    extra1: [0.0; 4],
-                    extra2: [0.0; 4],
+                    extra0,
+                    extra1,
+                    extra2,
                 });
             }
             NodeData::Operation { op, smooth_k, .. } => {

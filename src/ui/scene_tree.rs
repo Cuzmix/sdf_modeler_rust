@@ -126,7 +126,9 @@ fn draw_leaf_item_with_root(
 
 fn format_node_label(node: &SceneNode, is_root: bool) -> String {
     let badge = match &node.data {
-        NodeData::Primitive { kind, .. } => kind.badge(),
+        NodeData::Primitive { kind, voxel_grid, .. } => {
+            if voxel_grid.is_some() { "[Vox]" } else { kind.badge() }
+        }
         NodeData::Operation { op, .. } => op.badge(),
     };
     let root_marker = if is_root { " (R)" } else { "" };

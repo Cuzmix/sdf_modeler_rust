@@ -2,6 +2,7 @@ mod app;
 mod gpu;
 mod graph;
 mod io;
+mod sculpt;
 mod settings;
 mod ui;
 

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::gpu::camera::Camera;
 use crate::graph::scene::Scene;
 
-const CURRENT_VERSION: u32 = 1;
+const CURRENT_VERSION: u32 = 2;
 
 #[derive(Serialize, Deserialize)]
 pub struct ProjectFile {
