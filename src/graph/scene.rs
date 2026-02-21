@@ -178,6 +178,8 @@ pub enum NodeData {
         rotation: Vec3,
         color: Vec3,
         voxel_grid: VoxelGrid,
+        #[serde(default = "crate::graph::voxel::default_resolution")]
+        desired_resolution: u32,
     },
 }
 
@@ -305,6 +307,7 @@ impl Scene {
         voxel_grid: VoxelGrid,
     ) -> NodeId {
         let name = self.next_name("Sculpt");
+        let desired_resolution = voxel_grid.resolution;
         self.add_node(
             name,
             NodeData::Sculpt {
@@ -313,6 +316,7 @@ impl Scene {
                 rotation,
                 color,
                 voxel_grid,
+                desired_resolution,
             },
         )
     }
@@ -575,6 +579,7 @@ impl Scene {
                         rotation: r1,
                         color: c1,
                         voxel_grid: v1,
+                        desired_resolution: dr1,
                     },
                     NodeData::Sculpt {
                         input: i2,
@@ -582,12 +587,14 @@ impl Scene {
                         rotation: r2,
                         color: c2,
                         voxel_grid: v2,
+                        desired_resolution: dr2,
                     },
                 ) => {
                     if i1 != i2
                         || p1 != p2
                         || r1 != r2
                         || c1 != c2
+                        || dr1 != dr2
                         || !v1.content_eq(v2)
                     {
                         return false;

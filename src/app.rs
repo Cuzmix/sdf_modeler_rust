@@ -41,7 +41,7 @@ impl SdfApp {
             .expect("WGPU render state required");
 
         let scene = Scene::new();
-        let shader_src = codegen::generate_shader(&scene);
+        let shader_src = codegen::generate_shader(&scene, settings.shadows_enabled);
         let pick_shader_src = codegen::generate_pick_shader(&scene);
         let structure_key = scene.structure_key();
 
@@ -170,7 +170,7 @@ impl SdfApp {
     fn sync_gpu_pipeline(&mut self) {
         let new_key = self.scene.structure_key();
         if new_key != self.current_structure_key {
-            let shader_src = codegen::generate_shader(&self.scene);
+            let shader_src = codegen::generate_shader(&self.scene, self.settings.shadows_enabled);
             let pick_shader_src = codegen::generate_pick_shader(&self.scene);
             let mut renderer = self.render_state.renderer.write();
             if let Some(res) = renderer
@@ -313,6 +313,13 @@ impl SdfApp {
                     if self.settings.vsync_enabled != self.initial_vsync {
                         ui.weak("(restart required)");
                     }
+                    ui.separator();
+                    let prev_shadows = self.settings.shadows_enabled;
+                    ui.checkbox(&mut self.settings.shadows_enabled, "Raymarched Shadows");
+                    if self.settings.shadows_enabled != prev_shadows {
+                        self.settings.save();
+                        self.current_structure_key = 0;
+                    }
                 });
             });
         });
@@ -339,6 +346,7 @@ impl eframe::App for SdfApp {
         self.show_menu_bar(ctx);
 
         let mut pending_pick = None;
+        let mut settings_dirty = false;
         let mut tab_viewer = SdfTabViewer {
             camera: &mut self.camera,
             scene: &mut self.scene,
@@ -346,6 +354,8 @@ impl eframe::App for SdfApp {
             gizmo_state: &mut self.gizmo_state,
             gizmo_mode: &self.gizmo_mode,
             sculpt_state: &mut self.sculpt_state,
+            settings: &mut self.settings,
+            settings_dirty: &mut settings_dirty,
             time: now as f32,
             pending_pick: &mut pending_pick,
         };
@@ -359,6 +369,10 @@ impl eframe::App for SdfApp {
 
         if pending_pick.is_some() {
             self.pending_pick = pending_pick;
+        }
+
+        if settings_dirty {
+            self.current_structure_key = 0; // Force pipeline rebuild
         }
 
         // Undo/Redo: end-of-frame commit

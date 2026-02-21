@@ -4,12 +4,15 @@ use std::path::PathBuf;
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Settings {
     pub vsync_enabled: bool,
+    #[serde(default)]
+    pub shadows_enabled: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self {
             vsync_enabled: true,
+            shadows_enabled: false,
         }
     }
 }

@@ -3,8 +3,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::graph::scene::{CsgOp, NodeData, NodeId, Scene, SdfPrimitive};
 
-pub const DEFAULT_RESOLUTION: u32 = 64;
+pub const DEFAULT_RESOLUTION: u32 = 96;
 const GRID_PADDING: f32 = 0.5;
+
+pub fn default_resolution() -> u32 {
+    DEFAULT_RESOLUTION
+}
 const FAR_DISTANCE: f32 = 999.0;
 
 /// A 3D signed distance field stored as a flat array.

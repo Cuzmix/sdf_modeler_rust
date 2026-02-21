@@ -7,7 +7,8 @@ use crate::graph::scene::Scene;
 use crate::sculpt::SculptState;
 use crate::ui::gizmo::{GizmoMode, GizmoState};
 use crate::ui::node_graph::{self, NodeGraphState};
-use crate::ui::{properties, scene_tree, viewport};
+use crate::settings::Settings;
+use crate::ui::{properties, render_settings, scene_tree, viewport};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Tab {
@@ -15,6 +16,7 @@ pub enum Tab {
     NodeGraph,
     Properties,
     SceneTree,
+    RenderSettings,
 }
 
 pub fn create_dock_state() -> DockState<Tab> {
@@ -25,7 +27,7 @@ pub fn create_dock_state() -> DockState<Tab> {
         NodeIndex::root(),
         Split::Right,
         0.8,
-        Node::leaf(Tab::Properties),
+        Node::leaf_with(vec![Tab::Properties, Tab::RenderSettings]),
     );
 
     let [_props, _tree] = surface.split(
@@ -52,6 +54,8 @@ pub struct SdfTabViewer<'a> {
     pub gizmo_state: &'a mut GizmoState,
     pub gizmo_mode: &'a GizmoMode,
     pub sculpt_state: &'a mut SculptState,
+    pub settings: &'a mut Settings,
+    pub settings_dirty: &'a mut bool,
     pub time: f32,
     pub pending_pick: &'a mut Option<PendingPick>,
 }
@@ -65,6 +69,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
             Tab::NodeGraph => "Node Graph".into(),
             Tab::Properties => "Properties".into(),
             Tab::SceneTree => "Scene Tree".into(),
+            Tab::RenderSettings => "Render Settings".into(),
         }
     }
 
@@ -97,6 +102,11 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
             }
             Tab::SceneTree => {
                 scene_tree::draw(ui, self.scene, &mut self.node_graph_state.selected);
+            }
+            Tab::RenderSettings => {
+                if render_settings::draw(ui, self.settings) {
+                    *self.settings_dirty = true;
+                }
             }
         }
     }

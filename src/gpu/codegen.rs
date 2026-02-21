@@ -198,7 +198,7 @@ fn ray_march(ro: vec3f, rd: vec3f) -> vec2f {
     for (var i = 0; i < 128; i++) {
         let p = ro + rd * t;
         let hit = scene_sdf(p);
-        if hit.x < 0.001 {
+        if hit.x < 0.002 {
             mat_id = hit.y;
             break;
         }
@@ -210,7 +210,7 @@ fn ray_march(ro: vec3f, rd: vec3f) -> vec2f {
 }
 
 fn calc_normal(p: vec3f) -> vec3f {
-    let e = vec2f(0.001, 0.0);
+    let e = vec2f(0.01, 0.0);
     return normalize(vec3f(
         scene_sdf(p + e.xyy).x - scene_sdf(p - e.xyy).x,
         scene_sdf(p + e.yxy).x - scene_sdf(p - e.yxy).x,
@@ -223,11 +223,11 @@ fn soft_shadow(ro: vec3f, rd: vec3f, mint: f32, maxt: f32, k: f32) -> f32 {
     var t = mint;
     for (var i = 0; i < SHADOW_STEPS; i++) {
         let h = scene_sdf(ro + rd * t).x;
-        if h < 0.001 {
+        if h < 0.005 {
             return 0.0;
         }
         res = min(res, k * h / t);
-        t += clamp(h, 0.02, 0.2);
+        t += clamp(h, 0.05, 0.2);
         if t > maxt { break; }
     }
     return clamp(res, 0.0, 1.0);
@@ -284,7 +284,7 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
     let key_h = normalize(key_dir - rd);
     let key_diff = max(dot(n, key_dir), 0.0);
     let key_spec = pow(max(dot(n, key_h), 0.0), 32.0);
-    let shadow = soft_shadow(p + n * 0.01, key_dir, 0.02, 20.0, SHADOW_PENUMBRA_K);
+    /*SHADOW_LINE*/
 
     // Fill light (opposite side, dimmer, no shadow)
     let fill_dir = normalize(vec3f(-1.0, 0.5, -1.0));
@@ -319,7 +319,7 @@ fn pick_ray_march(ro: vec3f, rd: vec3f) -> vec2f {
     for (var i = 0; i < 128; i++) {
         let p = ro + rd * t;
         let hit = scene_sdf(p);
-        if hit.x < 0.001 {
+        if hit.x < 0.002 {
             mat_id = hit.y;
             break;
         }
@@ -371,9 +371,15 @@ fn cs_pick() {
 // Code generation
 // ---------------------------------------------------------------------------
 
-pub fn generate_shader(scene: &Scene) -> String {
+pub fn generate_shader(scene: &Scene, shadows_enabled: bool) -> String {
     let scene_sdf = generate_scene_sdf(scene);
-    format!("{}\n{}\n{}", SHADER_PRELUDE, scene_sdf, SHADER_POSTLUDE)
+    let shadow_line = if shadows_enabled {
+        "    let shadow = soft_shadow(p + n * 0.04, key_dir, 0.06, 20.0, SHADOW_PENUMBRA_K);"
+    } else {
+        "    let shadow = 1.0;"
+    };
+    let postlude = SHADER_POSTLUDE.replace("/*SHADOW_LINE*/", shadow_line);
+    format!("{}\n{}\n{}", SHADER_PRELUDE, scene_sdf, postlude)
 }
 
 pub fn generate_pick_shader(scene: &Scene) -> String {

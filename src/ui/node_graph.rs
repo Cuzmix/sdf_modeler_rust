@@ -57,6 +57,7 @@ pub struct NodeGraphState {
     pub layout_dirty: bool,
     pub pinned_positions: HashSet<NodeId>,
     pub needs_center: bool,
+    pub last_node_count: usize,
 }
 
 impl NodeGraphState {
@@ -69,6 +70,7 @@ impl NodeGraphState {
             layout_dirty: true,
             pinned_positions: HashSet::new(),
             needs_center: true,
+            last_node_count: 0,
         }
     }
 }
@@ -537,6 +539,12 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState) {
     let response = ui.allocate_rect(canvas_rect, egui::Sense::click_and_drag());
     let painter = ui.painter_at(canvas_rect);
     painter.rect_filled(canvas_rect, 0.0, COLOR_BG);
+
+    let node_count = scene.nodes.len();
+    if node_count != state.last_node_count {
+        state.layout_dirty = true;
+        state.last_node_count = node_count;
+    }
 
     if state.layout_dirty {
         auto_layout(scene, state);

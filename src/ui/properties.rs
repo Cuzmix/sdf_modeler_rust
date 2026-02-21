@@ -204,7 +204,8 @@ pub fn draw(
             mut position,
             mut rotation,
             mut color,
-            voxel_grid,
+            voxel_grid: _,
+            mut desired_resolution,
         } => {
             ui.label("Type: Sculpt Modifier");
             ui.separator();
@@ -239,7 +240,15 @@ pub fn draw(
 
             ui.separator();
             ui.label("Sculpting");
-            ui.label(format!("Resolution: {}^3", voxel_grid.resolution));
+            let mut res_i32 = desired_resolution as i32;
+            ui.horizontal(|ui| {
+                ui.label("Resolution:");
+                ui.add(egui::Slider::new(&mut res_i32, 32..=256).suffix("^3"));
+            });
+            desired_resolution = res_i32 as u32;
+            let voxels = (desired_resolution as u64).pow(3);
+            let mem_mb = (voxels * 4) as f64 / (1024.0 * 1024.0);
+            ui.weak(format!("{} voxels ({:.1} MB)", voxels, mem_mb));
 
             let sculpt_active = sculpt_state.active_node() == Some(id);
 
@@ -274,7 +283,7 @@ pub fn draw(
                     if let Some(input_id) = input {
                         if ui.button("Re-bake").clicked() {
                             let (grid, center) =
-                                voxel::bake_subtree(scene, input_id, voxel::DEFAULT_RESOLUTION);
+                                voxel::bake_subtree(scene, input_id, desired_resolution);
                             if let Some(node) = scene.nodes.get_mut(&id) {
                                 if let NodeData::Sculpt {
                                     voxel_grid: ref mut vg,
@@ -316,12 +325,14 @@ pub fn draw(
                     position: ref mut p,
                     rotation: ref mut r,
                     color: ref mut c,
+                    desired_resolution: ref mut dr,
                     ..
                 } = node.data
                 {
                     *p = position;
                     *r = rotation;
                     *c = color;
+                    *dr = desired_resolution;
                 }
             }
         }
