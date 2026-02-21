@@ -1,6 +1,7 @@
 use eframe::egui;
 use egui_dock::{DockState, Node, NodeIndex, Split, TabViewer};
 
+use crate::app::BakeRequest;
 use crate::gpu::camera::Camera;
 use crate::gpu::picking::PendingPick;
 use crate::graph::scene::Scene;
@@ -58,6 +59,9 @@ pub struct SdfTabViewer<'a> {
     pub settings_dirty: &'a mut bool,
     pub time: f32,
     pub pending_pick: &'a mut Option<PendingPick>,
+    pub bake_request: &'a mut Option<BakeRequest>,
+    /// (done_slices, total_slices) when a bake is in progress, None when idle.
+    pub bake_progress: Option<(u32, u32)>,
 }
 
 impl<'a> TabViewer for SdfTabViewer<'a> {
@@ -98,6 +102,8 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.scene,
                     self.node_graph_state.selected,
                     self.sculpt_state,
+                    self.bake_request,
+                    self.bake_progress,
                 );
             }
             Tab::SceneTree => {

@@ -9,7 +9,8 @@
       "Bash(cargo build:*)",
       "Bash(RUST_LOG=info cargo run:*)",
       "Bash(cargo check:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(cargo add:*)"
     ]
   }
 }

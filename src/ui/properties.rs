@@ -1,5 +1,6 @@
 use eframe::egui;
 
+use crate::app::BakeRequest;
 use crate::graph::scene::{NodeData, NodeId, Scene, TransformKind};
 use crate::graph::voxel;
 use crate::sculpt::{self, BrushMode, SculptState};
@@ -36,6 +37,8 @@ pub fn draw(
     scene: &mut Scene,
     selected: Option<NodeId>,
     sculpt_state: &mut SculptState,
+    bake_request: &mut Option<BakeRequest>,
+    bake_progress: Option<(u32, u32)>,
 ) {
     let Some(id) = selected else {
         ui.centered_and_justified(|ui| {
@@ -101,17 +104,16 @@ pub fn draw(
 
             // Add Sculpt Modifier button
             ui.separator();
-            if ui.button("Add Sculpt Modifier").clicked() {
-                let (grid, center) = voxel::bake_subtree(scene, id, voxel::DEFAULT_RESOLUTION);
-                let sculpt_id = scene.insert_sculpt_above(
-                    id, center, glam::Vec3::ZERO, color, grid,
-                );
-                *sculpt_state = SculptState::Active {
-                    node_id: sculpt_id,
-                    brush_mode: BrushMode::Add,
-                    brush_radius: sculpt::DEFAULT_BRUSH_RADIUS,
-                    brush_strength: sculpt::DEFAULT_BRUSH_STRENGTH,
-                };
+            if let Some((done, total)) = bake_progress {
+                let frac = done as f32 / total.max(1) as f32;
+                ui.add(egui::ProgressBar::new(frac).text(format!("Baking... {:.0}%", frac * 100.0)));
+            } else if ui.button("Add Sculpt Modifier").clicked() {
+                *bake_request = Some(BakeRequest {
+                    subtree_root: id,
+                    resolution: voxel::DEFAULT_RESOLUTION,
+                    color,
+                    existing_sculpt: None,
+                });
                 if let Some(node) = scene.nodes.get_mut(&id) {
                     node.name = name;
                 }
@@ -172,19 +174,17 @@ pub fn draw(
 
             // Add Sculpt Modifier button
             ui.separator();
-            if ui.button("Add Sculpt Modifier").clicked() {
-                let (grid, center) = voxel::bake_subtree(scene, id, voxel::DEFAULT_RESOLUTION);
-                // Use a neutral color for operation sculpts
+            if let Some((done, total)) = bake_progress {
+                let frac = done as f32 / total.max(1) as f32;
+                ui.add(egui::ProgressBar::new(frac).text(format!("Baking... {:.0}%", frac * 100.0)));
+            } else if ui.button("Add Sculpt Modifier").clicked() {
                 let sculpt_color = glam::Vec3::new(0.6, 0.6, 0.6);
-                let sculpt_id = scene.insert_sculpt_above(
-                    id, center, glam::Vec3::ZERO, sculpt_color, grid,
-                );
-                *sculpt_state = SculptState::Active {
-                    node_id: sculpt_id,
-                    brush_mode: BrushMode::Add,
-                    brush_radius: sculpt::DEFAULT_BRUSH_RADIUS,
-                    brush_strength: sculpt::DEFAULT_BRUSH_STRENGTH,
-                };
+                *bake_request = Some(BakeRequest {
+                    subtree_root: id,
+                    resolution: voxel::DEFAULT_RESOLUTION,
+                    color: sculpt_color,
+                    existing_sculpt: None,
+                });
                 return;
             }
 
@@ -276,29 +276,26 @@ pub fn draw(
             }
 
             if sculpt_active {
-                ui.horizontal(|ui| {
-                    if ui.button("Exit Sculpt Mode").clicked() {
-                        *sculpt_state = SculptState::Inactive;
-                    }
-                    if let Some(input_id) = input {
-                        if ui.button("Re-bake").clicked() {
-                            let (grid, center) =
-                                voxel::bake_subtree(scene, input_id, desired_resolution);
-                            if let Some(node) = scene.nodes.get_mut(&id) {
-                                if let NodeData::Sculpt {
-                                    voxel_grid: ref mut vg,
-                                    position: ref mut p,
-                                    ..
-                                } = node.data
-                                {
-                                    *vg = grid;
-                                    *p = center;
-                                }
-                            }
-                            position = center;
+                if let Some((done, total)) = bake_progress {
+                    let frac = done as f32 / total.max(1) as f32;
+                    ui.add(egui::ProgressBar::new(frac).text(format!("Baking... {:.0}%", frac * 100.0)));
+                } else {
+                    ui.horizontal(|ui| {
+                        if ui.button("Exit Sculpt Mode").clicked() {
+                            *sculpt_state = SculptState::Inactive;
                         }
-                    }
-                });
+                        if let Some(input_id) = input {
+                            if ui.button("Re-bake").clicked() {
+                                *bake_request = Some(BakeRequest {
+                                    subtree_root: input_id,
+                                    resolution: desired_resolution,
+                                    color,
+                                    existing_sculpt: Some(id),
+                                });
+                            }
+                        }
+                    });
+                }
             } else {
                 ui.horizontal(|ui| {
                     if ui.button("Resume Sculpting").clicked() {

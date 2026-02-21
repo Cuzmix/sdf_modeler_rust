@@ -575,6 +575,62 @@ impl Scene {
         hasher.finish()
     }
 
+    /// Lightweight hash of all mutable node parameters (positions, rotations,
+    /// scales, colors, smooth_k, etc.). Skips voxel data — voxel changes are
+    /// tracked explicitly via dirty flags at brush/undo/redo sites.
+    pub fn data_fingerprint(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        let mut ids: Vec<NodeId> = self.nodes.keys().cloned().collect();
+        ids.sort();
+        for id in ids {
+            let node = &self.nodes[&id];
+            id.hash(&mut hasher);
+            node.name.hash(&mut hasher);
+            match &node.data {
+                NodeData::Primitive {
+                    position, rotation, scale, color, ..
+                } => {
+                    position.x.to_bits().hash(&mut hasher);
+                    position.y.to_bits().hash(&mut hasher);
+                    position.z.to_bits().hash(&mut hasher);
+                    rotation.x.to_bits().hash(&mut hasher);
+                    rotation.y.to_bits().hash(&mut hasher);
+                    rotation.z.to_bits().hash(&mut hasher);
+                    scale.x.to_bits().hash(&mut hasher);
+                    scale.y.to_bits().hash(&mut hasher);
+                    scale.z.to_bits().hash(&mut hasher);
+                    color.x.to_bits().hash(&mut hasher);
+                    color.y.to_bits().hash(&mut hasher);
+                    color.z.to_bits().hash(&mut hasher);
+                }
+                NodeData::Operation { smooth_k, .. } => {
+                    smooth_k.to_bits().hash(&mut hasher);
+                }
+                NodeData::Sculpt {
+                    position, rotation, color, desired_resolution, ..
+                } => {
+                    position.x.to_bits().hash(&mut hasher);
+                    position.y.to_bits().hash(&mut hasher);
+                    position.z.to_bits().hash(&mut hasher);
+                    rotation.x.to_bits().hash(&mut hasher);
+                    rotation.y.to_bits().hash(&mut hasher);
+                    rotation.z.to_bits().hash(&mut hasher);
+                    color.x.to_bits().hash(&mut hasher);
+                    color.y.to_bits().hash(&mut hasher);
+                    color.z.to_bits().hash(&mut hasher);
+                    desired_resolution.hash(&mut hasher);
+                }
+                NodeData::Transform { value, .. } => {
+                    value.x.to_bits().hash(&mut hasher);
+                    value.y.to_bits().hash(&mut hasher);
+                    value.z.to_bits().hash(&mut hasher);
+                }
+            }
+        }
+        hasher.finish()
+    }
+
     /// Returns nodes not referenced as a child by any other node.
     pub fn top_level_nodes(&self) -> Vec<NodeId> {
         let mut referenced: HashSet<NodeId> = HashSet::new();

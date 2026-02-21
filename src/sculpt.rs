@@ -69,6 +69,7 @@ impl SculptState {
 // ---------------------------------------------------------------------------
 
 /// Apply a spherical brush stroke at `hit_world` position.
+/// Returns the (z0, z1) inclusive dirty z-slab range for incremental GPU upload.
 pub fn apply_brush(
     scene: &mut Scene,
     node_id: NodeId,
@@ -76,36 +77,39 @@ pub fn apply_brush(
     brush_mode: &BrushMode,
     brush_radius: f32,
     brush_strength: f32,
-) {
+) -> Option<(u32, u32)> {
     // Read transform to convert hit point to local space
     let (position, rotation) = match scene.nodes.get(&node_id).map(|n| &n.data) {
         Some(NodeData::Sculpt {
             position, rotation, ..
         }) => (*position, *rotation),
-        _ => return,
+        _ => return None,
     };
 
     let local_hit = inverse_rotate_euler(hit_world - position, rotation);
 
     // Get mutable reference to grid and apply brush
     let Some(node) = scene.nodes.get_mut(&node_id) else {
-        return;
+        return None;
     };
     if let NodeData::Sculpt {
         ref mut voxel_grid, ..
     } = node.data
     {
-        apply_brush_to_grid(voxel_grid, local_hit, brush_mode, brush_radius, brush_strength);
+        Some(apply_brush_to_grid(voxel_grid, local_hit, brush_mode, brush_radius, brush_strength))
+    } else {
+        None
     }
 }
 
+/// Returns (z0, z1) inclusive range of z-slabs that were modified.
 fn apply_brush_to_grid(
     grid: &mut VoxelGrid,
     center: Vec3,
     brush_mode: &BrushMode,
     radius: f32,
     strength: f32,
-) {
+) -> (u32, u32) {
     let res = grid.resolution;
     let sign = brush_mode.sign();
 
@@ -137,6 +141,8 @@ fn apply_brush_to_grid(
             }
         }
     }
+
+    (z0, z1)
 }
 
 /// Inverse of rotate_euler: undo Z rotation, then Y, then X.

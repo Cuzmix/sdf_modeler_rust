@@ -1,4 +1,8 @@
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
+
 use glam::{Vec2, Vec3, Vec3Swizzles};
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::graph::scene::{CsgOp, NodeData, NodeId, Scene, SdfPrimitive, TransformKind};
@@ -18,7 +22,88 @@ pub struct VoxelGrid {
     pub resolution: u32,
     pub bounds_min: Vec3,
     pub bounds_max: Vec3,
+    #[serde(with = "sparse_voxel_data")]
     pub data: Vec<f32>,
+}
+
+/// Custom serde module: serializes voxel data sparsely when beneficial (skipping FAR_DISTANCE
+/// voxels), and deserializes both old dense format and new sparse format.
+mod sparse_voxel_data {
+    use super::FAR_DISTANCE;
+    use serde::de::{self, Deserializer, SeqAccess, Visitor};
+    use serde::ser::{Serialize, Serializer};
+
+    #[derive(serde::Serialize)]
+    struct SparseRepr {
+        total: usize,
+        entries: Vec<(u32, f32)>,
+    }
+
+    pub fn serialize<S: Serializer>(data: &Vec<f32>, serializer: S) -> Result<S::Ok, S::Error> {
+        let non_far: Vec<(u32, f32)> = data
+            .iter()
+            .enumerate()
+            .filter(|(_, &d)| (d - FAR_DISTANCE).abs() > 0.001)
+            .map(|(i, &d)| (i as u32, d))
+            .collect();
+
+        // Use sparse if it saves space: each sparse entry = (u32, f32) = 2 values
+        // vs dense = 1 value per voxel. Sparse wins when non_far * 2 < total.
+        if non_far.len() * 2 < data.len() {
+            let repr = SparseRepr { total: data.len(), entries: non_far };
+            repr.serialize(serializer)
+        } else {
+            data.serialize(serializer)
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<f32>, D::Error> {
+        deserializer.deserialize_any(VoxelDataVisitor)
+    }
+
+    struct VoxelDataVisitor;
+
+    impl<'de> Visitor<'de> for VoxelDataVisitor {
+        type Value = Vec<f32>;
+
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("a dense array of f32 or a sparse {total, entries} object")
+        }
+
+        // Old format: plain array of f32
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Vec<f32>, A::Error> {
+            let mut data = Vec::with_capacity(seq.size_hint().unwrap_or(0));
+            while let Some(val) = seq.next_element::<f32>()? {
+                data.push(val);
+            }
+            Ok(data)
+        }
+
+        // New sparse format: { "total": N, "entries": [[idx, val], ...] }
+        fn visit_map<M: de::MapAccess<'de>>(self, mut map: M) -> Result<Vec<f32>, M::Error> {
+            let mut total: Option<usize> = None;
+            let mut entries: Option<Vec<(u32, f32)>> = None;
+
+            while let Some(key) = map.next_key::<String>()? {
+                match key.as_str() {
+                    "total" => total = Some(map.next_value()?),
+                    "entries" => entries = Some(map.next_value()?),
+                    _ => { let _: serde::de::IgnoredAny = map.next_value()?; }
+                }
+            }
+
+            let total = total.ok_or_else(|| de::Error::missing_field("total"))?;
+            let entries = entries.ok_or_else(|| de::Error::missing_field("entries"))?;
+
+            let mut data = vec![FAR_DISTANCE; total];
+            for (idx, val) in entries {
+                if (idx as usize) < data.len() {
+                    data[idx as usize] = val;
+                }
+            }
+            Ok(data)
+        }
+    }
 }
 
 impl VoxelGrid {
@@ -299,21 +384,26 @@ pub fn bake_from_analytical(kind: &SdfPrimitive, scale: Vec3, resolution: u32) -
     let extent = scale * (1.0 + GRID_PADDING);
     let bounds_min = -extent;
     let bounds_max = extent;
-
-    let mut grid = VoxelGrid::new(resolution, bounds_min, bounds_max);
     let res = resolution;
+    let res_f = (res - 1) as f32;
+    let size = bounds_max - bounds_min;
 
-    for z in 0..res {
-        for y in 0..res {
-            for x in 0..res {
-                let pos = grid.grid_to_world(x as f32, y as f32, z as f32);
-                let dist = evaluate_sdf(kind, pos, scale);
-                grid.data[VoxelGrid::index(x, y, z, res)] = dist;
+    let data: Vec<f32> = (0..res)
+        .into_par_iter()
+        .flat_map(|z| {
+            let mut slice = Vec::with_capacity((res * res) as usize);
+            for y in 0..res {
+                for x in 0..res {
+                    let norm = Vec3::new(x as f32, y as f32, z as f32) / res_f;
+                    let pos = bounds_min + norm * size;
+                    slice.push(evaluate_sdf(kind, pos, scale));
+                }
             }
-        }
-    }
+            slice
+        })
+        .collect();
 
-    grid
+    VoxelGrid { resolution, bounds_min, bounds_max, data }
 }
 
 /// Bake any subtree's SDF into a VoxelGrid.
@@ -325,20 +415,64 @@ pub fn bake_subtree(scene: &Scene, subtree_root: NodeId, resolution: u32) -> (Vo
 
     let local_min = -half_extent;
     let local_max = half_extent;
-
-    let mut grid = VoxelGrid::new(resolution, local_min, local_max);
     let res = resolution;
+    let res_f = (res - 1) as f32;
+    let size = local_max - local_min;
 
-    for z in 0..res {
-        for y in 0..res {
-            for x in 0..res {
-                let local_pos = grid.grid_to_world(x as f32, y as f32, z as f32);
-                let world_pos = local_pos + center;
-                let dist = evaluate_sdf_tree(scene, subtree_root, world_pos);
-                grid.data[VoxelGrid::index(x, y, z, res)] = dist;
+    let data: Vec<f32> = (0..res)
+        .into_par_iter()
+        .flat_map(|z| {
+            let mut slice = Vec::with_capacity((res * res) as usize);
+            for y in 0..res {
+                for x in 0..res {
+                    let norm = Vec3::new(x as f32, y as f32, z as f32) / res_f;
+                    let local_pos = local_min + norm * size;
+                    let world_pos = local_pos + center;
+                    slice.push(evaluate_sdf_tree(scene, subtree_root, world_pos));
+                }
             }
-        }
-    }
+            slice
+        })
+        .collect();
 
+    let grid = VoxelGrid { resolution, bounds_min: local_min, bounds_max: local_max, data };
+    (grid, center)
+}
+
+/// Same as `bake_subtree` but reports progress via an atomic counter (incremented per z-slice).
+pub fn bake_subtree_with_progress(
+    scene: &Scene,
+    subtree_root: NodeId,
+    resolution: u32,
+    progress: Arc<AtomicU32>,
+) -> (VoxelGrid, Vec3) {
+    let (world_min, world_max) = bounds_for_subtree(scene, subtree_root);
+    let center = (world_min + world_max) * 0.5;
+    let half_extent = (world_max - world_min) * 0.5;
+
+    let local_min = -half_extent;
+    let local_max = half_extent;
+    let res = resolution;
+    let res_f = (res - 1) as f32;
+    let size = local_max - local_min;
+
+    let data: Vec<f32> = (0..res)
+        .into_par_iter()
+        .flat_map(|z| {
+            let mut slice = Vec::with_capacity((res * res) as usize);
+            for y in 0..res {
+                for x in 0..res {
+                    let norm = Vec3::new(x as f32, y as f32, z as f32) / res_f;
+                    let local_pos = local_min + norm * size;
+                    let world_pos = local_pos + center;
+                    slice.push(evaluate_sdf_tree(scene, subtree_root, world_pos));
+                }
+            }
+            progress.fetch_add(1, Ordering::Relaxed);
+            slice
+        })
+        .collect();
+
+    let grid = VoxelGrid { resolution, bounds_min: local_min, bounds_max: local_max, data };
     (grid, center)
 }

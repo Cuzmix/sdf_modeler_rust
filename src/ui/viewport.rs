@@ -372,6 +372,28 @@ impl ViewportResources {
         }
     }
 
+    /// Upload only the modified z-slab range of a single voxel grid to GPU.
+    pub fn update_voxel_region(
+        &self,
+        queue: &wgpu::Queue,
+        grid_gpu_offset: u32,
+        resolution: u32,
+        z0: u32,
+        z1: u32,
+        grid_data: &[f32],
+    ) {
+        let slab_size = (resolution * resolution) as usize;
+        let start_index = z0 as usize * slab_size;
+        let end_index = ((z1 as usize) + 1) * slab_size;
+        let sub_data = &grid_data[start_index..end_index];
+        let byte_offset = ((grid_gpu_offset as usize) + start_index) * std::mem::size_of::<f32>();
+        queue.write_buffer(
+            &self.voxel_buffer,
+            byte_offset as u64,
+            bytemuck::cast_slice(sub_data),
+        );
+    }
+
     /// Dispatch pick compute shader and synchronously read back the result.
     pub fn execute_pick(
         &self,
