@@ -57,17 +57,19 @@ pub struct NodeGraphState {
     pub drag: DragState,
     pub layout_dirty: bool,
     pub pinned_positions: HashSet<NodeId>,
+    pub needs_center: bool,
 }
 
 impl NodeGraphState {
     pub fn new() -> Self {
         Self {
             node_positions: HashMap::new(),
-            pan_offset: Vec2::new(50.0, 50.0),
+            pan_offset: Vec2::ZERO,
             selected: None,
             drag: DragState::None,
             layout_dirty: true,
             pinned_positions: HashSet::new(),
+            needs_center: true,
         }
     }
 }
@@ -208,8 +210,10 @@ fn draw_toolbar(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState
         ] {
             let label = format!("+{}", kind.base_name());
             if ui.small_button(&label).clicked() {
-                scene.create_primitive(kind);
+                let new_id = scene.create_primitive(kind);
+                auto_wire_to_root(scene, new_id);
                 state.layout_dirty = true;
+                state.needs_center = true;
             }
         }
         ui.separator();
@@ -515,6 +519,23 @@ fn handle_interaction(
         }
         state.drag = DragState::None;
     }
+
+    // Simple click (no drag): select node or deselect
+    if response.clicked() {
+        if let Some(pos) = pointer {
+            let mut clicked_node = false;
+            for &(id, rect) in node_rects.iter().rev() {
+                if rect.contains(pos) {
+                    state.selected = Some(id);
+                    clicked_node = true;
+                    break;
+                }
+            }
+            if !clicked_node {
+                state.selected = None;
+            }
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -532,6 +553,25 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState) {
 
     if state.layout_dirty {
         auto_layout(scene, state);
+    }
+
+    // Auto-center graph in canvas after first layout
+    if state.needs_center && !state.node_positions.is_empty() {
+        let mut min = Pos2::new(f32::MAX, f32::MAX);
+        let mut max = Pos2::new(f32::MIN, f32::MIN);
+        for pos in state.node_positions.values() {
+            min.x = min.x.min(pos.x);
+            min.y = min.y.min(pos.y);
+            max.x = max.x.max(pos.x + NODE_WIDTH);
+            max.y = max.y.max(pos.y + NODE_HEIGHT);
+        }
+        let graph_center = Pos2::new((min.x + max.x) / 2.0, (min.y + max.y) / 2.0);
+        let canvas_center = canvas_rect.center();
+        state.pan_offset = Vec2::new(
+            canvas_center.x - graph_center.x,
+            canvas_center.y - graph_center.y,
+        );
+        state.needs_center = false;
     }
 
     // Pan: right-drag, middle-drag, or scroll
@@ -582,6 +622,23 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState) {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+fn auto_wire_to_root(scene: &mut Scene, new_id: NodeId) {
+    match scene.root {
+        None => {
+            scene.root = Some(new_id);
+        }
+        Some(root_id) => {
+            if matches!(
+                scene.nodes.get(&root_id).map(|n| &n.data),
+                Some(NodeData::Primitive { .. }) | Some(NodeData::Sculpt { .. })
+            ) {
+                let union_id = scene.create_operation(CsgOp::Union, root_id, new_id);
+                scene.root = Some(union_id);
+            }
+        }
+    }
+}
 
 fn create_op_from_selection(scene: &mut Scene, state: &mut NodeGraphState, op: CsgOp) {
     // Get two most recently created primitives, or use first two nodes
