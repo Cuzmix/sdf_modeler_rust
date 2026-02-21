@@ -77,7 +77,7 @@ fn draw_node_recursive(
         NodeData::Primitive { .. } => {
             draw_leaf_item(ui, node, id, selected);
         }
-        NodeData::Sculpt { input, .. } => {
+        NodeData::Sculpt { input, .. } | NodeData::Transform { input, .. } => {
             let header_text = format_node_label(node);
             let color = if is_selected { COLOR_SELECTED } else { COLOR_NORMAL };
             let header = egui::CollapsingHeader::new(
@@ -122,6 +122,7 @@ fn format_node_label(node: &SceneNode) -> String {
         NodeData::Primitive { kind, .. } => kind.badge(),
         NodeData::Operation { op, .. } => op.badge(),
         NodeData::Sculpt { .. } => "[Scl]",
+        NodeData::Transform { kind, .. } => kind.badge(),
     };
     format!("{} {}", badge, node.name)
 }

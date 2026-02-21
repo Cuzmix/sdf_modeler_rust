@@ -1,6 +1,6 @@
 use eframe::egui;
 
-use crate::graph::scene::{NodeData, NodeId, Scene};
+use crate::graph::scene::{NodeData, NodeId, Scene, TransformKind};
 use crate::graph::voxel;
 use crate::sculpt::{self, BrushMode, SculptState};
 
@@ -333,6 +333,52 @@ pub fn draw(
                     *r = rotation;
                     *c = color;
                     *dr = desired_resolution;
+                }
+            }
+        }
+        NodeData::Transform {
+            kind,
+            input,
+            mut value,
+        } => {
+            ui.label(format!("Type: {}", kind.base_name()));
+            ui.separator();
+
+            match input {
+                Some(iid) => {
+                    let input_name = scene.nodes.get(&iid).map(|n| n.name.as_str()).unwrap_or("???");
+                    ui.label(format!("Input: {} (#{})", input_name, iid));
+                }
+                None => { ui.label("Input: (empty)"); }
+            }
+            ui.separator();
+
+            match kind {
+                TransformKind::Translate => {
+                    vec3_editor(ui, "Offset", &mut value, 0.05, None, "");
+                }
+                TransformKind::Rotate => {
+                    let mut rot_deg = glam::Vec3::new(
+                        value.x.to_degrees(),
+                        value.y.to_degrees(),
+                        value.z.to_degrees(),
+                    );
+                    vec3_editor(ui, "Rotation", &mut rot_deg, 1.0, None, "\u{00B0}");
+                    value = glam::Vec3::new(
+                        rot_deg.x.to_radians(),
+                        rot_deg.y.to_radians(),
+                        rot_deg.z.to_radians(),
+                    );
+                }
+                TransformKind::Scale => {
+                    vec3_editor(ui, "Scale", &mut value, 0.05, Some(SCALE_MIN..=SCALE_MAX), "");
+                }
+            }
+
+            // Write back
+            if let Some(node) = scene.nodes.get_mut(&id) {
+                if let NodeData::Transform { value: ref mut v, .. } = node.data {
+                    *v = value;
                 }
             }
         }

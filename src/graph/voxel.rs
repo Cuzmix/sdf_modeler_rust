@@ -1,7 +1,7 @@
 use glam::{Vec2, Vec3, Vec3Swizzles};
 use serde::{Deserialize, Serialize};
 
-use crate::graph::scene::{CsgOp, NodeData, NodeId, Scene, SdfPrimitive};
+use crate::graph::scene::{CsgOp, NodeData, NodeId, Scene, SdfPrimitive, TransformKind};
 
 pub const DEFAULT_RESOLUTION: u32 = 96;
 const GRID_PADDING: f32 = 0.5;
@@ -229,6 +229,21 @@ pub fn evaluate_sdf_tree(scene: &Scene, node_id: NodeId, p: Vec3) -> f32 {
             let local_p = rotate_euler(p - *position, *rotation);
             voxel_grid.sample(local_p)
         }
+        NodeData::Transform { kind, input, value } => {
+            let Some(child_id) = input else {
+                return FAR_DISTANCE;
+            };
+            let tp = match kind {
+                TransformKind::Translate => p - *value,
+                TransformKind::Rotate => rotate_euler(p, *value),
+                TransformKind::Scale => p / *value,
+            };
+            let d = evaluate_sdf_tree(scene, *child_id, tp);
+            match kind {
+                TransformKind::Scale => d * value.min_element(),
+                _ => d,
+            }
+        }
     }
 }
 
@@ -260,6 +275,9 @@ fn collect_bounds(scene: &Scene, id: NodeId, all_min: &mut Vec3, all_max: &mut V
         } => {
             *all_min = all_min.min(*position + voxel_grid.bounds_min);
             *all_max = all_max.max(*position + voxel_grid.bounds_max);
+        }
+        NodeData::Transform { input, .. } => {
+            if let Some(i) = input { collect_bounds(scene, *i, all_min, all_max); }
         }
     }
 }

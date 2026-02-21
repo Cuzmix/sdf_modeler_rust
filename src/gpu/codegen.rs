@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use bytemuck::{Pod, Zeroable};
 
-use crate::graph::scene::{NodeData, NodeId, Scene};
+use crate::graph::scene::{NodeData, NodeId, Scene, TransformKind};
 use crate::settings::RenderConfig;
 
 /// 128-byte GPU node (8 x vec4f). Expanded for rotation + future growth.
@@ -443,6 +443,82 @@ pub fn generate_pick_shader(scene: &Scene, config: &RenderConfig) -> String {
     format!("{}\n{}\n{}", SHADER_PRELUDE, scene_sdf, pick_postlude)
 }
 
+/// Build a parent map: child_id → parent_id, for all node types.
+fn build_parent_map(scene: &Scene) -> HashMap<NodeId, NodeId> {
+    let mut map = HashMap::new();
+    for node in scene.nodes.values() {
+        match &node.data {
+            NodeData::Operation { left, right, .. } => {
+                if let Some(l) = left { map.insert(*l, node.id); }
+                if let Some(r) = right { map.insert(*r, node.id); }
+            }
+            NodeData::Sculpt { input, .. } | NodeData::Transform { input, .. } => {
+                if let Some(i) = input { map.insert(*i, node.id); }
+            }
+            _ => {}
+        }
+    }
+    map
+}
+
+/// Walk up from `node_id` through ancestors, collecting all Transform ancestors.
+/// Returns chain from innermost (closest to leaf) to outermost.
+fn get_transform_chain(
+    node_id: NodeId,
+    parent_map: &HashMap<NodeId, NodeId>,
+    scene: &Scene,
+    idx_map: &HashMap<NodeId, usize>,
+) -> Vec<(usize, TransformKind)> {
+    let mut chain = Vec::new();
+    let mut current = node_id;
+    while let Some(&parent_id) = parent_map.get(&current) {
+        if let Some(node) = scene.nodes.get(&parent_id) {
+            if let NodeData::Transform { kind, .. } = &node.data {
+                if let Some(&idx) = idx_map.get(&parent_id) {
+                    chain.push((idx, kind.clone()));
+                }
+            }
+        }
+        current = parent_id;
+    }
+    chain
+}
+
+/// Emit WGSL code for a transform chain. Returns the final point variable name.
+/// Chain is innermost-first; we process outermost-first (reversed).
+fn emit_transform_chain(
+    lines: &mut Vec<String>,
+    node_idx: usize,
+    chain: &[(usize, TransformKind)],
+) -> String {
+    if chain.is_empty() {
+        return "p".to_string();
+    }
+    let mut current_var = "p".to_string();
+    for (step, (transform_idx, kind)) in chain.iter().rev().enumerate() {
+        let new_var = format!("tp{}_{}", node_idx, step);
+        match kind {
+            TransformKind::Translate => {
+                lines.push(format!(
+                    "    let {new_var} = {current_var} - nodes[{transform_idx}].position.xyz;"
+                ));
+            }
+            TransformKind::Rotate => {
+                lines.push(format!(
+                    "    let {new_var} = rotate_euler({current_var}, nodes[{transform_idx}].rotation.xyz);"
+                ));
+            }
+            TransformKind::Scale => {
+                lines.push(format!(
+                    "    let {new_var} = {current_var} / nodes[{transform_idx}].scale.xyz;"
+                ));
+            }
+        }
+        current_var = new_var;
+    }
+    current_var
+}
+
 fn generate_scene_sdf(scene: &Scene) -> String {
     let order = scene.topo_order();
     if order.is_empty() {
@@ -451,6 +527,7 @@ fn generate_scene_sdf(scene: &Scene) -> String {
     }
 
     let idx_map: HashMap<NodeId, usize> = order.iter().enumerate().map(|(i, &id)| (id, i)).collect();
+    let parent_map = build_parent_map(scene);
 
     let mut lines = Vec::new();
     lines.push("fn scene_sdf(p: vec3f) -> vec2f {".to_string());
@@ -461,8 +538,10 @@ fn generate_scene_sdf(scene: &Scene) -> String {
         };
         match &node.data {
             NodeData::Primitive { kind, .. } => {
+                let chain = get_transform_chain(node_id, &parent_map, scene, &idx_map);
+                let point_var = emit_transform_chain(&mut lines, i, &chain);
                 lines.push(format!(
-                    "    let lp{i} = rotate_euler(p - nodes[{i}].position.xyz, nodes[{i}].rotation.xyz);"
+                    "    let lp{i} = rotate_euler({point_var} - nodes[{i}].position.xyz, nodes[{i}].rotation.xyz);"
                 ));
                 let sdf_fn = kind.sdf_function_name();
                 lines.push(format!(
@@ -480,22 +559,39 @@ fn generate_scene_sdf(scene: &Scene) -> String {
                         ));
                     }
                     (Some(ci), None) | (None, Some(ci)) => {
-                        // Pass-through the single connected child
                         lines.push(format!("    let n{i} = n{ci};"));
                     }
                     (None, None) => {
-                        // No inputs — emit far-away sentinel
                         lines.push(format!("    let n{i} = vec2f(1e10, -1.0);"));
                     }
                 }
             }
             NodeData::Sculpt { .. } => {
+                let chain = get_transform_chain(node_id, &parent_map, scene, &idx_map);
+                let point_var = emit_transform_chain(&mut lines, i, &chain);
                 lines.push(format!(
-                    "    let lp{i} = rotate_euler(p - nodes[{i}].position.xyz, nodes[{i}].rotation.xyz);"
+                    "    let lp{i} = rotate_euler({point_var} - nodes[{i}].position.xyz, nodes[{i}].rotation.xyz);"
                 ));
                 lines.push(format!(
                     "    let n{i} = vec2f(sdf_voxel_grid(lp{i}, {i}u), f32({i}));"
                 ));
+            }
+            NodeData::Transform { kind, input, .. } => {
+                let child_idx = input.and_then(|id| idx_map.get(&id).copied());
+                if let Some(ci) = child_idx {
+                    match kind {
+                        TransformKind::Scale => {
+                            lines.push(format!(
+                                "    let n{i} = vec2f(n{ci}.x * min(nodes[{i}].scale.x, min(nodes[{i}].scale.y, nodes[{i}].scale.z)), n{ci}.y);"
+                            ));
+                        }
+                        _ => {
+                            lines.push(format!("    let n{i} = n{ci};"));
+                        }
+                    }
+                } else {
+                    lines.push(format!("    let n{i} = vec2f(1e10, -1.0);"));
+                }
             }
         }
     }
@@ -609,6 +705,30 @@ pub fn build_node_buffer(
                     extra0: [offset as f32, voxel_grid.resolution as f32, 0.0, 0.0],
                     extra1: [voxel_grid.bounds_min.x, voxel_grid.bounds_min.y, voxel_grid.bounds_min.z, 0.0],
                     extra2: [voxel_grid.bounds_max.x, voxel_grid.bounds_max.y, voxel_grid.bounds_max.z, 0.0],
+                });
+            }
+            NodeData::Transform { kind, value, .. } => {
+                buffer.push(SdfNodeGpu {
+                    type_op: [kind.gpu_type_id(), 0.0, 0.0, 0.0],
+                    position: if matches!(kind, TransformKind::Translate) {
+                        [value.x, value.y, value.z, 0.0]
+                    } else {
+                        [0.0; 4]
+                    },
+                    rotation: if matches!(kind, TransformKind::Rotate) {
+                        [value.x, value.y, value.z, 0.0]
+                    } else {
+                        [0.0; 4]
+                    },
+                    scale: if matches!(kind, TransformKind::Scale) {
+                        [value.x, value.y, value.z, 0.0]
+                    } else {
+                        [1.0, 1.0, 1.0, 0.0]
+                    },
+                    color: [0.0, 0.0, 0.0, is_sel],
+                    extra0: [0.0; 4],
+                    extra1: [0.0; 4],
+                    extra2: [0.0; 4],
                 });
             }
         }

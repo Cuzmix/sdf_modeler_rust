@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use eframe::egui::{self, Color32, Pos2, Rect, Stroke, Vec2};
 
-use crate::graph::scene::{CsgOp, NodeData, NodeId, Scene, SdfPrimitive};
+use crate::graph::scene::{CsgOp, NodeData, NodeId, Scene, SdfPrimitive, TransformKind};
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -25,6 +25,7 @@ const COLOR_WIRE: Color32 = Color32::from_rgb(160, 160, 180);
 const COLOR_WIRE_DRAG: Color32 = Color32::from_rgb(100, 180, 255);
 const COLOR_SEL_BORDER: Color32 = Color32::from_rgb(255, 200, 60);
 const COLOR_SCULPT_BADGE: Color32 = Color32::from_rgb(150, 100, 200);
+const COLOR_TRANSFORM_BADGE: Color32 = Color32::from_rgb(100, 180, 170);
 
 // ---------------------------------------------------------------------------
 // State types
@@ -89,7 +90,7 @@ fn compute_depth(scene: &Scene, id: NodeId, cache: &mut HashMap<NodeId, u32>) ->
             let rd = right.map_or(0, |r| compute_depth(scene, r, cache));
             1 + ld.max(rd)
         }
-        Some(NodeData::Sculpt { input, .. }) => {
+        Some(NodeData::Sculpt { input, .. }) | Some(NodeData::Transform { input, .. }) => {
             1 + input.map_or(0, |i| compute_depth(scene, i, cache))
         }
         _ => 0,
@@ -181,6 +182,7 @@ fn node_type_label(data: &NodeData) -> &str {
         NodeData::Primitive { kind, .. } => kind.base_name(),
         NodeData::Operation { op, .. } => op.base_name(),
         NodeData::Sculpt { .. } => "Sculpt",
+        NodeData::Transform { kind, .. } => kind.base_name(),
     }
 }
 
@@ -189,6 +191,7 @@ fn badge_color(data: &NodeData) -> Color32 {
         NodeData::Primitive { .. } => COLOR_PRIM_BADGE,
         NodeData::Operation { .. } => COLOR_OP_BADGE,
         NodeData::Sculpt { .. } => COLOR_SCULPT_BADGE,
+        NodeData::Transform { .. } => COLOR_TRANSFORM_BADGE,
     }
 }
 
@@ -228,6 +231,27 @@ fn draw_toolbar(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState
             let label = format!("+{}", op.base_name());
             if ui.small_button(&label).clicked() {
                 create_op_from_selection(scene, state, op);
+            }
+        }
+        ui.separator();
+
+        // Transform buttons
+        for kind in [
+            TransformKind::Translate,
+            TransformKind::Rotate,
+            TransformKind::Scale,
+        ] {
+            let label = format!("+{}", kind.base_name());
+            if ui.small_button(&label).clicked() {
+                if let Some(sel) = state.selected {
+                    let transform_id = scene.insert_transform_above(sel, kind);
+                    state.selected = Some(transform_id);
+                } else {
+                    let transform_id = scene.create_transform(kind, None);
+                    state.selected = Some(transform_id);
+                }
+                state.layout_dirty = true;
+                state.needs_center = true;
             }
         }
         ui.separator();
@@ -281,15 +305,15 @@ fn draw_connections(
                     }
                 }
             }
-            NodeData::Sculpt { input, .. } => {
+            NodeData::Sculpt { input, .. } | NodeData::Transform { input, .. } => {
                 if let Some(input_id) = input {
-                    if let (Some(&input_pos), Some(&sculpt_pos)) =
+                    if let (Some(&input_pos), Some(&node_pos)) =
                         (state.node_positions.get(input_id), state.node_positions.get(id))
                     {
                         draw_bezier(
                             painter,
                             output_port_pos(input_pos, pan),
-                            input_single_port_pos(sculpt_pos, pan),
+                            input_single_port_pos(node_pos, pan),
                             COLOR_WIRE,
                         );
                     }
@@ -379,7 +403,7 @@ fn draw_node_card(
             painter.circle_filled(input_left_port_pos(node_pos, pan), PORT_RADIUS, COLOR_PORT_IN);
             painter.circle_filled(input_right_port_pos(node_pos, pan), PORT_RADIUS, COLOR_PORT_IN);
         }
-        NodeData::Sculpt { .. } => {
+        NodeData::Sculpt { .. } | NodeData::Transform { .. } => {
             painter.circle_filled(input_single_port_pos(node_pos, pan), PORT_RADIUS, COLOR_PORT_IN);
         }
         _ => {}
@@ -444,7 +468,7 @@ fn handle_interaction(
                         break;
                     }
                 }
-                if matches!(data, NodeData::Sculpt { .. }) {
+                if matches!(data, NodeData::Sculpt { .. } | NodeData::Transform { .. }) {
                     let in_s = input_single_port_pos(np, pan);
                     if pos.distance(in_s) < PORT_RADIUS * 3.0 {
                         state.drag = DragState::WireDrag {
@@ -640,6 +664,7 @@ fn get_input_connection(scene: &Scene, node_id: NodeId, port: &PortKind) -> Opti
         (NodeData::Operation { left, .. }, PortKind::InputLeft) => *left,
         (NodeData::Operation { right, .. }, PortKind::InputRight) => *right,
         (NodeData::Sculpt { input, .. }, PortKind::InputSingle) => *input,
+        (NodeData::Transform { input, .. }, PortKind::InputSingle) => *input,
         _ => None,
     })
 }
@@ -679,7 +704,7 @@ fn hit_input_port(
                 return Some(PortKind::InputRight);
             }
         }
-        NodeData::Sculpt { .. } => {
+        NodeData::Sculpt { .. } | NodeData::Transform { .. } => {
             if !same_port(&PortKind::InputSingle)
                 && release_pos.distance(input_single_port_pos(np, pan)) < PORT_RADIUS * 4.0
             {
@@ -726,8 +751,8 @@ fn try_complete_wire(
                         return;
                     }
                 }
-                // Dragged from output → looking for Sculpt input port
-                if matches!(data, NodeData::Sculpt { .. }) {
+                // Dragged from output → looking for Sculpt/Transform input port
+                if matches!(data, NodeData::Sculpt { .. } | NodeData::Transform { .. }) {
                     let in_s = input_single_port_pos(np, pan);
                     if release_pos.distance(in_s) < PORT_RADIUS * 4.0 {
                         scene.set_sculpt_input(*id, Some(from_node));
