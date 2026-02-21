@@ -13,12 +13,15 @@ const FAR_DISTANCE: f32 = 999.0;
 
 /// A 3D signed distance field stored as a flat array.
 /// Layout: data[z * res * res + y * res + x]
+/// material_ids uses the same layout and stores the NodeId (as f32) of the closest primitive.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct VoxelGrid {
     pub resolution: u32,
     pub bounds_min: Vec3,
     pub bounds_max: Vec3,
     pub data: Vec<f32>,
+    #[serde(default)]
+    pub material_ids: Vec<f32>,
 }
 
 impl VoxelGrid {
@@ -29,6 +32,7 @@ impl VoxelGrid {
             bounds_min,
             bounds_max,
             data: vec![FAR_DISTANCE; total],
+            material_ids: vec![-1.0; total],
         }
     }
 
@@ -62,6 +66,25 @@ impl VoxelGrid {
                 .iter()
                 .zip(other.data.iter())
                 .all(|(a, b)| a.to_bits() == b.to_bits())
+            && self.material_ids.len() == other.material_ids.len()
+            && self.material_ids
+                .iter()
+                .zip(other.material_ids.iter())
+                .all(|(a, b)| a.to_bits() == b.to_bits())
+    }
+
+    /// Nearest-neighbor material ID lookup at a local-space position.
+    pub fn sample_material(&self, local_pos: Vec3) -> f32 {
+        if self.material_ids.len() != self.data.len() {
+            return -1.0;
+        }
+        let gc = self.world_to_grid(local_pos);
+        let max_coord = (self.resolution - 1) as f32;
+        let gc = gc.clamp(Vec3::ZERO, Vec3::splat(max_coord));
+        let ix = gc.x.round() as u32;
+        let iy = gc.y.round() as u32;
+        let iz = gc.z.round() as u32;
+        self.material_ids[Self::index(ix, iy, iz, self.resolution)]
     }
 
     /// CPU-side trilinear interpolation at a local-space position.
@@ -247,6 +270,88 @@ pub fn evaluate_sdf_tree(scene: &Scene, node_id: NodeId, p: Vec3) -> f32 {
     }
 }
 
+/// Evaluate the combined SDF of a subtree at a world-space point,
+/// returning (distance, material_node_id as f32).
+/// Material tracks which primitive's NodeId is closest at each point.
+pub fn evaluate_sdf_tree_with_material(scene: &Scene, node_id: NodeId, p: Vec3) -> (f32, f32) {
+    let Some(node) = scene.nodes.get(&node_id) else {
+        return (FAR_DISTANCE, -1.0);
+    };
+    match &node.data {
+        NodeData::Primitive {
+            kind,
+            position,
+            rotation,
+            scale,
+            ..
+        } => {
+            let local_p = rotate_euler(p - *position, *rotation);
+            let dist = evaluate_sdf(kind, local_p, *scale);
+            (dist, node_id as f32)
+        }
+        NodeData::Operation {
+            op,
+            smooth_k,
+            left,
+            right,
+        } => {
+            let a = left.map(|l| evaluate_sdf_tree_with_material(scene, l, p));
+            let b = right.map(|r| evaluate_sdf_tree_with_material(scene, r, p));
+            match (a, b) {
+                (Some((da, ma)), Some((db, mb))) => match op {
+                    CsgOp::Union => {
+                        if da < db { (da, ma) } else { (db, mb) }
+                    }
+                    CsgOp::SmoothUnion => {
+                        let k = smooth_k.max(0.0001);
+                        let h = (0.5 + 0.5 * (db - da) / k).clamp(0.0, 1.0);
+                        let d = db + (da - db) * h - k * h * (1.0 - h);
+                        let mat = if da < db { ma } else { mb };
+                        (d, mat)
+                    }
+                    CsgOp::Subtract => {
+                        let d = da.max(-db);
+                        (d, ma)
+                    }
+                    CsgOp::Intersect => {
+                        if da > db { (da, ma) } else { (db, mb) }
+                    }
+                },
+                (Some(v), None) | (None, Some(v)) => v,
+                (None, None) => (f32::MAX, -1.0),
+            }
+        }
+        NodeData::Sculpt {
+            position,
+            rotation,
+            voxel_grid,
+            ..
+        } => {
+            let local_p = rotate_euler(p - *position, *rotation);
+            let dist = voxel_grid.sample(local_p);
+            let mat = voxel_grid.sample_material(local_p);
+            let mat = if mat < 0.0 { node_id as f32 } else { mat };
+            (dist, mat)
+        }
+        NodeData::Transform { kind, input, value } => {
+            let Some(child_id) = input else {
+                return (FAR_DISTANCE, -1.0);
+            };
+            let tp = match kind {
+                TransformKind::Translate => p - *value,
+                TransformKind::Rotate => rotate_euler(p, *value),
+                TransformKind::Scale => p / *value,
+            };
+            let (d, mat) = evaluate_sdf_tree_with_material(scene, *child_id, tp);
+            let d = match kind {
+                TransformKind::Scale => d * value.min_element(),
+                _ => d,
+            };
+            (d, mat)
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Bounds estimation
 // ---------------------------------------------------------------------------
@@ -318,6 +423,7 @@ pub fn bake_from_analytical(kind: &SdfPrimitive, scale: Vec3, resolution: u32) -
 
 /// Bake any subtree's SDF into a VoxelGrid.
 /// Returns (grid in local space, center position in world space).
+/// Material IDs store the NodeId (as f32) of the closest primitive at each voxel.
 pub fn bake_subtree(scene: &Scene, subtree_root: NodeId, resolution: u32) -> (VoxelGrid, Vec3) {
     let (world_min, world_max) = bounds_for_subtree(scene, subtree_root);
     let center = (world_min + world_max) * 0.5;
@@ -334,8 +440,10 @@ pub fn bake_subtree(scene: &Scene, subtree_root: NodeId, resolution: u32) -> (Vo
             for x in 0..res {
                 let local_pos = grid.grid_to_world(x as f32, y as f32, z as f32);
                 let world_pos = local_pos + center;
-                let dist = evaluate_sdf_tree(scene, subtree_root, world_pos);
-                grid.data[VoxelGrid::index(x, y, z, res)] = dist;
+                let (dist, mat) = evaluate_sdf_tree_with_material(scene, subtree_root, world_pos);
+                let idx = VoxelGrid::index(x, y, z, res);
+                grid.data[idx] = dist;
+                grid.material_ids[idx] = mat;
             }
         }
     }

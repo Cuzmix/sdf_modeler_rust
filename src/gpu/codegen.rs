@@ -46,7 +46,7 @@ struct SdfNode {
 @group(1) @binding(0) var<storage, read> nodes: array<SdfNode>;
 @group(1) @binding(1) var<storage, read> voxel_data: array<f32>;
 
-fn sdf_voxel_grid(local_p: vec3f, node_idx: u32) -> f32 {
+fn sdf_voxel_grid(local_p: vec3f, node_idx: u32) -> vec2f {
     let offset = u32(nodes[node_idx].extra0.x);
     let res    = u32(nodes[node_idx].extra0.y);
     let bmin   = nodes[node_idx].extra1.xyz;
@@ -77,7 +77,15 @@ fn sdf_voxel_grid(local_p: vec3f, node_idx: u32) -> f32 {
     let c11 = mix(c011, c111, f.x);
     let c0  = mix(c00, c10, f.y);
     let c1  = mix(c01, c11, f.y);
-    return mix(c0, c1, f.z);
+    let dist = mix(c0, c1, f.z);
+
+    // Material: nearest-neighbor lookup from second half of voxel block
+    let mat_offset = offset + res * res * res;
+    let ni = vec3<u32>(vec3f(round(gc.x), round(gc.y), round(gc.z)));
+    let ni_c = min(ni, vec3<u32>(res - 1u));
+    let mat_id = voxel_data[mat_offset + ni_c.z * r2 + ni_c.y * res + ni_c.x];
+
+    return vec2f(dist, mat_id);
 }
 
 struct VertexOutput {
@@ -573,7 +581,7 @@ fn generate_scene_sdf(scene: &Scene) -> String {
                     "    let lp{i} = rotate_euler({point_var} - nodes[{i}].position.xyz, nodes[{i}].rotation.xyz);"
                 ));
                 lines.push(format!(
-                    "    let n{i} = vec2f(sdf_voxel_grid(lp{i}, {i}u), f32({i}));"
+                    "    let n{i} = sdf_voxel_grid(lp{i}, {i}u);"
                 ));
             }
             NodeData::Transform { kind, input, .. } => {
@@ -623,8 +631,12 @@ fn generate_scene_sdf(scene: &Scene) -> String {
 
 /// Build the concatenated voxel data buffer.
 /// Returns (flat_data, offset_map) where offset_map maps NodeId → offset in flat_data (f32 elements).
+/// Each sculpt node's block is: [distance_data (res^3)] [material_ids (res^3)].
+/// Material IDs are translated from NodeId to topo-order index for GPU use.
 pub fn build_voxel_buffer(scene: &Scene) -> (Vec<f32>, HashMap<NodeId, u32>) {
     let order = scene.topo_order();
+    let idx_map: HashMap<NodeId, usize> =
+        order.iter().enumerate().map(|(i, &id)| (id, i)).collect();
     let mut flat_data = Vec::new();
     let mut offsets = HashMap::new();
 
@@ -633,7 +645,26 @@ pub fn build_voxel_buffer(scene: &Scene) -> (Vec<f32>, HashMap<NodeId, u32>) {
             if let NodeData::Sculpt { ref voxel_grid, .. } = node.data {
                 let offset = flat_data.len() as u32;
                 offsets.insert(node_id, offset);
+                // Distance data
                 flat_data.extend_from_slice(&voxel_grid.data);
+                // Material data (translated from NodeId to topo index)
+                let self_idx = idx_map.get(&node_id).copied().unwrap_or(0) as f32;
+                if voxel_grid.material_ids.len() == voxel_grid.data.len() {
+                    for &mat_node_id in &voxel_grid.material_ids {
+                        if mat_node_id < 0.0 {
+                            flat_data.push(self_idx);
+                        } else {
+                            let nid = mat_node_id as u64;
+                            let idx = idx_map.get(&nid).copied().unwrap_or(0) as f32;
+                            flat_data.push(idx);
+                        }
+                    }
+                } else {
+                    // Legacy grid without material data — use sculpt node's own index
+                    flat_data.extend(
+                        std::iter::repeat(self_idx).take(voxel_grid.data.len()),
+                    );
+                }
             }
         }
     }
