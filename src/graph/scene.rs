@@ -575,6 +575,103 @@ impl Scene {
         hasher.finish()
     }
 
+    /// Hash of full scene content (topology + all parameters + voxel data samples).
+    /// Used to skip GPU buffer uploads when nothing changed.
+    pub fn content_key(&self) -> u64 {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        self.nodes.len().hash(&mut hasher);
+        let mut ids: Vec<NodeId> = self.nodes.keys().cloned().collect();
+        ids.sort();
+        for id in ids {
+            let node = &self.nodes[&id];
+            id.hash(&mut hasher);
+            node.name.hash(&mut hasher);
+            match &node.data {
+                NodeData::Primitive {
+                    kind, position, rotation, scale, color, ..
+                } => {
+                    0u8.hash(&mut hasher);
+                    std::mem::discriminant(kind).hash(&mut hasher);
+                    for v in position.to_array().iter()
+                        .chain(rotation.to_array().iter())
+                        .chain(scale.to_array().iter())
+                        .chain(color.to_array().iter())
+                    {
+                        v.to_bits().hash(&mut hasher);
+                    }
+                }
+                NodeData::Operation { op, smooth_k, left, right } => {
+                    1u8.hash(&mut hasher);
+                    std::mem::discriminant(op).hash(&mut hasher);
+                    smooth_k.to_bits().hash(&mut hasher);
+                    left.hash(&mut hasher);
+                    right.hash(&mut hasher);
+                }
+                NodeData::Sculpt {
+                    input, position, rotation, color, voxel_grid, desired_resolution,
+                } => {
+                    2u8.hash(&mut hasher);
+                    input.hash(&mut hasher);
+                    for v in position.to_array().iter()
+                        .chain(rotation.to_array().iter())
+                        .chain(color.to_array().iter())
+                    {
+                        v.to_bits().hash(&mut hasher);
+                    }
+                    voxel_grid.resolution.hash(&mut hasher);
+                    desired_resolution.hash(&mut hasher);
+                    voxel_grid.data.len().hash(&mut hasher);
+                    let len = voxel_grid.data.len();
+                    for &idx in &[0, len / 4, len / 2, 3 * len / 4, len.saturating_sub(1)] {
+                        if idx < len {
+                            voxel_grid.data[idx].to_bits().hash(&mut hasher);
+                        }
+                    }
+                    voxel_grid.material_ids.len().hash(&mut hasher);
+                }
+                NodeData::Transform { kind, input, value } => {
+                    3u8.hash(&mut hasher);
+                    std::mem::discriminant(kind).hash(&mut hasher);
+                    input.hash(&mut hasher);
+                    for v in value.to_array().iter() {
+                        v.to_bits().hash(&mut hasher);
+                    }
+                }
+            }
+        }
+        hasher.finish()
+    }
+
+    /// Hash of voxel grid contents only. Used to skip expensive voxel buffer rebuilds
+    /// when only node parameters or selection changed.
+    pub fn voxel_content_key(&self) -> u64 {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        let mut ids: Vec<NodeId> = self.nodes.keys().cloned().collect();
+        ids.sort();
+        for id in ids {
+            let node = &self.nodes[&id];
+            if let NodeData::Sculpt { voxel_grid, .. } = &node.data {
+                id.hash(&mut hasher);
+                voxel_grid.resolution.hash(&mut hasher);
+                voxel_grid.data.len().hash(&mut hasher);
+                let len = voxel_grid.data.len();
+                for &idx in &[0, len / 4, len / 2, 3 * len / 4, len.saturating_sub(1)] {
+                    if idx < len {
+                        voxel_grid.data[idx].to_bits().hash(&mut hasher);
+                    }
+                }
+                let mlen = voxel_grid.material_ids.len();
+                mlen.hash(&mut hasher);
+                for &idx in &[0, mlen / 4, mlen / 2, 3 * mlen / 4, mlen.saturating_sub(1)] {
+                    if idx < mlen {
+                        voxel_grid.material_ids[idx].to_bits().hash(&mut hasher);
+                    }
+                }
+            }
+        }
+        hasher.finish()
+    }
+
     /// Returns nodes not referenced as a child by any other node.
     pub fn top_level_nodes(&self) -> Vec<NodeId> {
         let mut referenced: HashSet<NodeId> = HashSet::new();

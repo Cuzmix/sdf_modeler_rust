@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use eframe::egui;
 use eframe::egui_wgpu::RenderState;
 use egui_dock::DockState;
@@ -7,7 +9,7 @@ use crate::gpu::camera::Camera;
 use crate::gpu::codegen;
 use crate::gpu::picking::PendingPick;
 use crate::graph::history::History;
-use crate::graph::scene::{NodeData, Scene};
+use crate::graph::scene::{NodeData, NodeId, Scene};
 use crate::sculpt::{self, BrushMode, SculptState};
 use crate::settings::Settings;
 use crate::ui::dock::{self, SdfTabViewer, Tab};
@@ -22,6 +24,9 @@ pub struct SdfApp {
     node_graph_state: NodeGraphState,
     render_state: RenderState,
     current_structure_key: u64,
+    current_content_key: u64,
+    current_voxel_key: u64,
+    cached_voxel_offsets: HashMap<NodeId, u32>,
     history: History,
     last_time: f64,
     show_debug: bool,
@@ -76,6 +81,9 @@ impl SdfApp {
             node_graph_state: NodeGraphState::new(),
             render_state,
             current_structure_key: structure_key,
+            current_content_key: 0, // Force first upload
+            current_voxel_key: 0,   // Force first upload
+            cached_voxel_offsets: voxel_offsets,
             history: History::new(),
             last_time: 0.0,
             show_debug: true,
@@ -139,6 +147,8 @@ impl SdfApp {
                         self.node_graph_state.layout_dirty = true;
                         self.sculpt_state = SculptState::Inactive;
                         self.current_structure_key = 0; // Force pipeline rebuild
+                        self.current_content_key = 0; // Force buffer upload
+                        self.current_voxel_key = 0;
                     }
                     Err(e) => {
                         log::error!("Failed to load project: {}", e);
@@ -184,9 +194,34 @@ impl SdfApp {
     }
 
     fn upload_scene_buffer(&mut self) {
-        let (voxel_data, voxel_offsets) = codegen::build_voxel_buffer(&self.scene);
-        let node_data =
-            codegen::build_node_buffer(&self.scene, self.node_graph_state.selected, &voxel_offsets);
+        let scene_key = self.scene.content_key();
+        let sel = self.node_graph_state.selected.unwrap_or(u64::MAX);
+        let content_key = scene_key.wrapping_add(sel.wrapping_mul(0x9e3779b97f4a7c15));
+        let voxel_key = self.scene.voxel_content_key();
+
+        let content_dirty = content_key != self.current_content_key;
+        let voxel_dirty = voxel_key != self.current_voxel_key;
+
+        if !content_dirty && !voxel_dirty {
+            return;
+        }
+
+        // Rebuild voxel buffer only when voxel data actually changed
+        let voxel_data = if voxel_dirty {
+            let (data, offsets) = codegen::build_voxel_buffer(&self.scene);
+            self.cached_voxel_offsets = offsets;
+            Some(data)
+        } else {
+            None
+        };
+
+        // Rebuild node buffer whenever anything changed (params, selection, or voxel offsets)
+        let node_data = codegen::build_node_buffer(
+            &self.scene,
+            self.node_graph_state.selected,
+            &self.cached_voxel_offsets,
+        );
+
         let mut renderer = self.render_state.renderer.write();
         if let Some(res) = renderer
             .callback_resources
@@ -197,12 +232,17 @@ impl SdfApp {
                 &self.render_state.queue,
                 &node_data,
             );
-            res.update_voxel_buffer(
-                &self.render_state.device,
-                &self.render_state.queue,
-                &voxel_data,
-            );
+            if let Some(ref voxel_data) = voxel_data {
+                res.update_voxel_buffer(
+                    &self.render_state.device,
+                    &self.render_state.queue,
+                    voxel_data,
+                );
+            }
         }
+
+        self.current_content_key = content_key;
+        self.current_voxel_key = voxel_key;
     }
 
     fn process_pending_pick(&mut self) {
@@ -366,6 +406,8 @@ impl eframe::App for SdfApp {
 
         if settings_dirty {
             self.current_structure_key = 0; // Force pipeline rebuild
+            self.current_content_key = 0; // Force buffer upload
+            self.current_voxel_key = 0;
         }
 
         // Undo/Redo: end-of-frame commit
