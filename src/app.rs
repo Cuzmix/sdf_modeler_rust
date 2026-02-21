@@ -41,8 +41,8 @@ impl SdfApp {
             .expect("WGPU render state required");
 
         let scene = Scene::new();
-        let shader_src = codegen::generate_shader(&scene, settings.shadows_enabled);
-        let pick_shader_src = codegen::generate_pick_shader(&scene);
+        let shader_src = codegen::generate_shader(&scene, &settings.render);
+        let pick_shader_src = codegen::generate_pick_shader(&scene, &settings.render);
         let structure_key = scene.structure_key();
 
         let resources = ViewportResources::new(
@@ -170,8 +170,8 @@ impl SdfApp {
     fn sync_gpu_pipeline(&mut self) {
         let new_key = self.scene.structure_key();
         if new_key != self.current_structure_key {
-            let shader_src = codegen::generate_shader(&self.scene, self.settings.shadows_enabled);
-            let pick_shader_src = codegen::generate_pick_shader(&self.scene);
+            let shader_src = codegen::generate_shader(&self.scene, &self.settings.render);
+            let pick_shader_src = codegen::generate_pick_shader(&self.scene, &self.settings.render);
             let mut renderer = self.render_state.renderer.write();
             if let Some(res) = renderer
                 .callback_resources
@@ -312,13 +312,6 @@ impl SdfApp {
                     }
                     if self.settings.vsync_enabled != self.initial_vsync {
                         ui.weak("(restart required)");
-                    }
-                    ui.separator();
-                    let prev_shadows = self.settings.shadows_enabled;
-                    ui.checkbox(&mut self.settings.shadows_enabled, "Raymarched Shadows");
-                    if self.settings.shadows_enabled != prev_shadows {
-                        self.settings.save();
-                        self.current_structure_key = 0;
                     }
                 });
             });

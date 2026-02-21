@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use bytemuck::{Pod, Zeroable};
 
 use crate::graph::scene::{NodeData, NodeId, Scene};
+use crate::settings::RenderConfig;
 
 /// 128-byte GPU node (8 x vec4f). Expanded for rotation + future growth.
 #[repr(C)]
@@ -186,25 +187,25 @@ fn op_intersect(a: vec2f, b: vec2f, k: f32) -> vec2f {
 
 const SHADER_POSTLUDE: &str = r#"
 // --- Rendering quality constants ---
-const SHADOW_STEPS: i32 = 32;
-const SHADOW_PENUMBRA_K: f32 = 8.0;
-const AO_SAMPLES: i32 = 5;
-const AO_STEP: f32 = 0.08;
-const AO_DECAY: f32 = 0.95;
+const SHADOW_STEPS: i32 = /*SHADOW_STEPS*/;
+const SHADOW_PENUMBRA_K: f32 = /*SHADOW_PENUMBRA_K*/;
+const AO_SAMPLES: i32 = /*AO_SAMPLES*/;
+const AO_STEP: f32 = /*AO_STEP*/;
+const AO_DECAY: f32 = /*AO_DECAY*/;
 
 fn ray_march(ro: vec3f, rd: vec3f) -> vec2f {
     var t = 0.0;
     var mat_id = -1.0;
-    for (var i = 0; i < 128; i++) {
+    for (var i = 0; i < /*MARCH_MAX_STEPS*/; i++) {
         let p = ro + rd * t;
         let hit = scene_sdf(p);
-        if hit.x < 0.002 {
+        if hit.x < /*MARCH_EPSILON*/ {
             mat_id = hit.y;
             break;
         }
-        t += hit.x * 0.8;
+        t += hit.x * /*MARCH_STEP_MULT*/;
         mat_id = hit.y;
-        if t > 50.0 { break; }
+        if t > /*MARCH_MAX_DIST*/ { break; }
     }
     return vec2f(t, mat_id);
 }
@@ -242,7 +243,7 @@ fn calc_ao(p: vec3f, n: vec3f) -> f32 {
         occ += (dist - d) * weight;
         weight *= AO_DECAY;
     }
-    return clamp(1.0 - 3.0 * occ, 0.0, 1.0);
+    return clamp(1.0 - /*AO_INTENSITY*/ * occ, 0.0, 1.0);
 }
 
 fn get_node_color(mat_id: i32) -> vec3f {
@@ -270,9 +271,9 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
     let mat_id = i32(hit.y + 0.5);
 
     // Sky gradient
-    if t > 49.0 {
+    if t > /*SKY_CUTOFF*/ {
         let sky_t = uv.y * 0.5 + 0.5;
-        let bg = mix(vec3f(0.10, 0.10, 0.16), vec3f(0.02, 0.02, 0.05), sky_t);
+        let bg = mix(vec3f(/*SKY_HORIZON*/), vec3f(/*SKY_ZENITH*/), sky_t);
         return vec4f(bg, 1.0);
     }
 
@@ -280,23 +281,23 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
     let n = calc_normal(p);
 
     // Key light
-    let key_dir = normalize(vec3f(1.0, 2.0, 3.0));
+    let key_dir = normalize(vec3f(/*KEY_LIGHT_DIR*/));
     let key_h = normalize(key_dir - rd);
     let key_diff = max(dot(n, key_dir), 0.0);
-    let key_spec = pow(max(dot(n, key_h), 0.0), 32.0);
+    let key_spec = pow(max(dot(n, key_h), 0.0), /*KEY_SPEC_POWER*/);
     /*SHADOW_LINE*/
 
     // Fill light (opposite side, dimmer, no shadow)
-    let fill_dir = normalize(vec3f(-1.0, 0.5, -1.0));
-    let fill_diff = max(dot(n, fill_dir), 0.0) * 0.25;
+    let fill_dir = normalize(vec3f(/*FILL_LIGHT_DIR*/));
+    let fill_diff = max(dot(n, fill_dir), 0.0) * /*FILL_INTENSITY*/;
 
     // Ambient occlusion
-    let ao = calc_ao(p, n);
+    /*AO_LINE*/
 
     let albedo = get_node_color(mat_id);
-    let ambient = 0.06 * ao;
-    var color = albedo * (ambient + key_diff * shadow * 0.85 + fill_diff)
-              + vec3f(1.0) * key_spec * shadow * 0.4;
+    let ambient = /*AMBIENT*/ * ao;
+    var color = albedo * (ambient + key_diff * shadow * /*KEY_DIFFUSE*/ + fill_diff)
+              + vec3f(1.0) * key_spec * shadow * /*KEY_SPEC_INTENSITY*/;
 
     if is_selected(mat_id) {
         let rim = 1.0 - max(dot(n, -rd), 0.0);
@@ -304,7 +305,7 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
         color = mix(color, vec3f(1.0, 0.8, 0.2), rim_factor);
     }
 
-    return vec4f(pow(color, vec3f(1.0 / 2.2)), 1.0);
+    return vec4f(pow(color, vec3f(1.0 / /*GAMMA*/)), 1.0);
 }
 "#;
 
@@ -316,16 +317,16 @@ const PICK_COMPUTE_POSTLUDE: &str = r#"
 fn pick_ray_march(ro: vec3f, rd: vec3f) -> vec2f {
     var t = 0.0;
     var mat_id = -1.0;
-    for (var i = 0; i < 128; i++) {
+    for (var i = 0; i < /*MARCH_MAX_STEPS*/; i++) {
         let p = ro + rd * t;
         let hit = scene_sdf(p);
-        if hit.x < 0.002 {
+        if hit.x < /*MARCH_EPSILON*/ {
             mat_id = hit.y;
             break;
         }
-        t += hit.x * 0.8;
+        t += hit.x * /*MARCH_STEP_MULT*/;
         mat_id = hit.y;
-        if t > 50.0 {
+        if t > /*MARCH_MAX_DIST*/ {
             mat_id = -1.0;
             break;
         }
@@ -371,20 +372,75 @@ fn cs_pick() {
 // Code generation
 // ---------------------------------------------------------------------------
 
-pub fn generate_shader(scene: &Scene, shadows_enabled: bool) -> String {
+/// Format f32 as a WGSL literal (always includes decimal point).
+fn format_f32(v: f32) -> String {
+    let s = format!("{}", v);
+    if s.contains('.') { s } else { format!("{}.0", s) }
+}
+
+/// Format [f32; 3] as WGSL vec3 components: "x, y, z".
+fn format_vec3(v: [f32; 3]) -> String {
+    format!("{}, {}, {}", format_f32(v[0]), format_f32(v[1]), format_f32(v[2]))
+}
+
+/// Apply the 4 raymarching placeholders shared by render and pick shaders.
+fn apply_march_placeholders(src: &str, config: &RenderConfig) -> String {
+    src.replace("/*MARCH_MAX_STEPS*/", &config.march_max_steps.to_string())
+        .replace("/*MARCH_EPSILON*/", &format_f32(config.march_epsilon))
+        .replace("/*MARCH_STEP_MULT*/", &format_f32(config.march_step_multiplier))
+        .replace("/*MARCH_MAX_DIST*/", &format_f32(config.march_max_distance))
+}
+
+pub fn generate_shader(scene: &Scene, config: &RenderConfig) -> String {
     let scene_sdf = generate_scene_sdf(scene);
-    let shadow_line = if shadows_enabled {
-        "    let shadow = soft_shadow(p + n * 0.04, key_dir, 0.06, 20.0, SHADOW_PENUMBRA_K);"
+
+    let shadow_line = if config.shadows_enabled {
+        format!(
+            "    let shadow = soft_shadow(p + n * {}, key_dir, {}, {}, SHADOW_PENUMBRA_K);",
+            format_f32(config.shadow_bias),
+            format_f32(config.shadow_mint),
+            format_f32(config.shadow_maxt),
+        )
     } else {
-        "    let shadow = 1.0;"
+        "    let shadow = 1.0;".to_string()
     };
-    let postlude = SHADER_POSTLUDE.replace("/*SHADOW_LINE*/", shadow_line);
+
+    let ao_line = if config.ao_enabled {
+        "    let ao = calc_ao(p, n);".to_string()
+    } else {
+        "    let ao = 1.0;".to_string()
+    };
+
+    let sky_cutoff = config.march_max_distance - 1.0;
+
+    let postlude = apply_march_placeholders(SHADER_POSTLUDE, config)
+        .replace("/*SHADOW_STEPS*/", &config.shadow_steps.to_string())
+        .replace("/*SHADOW_PENUMBRA_K*/", &format_f32(config.shadow_penumbra_k))
+        .replace("/*AO_SAMPLES*/", &config.ao_samples.to_string())
+        .replace("/*AO_STEP*/", &format_f32(config.ao_step))
+        .replace("/*AO_DECAY*/", &format_f32(config.ao_decay))
+        .replace("/*AO_INTENSITY*/", &format_f32(config.ao_intensity))
+        .replace("/*KEY_LIGHT_DIR*/", &format_vec3(config.key_light_dir))
+        .replace("/*KEY_DIFFUSE*/", &format_f32(config.key_diffuse))
+        .replace("/*KEY_SPEC_POWER*/", &format_f32(config.key_spec_power))
+        .replace("/*KEY_SPEC_INTENSITY*/", &format_f32(config.key_spec_intensity))
+        .replace("/*FILL_LIGHT_DIR*/", &format_vec3(config.fill_light_dir))
+        .replace("/*FILL_INTENSITY*/", &format_f32(config.fill_intensity))
+        .replace("/*AMBIENT*/", &format_f32(config.ambient))
+        .replace("/*SKY_HORIZON*/", &format_vec3(config.sky_horizon))
+        .replace("/*SKY_ZENITH*/", &format_vec3(config.sky_zenith))
+        .replace("/*SKY_CUTOFF*/", &format_f32(sky_cutoff))
+        .replace("/*GAMMA*/", &format_f32(config.gamma))
+        .replace("/*SHADOW_LINE*/", &shadow_line)
+        .replace("/*AO_LINE*/", &ao_line);
+
     format!("{}\n{}\n{}", SHADER_PRELUDE, scene_sdf, postlude)
 }
 
-pub fn generate_pick_shader(scene: &Scene) -> String {
+pub fn generate_pick_shader(scene: &Scene, config: &RenderConfig) -> String {
     let scene_sdf = generate_scene_sdf(scene);
-    format!("{}\n{}\n{}", SHADER_PRELUDE, scene_sdf, PICK_COMPUTE_POSTLUDE)
+    let pick_postlude = apply_march_placeholders(PICK_COMPUTE_POSTLUDE, config);
+    format!("{}\n{}\n{}", SHADER_PRELUDE, scene_sdf, pick_postlude)
 }
 
 fn generate_scene_sdf(scene: &Scene) -> String {
