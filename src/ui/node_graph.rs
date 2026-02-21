@@ -24,7 +24,6 @@ const COLOR_PORT_IN: Color32 = Color32::from_rgb(200, 100, 100);
 const COLOR_WIRE: Color32 = Color32::from_rgb(160, 160, 180);
 const COLOR_WIRE_DRAG: Color32 = Color32::from_rgb(100, 180, 255);
 const COLOR_SEL_BORDER: Color32 = Color32::from_rgb(255, 200, 60);
-const COLOR_ROOT_BADGE: Color32 = Color32::from_rgb(255, 220, 80);
 const COLOR_SCULPT_BADGE: Color32 = Color32::from_rgb(150, 100, 200);
 
 // ---------------------------------------------------------------------------
@@ -210,8 +209,7 @@ fn draw_toolbar(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState
         ] {
             let label = format!("+{}", kind.base_name());
             if ui.small_button(&label).clicked() {
-                let new_id = scene.create_primitive(kind);
-                auto_wire_to_root(scene, new_id);
+                scene.create_primitive(kind);
                 state.layout_dirty = true;
                 state.needs_center = true;
             }
@@ -232,11 +230,6 @@ fn draw_toolbar(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState
         }
         ui.separator();
 
-        if ui.small_button("Set Root").clicked() {
-            if let Some(sel) = state.selected {
-                scene.root = Some(sel);
-            }
-        }
         if ui.small_button("Delete").clicked() {
             if let Some(sel) = state.selected {
                 scene.remove_node(sel);
@@ -330,7 +323,6 @@ fn draw_node_card(
     node_pos: Pos2,
     pan: Vec2,
     is_selected: bool,
-    is_root: bool,
 ) -> Rect {
     let rect = node_screen_rect(node_pos, pan);
 
@@ -369,17 +361,6 @@ fn draw_node_card(
         egui::FontId::proportional(10.0),
         Color32::from_rgb(200, 200, 210),
     );
-
-    // Root badge
-    if is_root {
-        painter.text(
-            Pos2::new(rect.max.x - 8.0, rect.min.y + 32.0),
-            egui::Align2::RIGHT_CENTER,
-            "R",
-            egui::FontId::proportional(9.0),
-            COLOR_ROOT_BADGE,
-        );
-    }
 
     // Output port (all nodes)
     painter.circle_filled(output_port_pos(node_pos, pan), PORT_RADIUS, COLOR_PORT_OUT);
@@ -611,8 +592,7 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState) {
             continue;
         }
         let is_selected = state.selected == Some(*id);
-        let is_root = scene.root == Some(*id);
-        draw_node_card(&painter, scene, *id, data, node_pos, pan, is_selected, is_root);
+        draw_node_card(&painter, scene, *id, data, node_pos, pan, is_selected);
         node_rects.push((*id, rect));
     }
 
@@ -623,25 +603,7 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState) {
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn auto_wire_to_root(scene: &mut Scene, new_id: NodeId) {
-    match scene.root {
-        None => {
-            scene.root = Some(new_id);
-        }
-        Some(root_id) => {
-            if matches!(
-                scene.nodes.get(&root_id).map(|n| &n.data),
-                Some(NodeData::Primitive { .. }) | Some(NodeData::Sculpt { .. })
-            ) {
-                let union_id = scene.create_operation(CsgOp::Union, root_id, new_id);
-                scene.root = Some(union_id);
-            }
-        }
-    }
-}
-
 fn create_op_from_selection(scene: &mut Scene, state: &mut NodeGraphState, op: CsgOp) {
-    // Get two most recently created primitives, or use first two nodes
     let mut prim_ids: Vec<NodeId> = scene
         .nodes
         .values()
@@ -654,7 +616,6 @@ fn create_op_from_selection(scene: &mut Scene, state: &mut NodeGraphState, op: C
         let left = prim_ids[prim_ids.len() - 2];
         let right = prim_ids[prim_ids.len() - 1];
         let op_id = scene.create_operation(op, left, right);
-        scene.root = Some(op_id);
         state.selected = Some(op_id);
         state.layout_dirty = true;
     }

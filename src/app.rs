@@ -297,11 +297,7 @@ impl SdfApp {
                 ));
                 ui.separator();
                 ui.label(format!("Nodes: {}", self.scene.nodes.len()));
-                if let Some(root) = self.scene.root {
-                    ui.label(format!("Root: {}", root));
-                } else {
-                    ui.label("Root: none");
-                }
+                ui.label(format!("Top-level: {}", self.scene.top_level_nodes().len()));
             });
     }
 

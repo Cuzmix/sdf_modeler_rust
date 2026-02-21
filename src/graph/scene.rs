@@ -191,7 +191,6 @@ pub struct SceneNode {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Scene {
     pub nodes: HashMap<NodeId, SceneNode>,
-    pub root: Option<NodeId>,
     pub(crate) next_id: u64,
     pub(crate) name_counters: HashMap<String, u32>,
 }
@@ -200,12 +199,10 @@ impl Scene {
     pub fn new() -> Self {
         let mut scene = Self {
             nodes: HashMap::new(),
-            root: None,
             next_id: 0,
             name_counters: HashMap::new(),
         };
-        let id = scene.create_primitive(SdfPrimitive::Sphere);
-        scene.root = Some(id);
+        scene.create_primitive(SdfPrimitive::Sphere);
         scene
     }
 
@@ -228,9 +225,6 @@ impl Scene {
 
     pub fn remove_node(&mut self, id: NodeId) -> Option<SceneNode> {
         let node = self.nodes.remove(&id);
-        if self.root == Some(id) {
-            self.root = None;
-        }
         // Disconnect any nodes referencing this node as a child
         let to_remove: Vec<NodeId> = self
             .nodes
@@ -314,11 +308,6 @@ impl Scene {
     ) -> NodeId {
         let sculpt_id = self.create_sculpt(target_id, position, rotation, color, voxel_grid);
 
-        // Rewire root
-        if self.root == Some(target_id) {
-            self.root = Some(sculpt_id);
-        }
-
         // Rewire all parents that referenced target_id
         let parents: Vec<(NodeId, bool, bool)> = self
             .nodes
@@ -398,7 +387,6 @@ impl Scene {
     /// Hash of graph topology only (not parameter values).
     pub fn structure_key(&self) -> u64 {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        self.root.hash(&mut hasher);
         self.nodes.len().hash(&mut hasher);
         let mut ids: Vec<NodeId> = self.nodes.keys().cloned().collect();
         ids.sort();
@@ -430,14 +418,42 @@ impl Scene {
         hasher.finish()
     }
 
-    /// Post-order traversal from root. Returns nodes in evaluation order.
+    /// Returns nodes not referenced as a child by any other node.
+    pub fn top_level_nodes(&self) -> Vec<NodeId> {
+        let mut referenced: HashSet<NodeId> = HashSet::new();
+        for node in self.nodes.values() {
+            match &node.data {
+                NodeData::Operation { left, right, .. } => {
+                    referenced.insert(*left);
+                    referenced.insert(*right);
+                }
+                NodeData::Sculpt { input, .. } => {
+                    referenced.insert(*input);
+                }
+                _ => {}
+            }
+        }
+        let mut top: Vec<NodeId> = self
+            .nodes
+            .keys()
+            .filter(|id| !referenced.contains(id))
+            .cloned()
+            .collect();
+        top.sort();
+        top
+    }
+
+    /// Post-order traversal from all top-level nodes. Returns nodes in evaluation order.
     pub fn topo_order(&self) -> Vec<NodeId> {
-        let Some(root) = self.root else {
+        let tops = self.top_level_nodes();
+        if tops.is_empty() {
             return Vec::new();
-        };
+        }
         let mut result = Vec::new();
         let mut visited = HashSet::new();
-        self.topo_visit(root, &mut visited, &mut result);
+        for &root in &tops {
+            self.topo_visit(root, &mut visited, &mut result);
+        }
         result
     }
 
@@ -461,38 +477,9 @@ impl Scene {
         result.push(id);
     }
 
-    // --- Reachability ---
-
-    /// Returns the set of all NodeIds reachable from root via DFS.
-    pub fn reachable_from_root(&self) -> HashSet<NodeId> {
-        let mut visited = HashSet::new();
-        if let Some(root) = self.root {
-            self.visit_reachable(root, &mut visited);
-        }
-        visited
-    }
-
-    fn visit_reachable(&self, id: NodeId, visited: &mut HashSet<NodeId>) {
-        if !visited.insert(id) {
-            return;
-        }
-        if let Some(node) = self.nodes.get(&id) {
-            match &node.data {
-                NodeData::Operation { left, right, .. } => {
-                    self.visit_reachable(*left, visited);
-                    self.visit_reachable(*right, visited);
-                }
-                NodeData::Sculpt { input, .. } => {
-                    self.visit_reachable(*input, visited);
-                }
-                NodeData::Primitive { .. } => {}
-            }
-        }
-    }
-
     /// Deep equality check (topology + parameters). Used by undo system.
     pub fn content_eq(&self, other: &Scene) -> bool {
-        if self.root != other.root || self.nodes.len() != other.nodes.len() {
+        if self.nodes.len() != other.nodes.len() {
             return false;
         }
         for (id, node) in &self.nodes {

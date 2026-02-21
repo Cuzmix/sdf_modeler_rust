@@ -426,8 +426,22 @@ fn generate_scene_sdf(scene: &Scene) -> String {
         }
     }
 
-    let root_idx = order.len() - 1;
-    lines.push(format!("    return n{root_idx};"));
+    let tops = scene.top_level_nodes();
+    let top_indices: Vec<usize> = tops
+        .iter()
+        .filter_map(|id| idx_map.get(id).copied())
+        .collect();
+    match top_indices.len() {
+        0 => lines.push("    return vec2f(1e10, -1.0);".to_string()),
+        1 => lines.push(format!("    return n{};", top_indices[0])),
+        _ => {
+            lines.push(format!("    var result = n{};", top_indices[0]));
+            for &idx in &top_indices[1..] {
+                lines.push(format!("    result = op_union(result, n{idx}, 0.0);"));
+            }
+            lines.push("    return result;".to_string());
+        }
+    }
     lines.push("}".to_string());
 
     lines.join("\n")
