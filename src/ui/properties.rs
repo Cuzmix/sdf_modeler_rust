@@ -150,18 +150,25 @@ pub fn draw(
             });
 
             ui.separator();
-            let left_name = scene
-                .nodes
-                .get(&left)
-                .map(|n| n.name.as_str())
-                .unwrap_or("???");
-            let right_name = scene
-                .nodes
-                .get(&right)
-                .map(|n| n.name.as_str())
-                .unwrap_or("???");
-            ui.label(format!("Left: {} (#{})", left_name, left));
-            ui.label(format!("Right: {} (#{})", right_name, right));
+            match left {
+                Some(lid) => {
+                    let left_name = scene.nodes.get(&lid).map(|n| n.name.as_str()).unwrap_or("???");
+                    ui.label(format!("Left: {} (#{})", left_name, lid));
+                }
+                None => { ui.label("Left: (empty)"); }
+            }
+            match right {
+                Some(rid) => {
+                    let right_name = scene.nodes.get(&rid).map(|n| n.name.as_str()).unwrap_or("???");
+                    ui.label(format!("Right: {} (#{})", right_name, rid));
+                }
+                None => { ui.label("Right: (empty)"); }
+            }
+            if left.is_some() && right.is_some() {
+                if ui.button("Swap Inputs").clicked() {
+                    scene.swap_children(id);
+                }
+            }
 
             // Add Sculpt Modifier button
             ui.separator();
@@ -202,12 +209,13 @@ pub fn draw(
             ui.label("Type: Sculpt Modifier");
             ui.separator();
 
-            let input_name = scene
-                .nodes
-                .get(&input)
-                .map(|n| n.name.as_str())
-                .unwrap_or("???");
-            ui.label(format!("Input: {} (#{})", input_name, input));
+            match input {
+                Some(iid) => {
+                    let input_name = scene.nodes.get(&iid).map(|n| n.name.as_str()).unwrap_or("???");
+                    ui.label(format!("Input: {} (#{})", input_name, iid));
+                }
+                None => { ui.label("Input: (empty)"); }
+            }
             ui.separator();
 
             vec3_editor(ui, "Position", &mut position, 0.05, None, "");
@@ -263,21 +271,23 @@ pub fn draw(
                     if ui.button("Exit Sculpt Mode").clicked() {
                         *sculpt_state = SculptState::Inactive;
                     }
-                    if ui.button("Re-bake").clicked() {
-                        let (grid, center) =
-                            voxel::bake_subtree(scene, input, voxel::DEFAULT_RESOLUTION);
-                        if let Some(node) = scene.nodes.get_mut(&id) {
-                            if let NodeData::Sculpt {
-                                voxel_grid: ref mut vg,
-                                position: ref mut p,
-                                ..
-                            } = node.data
-                            {
-                                *vg = grid;
-                                *p = center;
+                    if let Some(input_id) = input {
+                        if ui.button("Re-bake").clicked() {
+                            let (grid, center) =
+                                voxel::bake_subtree(scene, input_id, voxel::DEFAULT_RESOLUTION);
+                            if let Some(node) = scene.nodes.get_mut(&id) {
+                                if let NodeData::Sculpt {
+                                    voxel_grid: ref mut vg,
+                                    position: ref mut p,
+                                    ..
+                                } = node.data
+                                {
+                                    *vg = grid;
+                                    *p = center;
+                                }
                             }
+                            position = center;
                         }
-                        position = center;
                     }
                 });
             } else {

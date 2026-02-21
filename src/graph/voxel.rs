@@ -203,13 +203,17 @@ pub fn evaluate_sdf_tree(scene: &Scene, node_id: NodeId, p: Vec3) -> f32 {
             left,
             right,
         } => {
-            let a = evaluate_sdf_tree(scene, *left, p);
-            let b = evaluate_sdf_tree(scene, *right, p);
-            match op {
-                CsgOp::Union => csg_union(a, b),
-                CsgOp::SmoothUnion => csg_smooth_union(a, b, *smooth_k),
-                CsgOp::Subtract => csg_subtract(a, b),
-                CsgOp::Intersect => csg_intersect(a, b),
+            let a = left.map(|l| evaluate_sdf_tree(scene, l, p));
+            let b = right.map(|r| evaluate_sdf_tree(scene, r, p));
+            match (a, b) {
+                (Some(a), Some(b)) => match op {
+                    CsgOp::Union => csg_union(a, b),
+                    CsgOp::SmoothUnion => csg_smooth_union(a, b, *smooth_k),
+                    CsgOp::Subtract => csg_subtract(a, b),
+                    CsgOp::Intersect => csg_intersect(a, b),
+                },
+                (Some(v), None) | (None, Some(v)) => v,
+                (None, None) => f32::MAX,
             }
         }
         NodeData::Sculpt {
@@ -242,8 +246,8 @@ fn collect_bounds(scene: &Scene, id: NodeId, all_min: &mut Vec3, all_max: &mut V
             *all_max = all_max.max(*position + extent);
         }
         NodeData::Operation { left, right, .. } => {
-            collect_bounds(scene, *left, all_min, all_max);
-            collect_bounds(scene, *right, all_min, all_max);
+            if let Some(l) = left { collect_bounds(scene, *l, all_min, all_max); }
+            if let Some(r) = right { collect_bounds(scene, *r, all_min, all_max); }
         }
         NodeData::Sculpt {
             position,

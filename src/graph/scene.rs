@@ -169,11 +169,11 @@ pub enum NodeData {
     Operation {
         op: CsgOp,
         smooth_k: f32,
-        left: NodeId,
-        right: NodeId,
+        left: Option<NodeId>,
+        right: Option<NodeId>,
     },
     Sculpt {
-        input: NodeId,
+        input: Option<NodeId>,
         position: Vec3,
         rotation: Vec3,
         color: Vec3,
@@ -225,22 +225,43 @@ impl Scene {
 
     pub fn remove_node(&mut self, id: NodeId) -> Option<SceneNode> {
         let node = self.nodes.remove(&id);
-        // Disconnect any nodes referencing this node as a child
-        let to_remove: Vec<NodeId> = self
+        // Null out any references to this node (instead of cascade-deleting)
+        let to_patch: Vec<(NodeId, bool, bool, bool)> = self
             .nodes
             .values()
             .filter_map(|n| match &n.data {
-                NodeData::Operation { left, right, .. }
-                    if *left == id || *right == id =>
-                {
-                    Some(n.id)
+                NodeData::Operation { left, right, .. } => {
+                    let is_left = *left == Some(id);
+                    let is_right = *right == Some(id);
+                    if is_left || is_right {
+                        Some((n.id, is_left, is_right, false))
+                    } else {
+                        None
+                    }
                 }
-                NodeData::Sculpt { input, .. } if *input == id => Some(n.id),
+                NodeData::Sculpt { input, .. } if *input == Some(id) => {
+                    Some((n.id, false, false, true))
+                }
                 _ => None,
             })
             .collect();
-        for dep_id in to_remove {
-            self.remove_node(dep_id);
+        for (parent_id, is_left, is_right, is_sculpt) in to_patch {
+            if let Some(parent) = self.nodes.get_mut(&parent_id) {
+                match &mut parent.data {
+                    NodeData::Operation { left, right, .. } => {
+                        if is_left {
+                            *left = None;
+                        }
+                        if is_right {
+                            *right = None;
+                        }
+                    }
+                    NodeData::Sculpt { input, .. } if is_sculpt => {
+                        *input = None;
+                    }
+                    _ => {}
+                }
+            }
         }
         node
     }
@@ -269,8 +290,8 @@ impl Scene {
             NodeData::Operation {
                 smooth_k: op.default_smooth_k(),
                 op,
-                left,
-                right,
+                left: Some(left),
+                right: Some(right),
             },
         )
     }
@@ -287,7 +308,7 @@ impl Scene {
         self.add_node(
             name,
             NodeData::Sculpt {
-                input,
+                input: Some(input),
                 position,
                 rotation,
                 color,
@@ -318,15 +339,15 @@ impl Scene {
                 }
                 match &n.data {
                     NodeData::Operation { left, right, .. } => {
-                        let is_left = *left == target_id;
-                        let is_right = *right == target_id;
+                        let is_left = *left == Some(target_id);
+                        let is_right = *right == Some(target_id);
                         if is_left || is_right {
                             Some((n.id, is_left, is_right))
                         } else {
                             None
                         }
                     }
-                    NodeData::Sculpt { input, .. } if *input == target_id => {
+                    NodeData::Sculpt { input, .. } if *input == Some(target_id) => {
                         Some((n.id, true, false))
                     }
                     _ => None,
@@ -339,14 +360,14 @@ impl Scene {
                 match &mut parent.data {
                     NodeData::Operation { left, right, .. } => {
                         if is_left {
-                            *left = sculpt_id;
+                            *left = Some(sculpt_id);
                         }
                         if is_right {
-                            *right = sculpt_id;
+                            *right = Some(sculpt_id);
                         }
                     }
                     NodeData::Sculpt { input, .. } => {
-                        *input = sculpt_id;
+                        *input = Some(sculpt_id);
                     }
                     _ => {}
                 }
@@ -358,7 +379,7 @@ impl Scene {
 
     // --- Topology mutation ---
 
-    pub fn set_left_child(&mut self, op_id: NodeId, child_id: NodeId) {
+    pub fn set_left_child(&mut self, op_id: NodeId, child_id: Option<NodeId>) {
         if let Some(node) = self.nodes.get_mut(&op_id) {
             if let NodeData::Operation { left, .. } = &mut node.data {
                 *left = child_id;
@@ -366,7 +387,7 @@ impl Scene {
         }
     }
 
-    pub fn set_right_child(&mut self, op_id: NodeId, child_id: NodeId) {
+    pub fn set_right_child(&mut self, op_id: NodeId, child_id: Option<NodeId>) {
         if let Some(node) = self.nodes.get_mut(&op_id) {
             if let NodeData::Operation { right, .. } = &mut node.data {
                 *right = child_id;
@@ -374,10 +395,18 @@ impl Scene {
         }
     }
 
-    pub fn set_sculpt_input(&mut self, sculpt_id: NodeId, child_id: NodeId) {
+    pub fn set_sculpt_input(&mut self, sculpt_id: NodeId, child_id: Option<NodeId>) {
         if let Some(node) = self.nodes.get_mut(&sculpt_id) {
             if let NodeData::Sculpt { input, .. } = &mut node.data {
                 *input = child_id;
+            }
+        }
+    }
+
+    pub fn swap_children(&mut self, op_id: NodeId) {
+        if let Some(node) = self.nodes.get_mut(&op_id) {
+            if let NodeData::Operation { left, right, .. } = &mut node.data {
+                std::mem::swap(left, right);
             }
         }
     }
@@ -424,11 +453,11 @@ impl Scene {
         for node in self.nodes.values() {
             match &node.data {
                 NodeData::Operation { left, right, .. } => {
-                    referenced.insert(*left);
-                    referenced.insert(*right);
+                    if let Some(l) = left { referenced.insert(*l); }
+                    if let Some(r) = right { referenced.insert(*r); }
                 }
                 NodeData::Sculpt { input, .. } => {
-                    referenced.insert(*input);
+                    if let Some(i) = input { referenced.insert(*i); }
                 }
                 _ => {}
             }
@@ -466,11 +495,11 @@ impl Scene {
         };
         match &node.data {
             NodeData::Operation { left, right, .. } => {
-                self.topo_visit(*left, visited, result);
-                self.topo_visit(*right, visited, result);
+                if let Some(l) = left { self.topo_visit(*l, visited, result); }
+                if let Some(r) = right { self.topo_visit(*r, visited, result); }
             }
             NodeData::Sculpt { input, .. } => {
-                self.topo_visit(*input, visited, result);
+                if let Some(i) = input { self.topo_visit(*i, visited, result); }
             }
             NodeData::Primitive { .. } => {}
         }

@@ -408,12 +408,24 @@ fn generate_scene_sdf(scene: &Scene) -> String {
                 ));
             }
             NodeData::Operation { op, left, right, .. } => {
-                let li = idx_map.get(left).copied().unwrap_or(0);
-                let ri = idx_map.get(right).copied().unwrap_or(0);
-                let op_fn = op.wgsl_function_name();
-                lines.push(format!(
-                    "    let n{i} = {op_fn}(n{li}, n{ri}, nodes[{i}].type_op.y);"
-                ));
+                let li = left.and_then(|id| idx_map.get(&id).copied());
+                let ri = right.and_then(|id| idx_map.get(&id).copied());
+                match (li, ri) {
+                    (Some(li), Some(ri)) => {
+                        let op_fn = op.wgsl_function_name();
+                        lines.push(format!(
+                            "    let n{i} = {op_fn}(n{li}, n{ri}, nodes[{i}].type_op.y);"
+                        ));
+                    }
+                    (Some(ci), None) | (None, Some(ci)) => {
+                        // Pass-through the single connected child
+                        lines.push(format!("    let n{i} = n{ci};"));
+                    }
+                    (None, None) => {
+                        // No inputs — emit far-away sentinel
+                        lines.push(format!("    let n{i} = vec2f(1e10, -1.0);"));
+                    }
+                }
             }
             NodeData::Sculpt { .. } => {
                 lines.push(format!(

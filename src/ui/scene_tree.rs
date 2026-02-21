@@ -58,10 +58,16 @@ fn draw_node_recursive(
             .default_open(true)
             .id_salt(id)
             .show(ui, |ui| {
-                let left = *left;
-                let right = *right;
-                draw_node_recursive(ui, scene, left, selected, visited);
-                draw_node_recursive(ui, scene, right, selected, visited);
+                if let Some(left) = *left {
+                    draw_node_recursive(ui, scene, left, selected, visited);
+                } else {
+                    ui.label("  (empty)");
+                }
+                if let Some(right) = *right {
+                    draw_node_recursive(ui, scene, right, selected, visited);
+                } else {
+                    ui.label("  (empty)");
+                }
             });
 
             if header.header_response.clicked() {
@@ -80,8 +86,11 @@ fn draw_node_recursive(
             .default_open(true)
             .id_salt(id)
             .show(ui, |ui| {
-                let input = *input;
-                draw_node_recursive(ui, scene, input, selected, visited);
+                if let Some(input) = *input {
+                    draw_node_recursive(ui, scene, input, selected, visited);
+                } else {
+                    ui.label("  (empty)");
+                }
             });
             if header.header_response.clicked() {
                 *selected = Some(id);

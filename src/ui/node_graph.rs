@@ -83,12 +83,12 @@ fn compute_depth(scene: &Scene, id: NodeId, cache: &mut HashMap<NodeId, u32>) ->
     }
     let depth = match scene.nodes.get(&id).map(|n| &n.data) {
         Some(NodeData::Operation { left, right, .. }) => {
-            let ld = compute_depth(scene, *left, cache);
-            let rd = compute_depth(scene, *right, cache);
+            let ld = left.map_or(0, |l| compute_depth(scene, l, cache));
+            let rd = right.map_or(0, |r| compute_depth(scene, r, cache));
             1 + ld.max(rd)
         }
         Some(NodeData::Sculpt { input, .. }) => {
-            1 + compute_depth(scene, *input, cache)
+            1 + input.map_or(0, |i| compute_depth(scene, i, cache))
         }
         _ => 0,
     };
@@ -254,37 +254,43 @@ fn draw_connections(
     for (id, data) in node_snapshot {
         match data {
             NodeData::Operation { left, right, .. } => {
-                if let (Some(&left_pos), Some(&op_pos)) =
-                    (state.node_positions.get(left), state.node_positions.get(id))
-                {
-                    draw_bezier(
-                        painter,
-                        output_port_pos(left_pos, pan),
-                        input_left_port_pos(op_pos, pan),
-                        COLOR_WIRE,
-                    );
+                if let Some(left_id) = left {
+                    if let (Some(&left_pos), Some(&op_pos)) =
+                        (state.node_positions.get(left_id), state.node_positions.get(id))
+                    {
+                        draw_bezier(
+                            painter,
+                            output_port_pos(left_pos, pan),
+                            input_left_port_pos(op_pos, pan),
+                            COLOR_WIRE,
+                        );
+                    }
                 }
-                if let (Some(&right_pos), Some(&op_pos)) =
-                    (state.node_positions.get(right), state.node_positions.get(id))
-                {
-                    draw_bezier(
-                        painter,
-                        output_port_pos(right_pos, pan),
-                        input_right_port_pos(op_pos, pan),
-                        COLOR_WIRE,
-                    );
+                if let Some(right_id) = right {
+                    if let (Some(&right_pos), Some(&op_pos)) =
+                        (state.node_positions.get(right_id), state.node_positions.get(id))
+                    {
+                        draw_bezier(
+                            painter,
+                            output_port_pos(right_pos, pan),
+                            input_right_port_pos(op_pos, pan),
+                            COLOR_WIRE,
+                        );
+                    }
                 }
             }
             NodeData::Sculpt { input, .. } => {
-                if let (Some(&input_pos), Some(&sculpt_pos)) =
-                    (state.node_positions.get(input), state.node_positions.get(id))
-                {
-                    draw_bezier(
-                        painter,
-                        output_port_pos(input_pos, pan),
-                        input_single_port_pos(sculpt_pos, pan),
-                        COLOR_WIRE,
-                    );
+                if let Some(input_id) = input {
+                    if let (Some(&input_pos), Some(&sculpt_pos)) =
+                        (state.node_positions.get(input_id), state.node_positions.get(id))
+                    {
+                        draw_bezier(
+                            painter,
+                            output_port_pos(input_pos, pan),
+                            input_single_port_pos(sculpt_pos, pan),
+                            COLOR_WIRE,
+                        );
+                    }
                 }
             }
             _ => {}
@@ -621,6 +627,62 @@ fn create_op_from_selection(scene: &mut Scene, state: &mut NodeGraphState, op: C
     }
 }
 
+fn get_input_connection(scene: &Scene, node_id: NodeId, port: &PortKind) -> Option<NodeId> {
+    scene.nodes.get(&node_id).and_then(|n| match (&n.data, port) {
+        (NodeData::Operation { left, .. }, PortKind::InputLeft) => *left,
+        (NodeData::Operation { right, .. }, PortKind::InputRight) => *right,
+        (NodeData::Sculpt { input, .. }, PortKind::InputSingle) => *input,
+        _ => None,
+    })
+}
+
+fn set_input_connection(scene: &mut Scene, node_id: NodeId, port: &PortKind, value: Option<NodeId>) {
+    match port {
+        PortKind::InputLeft => scene.set_left_child(node_id, value),
+        PortKind::InputRight => scene.set_right_child(node_id, value),
+        PortKind::InputSingle => scene.set_sculpt_input(node_id, value),
+        PortKind::Output => {}
+    }
+}
+
+/// Check if the release position hits an input port on this node.
+/// Returns the matching PortKind if hit, skipping the exact same port we started from.
+fn hit_input_port(
+    data: &NodeData,
+    np: Pos2,
+    pan: Vec2,
+    release_pos: Pos2,
+    from_node: NodeId,
+    from_port: &PortKind,
+    target_node: NodeId,
+) -> Option<PortKind> {
+    let same_port = |pk: &PortKind| target_node == from_node && pk == from_port;
+
+    match data {
+        NodeData::Operation { .. } => {
+            if !same_port(&PortKind::InputLeft)
+                && release_pos.distance(input_left_port_pos(np, pan)) < PORT_RADIUS * 4.0
+            {
+                return Some(PortKind::InputLeft);
+            }
+            if !same_port(&PortKind::InputRight)
+                && release_pos.distance(input_right_port_pos(np, pan)) < PORT_RADIUS * 4.0
+            {
+                return Some(PortKind::InputRight);
+            }
+        }
+        NodeData::Sculpt { .. } => {
+            if !same_port(&PortKind::InputSingle)
+                && release_pos.distance(input_single_port_pos(np, pan)) < PORT_RADIUS * 4.0
+            {
+                return Some(PortKind::InputSingle);
+            }
+        }
+        _ => {}
+    }
+    None
+}
+
 fn try_complete_wire(
     scene: &mut Scene,
     state: &mut NodeGraphState,
@@ -646,12 +708,12 @@ fn try_complete_wire(
                     let in_l = input_left_port_pos(np, pan);
                     let in_r = input_right_port_pos(np, pan);
                     if release_pos.distance(in_l) < PORT_RADIUS * 4.0 {
-                        scene.set_left_child(*id, from_node);
+                        scene.set_left_child(*id, Some(from_node));
                         state.layout_dirty = true;
                         return;
                     }
                     if release_pos.distance(in_r) < PORT_RADIUS * 4.0 {
-                        scene.set_right_child(*id, from_node);
+                        scene.set_right_child(*id, Some(from_node));
                         state.layout_dirty = true;
                         return;
                     }
@@ -660,38 +722,49 @@ fn try_complete_wire(
                 if matches!(data, NodeData::Sculpt { .. }) {
                     let in_s = input_single_port_pos(np, pan);
                     if release_pos.distance(in_s) < PORT_RADIUS * 4.0 {
-                        scene.set_sculpt_input(*id, from_node);
+                        scene.set_sculpt_input(*id, Some(from_node));
                         state.layout_dirty = true;
                         return;
                     }
                 }
             }
-            PortKind::InputLeft | PortKind::InputRight => {
-                // Dragged from input → looking for output ports on any node
+            PortKind::InputLeft | PortKind::InputRight | PortKind::InputSingle => {
+                // Dragged from input → check output ports first (rewire)
                 if *id != from_node {
                     let out = output_port_pos(np, pan);
                     if release_pos.distance(out) < PORT_RADIUS * 4.0 {
-                        match from_port {
-                            PortKind::InputLeft => scene.set_left_child(from_node, *id),
-                            PortKind::InputRight => scene.set_right_child(from_node, *id),
-                            _ => {}
-                        }
+                        set_input_connection(scene, from_node, from_port, Some(*id));
                         state.layout_dirty = true;
                         return;
                     }
                 }
-            }
-            PortKind::InputSingle => {
-                // Dragged from Sculpt input → looking for output ports
-                if *id != from_node {
-                    let out = output_port_pos(np, pan);
-                    if release_pos.distance(out) < PORT_RADIUS * 4.0 {
-                        scene.set_sculpt_input(from_node, *id);
-                        state.layout_dirty = true;
-                        return;
-                    }
+                // Dragged from input → check other input ports (swap)
+                if let Some(target_port) = hit_input_port(data, np, pan, release_pos, from_node, from_port, *id) {
+                    let src_val = get_input_connection(scene, from_node, from_port);
+                    let dst_val = get_input_connection(scene, *id, &target_port);
+                    set_input_connection(scene, from_node, from_port, dst_val);
+                    set_input_connection(scene, *id, &target_port, src_val);
+                    state.layout_dirty = true;
+                    return;
                 }
             }
         }
+    }
+
+    // No port was hit — disconnect if dragged from an input port
+    match from_port {
+        PortKind::InputLeft => {
+            scene.set_left_child(from_node, None);
+            state.layout_dirty = true;
+        }
+        PortKind::InputRight => {
+            scene.set_right_child(from_node, None);
+            state.layout_dirty = true;
+        }
+        PortKind::InputSingle => {
+            scene.set_sculpt_input(from_node, None);
+            state.layout_dirty = true;
+        }
+        PortKind::Output => {}
     }
 }
