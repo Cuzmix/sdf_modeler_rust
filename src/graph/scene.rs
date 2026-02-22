@@ -229,6 +229,41 @@ pub enum NodeData {
     },
 }
 
+impl NodeData {
+    /// Iterate over child node IDs (0-2 children depending on variant).
+    pub fn children(&self) -> impl Iterator<Item = NodeId> {
+        let (a, b) = match self {
+            NodeData::Operation { left, right, .. } => (*left, *right),
+            NodeData::Sculpt { input, .. } | NodeData::Transform { input, .. } => (*input, None),
+            NodeData::Primitive { .. } => (None, None),
+        };
+        a.into_iter().chain(b)
+    }
+
+    /// For geometry nodes (Primitive/Sculpt), return local bounding sphere (center, radius).
+    /// Returns None for non-geometry nodes.
+    pub fn geometry_local_sphere(&self) -> Option<([f32; 3], f32)> {
+        match self {
+            NodeData::Primitive { position, scale, .. } => {
+                let r = scale.x.max(scale.y).max(scale.z);
+                Some(([position.x, position.y, position.z], r))
+            }
+            NodeData::Sculpt { position, voxel_grid, .. } => {
+                let mid = [
+                    position.x + (voxel_grid.bounds_min.x + voxel_grid.bounds_max.x) * 0.5,
+                    position.y + (voxel_grid.bounds_min.y + voxel_grid.bounds_max.y) * 0.5,
+                    position.z + (voxel_grid.bounds_min.z + voxel_grid.bounds_max.z) * 0.5,
+                ];
+                let r = ((voxel_grid.bounds_max.x - voxel_grid.bounds_min.x) * 0.5)
+                    .max((voxel_grid.bounds_max.y - voxel_grid.bounds_min.y) * 0.5)
+                    .max((voxel_grid.bounds_max.z - voxel_grid.bounds_min.z) * 0.5);
+                Some((mid, r))
+            }
+            _ => None,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SceneNode {
     pub id: NodeId,
@@ -633,22 +668,10 @@ impl Scene {
 
     /// Returns nodes not referenced as a child by any other node.
     pub fn top_level_nodes(&self) -> Vec<NodeId> {
-        let mut referenced: HashSet<NodeId> = HashSet::new();
-        for node in self.nodes.values() {
-            match &node.data {
-                NodeData::Operation { left, right, .. } => {
-                    if let Some(l) = left { referenced.insert(*l); }
-                    if let Some(r) = right { referenced.insert(*r); }
-                }
-                NodeData::Sculpt { input, .. } | NodeData::Transform { input, .. } => {
-                    if let Some(i) = input { referenced.insert(*i); }
-                }
-                _ => {}
-            }
-        }
-        let mut top: Vec<NodeId> = self
-            .nodes
-            .keys()
+        let referenced: HashSet<NodeId> = self.nodes.values()
+            .flat_map(|n| n.data.children())
+            .collect();
+        let mut top: Vec<NodeId> = self.nodes.keys()
             .filter(|id| !referenced.contains(id))
             .cloned()
             .collect();
@@ -671,23 +694,255 @@ impl Scene {
     }
 
     fn topo_visit(&self, id: NodeId, visited: &mut HashSet<NodeId>, result: &mut Vec<NodeId>) {
-        if !visited.insert(id) {
-            return;
-        }
-        let Some(node) = self.nodes.get(&id) else {
-            return;
-        };
-        match &node.data {
-            NodeData::Operation { left, right, .. } => {
-                if let Some(l) = left { self.topo_visit(*l, visited, result); }
-                if let Some(r) = right { self.topo_visit(*r, visited, result); }
-            }
-            NodeData::Sculpt { input, .. } | NodeData::Transform { input, .. } => {
-                if let Some(i) = input { self.topo_visit(*i, visited, result); }
-            }
-            NodeData::Primitive { .. } => {}
+        if !visited.insert(id) { return; }
+        let Some(node) = self.nodes.get(&id) else { return; };
+        for child_id in node.data.children() {
+            self.topo_visit(child_id, visited, result);
         }
         result.push(id);
+    }
+
+    // --- Tree traversal helpers ---
+
+    /// Build a parent map: child_id → parent_id.
+    pub fn build_parent_map(&self) -> HashMap<NodeId, NodeId> {
+        let mut map = HashMap::new();
+        for node in self.nodes.values() {
+            for child_id in node.data.children() {
+                map.insert(child_id, node.id);
+            }
+        }
+        map
+    }
+
+    /// Walk up from a leaf through ancestor transforms and compute world-space
+    /// bounding sphere (center, radius).
+    fn walk_transforms_sphere(
+        &self,
+        center: [f32; 3],
+        extent: f32,
+        leaf_id: NodeId,
+        parent_map: &HashMap<NodeId, NodeId>,
+    ) -> ([f32; 3], f32) {
+        let mut wc = center;
+        let mut wr = extent;
+        let mut current = leaf_id;
+        while let Some(&pid) = parent_map.get(&current) {
+            if let Some(parent) = self.nodes.get(&pid) {
+                match &parent.data {
+                    NodeData::Transform { kind: TransformKind::Translate, value, .. } => {
+                        wc[0] += value.x;
+                        wc[1] += value.y;
+                        wc[2] += value.z;
+                    }
+                    NodeData::Transform { kind: TransformKind::Scale, value, .. } => {
+                        let s = value.x.abs().max(value.y.abs()).max(value.z.abs());
+                        wr *= s;
+                        wc[0] *= value.x;
+                        wc[1] *= value.y;
+                        wc[2] *= value.z;
+                    }
+                    NodeData::Transform { kind: TransformKind::Rotate, .. } => {
+                        let dist = (wc[0] * wc[0] + wc[1] * wc[1] + wc[2] * wc[2]).sqrt();
+                        wr += dist;
+                        wc = [0.0, 0.0, 0.0];
+                    }
+                    _ => {}
+                }
+            }
+            current = pid;
+        }
+        (wc, wr)
+    }
+
+    /// Check if any node in the subtree rooted at `root` is a Sculpt node.
+    pub fn subtree_has_sculpt(&self, root: NodeId) -> bool {
+        let mut stack = vec![root];
+        while let Some(id) = stack.pop() {
+            if let Some(node) = self.nodes.get(&id) {
+                if matches!(node.data, NodeData::Sculpt { .. }) {
+                    return true;
+                }
+                stack.extend(node.data.children());
+            }
+        }
+        false
+    }
+
+    /// Collect all node IDs in the subtree rooted at `root`.
+    pub fn collect_subtree(&self, root: NodeId) -> HashSet<NodeId> {
+        let mut set = HashSet::new();
+        let mut stack = vec![root];
+        while let Some(id) = stack.pop() {
+            if !set.insert(id) { continue; }
+            if let Some(node) = self.nodes.get(&id) {
+                stack.extend(node.data.children());
+            }
+        }
+        set
+    }
+
+    /// Compute world-space bounding sphere (center, radius) for a subtree.
+    /// `parent_map` should be pre-built via `build_parent_map()`.
+    pub fn compute_subtree_sphere(
+        &self,
+        root: NodeId,
+        parent_map: &HashMap<NodeId, NodeId>,
+    ) -> ([f32; 3], f32) {
+        let subtree_nodes = self.collect_subtree(root);
+        let mut bmin = [f32::MAX; 3];
+        let mut bmax = [f32::MIN; 3];
+        let mut has_geom = false;
+        let mut max_smooth_k: f32 = 0.0;
+
+        for &nid in &subtree_nodes {
+            if let Some(node) = self.nodes.get(&nid) {
+                if let NodeData::Operation { smooth_k, .. } = &node.data {
+                    max_smooth_k = max_smooth_k.max(*smooth_k);
+                }
+                if let Some((center, extent)) = node.data.geometry_local_sphere() {
+                    let (wc, wr) = self.walk_transforms_sphere(center, extent, nid, parent_map);
+                    for i in 0..3 {
+                        bmin[i] = bmin[i].min(wc[i] - wr);
+                        bmax[i] = bmax[i].max(wc[i] + wr);
+                    }
+                    has_geom = true;
+                }
+            }
+        }
+
+        if !has_geom {
+            return ([0.0; 3], 1.0);
+        }
+
+        let pad = max_smooth_k + 0.5;
+        let center = [
+            (bmin[0] + bmax[0]) * 0.5,
+            (bmin[1] + bmax[1]) * 0.5,
+            (bmin[2] + bmax[2]) * 0.5,
+        ];
+        let half = [
+            (bmax[0] - bmin[0]) * 0.5 + pad,
+            (bmax[1] - bmin[1]) * 0.5 + pad,
+            (bmax[2] - bmin[2]) * 0.5 + pad,
+        ];
+        let radius = (half[0] * half[0] + half[1] * half[1] + half[2] * half[2]).sqrt();
+        (center, radius)
+    }
+
+    /// Flatten a subtree into a single standalone Sculpt node.
+    /// Replaces the entire subtree rooted at `subtree_root` with a new Sculpt node
+    /// containing the pre-baked `voxel_grid`. Returns the new node's ID.
+    pub fn flatten_subtree(
+        &mut self,
+        subtree_root: NodeId,
+        voxel_grid: VoxelGrid,
+        center: Vec3,
+        color: Vec3,
+    ) -> NodeId {
+        // 1. Collect all nodes in the subtree (to delete later)
+        let subtree_ids = self.collect_subtree(subtree_root);
+
+        // 2. Find parents that reference subtree_root and record their rewiring info
+        let parents: Vec<(NodeId, bool, bool)> = self
+            .nodes
+            .values()
+            .filter_map(|n| {
+                if subtree_ids.contains(&n.id) {
+                    return None; // Skip nodes that are part of the subtree
+                }
+                match &n.data {
+                    NodeData::Operation { left, right, .. } => {
+                        let is_left = *left == Some(subtree_root);
+                        let is_right = *right == Some(subtree_root);
+                        if is_left || is_right {
+                            Some((n.id, is_left, is_right))
+                        } else {
+                            None
+                        }
+                    }
+                    NodeData::Sculpt { input, .. } if *input == Some(subtree_root) => {
+                        Some((n.id, true, false))
+                    }
+                    NodeData::Transform { input, .. } if *input == Some(subtree_root) => {
+                        Some((n.id, true, false))
+                    }
+                    _ => None,
+                }
+            })
+            .collect();
+
+        // 3. Add the new standalone Sculpt node (input: None)
+        let desired_resolution = voxel_grid.resolution;
+        let name = self.next_name("Sculpt");
+        let new_id = self.add_node(
+            name,
+            NodeData::Sculpt {
+                input: None,
+                position: center,
+                rotation: Vec3::ZERO,
+                color,
+                voxel_grid,
+                desired_resolution,
+            },
+        );
+
+        // 4. Rewire parents: subtree_root → new_id
+        for (parent_id, is_left, is_right) in parents {
+            if let Some(parent) = self.nodes.get_mut(&parent_id) {
+                match &mut parent.data {
+                    NodeData::Operation { left, right, .. } => {
+                        if is_left {
+                            *left = Some(new_id);
+                        }
+                        if is_right {
+                            *right = Some(new_id);
+                        }
+                    }
+                    NodeData::Sculpt { input, .. } | NodeData::Transform { input, .. } => {
+                        *input = Some(new_id);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        // 5. Delete all subtree nodes (now orphaned)
+        for id in subtree_ids {
+            self.nodes.remove(&id);
+        }
+
+        new_id
+    }
+
+    /// Compute a conservative world-space AABB encompassing all scene geometry.
+    /// Walks the tree to properly compose transforms with their children's bounds.
+    pub fn compute_bounds(&self) -> ([f32; 3], [f32; 3]) {
+        let parent_map = self.build_parent_map();
+        let mut bmin = [f32::MAX; 3];
+        let mut bmax = [f32::MIN; 3];
+        let mut has_geometry = false;
+
+        for node in self.nodes.values() {
+            if let Some((center, extent)) = node.data.geometry_local_sphere() {
+                let (wc, wr) = self.walk_transforms_sphere(center, extent, node.id, &parent_map);
+                for i in 0..3 {
+                    bmin[i] = bmin[i].min(wc[i] - wr);
+                    bmax[i] = bmax[i].max(wc[i] + wr);
+                }
+                has_geometry = true;
+            }
+        }
+
+        if !has_geometry {
+            return ([-5.0; 3], [5.0; 3]);
+        }
+
+        for i in 0..3 {
+            bmin[i] -= 1.5;
+            bmax[i] += 1.5;
+        }
+        (bmin, bmax)
     }
 
     /// Deep equality check (topology + parameters). Used by undo system.

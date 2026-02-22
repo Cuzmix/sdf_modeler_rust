@@ -113,6 +113,7 @@ pub fn draw(
                     resolution: voxel::DEFAULT_RESOLUTION,
                     color,
                     existing_sculpt: None,
+                    flatten: false,
                 });
                 if let Some(node) = scene.nodes.get_mut(&id) {
                     node.name = name;
@@ -172,20 +173,37 @@ pub fn draw(
                 }
             }
 
-            // Add Sculpt Modifier button
+            // Add Sculpt Modifier / Flatten buttons
             ui.separator();
             if let Some((done, total)) = bake_progress {
                 let frac = done as f32 / total.max(1) as f32;
                 ui.add(egui::ProgressBar::new(frac).text(format!("Baking... {:.0}%", frac * 100.0)));
-            } else if ui.button("Add Sculpt Modifier").clicked() {
-                let sculpt_color = glam::Vec3::new(0.6, 0.6, 0.6);
-                *bake_request = Some(BakeRequest {
-                    subtree_root: id,
-                    resolution: voxel::DEFAULT_RESOLUTION,
-                    color: sculpt_color,
-                    existing_sculpt: None,
+            } else {
+                ui.horizontal(|ui| {
+                    if ui.button("Add Sculpt Modifier").clicked() {
+                        let sculpt_color = glam::Vec3::new(0.6, 0.6, 0.6);
+                        *bake_request = Some(BakeRequest {
+                            subtree_root: id,
+                            resolution: voxel::DEFAULT_RESOLUTION,
+                            color: sculpt_color,
+                            existing_sculpt: None,
+                            flatten: false,
+                        });
+                        return;
+                    }
+                    if ui.button("Flatten to Sculpt").clicked() {
+                        let resolution = voxel::max_subtree_resolution(scene, id);
+                        let sculpt_color = glam::Vec3::new(0.6, 0.6, 0.6);
+                        *bake_request = Some(BakeRequest {
+                            subtree_root: id,
+                            resolution,
+                            color: sculpt_color,
+                            existing_sculpt: None,
+                            flatten: true,
+                        });
+                        return;
+                    }
                 });
-                return;
             }
 
             // Write back
@@ -291,29 +309,48 @@ pub fn draw(
                                     resolution: desired_resolution,
                                     color,
                                     existing_sculpt: Some(id),
+                                    flatten: false,
                                 });
                             }
                         }
                     });
                 }
             } else {
-                ui.horizontal(|ui| {
-                    if ui.button("Resume Sculpting").clicked() {
-                        *sculpt_state = SculptState::Active {
-                            node_id: id,
-                            brush_mode: BrushMode::Add,
-                            brush_radius: sculpt::DEFAULT_BRUSH_RADIUS,
-                            brush_strength: sculpt::DEFAULT_BRUSH_STRENGTH,
-                        };
+                if let Some((done, total)) = bake_progress {
+                    let frac = done as f32 / total.max(1) as f32;
+                    ui.add(egui::ProgressBar::new(frac).text(format!("Baking... {:.0}%", frac * 100.0)));
+                } else {
+                    ui.horizontal(|ui| {
+                        if ui.button("Resume Sculpting").clicked() {
+                            *sculpt_state = SculptState::Active {
+                                node_id: id,
+                                brush_mode: BrushMode::Add,
+                                brush_radius: sculpt::DEFAULT_BRUSH_RADIUS,
+                                brush_strength: sculpt::DEFAULT_BRUSH_STRENGTH,
+                            };
+                        }
+                        if ui.button("Remove Modifier").clicked() {
+                            scene.remove_node(id);
+                            *sculpt_state = SculptState::Inactive;
+                            return;
+                        }
+                    });
+                    // Flatten: merge this sculpt + its input into a standalone Sculpt
+                    if input.is_some() {
+                        if ui.button("Flatten (merge input + sculpt)").clicked() {
+                            let resolution = voxel::max_subtree_resolution(scene, id);
+                            *bake_request = Some(BakeRequest {
+                                subtree_root: id,
+                                resolution,
+                                color,
+                                existing_sculpt: None,
+                                flatten: true,
+                            });
+                            *sculpt_state = SculptState::Inactive;
+                            return;
+                        }
                     }
-                    if ui.button("Remove Modifier").clicked() {
-                        // Remove the sculpt node, reconnect input to parents
-                        // For simplicity: just delete the sculpt node (its parent will be disconnected)
-                        scene.remove_node(id);
-                        *sculpt_state = SculptState::Inactive;
-                        return;
-                    }
-                });
+                }
             }
 
             // Write back

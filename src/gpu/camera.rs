@@ -46,7 +46,13 @@ impl Camera {
         Mat4::perspective_rh(self.fov, aspect, 0.01, 100.0)
     }
 
-    pub fn to_uniform(&self, viewport: [f32; 4], time: f32) -> CameraUniform {
+    pub fn to_uniform(
+        &self,
+        viewport: [f32; 4],
+        time: f32,
+        quality_mode: f32,
+        scene_bounds: ([f32; 3], [f32; 3]),
+    ) -> CameraUniform {
         let aspect = viewport[2] / viewport[3].max(1.0);
         let view = self.view_matrix();
         let proj = self.projection_matrix(aspect);
@@ -57,7 +63,10 @@ impl Camera {
             eye: self.eye().extend(1.0).to_array(),
             viewport,
             time,
-            _pad: [0.0; 3],
+            quality_mode,
+            _pad: [0.0; 2],
+            scene_min: [scene_bounds.0[0], scene_bounds.0[1], scene_bounds.0[2], 0.0],
+            scene_max: [scene_bounds.1[0], scene_bounds.1[1], scene_bounds.1[2], 0.0],
         }
     }
 
@@ -89,5 +98,8 @@ pub struct CameraUniform {
     pub eye: [f32; 4],
     pub viewport: [f32; 4],
     pub time: f32,
-    pub _pad: [f32; 3],
+    pub quality_mode: f32,
+    pub _pad: [f32; 2],
+    pub scene_min: [f32; 4],
+    pub scene_max: [f32; 4],
 }

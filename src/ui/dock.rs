@@ -62,6 +62,8 @@ pub struct SdfTabViewer<'a> {
     pub bake_request: &'a mut Option<BakeRequest>,
     /// (done_slices, total_slices) when a bake is in progress, None when idle.
     pub bake_progress: Option<(u32, u32)>,
+    /// Number of sculpt nodes in the scene (for auto step reduction).
+    pub sculpt_count: usize,
 }
 
 impl<'a> TabViewer for SdfTabViewer<'a> {
@@ -89,6 +91,8 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.gizmo_mode,
                     self.sculpt_state,
                     self.time,
+                    &self.settings.render,
+                    self.sculpt_count,
                 ) {
                     *self.pending_pick = Some(pick);
                 }

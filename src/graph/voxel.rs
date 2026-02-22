@@ -15,6 +15,24 @@ pub fn default_resolution() -> u32 {
 }
 const FAR_DISTANCE: f32 = 999.0;
 
+/// Return the max voxel resolution of any Sculpt node in a subtree.
+/// Falls back to DEFAULT_RESOLUTION if no Sculpt nodes exist.
+pub fn max_subtree_resolution(scene: &Scene, root: NodeId) -> u32 {
+    let mut max_res = 0u32;
+    let mut stack = vec![root];
+    let mut visited = std::collections::HashSet::new();
+    while let Some(id) = stack.pop() {
+        if !visited.insert(id) { continue; }
+        if let Some(node) = scene.nodes.get(&id) {
+            if let NodeData::Sculpt { ref voxel_grid, .. } = node.data {
+                max_res = max_res.max(voxel_grid.resolution);
+            }
+            stack.extend(node.data.children());
+        }
+    }
+    if max_res == 0 { DEFAULT_RESOLUTION } else { max_res }
+}
+
 /// A 3D signed distance field stored as a flat array.
 /// Layout: data[z * res * res + y * res + x]
 #[derive(Clone, Debug, Serialize, Deserialize)]

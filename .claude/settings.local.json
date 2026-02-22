@@ -10,7 +10,10 @@
       "Bash(RUST_LOG=info cargo run:*)",
       "Bash(cargo check:*)",
       "Bash(git commit:*)",
-      "Bash(cargo add:*)"
+      "Bash(cargo add:*)",
+      "WebFetch(domain:iquilezles.org)",
+      "Bash(cargo run:*)",
+      "Bash(python3:*)"
     ]
   }
 }

@@ -4,12 +4,13 @@ use std::sync::Arc;
 
 use eframe::egui;
 use eframe::egui_wgpu::RenderState;
+use eframe::wgpu;
 use egui_dock::DockState;
 use glam::Vec3;
 
 use crate::gpu::camera::Camera;
 use crate::gpu::codegen;
-use crate::gpu::picking::PendingPick;
+use crate::gpu::picking::{PendingPick, PickResult};
 use crate::graph::history::History;
 use crate::graph::scene::{NodeData, NodeId, Scene};
 use crate::graph::voxel;
@@ -18,7 +19,7 @@ use crate::settings::Settings;
 use crate::ui::dock::{self, SdfTabViewer, Tab};
 use crate::ui::gizmo::{GizmoMode, GizmoState};
 use crate::ui::node_graph::NodeGraphState;
-use crate::ui::viewport::ViewportResources;
+use crate::ui::viewport::{BrushDispatch, BrushGpuParams, ViewportResources};
 
 // ---------------------------------------------------------------------------
 // Async bake types
@@ -31,6 +32,8 @@ pub struct BakeRequest {
     pub color: Vec3,
     /// If Some, update this existing sculpt node. If None, create a new one above subtree_root.
     pub existing_sculpt: Option<NodeId>,
+    /// If true, replace the entire subtree with a standalone Sculpt node (destructive flatten).
+    pub flatten: bool,
 }
 
 enum BakeStatus {
@@ -41,9 +44,19 @@ enum BakeStatus {
         /// The subtree root (used when creating a new sculpt node).
         subtree_root: NodeId,
         color: Vec3,
+        /// If true, replace entire subtree with standalone Sculpt (destructive flatten).
+        flatten: bool,
         progress: Arc<AtomicU32>,
         total: u32,
         receiver: std::sync::mpsc::Receiver<(voxel::VoxelGrid, Vec3)>,
+    },
+}
+
+/// Async pick state for sculpt mode (1-frame delay, eliminates GPU stall).
+enum PickState {
+    Idle,
+    Pending {
+        receiver: std::sync::mpsc::Receiver<Result<(), wgpu::BufferAsyncError>>,
     },
 }
 
@@ -67,6 +80,12 @@ pub struct SdfApp {
     last_data_fingerprint: u64,
     bake_status: BakeStatus,
     voxel_gpu_offsets: HashMap<NodeId, u32>,
+    /// Maps sculpt NodeId → texture index for voxel texture3D uploads.
+    sculpt_tex_indices: HashMap<NodeId, usize>,
+    /// Async pick state for sculpt mode.
+    pick_state: PickState,
+    /// Last brush hit for stroke interpolation.
+    last_sculpt_hit: Option<Vec3>,
 }
 
 impl SdfApp {
@@ -125,6 +144,9 @@ impl SdfApp {
             last_data_fingerprint: 0,
             bake_status: BakeStatus::Idle,
             voxel_gpu_offsets: voxel_offsets,
+            sculpt_tex_indices: HashMap::new(),
+            pick_state: PickState::Idle,
+            last_sculpt_hit: None,
         }
     }
 
@@ -234,6 +256,7 @@ impl SdfApp {
             existing_sculpt: req.existing_sculpt,
             subtree_root: req.subtree_root,
             color: req.color,
+            flatten: req.flatten,
             progress,
             total: resolution,
             receiver: rx,
@@ -249,14 +272,25 @@ impl SdfApp {
 
         if let Some((grid, center)) = completed {
             // Extract fields before replacing status
-            let (existing_sculpt, subtree_root, color) = match &self.bake_status {
+            let (existing_sculpt, subtree_root, color, flatten) = match &self.bake_status {
                 BakeStatus::InProgress {
-                    existing_sculpt, subtree_root, color, ..
-                } => (*existing_sculpt, *subtree_root, *color),
+                    existing_sculpt, subtree_root, color, flatten, ..
+                } => (*existing_sculpt, *subtree_root, *color, *flatten),
                 _ => unreachable!(),
             };
 
-            if let Some(sculpt_id) = existing_sculpt {
+            if flatten {
+                // Flatten: replace entire subtree with standalone Sculpt
+                let new_id = self.scene.flatten_subtree(subtree_root, grid, center, color);
+                self.node_graph_state.selected = Some(new_id);
+                self.node_graph_state.layout_dirty = true;
+                self.sculpt_state = SculptState::Active {
+                    node_id: new_id,
+                    brush_mode: BrushMode::Add,
+                    brush_radius: sculpt::DEFAULT_BRUSH_RADIUS,
+                    brush_strength: sculpt::DEFAULT_BRUSH_STRENGTH,
+                };
+            } else if let Some(sculpt_id) = existing_sculpt {
                 // Re-bake: update existing sculpt node
                 if let Some(node) = self.scene.nodes.get_mut(&sculpt_id) {
                     if let NodeData::Sculpt {
@@ -313,17 +347,252 @@ impl SdfApp {
         true
     }
 
+    /// Upload dirty z-slab region of a sculpt node's voxel data to its texture3D.
+    fn upload_voxel_texture_region(&self, node_id: NodeId, z0: u32, z1: u32) {
+        let Some(&tex_idx) = self.sculpt_tex_indices.get(&node_id) else {
+            return;
+        };
+        let Some(node) = self.scene.nodes.get(&node_id) else {
+            return;
+        };
+        let NodeData::Sculpt { ref voxel_grid, .. } = node.data else {
+            return;
+        };
+        let renderer = self.render_state.renderer.read();
+        let Some(res) = renderer.callback_resources.get::<ViewportResources>() else {
+            return;
+        };
+        res.upload_voxel_texture_region(
+            &self.render_state.queue,
+            tex_idx,
+            voxel_grid.resolution,
+            z0,
+            z1,
+            &voxel_grid.data,
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Async sculpt pick (1-frame delay, eliminates GPU stall)
+    // -----------------------------------------------------------------------
+
+    /// Poll for a previously submitted async sculpt pick result.
+    /// If ready: apply brush at the hit point (CPU + GPU).
+    fn poll_sculpt_pick(&mut self) {
+        if !matches!(self.pick_state, PickState::Pending { .. }) {
+            return;
+        }
+
+        // Non-blocking GPU poll to advance async map
+        self.render_state.device.poll(wgpu::Maintain::Poll);
+
+        // Try to read the result
+        let ready = {
+            let renderer = self.render_state.renderer.read();
+            let Some(res) = renderer.callback_resources.get::<ViewportResources>() else {
+                return;
+            };
+            let PickState::Pending { ref receiver } = self.pick_state else {
+                return;
+            };
+            res.try_read_pick_result(receiver)
+        };
+
+        let Some(pick_result) = ready else {
+            return; // Not ready yet — try again next frame
+        };
+
+        self.pick_state = PickState::Idle;
+
+        if let Some(result) = pick_result {
+            self.handle_sculpt_hit(result);
+        }
+    }
+
+    /// Handle a sculpt pick result: apply brush with interpolation.
+    fn handle_sculpt_hit(&mut self, result: PickResult) {
+        let topo_order = self.scene.topo_order();
+        let idx = result.material_id as usize;
+        if idx >= topo_order.len() {
+            return;
+        }
+        let hit_node_id = topo_order[idx];
+
+        let SculptState::Active {
+            node_id,
+            ref brush_mode,
+            brush_radius,
+            brush_strength,
+        } = self.sculpt_state
+        else {
+            return;
+        };
+
+        if hit_node_id != node_id {
+            return;
+        }
+
+        let hit_world = Vec3::new(result.world_pos[0], result.world_pos[1], result.world_pos[2]);
+        let brush_mode = brush_mode.clone();
+
+        // Brush stroke interpolation: fill gaps during fast mouse movement
+        let hits = self.interpolate_brush_hits(hit_world, brush_radius);
+
+        for &pos in &hits {
+            // CPU brush (keeps voxel_grid.data in sync for undo/save)
+            let dirty_range = sculpt::apply_brush(
+                &mut self.scene,
+                node_id,
+                pos,
+                &brush_mode,
+                brush_radius,
+                brush_strength,
+            );
+
+            // GPU brush (instant visual update on storage buffer)
+            self.dispatch_gpu_brush(node_id, pos, &brush_mode, brush_radius, brush_strength);
+
+            // Update voxel texture region (keeps texture3D in sync with storage buffer)
+            if let Some((z0, z1)) = dirty_range {
+                self.upload_voxel_texture_region(node_id, z0, z1);
+            }
+        }
+
+        self.last_sculpt_hit = Some(hit_world);
+    }
+
+    /// Interpolate between last and current hit to prevent gaps.
+    fn interpolate_brush_hits(&self, current: Vec3, brush_radius: f32) -> Vec<Vec3> {
+        let Some(last) = self.last_sculpt_hit else {
+            return vec![current];
+        };
+        let dist = (current - last).length();
+        let step = brush_radius * 0.3;
+        if dist <= step {
+            return vec![current];
+        }
+        let n = (dist / step).ceil() as usize;
+        let mut hits = Vec::with_capacity(n);
+        for i in 1..=n {
+            let t = i as f32 / n as f32;
+            hits.push(last + (current - last) * t);
+        }
+        hits
+    }
+
+    /// Dispatch GPU compute brush to modify voxel_buffer directly on the GPU.
+    fn dispatch_gpu_brush(
+        &self,
+        node_id: NodeId,
+        hit_world: Vec3,
+        brush_mode: &BrushMode,
+        radius: f32,
+        strength: f32,
+    ) {
+        let Some(&gpu_offset) = self.voxel_gpu_offsets.get(&node_id) else {
+            return;
+        };
+        let Some(node) = self.scene.nodes.get(&node_id) else {
+            return;
+        };
+        let NodeData::Sculpt {
+            position,
+            rotation,
+            ref voxel_grid,
+            ..
+        } = node.data
+        else {
+            return;
+        };
+
+        let local_hit = sculpt::inverse_rotate_euler(hit_world - position, rotation);
+        let res = voxel_grid.resolution;
+
+        // Compute grid-space AABB of the brush
+        let brush_min = local_hit - Vec3::splat(radius);
+        let brush_max = local_hit + Vec3::splat(radius);
+        let g_min = voxel_grid.world_to_grid(brush_min);
+        let g_max = voxel_grid.world_to_grid(brush_max);
+
+        let x0 = (g_min.x.floor().max(0.0) as u32).min(res - 1);
+        let y0 = (g_min.y.floor().max(0.0) as u32).min(res - 1);
+        let z0 = (g_min.z.floor().max(0.0) as u32).min(res - 1);
+        let x1 = (g_max.x.ceil().max(0.0) as u32).min(res - 1);
+        let y1 = (g_max.y.ceil().max(0.0) as u32).min(res - 1);
+        let z1 = (g_max.z.ceil().max(0.0) as u32).min(res - 1);
+
+        let sign = match brush_mode {
+            BrushMode::Add => -1.0f32,
+            BrushMode::Carve => 1.0f32,
+        };
+
+        let dispatch = BrushDispatch {
+            params: BrushGpuParams {
+                center_local: local_hit.to_array(),
+                radius,
+                strength,
+                sign_val: sign,
+                grid_offset: gpu_offset,
+                grid_resolution: res,
+                bounds_min: voxel_grid.bounds_min.to_array(),
+                _pad0: 0.0,
+                bounds_max: voxel_grid.bounds_max.to_array(),
+                _pad1: 0.0,
+                min_voxel: [x0, y0, z0],
+                _pad2: 0,
+            },
+            workgroups: [
+                (x1 - x0 + 4) / 4,
+                (y1 - y0 + 4) / 4,
+                (z1 - z0 + 4) / 4,
+            ],
+        };
+
+        let renderer = self.render_state.renderer.read();
+        if let Some(vr) = renderer.callback_resources.get::<ViewportResources>() {
+            vr.dispatch_brush(&self.render_state.device, &self.render_state.queue, &dispatch);
+        }
+    }
+
+    /// Submit an async pick for sculpt mode (non-blocking).
+    fn submit_sculpt_pick(&mut self) {
+        if !self.sculpt_state.is_active() {
+            return;
+        }
+        if !matches!(self.pick_state, PickState::Idle) {
+            return;
+        }
+        let Some(pending) = self.pending_pick.take() else {
+            return;
+        };
+        let renderer = self.render_state.renderer.read();
+        let Some(res) = renderer.callback_resources.get::<ViewportResources>() else {
+            return;
+        };
+        let rx = res.submit_pick(
+            &self.render_state.device,
+            &self.render_state.queue,
+            &pending,
+        );
+        drop(renderer);
+
+        self.pick_state = PickState::Pending { receiver: rx };
+    }
+
     fn sync_gpu_pipeline(&mut self) {
         let new_key = self.scene.structure_key();
         if new_key != self.current_structure_key {
             let shader_src = codegen::generate_shader(&self.scene, &self.settings.render);
             let pick_shader_src = codegen::generate_pick_shader(&self.scene, &self.settings.render);
+            let sculpt_count = codegen::collect_sculpt_tex_info(&self.scene).len();
             let mut renderer = self.render_state.renderer.write();
             if let Some(res) = renderer
                 .callback_resources
                 .get_mut::<ViewportResources>()
             {
-                res.rebuild_pipeline(&self.render_state.device, &shader_src, &pick_shader_src);
+                res.rebuild_pipeline(
+                    &self.render_state.device, &shader_src, &pick_shader_src, sculpt_count,
+                );
             }
             self.current_structure_key = new_key;
             self.buffer_dirty = true; // new pipeline needs fresh buffer data
@@ -334,7 +603,9 @@ impl SdfApp {
         let (voxel_data, voxel_offsets) = codegen::build_voxel_buffer(&self.scene);
         let node_data =
             codegen::build_node_buffer(&self.scene, self.node_graph_state.selected, &voxel_offsets);
+        let sculpt_infos = codegen::collect_sculpt_tex_info(&self.scene);
         self.voxel_gpu_offsets = voxel_offsets;
+        self.sculpt_tex_indices = sculpt_infos.iter().map(|i| (i.node_id, i.tex_idx)).collect();
         let mut renderer = self.render_state.renderer.write();
         if let Some(res) = renderer
             .callback_resources
@@ -350,10 +621,28 @@ impl SdfApp {
                 &self.render_state.queue,
                 &voxel_data,
             );
+            // Upload voxel textures for render shader
+            for info in &sculpt_infos {
+                if let Some(node) = self.scene.nodes.get(&info.node_id) {
+                    if let NodeData::Sculpt { ref voxel_grid, .. } = node.data {
+                        res.upload_voxel_texture(
+                            &self.render_state.device,
+                            &self.render_state.queue,
+                            info.tex_idx,
+                            voxel_grid.resolution,
+                            &voxel_grid.data,
+                        );
+                    }
+                }
+            }
         }
     }
 
     fn process_pending_pick(&mut self) {
+        // Sculpt mode uses async pick path (poll_sculpt_pick / submit_sculpt_pick)
+        if self.sculpt_state.is_active() {
+            return;
+        }
         let Some(pending) = self.pending_pick.take() else {
             return;
         };
@@ -370,47 +659,11 @@ impl SdfApp {
             let idx = result.material_id as usize;
             if idx < topo_order.len() {
                 let hit_node_id = topo_order[idx];
-
-                // Sculpt mode: apply brush if we hit the sculpted node
-                if let SculptState::Active {
-                    node_id,
-                    ref brush_mode,
-                    brush_radius,
-                    brush_strength,
-                } = self.sculpt_state
-                {
-                    if hit_node_id == node_id {
-                        let hit_world = Vec3::new(
-                            result.world_pos[0],
-                            result.world_pos[1],
-                            result.world_pos[2],
-                        );
-                        let dirty_range = sculpt::apply_brush(
-                            &mut self.scene,
-                            node_id,
-                            hit_world,
-                            brush_mode,
-                            brush_radius,
-                            brush_strength,
-                        );
-                        // Try incremental upload; fall back to full upload
-                        let did_incremental = if let Some((z0, z1)) = dirty_range {
-                            self.try_incremental_voxel_upload(node_id, z0, z1)
-                        } else {
-                            false
-                        };
-                        if !did_incremental {
-                            self.buffer_dirty = true;
-                        }
-                    }
-                    // Don't change selection in sculpt mode
-                } else {
-                    self.node_graph_state.selected = Some(hit_node_id);
-                    self.buffer_dirty = true; // selection state encoded in GPU buffer
-                }
+                self.node_graph_state.selected = Some(hit_node_id);
+                self.buffer_dirty = true;
             }
-        } else if !self.sculpt_state.is_active() {
-            // Clicked empty space — deselect (only in normal mode)
+        } else {
+            // Clicked empty space — deselect
             self.node_graph_state.selected = None;
             self.buffer_dirty = true;
         }
@@ -419,14 +672,20 @@ impl SdfApp {
     fn sync_sculpt_state(&mut self) {
         // Auto-deactivate sculpt when selection changes away from sculpted node
         if let Some(active_node) = self.sculpt_state.active_node() {
+            let mut deactivate = false;
             if self.node_graph_state.selected != Some(active_node) {
-                self.sculpt_state = SculptState::Inactive;
+                deactivate = true;
             }
             // Also deactivate if the node is no longer a Sculpt node
             if let Some(node) = self.scene.nodes.get(&active_node) {
                 if !matches!(node.data, NodeData::Sculpt { .. }) {
-                    self.sculpt_state = SculptState::Inactive;
+                    deactivate = true;
                 }
+            }
+            if deactivate {
+                self.sculpt_state = SculptState::Inactive;
+                self.last_sculpt_hit = None;
+                self.pick_state = PickState::Idle;
             }
         }
     }
@@ -490,8 +749,9 @@ impl eframe::App for SdfApp {
         self.handle_keyboard_input(ctx);
         self.sync_sculpt_state();
         self.poll_async_bake();
+        self.poll_sculpt_pick(); // Read async pick result from previous frame
         self.sync_gpu_pipeline();
-        self.process_pending_pick();
+        self.process_pending_pick(); // Synchronous pick for normal (non-sculpt) mode
 
         // --- UI ---
         self.show_debug_window(ctx, dt);
@@ -508,6 +768,7 @@ impl eframe::App for SdfApp {
         let mut pending_pick = None;
         let mut settings_dirty = false;
         let mut bake_request: Option<BakeRequest> = None;
+        let sculpt_count = self.sculpt_tex_indices.len();
         let mut tab_viewer = SdfTabViewer {
             camera: &mut self.camera,
             scene: &mut self.scene,
@@ -521,6 +782,7 @@ impl eframe::App for SdfApp {
             pending_pick: &mut pending_pick,
             bake_request: &mut bake_request,
             bake_progress,
+            sculpt_count,
         };
 
         egui::CentralPanel::default()
@@ -532,6 +794,17 @@ impl eframe::App for SdfApp {
 
         if pending_pick.is_some() {
             self.pending_pick = pending_pick;
+        }
+
+        // Sculpt mode: submit async pick for next frame's poll_sculpt_pick
+        self.submit_sculpt_pick();
+
+        // Reset stroke interpolation when mouse is released during sculpting
+        if self.sculpt_state.is_active()
+            && self.pending_pick.is_none()
+            && matches!(self.pick_state, PickState::Idle)
+        {
+            self.last_sculpt_hit = None;
         }
 
         // Start async bake if requested by UI
@@ -567,6 +840,15 @@ impl eframe::App for SdfApp {
             is_dragging,
         );
 
-        ctx.request_repaint();
+        // Only repaint when something needs updating (saves GPU when idle)
+        let needs_repaint = is_dragging
+            || self.sculpt_state.is_active()
+            || !matches!(self.bake_status, BakeStatus::Idle)
+            || !matches!(self.pick_state, PickState::Idle)
+            || self.pending_pick.is_some()
+            || settings_dirty;
+        if needs_repaint {
+            ctx.request_repaint();
+        }
     }
 }

@@ -101,6 +101,23 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
             }
         });
 
+    // --- Fog ---
+    egui::CollapsingHeader::new("Fog")
+        .default_open(false)
+        .show(ui, |ui| {
+            ui.checkbox(&mut config.fog_enabled, "Enable Fog");
+            ui.add_enabled_ui(config.fog_enabled, |ui| {
+                labeled_slider(ui, "Density", &mut config.fog_density, 0.001..=0.2, true);
+                ui.horizontal(|ui| {
+                    ui.label("Color:");
+                    ui.color_edit_button_rgb(&mut config.fog_color);
+                });
+            });
+            if ui.small_button("Reset").clicked() {
+                config.reset_fog();
+            }
+        });
+
     // --- Gamma ---
     egui::CollapsingHeader::new("Gamma")
         .default_open(false)
@@ -109,6 +126,16 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
             if ui.small_button("Reset").clicked() {
                 config.reset_gamma();
             }
+        });
+
+    // --- Performance ---
+    egui::CollapsingHeader::new("Performance")
+        .default_open(true)
+        .show(ui, |ui| {
+            ui.checkbox(&mut config.sculpt_fast_mode, "Fast mode while sculpting")
+                .on_hover_text("Half steps + skip AO/shadows during brush strokes");
+            ui.checkbox(&mut config.auto_reduce_steps, "Auto-reduce steps (multi-sculpt)")
+                .on_hover_text("Halve march steps when 2+ sculpt nodes exist");
         });
 
     let changed = settings.render != before;

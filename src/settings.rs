@@ -79,9 +79,24 @@ pub struct RenderConfig {
     pub sky_horizon: [f32; 3],
     pub sky_zenith: [f32; 3],
 
+    // Fog
+    pub fog_enabled: bool,
+    pub fog_density: f32,
+    pub fog_color: [f32; 3],
+
     // Gamma
     pub gamma: f32,
+
+    // Performance
+    /// Use fast quality mode during sculpt brush strokes (half steps, skip AO/shadows).
+    #[serde(default)]
+    pub sculpt_fast_mode: bool,
+    /// Automatically reduce march steps when multiple sculpt nodes exist.
+    #[serde(default = "default_true")]
+    pub auto_reduce_steps: bool,
 }
+
+fn default_true() -> bool { true }
 
 impl Default for RenderConfig {
     fn default() -> Self {
@@ -101,7 +116,7 @@ impl Default for RenderConfig {
 
             march_max_steps: 128,
             march_epsilon: 0.002,
-            march_step_multiplier: 0.8,
+            march_step_multiplier: 0.9,
             march_max_distance: 50.0,
 
             key_light_dir: [1.0, 2.0, 3.0],
@@ -115,7 +130,14 @@ impl Default for RenderConfig {
             sky_horizon: [0.10, 0.10, 0.16],
             sky_zenith: [0.02, 0.02, 0.05],
 
+            fog_enabled: false,
+            fog_density: 0.04,
+            fog_color: [0.5, 0.55, 0.65],
+
             gamma: 2.2,
+
+            sculpt_fast_mode: false,
+            auto_reduce_steps: true,
         }
     }
 }
@@ -163,6 +185,13 @@ impl RenderConfig {
         let d = Self::default();
         self.sky_horizon = d.sky_horizon;
         self.sky_zenith = d.sky_zenith;
+    }
+
+    pub fn reset_fog(&mut self) {
+        let d = Self::default();
+        self.fog_enabled = d.fog_enabled;
+        self.fog_density = d.fog_density;
+        self.fog_color = d.fog_color;
     }
 
     pub fn reset_gamma(&mut self) {

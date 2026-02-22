@@ -146,7 +146,7 @@ fn apply_brush_to_grid(
 }
 
 /// Inverse of rotate_euler: undo Z rotation, then Y, then X.
-fn inverse_rotate_euler(p: Vec3, r: Vec3) -> Vec3 {
+pub fn inverse_rotate_euler(p: Vec3, r: Vec3) -> Vec3 {
     let mut q = p;
     // Inverse Z rotation
     let (sz, cz) = r.z.sin_cos();
