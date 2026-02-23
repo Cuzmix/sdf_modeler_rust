@@ -650,15 +650,12 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState) {
 
 fn create_op_from_selection(scene: &mut Scene, state: &mut NodeGraphState, op: CsgOp) {
     let tops = scene.top_level_nodes();
-    if tops.len() >= 2 {
-        // Use last two top-level nodes (works with any node type, not just primitives)
-        let left = tops[tops.len() - 2];
-        let right = tops[tops.len() - 1];
-        let op_id = scene.create_operation(op, left, right);
-        state.selected = Some(op_id);
-        state.layout_dirty = true;
-        state.needs_center = true;
-    }
+    let left = if tops.len() >= 2 { Some(tops[tops.len() - 2]) } else { None };
+    let right = tops.last().copied();
+    let op_id = scene.create_operation(op, left, right);
+    state.selected = Some(op_id);
+    state.layout_dirty = true;
+    state.needs_center = true;
 }
 
 fn get_input_connection(scene: &Scene, node_id: NodeId, port: &PortKind) -> Option<NodeId> {

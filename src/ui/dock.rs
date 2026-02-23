@@ -1,12 +1,13 @@
 use eframe::egui;
 use egui_dock::{DockState, Node, NodeIndex, Split, TabViewer};
+use glam::Vec3;
 
 use crate::app::BakeRequest;
 use crate::gpu::camera::Camera;
 use crate::gpu::picking::PendingPick;
 use crate::graph::scene::{NodeId, Scene};
 use crate::sculpt::SculptState;
-use crate::ui::gizmo::{GizmoMode, GizmoState};
+use crate::ui::gizmo::{GizmoMode, GizmoSpace, GizmoState};
 use crate::ui::node_graph::{self, NodeGraphState};
 use crate::settings::Settings;
 use crate::ui::{properties, render_settings, scene_tree, viewport};
@@ -54,6 +55,8 @@ pub struct SdfTabViewer<'a> {
     pub node_graph_state: &'a mut NodeGraphState,
     pub gizmo_state: &'a mut GizmoState,
     pub gizmo_mode: &'a GizmoMode,
+    pub gizmo_space: &'a GizmoSpace,
+    pub pivot_offset: &'a mut Vec3,
     pub sculpt_state: &'a mut SculptState,
     pub settings: &'a mut Settings,
     pub settings_dirty: &'a mut bool,
@@ -95,6 +98,8 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.node_graph_state.selected,
                     self.gizmo_state,
                     self.gizmo_mode,
+                    self.gizmo_space,
+                    self.pivot_offset,
                     self.sculpt_state,
                     self.time,
                     &self.settings.render,

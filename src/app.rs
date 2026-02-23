@@ -18,7 +18,7 @@ use crate::graph::voxel;
 use crate::sculpt::{self, BrushMode, FalloffMode, SculptState};
 use crate::settings::Settings;
 use crate::ui::dock::{self, SdfTabViewer, Tab};
-use crate::ui::gizmo::{GizmoMode, GizmoState};
+use crate::ui::gizmo::{GizmoMode, GizmoSpace, GizmoState};
 use crate::ui::node_graph::NodeGraphState;
 use crate::ui::viewport::{BrushDispatch, BrushGpuParams, ViewportResources};
 
@@ -140,6 +140,9 @@ pub struct SdfApp {
     pending_pick: Option<PendingPick>,
     gizmo_state: GizmoState,
     gizmo_mode: GizmoMode,
+    gizmo_space: GizmoSpace,
+    pivot_offset: Vec3,
+    last_gizmo_selection: Option<NodeId>,
     sculpt_state: SculptState,
     settings: Settings,
     initial_vsync: bool,
@@ -224,6 +227,9 @@ impl SdfApp {
             pending_pick: None,
             gizmo_state: GizmoState::Idle,
             gizmo_mode: GizmoMode::Translate,
+            gizmo_space: GizmoSpace::Local,
+            pivot_offset: Vec3::ZERO,
+            last_gizmo_selection: None,
             sculpt_state: SculptState::Inactive,
             initial_vsync: settings.vsync_enabled,
             settings,
@@ -354,6 +360,21 @@ impl SdfApp {
         // Gizmo mode
         if ctx.input(|i| i.key_pressed(egui::Key::W)) {
             self.gizmo_mode = GizmoMode::Translate;
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::E) && !i.modifiers.ctrl) {
+            self.gizmo_mode = GizmoMode::Rotate;
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::R)) {
+            self.gizmo_mode = GizmoMode::Scale;
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::G)) {
+            self.gizmo_space = match self.gizmo_space {
+                GizmoSpace::Local => GizmoSpace::World,
+                GizmoSpace::World => GizmoSpace::Local,
+            };
+        }
+        if ctx.input(|i| i.modifiers.alt && i.key_pressed(egui::Key::C)) {
+            self.pivot_offset = Vec3::ZERO;
         }
 
         // Sculpt brush mode shortcuts (when sculpt is active)
@@ -1596,6 +1617,15 @@ impl SdfApp {
                         row(ui, "F7", "Right view");
 
                         ui.separator(); ui.end_row();
+                        section(ui, "Gizmo");
+                        row(ui, "W", "Move tool");
+                        row(ui, "E", "Rotate tool");
+                        row(ui, "R", "Scale tool");
+                        row(ui, "G", "Toggle Local / World");
+                        row(ui, "Alt+Drag", "Move pivot");
+                        row(ui, "Alt+C", "Reset pivot");
+
+                        ui.separator(); ui.end_row();
                         section(ui, "Sculpt Mode");
                         row(ui, "LMB drag", "Paint brush");
                         row(ui, "RMB drag", "Pan camera");
@@ -1647,7 +1677,12 @@ impl SdfApp {
                             }
                         }
                         SculptState::Inactive => {
-                            ui.label("Object Mode");
+                            ui.colored_label(
+                                egui::Color32::from_rgb(130, 200, 255),
+                                self.gizmo_mode.label(),
+                            );
+                            ui.separator();
+                            ui.weak(self.gizmo_space.label());
                         }
                     }
 
@@ -1685,6 +1720,14 @@ impl eframe::App for SdfApp {
             .begin_frame(&self.scene, self.node_graph_state.selected);
 
         self.handle_keyboard_input(ctx);
+
+        // Reset pivot when selection changes
+        let current_sel = self.node_graph_state.selected;
+        if current_sel != self.last_gizmo_selection {
+            self.pivot_offset = Vec3::ZERO;
+            self.last_gizmo_selection = current_sel;
+        }
+
         self.sync_sculpt_state();
         self.poll_async_bake();
         self.poll_export();
@@ -1721,6 +1764,8 @@ impl eframe::App for SdfApp {
             node_graph_state: &mut self.node_graph_state,
             gizmo_state: &mut self.gizmo_state,
             gizmo_mode: &self.gizmo_mode,
+            gizmo_space: &self.gizmo_space,
+            pivot_offset: &mut self.pivot_offset,
             sculpt_state: &mut self.sculpt_state,
             settings: &mut self.settings,
             settings_dirty: &mut settings_dirty,

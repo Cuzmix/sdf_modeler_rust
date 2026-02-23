@@ -94,6 +94,22 @@ impl SdfPrimitive {
         }
     }
 
+    /// Returns (label, axis_index) for each scale parameter this primitive uses.
+    pub fn scale_params(&self) -> &'static [(&'static str, usize)] {
+        match self {
+            Self::Sphere => &[("Radius", 0)],
+            Self::Box => &[("Width", 0), ("Height", 1), ("Depth", 2)],
+            Self::Cylinder => &[("Radius", 0), ("Height", 1)],
+            Self::Torus => &[("Major R", 0), ("Tube R", 1)],
+            Self::Plane => &[],
+            Self::Cone => &[("Radius", 0), ("Height", 1)],
+            Self::Capsule => &[("Radius", 0), ("Half H", 1)],
+            Self::Ellipsoid => &[("Radius X", 0), ("Radius Y", 1), ("Radius Z", 2)],
+            Self::HexPrism => &[("Radius", 0), ("Height", 1)],
+            Self::Pyramid => &[("Base", 0), ("Height", 1)],
+        }
+    }
+
     pub fn sdf_function_name(&self) -> &'static str {
         match self {
             Self::Sphere => "sdf_sphere",
@@ -407,15 +423,20 @@ impl Scene {
         )
     }
 
-    pub fn create_operation(&mut self, op: CsgOp, left: NodeId, right: NodeId) -> NodeId {
+    pub fn create_operation(
+        &mut self,
+        op: CsgOp,
+        left: Option<NodeId>,
+        right: Option<NodeId>,
+    ) -> NodeId {
         let name = self.next_name(op.base_name());
         self.add_node(
             name,
             NodeData::Operation {
                 smooth_k: op.default_smooth_k(),
                 op,
-                left: Some(left),
-                right: Some(right),
+                left,
+                right,
             },
         )
     }

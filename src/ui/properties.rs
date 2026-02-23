@@ -138,7 +138,25 @@ pub fn draw(
                 rot_deg.z.to_radians(),
             );
 
-            vec3_editor(ui, "Scale", &mut scale, 0.05, Some(SCALE_MIN..=SCALE_MAX), "");
+            let params = kind.scale_params();
+            if !params.is_empty() {
+                ui.label("Size");
+                ui.horizontal(|ui| {
+                    for &(label, axis) in params {
+                        ui.label(format!("{}:", label));
+                        let val = match axis {
+                            0 => &mut scale.x,
+                            1 => &mut scale.y,
+                            _ => &mut scale.z,
+                        };
+                        ui.add(
+                            egui::DragValue::new(val)
+                                .speed(0.05)
+                                .range(SCALE_MIN..=SCALE_MAX),
+                        );
+                    }
+                });
+            }
 
             ui.label("Color");
             let mut color_arr = [color.x, color.y, color.z];

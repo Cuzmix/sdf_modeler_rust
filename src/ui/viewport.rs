@@ -8,7 +8,7 @@ use crate::gpu::codegen::SdfNodeGpu;
 use crate::gpu::picking::{PendingPick, PickResult};
 use crate::graph::scene::{NodeId, Scene};
 use crate::sculpt::SculptState;
-use crate::ui::gizmo::{self, GizmoMode, GizmoState};
+use crate::ui::gizmo::{self, GizmoMode, GizmoSpace, GizmoState};
 
 const INITIAL_SCENE_CAPACITY: usize = 16;
 const INITIAL_VOXEL_CAPACITY: usize = 4; // in f32 elements (minimum valid buffer)
@@ -1704,6 +1704,8 @@ pub fn draw(
     selected: Option<NodeId>,
     gizmo_state: &mut GizmoState,
     gizmo_mode: &GizmoMode,
+    gizmo_space: &GizmoSpace,
+    pivot_offset: &mut glam::Vec3,
     sculpt_state: &SculptState,
     time: f32,
     render_config: &crate::settings::RenderConfig,
@@ -1784,6 +1786,8 @@ pub fn draw(
             selected,
             gizmo_state,
             gizmo_mode,
+            gizmo_space,
+            pivot_offset,
             rect,
         )
     };
