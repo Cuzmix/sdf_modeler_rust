@@ -232,6 +232,16 @@ impl SdfApp {
         }
     }
 
+    fn delete_selected(&mut self) {
+        if let Some(sel) = self.node_graph_state.selected {
+            self.scene.remove_node(sel);
+            self.node_graph_state.selected = None;
+            self.node_graph_state.layout_dirty = true;
+            self.sculpt_state = SculptState::Inactive;
+            self.buffer_dirty = true;
+        }
+    }
+
     fn handle_keyboard_input(&mut self, ctx: &egui::Context) {
         // Camera presets
         if ctx.input(|i| i.key_pressed(egui::Key::F1)) {
@@ -247,6 +257,11 @@ impl SdfApp {
         // Debug toggle
         if ctx.input(|i| i.key_pressed(egui::Key::F4)) {
             self.show_debug = !self.show_debug;
+        }
+
+        // Delete selected node
+        if ctx.input(|i| i.key_pressed(egui::Key::Delete)) {
+            self.delete_selected();
         }
 
         // Undo / Redo
@@ -1324,8 +1339,86 @@ impl SdfApp {
     }
 
     fn show_menu_bar(&mut self, ctx: &egui::Context) {
+        let mut action_new = false;
+        let mut action_open = false;
+        let mut action_save = false;
+        let mut action_screenshot = false;
+        let mut action_export = false;
+        let mut action_undo = false;
+        let mut action_redo = false;
+        let mut action_delete = false;
+
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
+                // --- File ---
+                ui.menu_button("File", |ui| {
+                    if ui.button("New Scene").clicked() {
+                        action_new = true;
+                        ui.close_menu();
+                    }
+                    ui.separator();
+                    if ui.add(egui::Button::new("Open...").shortcut_text("Ctrl+O")).clicked() {
+                        action_open = true;
+                        ui.close_menu();
+                    }
+                    if ui.add(egui::Button::new("Save As...").shortcut_text("Ctrl+S")).clicked() {
+                        action_save = true;
+                        ui.close_menu();
+                    }
+                    ui.separator();
+                    if ui.add(egui::Button::new("Screenshot...").shortcut_text("Ctrl+P")).clicked() {
+                        action_screenshot = true;
+                        ui.close_menu();
+                    }
+                    let export_idle = matches!(self.export_status, ExportStatus::Idle);
+                    if ui.add_enabled(export_idle, egui::Button::new("Export OBJ...").shortcut_text("Ctrl+E")).clicked() {
+                        action_export = true;
+                        ui.close_menu();
+                    }
+                });
+
+                // --- Edit ---
+                ui.menu_button("Edit", |ui| {
+                    if ui.add(egui::Button::new("Undo").shortcut_text("Ctrl+Z")).clicked() {
+                        action_undo = true;
+                        ui.close_menu();
+                    }
+                    if ui.add(egui::Button::new("Redo").shortcut_text("Ctrl+Y")).clicked() {
+                        action_redo = true;
+                        ui.close_menu();
+                    }
+                    ui.separator();
+                    let has_sel = self.node_graph_state.selected.is_some();
+                    if ui.add_enabled(has_sel, egui::Button::new("Delete").shortcut_text("Del")).clicked() {
+                        action_delete = true;
+                        ui.close_menu();
+                    }
+                });
+
+                // --- View ---
+                ui.menu_button("View", |ui| {
+                    let profiler_label = if self.show_debug { "Hide Profiler" } else { "Show Profiler" };
+                    if ui.add(egui::Button::new(profiler_label).shortcut_text("F4")).clicked() {
+                        self.show_debug = !self.show_debug;
+                        ui.close_menu();
+                    }
+                    ui.separator();
+                    ui.label("Camera Presets");
+                    if ui.add(egui::Button::new("Front").shortcut_text("F1")).clicked() {
+                        self.camera.set_front();
+                        ui.close_menu();
+                    }
+                    if ui.add(egui::Button::new("Top").shortcut_text("F2")).clicked() {
+                        self.camera.set_top();
+                        ui.close_menu();
+                    }
+                    if ui.add(egui::Button::new("Right").shortcut_text("F3")).clicked() {
+                        self.camera.set_right();
+                        ui.close_menu();
+                    }
+                });
+
+                // --- Settings ---
                 ui.menu_button("Settings", |ui| {
                     let mut vsync = self.settings.vsync_enabled;
                     if ui.checkbox(&mut vsync, "VSync").changed() {
@@ -1337,21 +1430,151 @@ impl SdfApp {
                     }
                 });
 
-                // Export progress indicator
-                if let ExportStatus::InProgress { ref progress, total, .. } = self.export_status {
-                    let done = progress.load(Ordering::Relaxed);
-                    let frac = done as f32 / total.max(1) as f32;
-                    ui.add(
-                        egui::ProgressBar::new(frac)
-                            .text(format!("Exporting... {:.0}%", frac * 100.0))
-                            .desired_width(200.0),
-                    );
-                }
+                // Progress indicators (right-aligned)
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if let ExportStatus::InProgress { ref progress, total, .. } = self.export_status {
+                        let done = progress.load(Ordering::Relaxed);
+                        let frac = done as f32 / total.max(1) as f32;
+                        ui.add(
+                            egui::ProgressBar::new(frac)
+                                .text(format!("Exporting... {:.0}%", frac * 100.0))
+                                .desired_width(200.0),
+                        );
+                    }
+                    if let BakeStatus::InProgress { ref progress, total, .. } = self.bake_status {
+                        let done = progress.load(Ordering::Relaxed);
+                        let frac = done as f32 / total.max(1) as f32;
+                        ui.add(
+                            egui::ProgressBar::new(frac)
+                                .text(format!("Baking... {:.0}%", frac * 100.0))
+                                .desired_width(200.0),
+                        );
+                    }
+                });
             });
         });
+
+        // Process deferred menu actions
+        if action_new {
+            self.scene = Scene::new();
+            self.history = History::new();
+            self.node_graph_state.selected = None;
+            self.node_graph_state.layout_dirty = true;
+            self.sculpt_state = SculptState::Inactive;
+            self.current_structure_key = 0;
+            self.buffer_dirty = true;
+        }
+        if action_open {
+            if let Some(path) = crate::io::open_dialog() {
+                match crate::io::load_project(&path) {
+                    Ok(project) => {
+                        self.scene = project.scene;
+                        self.camera = project.camera;
+                        self.history = History::new();
+                        self.node_graph_state.selected = None;
+                        self.node_graph_state.layout_dirty = true;
+                        self.sculpt_state = SculptState::Inactive;
+                        self.current_structure_key = 0;
+                        self.buffer_dirty = true;
+                    }
+                    Err(e) => log::error!("Failed to load project: {}", e),
+                }
+            }
+        }
+        if action_save {
+            if let Some(path) = crate::io::save_dialog() {
+                if let Err(e) = crate::io::save_project(&self.scene, &self.camera, &path) {
+                    log::error!("Failed to save project: {}", e);
+                }
+            }
+        }
+        if action_screenshot {
+            self.take_screenshot();
+        }
+        if action_export {
+            self.start_export(ctx);
+        }
+        if action_undo {
+            if let Some((restored_scene, restored_sel)) =
+                self.history.undo(&self.scene, self.node_graph_state.selected)
+            {
+                self.scene = restored_scene;
+                self.node_graph_state.selected = restored_sel;
+                self.node_graph_state.layout_dirty = true;
+                self.buffer_dirty = true;
+            }
+        }
+        if action_redo {
+            if let Some((restored_scene, restored_sel)) =
+                self.history.redo(&self.scene, self.node_graph_state.selected)
+            {
+                self.scene = restored_scene;
+                self.node_graph_state.selected = restored_sel;
+                self.node_graph_state.layout_dirty = true;
+                self.buffer_dirty = true;
+            }
+        }
+        if action_delete {
+            self.delete_selected();
+        }
+    }
+
+    fn show_status_bar(&self, ctx: &egui::Context) {
+        egui::TopBottomPanel::bottom("status_bar")
+            .exact_height(22.0)
+            .show(ctx, |ui| {
+                ui.horizontal_centered(|ui| {
+                    // Mode indicator
+                    match &self.sculpt_state {
+                        SculptState::Active { brush_mode, symmetry_axis, .. } => {
+                            let mode_name = match brush_mode {
+                                BrushMode::Add => "Add",
+                                BrushMode::Carve => "Carve",
+                                BrushMode::Smooth => "Smooth",
+                                BrushMode::Flatten => "Flatten",
+                                BrushMode::Inflate => "Inflate",
+                                BrushMode::Grab => "Grab",
+                            };
+                            ui.colored_label(
+                                egui::Color32::from_rgb(180, 130, 255),
+                                format!("Sculpt: {}", mode_name),
+                            );
+                            if let Some(axis) = symmetry_axis {
+                                let axis_name = match axis {
+                                    0 => "X",
+                                    1 => "Y",
+                                    _ => "Z",
+                                };
+                                ui.separator();
+                                ui.label(format!("Sym: {}", axis_name));
+                            }
+                        }
+                        SculptState::Inactive => {
+                            ui.label("Object Mode");
+                        }
+                    }
+
+                    ui.separator();
+
+                    // Selection info
+                    if let Some(sel) = self.node_graph_state.selected {
+                        if let Some(node) = self.scene.nodes.get(&sel) {
+                            ui.weak(&node.name);
+                        }
+                    }
+
+                    // Right-aligned control hints
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if self.sculpt_state.is_active() {
+                            ui.weak("LMB: Paint | RMB: Pan | MMB: Orbit | 1-6: Brush | X/Y/Z: Sym");
+                        } else {
+                            ui.weak("LMB: Orbit | RMB: Pan | Scroll: Zoom | Del: Delete");
+                        }
+                    });
+                });
+            });
     }
 }
-
 impl eframe::App for SdfApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let frame_start = Instant::now();
@@ -1377,8 +1600,9 @@ impl eframe::App for SdfApp {
         self.process_pending_pick(); // Synchronous pick for normal (non-sculpt) mode
 
         // --- UI ---
-        self.show_debug_window(ctx);
         self.show_menu_bar(ctx);
+        self.show_status_bar(ctx);
+        self.show_debug_window(ctx);
 
         let t_ui = Instant::now();
         let baking = !matches!(self.bake_status, BakeStatus::Idle);
@@ -1417,6 +1641,16 @@ impl eframe::App for SdfApp {
             });
 
         self.timings.ui_draw_s = t_ui.elapsed().as_secs_f64();
+
+        // Defensive: if a node was deleted via any UI panel, clean up state
+        if let Some(sel) = self.node_graph_state.selected {
+            if !self.scene.nodes.contains_key(&sel) {
+                self.node_graph_state.selected = None;
+                self.node_graph_state.layout_dirty = true;
+                self.sculpt_state = SculptState::Inactive;
+                self.buffer_dirty = true;
+            }
+        }
 
         if pending_pick.is_some() {
             self.pending_pick = pending_pick;

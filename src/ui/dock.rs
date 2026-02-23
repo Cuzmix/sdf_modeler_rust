@@ -109,9 +109,23 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.bake_request,
                     self.bake_progress,
                 );
+                // Defensive: clear selection if the node was deleted by properties panel
+                if let Some(sel) = self.node_graph_state.selected {
+                    if !self.scene.nodes.contains_key(&sel) {
+                        self.node_graph_state.selected = None;
+                        self.node_graph_state.layout_dirty = true;
+                    }
+                }
             }
             Tab::SceneTree => {
                 scene_tree::draw(ui, self.scene, &mut self.node_graph_state.selected);
+                // Defensive: mark layout dirty if a node was deleted via context menu
+                if let Some(sel) = self.node_graph_state.selected {
+                    if !self.scene.nodes.contains_key(&sel) {
+                        self.node_graph_state.selected = None;
+                        self.node_graph_state.layout_dirty = true;
+                    }
+                }
             }
             Tab::RenderSettings => {
                 if render_settings::draw(ui, self.settings) {

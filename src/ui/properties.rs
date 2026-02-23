@@ -41,8 +41,11 @@ pub fn draw(
     bake_progress: Option<(u32, u32)>,
 ) {
     let Some(id) = selected else {
-        ui.centered_and_justified(|ui| {
+        ui.vertical_centered(|ui| {
+            ui.add_space(40.0);
             ui.label("No selection");
+            ui.add_space(8.0);
+            ui.weak("Click a node in the viewport or scene tree");
         });
         return;
     };
@@ -118,18 +121,26 @@ pub fn draw(
             if let Some((done, total)) = bake_progress {
                 let frac = done as f32 / total.max(1) as f32;
                 ui.add(egui::ProgressBar::new(frac).text(format!("Baking... {:.0}%", frac * 100.0)));
-            } else if ui.button("Add Sculpt Modifier").clicked() {
-                *bake_request = Some(BakeRequest {
-                    subtree_root: id,
-                    resolution: voxel::DEFAULT_RESOLUTION,
-                    color,
-                    existing_sculpt: None,
-                    flatten: false,
+            } else {
+                ui.horizontal(|ui| {
+                    if ui.button("Add Sculpt Modifier").clicked() {
+                        *bake_request = Some(BakeRequest {
+                            subtree_root: id,
+                            resolution: voxel::DEFAULT_RESOLUTION,
+                            color,
+                            existing_sculpt: None,
+                            flatten: false,
+                        });
+                        if let Some(node) = scene.nodes.get_mut(&id) {
+                            node.name = name.clone();
+                        }
+                        return;
+                    }
+                    if ui.button("Delete Node").on_hover_text("Remove this node from the scene").clicked() {
+                        scene.remove_node(id);
+                        return;
+                    }
                 });
-                if let Some(node) = scene.nodes.get_mut(&id) {
-                    node.name = name;
-                }
-                return;
             }
 
             // Write back
@@ -219,6 +230,10 @@ pub fn draw(
                         return;
                     }
                 });
+                if ui.button("Delete Node").on_hover_text("Remove this node from the scene").clicked() {
+                    scene.remove_node(id);
+                    return;
+                }
             }
 
             // Write back
@@ -471,6 +486,12 @@ pub fn draw(
                 TransformKind::Scale => {
                     vec3_editor(ui, "Scale", &mut value, 0.05, Some(SCALE_MIN..=SCALE_MAX), "");
                 }
+            }
+
+            ui.separator();
+            if ui.button("Delete Node").on_hover_text("Remove this node from the scene").clicked() {
+                scene.remove_node(id);
+                return;
             }
 
             // Write back

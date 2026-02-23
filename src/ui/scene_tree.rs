@@ -7,7 +7,7 @@ use crate::graph::scene::{NodeData, NodeId, Scene, SceneNode};
 const COLOR_SELECTED: egui::Color32 = egui::Color32::from_rgb(255, 200, 60);
 const COLOR_NORMAL: egui::Color32 = egui::Color32::from_rgb(200, 200, 210);
 
-pub fn draw(ui: &mut egui::Ui, scene: &Scene, selected: &mut Option<NodeId>) {
+pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, selected: &mut Option<NodeId>) {
     ui.heading("Scene Tree");
     ui.separator();
 
@@ -28,9 +28,29 @@ pub fn draw(ui: &mut egui::Ui, scene: &Scene, selected: &mut Option<NodeId>) {
     }
 }
 
+/// Lightweight node info extracted before mutable scene operations.
+struct NodeInfo {
+    label: String,
+    is_selected: bool,
+    is_leaf: bool,
+    children: Vec<Option<NodeId>>,
+}
+
+fn extract_info(scene: &Scene, id: NodeId, selected: Option<NodeId>) -> Option<NodeInfo> {
+    let node = scene.nodes.get(&id)?;
+    let label = format_node_label(node);
+    let is_selected = selected == Some(id);
+    let (is_leaf, children) = match &node.data {
+        NodeData::Primitive { .. } => (true, vec![]),
+        NodeData::Operation { left, right, .. } => (false, vec![*left, *right]),
+        NodeData::Sculpt { input, .. } | NodeData::Transform { input, .. } => (false, vec![*input]),
+    };
+    Some(NodeInfo { label, is_selected, is_leaf, children })
+}
+
 fn draw_node_recursive(
     ui: &mut egui::Ui,
-    scene: &Scene,
+    scene: &mut Scene,
     id: NodeId,
     selected: &mut Option<NodeId>,
     visited: &mut HashSet<NodeId>,
@@ -40,80 +60,53 @@ fn draw_node_recursive(
         return;
     }
 
-    let Some(node) = scene.nodes.get(&id) else {
+    let Some(info) = extract_info(scene, id, *selected) else {
         ui.label(format!("  (missing: #{})", id));
         return;
     };
 
-    let is_selected = *selected == Some(id);
-
-    match &node.data {
-        NodeData::Operation { left, right, .. } => {
-            let header_text = format_node_label(node);
-            let color = if is_selected { COLOR_SELECTED } else { COLOR_NORMAL };
-
-            let header = egui::CollapsingHeader::new(
-                egui::RichText::new(&header_text).color(color),
-            )
-            .default_open(true)
-            .id_salt(id)
-            .show(ui, |ui| {
-                if let Some(left) = *left {
-                    draw_node_recursive(ui, scene, left, selected, visited);
-                } else {
-                    ui.label("  (empty)");
-                }
-                if let Some(right) = *right {
-                    draw_node_recursive(ui, scene, right, selected, visited);
-                } else {
-                    ui.label("  (empty)");
-                }
-            });
-
-            if header.header_response.clicked() {
-                *selected = Some(id);
+    if info.is_leaf {
+        let color = if info.is_selected { COLOR_SELECTED } else { COLOR_NORMAL };
+        let label = egui::Label::new(egui::RichText::new(&info.label).color(color))
+            .sense(egui::Sense::click());
+        let response = ui.add(label);
+        if response.clicked() {
+            *selected = Some(id);
+        }
+        response.context_menu(|ui| {
+            if ui.button("Delete").clicked() {
+                scene.remove_node(id);
+                if *selected == Some(id) { *selected = None; }
+                ui.close_menu();
             }
-        }
-        NodeData::Primitive { .. } => {
-            draw_leaf_item(ui, node, id, selected);
-        }
-        NodeData::Sculpt { input, .. } | NodeData::Transform { input, .. } => {
-            let header_text = format_node_label(node);
-            let color = if is_selected { COLOR_SELECTED } else { COLOR_NORMAL };
-            let header = egui::CollapsingHeader::new(
-                egui::RichText::new(&header_text).color(color),
-            )
-            .default_open(true)
-            .id_salt(id)
-            .show(ui, |ui| {
-                if let Some(input) = *input {
-                    draw_node_recursive(ui, scene, input, selected, visited);
+        });
+    } else {
+        let color = if info.is_selected { COLOR_SELECTED } else { COLOR_NORMAL };
+        let header = egui::CollapsingHeader::new(
+            egui::RichText::new(&info.label).color(color),
+        )
+        .default_open(true)
+        .id_salt(id)
+        .show(ui, |ui| {
+            for child_opt in &info.children {
+                if let Some(child_id) = child_opt {
+                    draw_node_recursive(ui, scene, *child_id, selected, visited);
                 } else {
                     ui.label("  (empty)");
                 }
-            });
-            if header.header_response.clicked() {
-                *selected = Some(id);
             }
+        });
+
+        if header.header_response.clicked() {
+            *selected = Some(id);
         }
-    }
-}
-
-fn draw_leaf_item(
-    ui: &mut egui::Ui,
-    node: &SceneNode,
-    id: NodeId,
-    selected: &mut Option<NodeId>,
-) {
-    let is_selected = *selected == Some(id);
-    let label_text = format_node_label(node);
-    let color = if is_selected { COLOR_SELECTED } else { COLOR_NORMAL };
-
-    let label = egui::Label::new(egui::RichText::new(&label_text).color(color))
-        .sense(egui::Sense::click());
-
-    if ui.add(label).clicked() {
-        *selected = Some(id);
+        header.header_response.context_menu(|ui| {
+            if ui.button("Delete").clicked() {
+                scene.remove_node(id);
+                if *selected == Some(id) { *selected = None; }
+                ui.close_menu();
+            }
+        });
     }
 }
 

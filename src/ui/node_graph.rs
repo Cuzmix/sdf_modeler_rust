@@ -201,65 +201,69 @@ fn badge_color(data: &NodeData) -> Color32 {
 
 fn draw_toolbar(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState) {
     ui.horizontal(|ui| {
-        ui.style_mut().spacing.button_padding = Vec2::new(4.0, 2.0);
-
-        // Primitive buttons
-        for kind in [
-            SdfPrimitive::Sphere,
-            SdfPrimitive::Box,
-            SdfPrimitive::Cylinder,
-            SdfPrimitive::Torus,
-            SdfPrimitive::Cone,
-            SdfPrimitive::Capsule,
-            SdfPrimitive::Ellipsoid,
-            SdfPrimitive::HexPrism,
-            SdfPrimitive::Pyramid,
-        ] {
-            let label = format!("+{}", kind.base_name());
-            if ui.small_button(&label).clicked() {
-                scene.create_primitive(kind);
-                state.layout_dirty = true;
-                state.needs_center = true;
-            }
-        }
-        ui.separator();
-
-        // Operation buttons
-        for op in [
-            CsgOp::Union,
-            CsgOp::SmoothUnion,
-            CsgOp::Subtract,
-            CsgOp::Intersect,
-        ] {
-            let label = format!("+{}", op.base_name());
-            if ui.small_button(&label).clicked() {
-                create_op_from_selection(scene, state, op);
-            }
-        }
-        ui.separator();
-
-        // Transform buttons
-        for kind in [
-            TransformKind::Translate,
-            TransformKind::Rotate,
-            TransformKind::Scale,
-        ] {
-            let label = format!("+{}", kind.base_name());
-            if ui.small_button(&label).clicked() {
-                if let Some(sel) = state.selected {
-                    let transform_id = scene.insert_transform_above(sel, kind);
-                    state.selected = Some(transform_id);
-                } else {
-                    let transform_id = scene.create_transform(kind, None);
-                    state.selected = Some(transform_id);
+        // Primitives dropdown
+        ui.menu_button("+ Primitive", |ui| {
+            for kind in [
+                SdfPrimitive::Sphere,
+                SdfPrimitive::Box,
+                SdfPrimitive::Cylinder,
+                SdfPrimitive::Torus,
+                SdfPrimitive::Cone,
+                SdfPrimitive::Capsule,
+                SdfPrimitive::Ellipsoid,
+                SdfPrimitive::HexPrism,
+                SdfPrimitive::Pyramid,
+            ] {
+                if ui.button(kind.base_name()).clicked() {
+                    scene.create_primitive(kind);
+                    state.layout_dirty = true;
+                    state.needs_center = true;
+                    ui.close_menu();
                 }
-                state.layout_dirty = true;
-                state.needs_center = true;
             }
-        }
+        });
+
+        // Operations dropdown
+        ui.menu_button("+ Operation", |ui| {
+            for op in [
+                CsgOp::Union,
+                CsgOp::SmoothUnion,
+                CsgOp::Subtract,
+                CsgOp::Intersect,
+            ] {
+                if ui.button(op.base_name()).clicked() {
+                    create_op_from_selection(scene, state, op);
+                    ui.close_menu();
+                }
+            }
+        });
+
+        // Transforms dropdown
+        ui.menu_button("+ Transform", |ui| {
+            for kind in [
+                TransformKind::Translate,
+                TransformKind::Rotate,
+                TransformKind::Scale,
+            ] {
+                if ui.button(kind.base_name()).clicked() {
+                    if let Some(sel) = state.selected {
+                        let transform_id = scene.insert_transform_above(sel, kind);
+                        state.selected = Some(transform_id);
+                    } else {
+                        let transform_id = scene.create_transform(kind, None);
+                        state.selected = Some(transform_id);
+                    }
+                    state.layout_dirty = true;
+                    state.needs_center = true;
+                    ui.close_menu();
+                }
+            }
+        });
+
         ui.separator();
 
-        if ui.small_button("Delete").clicked() {
+        let has_selection = state.selected.is_some();
+        if ui.add_enabled(has_selection, egui::Button::new("Delete")).clicked() {
             if let Some(sel) = state.selected {
                 scene.remove_node(sel);
                 state.selected = None;
@@ -645,20 +649,15 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState) {
 // ---------------------------------------------------------------------------
 
 fn create_op_from_selection(scene: &mut Scene, state: &mut NodeGraphState, op: CsgOp) {
-    let mut prim_ids: Vec<NodeId> = scene
-        .nodes
-        .values()
-        .filter(|n| matches!(n.data, NodeData::Primitive { .. }))
-        .map(|n| n.id)
-        .collect();
-    prim_ids.sort();
-
-    if prim_ids.len() >= 2 {
-        let left = prim_ids[prim_ids.len() - 2];
-        let right = prim_ids[prim_ids.len() - 1];
+    let tops = scene.top_level_nodes();
+    if tops.len() >= 2 {
+        // Use last two top-level nodes (works with any node type, not just primitives)
+        let left = tops[tops.len() - 2];
+        let right = tops[tops.len() - 1];
         let op_id = scene.create_operation(op, left, right);
         state.selected = Some(op_id);
         state.layout_dirty = true;
+        state.needs_center = true;
     }
 }
 
