@@ -4,7 +4,7 @@ use egui_dock::{DockState, Node, NodeIndex, Split, TabViewer};
 use crate::app::BakeRequest;
 use crate::gpu::camera::Camera;
 use crate::gpu::picking::PendingPick;
-use crate::graph::scene::Scene;
+use crate::graph::scene::{NodeId, Scene};
 use crate::sculpt::SculptState;
 use crate::ui::gizmo::{GizmoMode, GizmoState};
 use crate::ui::node_graph::{self, NodeGraphState};
@@ -64,6 +64,12 @@ pub struct SdfTabViewer<'a> {
     pub bake_progress: Option<(u32, u32)>,
     /// Number of sculpt nodes in the scene (for auto step reduction).
     pub sculpt_count: usize,
+    /// Node currently being renamed in scene tree (None = not renaming).
+    pub renaming_node: &'a mut Option<NodeId>,
+    /// Rename text buffer.
+    pub rename_buf: &'a mut String,
+    /// FPS info for viewport overlay: (fps, frame_ms).
+    pub fps_info: Option<(f64, f64)>,
 }
 
 impl<'a> TabViewer for SdfTabViewer<'a> {
@@ -93,6 +99,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.time,
                     &self.settings.render,
                     self.sculpt_count,
+                    self.fps_info,
                 ) {
                     *self.pending_pick = Some(pick);
                 }
@@ -118,7 +125,13 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                 }
             }
             Tab::SceneTree => {
-                scene_tree::draw(ui, self.scene, &mut self.node_graph_state.selected);
+                scene_tree::draw(
+                    ui,
+                    self.scene,
+                    &mut self.node_graph_state.selected,
+                    self.renaming_node,
+                    self.rename_buf,
+                );
                 // Defensive: mark layout dirty if a node was deleted via context menu
                 if let Some(sel) = self.node_graph_state.selected {
                     if !self.scene.nodes.contains_key(&sel) {

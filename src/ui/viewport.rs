@@ -1708,6 +1708,7 @@ pub fn draw(
     time: f32,
     render_config: &crate::settings::RenderConfig,
     sculpt_count: usize,
+    fps_info: Option<(f64, f64)>, // (fps, frame_ms)
 ) -> Option<PendingPick> {
     let rect = ui.available_rect_before_wrap();
     let response = ui.allocate_rect(rect, egui::Sense::click_and_drag());
@@ -1807,15 +1808,90 @@ pub fn draw(
             }
         }
 
-        // Brush cursor preview
-        if let SculptState::Active { brush_radius, .. } = sculpt_state {
+        // Enhanced brush cursor preview
+        if let SculptState::Active {
+            brush_radius,
+            brush_strength,
+            symmetry_axis,
+            ..
+        } = sculpt_state
+        {
             if let Some(hover_pos) = response.hover_pos() {
                 let screen_radius = brush_radius / camera.distance * rect.height() * 0.5;
+
+                // Outer ring: brush extent
                 ui.painter().circle_stroke(
                     hover_pos,
                     screen_radius,
                     egui::Stroke::new(1.5, BRUSH_CURSOR_COLOR),
                 );
+
+                // Inner fill: strength indicator (opacity proportional to strength)
+                let strength_alpha = (brush_strength / 0.5 * 60.0).clamp(8.0, 60.0) as u8;
+                ui.painter().circle_filled(
+                    hover_pos,
+                    screen_radius * 0.6,
+                    egui::Color32::from_rgba_premultiplied(200, 200, 200, strength_alpha),
+                );
+
+                // Crosshair center dot
+                ui.painter().circle_filled(
+                    hover_pos,
+                    2.0,
+                    egui::Color32::from_rgba_premultiplied(255, 255, 255, 160),
+                );
+
+                // Symmetry mirror cursor
+                if let Some(axis) = symmetry_axis {
+                    let mirror_color = match axis {
+                        0 => egui::Color32::from_rgba_premultiplied(255, 100, 100, 100),
+                        1 => egui::Color32::from_rgba_premultiplied(100, 255, 100, 100),
+                        _ => egui::Color32::from_rgba_premultiplied(100, 100, 255, 100),
+                    };
+                    // Mirror the hover position through the symmetry plane in screen space
+                    // Project the origin and the mirrored point to get screen-space mirror
+                    let aspect = rect.width() / rect.height();
+                    let vp = camera.projection_matrix(aspect) * camera.view_matrix();
+                    let origin = gizmo::world_to_screen(glam::Vec3::ZERO, &vp, rect);
+                    if let Some(origin_screen) = origin {
+                        // Mirror hover_pos around the axis line through origin
+                        let mirror_pos = match axis {
+                            0 => {
+                                // X symmetry: mirror horizontally around origin.x
+                                egui::pos2(
+                                    2.0 * origin_screen.x - hover_pos.x,
+                                    hover_pos.y,
+                                )
+                            }
+                            1 => {
+                                // Y symmetry: mirror vertically around origin.y
+                                egui::pos2(
+                                    hover_pos.x,
+                                    2.0 * origin_screen.y - hover_pos.y,
+                                )
+                            }
+                            _ => {
+                                // Z symmetry: approximate mirror horizontally
+                                egui::pos2(
+                                    2.0 * origin_screen.x - hover_pos.x,
+                                    hover_pos.y,
+                                )
+                            }
+                        };
+                        if rect.contains(mirror_pos) {
+                            ui.painter().circle_stroke(
+                                mirror_pos,
+                                screen_radius,
+                                egui::Stroke::new(1.0, mirror_color),
+                            );
+                            ui.painter().circle_filled(
+                                mirror_pos,
+                                2.0,
+                                mirror_color,
+                            );
+                        }
+                    }
+                }
             }
         }
 
@@ -1860,6 +1936,35 @@ pub fn draw(
         if scroll != 0.0 {
             camera.zoom(scroll);
         }
+    }
+
+    // --- FPS counter overlay (top-left of viewport) ---
+    if let Some((fps, frame_ms)) = fps_info {
+        let text = format!("{:.0} FPS ({:.1} ms)", fps, frame_ms);
+        let font = egui::FontId::monospace(11.0);
+        let pos = rect.min + egui::vec2(6.0, 4.0);
+        // Shadow for readability
+        ui.painter().text(
+            pos + egui::vec2(1.0, 1.0),
+            egui::Align2::LEFT_TOP,
+            &text,
+            font.clone(),
+            egui::Color32::from_black_alpha(180),
+        );
+        let color = if fps >= 55.0 {
+            egui::Color32::from_rgb(120, 220, 120) // green
+        } else if fps >= 30.0 {
+            egui::Color32::from_rgb(220, 200, 80) // yellow
+        } else {
+            egui::Color32::from_rgb(220, 100, 100) // red
+        };
+        ui.painter().text(
+            pos,
+            egui::Align2::LEFT_TOP,
+            &text,
+            font,
+            color,
+        );
     }
 
     pending_pick

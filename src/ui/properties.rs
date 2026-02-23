@@ -8,6 +8,44 @@ use crate::sculpt::{BrushMode, FalloffMode, SculptState};
 const SCALE_MIN: f32 = 0.01;
 const SCALE_MAX: f32 = 100.0;
 
+/// Common color presets as (name, [r, g, b]).
+const COLOR_PRESETS: &[(&str, [f32; 3])] = &[
+    ("R", [0.85, 0.15, 0.15]),
+    ("G", [0.15, 0.75, 0.15]),
+    ("B", [0.2, 0.3, 0.85]),
+    ("Y", [0.9, 0.8, 0.1]),
+    ("O", [0.9, 0.5, 0.1]),
+    ("W", [0.9, 0.9, 0.9]),
+    ("Gr", [0.5, 0.5, 0.5]),
+    ("Tn", [0.76, 0.6, 0.42]),
+];
+
+fn color_presets_row(ui: &mut egui::Ui, color: &mut [f32; 3]) {
+    ui.horizontal(|ui| {
+        for &(label, preset) in COLOR_PRESETS {
+            let c32 = egui::Color32::from_rgb(
+                (preset[0] * 255.0) as u8,
+                (preset[1] * 255.0) as u8,
+                (preset[2] * 255.0) as u8,
+            );
+            let btn = egui::Button::new(
+                egui::RichText::new(label).small().color(
+                    if preset[0] + preset[1] + preset[2] > 1.5 {
+                        egui::Color32::BLACK
+                    } else {
+                        egui::Color32::WHITE
+                    },
+                ),
+            )
+            .fill(c32)
+            .min_size(egui::vec2(20.0, 16.0));
+            if ui.add(btn).clicked() {
+                *color = preset;
+            }
+        }
+    });
+}
+
 fn vec3_editor(
     ui: &mut egui::Ui,
     label: &str,
@@ -104,7 +142,10 @@ pub fn draw(
 
             ui.label("Color");
             let mut color_arr = [color.x, color.y, color.z];
-            ui.color_edit_button_rgb(&mut color_arr);
+            ui.horizontal(|ui| {
+                ui.color_edit_button_rgb(&mut color_arr);
+                color_presets_row(ui, &mut color_arr);
+            });
             color = glam::Vec3::new(color_arr[0], color_arr[1], color_arr[2]);
 
             ui.horizontal(|ui| {
@@ -285,7 +326,10 @@ pub fn draw(
 
             ui.label("Color");
             let mut color_arr = [color.x, color.y, color.z];
-            ui.color_edit_button_rgb(&mut color_arr);
+            ui.horizontal(|ui| {
+                ui.color_edit_button_rgb(&mut color_arr);
+                color_presets_row(ui, &mut color_arr);
+            });
             color = glam::Vec3::new(color_arr[0], color_arr[1], color_arr[2]);
 
             ui.horizontal(|ui| {

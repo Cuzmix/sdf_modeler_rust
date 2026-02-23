@@ -163,6 +163,16 @@ pub struct SdfApp {
     composite_full_update_needed: bool,
     /// Frame profiling data.
     timings: FrameTimings,
+    /// Node currently being renamed in scene tree.
+    renaming_node: Option<NodeId>,
+    /// Rename text buffer.
+    rename_buf: String,
+    /// Show keyboard shortcuts help window.
+    show_help: bool,
+    /// Scene has unsaved modifications.
+    scene_dirty: bool,
+    /// Fingerprint at last save/load (to detect unsaved changes).
+    saved_fingerprint: u64,
 }
 
 impl SdfApp {
@@ -229,6 +239,11 @@ impl SdfApp {
             resolution_upgrade_pending: false,
             composite_full_update_needed: false,
             timings: FrameTimings::new(),
+            renaming_node: None,
+            rename_buf: String::new(),
+            show_help: false,
+            scene_dirty: false,
+            saved_fingerprint: 0,
         }
     }
 
@@ -243,14 +258,18 @@ impl SdfApp {
     }
 
     fn handle_keyboard_input(&mut self, ctx: &egui::Context) {
-        // Camera presets
+        // Help
         if ctx.input(|i| i.key_pressed(egui::Key::F1)) {
+            self.show_help = !self.show_help;
+        }
+        // Camera presets
+        if ctx.input(|i| i.key_pressed(egui::Key::F5)) {
             self.camera.set_front();
         }
-        if ctx.input(|i| i.key_pressed(egui::Key::F2)) {
+        if ctx.input(|i| i.key_pressed(egui::Key::F6)) {
             self.camera.set_top();
         }
-        if ctx.input(|i| i.key_pressed(egui::Key::F3)) {
+        if ctx.input(|i| i.key_pressed(egui::Key::F7)) {
             self.camera.set_right();
         }
 
@@ -1404,16 +1423,24 @@ impl SdfApp {
                     }
                     ui.separator();
                     ui.label("Camera Presets");
-                    if ui.add(egui::Button::new("Front").shortcut_text("F1")).clicked() {
+                    if ui.add(egui::Button::new("Front").shortcut_text("F5")).clicked() {
                         self.camera.set_front();
                         ui.close_menu();
                     }
-                    if ui.add(egui::Button::new("Top").shortcut_text("F2")).clicked() {
+                    if ui.add(egui::Button::new("Top").shortcut_text("F6")).clicked() {
                         self.camera.set_top();
                         ui.close_menu();
                     }
-                    if ui.add(egui::Button::new("Right").shortcut_text("F3")).clicked() {
+                    if ui.add(egui::Button::new("Right").shortcut_text("F7")).clicked() {
                         self.camera.set_right();
+                        ui.close_menu();
+                    }
+                });
+
+                // --- Help ---
+                ui.menu_button("Help", |ui| {
+                    if ui.add(egui::Button::new("Keyboard Shortcuts").shortcut_text("F1")).clicked() {
+                        self.show_help = !self.show_help;
                         ui.close_menu();
                     }
                 });
@@ -1463,6 +1490,8 @@ impl SdfApp {
             self.sculpt_state = SculptState::Inactive;
             self.current_structure_key = 0;
             self.buffer_dirty = true;
+            self.saved_fingerprint = self.scene.data_fingerprint();
+            self.scene_dirty = false;
         }
         if action_open {
             if let Some(path) = crate::io::open_dialog() {
@@ -1476,6 +1505,8 @@ impl SdfApp {
                         self.sculpt_state = SculptState::Inactive;
                         self.current_structure_key = 0;
                         self.buffer_dirty = true;
+                        self.saved_fingerprint = self.scene.data_fingerprint();
+                        self.scene_dirty = false;
                     }
                     Err(e) => log::error!("Failed to load project: {}", e),
                 }
@@ -1485,6 +1516,9 @@ impl SdfApp {
             if let Some(path) = crate::io::save_dialog() {
                 if let Err(e) = crate::io::save_project(&self.scene, &self.camera, &path) {
                     log::error!("Failed to save project: {}", e);
+                } else {
+                    self.saved_fingerprint = self.scene.data_fingerprint();
+                    self.scene_dirty = false;
                 }
             }
         }
@@ -1517,6 +1551,69 @@ impl SdfApp {
         if action_delete {
             self.delete_selected();
         }
+    }
+
+    fn show_help_window(&mut self, ctx: &egui::Context) {
+        if !self.show_help { return; }
+        egui::Window::new("Keyboard Shortcuts")
+            .open(&mut self.show_help)
+            .resizable(false)
+            .default_width(380.0)
+            .show(ctx, |ui| {
+                egui::Grid::new("shortcuts_grid")
+                    .num_columns(2)
+                    .spacing([40.0, 4.0])
+                    .striped(true)
+                    .show(ui, |ui| {
+                        let section = |ui: &mut egui::Ui, title: &str| {
+                            ui.colored_label(egui::Color32::from_rgb(180, 200, 255), title);
+                            ui.end_row();
+                        };
+                        let row = |ui: &mut egui::Ui, key: &str, desc: &str| {
+                            ui.monospace(key);
+                            ui.label(desc);
+                            ui.end_row();
+                        };
+
+                        section(ui, "General");
+                        row(ui, "Ctrl+O", "Open project");
+                        row(ui, "Ctrl+S", "Save project");
+                        row(ui, "Ctrl+Z", "Undo");
+                        row(ui, "Ctrl+Y", "Redo");
+                        row(ui, "Delete", "Delete selected node");
+                        row(ui, "Ctrl+P", "Screenshot");
+                        row(ui, "Ctrl+E", "Export OBJ");
+                        row(ui, "F1", "Toggle this help");
+                        row(ui, "F4", "Toggle profiler");
+
+                        ui.separator(); ui.end_row();
+                        section(ui, "Camera");
+                        row(ui, "LMB drag", "Orbit");
+                        row(ui, "RMB drag", "Pan");
+                        row(ui, "Scroll", "Zoom");
+                        row(ui, "F5", "Front view");
+                        row(ui, "F6", "Top view");
+                        row(ui, "F7", "Right view");
+
+                        ui.separator(); ui.end_row();
+                        section(ui, "Sculpt Mode");
+                        row(ui, "LMB drag", "Paint brush");
+                        row(ui, "RMB drag", "Pan camera");
+                        row(ui, "MMB drag", "Orbit camera");
+                        row(ui, "1", "Add brush");
+                        row(ui, "2", "Carve brush");
+                        row(ui, "3", "Smooth brush");
+                        row(ui, "4", "Flatten brush");
+                        row(ui, "5", "Inflate brush");
+                        row(ui, "6", "Grab brush");
+                        row(ui, "X / Y / Z", "Toggle symmetry axis");
+
+                        ui.separator(); ui.end_row();
+                        section(ui, "Scene Tree");
+                        row(ui, "Double-click", "Rename node");
+                        row(ui, "Right-click", "Context menu");
+                    });
+            });
     }
 
     fn show_status_bar(&self, ctx: &egui::Context) {
@@ -1602,6 +1699,7 @@ impl eframe::App for SdfApp {
         // --- UI ---
         self.show_menu_bar(ctx);
         self.show_status_bar(ctx);
+        self.show_help_window(ctx);
         self.show_debug_window(ctx);
 
         let t_ui = Instant::now();
@@ -1631,6 +1729,9 @@ impl eframe::App for SdfApp {
             bake_request: &mut bake_request,
             bake_progress,
             sculpt_count,
+            renaming_node: &mut self.renaming_node,
+            rename_buf: &mut self.rename_buf,
+            fps_info: Some((self.timings.avg_fps, self.timings.avg_frame_ms)),
         };
 
         egui::CentralPanel::default()
@@ -1702,6 +1803,15 @@ impl eframe::App for SdfApp {
         if fp != self.last_data_fingerprint {
             self.last_data_fingerprint = fp;
             self.buffer_dirty = true;
+        }
+
+        // Track unsaved changes and update window title
+        let now_dirty = fp != self.saved_fingerprint
+            || self.scene.structure_key() != 0 && self.saved_fingerprint == 0 && !self.scene.nodes.is_empty();
+        if now_dirty != self.scene_dirty {
+            self.scene_dirty = now_dirty;
+            let title = if now_dirty { "SDF Modeler *" } else { "SDF Modeler" };
+            ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.into()));
         }
 
         // Upload GPU buffers only when scene data actually changed
