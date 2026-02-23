@@ -35,17 +35,24 @@ pub fn max_subtree_resolution(scene: &Scene, root: NodeId) -> u32 {
 
 /// A 3D signed distance field stored as a flat array.
 /// Layout: data[z * res * res + y * res + x]
+///
+/// Two modes:
+/// - `is_displacement = false` (total SDF): data stores complete distance values, fill = FAR_DISTANCE
+/// - `is_displacement = true` (differential): data stores displacement from analytical base, fill = 0.0
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct VoxelGrid {
     pub resolution: u32,
     pub bounds_min: Vec3,
     pub bounds_max: Vec3,
+    #[serde(default)]
+    pub is_displacement: bool,
     #[serde(with = "sparse_voxel_data")]
     pub data: Vec<f32>,
 }
 
-/// Custom serde module: serializes voxel data sparsely when beneficial (skipping FAR_DISTANCE
-/// voxels), and deserializes both old dense format and new sparse format.
+/// Custom serde module: serializes voxel data sparsely when beneficial.
+/// Supports both total-SDF grids (fill = FAR_DISTANCE) and displacement grids (fill = 0.0).
+/// Auto-detects the fill value based on data content.
 mod sparse_voxel_data {
     use super::FAR_DISTANCE;
     use serde::de::{self, Deserializer, SeqAccess, Visitor};
@@ -54,21 +61,27 @@ mod sparse_voxel_data {
     #[derive(serde::Serialize)]
     struct SparseRepr {
         total: usize,
+        fill: f32,
         entries: Vec<(u32, f32)>,
     }
 
     pub fn serialize<S: Serializer>(data: &Vec<f32>, serializer: S) -> Result<S::Ok, S::Error> {
-        let non_far: Vec<(u32, f32)> = data
+        // Auto-detect fill: count values near FAR_DISTANCE vs near 0.0
+        let near_far = data.iter().filter(|&&d| (d - FAR_DISTANCE).abs() < 0.001).count();
+        let near_zero = data.iter().filter(|&&d| d.abs() < 0.001).count();
+        let fill = if near_far >= near_zero { FAR_DISTANCE } else { 0.0 };
+
+        let non_fill: Vec<(u32, f32)> = data
             .iter()
             .enumerate()
-            .filter(|(_, &d)| (d - FAR_DISTANCE).abs() > 0.001)
+            .filter(|(_, &d)| (d - fill).abs() > 0.001)
             .map(|(i, &d)| (i as u32, d))
             .collect();
 
         // Use sparse if it saves space: each sparse entry = (u32, f32) = 2 values
-        // vs dense = 1 value per voxel. Sparse wins when non_far * 2 < total.
-        if non_far.len() * 2 < data.len() {
-            let repr = SparseRepr { total: data.len(), entries: non_far };
+        // vs dense = 1 value per voxel. Sparse wins when non_fill * 2 < total.
+        if non_fill.len() * 2 < data.len() {
+            let repr = SparseRepr { total: data.len(), fill, entries: non_fill };
             repr.serialize(serializer)
         } else {
             data.serialize(serializer)
@@ -85,7 +98,7 @@ mod sparse_voxel_data {
         type Value = Vec<f32>;
 
         fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-            f.write_str("a dense array of f32 or a sparse {total, entries} object")
+            f.write_str("a dense array of f32 or a sparse {total, fill?, entries} object")
         }
 
         // Old format: plain array of f32
@@ -97,14 +110,16 @@ mod sparse_voxel_data {
             Ok(data)
         }
 
-        // New sparse format: { "total": N, "entries": [[idx, val], ...] }
+        // Sparse format: { "total": N, "fill"?: F, "entries": [[idx, val], ...] }
         fn visit_map<M: de::MapAccess<'de>>(self, mut map: M) -> Result<Vec<f32>, M::Error> {
             let mut total: Option<usize> = None;
+            let mut fill: Option<f32> = None;
             let mut entries: Option<Vec<(u32, f32)>> = None;
 
             while let Some(key) = map.next_key::<String>()? {
                 match key.as_str() {
                     "total" => total = Some(map.next_value()?),
+                    "fill" => fill = Some(map.next_value()?),
                     "entries" => entries = Some(map.next_value()?),
                     _ => { let _: serde::de::IgnoredAny = map.next_value()?; }
                 }
@@ -112,8 +127,9 @@ mod sparse_voxel_data {
 
             let total = total.ok_or_else(|| de::Error::missing_field("total"))?;
             let entries = entries.ok_or_else(|| de::Error::missing_field("entries"))?;
+            let fill = fill.unwrap_or(FAR_DISTANCE); // backward compat: old files used FAR_DISTANCE
 
-            let mut data = vec![FAR_DISTANCE; total];
+            let mut data = vec![fill; total];
             for (idx, val) in entries {
                 if (idx as usize) < data.len() {
                     data[idx as usize] = val;
@@ -125,13 +141,28 @@ mod sparse_voxel_data {
 }
 
 impl VoxelGrid {
+    /// Create a total-SDF grid (fill = FAR_DISTANCE). Used for standalone sculpts / flatten.
     pub fn new(resolution: u32, bounds_min: Vec3, bounds_max: Vec3) -> Self {
         let total = (resolution * resolution * resolution) as usize;
         Self {
             resolution,
             bounds_min,
             bounds_max,
+            is_displacement: false,
             data: vec![FAR_DISTANCE; total],
+        }
+    }
+
+    /// Create a displacement grid (fill = 0.0). Used for sculpts with an analytical child.
+    /// O(1) — no per-voxel SDF evaluation needed.
+    pub fn new_displacement(resolution: u32, bounds_min: Vec3, bounds_max: Vec3) -> Self {
+        let total = (resolution * resolution * resolution) as usize;
+        Self {
+            resolution,
+            bounds_min,
+            bounds_max,
+            is_displacement: true,
+            data: vec![0.0; total],
         }
     }
 
@@ -260,6 +291,43 @@ fn evaluate_sdf(kind: &SdfPrimitive, p: Vec3, s: Vec3) -> f32 {
             let py = p.y.clamp(-h, h);
             (p - Vec3::new(0.0, py, 0.0)).length() - r
         }
+        SdfPrimitive::Ellipsoid => {
+            let k0 = (p / s).length();
+            let k1 = (p / (s * s)).length();
+            if k1 < 0.0001 {
+                p.length() - s.x.min(s.y).min(s.z)
+            } else {
+                k0 * (k0 - 1.0) / k1
+            }
+        }
+        SdfPrimitive::HexPrism => {
+            let k = Vec3::new(-0.8660254038, 0.5, 0.57735026919);
+            let pa = p.abs();
+            let dot2 = 2.0 * (k.x * pa.x + k.y * pa.z).min(0.0);
+            let rx = pa.x - dot2 * k.x;
+            let rz = pa.z - dot2 * k.y;
+            let clamped_rx = rx.clamp(-k.z * s.x, k.z * s.x);
+            let d1 = Vec2::new(rx - clamped_rx, rz - s.x).length() * (rz - s.x).signum();
+            let d2 = pa.y - s.y;
+            d1.max(d2).min(0.0) + Vec2::new(d1.max(0.0), d2.max(0.0)).length()
+        }
+        SdfPrimitive::Pyramid => {
+            let h = s.y;
+            let b = s.x;
+            let m2 = h * h + 0.25;
+            let mut xz = Vec2::new(p.x.abs(), p.z.abs());
+            if xz.y > xz.x {
+                xz = Vec2::new(xz.y, xz.x);
+            }
+            xz -= Vec2::splat(0.5) * b;
+            let q = Vec3::new(xz.y, h * p.y - 0.5 * xz.x, h * xz.x + 0.5 * p.y);
+            let ss = (-q.x).max(0.0);
+            let t = ((q.y - 0.5 * xz.y) / (m2 + 0.25)).clamp(0.0, 1.0);
+            let a = m2 * (q.x + ss) * (q.x + ss) + q.y * q.y;
+            let bb = m2 * (q.x + 0.5 * t) * (q.x + 0.5 * t) + (q.y - m2 * t) * (q.y - m2 * t);
+            let d2 = if q.y.min(-q.x * m2 - q.y * 0.5) > 0.0 { a } else { bb };
+            ((d2 + q.z * q.z) / m2).sqrt() * q.z.max(-p.y).signum()
+        }
     }
 }
 
@@ -324,13 +392,26 @@ pub fn evaluate_sdf_tree(scene: &Scene, node_id: NodeId, p: Vec3) -> f32 {
             }
         }
         NodeData::Sculpt {
+            input,
             position,
             rotation,
             voxel_grid,
             ..
         } => {
             let local_p = rotate_euler(p - *position, *rotation);
-            voxel_grid.sample(local_p)
+            if let Some(child_id) = input {
+                // Differential: analytical child SDF + displacement from grid
+                let analytical = evaluate_sdf_tree(scene, *child_id, p);
+                let gc = voxel_grid.world_to_grid(local_p);
+                let max_c = (voxel_grid.resolution - 1) as f32;
+                let outside = gc.x < 0.0 || gc.y < 0.0 || gc.z < 0.0
+                    || gc.x > max_c || gc.y > max_c || gc.z > max_c;
+                let disp = if outside { 0.0 } else { voxel_grid.sample(local_p) };
+                analytical + disp
+            } else {
+                // Standalone: grid IS the total SDF (unchanged)
+                voxel_grid.sample(local_p)
+            }
         }
         NodeData::Transform { kind, input, value } => {
             let Some(child_id) = input else {
@@ -397,7 +478,31 @@ fn bounds_for_subtree(scene: &Scene, root_id: NodeId) -> (Vec3, Vec3) {
 // Baking
 // ---------------------------------------------------------------------------
 
-/// Sample the analytical SDF of a primitive into a VoxelGrid.
+/// Create a displacement grid for a primitive sculpt node (differential SDF).
+/// The grid starts at 0.0 everywhere — the analytical SDF is evaluated live in the shader.
+/// O(1) — no per-voxel evaluation needed!
+pub fn create_displacement_grid(scale: Vec3, resolution: u32) -> VoxelGrid {
+    let extent = scale * (1.0 + GRID_PADDING);
+    VoxelGrid::new_displacement(resolution, -extent, extent)
+}
+
+/// Create a displacement grid for an arbitrary subtree (differential SDF).
+/// Computes bounds from the subtree but does NOT evaluate SDF — grid starts at 0.0.
+/// Returns (grid in local space, center in world space).
+pub fn create_displacement_grid_for_subtree(
+    scene: &Scene,
+    subtree_root: NodeId,
+    resolution: u32,
+) -> (VoxelGrid, Vec3) {
+    let (world_min, world_max) = bounds_for_subtree(scene, subtree_root);
+    let center = (world_min + world_max) * 0.5;
+    let half_extent = (world_max - world_min) * 0.5;
+    let grid = VoxelGrid::new_displacement(resolution, -half_extent, half_extent);
+    (grid, center)
+}
+
+/// Sample the analytical SDF of a primitive into a VoxelGrid (total SDF).
+/// Used for flatten_subtree (standalone sculpts with no analytical child).
 pub fn bake_from_analytical(kind: &SdfPrimitive, scale: Vec3, resolution: u32) -> VoxelGrid {
     let extent = scale * (1.0 + GRID_PADDING);
     let bounds_min = -extent;
@@ -421,7 +526,7 @@ pub fn bake_from_analytical(kind: &SdfPrimitive, scale: Vec3, resolution: u32) -
         })
         .collect();
 
-    VoxelGrid { resolution, bounds_min, bounds_max, data }
+    VoxelGrid { resolution, bounds_min, bounds_max, is_displacement: false, data }
 }
 
 /// Bake any subtree's SDF into a VoxelGrid.
@@ -453,7 +558,7 @@ pub fn bake_subtree(scene: &Scene, subtree_root: NodeId, resolution: u32) -> (Vo
         })
         .collect();
 
-    let grid = VoxelGrid { resolution, bounds_min: local_min, bounds_max: local_max, data };
+    let grid = VoxelGrid { resolution, bounds_min: local_min, bounds_max: local_max, is_displacement: false, data };
     (grid, center)
 }
 
@@ -491,6 +596,6 @@ pub fn bake_subtree_with_progress(
         })
         .collect();
 
-    let grid = VoxelGrid { resolution, bounds_min: local_min, bounds_max: local_max, data };
+    let grid = VoxelGrid { resolution, bounds_min: local_min, bounds_max: local_max, is_displacement: false, data };
     (grid, center)
 }

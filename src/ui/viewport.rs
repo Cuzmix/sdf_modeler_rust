@@ -6,12 +6,14 @@ use eframe::wgpu;
 use crate::gpu::camera::{Camera, CameraUniform};
 use crate::gpu::codegen::SdfNodeGpu;
 use crate::gpu::picking::{PendingPick, PickResult};
-use crate::graph::scene::NodeId;
+use crate::graph::scene::{NodeId, Scene};
+use crate::sculpt::SculptState;
+use crate::ui::gizmo::{self, GizmoMode, GizmoState};
 
 const INITIAL_SCENE_CAPACITY: usize = 16;
 const INITIAL_VOXEL_CAPACITY: usize = 4; // in f32 elements (minimum valid buffer)
 
-/// GPU-side brush parameters. Matches the WGSL `BrushParams` struct layout (80 bytes).
+/// GPU-side brush parameters. Matches the WGSL `BrushParams` struct layout (112 bytes).
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]
 pub struct BrushGpuParams {
@@ -32,6 +34,14 @@ pub struct BrushGpuParams {
     // uvec3 min_voxel + pad
     pub min_voxel: [u32; 3],
     pub _pad2: u32,
+    // f32 brush_mode, f32 falloff_mode, u32 smooth_iterations, f32 flatten_ref
+    pub brush_mode: f32,
+    pub falloff_mode: f32,
+    pub smooth_iterations: u32,
+    pub flatten_ref: f32,
+    // f32 surface_constraint + padding to 112 bytes (16-byte aligned)
+    pub surface_constraint: f32,
+    pub _pad3: [f32; 3],
 }
 
 /// CPU-side brush dispatch info (wraps GPU params + workgroup counts).
@@ -881,6 +891,115 @@ impl ViewportResources {
 
         queue.submit(std::iter::once(encoder.finish()));
     }
+
+    /// Render the viewport to an offscreen texture and return RGBA pixel data.
+    pub fn screenshot(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        uniform: &CameraUniform,
+        width: u32,
+        height: u32,
+    ) -> Vec<u8> {
+        // Write camera uniform
+        queue.write_buffer(&self.camera_buffer, 0, bytemuck::bytes_of(uniform));
+
+        // Create offscreen texture
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Screenshot Texture"),
+            size: wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: self.target_format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        // Row alignment for buffer copy
+        let bytes_per_pixel = 4u32;
+        let unpadded_row = width * bytes_per_pixel;
+        let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
+        let padded_row = (unpadded_row + align - 1) / align * align;
+        let buffer_size = (padded_row * height) as u64;
+
+        let staging = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Screenshot Staging"),
+            size: buffer_size,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Screenshot Encoder"),
+        });
+
+        // Render pass
+        {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Screenshot Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+            pass.set_pipeline(&self.pipeline);
+            pass.set_bind_group(0, &self.camera_bind_group, &[]);
+            pass.set_bind_group(1, &self.scene_bind_group, &[]);
+            pass.set_bind_group(2, &self.voxel_tex_bind_group, &[]);
+            pass.draw(0..3, 0..1);
+        }
+
+        // Copy texture to staging buffer
+        encoder.copy_texture_to_buffer(
+            wgpu::ImageCopyTexture {
+                texture: &texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::ImageCopyBuffer {
+                buffer: &staging,
+                layout: wgpu::ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: Some(padded_row),
+                    rows_per_image: Some(height),
+                },
+            },
+            wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+        );
+
+        queue.submit(std::iter::once(encoder.finish()));
+
+        // Map and read back
+        let buffer_slice = staging.slice(..);
+        let (tx, rx) = std::sync::mpsc::channel();
+        buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
+            let _ = tx.send(result);
+        });
+        device.poll(wgpu::Maintain::Wait);
+        let _ = rx.recv();
+
+        let data = buffer_slice.get_mapped_range();
+        let mut pixels = Vec::with_capacity((width * height * bytes_per_pixel) as usize);
+        for row in 0..height {
+            let start = (row * padded_row) as usize;
+            let end = start + unpadded_row as usize;
+            pixels.extend_from_slice(&data[start..end]);
+        }
+        drop(data);
+        staging.unmap();
+
+        pixels
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -924,11 +1043,65 @@ impl egui_wgpu::CallbackTrait for ViewportCallback {
     }
 }
 
-use crate::graph::scene::Scene;
-use crate::sculpt::SculptState;
-use crate::ui::gizmo::{self, GizmoMode, GizmoState};
-
 const BRUSH_CURSOR_COLOR: egui::Color32 = egui::Color32::from_rgba_premultiplied(200, 200, 200, 128);
+
+/// Draw a semi-transparent symmetry plane overlay at the mirror axis.
+fn draw_symmetry_plane(painter: &egui::Painter, camera: &Camera, rect: egui::Rect, axis: u8) {
+    let aspect = rect.width() / rect.height();
+    let view_proj = camera.projection_matrix(aspect) * camera.view_matrix();
+
+    let extent = 5.0_f32;
+    let corners: [glam::Vec3; 4] = match axis {
+        0 => [
+            glam::Vec3::new(0.0, -extent, -extent),
+            glam::Vec3::new(0.0, -extent, extent),
+            glam::Vec3::new(0.0, extent, extent),
+            glam::Vec3::new(0.0, extent, -extent),
+        ],
+        1 => [
+            glam::Vec3::new(-extent, 0.0, -extent),
+            glam::Vec3::new(extent, 0.0, -extent),
+            glam::Vec3::new(extent, 0.0, extent),
+            glam::Vec3::new(-extent, 0.0, extent),
+        ],
+        _ => [
+            glam::Vec3::new(-extent, -extent, 0.0),
+            glam::Vec3::new(extent, -extent, 0.0),
+            glam::Vec3::new(extent, extent, 0.0),
+            glam::Vec3::new(-extent, extent, 0.0),
+        ],
+    };
+
+    let screen_pts: Vec<egui::Pos2> = corners
+        .iter()
+        .filter_map(|&c| gizmo::world_to_screen(c, &view_proj, rect))
+        .collect();
+
+    if screen_pts.len() < 3 {
+        return;
+    }
+
+    let (fill, border) = match axis {
+        0 => (
+            egui::Color32::from_rgba_premultiplied(255, 50, 50, 20),
+            egui::Color32::from_rgba_premultiplied(255, 80, 80, 80),
+        ),
+        1 => (
+            egui::Color32::from_rgba_premultiplied(50, 255, 50, 20),
+            egui::Color32::from_rgba_premultiplied(80, 255, 80, 80),
+        ),
+        _ => (
+            egui::Color32::from_rgba_premultiplied(50, 50, 255, 20),
+            egui::Color32::from_rgba_premultiplied(80, 80, 255, 80),
+        ),
+    };
+
+    painter.add(egui::Shape::convex_polygon(
+        screen_pts,
+        fill,
+        egui::Stroke::new(1.0, border),
+    ));
+}
 
 /// Returns an optional PendingPick if the user clicked/dragged in the viewport.
 pub fn draw(
@@ -974,12 +1147,17 @@ pub fn draw(
         0.0
     };
     let scene_bounds = scene.compute_bounds();
-    let uniform = camera.to_uniform(viewport, time, quality_mode, scene_bounds);
+    let uniform = camera.to_uniform(viewport, time, quality_mode, render_config.show_grid, scene_bounds);
 
     ui.painter().add(egui_wgpu::Callback::new_paint_callback(
         rect,
         ViewportCallback { uniform },
     ));
+
+    // --- Symmetry plane overlay ---
+    if let Some(axis) = sculpt_state.symmetry_axis() {
+        draw_symmetry_plane(ui.painter(), camera, rect, axis);
+    }
 
     // --- Gizmo overlay (drawn on top of WGPU content) ---
 
@@ -1012,7 +1190,7 @@ pub fn draw(
                     ];
                     pending_pick = Some(PendingPick {
                         mouse_pos: mouse_px,
-                        camera_uniform: camera.to_uniform(viewport, time, 0.0, scene_bounds),
+                        camera_uniform: camera.to_uniform(viewport, time, 0.0, false, scene_bounds),
                     });
                 }
             }
@@ -1047,7 +1225,7 @@ pub fn draw(
                     (pos.x - rect.min.x) * pixels_per_point,
                     (pos.y - rect.min.y) * pixels_per_point,
                 ];
-                let pick_uniform = camera.to_uniform(viewport, time, 0.0, scene_bounds);
+                let pick_uniform = camera.to_uniform(viewport, time, 0.0, false, scene_bounds);
                 pending_pick = Some(PendingPick {
                     mouse_pos: mouse_px,
                     camera_uniform: pick_uniform,

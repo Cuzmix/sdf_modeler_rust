@@ -16,6 +16,9 @@ pub enum SdfPrimitive {
     Plane,
     Cone,
     Capsule,
+    Ellipsoid,
+    HexPrism,
+    Pyramid,
 }
 
 impl SdfPrimitive {
@@ -28,6 +31,9 @@ impl SdfPrimitive {
             Self::Plane => "Plane",
             Self::Cone => "Cone",
             Self::Capsule => "Capsule",
+            Self::Ellipsoid => "Ellipsoid",
+            Self::HexPrism => "HexPrism",
+            Self::Pyramid => "Pyramid",
         }
     }
 
@@ -40,6 +46,9 @@ impl SdfPrimitive {
             Self::Cone => Vec3::new(0.0, 0.0, -2.0),
             Self::Capsule => Vec3::new(-2.0, 0.0, 2.0),
             Self::Plane => Vec3::ZERO,
+            Self::Ellipsoid => Vec3::new(2.0, 0.0, 2.0),
+            Self::HexPrism => Vec3::new(-2.0, 0.0, -2.0),
+            Self::Pyramid => Vec3::new(2.0, 0.0, -2.0),
         }
     }
 
@@ -49,6 +58,9 @@ impl SdfPrimitive {
             Self::Torus => Vec3::new(1.0, 0.3, 1.0),
             Self::Cylinder | Self::Cone => Vec3::new(0.5, 1.0, 0.5),
             Self::Capsule => Vec3::new(0.3, 1.0, 0.3),
+            Self::Ellipsoid => Vec3::new(1.0, 0.6, 0.4),
+            Self::HexPrism => Vec3::new(0.5, 0.5, 0.5),
+            Self::Pyramid => Vec3::new(1.0, 1.0, 1.0),
         }
     }
 
@@ -61,6 +73,9 @@ impl SdfPrimitive {
             Self::Cone => Vec3::new(0.7, 0.3, 0.7),
             Self::Capsule => Vec3::new(0.3, 0.7, 0.7),
             Self::Plane => Vec3::new(0.5, 0.5, 0.5),
+            Self::Ellipsoid => Vec3::new(0.9, 0.5, 0.3),
+            Self::HexPrism => Vec3::new(0.4, 0.6, 0.8),
+            Self::Pyramid => Vec3::new(0.8, 0.7, 0.3),
         }
     }
 
@@ -73,6 +88,9 @@ impl SdfPrimitive {
             Self::Plane => 4.0,
             Self::Cone => 5.0,
             Self::Capsule => 6.0,
+            Self::Ellipsoid => 7.0,
+            Self::HexPrism => 8.0,
+            Self::Pyramid => 9.0,
         }
     }
 
@@ -85,6 +103,9 @@ impl SdfPrimitive {
             Self::Plane => "sdf_plane",
             Self::Cone => "sdf_cone",
             Self::Capsule => "sdf_capsule",
+            Self::Ellipsoid => "sdf_ellipsoid",
+            Self::HexPrism => "sdf_hex_prism",
+            Self::Pyramid => "sdf_pyramid",
         }
     }
 
@@ -97,6 +118,9 @@ impl SdfPrimitive {
             Self::Plane => "[Pln]",
             Self::Cone => "[Con]",
             Self::Capsule => "[Cap]",
+            Self::Ellipsoid => "[Ell]",
+            Self::HexPrism => "[Hex]",
+            Self::Pyramid => "[Pyr]",
         }
     }
 }
@@ -195,6 +219,8 @@ impl CsgOp {
     }
 }
 
+fn default_roughness() -> f32 { 0.5 }
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum NodeData {
     Primitive {
@@ -203,6 +229,10 @@ pub enum NodeData {
         rotation: Vec3,
         scale: Vec3,
         color: Vec3,
+        #[serde(default = "default_roughness")]
+        roughness: f32,
+        #[serde(default)]
+        metallic: f32,
         /// Legacy: kept for v2 save file migration only. Always None at runtime.
         #[serde(default, skip_serializing)]
         voxel_grid: Option<VoxelGrid>,
@@ -218,6 +248,10 @@ pub enum NodeData {
         position: Vec3,
         rotation: Vec3,
         color: Vec3,
+        #[serde(default = "default_roughness")]
+        roughness: f32,
+        #[serde(default)]
+        metallic: f32,
         voxel_grid: VoxelGrid,
         #[serde(default = "crate::graph::voxel::default_resolution")]
         desired_resolution: u32,
@@ -365,6 +399,8 @@ impl Scene {
                 rotation: Vec3::ZERO,
                 scale: kind.default_scale(),
                 color: kind.default_color(),
+                roughness: 0.5,
+                metallic: 0.0,
                 kind,
                 voxel_grid: None,
             },
@@ -401,6 +437,8 @@ impl Scene {
                 position,
                 rotation,
                 color,
+                roughness: 0.5,
+                metallic: 0.0,
                 voxel_grid,
                 desired_resolution,
             },
@@ -624,7 +662,7 @@ impl Scene {
             node.name.hash(&mut hasher);
             match &node.data {
                 NodeData::Primitive {
-                    position, rotation, scale, color, ..
+                    position, rotation, scale, color, metallic, roughness, ..
                 } => {
                     position.x.to_bits().hash(&mut hasher);
                     position.y.to_bits().hash(&mut hasher);
@@ -638,12 +676,14 @@ impl Scene {
                     color.x.to_bits().hash(&mut hasher);
                     color.y.to_bits().hash(&mut hasher);
                     color.z.to_bits().hash(&mut hasher);
+                    metallic.to_bits().hash(&mut hasher);
+                    roughness.to_bits().hash(&mut hasher);
                 }
                 NodeData::Operation { smooth_k, .. } => {
                     smooth_k.to_bits().hash(&mut hasher);
                 }
                 NodeData::Sculpt {
-                    position, rotation, color, desired_resolution, ..
+                    position, rotation, color, metallic, roughness, desired_resolution, ..
                 } => {
                     position.x.to_bits().hash(&mut hasher);
                     position.y.to_bits().hash(&mut hasher);
@@ -654,6 +694,8 @@ impl Scene {
                     color.x.to_bits().hash(&mut hasher);
                     color.y.to_bits().hash(&mut hasher);
                     color.z.to_bits().hash(&mut hasher);
+                    metallic.to_bits().hash(&mut hasher);
+                    roughness.to_bits().hash(&mut hasher);
                     desired_resolution.hash(&mut hasher);
                 }
                 NodeData::Transform { value, .. } => {
@@ -882,6 +924,8 @@ impl Scene {
                 position: center,
                 rotation: Vec3::ZERO,
                 color,
+                roughness: 0.5,
+                metallic: 0.0,
                 voxel_grid,
                 desired_resolution,
             },
@@ -965,6 +1009,8 @@ impl Scene {
                         rotation: r1,
                         scale: s1,
                         color: c1,
+                        roughness: rgh1,
+                        metallic: m1,
                         ..
                     },
                     NodeData::Primitive {
@@ -973,6 +1019,8 @@ impl Scene {
                         rotation: r2,
                         scale: s2,
                         color: c2,
+                        roughness: rgh2,
+                        metallic: m2,
                         ..
                     },
                 ) => {
@@ -981,6 +1029,8 @@ impl Scene {
                         || r1 != r2
                         || s1 != s2
                         || c1 != c2
+                        || rgh1 != rgh2
+                        || m1 != m2
                     {
                         return false;
                     }
@@ -1013,6 +1063,8 @@ impl Scene {
                         position: p1,
                         rotation: r1,
                         color: c1,
+                        roughness: rgh1,
+                        metallic: m1,
                         voxel_grid: v1,
                         desired_resolution: dr1,
                     },
@@ -1021,6 +1073,8 @@ impl Scene {
                         position: p2,
                         rotation: r2,
                         color: c2,
+                        roughness: rgh2,
+                        metallic: m2,
                         voxel_grid: v2,
                         desired_resolution: dr2,
                     },
@@ -1029,6 +1083,8 @@ impl Scene {
                         || p1 != p2
                         || r1 != r2
                         || c1 != c2
+                        || rgh1 != rgh2
+                        || m1 != m2
                         || dr1 != dr2
                         || !v1.content_eq(v2)
                     {

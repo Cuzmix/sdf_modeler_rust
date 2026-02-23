@@ -70,7 +70,7 @@ pub enum GizmoState {
 // Projection helpers
 // ---------------------------------------------------------------------------
 
-fn world_to_screen(world_pos: Vec3, view_proj: &Mat4, viewport_rect: Rect) -> Option<Pos2> {
+pub fn world_to_screen(world_pos: Vec3, view_proj: &Mat4, viewport_rect: Rect) -> Option<Pos2> {
     let clip = *view_proj * Vec4::new(world_pos.x, world_pos.y, world_pos.z, 1.0);
     if clip.w <= 0.0 {
         return None; // Behind camera

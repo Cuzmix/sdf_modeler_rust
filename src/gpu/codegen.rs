@@ -5,18 +5,18 @@ use bytemuck::{Pod, Zeroable};
 use crate::graph::scene::{NodeData, NodeId, Scene, SceneNode, TransformKind};
 use crate::settings::RenderConfig;
 
-/// 128-byte GPU node (8 x vec4f). Expanded for rotation + future growth.
+/// 128-byte GPU node (8 x vec4f).
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]
 pub struct SdfNodeGpu {
-    pub type_op: [f32; 4],   // [type_val, smooth_k, 0, 0]
+    pub type_op: [f32; 4],   // [type_val, smooth_k, metallic, roughness]
     pub position: [f32; 4],  // [x, y, z, 0]
     pub rotation: [f32; 4],  // [rx, ry, rz, 0] (radians)
     pub scale: [f32; 4],     // [sx, sy, sz, 0]
     pub color: [f32; 4],     // [r, g, b, is_selected]
-    pub extra0: [f32; 4],    // reserved: future material
-    pub extra1: [f32; 4],    // reserved: future modifiers
-    pub extra2: [f32; 4],    // reserved: future flags
+    pub extra0: [f32; 4],    // sculpt: [voxel_offset, resolution, 0, 0]
+    pub extra1: [f32; 4],    // sculpt: [bounds_min.xyz, 0]
+    pub extra2: [f32; 4],    // sculpt: [bounds_max.xyz, 0]
 }
 
 // ---------------------------------------------------------------------------
@@ -30,7 +30,8 @@ struct Camera {
     viewport: vec4f,
     time: f32,
     quality_mode: f32,
-    _pad: vec2f,
+    grid_enabled: f32,
+    _pad: f32,
     scene_min: vec4f,
     scene_max: vec4f,
 }
@@ -60,14 +61,9 @@ fn sdf_voxel_grid(local_p: vec3f, node_idx: u32) -> f32 {
     let clamped = clamp(local_p, bmin, bmax);
     let box_dist = length(local_p - clamped);
 
-    // Far from box: skip expensive trilinear interpolation entirely
-    if box_dist > 0.1 {
-        return box_dist;
-    }
-
-    // Near or inside: trilinear interp at clamped point + box_dist for continuity.
+    // Trilinear interp at clamped point + box_dist for continuity.
     // When inside, clamped == local_p and box_dist == 0 (same as before).
-    // When outside near boundary, samples boundary voxels and adds box_dist.
+    // When outside, samples boundary voxels and adds box_dist.
     let size = bmax - bmin;
     let norm = (local_p - bmin) / size;
     let max_c = f32(res - 1u);
@@ -94,6 +90,46 @@ fn sdf_voxel_grid(local_p: vec3f, node_idx: u32) -> f32 {
     let c0  = mix(c00, c10, f.y);
     let c1  = mix(c01, c11, f.y);
     return mix(c0, c1, f.z) + box_dist;
+}
+
+// Displacement-only grid sampling (for differential SDF sculpt nodes with analytical child).
+// Returns 0.0 outside the grid (neutral displacement).
+fn disp_voxel_grid(local_p: vec3f, node_idx: u32) -> f32 {
+    let offset = u32(nodes[node_idx].extra0.x);
+    let res    = u32(nodes[node_idx].extra0.y);
+    let bmin   = nodes[node_idx].extra1.xyz;
+    let bmax   = nodes[node_idx].extra2.xyz;
+
+    let norm = (local_p - bmin) / (bmax - bmin);
+    // Outside grid: no displacement
+    if any(norm < vec3f(0.0)) || any(norm > vec3f(1.0)) {
+        return 0.0;
+    }
+
+    let max_c = f32(res - 1u);
+    let gc = norm * max_c;
+
+    let i0 = vec3<u32>(vec3f(floor(gc.x), floor(gc.y), floor(gc.z)));
+    let i1 = min(i0 + vec3<u32>(1u), vec3<u32>(res - 1u));
+    let f = fract(gc);
+
+    let r2 = res * res;
+    let c000 = voxel_data[offset + i0.z * r2 + i0.y * res + i0.x];
+    let c100 = voxel_data[offset + i0.z * r2 + i0.y * res + i1.x];
+    let c010 = voxel_data[offset + i0.z * r2 + i1.y * res + i0.x];
+    let c110 = voxel_data[offset + i0.z * r2 + i1.y * res + i1.x];
+    let c001 = voxel_data[offset + i1.z * r2 + i0.y * res + i0.x];
+    let c101 = voxel_data[offset + i1.z * r2 + i0.y * res + i1.x];
+    let c011 = voxel_data[offset + i1.z * r2 + i1.y * res + i0.x];
+    let c111 = voxel_data[offset + i1.z * r2 + i1.y * res + i1.x];
+
+    let c00 = mix(c000, c100, f.x);
+    let c10 = mix(c010, c110, f.x);
+    let c01 = mix(c001, c101, f.x);
+    let c11 = mix(c011, c111, f.x);
+    let c0  = mix(c00, c10, f.y);
+    let c1  = mix(c01, c11, f.y);
+    return mix(c0, c1, f.z);
 }
 
 struct VertexOutput {
@@ -172,6 +208,40 @@ fn sdf_capsule(p: vec3f, s: vec3f) -> f32 {
     let r = s.x;
     let py = clamp(p.y, -h, h);
     return length(p - vec3f(0.0, py, 0.0)) - r;
+}
+
+fn sdf_ellipsoid(p: vec3f, s: vec3f) -> f32 {
+    let k0 = length(p / s);
+    let k1 = length(p / (s * s));
+    return select(k0 * (k0 - 1.0) / k1, length(p) - min(s.x, min(s.y, s.z)), k1 < 0.0001);
+}
+
+fn sdf_hex_prism(p: vec3f, s: vec3f) -> f32 {
+    let k = vec3f(-0.8660254038, 0.5, 0.57735026919);
+    let pa = abs(p);
+    let dot2 = 2.0 * min(k.x * pa.x + k.y * pa.z, 0.0);
+    let rx = pa.x - dot2 * k.x;
+    let rz = pa.z - dot2 * k.y;
+    let clampedRx = clamp(rx, -k.z * s.x, k.z * s.x);
+    let d1 = length(vec2f(rx - clampedRx, rz - s.x)) * sign(rz - s.x);
+    let d2 = pa.y - s.y;
+    return min(max(d1, d2), 0.0) + length(max(vec2f(d1, d2), vec2f(0.0)));
+}
+
+fn sdf_pyramid(p: vec3f, s: vec3f) -> f32 {
+    let h = s.y;
+    let b = s.x;
+    let m2 = h * h + 0.25;
+    var xz = vec2f(abs(p.x), abs(p.z));
+    if xz.y > xz.x { xz = vec2f(xz.y, xz.x); }
+    xz -= vec2f(0.5) * b;
+    let q = vec3f(xz.y, h * p.y - 0.5 * xz.x, h * xz.x + 0.5 * p.y);
+    let ss = max(-q.x, 0.0);
+    let t = clamp((q.y - 0.5 * xz.y) / (m2 + 0.25), 0.0, 1.0);
+    let a = m2 * (q.x + ss) * (q.x + ss) + q.y * q.y;
+    let bb = m2 * (q.x + 0.5 * t) * (q.x + 0.5 * t) + (q.y - m2 * t) * (q.y - m2 * t);
+    let d2 = select(bb, a, min(q.y, -q.x * m2 - q.y * 0.5) > 0.0);
+    return sqrt((d2 + q.z * q.z) / m2) * sign(max(q.z, -p.y));
 }
 
 // --- Ray-AABB intersection (for scene-level bounding) ---
@@ -347,49 +417,98 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
     let hit = ray_march(ro, rd);
     let t = hit.x;
     let mat_id = i32(hit.y + 0.5);
+    let sdf_miss = t > /*SKY_CUTOFF*/;
 
-    // Sky gradient
-    if t > /*SKY_CUTOFF*/ {
-        let sky_t = uv.y * 0.5 + 0.5;
-        let bg = mix(vec3f(/*SKY_HORIZON*/), vec3f(/*SKY_ZENITH*/), sky_t);
-        return vec4f(bg, 1.0);
+    // Precompute grid plane hit in uniform control flow (fwidth requires this)
+    let t_grid = -(ro.y / rd.y);
+    let gp = ro + rd * t_grid;
+    let dwdx = fwidth(gp.x);
+    let dwdz = fwidth(gp.z);
+
+    // Sky gradient (base color when no SDF hit)
+    let sky_grad_t = uv.y * 0.5 + 0.5;
+    let bg_sky = mix(vec3f(/*SKY_HORIZON*/), vec3f(/*SKY_ZENITH*/), sky_grad_t);
+
+    // --- Compute base color: sky or shaded SDF ---
+    var color = bg_sky;
+
+    if !sdf_miss {
+        let p = ro + rd * t;
+        let n = calc_normal(p, t);
+
+        // Material properties
+        let mat_metallic = select(0.0, nodes[mat_id].type_op.z, mat_id >= 0);
+        let mat_roughness = select(0.5, nodes[mat_id].type_op.w, mat_id >= 0);
+
+        // Key light
+        let key_dir = normalize(vec3f(/*KEY_LIGHT_DIR*/));
+        let key_h = normalize(key_dir - rd);
+        let key_diff = max(dot(n, key_dir), 0.0);
+        let spec_power = max(4.0, /*KEY_SPEC_POWER*/ * (1.0 - mat_roughness) * (1.0 - mat_roughness));
+        let key_spec = pow(max(dot(n, key_h), 0.0), spec_power);
+        /*SHADOW_LINE*/
+
+        // Fill light
+        let fill_dir = normalize(vec3f(/*FILL_LIGHT_DIR*/));
+        let fill_diff = max(dot(n, fill_dir), 0.0) * /*FILL_INTENSITY*/;
+
+        // Ambient occlusion
+        /*AO_LINE*/
+
+        let albedo = get_node_color(mat_id);
+        let diff_factor = 1.0 - mat_metallic * 0.8;
+        let spec_tint = mix(vec3f(1.0), albedo, mat_metallic);
+        // Hemispherical sky light (iq outdoor lighting)
+        let sky = clamp(0.5 + 0.5 * n.y, 0.0, 1.0);
+        let shadow_col = pow(vec3f(shadow), vec3f(1.0, 1.2, 1.5));
+        color = albedo * diff_factor * (sky * /*AMBIENT*/ * ao + key_diff * shadow_col * /*KEY_DIFFUSE*/ + fill_diff * ao)
+                  + spec_tint * key_spec * shadow * /*KEY_SPEC_INTENSITY*/;
+
+        if is_selected(mat_id) {
+            let rim = 1.0 - max(dot(n, -rd), 0.0);
+            let rim_factor = pow(rim, 2.0) * 0.6;
+            color = mix(color, vec3f(1.0, 0.8, 0.2), rim_factor);
+        }
+
+        /*FOG_LINE*/
+
+        /*TONEMAP_LINE*/
+        color = pow(color, vec3f(1.0 / /*GAMMA*/));
     }
 
-    let p = ro + rd * t;
-    let n = calc_normal(p, t);
+    // --- Grid overlay: transparent blend AFTER base color ---
+    // Condition matches TypeGPU: grid enabled, ray not parallel, grid in front,
+    // AND (SDF missed OR grid closer than SDF hit)
+    if camera.grid_enabled > 0.5 && abs(rd.y) > 0.0001 && t_grid > 0.0 && (sdf_miss || t_grid < t) {
+        // Fine grid lines (1 unit spacing)
+        let dist_fx = 0.5 - abs(fract(gp.x) - 0.5);
+        let dist_fz = 0.5 - abs(fract(gp.z) - 0.5);
+        let fine_x = 1.0 - smoothstep(0.0, dwdx * 1.5, dist_fx);
+        let fine_z = 1.0 - smoothstep(0.0, dwdz * 1.5, dist_fz);
+        let fine_line = max(fine_x, fine_z);
 
-    // Key light
-    let key_dir = normalize(vec3f(/*KEY_LIGHT_DIR*/));
-    let key_h = normalize(key_dir - rd);
-    let key_diff = max(dot(n, key_dir), 0.0);
-    let key_spec = pow(max(dot(n, key_h), 0.0), /*KEY_SPEC_POWER*/);
-    /*SHADOW_LINE*/
+        // Coarse grid lines (5 unit spacing)
+        let dist_cx = (0.5 - abs(fract(gp.x / 5.0) - 0.5)) * 5.0;
+        let dist_cz = (0.5 - abs(fract(gp.z / 5.0) - 0.5)) * 5.0;
+        let coarse_x = 1.0 - smoothstep(0.0, dwdx * 1.5, dist_cx);
+        let coarse_z = 1.0 - smoothstep(0.0, dwdz * 1.5, dist_cz);
+        let coarse_line = max(coarse_x, coarse_z);
 
-    // Fill light (opposite side, dimmer, no shadow)
-    let fill_dir = normalize(vec3f(/*FILL_LIGHT_DIR*/));
-    let fill_diff = max(dot(n, fill_dir), 0.0) * /*FILL_INTENSITY*/;
+        // Axis lines
+        let axis_x = 1.0 - smoothstep(0.0, dwdz * 2.0, abs(gp.z));
+        let axis_z = 1.0 - smoothstep(0.0, dwdx * 2.0, abs(gp.x));
 
-    // Ambient occlusion
-    /*AO_LINE*/
+        // Distance fade
+        let fade = clamp(1.0 - t_grid / 80.0, 0.0, 1.0);
+        let grid_i = max(fine_line * 0.3, coarse_line * 0.6);
+        let grid_col = vec3f(grid_i + axis_x * 0.7, grid_i, grid_i + axis_z * 0.7);
+        let alpha = max(max(grid_i, axis_x * 0.8), axis_z * 0.8) * fade;
 
-    let albedo = get_node_color(mat_id);
-    // Hemispherical sky light (iq outdoor lighting)
-    let sky = clamp(0.5 + 0.5 * n.y, 0.0, 1.0);
-    // Colored shadow tinting: blue shift in shadows (skylight fill)
-    let shadow_col = pow(vec3f(shadow), vec3f(1.0, 1.2, 1.5));
-    // Sun uses shadow only; sky/fill use AO only (iq's rule)
-    var color = albedo * (sky * /*AMBIENT*/ * ao + key_diff * shadow_col * /*KEY_DIFFUSE*/ + fill_diff * ao)
-              + vec3f(1.0) * key_spec * shadow * /*KEY_SPEC_INTENSITY*/;
-
-    if is_selected(mat_id) {
-        let rim = 1.0 - max(dot(n, -rd), 0.0);
-        let rim_factor = pow(rim, 2.0) * 0.6;
-        color = mix(color, vec3f(1.0, 0.8, 0.2), rim_factor);
+        // Transparent blend over base color
+        color = mix(color, grid_col, alpha);
     }
 
-    /*FOG_LINE*/
-
-    return vec4f(pow(color, vec3f(1.0 / /*GAMMA*/)), 1.0);
+    return vec4f(color, 1.0);
 }
 "#;
 
@@ -475,6 +594,14 @@ struct BrushParams {
     _pad1: f32,
     min_voxel: vec3<u32>,
     _pad2: u32,
+    brush_mode: f32,
+    falloff_mode: f32,
+    smooth_iterations: u32,
+    flatten_ref: f32,
+    surface_constraint: f32,
+    _pad3x: f32,
+    _pad3y: f32,
+    _pad3z: f32,
 }
 
 @group(0) @binding(0) var<uniform> brush: BrushParams;
@@ -491,12 +618,44 @@ fn cs_brush(@builtin(global_invocation_id) gid: vec3<u32>) {
     let world_pos = brush.bounds_min + norm * (brush.bounds_max - brush.bounds_min);
     let dist = length(world_pos - brush.center_local);
 
-    if dist < brush.radius {
-        let falloff = 1.0 - dist / brush.radius;
-        let delta = brush.sign_val * brush.strength * falloff * falloff;
-        let idx = brush.grid_offset + grid_pos.z * res * res + grid_pos.y * res + grid_pos.x;
-        voxel_data[idx] += delta;
-    }
+    if dist >= brush.radius { return; }
+
+    // Branchless falloff selection (0=Smooth, 1=Linear, 2=Sharp, 3=Flat)
+    let nt = dist / brush.radius;
+    let fm = brush.falloff_mode;
+    let isLinear = step(0.5, fm) * (1.0 - step(1.5, fm));
+    let isSharp  = step(1.5, fm) * (1.0 - step(2.5, fm));
+    let isFlat   = step(2.5, fm);
+    let isSmooth = 1.0 - isLinear - isSharp - isFlat;
+
+    let falloff = (1.0 - nt * nt * (3.0 - 2.0 * nt)) * isSmooth
+                + (1.0 - nt) * isLinear
+                + (1.0 - nt) * (1.0 - nt) * isSharp
+                + 1.0 * isFlat;
+
+    let idx = brush.grid_offset + grid_pos.z * res * res + grid_pos.y * res + grid_pos.x;
+    let cur = voxel_data[idx];
+
+    // Surface constraint: attenuate brush near surface only
+    let sf = select(1.0,
+        1.0 - clamp(abs(cur) / (brush.radius * brush.surface_constraint), 0.0, 1.0),
+        brush.surface_constraint > 0.0);
+
+    // Branchless mode selection (0=Add, 1=Carve, 3=Flatten, 4=Inflate; 2=Smooth never dispatched)
+    let bm = brush.brush_mode;
+    let isAdd     = 1.0 - step(0.5, bm);
+    let isCarve   = step(0.5, bm) * (1.0 - step(1.5, bm));
+    let isFlatten = step(2.5, bm) * (1.0 - step(3.5, bm));
+    let isInflate = step(3.5, bm) * (1.0 - step(4.5, bm));
+
+    let add_delta     = -1.0 * brush.strength * falloff * sf;
+    let carve_delta   =  1.0 * brush.strength * falloff * sf;
+    let flatten_delta = (brush.flatten_ref - cur) * falloff * brush.strength * sf;
+    // Inflate: Add with implicit surface constraint (only near-surface voxels)
+    let inflate_sf = 1.0 - clamp(abs(cur) / (brush.radius * 0.5), 0.0, 1.0);
+    let inflate_delta = -1.0 * brush.strength * falloff * inflate_sf;
+
+    voxel_data[idx] += add_delta * isAdd + carve_delta * isCarve + flatten_delta * isFlatten + inflate_delta * isInflate;
 }
 "#;
 
@@ -527,7 +686,8 @@ fn apply_march_placeholders(src: &str, config: &RenderConfig) -> String {
 pub struct SculptTexInfo {
     pub node_id: NodeId,
     pub tex_idx: usize,
-    pub resolution: u32,
+    /// true if sculpt has an analytical child (differential SDF), false if standalone (total SDF).
+    pub has_input: bool,
 }
 
 /// Count sculpt nodes in topo order and return their info for texture creation.
@@ -536,11 +696,11 @@ pub fn collect_sculpt_tex_info(scene: &Scene) -> Vec<SculptTexInfo> {
     let mut infos = Vec::new();
     for &node_id in &order {
         if let Some(node) = scene.nodes.get(&node_id) {
-            if let NodeData::Sculpt { ref voxel_grid, .. } = node.data {
+            if let NodeData::Sculpt { input, .. } = node.data {
                 infos.push(SculptTexInfo {
                     node_id,
                     tex_idx: infos.len(),
-                    resolution: voxel_grid.resolution,
+                    has_input: input.is_some(),
                 });
             }
         }
@@ -571,20 +731,33 @@ fn generate_voxel_texture_decls(scene: &Scene) -> (String, HashMap<NodeId, usize
 
     lines.push(String::new());
 
-    // Per-sculpt sampling function
+    // Per-sculpt sampling function (differential or total-SDF depending on has_input)
     for info in &infos {
         let i = info.tex_idx;
-        lines.push(format!("fn sdf_voxel_tex_{i}(local_p: vec3f, node_idx: u32) -> f32 {{"));
-        lines.push("    let bmin = nodes[node_idx].extra1.xyz;".to_string());
-        lines.push("    let bmax = nodes[node_idx].extra2.xyz;".to_string());
-        lines.push("    let clamped = clamp(local_p, bmin, bmax);".to_string());
-        lines.push("    let box_dist = length(local_p - clamped);".to_string());
-        lines.push("    if box_dist > 0.1 { return box_dist; }".to_string());
-        lines.push("    let uv = (local_p - bmin) / (bmax - bmin);".to_string());
-        lines.push(format!(
-            "    return textureSampleLevel(voxel_tex_{i}, voxel_sampler, uv, 0.0).x + box_dist;"
-        ));
-        lines.push("}".to_string());
+        if info.has_input {
+            // Differential sculpt: displacement-only sampling (returns 0 outside grid)
+            lines.push(format!("fn disp_voxel_tex_{i}(local_p: vec3f, node_idx: u32) -> f32 {{"));
+            lines.push("    let bmin = nodes[node_idx].extra1.xyz;".to_string());
+            lines.push("    let bmax = nodes[node_idx].extra2.xyz;".to_string());
+            lines.push("    let norm = (local_p - bmin) / (bmax - bmin);".to_string());
+            lines.push("    if any(norm < vec3f(0.0)) || any(norm > vec3f(1.0)) { return 0.0; }".to_string());
+            lines.push(format!(
+                "    return textureSampleLevel(voxel_tex_{i}, voxel_sampler, norm, 0.0).x;"
+            ));
+            lines.push("}".to_string());
+        } else {
+            // Standalone sculpt: total-SDF sampling (clamp to edge + box_dist)
+            lines.push(format!("fn sdf_voxel_tex_{i}(local_p: vec3f, node_idx: u32) -> f32 {{"));
+            lines.push("    let bmin = nodes[node_idx].extra1.xyz;".to_string());
+            lines.push("    let bmax = nodes[node_idx].extra2.xyz;".to_string());
+            lines.push("    let clamped = clamp(local_p, bmin, bmax);".to_string());
+            lines.push("    let box_dist = length(local_p - clamped);".to_string());
+            lines.push("    let uv = (clamped - bmin) / (bmax - bmin);".to_string());
+            lines.push(format!(
+                "    return textureSampleLevel(voxel_tex_{i}, voxel_sampler, uv, 0.0).x + box_dist;"
+            ));
+            lines.push("}".to_string());
+        }
         lines.push(String::new());
     }
 
@@ -645,7 +818,12 @@ pub fn generate_shader(scene: &Scene, config: &RenderConfig) -> String {
         .replace("/*GAMMA*/", &format_f32(config.gamma))
         .replace("/*SHADOW_LINE*/", &shadow_line)
         .replace("/*AO_LINE*/", &ao_line)
-        .replace("/*FOG_LINE*/", &fog_line);
+        .replace("/*FOG_LINE*/", &fog_line)
+        .replace("/*TONEMAP_LINE*/", if config.tonemapping_aces {
+            "    { let ta = color * (2.51 * color + vec3f(0.03)); let tb = color * (2.43 * color + vec3f(0.59)) + vec3f(0.14); color = clamp(ta / tb, vec3f(0.0), vec3f(1.0)); }"
+        } else {
+            ""
+        });
 
     format!("{}\n{}\n{}\n{}", SHADER_PRELUDE, tex_decls, scene_sdf, postlude)
 }
@@ -757,25 +935,45 @@ fn emit_node_wgsl(
                 }
             }
         }
-        NodeData::Sculpt { .. } => {
+        NodeData::Sculpt { input, .. } => {
             let chain = get_transform_chain(node_id, parent_map, scene, idx_map);
             let point_var = emit_transform_chain(lines, i, &chain);
             lines.push(format!(
                 "    let lp{i} = rotate_euler({point_var} - nodes[{i}].position.xyz, nodes[{i}].rotation.xyz);"
             ));
-            // Use texture path if available, otherwise storage buffer
-            let sdf_call = if let Some(tex_map) = sculpt_tex_map {
-                if let Some(&tex_idx) = tex_map.get(&node_id) {
-                    format!("sdf_voxel_tex_{tex_idx}(lp{i}, {i}u)")
+
+            let child_idx = input.and_then(|id| idx_map.get(&id).copied());
+
+            if child_idx.is_some() {
+                // DIFFERENTIAL: analytical child SDF + displacement from grid
+                let ci = child_idx.unwrap();
+                let disp_call = if let Some(tex_map) = sculpt_tex_map {
+                    if let Some(&tex_idx) = tex_map.get(&node_id) {
+                        format!("disp_voxel_tex_{tex_idx}(lp{i}, {i}u)")
+                    } else {
+                        format!("disp_voxel_grid(lp{i}, {i}u)")
+                    }
+                } else {
+                    format!("disp_voxel_grid(lp{i}, {i}u)")
+                };
+                lines.push(format!(
+                    "    let n{i} = vec2f(n{ci}.x + {disp_call}, f32({i}));"
+                ));
+            } else {
+                // STANDALONE: total SDF from grid (unchanged behavior)
+                let sdf_call = if let Some(tex_map) = sculpt_tex_map {
+                    if let Some(&tex_idx) = tex_map.get(&node_id) {
+                        format!("sdf_voxel_tex_{tex_idx}(lp{i}, {i}u)")
+                    } else {
+                        format!("sdf_voxel_grid(lp{i}, {i}u)")
+                    }
                 } else {
                     format!("sdf_voxel_grid(lp{i}, {i}u)")
-                }
-            } else {
-                format!("sdf_voxel_grid(lp{i}, {i}u)")
-            };
-            lines.push(format!(
-                "    let n{i} = vec2f({sdf_call}, f32({i}));"
-            ));
+                };
+                lines.push(format!(
+                    "    let n{i} = vec2f({sdf_call}, f32({i}));"
+                ));
+            }
         }
         NodeData::Transform { kind, input, .. } => {
             let child_idx = input.and_then(|id| idx_map.get(&id).copied());
@@ -898,10 +1096,12 @@ pub fn build_node_buffer(
                 rotation,
                 scale,
                 color,
+                metallic,
+                roughness,
                 ..
             } => {
                 buffer.push(SdfNodeGpu {
-                    type_op: [kind.gpu_type_id(), 0.0, 0.0, 0.0],
+                    type_op: [kind.gpu_type_id(), 0.0, *metallic, *roughness],
                     position: [position.x, position.y, position.z, 0.0],
                     rotation: [rotation.x, rotation.y, rotation.z, 0.0],
                     scale: [scale.x, scale.y, scale.z, 0.0],
@@ -927,12 +1127,14 @@ pub fn build_node_buffer(
                 position,
                 rotation,
                 color,
+                metallic,
+                roughness,
                 voxel_grid,
                 ..
             } => {
                 let offset = voxel_offsets.get(&node_id).copied().unwrap_or(0);
                 buffer.push(SdfNodeGpu {
-                    type_op: [20.0, 0.0, 0.0, 0.0],
+                    type_op: [20.0, 0.0, *metallic, *roughness],
                     position: [position.x, position.y, position.z, 0.0],
                     rotation: [rotation.x, rotation.y, rotation.z, 0.0],
                     scale: [1.0, 1.0, 1.0, 0.0],

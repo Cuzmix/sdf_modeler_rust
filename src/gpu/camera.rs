@@ -51,6 +51,7 @@ impl Camera {
         viewport: [f32; 4],
         time: f32,
         quality_mode: f32,
+        grid_enabled: bool,
         scene_bounds: ([f32; 3], [f32; 3]),
     ) -> CameraUniform {
         let aspect = viewport[2] / viewport[3].max(1.0);
@@ -64,7 +65,8 @@ impl Camera {
             viewport,
             time,
             quality_mode,
-            _pad: [0.0; 2],
+            grid_enabled: if grid_enabled { 1.0 } else { 0.0 },
+            _pad: 0.0,
             scene_min: [scene_bounds.0[0], scene_bounds.0[1], scene_bounds.0[2], 0.0],
             scene_max: [scene_bounds.1[0], scene_bounds.1[1], scene_bounds.1[2], 0.0],
         }
@@ -89,6 +91,21 @@ impl Camera {
         self.distance *= 1.0 - delta * ZOOM_SENSITIVITY;
         self.distance = self.distance.clamp(MIN_DISTANCE, MAX_DISTANCE);
     }
+
+    pub fn set_front(&mut self) {
+        self.yaw = 0.0;
+        self.pitch = 0.0;
+    }
+
+    pub fn set_top(&mut self) {
+        self.yaw = 0.0;
+        self.pitch = PITCH_LIMIT_RAD;
+    }
+
+    pub fn set_right(&mut self) {
+        self.yaw = std::f32::consts::FRAC_PI_2;
+        self.pitch = 0.0;
+    }
 }
 
 #[repr(C)]
@@ -99,7 +116,8 @@ pub struct CameraUniform {
     pub viewport: [f32; 4],
     pub time: f32,
     pub quality_mode: f32,
-    pub _pad: [f32; 2],
+    pub grid_enabled: f32,
+    pub _pad: f32,
     pub scene_min: [f32; 4],
     pub scene_max: [f32; 4],
 }

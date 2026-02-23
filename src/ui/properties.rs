@@ -3,7 +3,7 @@ use eframe::egui;
 use crate::app::BakeRequest;
 use crate::graph::scene::{NodeData, NodeId, Scene, TransformKind};
 use crate::graph::voxel;
-use crate::sculpt::{self, BrushMode, SculptState};
+use crate::sculpt::{BrushMode, FalloffMode, SculptState};
 
 const SCALE_MIN: f32 = 0.01;
 const SCALE_MAX: f32 = 100.0;
@@ -75,6 +75,8 @@ pub fn draw(
             mut rotation,
             mut scale,
             mut color,
+            mut roughness,
+            mut metallic,
             ..
         } => {
             ui.label(format!("Type: {}", kind.base_name()));
@@ -102,6 +104,15 @@ pub fn draw(
             ui.color_edit_button_rgb(&mut color_arr);
             color = glam::Vec3::new(color_arr[0], color_arr[1], color_arr[2]);
 
+            ui.horizontal(|ui| {
+                ui.label("Metallic:");
+                ui.add(egui::Slider::new(&mut metallic, 0.0..=1.0));
+            });
+            ui.horizontal(|ui| {
+                ui.label("Roughness:");
+                ui.add(egui::Slider::new(&mut roughness, 0.0..=1.0));
+            });
+
             // Add Sculpt Modifier button
             ui.separator();
             if let Some((done, total)) = bake_progress {
@@ -128,6 +139,8 @@ pub fn draw(
                     rotation: ref mut r,
                     scale: ref mut s,
                     color: ref mut c,
+                    metallic: ref mut m,
+                    roughness: ref mut rgh,
                     ..
                 } = node.data
                 {
@@ -135,6 +148,8 @@ pub fn draw(
                     *r = rotation;
                     *s = scale;
                     *c = color;
+                    *m = metallic;
+                    *rgh = roughness;
                 }
             }
         }
@@ -222,6 +237,8 @@ pub fn draw(
             mut position,
             mut rotation,
             mut color,
+            mut roughness,
+            mut metallic,
             voxel_grid: _,
             mut desired_resolution,
         } => {
@@ -256,6 +273,15 @@ pub fn draw(
             ui.color_edit_button_rgb(&mut color_arr);
             color = glam::Vec3::new(color_arr[0], color_arr[1], color_arr[2]);
 
+            ui.horizontal(|ui| {
+                ui.label("Metallic:");
+                ui.add(egui::Slider::new(&mut metallic, 0.0..=1.0));
+            });
+            ui.horizontal(|ui| {
+                ui.label("Roughness:");
+                ui.add(egui::Slider::new(&mut roughness, 0.0..=1.0));
+            });
+
             ui.separator();
             ui.label("Sculpting");
             let mut res_i32 = desired_resolution as i32;
@@ -275,6 +301,11 @@ pub fn draw(
                 ref mut brush_mode,
                 ref mut brush_radius,
                 ref mut brush_strength,
+                ref mut falloff_mode,
+                ref mut smooth_iterations,
+                ref mut lazy_radius,
+                ref mut surface_constraint,
+                ref mut symmetry_axis,
                 ..
             } = sculpt_state
             {
@@ -282,6 +313,17 @@ pub fn draw(
                     ui.label("Brush:");
                     ui.selectable_value(brush_mode, BrushMode::Add, "Add");
                     ui.selectable_value(brush_mode, BrushMode::Carve, "Carve");
+                    ui.selectable_value(brush_mode, BrushMode::Smooth, "Smooth");
+                    ui.selectable_value(brush_mode, BrushMode::Flatten, "Flatten");
+                    ui.selectable_value(brush_mode, BrushMode::Inflate, "Inflate");
+                    ui.selectable_value(brush_mode, BrushMode::Grab, "Grab");
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Falloff:");
+                    ui.selectable_value(falloff_mode, FalloffMode::Smooth, "Smooth");
+                    ui.selectable_value(falloff_mode, FalloffMode::Linear, "Linear");
+                    ui.selectable_value(falloff_mode, FalloffMode::Sharp, "Sharp");
+                    ui.selectable_value(falloff_mode, FalloffMode::Flat, "Flat");
                 });
                 ui.horizontal(|ui| {
                     ui.label("Radius:");
@@ -290,6 +332,29 @@ pub fn draw(
                 ui.horizontal(|ui| {
                     ui.label("Strength:");
                     ui.add(egui::Slider::new(brush_strength, 0.01..=0.5));
+                });
+                if *brush_mode == BrushMode::Smooth {
+                    ui.horizontal(|ui| {
+                        ui.label("Iterations:");
+                        let mut iters = *smooth_iterations as i32;
+                        ui.add(egui::Slider::new(&mut iters, 1..=10));
+                        *smooth_iterations = iters as u32;
+                    });
+                }
+                ui.horizontal(|ui| {
+                    ui.label("Stabilize:");
+                    ui.add(egui::Slider::new(lazy_radius, 0.0..=0.5));
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Surface:");
+                    ui.add(egui::Slider::new(surface_constraint, 0.0..=1.0));
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Symmetry:");
+                    ui.selectable_value(symmetry_axis, None, "Off");
+                    ui.selectable_value(symmetry_axis, Some(0), "X");
+                    ui.selectable_value(symmetry_axis, Some(1), "Y");
+                    ui.selectable_value(symmetry_axis, Some(2), "Z");
                 });
             }
 
@@ -322,12 +387,7 @@ pub fn draw(
                 } else {
                     ui.horizontal(|ui| {
                         if ui.button("Resume Sculpting").clicked() {
-                            *sculpt_state = SculptState::Active {
-                                node_id: id,
-                                brush_mode: BrushMode::Add,
-                                brush_radius: sculpt::DEFAULT_BRUSH_RADIUS,
-                                brush_strength: sculpt::DEFAULT_BRUSH_STRENGTH,
-                            };
+                            *sculpt_state = SculptState::new_active(id);
                         }
                         if ui.button("Remove Modifier").clicked() {
                             scene.remove_node(id);
@@ -359,6 +419,8 @@ pub fn draw(
                     position: ref mut p,
                     rotation: ref mut r,
                     color: ref mut c,
+                    metallic: ref mut m,
+                    roughness: ref mut rgh,
                     desired_resolution: ref mut dr,
                     ..
                 } = node.data
@@ -366,6 +428,8 @@ pub fn draw(
                     *p = position;
                     *r = rotation;
                     *c = color;
+                    *m = metallic;
+                    *rgh = roughness;
                     *dr = desired_resolution;
                 }
             }

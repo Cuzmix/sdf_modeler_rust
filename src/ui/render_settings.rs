@@ -118,14 +118,24 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
             }
         });
 
-    // --- Gamma ---
+    // --- Gamma / Tonemapping ---
     egui::CollapsingHeader::new("Gamma")
         .default_open(false)
         .show(ui, |ui| {
             labeled_slider(ui, "Gamma", &mut config.gamma, 1.0..=3.0, false);
+            ui.checkbox(&mut config.tonemapping_aces, "ACES Filmic Tonemapping")
+                .on_hover_text("Apply ACES filmic curve before gamma. Better highlight rolloff but shifts hue slightly.");
             if ui.small_button("Reset").clicked() {
                 config.reset_gamma();
             }
+        });
+
+    // --- Viewport ---
+    egui::CollapsingHeader::new("Viewport")
+        .default_open(true)
+        .show(ui, |ui| {
+            ui.checkbox(&mut config.show_grid, "Show Grid")
+                .on_hover_text("Display ground plane grid at Y=0");
         });
 
     // --- Performance ---

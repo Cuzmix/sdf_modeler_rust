@@ -211,6 +211,9 @@ fn draw_toolbar(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState
             SdfPrimitive::Torus,
             SdfPrimitive::Cone,
             SdfPrimitive::Capsule,
+            SdfPrimitive::Ellipsoid,
+            SdfPrimitive::HexPrism,
+            SdfPrimitive::Pyramid,
         ] {
             let label = format!("+{}", kind.base_name());
             if ui.small_button(&label).clicked() {

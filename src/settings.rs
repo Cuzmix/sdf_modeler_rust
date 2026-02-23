@@ -84,8 +84,14 @@ pub struct RenderConfig {
     pub fog_density: f32,
     pub fog_color: [f32; 3],
 
-    // Gamma
+    // Gamma / Tonemapping
     pub gamma: f32,
+    #[serde(default)]
+    pub tonemapping_aces: bool,
+
+    // Viewport
+    #[serde(default = "default_true")]
+    pub show_grid: bool,
 
     // Performance
     /// Use fast quality mode during sculpt brush strokes (half steps, skip AO/shadows).
@@ -135,6 +141,9 @@ impl Default for RenderConfig {
             fog_color: [0.5, 0.55, 0.65],
 
             gamma: 2.2,
+            tonemapping_aces: false,
+
+            show_grid: true,
 
             sculpt_fast_mode: false,
             auto_reduce_steps: true,
@@ -195,7 +204,9 @@ impl RenderConfig {
     }
 
     pub fn reset_gamma(&mut self) {
-        self.gamma = Self::default().gamma;
+        let d = Self::default();
+        self.gamma = d.gamma;
+        self.tonemapping_aces = d.tonemapping_aces;
     }
 
     pub fn reset_all(&mut self) {
