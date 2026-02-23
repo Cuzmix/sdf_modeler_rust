@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use bytemuck::{Pod, Zeroable};
 
@@ -660,6 +660,58 @@ fn cs_brush(@builtin(global_invocation_id) gid: vec3<u32>) {
 "#;
 
 // ---------------------------------------------------------------------------
+// Composite compute shader entry point
+// ---------------------------------------------------------------------------
+
+const COMPOSITE_COMPUTE_ENTRY: &str = r#"
+struct CompositeParams {
+    bounds_min: vec4f,
+    bounds_max: vec4f,
+    resolution: u32,
+    update_min_x: u32,
+    update_min_y: u32,
+    update_min_z: u32,
+    update_max_x: u32,
+    update_max_y: u32,
+    update_max_z: u32,
+    _pad: u32,
+}
+
+@group(3) @binding(0) var<uniform> comp_params: CompositeParams;
+@group(3) @binding(1) var comp_sdf_out: texture_storage_3d<r32float, write>;
+@group(3) @binding(2) var comp_mat_out: texture_storage_3d<r32uint, write>;
+@group(3) @binding(3) var comp_normal_out: texture_storage_3d<rgba8snorm, write>;
+
+@compute @workgroup_size(4, 4, 4)
+fn cs_composite(@builtin(global_invocation_id) gid: vec3<u32>) {
+    let update_min = vec3u(comp_params.update_min_x, comp_params.update_min_y, comp_params.update_min_z);
+    let update_max = vec3u(comp_params.update_max_x, comp_params.update_max_y, comp_params.update_max_z);
+    let voxel = update_min + gid;
+    let res = comp_params.resolution;
+    if any(voxel >= vec3u(res)) || any(voxel > update_max) { return; }
+
+    let norm = vec3f(voxel) / f32(res - 1u);
+    let world_pos = comp_params.bounds_min.xyz + norm * (comp_params.bounds_max.xyz - comp_params.bounds_min.xyz);
+
+    let hit = scene_sdf(world_pos);
+
+    textureStore(comp_sdf_out, voxel, vec4f(hit.x, 0.0, 0.0, 0.0));
+    textureStore(comp_mat_out, voxel, vec4u(u32(max(hit.y + 1.0, 0.0)), 0u, 0u, 0u));
+
+    // Precompute normal using tetrahedron technique (4 SDF evals)
+    let e = 0.002;
+    let k = vec2f(1.0, -1.0);
+    let n = normalize(
+        k.xyy * scene_sdf(world_pos + k.xyy * e).x +
+        k.yyx * scene_sdf(world_pos + k.yyx * e).x +
+        k.yxy * scene_sdf(world_pos + k.yxy * e).x +
+        k.xxx * scene_sdf(world_pos + k.xxx * e).x
+    );
+    textureStore(comp_normal_out, voxel, vec4f(n, 0.0));
+}
+"#;
+
+// ---------------------------------------------------------------------------
 // Code generation
 // ---------------------------------------------------------------------------
 
@@ -764,11 +816,8 @@ fn generate_voxel_texture_decls(scene: &Scene) -> (String, HashMap<NodeId, usize
     (lines.join("\n"), tex_map)
 }
 
-pub fn generate_shader(scene: &Scene, config: &RenderConfig) -> String {
-    let (tex_decls, sculpt_tex_map) = generate_voxel_texture_decls(scene);
-    let tex_map = if sculpt_tex_map.is_empty() { None } else { Some(&sculpt_tex_map) };
-    let scene_sdf = generate_scene_sdf(scene, tex_map);
-
+/// Build the SHADER_POSTLUDE with all placeholder replacements.
+fn build_postlude(config: &RenderConfig) -> String {
     let shadow_line = if config.shadows_enabled {
         format!(
             "    var shadow = 1.0;\n    if camera.quality_mode < 0.5 {{ shadow = soft_shadow(p + n * {}, key_dir, {}, {}, SHADOW_PENUMBRA_K); }}",
@@ -798,7 +847,7 @@ pub fn generate_shader(scene: &Scene, config: &RenderConfig) -> String {
 
     let sky_cutoff = config.march_max_distance - 1.0;
 
-    let postlude = apply_march_placeholders(SHADER_POSTLUDE, config)
+    apply_march_placeholders(SHADER_POSTLUDE, config)
         .replace("/*SHADOW_STEPS*/", &config.shadow_steps.to_string())
         .replace("/*SHADOW_PENUMBRA_K*/", &format_f32(config.shadow_penumbra_k))
         .replace("/*AO_SAMPLES*/", &config.ao_samples.to_string())
@@ -823,8 +872,14 @@ pub fn generate_shader(scene: &Scene, config: &RenderConfig) -> String {
             "    { let ta = color * (2.51 * color + vec3f(0.03)); let tb = color * (2.43 * color + vec3f(0.59)) + vec3f(0.14); color = clamp(ta / tb, vec3f(0.0), vec3f(1.0)); }"
         } else {
             ""
-        });
+        })
+}
 
+pub fn generate_shader(scene: &Scene, config: &RenderConfig) -> String {
+    let (tex_decls, sculpt_tex_map) = generate_voxel_texture_decls(scene);
+    let tex_map = if sculpt_tex_map.is_empty() { None } else { Some(&sculpt_tex_map) };
+    let scene_sdf = generate_scene_sdf(scene, tex_map);
+    let postlude = build_postlude(config);
     format!("{}\n{}\n{}\n{}", SHADER_PRELUDE, tex_decls, scene_sdf, postlude)
 }
 
@@ -832,6 +887,87 @@ pub fn generate_pick_shader(scene: &Scene, config: &RenderConfig) -> String {
     let scene_sdf = generate_scene_sdf(scene, None);
     let pick_postlude = apply_march_placeholders(PICK_COMPUTE_POSTLUDE, config);
     format!("{}\n{}\n{}", SHADER_PRELUDE, scene_sdf, pick_postlude)
+}
+
+/// Generate the composite compute shader that pre-evaluates scene_sdf at every voxel
+/// in a 3D grid and writes SDF + material ID to storage textures.
+pub fn generate_composite_shader(scene: &Scene, _config: &RenderConfig) -> String {
+    let (tex_decls, sculpt_tex_map) = generate_voxel_texture_decls(scene);
+    let tex_map = if sculpt_tex_map.is_empty() { None } else { Some(&sculpt_tex_map) };
+    let scene_sdf = generate_scene_sdf(scene, tex_map);
+    format!("{}\n{}\n{}\n{}", SHADER_PRELUDE, tex_decls, scene_sdf, COMPOSITE_COMPUTE_ENTRY)
+}
+
+/// Generate the composite render shader that reads the pre-composited scene volume.
+/// `scene_sdf()` becomes a single texture lookup regardless of scene complexity.
+pub fn generate_composite_render_shader(
+    config: &RenderConfig,
+    bounds_min: [f32; 3],
+    bounds_max: [f32; 3],
+) -> String {
+    let comp_scene_sdf = format!(
+        r#"
+@group(2) @binding(0) var comp_sampler: sampler;
+@group(2) @binding(1) var comp_sdf_tex: texture_3d<f32>;
+@group(2) @binding(2) var comp_mat_tex: texture_3d<u32>;
+@group(2) @binding(3) var comp_normal_tex: texture_3d<f32>;
+
+const COMP_BMIN: vec3f = vec3f({bmin});
+const COMP_BMAX: vec3f = vec3f({bmax});
+
+fn comp_to_uv(p: vec3f) -> vec3f {{
+    return clamp((p - COMP_BMIN) / (COMP_BMAX - COMP_BMIN), vec3f(0.0), vec3f(1.0));
+}}
+
+fn scene_sdf(p: vec3f) -> vec2f {{
+    let size = COMP_BMAX - COMP_BMIN;
+    let norm = (p - COMP_BMIN) / size;
+
+    // Outside bounds: return distance to AABB
+    if any(norm < vec3f(-0.01)) || any(norm > vec3f(1.01)) {{
+        return vec2f(length(max(p - COMP_BMAX, COMP_BMIN - p)), -1.0);
+    }}
+
+    let uv = clamp(norm, vec3f(0.0), vec3f(1.0));
+    let d = textureSampleLevel(comp_sdf_tex, comp_sampler, uv, 0.0).x;
+    let dims = textureDimensions(comp_mat_tex);
+    let fc = clamp(uv * vec3f(dims), vec3f(0.0), vec3f(dims - vec3u(1u)));
+    let ic = vec3u(fc);
+    let mat_raw = textureLoad(comp_mat_tex, ic, 0).x;
+    let mat_id = f32(mat_raw) - 1.0;
+    return vec2f(d, mat_id);
+}}
+"#,
+        bmin = format_vec3(bounds_min),
+        bmax = format_vec3(bounds_max),
+    );
+    let mut postlude = build_postlude(config);
+
+    // Replace calc_normal with precomputed normal texture lookup
+    let old_calc_normal = r#"fn calc_normal(p: vec3f, t: f32) -> vec3f {
+    // Tetrahedron technique: 4 SDF evals instead of 6.
+    // Distance-adaptive epsilon: larger at distance (reduces aliasing), tighter up close (more detail).
+    let e = clamp(0.001 * t, 0.0005, 0.05);
+    let k = vec2f(1.0, -1.0);
+    return normalize(
+        k.xyy * scene_sdf(p + k.xyy * e).x +
+        k.yyx * scene_sdf(p + k.yyx * e).x +
+        k.yxy * scene_sdf(p + k.yxy * e).x +
+        k.xxx * scene_sdf(p + k.xxx * e).x
+    );
+}"#;
+    let new_calc_normal = r#"fn calc_normal(p: vec3f, t: f32) -> vec3f {
+    // Precomputed normal from composite volume (single texture lookup).
+    let uv = comp_to_uv(p);
+    return normalize(textureSampleLevel(comp_normal_tex, comp_sampler, uv, 0.0).xyz);
+}"#;
+    if postlude.contains(old_calc_normal) {
+        postlude = postlude.replace(old_calc_normal, new_calc_normal);
+    } else {
+        log::warn!("Composite render: calc_normal string replace FAILED — using analytical normals as fallback");
+    }
+
+    format!("{}\n{}\n{}", SHADER_PRELUDE, comp_scene_sdf, postlude)
 }
 
 /// Walk up from `node_id` through ancestors, collecting all Transform ancestors.
@@ -1007,10 +1143,87 @@ fn generate_scene_sdf(
 
     let idx_map: HashMap<NodeId, usize> = order.iter().enumerate().map(|(i, &id)| (id, i)).collect();
     let parent_map = scene.build_parent_map();
-
     let tops = scene.top_level_nodes();
 
-    generate_scene_sdf_flat(scene, &order, &idx_map, &parent_map, &tops, sculpt_tex_map)
+    // Classify top-level subtrees: cheap (no sculpt) vs expensive (has sculpt)
+    let mut cheap_tops = Vec::new();
+    let mut expensive_tops = Vec::new();
+    for &top_id in &tops {
+        if scene.subtree_has_sculpt(top_id) {
+            expensive_tops.push(top_id);
+        } else {
+            cheap_tops.push(top_id);
+        }
+    }
+
+    // No sculpts at all: use flat codegen (no bounding skip needed)
+    if expensive_tops.is_empty() {
+        return generate_scene_sdf_flat(scene, &order, &idx_map, &parent_map, &tops, sculpt_tex_map);
+    }
+
+    // Only one expensive subtree and no cheap tops: flat codegen (no skip benefit)
+    if expensive_tops.len() == 1 && cheap_tops.is_empty() {
+        return generate_scene_sdf_flat(scene, &order, &idx_map, &parent_map, &tops, sculpt_tex_map);
+    }
+
+    // Two-phase codegen with bounding skip for expensive subtrees
+    let mut lines = Vec::new();
+    lines.push("fn scene_sdf(p: vec3f) -> vec2f {".to_string());
+
+    // Phase 1: Emit all cheap subtree nodes unconditionally
+    let cheap_node_set: HashSet<NodeId> = cheap_tops.iter()
+        .flat_map(|&id| scene.collect_subtree(id))
+        .collect();
+
+    for (i, &node_id) in order.iter().enumerate() {
+        if !cheap_node_set.contains(&node_id) { continue; }
+        let Some(node) = scene.nodes.get(&node_id) else { continue; };
+        emit_node_wgsl(&mut lines, i, node_id, node, &parent_map, scene, &idx_map, sculpt_tex_map);
+    }
+
+    // Initialize result from cheap tops
+    let cheap_indices: Vec<usize> = cheap_tops.iter()
+        .filter_map(|id| idx_map.get(id).copied())
+        .collect();
+    if cheap_indices.is_empty() {
+        lines.push("    var result = vec2f(1e10, -1.0);".to_string());
+    } else {
+        lines.push(format!("    var result = n{};", cheap_indices[0]));
+        for &idx in &cheap_indices[1..] {
+            lines.push(format!("    result = op_union(result, n{idx}, 0.0);"));
+        }
+    }
+
+    // Phase 2: Emit expensive subtrees wrapped in bounding sphere check
+    for &top_id in &expensive_tops {
+        let (center, radius) = scene.compute_subtree_sphere(top_id, &parent_map);
+        let subtree_nodes = scene.collect_subtree(top_id);
+
+        lines.push(format!(
+            "    {{ let _bd = length(p - vec3f({}, {}, {})) - {};",
+            format_f32(center[0]), format_f32(center[1]), format_f32(center[2]),
+            format_f32(radius),
+        ));
+        lines.push("    if _bd < result.x {".to_string());
+
+        // Emit all nodes in this subtree (preserving topo order)
+        for (i, &node_id) in order.iter().enumerate() {
+            if !subtree_nodes.contains(&node_id) { continue; }
+            let Some(node) = scene.nodes.get(&node_id) else { continue; };
+            emit_node_wgsl(&mut lines, i, node_id, node, &parent_map, scene, &idx_map, sculpt_tex_map);
+        }
+
+        // Union this subtree's root with the result
+        if let Some(&top_idx) = idx_map.get(&top_id) {
+            lines.push(format!("        result = op_union(result, n{top_idx}, 0.0);"));
+        }
+        lines.push("    } }".to_string());
+    }
+
+    lines.push("    return result;".to_string());
+    lines.push("}".to_string());
+
+    lines.join("\n")
 }
 
 /// Original flat codegen (no expensive subtrees).

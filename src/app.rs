@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use std::time::Instant;
 
 use eframe::egui;
 use eframe::egui_wgpu::RenderState;
@@ -20,6 +21,61 @@ use crate::ui::dock::{self, SdfTabViewer, Tab};
 use crate::ui::gizmo::{GizmoMode, GizmoState};
 use crate::ui::node_graph::NodeGraphState;
 use crate::ui::viewport::{BrushDispatch, BrushGpuParams, ViewportResources};
+
+// ---------------------------------------------------------------------------
+// Frame timing / profiling
+// ---------------------------------------------------------------------------
+
+const TIMING_HISTORY_LEN: usize = 120;
+
+pub struct FrameTimings {
+    /// Per-phase CPU timings (current frame), in seconds.
+    pub pipeline_sync_s: f64,
+    pub buffer_upload_s: f64,
+    pub composite_dispatch_s: f64,
+    pub ui_draw_s: f64,
+    pub total_cpu_s: f64,
+
+    /// Smoothed (EMA) values for display stability.
+    pub avg_frame_ms: f64,
+    pub avg_fps: f64,
+
+    /// Rolling history for sparkline (frame time in ms).
+    pub history: Vec<f32>,
+    pub history_idx: usize,
+}
+
+impl FrameTimings {
+    fn new() -> Self {
+        Self {
+            pipeline_sync_s: 0.0,
+            buffer_upload_s: 0.0,
+            composite_dispatch_s: 0.0,
+            ui_draw_s: 0.0,
+            total_cpu_s: 0.0,
+            avg_frame_ms: 16.0,
+            avg_fps: 60.0,
+            history: vec![0.0; TIMING_HISTORY_LEN],
+            history_idx: 0,
+        }
+    }
+
+    fn push_frame(&mut self, dt_s: f64) {
+        let dt_ms = dt_s * 1000.0;
+        // EMA smoothing (alpha ~0.1 for ~10-frame averaging)
+        let alpha = 0.1;
+        self.avg_frame_ms = self.avg_frame_ms * (1.0 - alpha) + dt_ms * alpha;
+        self.avg_fps = if self.avg_frame_ms > 0.0 {
+            1000.0 / self.avg_frame_ms
+        } else {
+            0.0
+        };
+
+        // Ring buffer history
+        self.history[self.history_idx] = dt_ms as f32;
+        self.history_idx = (self.history_idx + 1) % TIMING_HISTORY_LEN;
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Async bake types
@@ -101,6 +157,12 @@ pub struct SdfApp {
     lazy_brush_pos: Option<Vec3>,
     /// Async mesh export state.
     export_status: ExportStatus,
+    /// When true, request one more repaint at full resolution after interaction stops.
+    resolution_upgrade_pending: bool,
+    /// When true, dispatch a full composite volume update next frame.
+    composite_full_update_needed: bool,
+    /// Frame profiling data.
+    timings: FrameTimings,
 }
 
 impl SdfApp {
@@ -164,6 +226,9 @@ impl SdfApp {
             last_sculpt_hit: None,
             lazy_brush_pos: None,
             export_status: ExportStatus::Idle,
+            resolution_upgrade_pending: false,
+            composite_full_update_needed: false,
+            timings: FrameTimings::new(),
         }
     }
 
@@ -794,6 +859,11 @@ impl SdfApp {
             }
         }
 
+        // Incremental composite volume update for the brush-affected region
+        if self.settings.render.composite_volume_enabled && !all_hits.is_empty() {
+            self.dispatch_composite_region(effective_hit, brush_radius);
+        }
+
         self.last_sculpt_hit = Some(effective_hit);
     }
 
@@ -930,9 +1000,55 @@ impl SdfApp {
                 .callback_resources
                 .get_mut::<ViewportResources>()
             {
+                // Always rebuild the normal + pick pipelines
                 res.rebuild_pipeline(
                     &self.render_state.device, &shader_src, &pick_shader_src, sculpt_count,
                 );
+
+                // Rebuild composite pipelines if enabled and there are sculpt nodes
+                if self.settings.render.composite_volume_enabled && sculpt_count > 0 {
+                    let bounds = self.scene.compute_bounds();
+                    let padding = 1.5;
+                    let bounds_min = [
+                        bounds.0[0] - padding,
+                        bounds.0[1] - padding,
+                        bounds.0[2] - padding,
+                    ];
+                    let bounds_max = [
+                        bounds.1[0] + padding,
+                        bounds.1[1] + padding,
+                        bounds.1[2] + padding,
+                    ];
+                    let resolution = self.settings.render.composite_volume_resolution;
+
+                    log::info!(
+                        "Composite: building pipelines ({}^3, bounds=[{:.2},{:.2},{:.2}]-[{:.2},{:.2},{:.2}])",
+                        resolution,
+                        bounds_min[0], bounds_min[1], bounds_min[2],
+                        bounds_max[0], bounds_max[1], bounds_max[2],
+                    );
+
+                    let comp_compute_src = codegen::generate_composite_shader(
+                        &self.scene, &self.settings.render,
+                    );
+                    let comp_render_src = codegen::generate_composite_render_shader(
+                        &self.settings.render, bounds_min, bounds_max,
+                    );
+
+                    res.rebuild_composite(
+                        &self.render_state.device,
+                        &comp_compute_src,
+                        &comp_render_src,
+                        resolution,
+                        bounds_min,
+                        bounds_max,
+                    );
+                    log::info!("Composite: pipelines built, use_composite={}", res.use_composite);
+                    self.composite_full_update_needed = true;
+                } else {
+                    res.use_composite = false;
+                    res.composite = None;
+                }
             }
             self.current_structure_key = new_key;
             self.buffer_dirty = true; // new pipeline needs fresh buffer data
@@ -976,6 +1092,55 @@ impl SdfApp {
                 }
             }
         }
+    }
+
+    /// Dispatch a full composite volume update (all voxels).
+    fn dispatch_composite_full(&self) {
+        let renderer = self.render_state.renderer.read();
+        let Some(res) = renderer.callback_resources.get::<ViewportResources>() else { return; };
+        let Some(ref comp) = res.composite else { return; };
+        let r = comp.resolution;
+        res.dispatch_composite(
+            &self.render_state.device,
+            &self.render_state.queue,
+            [0, 0, 0],
+            [r - 1, r - 1, r - 1],
+        );
+    }
+
+    /// Dispatch an incremental composite update for the brush-affected region.
+    fn dispatch_composite_region(&self, center: Vec3, radius: f32) {
+        let renderer = self.render_state.renderer.read();
+        let Some(res) = renderer.callback_resources.get::<ViewportResources>() else { return; };
+        let Some(ref comp) = res.composite else { return; };
+
+        let pad = 3i32;
+        let r = comp.resolution;
+        let rf = r as f32;
+        let bmin = comp.bounds_min;
+        let bmax = comp.bounds_max;
+        let size = [bmax[0] - bmin[0], bmax[1] - bmin[1], bmax[2] - bmin[2]];
+
+        let brush_min = [center.x - radius, center.y - radius, center.z - radius];
+        let brush_max = [center.x + radius, center.y + radius, center.z + radius];
+
+        let umin = [
+            (((brush_min[0] - bmin[0]) / size[0] * rf).floor() as i32 - pad).max(0) as u32,
+            (((brush_min[1] - bmin[1]) / size[1] * rf).floor() as i32 - pad).max(0) as u32,
+            (((brush_min[2] - bmin[2]) / size[2] * rf).floor() as i32 - pad).max(0) as u32,
+        ];
+        let umax = [
+            (((brush_max[0] - bmin[0]) / size[0] * rf).ceil() as i32 + pad).min(r as i32 - 1) as u32,
+            (((brush_max[1] - bmin[1]) / size[1] * rf).ceil() as i32 + pad).min(r as i32 - 1) as u32,
+            (((brush_max[2] - bmin[2]) / size[2] * rf).ceil() as i32 + pad).min(r as i32 - 1) as u32,
+        ];
+
+        res.dispatch_composite(
+            &self.render_state.device,
+            &self.render_state.queue,
+            umin,
+            umax,
+        );
     }
 
     fn process_pending_pick(&mut self) {
@@ -1031,32 +1196,130 @@ impl SdfApp {
         }
     }
 
-    fn show_debug_window(&self, ctx: &egui::Context, dt: f64) {
+    fn show_debug_window(&self, ctx: &egui::Context) {
         if !self.show_debug {
             return;
         }
-        egui::Window::new("Debug")
+        let t = &self.timings;
+        egui::Window::new("Profiler")
             .default_pos([10.0, 10.0])
-            .default_size([220.0, 160.0])
+            .default_size([280.0, 320.0])
             .show(ctx, |ui| {
-                let fps = if dt > 0.0 { 1.0 / dt } else { 0.0 };
-                ui.label(format!("FPS: {:.0}", fps));
-                ui.separator();
-                let eye = self.camera.eye();
-                ui.label(format!("Eye: ({:.2}, {:.2}, {:.2})", eye.x, eye.y, eye.z));
-                ui.label(format!(
-                    "Target: ({:.2}, {:.2}, {:.2})",
-                    self.camera.target.x, self.camera.target.y, self.camera.target.z
+                // --- FPS / Frame time ---
+                let color = if t.avg_fps >= 55.0 {
+                    egui::Color32::from_rgb(100, 255, 100)
+                } else if t.avg_fps >= 30.0 {
+                    egui::Color32::from_rgb(255, 255, 100)
+                } else {
+                    egui::Color32::from_rgb(255, 100, 100)
+                };
+                ui.colored_label(color, format!(
+                    "FPS: {:.0}  ({:.2} ms)", t.avg_fps, t.avg_frame_ms
                 ));
-                ui.label(format!("Distance: {:.2}", self.camera.distance));
-                ui.label(format!(
-                    "Yaw: {:.1}\u{00B0}  Pitch: {:.1}\u{00B0}",
-                    self.camera.yaw.to_degrees(),
-                    self.camera.pitch.to_degrees(),
-                ));
+
+                // --- Frame time sparkline ---
+                let history_ordered: Vec<f32> = {
+                    let idx = t.history_idx;
+                    let mut v = Vec::with_capacity(TIMING_HISTORY_LEN);
+                    v.extend_from_slice(&t.history[idx..]);
+                    v.extend_from_slice(&t.history[..idx]);
+                    v
+                };
+                let max_ms = history_ordered.iter().cloned().fold(1.0_f32, f32::max);
+                let target_ms = 16.67_f32; // 60 FPS target line
+
+                let (rect, _) = ui.allocate_exact_size(
+                    egui::vec2(ui.available_width(), 50.0),
+                    egui::Sense::hover(),
+                );
+                let painter = ui.painter_at(rect);
+                painter.rect_filled(rect, 2.0, egui::Color32::from_gray(30));
+
+                // Draw 60fps target line
+                let target_y = rect.bottom() - (target_ms / max_ms) * rect.height();
+                if target_y > rect.top() {
+                    painter.line_segment(
+                        [egui::pos2(rect.left(), target_y), egui::pos2(rect.right(), target_y)],
+                        egui::Stroke::new(1.0, egui::Color32::from_rgba_premultiplied(100, 100, 255, 80)),
+                    );
+                }
+
+                // Draw bars
+                let bar_w = rect.width() / TIMING_HISTORY_LEN as f32;
+                for (i, &ms) in history_ordered.iter().enumerate() {
+                    let h = (ms / max_ms) * rect.height();
+                    let x = rect.left() + i as f32 * bar_w;
+                    let bar_color = if ms <= 16.67 {
+                        egui::Color32::from_rgb(80, 200, 80)
+                    } else if ms <= 33.33 {
+                        egui::Color32::from_rgb(200, 200, 80)
+                    } else {
+                        egui::Color32::from_rgb(200, 80, 80)
+                    };
+                    painter.rect_filled(
+                        egui::Rect::from_min_size(
+                            egui::pos2(x, rect.bottom() - h),
+                            egui::vec2(bar_w.max(1.0), h),
+                        ),
+                        0.0,
+                        bar_color,
+                    );
+                }
+
+                ui.add_space(2.0);
+
+                // --- CPU phase breakdown ---
+                egui::CollapsingHeader::new("CPU Phases")
+                    .default_open(true)
+                    .show(ui, |ui| {
+                        ui.monospace(format!("Pipeline sync:  {:6.2} ms", t.pipeline_sync_s * 1000.0));
+                        ui.monospace(format!("Buffer upload:  {:6.2} ms", t.buffer_upload_s * 1000.0));
+                        ui.monospace(format!("Comp dispatch:  {:6.2} ms", t.composite_dispatch_s * 1000.0));
+                        ui.monospace(format!("UI draw:        {:6.2} ms", t.ui_draw_s * 1000.0));
+                        ui.monospace(format!("Total CPU:      {:6.2} ms", t.total_cpu_s * 1000.0));
+                    });
+
                 ui.separator();
-                ui.label(format!("Nodes: {}", self.scene.nodes.len()));
-                ui.label(format!("Top-level: {}", self.scene.top_level_nodes().len()));
+
+                // --- Scene stats ---
+                egui::CollapsingHeader::new("Scene")
+                    .default_open(true)
+                    .show(ui, |ui| {
+                        ui.label(format!("Nodes: {}", self.scene.nodes.len()));
+                        ui.label(format!("Top-level: {}", self.scene.top_level_nodes().len()));
+                        ui.label(format!("Sculpt textures: {}", self.sculpt_tex_indices.len()));
+                        ui.label(format!(
+                            "Composite: {}",
+                            if self.settings.render.composite_volume_enabled { "ON" } else { "OFF" }
+                        ));
+                    });
+
+                // --- Render state ---
+                egui::CollapsingHeader::new("Render State")
+                    .default_open(true)
+                    .show(ui, |ui| {
+                        let renderer = self.render_state.renderer.read();
+                        if let Some(res) = renderer.callback_resources.get::<ViewportResources>() {
+                            ui.label(format!(
+                                "Render size: {}x{}", res.render_width, res.render_height
+                            ));
+                            ui.label(format!("Composite active: {}", res.use_composite));
+                        }
+                    });
+
+                // --- Camera ---
+                egui::CollapsingHeader::new("Camera")
+                    .default_open(false)
+                    .show(ui, |ui| {
+                        let eye = self.camera.eye();
+                        ui.label(format!("Eye: ({:.2}, {:.2}, {:.2})", eye.x, eye.y, eye.z));
+                        ui.label(format!("Distance: {:.2}", self.camera.distance));
+                        ui.label(format!(
+                            "Yaw: {:.1} Pitch: {:.1}",
+                            self.camera.yaw.to_degrees(),
+                            self.camera.pitch.to_degrees(),
+                        ));
+                    });
             });
     }
 
@@ -1091,9 +1354,12 @@ impl SdfApp {
 
 impl eframe::App for SdfApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let frame_start = Instant::now();
+
         let now = ctx.input(|i| i.time);
         let dt = now - self.last_time;
         self.last_time = now;
+        self.timings.push_frame(dt);
 
         self.history
             .begin_frame(&self.scene, self.node_graph_state.selected);
@@ -1103,13 +1369,18 @@ impl eframe::App for SdfApp {
         self.poll_async_bake();
         self.poll_export();
         self.poll_sculpt_pick(); // Read async pick result from previous frame
+
+        let t0 = Instant::now();
         self.sync_gpu_pipeline();
+        self.timings.pipeline_sync_s = t0.elapsed().as_secs_f64();
+
         self.process_pending_pick(); // Synchronous pick for normal (non-sculpt) mode
 
         // --- UI ---
-        self.show_debug_window(ctx, dt);
+        self.show_debug_window(ctx);
         self.show_menu_bar(ctx);
 
+        let t_ui = Instant::now();
         let baking = !matches!(self.bake_status, BakeStatus::Idle);
         let bake_progress = match &self.bake_status {
             BakeStatus::InProgress { progress, total, .. } => {
@@ -1144,6 +1415,8 @@ impl eframe::App for SdfApp {
                 egui_dock::DockArea::new(&mut self.dock_state)
                     .show_inside(ui, &mut tab_viewer);
             });
+
+        self.timings.ui_draw_s = t_ui.elapsed().as_secs_f64();
 
         if pending_pick.is_some() {
             self.pending_pick = pending_pick;
@@ -1198,10 +1471,24 @@ impl eframe::App for SdfApp {
         }
 
         // Upload GPU buffers only when scene data actually changed
+        let t_upload = Instant::now();
         if self.buffer_dirty {
             self.upload_scene_buffer();
             self.buffer_dirty = false;
+            // Composite volume needs full update when scene buffer changes
+            if self.settings.render.composite_volume_enabled {
+                self.composite_full_update_needed = true;
+            }
         }
+        self.timings.buffer_upload_s = t_upload.elapsed().as_secs_f64();
+
+        // Dispatch composite volume update after buffers are uploaded
+        let t_comp = Instant::now();
+        if self.composite_full_update_needed {
+            self.dispatch_composite_full();
+            self.composite_full_update_needed = false;
+        }
+        self.timings.composite_dispatch_s = t_comp.elapsed().as_secs_f64();
 
         // Undo/Redo: end-of-frame commit
         let is_dragging = ctx.dragged_id().is_some();
@@ -1210,6 +1497,14 @@ impl eframe::App for SdfApp {
             self.node_graph_state.selected,
             is_dragging,
         );
+
+        // Resolution upgrade: when interaction stops, request one more frame at full res
+        if is_dragging || self.sculpt_state.is_active() {
+            self.resolution_upgrade_pending = true;
+        } else if self.resolution_upgrade_pending {
+            self.resolution_upgrade_pending = false;
+            ctx.request_repaint();
+        }
 
         // Only repaint when something needs updating (saves GPU when idle)
         let needs_repaint = is_dragging
@@ -1222,5 +1517,7 @@ impl eframe::App for SdfApp {
         if needs_repaint {
             ctx.request_repaint();
         }
+
+        self.timings.total_cpu_s = frame_start.elapsed().as_secs_f64();
     }
 }

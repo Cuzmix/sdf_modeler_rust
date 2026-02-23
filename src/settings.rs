@@ -100,9 +100,24 @@ pub struct RenderConfig {
     /// Automatically reduce march steps when multiple sculpt nodes exist.
     #[serde(default = "default_true")]
     pub auto_reduce_steps: bool,
+    /// Render resolution scale during interaction (0.25 to 1.0).
+    #[serde(default = "default_interaction_scale")]
+    pub interaction_render_scale: f32,
+    /// Render resolution scale at rest (0.5 to 1.0).
+    #[serde(default = "default_rest_scale")]
+    pub rest_render_scale: f32,
+    /// Enable GPU compute composite volume cache.
+    #[serde(default)]
+    pub composite_volume_enabled: bool,
+    /// Resolution of the composite scene volume (64-256).
+    #[serde(default = "default_composite_resolution")]
+    pub composite_volume_resolution: u32,
 }
 
 fn default_true() -> bool { true }
+fn default_interaction_scale() -> f32 { 0.5 }
+fn default_rest_scale() -> f32 { 1.0 }
+fn default_composite_resolution() -> u32 { 128 }
 
 impl Default for RenderConfig {
     fn default() -> Self {
@@ -147,6 +162,10 @@ impl Default for RenderConfig {
 
             sculpt_fast_mode: false,
             auto_reduce_steps: true,
+            interaction_render_scale: 0.5,
+            rest_render_scale: 1.0,
+            composite_volume_enabled: false,
+            composite_volume_resolution: 128,
         }
     }
 }

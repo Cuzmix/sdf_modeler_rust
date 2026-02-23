@@ -50,6 +50,42 @@ pub struct BrushDispatch {
     pub workgroups: [u32; 3],
 }
 
+/// GPU-side composite volume parameters. Matches WGSL `CompositeParams` (64 bytes).
+#[repr(C)]
+#[derive(Copy, Clone, Pod, Zeroable)]
+pub struct CompositeParams {
+    pub bounds_min: [f32; 4], // xyz + pad
+    pub bounds_max: [f32; 4], // xyz + pad
+    pub resolution: u32,
+    pub update_min: [u32; 3],
+    pub update_max: [u32; 3],
+    pub _pad: u32,
+}
+
+// Compile-time layout assertion: CompositeParams must be exactly 64 bytes.
+const _: () = assert!(std::mem::size_of::<CompositeParams>() == 64);
+
+/// GPU resources for the composite scene volume cache.
+pub struct CompositeResources {
+    pub sdf_texture: wgpu::Texture,
+    pub sdf_view: wgpu::TextureView,
+    pub mat_texture: wgpu::Texture,
+    pub mat_view: wgpu::TextureView,
+    pub normal_texture: wgpu::Texture,
+    pub normal_view: wgpu::TextureView,
+    pub sampler: wgpu::Sampler,
+    pub compute_pipeline: wgpu::ComputePipeline,
+    pub compute_bgl: wgpu::BindGroupLayout,
+    pub compute_bg: wgpu::BindGroup,
+    pub render_pipeline: wgpu::RenderPipeline,
+    pub render_bgl: wgpu::BindGroupLayout,
+    pub render_bg: wgpu::BindGroup,
+    pub params_buffer: wgpu::Buffer,
+    pub resolution: u32,
+    pub bounds_min: [f32; 3],
+    pub bounds_max: [f32; 3],
+}
+
 pub struct ViewportResources {
     // --- Render pipeline ---
     pub pipeline: wgpu::RenderPipeline,
@@ -84,7 +120,43 @@ pub struct ViewportResources {
     pub brush_uniform_buffer: wgpu::Buffer,
     pub brush_bind_group: wgpu::BindGroup,
     pub brush_bgl: wgpu::BindGroupLayout,
+
+    // --- Resolution scaling (offscreen render + blit) ---
+    pub offscreen_texture: Option<wgpu::Texture>,
+    pub offscreen_view: Option<wgpu::TextureView>,
+    pub blit_pipeline: wgpu::RenderPipeline,
+    pub blit_bgl: wgpu::BindGroupLayout,
+    pub blit_sampler: wgpu::Sampler,
+    pub blit_bind_group: Option<wgpu::BindGroup>,
+    pub blit_params_buffer: wgpu::Buffer,
+    pub render_width: u32,
+    pub render_height: u32,
+
+    // --- Composite scene volume cache ---
+    pub composite: Option<CompositeResources>,
+    pub use_composite: bool,
 }
+
+const BLIT_SHADER_SRC: &str = r#"
+struct BlitParams {
+    viewport: vec4f,
+}
+
+@group(0) @binding(0) var<uniform> params: BlitParams;
+@group(0) @binding(1) var blit_sampler: sampler;
+@group(0) @binding(2) var blit_texture: texture_2d<f32>;
+
+@vertex fn vs_blit(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4f {
+    let x = f32(i32(vi & 1u)) * 4.0 - 1.0;
+    let y = f32(i32(vi >> 1u)) * 4.0 - 1.0;
+    return vec4f(x, y, 0.0, 1.0);
+}
+
+@fragment fn fs_blit(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
+    let uv = (frag_coord.xy - params.viewport.xy) / params.viewport.zw;
+    return textureSampleLevel(blit_texture, blit_sampler, uv, 0.0);
+}
+"#;
 
 impl ViewportResources {
     fn create_render_pipeline(
@@ -245,18 +317,142 @@ impl ViewportResources {
         })
     }
 
+    fn create_blit_bgl(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Blit BGL"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+            ],
+        })
+    }
+
+    fn create_blit_pipeline(
+        device: &wgpu::Device,
+        blit_bgl: &wgpu::BindGroupLayout,
+        target_format: wgpu::TextureFormat,
+    ) -> wgpu::RenderPipeline {
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Blit Shader"),
+            source: wgpu::ShaderSource::Wgsl(BLIT_SHADER_SRC.into()),
+        });
+        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Blit Pipeline Layout"),
+            bind_group_layouts: &[blit_bgl],
+            push_constant_ranges: &[],
+        });
+        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Blit Pipeline"),
+            layout: Some(&layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: "vs_blit",
+                buffers: &[],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: "fs_blit",
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: target_format,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: Default::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                ..Default::default()
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        })
+    }
+
+    /// Ensure the offscreen render texture matches the given dimensions.
+    /// Recreates it and the blit bind group when the size changes.
+    pub fn ensure_offscreen_texture(&mut self, device: &wgpu::Device, width: u32, height: u32) {
+        let width = width.max(1);
+        let height = height.max(1);
+        if self.render_width == width && self.render_height == height
+            && self.offscreen_texture.is_some()
+        {
+            return;
+        }
+        let tex = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Offscreen RT"),
+            size: wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: self.target_format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                 | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
+        self.blit_bind_group = Some(device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Blit BG"),
+            layout: &self.blit_bgl,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: self.blit_params_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.blit_sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&view),
+                },
+            ],
+        }));
+        self.offscreen_view = Some(view);
+        self.offscreen_texture = Some(tex);
+        self.render_width = width;
+        self.render_height = height;
+    }
+
     /// Create the bind group layout for voxel textures: binding 0 = sampler, then N texture_3d bindings.
     fn create_voxel_tex_bgl(device: &wgpu::Device, tex_count: usize) -> wgpu::BindGroupLayout {
         let mut entries = vec![wgpu::BindGroupLayoutEntry {
             binding: 0,
-            visibility: wgpu::ShaderStages::FRAGMENT,
+            visibility: wgpu::ShaderStages::FRAGMENT | wgpu::ShaderStages::COMPUTE,
             ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
             count: None,
         }];
         for i in 0..tex_count {
             entries.push(wgpu::BindGroupLayoutEntry {
                 binding: (i + 1) as u32,
-                visibility: wgpu::ShaderStages::FRAGMENT,
+                visibility: wgpu::ShaderStages::FRAGMENT | wgpu::ShaderStages::COMPUTE,
                 ty: wgpu::BindingType::Texture {
                     sample_type: wgpu::TextureSampleType::Float { filterable: true },
                     view_dimension: wgpu::TextureViewDimension::D3,
@@ -509,6 +705,22 @@ impl ViewportResources {
         });
         let brush_pipeline = Self::create_brush_pipeline(device, &brush_bgl);
 
+        // --- Blit (resolution scaling) resources ---
+        let blit_bgl = Self::create_blit_bgl(device);
+        let blit_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("Blit Sampler"),
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            ..Default::default()
+        });
+        let blit_params_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Blit Params"),
+            size: 16, // vec4f viewport
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let blit_pipeline = Self::create_blit_pipeline(device, &blit_bgl, target_format);
+
         Self {
             pipeline,
             camera_buffer,
@@ -536,7 +748,325 @@ impl ViewportResources {
             brush_uniform_buffer,
             brush_bind_group,
             brush_bgl,
+            offscreen_texture: None,
+            offscreen_view: None,
+            blit_pipeline,
+            blit_bgl,
+            blit_sampler,
+            blit_bind_group: None,
+            blit_params_buffer,
+            render_width: 0,
+            render_height: 0,
+            composite: None,
+            use_composite: false,
         }
+    }
+
+    /// Create the composite compute bind group layout (@group(3) for compute shader).
+    fn create_comp_compute_bgl(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Comp Compute BGL"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::StorageTexture {
+                        access: wgpu::StorageTextureAccess::WriteOnly,
+                        format: wgpu::TextureFormat::R32Float,
+                        view_dimension: wgpu::TextureViewDimension::D3,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::StorageTexture {
+                        access: wgpu::StorageTextureAccess::WriteOnly,
+                        format: wgpu::TextureFormat::R32Uint,
+                        view_dimension: wgpu::TextureViewDimension::D3,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::StorageTexture {
+                        access: wgpu::StorageTextureAccess::WriteOnly,
+                        format: wgpu::TextureFormat::Rgba8Snorm,
+                        view_dimension: wgpu::TextureViewDimension::D3,
+                    },
+                    count: None,
+                },
+            ],
+        })
+    }
+
+    /// Create the composite render bind group layout (@group(2) for composite render shader).
+    fn create_comp_render_bgl(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Comp Render BGL"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D3,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Uint,
+                        view_dimension: wgpu::TextureViewDimension::D3,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D3,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+            ],
+        })
+    }
+
+    /// Build or rebuild all composite volume resources (textures, pipelines, bind groups).
+    pub fn rebuild_composite(
+        &mut self,
+        device: &wgpu::Device,
+        comp_compute_src: &str,
+        comp_render_src: &str,
+        resolution: u32,
+        bounds_min: [f32; 3],
+        bounds_max: [f32; 3],
+    ) {
+        let res = resolution;
+
+        // Create 3D textures (STORAGE_BINDING for compute write + TEXTURE_BINDING for render read)
+        let sdf_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Comp SDF Tex"),
+            size: wgpu::Extent3d { width: res, height: res, depth_or_array_layers: res },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D3,
+            format: wgpu::TextureFormat::R32Float,
+            usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let mat_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Comp Mat Tex"),
+            size: wgpu::Extent3d { width: res, height: res, depth_or_array_layers: res },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D3,
+            format: wgpu::TextureFormat::R32Uint,
+            usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let normal_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Comp Normal Tex"),
+            size: wgpu::Extent3d { width: res, height: res, depth_or_array_layers: res },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D3,
+            format: wgpu::TextureFormat::Rgba8Snorm,
+            usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+
+        let sdf_view = sdf_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let mat_view = mat_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let normal_view = normal_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("Comp Sampler"),
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            ..Default::default()
+        });
+
+        let params_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Comp Params"),
+            size: std::mem::size_of::<CompositeParams>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        // Compute pipeline: groups 0-2 = existing (camera, scene, voxel_tex), group 3 = composite
+        let compute_bgl = Self::create_comp_compute_bgl(device);
+        let compute_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Comp Compute BG"),
+            layout: &compute_bgl,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: params_buffer.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&sdf_view) },
+                wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(&mat_view) },
+                wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(&normal_view) },
+            ],
+        });
+
+        let compute_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Comp Compute Shader"),
+            source: wgpu::ShaderSource::Wgsl(comp_compute_src.into()),
+        });
+        let compute_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Comp Compute Layout"),
+            bind_group_layouts: &[&self.camera_bgl, &self.scene_bgl, &self.voxel_tex_bgl, &compute_bgl],
+            push_constant_ranges: &[],
+        });
+        let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("Comp Compute Pipeline"),
+            layout: Some(&compute_layout),
+            module: &compute_shader,
+            entry_point: "cs_composite",
+            compilation_options: Default::default(),
+            cache: None,
+        });
+
+        // Render pipeline: groups 0-1 = existing (camera, scene), group 2 = composite textures
+        let render_bgl = Self::create_comp_render_bgl(device);
+        let render_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Comp Render BG"),
+            layout: &render_bgl,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::Sampler(&sampler) },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&sdf_view) },
+                wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(&mat_view) },
+                wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(&normal_view) },
+            ],
+        });
+
+        let render_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Comp Render Shader"),
+            source: wgpu::ShaderSource::Wgsl(comp_render_src.into()),
+        });
+        let render_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Comp Render Layout"),
+            bind_group_layouts: &[&self.camera_bgl, &self.scene_bgl, &render_bgl],
+            push_constant_ranges: &[],
+        });
+        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Comp Render Pipeline"),
+            layout: Some(&render_layout),
+            vertex: wgpu::VertexState {
+                module: &render_shader,
+                entry_point: "vs_main",
+                buffers: &[],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &render_shader,
+                entry_point: "fs_main",
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: self.target_format,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: Default::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                ..Default::default()
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        });
+
+        self.composite = Some(CompositeResources {
+            sdf_texture,
+            sdf_view,
+            mat_texture,
+            mat_view,
+            normal_texture,
+            normal_view,
+            sampler,
+            compute_pipeline,
+            compute_bgl,
+            compute_bg,
+            render_pipeline,
+            render_bgl,
+            render_bg,
+            params_buffer,
+            resolution,
+            bounds_min,
+            bounds_max,
+        });
+        self.use_composite = true;
+    }
+
+    /// Dispatch the composite compute shader over a sub-region of the volume.
+    pub fn dispatch_composite(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        update_min: [u32; 3],
+        update_max: [u32; 3],
+    ) {
+        let Some(ref comp) = self.composite else { return; };
+
+        let params = CompositeParams {
+            bounds_min: [comp.bounds_min[0], comp.bounds_min[1], comp.bounds_min[2], 0.0],
+            bounds_max: [comp.bounds_max[0], comp.bounds_max[1], comp.bounds_max[2], 0.0],
+            resolution: comp.resolution,
+            update_min,
+            update_max,
+            _pad: 0,
+        };
+        queue.write_buffer(&comp.params_buffer, 0, bytemuck::bytes_of(&params));
+
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Comp Dispatch Encoder"),
+        });
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("Comp Dispatch Pass"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&comp.compute_pipeline);
+            pass.set_bind_group(0, &self.camera_bind_group, &[]);
+            pass.set_bind_group(1, &self.scene_bind_group, &[]);
+            pass.set_bind_group(2, &self.voxel_tex_bind_group, &[]);
+            pass.set_bind_group(3, &comp.compute_bg, &[]);
+
+            // Workgroups: ceil((update_max - update_min + 1) / 4) per axis
+            let wx = ((update_max[0] - update_min[0] + 4) / 4).max(1);
+            let wy = ((update_max[1] - update_min[1] + 4) / 4).max(1);
+            let wz = ((update_max[2] - update_min[2] + 4) / 4).max(1);
+            pass.dispatch_workgroups(wx, wy, wz);
+        }
+        queue.submit(std::iter::once(encoder.finish()));
     }
 
     pub fn rebuild_pipeline(
@@ -1007,25 +1537,88 @@ impl ViewportResources {
 // ---------------------------------------------------------------------------
 
 struct ViewportCallback {
-    uniform: CameraUniform,
+    /// Camera uniform with viewport set to render dimensions (offscreen texture size).
+    render_uniform: CameraUniform,
+    /// Display viewport in physical pixels: [x, y, width, height].
+    display_viewport: [f32; 4],
+    /// Render scale factor (0.25 - 1.0).
+    render_scale: f32,
 }
 
 impl egui_wgpu::CallbackTrait for ViewportCallback {
     fn prepare(
         &self,
-        _device: &wgpu::Device,
+        device: &wgpu::Device,
         queue: &wgpu::Queue,
         _screen_descriptor: &egui_wgpu::ScreenDescriptor,
         _encoder: &mut wgpu::CommandEncoder,
         callback_resources: &mut egui_wgpu::CallbackResources,
     ) -> Vec<wgpu::CommandBuffer> {
-        let resources = callback_resources.get::<ViewportResources>().unwrap();
+        let resources = callback_resources
+            .get_mut::<ViewportResources>()
+            .unwrap();
+
+        let display_w = self.display_viewport[2] as u32;
+        let display_h = self.display_viewport[3] as u32;
+        let render_w = ((display_w as f32) * self.render_scale).max(1.0) as u32;
+        let render_h = ((display_h as f32) * self.render_scale).max(1.0) as u32;
+
+        // Ensure offscreen texture + blit bind group are the right size
+        resources.ensure_offscreen_texture(device, render_w, render_h);
+
+        // Write camera uniform (viewport = render dimensions for the SDF shader)
         queue.write_buffer(
             &resources.camera_buffer,
             0,
-            bytemuck::bytes_of(&self.uniform),
+            bytemuck::bytes_of(&self.render_uniform),
         );
-        Vec::new()
+
+        // Write blit params (display viewport for the blit shader)
+        queue.write_buffer(
+            &resources.blit_params_buffer,
+            0,
+            bytemuck::cast_slice(&self.display_viewport),
+        );
+
+        // Render SDF scene to offscreen texture
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Offscreen Encoder"),
+        });
+        {
+            let view = resources.offscreen_view.as_ref().unwrap();
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Offscreen SDF Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            // Use composite render pipeline when enabled, otherwise direct render
+            if resources.use_composite {
+                if let Some(ref comp) = resources.composite {
+                    pass.set_pipeline(&comp.render_pipeline);
+                    pass.set_bind_group(0, &resources.camera_bind_group, &[]);
+                    pass.set_bind_group(1, &resources.scene_bind_group, &[]);
+                    pass.set_bind_group(2, &comp.render_bg, &[]);
+                }
+            } else {
+                pass.set_pipeline(&resources.pipeline);
+                pass.set_bind_group(0, &resources.camera_bind_group, &[]);
+                pass.set_bind_group(1, &resources.scene_bind_group, &[]);
+                pass.set_bind_group(2, &resources.voxel_tex_bind_group, &[]);
+            }
+            pass.draw(0..3, 0..1);
+        }
+
+        vec![encoder.finish()]
     }
 
     fn paint(
@@ -1035,11 +1628,11 @@ impl egui_wgpu::CallbackTrait for ViewportCallback {
         callback_resources: &egui_wgpu::CallbackResources,
     ) {
         let resources = callback_resources.get::<ViewportResources>().unwrap();
-        render_pass.set_pipeline(&resources.pipeline);
-        render_pass.set_bind_group(0, &resources.camera_bind_group, &[]);
-        render_pass.set_bind_group(1, &resources.scene_bind_group, &[]);
-        render_pass.set_bind_group(2, &resources.voxel_tex_bind_group, &[]);
-        render_pass.draw(0..3, 0..1);
+        if let Some(ref blit_bg) = resources.blit_bind_group {
+            render_pass.set_pipeline(&resources.blit_pipeline);
+            render_pass.set_bind_group(0, blit_bg, &[]);
+            render_pass.draw(0..3, 0..1);
+        }
     }
 }
 
@@ -1127,7 +1720,7 @@ pub fn draw(
         rect.width() * pixels_per_point,
         rect.height() * pixels_per_point,
     ];
-    // Fast quality mode: half steps + skip AO/shadows
+    // Interaction detection
     let sculpt_active = sculpt_state.is_active();
     let camera_dragging = if sculpt_active {
         response.dragged_by(egui::PointerButton::Secondary)
@@ -1138,20 +1731,38 @@ pub fn draw(
             || response.dragged_by(egui::PointerButton::Middle)
     };
     let sculpt_brushing = sculpt_active
-        && response.dragged_by(egui::PointerButton::Primary)
-        && render_config.sculpt_fast_mode;
+        && response.dragged_by(egui::PointerButton::Primary);
     let multi_sculpt_reduce = render_config.auto_reduce_steps && sculpt_count >= 2;
-    let quality_mode = if camera_dragging || sculpt_brushing || multi_sculpt_reduce {
+    let is_interacting = camera_dragging || sculpt_brushing;
+    // Fast quality mode: half steps + skip AO/shadows
+    let quality_mode = if (is_interacting && render_config.sculpt_fast_mode) || multi_sculpt_reduce {
         1.0
     } else {
         0.0
     };
+
+    // Resolution scaling: reduced resolution during interaction
+    let render_scale = if is_interacting {
+        render_config.interaction_render_scale.clamp(0.25, 1.0)
+    } else {
+        render_config.rest_render_scale.clamp(0.25, 1.0)
+    };
+
     let scene_bounds = scene.compute_bounds();
-    let uniform = camera.to_uniform(viewport, time, quality_mode, render_config.show_grid, scene_bounds);
+
+    // Render uniform uses the RENDER viewport (offscreen texture dimensions)
+    let render_w = (viewport[2] * render_scale).max(1.0);
+    let render_h = (viewport[3] * render_scale).max(1.0);
+    let render_viewport = [0.0, 0.0, render_w, render_h];
+    let render_uniform = camera.to_uniform(render_viewport, time, quality_mode, render_config.show_grid, scene_bounds);
 
     ui.painter().add(egui_wgpu::Callback::new_paint_callback(
         rect,
-        ViewportCallback { uniform },
+        ViewportCallback {
+            render_uniform,
+            display_viewport: viewport,
+            render_scale,
+        },
     ));
 
     // --- Symmetry plane overlay ---

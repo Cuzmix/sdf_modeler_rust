@@ -3,6 +3,14 @@ name = "sdf_modeler"
 version = "0.1.0"
 edition = "2021"
 
+# Fast debug builds: opt-level=2 gives ~90% of release perf with debug symbols + fast compile
+[profile.dev]
+opt-level = 2
+
+# Keep full optimization for release
+[profile.release]
+debug = true  # include debug symbols for profiling (flamegraph, samply)
+
 [dependencies]
 eframe = { version = "0.29", features = ["wgpu"] }
 egui_dock = "0.14"
@@ -14,3 +22,4 @@ rfd = "0.15"
 env_logger = "0.11"
 log = "0.4"
 rayon = "1.11.0"
+image = "0.25"

@@ -43,6 +43,7 @@ fn main() -> eframe::Result<()> {
                         max_texture_dimension_2d: 8192,
                         max_storage_buffers_per_shader_stage: 4,
                         max_storage_buffer_binding_size: 1 << 27, // 128MB
+                        max_storage_textures_per_shader_stage: 4, // composite volume write (SDF + mat + normal)
                         ..base_limits
                     },
                     memory_hints: wgpu::MemoryHints::default(),
