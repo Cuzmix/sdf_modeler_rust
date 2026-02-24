@@ -1,7 +1,7 @@
 use glam::Vec3;
 
 use crate::graph::scene::{NodeData, NodeId, Scene};
-use crate::graph::voxel::VoxelGrid;
+use crate::graph::voxel::{self, VoxelGrid};
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -106,9 +106,12 @@ pub enum SculptState {
         /// Mirror axis: None = off, Some(0) = X, Some(1) = Y, Some(2) = Z.
         symmetry_axis: Option<u8>,
         /// Snapshot of grid data for grab brush (cloned on grab start).
+        /// For differential sculpts, this is the total SDF (analytical + displacement).
         grab_snapshot: Option<Vec<f32>>,
         /// World position where grab stroke started.
         grab_start: Option<Vec3>,
+        /// Child input node for differential grab (used to subtract analytical SDF on write-back).
+        grab_child_input: Option<NodeId>,
     },
 }
 
@@ -128,6 +131,7 @@ impl SculptState {
             symmetry_axis: None,
             grab_snapshot: None,
             grab_start: None,
+            grab_child_input: None,
         }
     }
 
@@ -429,6 +433,149 @@ pub fn apply_grab_to_grid(
     }
 
     (z0, z1)
+}
+
+/// Apply grab brush for differential sculpts: snapshot is total SDF, write back as displacement.
+/// Subtracts the analytical child SDF at each voxel to convert total → displacement.
+pub fn apply_grab_to_grid_differential(
+    grid: &mut VoxelGrid,
+    snapshot: &[f32],
+    center: Vec3,
+    radius: f32,
+    strength: f32,
+    grab_delta: Vec3,
+    falloff_mode: &FalloffMode,
+    scene: &Scene,
+    child_id: NodeId,
+    sculpt_position: Vec3,
+    sculpt_rotation: Vec3,
+) -> (u32, u32) {
+    let res = grid.resolution;
+    let brush_min = center - Vec3::splat(radius);
+    let brush_max = center + Vec3::splat(radius);
+    let g_min = grid.world_to_grid(brush_min);
+    let g_max = grid.world_to_grid(brush_max);
+
+    let x0 = (g_min.x.floor().max(0.0) as u32).min(res - 1);
+    let y0 = (g_min.y.floor().max(0.0) as u32).min(res - 1);
+    let z0 = (g_min.z.floor().max(0.0) as u32).min(res - 1);
+    let x1 = (g_max.x.ceil().max(0.0) as u32).min(res - 1);
+    let y1 = (g_max.y.ceil().max(0.0) as u32).min(res - 1);
+    let z1 = (g_max.z.ceil().max(0.0) as u32).min(res - 1);
+
+    let max_c = (res - 1) as f32;
+
+    for z in z0..=z1 {
+        for y in y0..=y1 {
+            for x in x0..=x1 {
+                let local_pos = grid.grid_to_world(x as f32, y as f32, z as f32);
+                let dist = (local_pos - center).length();
+                if dist >= radius {
+                    continue;
+                }
+                let nt = dist / radius;
+                let falloff = falloff_mode.evaluate(nt);
+
+                // Sample total SDF from snapshot at offset position
+                let sample_pos = local_pos - grab_delta * falloff * strength;
+                let gc = grid.world_to_grid(sample_pos);
+
+                let gx = gc.x.clamp(0.0, max_c);
+                let gy = gc.y.clamp(0.0, max_c);
+                let gz = gc.z.clamp(0.0, max_c);
+
+                let ix0 = gx.floor() as u32;
+                let iy0 = gy.floor() as u32;
+                let iz0 = gz.floor() as u32;
+                let ix1 = (ix0 + 1).min(res - 1);
+                let iy1 = (iy0 + 1).min(res - 1);
+                let iz1 = (iz0 + 1).min(res - 1);
+                let fx = gx.fract();
+                let fy = gy.fract();
+                let fz = gz.fract();
+
+                let c000 = snapshot[VoxelGrid::index(ix0, iy0, iz0, res)];
+                let c100 = snapshot[VoxelGrid::index(ix1, iy0, iz0, res)];
+                let c010 = snapshot[VoxelGrid::index(ix0, iy1, iz0, res)];
+                let c110 = snapshot[VoxelGrid::index(ix1, iy1, iz0, res)];
+                let c001 = snapshot[VoxelGrid::index(ix0, iy0, iz1, res)];
+                let c101 = snapshot[VoxelGrid::index(ix1, iy0, iz1, res)];
+                let c011 = snapshot[VoxelGrid::index(ix0, iy1, iz1, res)];
+                let c111 = snapshot[VoxelGrid::index(ix1, iy1, iz1, res)];
+
+                let c00 = c000 + (c100 - c000) * fx;
+                let c10 = c010 + (c110 - c010) * fx;
+                let c01 = c001 + (c101 - c001) * fx;
+                let c11 = c011 + (c111 - c011) * fx;
+                let c0 = c00 + (c10 - c00) * fy;
+                let c1 = c01 + (c11 - c01) * fy;
+                let total_sampled = c0 + (c1 - c0) * fz;
+
+                // Subtract analytical child SDF to get back to displacement
+                let world_pos = sculpt_position + inverse_rotate_euler(local_pos, sculpt_rotation);
+                let analytical = voxel::evaluate_sdf_tree(scene, child_id, world_pos);
+
+                let idx = VoxelGrid::index(x, y, z, res);
+                grid.data[idx] = total_sampled - analytical;
+            }
+        }
+    }
+
+    (z0, z1)
+}
+
+/// Wrapper that handles the borrow conflict: need &Scene for evaluate_sdf_tree and &mut VoxelGrid.
+/// Temporarily swaps the VoxelGrid out of the scene, applies grab, then swaps it back.
+pub fn apply_grab_to_grid_differential_scene(
+    scene: &mut Scene,
+    node_id: NodeId,
+    snapshot: &[f32],
+    center: Vec3,
+    radius: f32,
+    strength: f32,
+    grab_delta: Vec3,
+    falloff_mode: &FalloffMode,
+    child_id: NodeId,
+    sculpt_position: Vec3,
+    sculpt_rotation: Vec3,
+) -> Option<(u32, u32)> {
+    // Extract VoxelGrid from the scene node temporarily
+    let node = scene.nodes.get_mut(&node_id)?;
+    let mut grid = if let NodeData::Sculpt { ref mut voxel_grid, .. } = node.data {
+        std::mem::replace(voxel_grid, VoxelGrid {
+            resolution: 1,
+            bounds_min: Vec3::ZERO,
+            bounds_max: Vec3::ONE,
+            is_displacement: true,
+            data: vec![0.0],
+        })
+    } else {
+        return None;
+    };
+
+    // Now scene doesn't hold our grid, so we can borrow &Scene and &mut grid simultaneously
+    let result = apply_grab_to_grid_differential(
+        &mut grid,
+        snapshot,
+        center,
+        radius,
+        strength,
+        grab_delta,
+        falloff_mode,
+        scene,
+        child_id,
+        sculpt_position,
+        sculpt_rotation,
+    );
+
+    // Put the grid back
+    if let Some(node) = scene.nodes.get_mut(&node_id) {
+        if let NodeData::Sculpt { ref mut voxel_grid, .. } = node.data {
+            *voxel_grid = grid;
+        }
+    }
+
+    Some(result)
 }
 
 /// Inverse of rotate_euler: undo Z rotation, then Y, then X.

@@ -425,12 +425,17 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
     let dwdx = fwidth(gp.x);
     let dwdz = fwidth(gp.z);
 
+    // Selection outline: precompute in uniform control flow (fwidth requires this)
+    let sel_f = select(0.0, 1.0, is_selected(mat_id));
+    let fwidth_sel = fwidth(sel_f);
+
     // Sky gradient (base color when no SDF hit)
     let sky_grad_t = uv.y * 0.5 + 0.5;
     let bg_sky = mix(vec3f(/*SKY_HORIZON*/), vec3f(/*SKY_ZENITH*/), sky_grad_t);
 
     // --- Compute base color: sky or shaded SDF ---
     var color = bg_sky;
+    var sel_rim = 0.0;
 
     if !sdf_miss {
         let p = ro + rd * t;
@@ -464,10 +469,10 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
         color = albedo * diff_factor * (sky * /*AMBIENT*/ * ao + key_diff * shadow_col * /*KEY_DIFFUSE*/ + fill_diff * ao)
                   + spec_tint * key_spec * shadow * /*KEY_SPEC_INTENSITY*/;
 
+        // Selection outline: rim detection fills diagonal gaps from fwidth
         if is_selected(mat_id) {
-            let rim = 1.0 - max(dot(n, -rd), 0.0);
-            let rim_factor = pow(rim, 2.0) * 0.6;
-            color = mix(color, vec3f(1.0, 0.8, 0.2), rim_factor);
+            let ndotv = max(dot(n, -rd), 0.0);
+            sel_rim = 1.0 - smoothstep(0.0, 0.15, ndotv);
         }
 
         /*FOG_LINE*/
@@ -506,6 +511,12 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
 
         // Transparent blend over base color
         color = mix(color, grid_col, alpha);
+    }
+
+    // Selection outline: fwidth for edge detection + rim for silhouette gap-filling
+    let outline_a = max(fwidth_sel, sel_rim);
+    if outline_a > 0.01 {
+        color = mix(color, vec3f(1.0, 0.8, 0.2), outline_a);
     }
 
     return vec4f(color, 1.0);

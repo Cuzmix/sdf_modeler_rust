@@ -769,6 +769,7 @@ impl SdfApp {
             symmetry_axis,
             ref mut grab_snapshot,
             ref mut grab_start,
+            ref mut grab_child_input,
         } = self.sculpt_state
         else {
             return;
@@ -786,14 +787,36 @@ impl SdfApp {
         let is_grab = brush_mode == BrushMode::Grab;
         if is_grab && grab_snapshot.is_none() {
             if let Some(node) = self.scene.nodes.get(&node_id) {
-                if let NodeData::Sculpt { ref voxel_grid, .. } = node.data {
-                    *grab_snapshot = Some(voxel_grid.data.clone());
+                if let NodeData::Sculpt { input, ref voxel_grid, position, rotation, .. } = node.data {
+                    if let Some(child_id) = input {
+                        // Differential sculpt: build total-SDF snapshot (analytical + displacement)
+                        let res = voxel_grid.resolution;
+                        let mut total_snap = voxel_grid.data.clone();
+                        for z in 0..res {
+                            for y in 0..res {
+                                for x in 0..res {
+                                    let local_pos = voxel_grid.grid_to_world(x as f32, y as f32, z as f32);
+                                    let world_pos = position + sculpt::inverse_rotate_euler(local_pos, rotation);
+                                    let analytical = voxel::evaluate_sdf_tree(&self.scene, child_id, world_pos);
+                                    let idx = voxel::VoxelGrid::index(x, y, z, res);
+                                    total_snap[idx] += analytical;
+                                }
+                            }
+                        }
+                        *grab_snapshot = Some(total_snap);
+                        *grab_child_input = Some(child_id);
+                    } else {
+                        // Standalone sculpt: grid is already total SDF
+                        *grab_snapshot = Some(voxel_grid.data.clone());
+                        *grab_child_input = None;
+                    }
                     *grab_start = Some(hit_world);
                 }
             }
         }
         let grab_snap = grab_snapshot.clone();
         let grab_origin = *grab_start;
+        let grab_child = *grab_child_input;
 
         // Lazy brush: smooth cursor with elastic dead zone
         let effective_hit = if lazy_radius > 0.0 {
@@ -855,20 +878,41 @@ impl SdfApp {
                 let local_center = sculpt::inverse_rotate_euler(origin - spos, srot);
                 let local_delta = sculpt::inverse_rotate_euler(grab_delta, srot);
 
-                if let Some(node) = self.scene.nodes.get_mut(&node_id) {
-                    if let NodeData::Sculpt { ref mut voxel_grid, .. } = node.data {
-                        let (z0, z1) = sculpt::apply_grab_to_grid(
-                            voxel_grid,
-                            snap,
-                            local_center,
-                            brush_radius,
-                            brush_strength,
-                            local_delta,
-                            &falloff_mode,
-                        );
-                        self.try_incremental_voxel_upload(node_id, z0, z1);
-                        self.upload_voxel_texture_region(node_id, z0, z1);
-                    }
+                let dirty = if let Some(child_id) = grab_child {
+                    // Differential sculpt: snapshot is total SDF, write back displacement
+                    sculpt::apply_grab_to_grid_differential_scene(
+                        &mut self.scene,
+                        node_id,
+                        snap,
+                        local_center,
+                        brush_radius,
+                        brush_strength,
+                        local_delta,
+                        &falloff_mode,
+                        child_id,
+                        spos,
+                        srot,
+                    )
+                } else {
+                    // Standalone sculpt: grid is total SDF, write directly
+                    if let Some(node) = self.scene.nodes.get_mut(&node_id) {
+                        if let NodeData::Sculpt { ref mut voxel_grid, .. } = node.data {
+                            Some(sculpt::apply_grab_to_grid(
+                                voxel_grid,
+                                snap,
+                                local_center,
+                                brush_radius,
+                                brush_strength,
+                                local_delta,
+                                &falloff_mode,
+                            ))
+                        } else { None }
+                    } else { None }
+                };
+
+                if let Some((z0, z1)) = dirty {
+                    self.try_incremental_voxel_upload(node_id, z0, z1);
+                    self.upload_voxel_texture_region(node_id, z0, z1);
                 }
             }
             self.last_sculpt_hit = Some(effective_hit);
@@ -1837,12 +1881,14 @@ impl eframe::App for SdfApp {
                 ref mut flatten_reference,
                 ref mut grab_snapshot,
                 ref mut grab_start,
+                ref mut grab_child_input,
                 ..
             } = self.sculpt_state
             {
                 *flatten_reference = None;
                 *grab_snapshot = None;
                 *grab_start = None;
+                *grab_child_input = None;
             }
         }
 
