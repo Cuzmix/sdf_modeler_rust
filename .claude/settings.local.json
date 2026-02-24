@@ -17,7 +17,21 @@
       "Bash(gh api:*)",
       "WebFetch(domain:projects.blender.org)",
       "WebFetch(domain:deepwiki.com)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(cd /c/Users/mimia/Documents/\"Code Projects\"/sdf_modeler_rust)",
+      "Bash(\"C:/Users/mimia/Documents/Code Projects/sdf_modeler_rust/src/gpu/shader_templates.rs\":*)",
+      "Bash(/tmp/write_codegen.py:*)",
+      "Bash(/tmp/write_codegen2.py:*)",
+      "Bash(git checkout -- src/gpu/codegen.rs)",
+      "Bash(/tmp/write_codegen3.py:*)",
+      "Bash(/tmp/write_codegen4.py:*)",
+      "Bash(\"c:/tmp/claude/gen_viewport.py\":*)",
+      "Bash(wc -l \"C:/Users/mimia/Documents/Code Projects/sdf_modeler_rust/src/app/\"*.rs)",
+      "Bash(wc -l /c/Users/mimia/Documents/\"Code Projects\"/sdf_modeler_rust/src/app/*.rs)",
+      "Bash(xargs wc -l)",
+      "Bash(cargo clippy)",
+      "Bash(while read f)",
+      "Bash(do wc -l \"$f\")"
     ]
   }
 }
