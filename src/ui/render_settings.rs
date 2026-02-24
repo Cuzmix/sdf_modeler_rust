@@ -174,6 +174,21 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
                 .on_hover_text("Display ground plane grid at Y=0");
         });
 
+    // --- Selection Outline ---
+    egui::CollapsingHeader::new("Selection Outline")
+        .default_open(false)
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label("Color:");
+                ui.color_edit_button_rgb(&mut config.outline_color);
+            });
+            labeled_slider_tip(ui, "Thickness", &mut config.outline_thickness, 1.0..=5.0, false,
+                "Outline width in screen pixels");
+            if ui.small_button("Reset").clicked() {
+                config.reset_outline();
+            }
+        });
+
     // --- Performance ---
     egui::CollapsingHeader::new("Performance")
         .default_open(true)

@@ -53,6 +53,7 @@ impl Camera {
         quality_mode: f32,
         grid_enabled: bool,
         scene_bounds: ([f32; 3], [f32; 3]),
+        selected_idx: f32,
     ) -> CameraUniform {
         let aspect = viewport[2] / viewport[3].max(1.0);
         let view = self.view_matrix();
@@ -66,7 +67,7 @@ impl Camera {
             time,
             quality_mode,
             grid_enabled: if grid_enabled { 1.0 } else { 0.0 },
-            _pad: 0.0,
+            selected_idx,
             scene_min: [scene_bounds.0[0], scene_bounds.0[1], scene_bounds.0[2], 0.0],
             scene_max: [scene_bounds.1[0], scene_bounds.1[1], scene_bounds.1[2], 0.0],
         }
@@ -117,7 +118,7 @@ pub struct CameraUniform {
     pub time: f32,
     pub quality_mode: f32,
     pub grid_enabled: f32,
-    pub _pad: f32,
+    pub selected_idx: f32,
     pub scene_min: [f32; 4],
     pub scene_max: [f32; 4],
 }

@@ -89,6 +89,12 @@ pub struct RenderConfig {
     #[serde(default)]
     pub tonemapping_aces: bool,
 
+    // Selection Outline
+    #[serde(default = "default_outline_color")]
+    pub outline_color: [f32; 3],
+    #[serde(default = "default_outline_thickness")]
+    pub outline_thickness: f32,
+
     // Viewport
     #[serde(default = "default_true")]
     pub show_grid: bool,
@@ -118,6 +124,8 @@ fn default_true() -> bool { true }
 fn default_interaction_scale() -> f32 { 0.5 }
 fn default_rest_scale() -> f32 { 1.0 }
 fn default_composite_resolution() -> u32 { 128 }
+fn default_outline_color() -> [f32; 3] { [1.0, 0.8, 0.2] }
+fn default_outline_thickness() -> f32 { 2.5 }
 
 impl Default for RenderConfig {
     fn default() -> Self {
@@ -157,6 +165,9 @@ impl Default for RenderConfig {
 
             gamma: 2.2,
             tonemapping_aces: false,
+
+            outline_color: [1.0, 0.8, 0.2],
+            outline_thickness: 2.5,
 
             show_grid: true,
 
@@ -226,6 +237,12 @@ impl RenderConfig {
         let d = Self::default();
         self.gamma = d.gamma;
         self.tonemapping_aces = d.tonemapping_aces;
+    }
+
+    pub fn reset_outline(&mut self) {
+        let d = Self::default();
+        self.outline_color = d.outline_color;
+        self.outline_thickness = d.outline_thickness;
     }
 
     pub fn reset_all(&mut self) {

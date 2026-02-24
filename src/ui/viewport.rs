@@ -1757,7 +1757,14 @@ pub fn draw(
     let render_w = (viewport[2] * render_scale).max(1.0);
     let render_h = (viewport[3] * render_scale).max(1.0);
     let render_viewport = [0.0, 0.0, render_w, render_h];
-    let render_uniform = camera.to_uniform(render_viewport, time, quality_mode, render_config.show_grid, scene_bounds);
+    let selected_idx = selected
+        .and_then(|id| {
+            let order = scene.topo_order();
+            order.iter().position(|&nid| nid == id)
+        })
+        .map(|i| i as f32)
+        .unwrap_or(-1.0);
+    let render_uniform = camera.to_uniform(render_viewport, time, quality_mode, render_config.show_grid, scene_bounds, selected_idx);
 
     ui.painter().add(egui_wgpu::Callback::new_paint_callback(
         rect,
@@ -1806,7 +1813,7 @@ pub fn draw(
                     ];
                     pending_pick = Some(PendingPick {
                         mouse_pos: mouse_px,
-                        camera_uniform: camera.to_uniform(viewport, time, 0.0, false, scene_bounds),
+                        camera_uniform: camera.to_uniform(viewport, time, 0.0, false, scene_bounds, -1.0),
                     });
                 }
             }
@@ -1916,7 +1923,7 @@ pub fn draw(
                     (pos.x - rect.min.x) * pixels_per_point,
                     (pos.y - rect.min.y) * pixels_per_point,
                 ];
-                let pick_uniform = camera.to_uniform(viewport, time, 0.0, false, scene_bounds);
+                let pick_uniform = camera.to_uniform(viewport, time, 0.0, false, scene_bounds, -1.0);
                 pending_pick = Some(PendingPick {
                     mouse_pos: mouse_px,
                     camera_uniform: pick_uniform,

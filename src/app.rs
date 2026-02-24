@@ -518,7 +518,7 @@ impl SdfApp {
         let height = 1080u32;
         let scene_bounds = self.scene.compute_bounds();
         let viewport = [0.0, 0.0, width as f32, height as f32];
-        let uniform = self.camera.to_uniform(viewport, 0.0, 0.0, false, scene_bounds);
+        let uniform = self.camera.to_uniform(viewport, 0.0, 0.0, false, scene_bounds, -1.0);
 
         let pixels = resources.screenshot(
             &self.render_state.device,

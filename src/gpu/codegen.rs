@@ -31,7 +31,7 @@ struct Camera {
     time: f32,
     quality_mode: f32,
     grid_enabled: f32,
-    _pad: f32,
+    selected_idx: f32,
     scene_min: vec4f,
     scene_max: vec4f,
 }
@@ -435,7 +435,7 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
 
     // --- Compute base color: sky or shaded SDF ---
     var color = bg_sky;
-    var sel_rim = 0.0;
+    var outline_a = 0.0;
 
     if !sdf_miss {
         let p = ro + rd * t;
@@ -469,10 +469,14 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
         color = albedo * diff_factor * (sky * /*AMBIENT*/ * ao + key_diff * shadow_col * /*KEY_DIFFUSE*/ + fill_diff * ao)
                   + spec_tint * key_spec * shadow * /*KEY_SPEC_INTENSITY*/;
 
-        // Selection outline: rim detection fills diagonal gaps from fwidth
-        if is_selected(mat_id) {
+        // Selection outline via selected_sdf distance check
+        if !is_selected(mat_id) {
+            let sel_d = selected_sdf(p);
+            let pixel_world = t * 2.0 / camera.viewport.w;
+            outline_a = 1.0 - smoothstep(0.0, pixel_world * /*OUTLINE_THICKNESS*/, sel_d);
+        } else {
             let ndotv = max(dot(n, -rd), 0.0);
-            sel_rim = 1.0 - smoothstep(0.0, 0.15, ndotv);
+            outline_a = 1.0 - smoothstep(0.0, 0.15, ndotv);
         }
 
         /*FOG_LINE*/
@@ -513,10 +517,10 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
         color = mix(color, grid_col, alpha);
     }
 
-    // Selection outline: fwidth for edge detection + rim for silhouette gap-filling
-    let outline_a = max(fwidth_sel, sel_rim);
-    if outline_a > 0.01 {
-        color = mix(color, vec3f(1.0, 0.8, 0.2), outline_a);
+    // Selection outline: selected_sdf for object boundaries, fwidth for sky boundary
+    let final_outline = max(outline_a, fwidth_sel);
+    if final_outline > 0.01 {
+        color = mix(color, vec3f(/*OUTLINE_COLOR*/), final_outline);
     }
 
     return vec4f(color, 1.0);
@@ -879,6 +883,8 @@ fn build_postlude(config: &RenderConfig) -> String {
         .replace("/*SHADOW_LINE*/", &shadow_line)
         .replace("/*AO_LINE*/", &ao_line)
         .replace("/*FOG_LINE*/", &fog_line)
+        .replace("/*OUTLINE_COLOR*/", &format_vec3(config.outline_color))
+        .replace("/*OUTLINE_THICKNESS*/", &format_f32(config.outline_thickness))
         .replace("/*TONEMAP_LINE*/", if config.tonemapping_aces {
             "    { let ta = color * (2.51 * color + vec3f(0.03)); let tb = color * (2.43 * color + vec3f(0.59)) + vec3f(0.14); color = clamp(ta / tb, vec3f(0.0), vec3f(1.0)); }"
         } else {
@@ -890,8 +896,9 @@ pub fn generate_shader(scene: &Scene, config: &RenderConfig) -> String {
     let (tex_decls, sculpt_tex_map) = generate_voxel_texture_decls(scene);
     let tex_map = if sculpt_tex_map.is_empty() { None } else { Some(&sculpt_tex_map) };
     let scene_sdf = generate_scene_sdf(scene, tex_map);
+    let sel_sdf = generate_selected_sdf(scene, tex_map);
     let postlude = build_postlude(config);
-    format!("{}\n{}\n{}\n{}", SHADER_PRELUDE, tex_decls, scene_sdf, postlude)
+    format!("{}\n{}\n{}\n{}\n{}", SHADER_PRELUDE, tex_decls, scene_sdf, sel_sdf, postlude)
 }
 
 pub fn generate_pick_shader(scene: &Scene, config: &RenderConfig) -> String {
@@ -1269,6 +1276,42 @@ fn generate_scene_sdf_flat(
             lines.push("    return result;".to_string());
         }
     }
+    lines.push("}".to_string());
+
+    lines.join("\n")
+}
+
+/// Generate `selected_sdf(p) -> f32`: evaluates all nodes, returns the selected
+/// node's distance based on `camera.selected_idx`. Used for screen-space outline.
+fn generate_selected_sdf(
+    scene: &Scene,
+    sculpt_tex_map: Option<&HashMap<NodeId, usize>>,
+) -> String {
+    let order = scene.topo_order();
+    if order.is_empty() {
+        return "fn selected_sdf(p: vec3f) -> f32 {\n    return 1e10;\n}".to_string();
+    }
+
+    let idx_map: HashMap<NodeId, usize> =
+        order.iter().enumerate().map(|(i, &id)| (id, i)).collect();
+    let parent_map = scene.build_parent_map();
+
+    let mut lines = Vec::new();
+    lines.push("fn selected_sdf(p: vec3f) -> f32 {".to_string());
+    lines.push("    if camera.selected_idx < 0.0 { return 1e10; }".to_string());
+    lines.push("    let _sel_idx = i32(camera.selected_idx + 0.5);".to_string());
+
+    for (i, &node_id) in order.iter().enumerate() {
+        let Some(node) = scene.nodes.get(&node_id) else { continue; };
+        emit_node_wgsl(
+            &mut lines, i, node_id, node, &parent_map, scene, &idx_map, sculpt_tex_map,
+        );
+    }
+
+    for i in 0..order.len() {
+        lines.push(format!("    if _sel_idx == {i} {{ return n{i}.x; }}"));
+    }
+    lines.push("    return 1e10;".to_string());
     lines.push("}".to_string());
 
     lines.join("\n")
