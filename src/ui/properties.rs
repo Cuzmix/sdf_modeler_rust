@@ -3,7 +3,7 @@ use eframe::egui;
 use crate::app::BakeRequest;
 use crate::graph::scene::{NodeData, NodeId, Scene, TransformKind};
 use crate::graph::voxel;
-use crate::sculpt::{BrushMode, FalloffMode, SculptState};
+use crate::sculpt::{BrushMode, FalloffMode, SculptState, DEFAULT_BRUSH_STRENGTH};
 
 const SCALE_MIN: f32 = 0.01;
 const SCALE_MAX: f32 = 100.0;
@@ -386,6 +386,7 @@ pub fn draw(
                 ..
             } = sculpt_state
             {
+                let prev_mode = brush_mode.clone();
                 ui.horizontal(|ui| {
                     ui.label("Brush:");
                     ui.selectable_value(brush_mode, BrushMode::Add, "Add");
@@ -395,6 +396,13 @@ pub fn draw(
                     ui.selectable_value(brush_mode, BrushMode::Inflate, "Inflate");
                     ui.selectable_value(brush_mode, BrushMode::Grab, "Grab");
                 });
+                if *brush_mode != prev_mode {
+                    if *brush_mode == BrushMode::Grab && *brush_strength < 0.5 {
+                        *brush_strength = 1.0;
+                    } else if prev_mode == BrushMode::Grab && *brush_strength > 0.5 {
+                        *brush_strength = DEFAULT_BRUSH_STRENGTH;
+                    }
+                }
                 ui.horizontal(|ui| {
                     ui.label("Falloff:");
                     ui.selectable_value(falloff_mode, FalloffMode::Smooth, "Smooth");
@@ -408,7 +416,12 @@ pub fn draw(
                 });
                 ui.horizontal(|ui| {
                     ui.label("Strength:");
-                    ui.add(egui::Slider::new(brush_strength, 0.01..=0.5));
+                    let range = if *brush_mode == BrushMode::Grab {
+                        0.1..=3.0
+                    } else {
+                        0.01..=0.5
+                    };
+                    ui.add(egui::Slider::new(brush_strength, range));
                 });
                 if *brush_mode == BrushMode::Smooth {
                     ui.horizontal(|ui| {

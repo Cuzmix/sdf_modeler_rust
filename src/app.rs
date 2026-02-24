@@ -15,7 +15,7 @@ use crate::gpu::picking::{PendingPick, PickResult};
 use crate::graph::history::History;
 use crate::graph::scene::{NodeData, NodeId, Scene};
 use crate::graph::voxel;
-use crate::sculpt::{self, BrushMode, FalloffMode, SculptState};
+use crate::sculpt::{self, BrushMode, FalloffMode, SculptState, DEFAULT_BRUSH_STRENGTH};
 use crate::settings::Settings;
 use crate::ui::dock::{self, SdfTabViewer, Tab};
 use crate::ui::gizmo::{GizmoMode, GizmoSpace, GizmoState};
@@ -380,33 +380,41 @@ impl SdfApp {
         // Sculpt brush mode shortcuts (when sculpt is active)
         if self.sculpt_state.is_active() {
             if ctx.input(|i| i.key_pressed(egui::Key::Num1)) {
-                if let SculptState::Active { ref mut brush_mode, .. } = self.sculpt_state {
+                if let SculptState::Active { ref mut brush_mode, ref mut brush_strength, .. } = self.sculpt_state {
+                    if *brush_mode == BrushMode::Grab && *brush_strength > 0.5 { *brush_strength = DEFAULT_BRUSH_STRENGTH; }
                     *brush_mode = BrushMode::Add;
                 }
             }
             if ctx.input(|i| i.key_pressed(egui::Key::Num2)) {
-                if let SculptState::Active { ref mut brush_mode, .. } = self.sculpt_state {
+                if let SculptState::Active { ref mut brush_mode, ref mut brush_strength, .. } = self.sculpt_state {
+                    if *brush_mode == BrushMode::Grab && *brush_strength > 0.5 { *brush_strength = DEFAULT_BRUSH_STRENGTH; }
                     *brush_mode = BrushMode::Carve;
                 }
             }
             if ctx.input(|i| i.key_pressed(egui::Key::Num3)) {
-                if let SculptState::Active { ref mut brush_mode, .. } = self.sculpt_state {
+                if let SculptState::Active { ref mut brush_mode, ref mut brush_strength, .. } = self.sculpt_state {
+                    if *brush_mode == BrushMode::Grab && *brush_strength > 0.5 { *brush_strength = DEFAULT_BRUSH_STRENGTH; }
                     *brush_mode = BrushMode::Smooth;
                 }
             }
             if ctx.input(|i| i.key_pressed(egui::Key::Num4)) {
-                if let SculptState::Active { ref mut brush_mode, .. } = self.sculpt_state {
+                if let SculptState::Active { ref mut brush_mode, ref mut brush_strength, .. } = self.sculpt_state {
+                    if *brush_mode == BrushMode::Grab && *brush_strength > 0.5 { *brush_strength = DEFAULT_BRUSH_STRENGTH; }
                     *brush_mode = BrushMode::Flatten;
                 }
             }
             if ctx.input(|i| i.key_pressed(egui::Key::Num5)) {
-                if let SculptState::Active { ref mut brush_mode, .. } = self.sculpt_state {
+                if let SculptState::Active { ref mut brush_mode, ref mut brush_strength, .. } = self.sculpt_state {
+                    if *brush_mode == BrushMode::Grab && *brush_strength > 0.5 { *brush_strength = DEFAULT_BRUSH_STRENGTH; }
                     *brush_mode = BrushMode::Inflate;
                 }
             }
             if ctx.input(|i| i.key_pressed(egui::Key::Num6)) {
-                if let SculptState::Active { ref mut brush_mode, .. } = self.sculpt_state {
+                if let SculptState::Active { ref mut brush_mode, ref mut brush_strength, .. } = self.sculpt_state {
                     *brush_mode = BrushMode::Grab;
+                    if *brush_strength < 0.5 {
+                        *brush_strength = 1.0;
+                    }
                 }
             }
             // Symmetry toggles: X/Y/Z
@@ -824,6 +832,49 @@ impl SdfApp {
         }
         let flatten_ref_val = flatten_reference.unwrap_or(0.0);
 
+        // Grab brush: single application per frame, centered at grab start
+        if is_grab {
+            if let (Some(ref snap), Some(origin)) = (&grab_snap, grab_origin) {
+                // Project mouse ray onto camera-facing plane at grab depth (like Blender).
+                // This gives 1:1 screen-to-world mapping regardless of surface curvature.
+                let eye = self.camera.eye();
+                let forward = (self.camera.target - eye).normalize();
+                let ray_dir = (hit_world - eye).normalize();
+                let denom = ray_dir.dot(forward);
+                let grab_delta = if denom.abs() > 1e-6 {
+                    let t = (origin - eye).dot(forward) / denom;
+                    (eye + ray_dir * t) - origin
+                } else {
+                    hit_world - origin
+                };
+                let (spos, srot) = match self.scene.nodes.get(&node_id).map(|n| &n.data) {
+                    Some(NodeData::Sculpt { position, rotation, .. }) => (*position, *rotation),
+                    _ => return,
+                };
+                // Center at grab start position, not current mouse
+                let local_center = sculpt::inverse_rotate_euler(origin - spos, srot);
+                let local_delta = sculpt::inverse_rotate_euler(grab_delta, srot);
+
+                if let Some(node) = self.scene.nodes.get_mut(&node_id) {
+                    if let NodeData::Sculpt { ref mut voxel_grid, .. } = node.data {
+                        let (z0, z1) = sculpt::apply_grab_to_grid(
+                            voxel_grid,
+                            snap,
+                            local_center,
+                            brush_radius,
+                            brush_strength,
+                            local_delta,
+                            &falloff_mode,
+                        );
+                        self.try_incremental_voxel_upload(node_id, z0, z1);
+                        self.upload_voxel_texture_region(node_id, z0, z1);
+                    }
+                }
+            }
+            self.last_sculpt_hit = Some(effective_hit);
+            return;
+        }
+
         // Brush stroke interpolation: fill gaps during fast mouse movement
         let hits = self.interpolate_brush_hits(effective_hit, brush_radius);
 
@@ -846,36 +897,7 @@ impl SdfApp {
         };
 
         for &pos in &all_hits {
-            if is_grab {
-                // Grab brush: CPU-only, sample from snapshot at offset
-                if let (Some(ref snap), Some(origin)) = (&grab_snap, grab_origin) {
-                    let grab_delta = pos - origin;
-                    // Get sculpt node transform for local-space conversion
-                    let (spos, srot) = match self.scene.nodes.get(&node_id).map(|n| &n.data) {
-                        Some(NodeData::Sculpt { position, rotation, .. }) => (*position, *rotation),
-                        _ => continue,
-                    };
-                    let local_center = sculpt::inverse_rotate_euler(pos - spos, srot);
-                    let local_delta = sculpt::inverse_rotate_euler(grab_delta, srot);
-
-                    if let Some(node) = self.scene.nodes.get_mut(&node_id) {
-                        if let NodeData::Sculpt { ref mut voxel_grid, .. } = node.data {
-                            let (z0, z1) = sculpt::apply_grab_to_grid(
-                                voxel_grid,
-                                snap,
-                                local_center,
-                                brush_radius,
-                                brush_strength,
-                                local_delta,
-                                &falloff_mode,
-                            );
-                            self.try_incremental_voxel_upload(node_id, z0, z1);
-                            self.upload_voxel_texture_region(node_id, z0, z1);
-                        }
-                    }
-                }
-            } else {
-                // Standard brush modes (Add/Carve/Smooth/Flatten/Inflate)
+            // Standard brush modes (Add/Carve/Smooth/Flatten/Inflate)
                 let dirty_range = sculpt::apply_brush(
                     &mut self.scene,
                     node_id,
@@ -911,7 +933,6 @@ impl SdfApp {
                     // Update voxel texture region (keeps texture3D in sync)
                     self.upload_voxel_texture_region(node_id, z0, z1);
                 }
-            }
         }
 
         // Incremental composite volume update for the brush-affected region

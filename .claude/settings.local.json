@@ -13,7 +13,11 @@
       "Bash(cargo add:*)",
       "WebFetch(domain:iquilezles.org)",
       "Bash(cargo run:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(gh api:*)",
+      "WebFetch(domain:projects.blender.org)",
+      "WebFetch(domain:deepwiki.com)",
+      "Bash(curl:*)"
     ]
   }
 }
