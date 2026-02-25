@@ -170,8 +170,12 @@ impl SdfApp {
 
     pub(super) fn start_export(&mut self, ctx: &egui::Context) {
         let Some(path) = rfd::FileDialog::new()
-            .set_title("Export OBJ Mesh")
+            .set_title("Export Mesh")
             .add_filter("Wavefront OBJ", &["obj"])
+            .add_filter("STL Binary", &["stl"])
+            .add_filter("Stanford PLY", &["ply"])
+            .add_filter("glTF Binary", &["glb"])
+            .add_filter("USD ASCII", &["usda"])
             .save_file()
         else {
             return;
@@ -224,14 +228,30 @@ impl SdfApp {
                 unreachable!()
             };
 
-            match crate::export::write_obj(&mesh, &path) {
-                Ok(()) => log::info!(
-                    "Exported {} vertices, {} triangles to {:?}",
-                    mesh.vertices.len(),
-                    mesh.triangles.len(),
-                    path,
-                ),
-                Err(e) => log::error!("Failed to write OBJ: {}", e),
+            match crate::export::write_mesh(&mesh, &path) {
+                Ok(()) => {
+                    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("obj").to_uppercase();
+                    let msg = format!(
+                        "Exported {} ({} verts, {} tris)",
+                        ext, mesh.vertices.len(), mesh.triangles.len(),
+                    );
+                    log::info!("{} to {:?}", msg, path);
+                    self.toasts.push(super::Toast {
+                        message: msg,
+                        is_error: false,
+                        created: std::time::Instant::now(),
+                        duration: std::time::Duration::from_secs(4),
+                    });
+                }
+                Err(e) => {
+                    log::error!("Failed to write mesh: {}", e);
+                    self.toasts.push(super::Toast {
+                        message: format!("Export failed: {}", e),
+                        is_error: true,
+                        created: std::time::Instant::now(),
+                        duration: std::time::Duration::from_secs(6),
+                    });
+                }
             }
 
             self.export_status = ExportStatus::Idle;

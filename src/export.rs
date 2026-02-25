@@ -530,3 +530,203 @@ pub fn write_obj(mesh: &ExportMesh, path: &Path) -> Result<(), String> {
     writer.flush().map_err(|e| e.to_string())?;
     Ok(())
 }
+
+pub fn write_stl(mesh: &ExportMesh, path: &Path) -> Result<(), String> {
+    let file = std::fs::File::create(path).map_err(|e| format!("Failed to create file: {}", e))?;
+    let mut w = std::io::BufWriter::new(file);
+
+    // 80-byte header
+    let mut header = [0u8; 80];
+    let tag = b"SDF Modeler Export";
+    header[..tag.len()].copy_from_slice(tag);
+    w.write_all(&header).map_err(|e| e.to_string())?;
+
+    // Triangle count (u32 LE)
+    let num_tris = mesh.triangles.len() as u32;
+    w.write_all(&num_tris.to_le_bytes()).map_err(|e| e.to_string())?;
+
+    for tri in &mesh.triangles {
+        let v0 = Vec3::from(mesh.vertices[tri[0] as usize]);
+        let v1 = Vec3::from(mesh.vertices[tri[1] as usize]);
+        let v2 = Vec3::from(mesh.vertices[tri[2] as usize]);
+        let normal = (v1 - v0).cross(v2 - v0).normalize_or_zero();
+
+        // Normal
+        for c in [normal.x, normal.y, normal.z] {
+            w.write_all(&c.to_le_bytes()).map_err(|e| e.to_string())?;
+        }
+        // 3 vertices
+        for v in [v0, v1, v2] {
+            for c in [v.x, v.y, v.z] {
+                w.write_all(&c.to_le_bytes()).map_err(|e| e.to_string())?;
+            }
+        }
+        // Attribute byte count
+        w.write_all(&0u16.to_le_bytes()).map_err(|e| e.to_string())?;
+    }
+
+    w.flush().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn write_ply(mesh: &ExportMesh, path: &Path) -> Result<(), String> {
+    let file = std::fs::File::create(path).map_err(|e| format!("Failed to create file: {}", e))?;
+    let mut w = std::io::BufWriter::new(file);
+
+    // PLY ASCII header
+    writeln!(w, "ply").map_err(|e| e.to_string())?;
+    writeln!(w, "format ascii 1.0").map_err(|e| e.to_string())?;
+    writeln!(w, "comment SDF Modeler Export").map_err(|e| e.to_string())?;
+    writeln!(w, "element vertex {}", mesh.vertices.len()).map_err(|e| e.to_string())?;
+    writeln!(w, "property float x").map_err(|e| e.to_string())?;
+    writeln!(w, "property float y").map_err(|e| e.to_string())?;
+    writeln!(w, "property float z").map_err(|e| e.to_string())?;
+    writeln!(w, "element face {}", mesh.triangles.len()).map_err(|e| e.to_string())?;
+    writeln!(w, "property list uchar uint vertex_indices").map_err(|e| e.to_string())?;
+    writeln!(w, "end_header").map_err(|e| e.to_string())?;
+
+    for v in &mesh.vertices {
+        writeln!(w, "{} {} {}", v[0], v[1], v[2]).map_err(|e| e.to_string())?;
+    }
+
+    for t in &mesh.triangles {
+        writeln!(w, "3 {} {} {}", t[0], t[1], t[2]).map_err(|e| e.to_string())?;
+    }
+
+    w.flush().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn write_glb(mesh: &ExportMesh, path: &Path) -> Result<(), String> {
+    let file = std::fs::File::create(path).map_err(|e| format!("Failed to create file: {}", e))?;
+    let mut w = std::io::BufWriter::new(file);
+
+    // --- Build binary buffer: [positions (f32x3)...] [indices (u32x3)...] ---
+    let pos_bytes = mesh.vertices.len() * 12; // 3 x f32
+    let idx_bytes = mesh.triangles.len() * 12; // 3 x u32
+    let bin_len = pos_bytes + idx_bytes;
+
+    // Compute position min/max for accessor bounds
+    let mut pos_min = [f32::MAX; 3];
+    let mut pos_max = [f32::MIN; 3];
+    for v in &mesh.vertices {
+        for i in 0..3 {
+            pos_min[i] = pos_min[i].min(v[i]);
+            pos_max[i] = pos_max[i].max(v[i]);
+        }
+    }
+
+    // --- Build JSON ---
+    let json = format!(
+        r#"{{"asset":{{"version":"2.0","generator":"SDF Modeler"}},"scene":0,"scenes":[{{"nodes":[0]}}],"nodes":[{{"mesh":0}}],"meshes":[{{"primitives":[{{"attributes":{{"POSITION":0}},"indices":1}}]}}],"accessors":[{{"bufferView":0,"componentType":5126,"count":{},"type":"VEC3","min":[{},{},{}],"max":[{},{},{}]}},{{"bufferView":1,"componentType":5125,"count":{},"type":"SCALAR"}}],"bufferViews":[{{"buffer":0,"byteOffset":0,"byteLength":{},"target":34962}},{{"buffer":0,"byteOffset":{},"byteLength":{},"target":34963}}],"buffers":[{{"byteLength":{}}}]}}"#,
+        mesh.vertices.len(),
+        pos_min[0], pos_min[1], pos_min[2],
+        pos_max[0], pos_max[1], pos_max[2],
+        mesh.triangles.len() * 3,
+        pos_bytes,
+        pos_bytes,
+        idx_bytes,
+        bin_len,
+    );
+
+    let json_bytes = json.as_bytes();
+    // Pad JSON to 4-byte alignment with spaces (0x20)
+    let json_pad = (4 - (json_bytes.len() % 4)) % 4;
+    let json_chunk_len = json_bytes.len() + json_pad;
+    // Pad BIN to 4-byte alignment with zeros
+    let bin_pad = (4 - (bin_len % 4)) % 4;
+    let bin_chunk_len = bin_len + bin_pad;
+
+    let total_len = 12 + 8 + json_chunk_len + 8 + bin_chunk_len;
+
+    // --- GLB Header ---
+    w.write_all(b"glTF").map_err(|e| e.to_string())?;                      // magic
+    w.write_all(&2u32.to_le_bytes()).map_err(|e| e.to_string())?;           // version
+    w.write_all(&(total_len as u32).to_le_bytes()).map_err(|e| e.to_string())?; // length
+
+    // --- JSON Chunk ---
+    w.write_all(&(json_chunk_len as u32).to_le_bytes()).map_err(|e| e.to_string())?;
+    w.write_all(&0x4E4F534Au32.to_le_bytes()).map_err(|e| e.to_string())?;  // "JSON"
+    w.write_all(json_bytes).map_err(|e| e.to_string())?;
+    for _ in 0..json_pad { w.write_all(b" ").map_err(|e| e.to_string())?; }
+
+    // --- BIN Chunk ---
+    w.write_all(&(bin_chunk_len as u32).to_le_bytes()).map_err(|e| e.to_string())?;
+    w.write_all(&0x004E4942u32.to_le_bytes()).map_err(|e| e.to_string())?;  // "BIN\0"
+
+    // Positions
+    for v in &mesh.vertices {
+        for c in v {
+            w.write_all(&c.to_le_bytes()).map_err(|e| e.to_string())?;
+        }
+    }
+    // Indices
+    for t in &mesh.triangles {
+        for i in t {
+            w.write_all(&i.to_le_bytes()).map_err(|e| e.to_string())?;
+        }
+    }
+    for _ in 0..bin_pad { w.write_all(&[0u8]).map_err(|e| e.to_string())?; }
+
+    w.flush().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+pub fn write_usda(mesh: &ExportMesh, path: &Path) -> Result<(), String> {
+    let file = std::fs::File::create(path).map_err(|e| format!("Failed to create file: {}", e))?;
+    let mut w = std::io::BufWriter::new(file);
+
+    writeln!(w, "#usda 1.0").map_err(|e| e.to_string())?;
+    writeln!(w, "(").map_err(|e| e.to_string())?;
+    writeln!(w, "    defaultPrim = \"SdfExport\"").map_err(|e| e.to_string())?;
+    writeln!(w, "    metersPerUnit = 1").map_err(|e| e.to_string())?;
+    writeln!(w, "    upAxis = \"Y\"").map_err(|e| e.to_string())?;
+    writeln!(w, ")").map_err(|e| e.to_string())?;
+    writeln!(w).map_err(|e| e.to_string())?;
+    writeln!(w, "def Mesh \"SdfExport\"").map_err(|e| e.to_string())?;
+    writeln!(w, "{{").map_err(|e| e.to_string())?;
+
+    // points
+    write!(w, "    point3f[] points = [").map_err(|e| e.to_string())?;
+    for (i, v) in mesh.vertices.iter().enumerate() {
+        if i > 0 { write!(w, ", ").map_err(|e| e.to_string())?; }
+        write!(w, "({}, {}, {})", v[0], v[1], v[2]).map_err(|e| e.to_string())?;
+    }
+    writeln!(w, "]").map_err(|e| e.to_string())?;
+
+    // faceVertexCounts — all triangles
+    write!(w, "    int[] faceVertexCounts = [").map_err(|e| e.to_string())?;
+    for i in 0..mesh.triangles.len() {
+        if i > 0 { write!(w, ", ").map_err(|e| e.to_string())?; }
+        write!(w, "3").map_err(|e| e.to_string())?;
+    }
+    writeln!(w, "]").map_err(|e| e.to_string())?;
+
+    // faceVertexIndices
+    write!(w, "    int[] faceVertexIndices = [").map_err(|e| e.to_string())?;
+    let mut first = true;
+    for t in &mesh.triangles {
+        for &idx in t {
+            if !first { write!(w, ", ").map_err(|e| e.to_string())?; }
+            write!(w, "{}", idx).map_err(|e| e.to_string())?;
+            first = false;
+        }
+    }
+    writeln!(w, "]").map_err(|e| e.to_string())?;
+
+    writeln!(w, "}}").map_err(|e| e.to_string())?;
+
+    w.flush().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Write an ExportMesh to the given path, choosing format by file extension.
+pub fn write_mesh(mesh: &ExportMesh, path: &Path) -> Result<(), String> {
+    match path.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).as_deref() {
+        Some("stl") => write_stl(mesh, path),
+        Some("ply") => write_ply(mesh, path),
+        Some("glb") => write_glb(mesh, path),
+        Some("usda") => write_usda(mesh, path),
+        _ => write_obj(mesh, path),
+    }
+}

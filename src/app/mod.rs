@@ -7,7 +7,7 @@ mod ui_panels;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use eframe::egui;
 use eframe::egui_wgpu::RenderState;
@@ -126,6 +126,13 @@ pub(super) enum ExportStatus {
     },
 }
 
+pub(super) struct Toast {
+    pub message: String,
+    pub is_error: bool,
+    pub created: Instant,
+    pub duration: Duration,
+}
+
 /// Async pick state for sculpt mode (1-frame delay, eliminates GPU stall).
 pub(super) enum PickState {
     Idle,
@@ -183,6 +190,8 @@ pub struct SdfApp {
     pub(super) scene_dirty: bool,
     /// Fingerprint at last save/load (to detect unsaved changes).
     pub(super) saved_fingerprint: u64,
+    /// Toast notifications (success/error messages).
+    pub(super) toasts: Vec<Toast>,
 }
 
 impl SdfApp {
@@ -257,6 +266,7 @@ impl SdfApp {
             show_help: false,
             scene_dirty: false,
             saved_fingerprint: 0,
+            toasts: Vec::new(),
         }
     }
 }
@@ -298,6 +308,7 @@ impl eframe::App for SdfApp {
         self.show_status_bar(ctx);
         self.show_help_window(ctx);
         self.show_debug_window(ctx);
+        self.show_toasts(ctx);
 
         let t_ui = Instant::now();
         let baking = !matches!(self.bake_status, BakeStatus::Idle);
