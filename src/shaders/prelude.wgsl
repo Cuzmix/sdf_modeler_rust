@@ -218,6 +218,49 @@ fn sdf_pyramid(p: vec3f, s: vec3f) -> f32 {
     return sqrt((d2 + q.z * q.z) / m2) * sign(max(q.z, -p.y));
 }
 
+// --- Modifier point/distance operations ---
+
+fn twist_point(p: vec3f, rate: f32) -> vec3f {
+    let c = cos(rate * p.y);
+    let s = sin(rate * p.y);
+    return vec3f(c * p.x - s * p.z, p.y, s * p.x + c * p.z);
+}
+
+fn bend_point(p: vec3f, k: f32) -> vec3f {
+    let c = cos(k * p.x);
+    let s = sin(k * p.x);
+    return vec3f(c * p.x - s * p.y, s * p.x + c * p.y, p.z);
+}
+
+fn taper_point(p: vec3f, factor: f32) -> vec3f {
+    let s = 1.0 / (1.0 + factor * p.y);
+    return vec3f(p.x * s, p.y, p.z * s);
+}
+
+fn elongate_point(p: vec3f, h: vec3f) -> vec3f {
+    return p - clamp(p, -h, h);
+}
+
+fn mirror_point(p: vec3f, axes: vec3f) -> vec3f {
+    return select(p, abs(p), axes > vec3f(0.5));
+}
+
+fn repeat_point(p: vec3f, s: vec3f) -> vec3f {
+    var q = p;
+    if s.x > 0.0 { q.x = q.x - s.x * round(q.x / s.x); }
+    if s.y > 0.0 { q.y = q.y - s.y * round(q.y / s.y); }
+    if s.z > 0.0 { q.z = q.z - s.z * round(q.z / s.z); }
+    return q;
+}
+
+fn finite_repeat_point(p: vec3f, s: vec3f, c: vec3f) -> vec3f {
+    var q = p;
+    if s.x > 0.0 { q.x = q.x - s.x * clamp(round(q.x / s.x), -c.x, c.x); }
+    if s.y > 0.0 { q.y = q.y - s.y * clamp(round(q.y / s.y), -c.y, c.y); }
+    if s.z > 0.0 { q.z = q.z - s.z * clamp(round(q.z / s.z), -c.z, c.z); }
+    return q;
+}
+
 // --- Ray-AABB intersection (for scene-level bounding) ---
 
 fn ray_aabb(ro: vec3f, inv_rd: vec3f, bmin: vec3f, bmax: vec3f) -> vec2f {

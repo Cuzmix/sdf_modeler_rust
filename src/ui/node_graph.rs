@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use eframe::egui::{self, Color32, Pos2, Rect, Stroke, Vec2};
 
-use crate::graph::scene::{CsgOp, NodeData, NodeId, Scene, SdfPrimitive, TransformKind};
+use crate::graph::scene::{CsgOp, ModifierKind, NodeData, NodeId, Scene, SdfPrimitive, TransformKind};
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -26,6 +26,7 @@ const COLOR_WIRE_DRAG: Color32 = Color32::from_rgb(100, 180, 255);
 const COLOR_SEL_BORDER: Color32 = Color32::from_rgb(255, 200, 60);
 const COLOR_SCULPT_BADGE: Color32 = Color32::from_rgb(150, 100, 200);
 const COLOR_TRANSFORM_BADGE: Color32 = Color32::from_rgb(100, 180, 170);
+const COLOR_MODIFIER_BADGE: Color32 = Color32::from_rgb(180, 160, 80);
 
 // ---------------------------------------------------------------------------
 // State types
@@ -90,7 +91,9 @@ fn compute_depth(scene: &Scene, id: NodeId, cache: &mut HashMap<NodeId, u32>) ->
             let rd = right.map_or(0, |r| compute_depth(scene, r, cache));
             1 + ld.max(rd)
         }
-        Some(NodeData::Sculpt { input, .. }) | Some(NodeData::Transform { input, .. }) => {
+        Some(NodeData::Sculpt { input, .. })
+        | Some(NodeData::Transform { input, .. })
+        | Some(NodeData::Modifier { input, .. }) => {
             1 + input.map_or(0, |i| compute_depth(scene, i, cache))
         }
         _ => 0,
@@ -183,6 +186,7 @@ fn node_type_label(data: &NodeData) -> &str {
         NodeData::Operation { op, .. } => op.base_name(),
         NodeData::Sculpt { .. } => "Sculpt",
         NodeData::Transform { kind, .. } => kind.base_name(),
+        NodeData::Modifier { kind, .. } => kind.base_name(),
     }
 }
 
@@ -192,6 +196,7 @@ fn badge_color(data: &NodeData) -> Color32 {
         NodeData::Operation { .. } => COLOR_OP_BADGE,
         NodeData::Sculpt { .. } => COLOR_SCULPT_BADGE,
         NodeData::Transform { .. } => COLOR_TRANSFORM_BADGE,
+        NodeData::Modifier { .. } => COLOR_MODIFIER_BADGE,
     }
 }
 
@@ -260,6 +265,57 @@ fn draw_toolbar(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState
             }
         });
 
+        // Modifiers dropdown
+        ui.menu_button("+ Modifier", |ui| {
+            ui.label("Deform");
+            for kind in [ModifierKind::Twist, ModifierKind::Bend, ModifierKind::Taper] {
+                if ui.button(kind.base_name()).clicked() {
+                    if let Some(sel) = state.selected {
+                        let id = scene.insert_modifier_above(sel, kind);
+                        state.selected = Some(id);
+                    } else {
+                        let id = scene.create_modifier(kind, None);
+                        state.selected = Some(id);
+                    }
+                    state.layout_dirty = true;
+                    state.needs_center = true;
+                    ui.close_menu();
+                }
+            }
+            ui.separator();
+            ui.label("Shape");
+            for kind in [ModifierKind::Round, ModifierKind::Onion, ModifierKind::Elongate] {
+                if ui.button(kind.base_name()).clicked() {
+                    if let Some(sel) = state.selected {
+                        let id = scene.insert_modifier_above(sel, kind);
+                        state.selected = Some(id);
+                    } else {
+                        let id = scene.create_modifier(kind, None);
+                        state.selected = Some(id);
+                    }
+                    state.layout_dirty = true;
+                    state.needs_center = true;
+                    ui.close_menu();
+                }
+            }
+            ui.separator();
+            ui.label("Repeat");
+            for kind in [ModifierKind::Mirror, ModifierKind::Repeat, ModifierKind::FiniteRepeat] {
+                if ui.button(kind.base_name()).clicked() {
+                    if let Some(sel) = state.selected {
+                        let id = scene.insert_modifier_above(sel, kind);
+                        state.selected = Some(id);
+                    } else {
+                        let id = scene.create_modifier(kind, None);
+                        state.selected = Some(id);
+                    }
+                    state.layout_dirty = true;
+                    state.needs_center = true;
+                    ui.close_menu();
+                }
+            }
+        });
+
         ui.separator();
 
         let has_selection = state.selected.is_some();
@@ -312,7 +368,7 @@ fn draw_connections(
                     }
                 }
             }
-            NodeData::Sculpt { input, .. } | NodeData::Transform { input, .. } => {
+            NodeData::Sculpt { input, .. } | NodeData::Transform { input, .. } | NodeData::Modifier { input, .. } => {
                 if let Some(input_id) = input {
                     if let (Some(&input_pos), Some(&node_pos)) =
                         (state.node_positions.get(input_id), state.node_positions.get(id))
@@ -410,7 +466,7 @@ fn draw_node_card(
             painter.circle_filled(input_left_port_pos(node_pos, pan), PORT_RADIUS, COLOR_PORT_IN);
             painter.circle_filled(input_right_port_pos(node_pos, pan), PORT_RADIUS, COLOR_PORT_IN);
         }
-        NodeData::Sculpt { .. } | NodeData::Transform { .. } => {
+        NodeData::Sculpt { .. } | NodeData::Transform { .. } | NodeData::Modifier { .. } => {
             painter.circle_filled(input_single_port_pos(node_pos, pan), PORT_RADIUS, COLOR_PORT_IN);
         }
         _ => {}
@@ -475,7 +531,7 @@ fn handle_interaction(
                         break;
                     }
                 }
-                if matches!(data, NodeData::Sculpt { .. } | NodeData::Transform { .. }) {
+                if matches!(data, NodeData::Sculpt { .. } | NodeData::Transform { .. } | NodeData::Modifier { .. }) {
                     let in_s = input_single_port_pos(np, pan);
                     if pos.distance(in_s) < PORT_RADIUS * 3.0 {
                         state.drag = DragState::WireDrag {
@@ -664,6 +720,7 @@ fn get_input_connection(scene: &Scene, node_id: NodeId, port: &PortKind) -> Opti
         (NodeData::Operation { right, .. }, PortKind::InputRight) => *right,
         (NodeData::Sculpt { input, .. }, PortKind::InputSingle) => *input,
         (NodeData::Transform { input, .. }, PortKind::InputSingle) => *input,
+        (NodeData::Modifier { input, .. }, PortKind::InputSingle) => *input,
         _ => None,
     })
 }
@@ -703,7 +760,7 @@ fn hit_input_port(
                 return Some(PortKind::InputRight);
             }
         }
-        NodeData::Sculpt { .. } | NodeData::Transform { .. } => {
+        NodeData::Sculpt { .. } | NodeData::Transform { .. } | NodeData::Modifier { .. } => {
             if !same_port(&PortKind::InputSingle)
                 && release_pos.distance(input_single_port_pos(np, pan)) < PORT_RADIUS * 4.0
             {
@@ -751,7 +808,7 @@ fn try_complete_wire(
                     }
                 }
                 // Dragged from output → looking for Sculpt/Transform input port
-                if matches!(data, NodeData::Sculpt { .. } | NodeData::Transform { .. }) {
+                if matches!(data, NodeData::Sculpt { .. } | NodeData::Transform { .. } | NodeData::Modifier { .. }) {
                     let in_s = input_single_port_pos(np, pan);
                     if release_pos.distance(in_s) < PORT_RADIUS * 4.0 {
                         scene.set_sculpt_input(*id, Some(from_node));

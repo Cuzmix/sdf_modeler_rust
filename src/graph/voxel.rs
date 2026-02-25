@@ -428,6 +428,75 @@ pub fn evaluate_sdf_tree(scene: &Scene, node_id: NodeId, p: Vec3) -> f32 {
                 _ => d,
             }
         }
+        NodeData::Modifier { kind, input, value, extra } => {
+            let Some(child_id) = input else {
+                return FAR_DISTANCE;
+            };
+            use crate::graph::scene::ModifierKind;
+            match kind {
+                // Point modifiers: transform p, then recurse
+                ModifierKind::Twist => {
+                    let rate = value.x;
+                    let c = (rate * p.y).cos();
+                    let s = (rate * p.y).sin();
+                    let tp = Vec3::new(c * p.x - s * p.z, p.y, s * p.x + c * p.z);
+                    evaluate_sdf_tree(scene, *child_id, tp)
+                }
+                ModifierKind::Bend => {
+                    let k = value.x;
+                    let c = (k * p.x).cos();
+                    let s = (k * p.x).sin();
+                    let tp = Vec3::new(c * p.x - s * p.y, s * p.x + c * p.y, p.z);
+                    evaluate_sdf_tree(scene, *child_id, tp)
+                }
+                ModifierKind::Taper => {
+                    let factor = value.x;
+                    let s = 1.0 / (1.0 + factor * p.y);
+                    let tp = Vec3::new(p.x * s, p.y, p.z * s);
+                    evaluate_sdf_tree(scene, *child_id, tp)
+                }
+                ModifierKind::Elongate => {
+                    let h = *value;
+                    let tp = p - p.clamp(-h, h);
+                    evaluate_sdf_tree(scene, *child_id, tp)
+                }
+                ModifierKind::Mirror => {
+                    let axes = *value;
+                    let tp = Vec3::new(
+                        if axes.x > 0.5 { p.x.abs() } else { p.x },
+                        if axes.y > 0.5 { p.y.abs() } else { p.y },
+                        if axes.z > 0.5 { p.z.abs() } else { p.z },
+                    );
+                    evaluate_sdf_tree(scene, *child_id, tp)
+                }
+                ModifierKind::Repeat => {
+                    let s = *value;
+                    let mut q = p;
+                    if s.x > 0.0 { q.x -= s.x * (q.x / s.x).round(); }
+                    if s.y > 0.0 { q.y -= s.y * (q.y / s.y).round(); }
+                    if s.z > 0.0 { q.z -= s.z * (q.z / s.z).round(); }
+                    evaluate_sdf_tree(scene, *child_id, q)
+                }
+                ModifierKind::FiniteRepeat => {
+                    let s = *value;
+                    let c = *extra;
+                    let mut q = p;
+                    if s.x > 0.0 { q.x -= s.x * (q.x / s.x).round().clamp(-c.x, c.x); }
+                    if s.y > 0.0 { q.y -= s.y * (q.y / s.y).round().clamp(-c.y, c.y); }
+                    if s.z > 0.0 { q.z -= s.z * (q.z / s.z).round().clamp(-c.z, c.z); }
+                    evaluate_sdf_tree(scene, *child_id, q)
+                }
+                // Distance modifiers: recurse first, then modify result
+                ModifierKind::Round => {
+                    let d = evaluate_sdf_tree(scene, *child_id, p);
+                    d - value.x
+                }
+                ModifierKind::Onion => {
+                    let d = evaluate_sdf_tree(scene, *child_id, p);
+                    d.abs() - value.x
+                }
+            }
+        }
     }
 }
 
@@ -460,7 +529,7 @@ fn collect_bounds(scene: &Scene, id: NodeId, all_min: &mut Vec3, all_max: &mut V
             *all_min = all_min.min(*position + voxel_grid.bounds_min);
             *all_max = all_max.max(*position + voxel_grid.bounds_max);
         }
-        NodeData::Transform { input, .. } => {
+        NodeData::Transform { input, .. } | NodeData::Modifier { input, .. } => {
             if let Some(i) = input { collect_bounds(scene, *i, all_min, all_max); }
         }
     }

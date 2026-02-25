@@ -158,6 +158,18 @@ pub fn build_node_buffer(
                     extra2: [0.0; 4],
                 });
             }
+            NodeData::Modifier { kind, value, extra, .. } => {
+                buffer.push(SdfNodeGpu {
+                    type_op: [kind.gpu_type_id(), 0.0, 0.0, 0.0],
+                    position: [value.x, value.y, value.z, 0.0],
+                    rotation: [extra.x, extra.y, extra.z, 0.0],
+                    scale: [1.0, 1.0, 1.0, 0.0],
+                    color: [0.0, 0.0, 0.0, is_sel],
+                    extra0: [0.0; 4],
+                    extra1: [0.0; 4],
+                    extra2: [0.0; 4],
+                });
+            }
         }
     }
 

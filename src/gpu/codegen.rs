@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::graph::scene::{NodeData, NodeId, Scene, SceneNode, TransformKind};
+use crate::graph::scene::{ModifierKind, NodeData, NodeId, Scene, SceneNode, TransformKind};
 use crate::settings::RenderConfig;
 
 use super::buffers::collect_sculpt_tex_info;
@@ -173,21 +173,34 @@ fn scene_sdf(p: vec3f) -> vec2f {{
 // Transform chain helpers
 // ---------------------------------------------------------------------------
 
-/// Walk up from `node_id` through ancestors, collecting all Transform ancestors.
-/// Returns chain from innermost (closest to leaf) to outermost.
+/// Chain entry: either a Transform or a point-modifying Modifier.
+#[derive(Clone)]
+enum ChainEntry {
+    Transform(TransformKind),
+    Modifier(ModifierKind),
+}
+
+/// Walk up from `node_id` through ancestors, collecting all Transform and
+/// point-modifying Modifier ancestors. Returns chain from innermost to outermost.
 fn get_transform_chain(
     node_id: NodeId,
     parent_map: &HashMap<NodeId, NodeId>,
     scene: &Scene,
     idx_map: &HashMap<NodeId, usize>,
-) -> Vec<(usize, TransformKind)> {
+) -> Vec<(usize, ChainEntry)> {
     let mut chain = Vec::new();
     let mut current = node_id;
     while let Some(&parent_id) = parent_map.get(&current) {
         if let Some(node) = scene.nodes.get(&parent_id) {
-            if let NodeData::Transform { kind, .. } = &node.data {
-                if let Some(&idx) = idx_map.get(&parent_id) {
-                    chain.push((idx, kind.clone()));
+            if let Some(&idx) = idx_map.get(&parent_id) {
+                match &node.data {
+                    NodeData::Transform { kind, .. } => {
+                        chain.push((idx, ChainEntry::Transform(kind.clone())));
+                    }
+                    NodeData::Modifier { kind, .. } if kind.is_point_modifier() => {
+                        chain.push((idx, ChainEntry::Modifier(kind.clone())));
+                    }
+                    _ => {}
                 }
             }
         }
@@ -201,30 +214,67 @@ fn get_transform_chain(
 fn emit_transform_chain(
     lines: &mut Vec<String>,
     node_idx: usize,
-    chain: &[(usize, TransformKind)],
+    chain: &[(usize, ChainEntry)],
 ) -> String {
     if chain.is_empty() {
         return "p".to_string();
     }
     let mut current_var = "p".to_string();
-    for (step, (transform_idx, kind)) in chain.iter().rev().enumerate() {
+    for (step, (idx, entry)) in chain.iter().rev().enumerate() {
         let new_var = format!("tp{}_{}", node_idx, step);
-        match kind {
-            TransformKind::Translate => {
+        match entry {
+            ChainEntry::Transform(TransformKind::Translate) => {
                 lines.push(format!(
-                    "    let {new_var} = {current_var} - nodes[{transform_idx}].position.xyz;"
+                    "    let {new_var} = {current_var} - nodes[{idx}].position.xyz;"
                 ));
             }
-            TransformKind::Rotate => {
+            ChainEntry::Transform(TransformKind::Rotate) => {
                 lines.push(format!(
-                    "    let {new_var} = rotate_euler({current_var}, nodes[{transform_idx}].rotation.xyz);"
+                    "    let {new_var} = rotate_euler({current_var}, nodes[{idx}].rotation.xyz);"
                 ));
             }
-            TransformKind::Scale => {
+            ChainEntry::Transform(TransformKind::Scale) => {
                 lines.push(format!(
-                    "    let {new_var} = {current_var} / nodes[{transform_idx}].scale.xyz;"
+                    "    let {new_var} = {current_var} / nodes[{idx}].scale.xyz;"
                 ));
             }
+            ChainEntry::Modifier(ModifierKind::Twist) => {
+                lines.push(format!(
+                    "    let {new_var} = twist_point({current_var}, nodes[{idx}].position.x);"
+                ));
+            }
+            ChainEntry::Modifier(ModifierKind::Bend) => {
+                lines.push(format!(
+                    "    let {new_var} = bend_point({current_var}, nodes[{idx}].position.x);"
+                ));
+            }
+            ChainEntry::Modifier(ModifierKind::Taper) => {
+                lines.push(format!(
+                    "    let {new_var} = taper_point({current_var}, nodes[{idx}].position.x);"
+                ));
+            }
+            ChainEntry::Modifier(ModifierKind::Elongate) => {
+                lines.push(format!(
+                    "    let {new_var} = elongate_point({current_var}, nodes[{idx}].position.xyz);"
+                ));
+            }
+            ChainEntry::Modifier(ModifierKind::Mirror) => {
+                lines.push(format!(
+                    "    let {new_var} = mirror_point({current_var}, nodes[{idx}].position.xyz);"
+                ));
+            }
+            ChainEntry::Modifier(ModifierKind::Repeat) => {
+                lines.push(format!(
+                    "    let {new_var} = repeat_point({current_var}, nodes[{idx}].position.xyz);"
+                ));
+            }
+            ChainEntry::Modifier(ModifierKind::FiniteRepeat) => {
+                lines.push(format!(
+                    "    let {new_var} = finite_repeat_point({current_var}, nodes[{idx}].position.xyz, nodes[{idx}].rotation.xyz);"
+                ));
+            }
+            // Round/Onion are distance modifiers, not in chain
+            ChainEntry::Modifier(ModifierKind::Round | ModifierKind::Onion) => unreachable!(),
         }
         current_var = new_var;
     }
@@ -327,6 +377,29 @@ fn emit_node_wgsl(
                             "    let n{i} = vec2f(n{ci}.x * min(nodes[{i}].scale.x, min(nodes[{i}].scale.y, nodes[{i}].scale.z)), n{ci}.y);"
                         ));
                     }
+                    _ => {
+                        lines.push(format!("    let n{i} = n{ci};"));
+                    }
+                }
+            } else {
+                lines.push(format!("    let n{i} = vec2f(1e10, -1.0);"));
+            }
+        }
+        NodeData::Modifier { kind, input, .. } => {
+            let child_idx = input.and_then(|id| idx_map.get(&id).copied());
+            if let Some(ci) = child_idx {
+                match kind {
+                    ModifierKind::Round => {
+                        lines.push(format!(
+                            "    let n{i} = vec2f(n{ci}.x - nodes[{i}].position.x, n{ci}.y);"
+                        ));
+                    }
+                    ModifierKind::Onion => {
+                        lines.push(format!(
+                            "    let n{i} = vec2f(abs(n{ci}.x) - nodes[{i}].position.x, n{ci}.y);"
+                        ));
+                    }
+                    // Point modifiers just pass through (transform chain handles the point)
                     _ => {
                         lines.push(format!("    let n{i} = n{ci};"));
                     }

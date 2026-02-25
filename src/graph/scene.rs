@@ -172,6 +172,97 @@ impl TransformKind {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum ModifierKind {
+    // Domain deformations (modify point before child eval)
+    Twist,
+    Bend,
+    Taper,
+    // Unary modifiers (modify distance after child eval)
+    Round,
+    Onion,
+    Elongate,
+    // Repetition (modify point before child eval)
+    Mirror,
+    Repeat,
+    FiniteRepeat,
+}
+
+impl ModifierKind {
+    pub fn base_name(&self) -> &'static str {
+        match self {
+            Self::Twist => "Twist",
+            Self::Bend => "Bend",
+            Self::Taper => "Taper",
+            Self::Round => "Round",
+            Self::Onion => "Onion",
+            Self::Elongate => "Elongate",
+            Self::Mirror => "Mirror",
+            Self::Repeat => "Repeat",
+            Self::FiniteRepeat => "Finite Repeat",
+        }
+    }
+
+    pub fn badge(&self) -> &'static str {
+        match self {
+            Self::Twist => "[Twi]",
+            Self::Bend => "[Bnd]",
+            Self::Taper => "[Tpr]",
+            Self::Round => "[Rnd]",
+            Self::Onion => "[Oni]",
+            Self::Elongate => "[Elo]",
+            Self::Mirror => "[Mir]",
+            Self::Repeat => "[Rep]",
+            Self::FiniteRepeat => "[FRp]",
+        }
+    }
+
+    pub fn default_value(&self) -> Vec3 {
+        match self {
+            Self::Twist => Vec3::new(1.0, 0.0, 0.0),
+            Self::Bend => Vec3::new(1.0, 0.0, 0.0),
+            Self::Taper => Vec3::new(0.5, 0.0, 0.0),
+            Self::Round => Vec3::new(0.1, 0.0, 0.0),
+            Self::Onion => Vec3::new(0.1, 0.0, 0.0),
+            Self::Elongate => Vec3::new(0.0, 0.5, 0.0),
+            Self::Mirror => Vec3::new(1.0, 0.0, 0.0),
+            Self::Repeat => Vec3::new(2.0, 0.0, 0.0),
+            Self::FiniteRepeat => Vec3::new(2.0, 0.0, 0.0),
+        }
+    }
+
+    pub fn default_extra(&self) -> Vec3 {
+        match self {
+            Self::FiniteRepeat => Vec3::new(2.0, 0.0, 0.0),
+            _ => Vec3::ZERO,
+        }
+    }
+
+    pub fn gpu_type_id(&self) -> f32 {
+        match self {
+            Self::Twist => 30.0,
+            Self::Bend => 31.0,
+            Self::Taper => 32.0,
+            Self::Round => 33.0,
+            Self::Onion => 34.0,
+            Self::Elongate => 35.0,
+            Self::Mirror => 36.0,
+            Self::Repeat => 37.0,
+            Self::FiniteRepeat => 38.0,
+        }
+    }
+
+    /// Point modifiers modify `p` before child evaluation (integrate into transform chain).
+    /// Distance modifiers modify the distance after child evaluation.
+    pub fn is_point_modifier(&self) -> bool {
+        match self {
+            Self::Twist | Self::Bend | Self::Taper
+            | Self::Elongate | Self::Mirror | Self::Repeat | Self::FiniteRepeat => true,
+            Self::Round | Self::Onion => false,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum CsgOp {
     Union,
     SmoothUnion,
@@ -266,6 +357,13 @@ pub enum NodeData {
         input: Option<NodeId>,
         value: Vec3,
     },
+    Modifier {
+        kind: ModifierKind,
+        input: Option<NodeId>,
+        value: Vec3,
+        #[serde(default)]
+        extra: Vec3,
+    },
 }
 
 impl NodeData {
@@ -273,7 +371,9 @@ impl NodeData {
     pub fn children(&self) -> impl Iterator<Item = NodeId> {
         let (a, b) = match self {
             NodeData::Operation { left, right, .. } => (*left, *right),
-            NodeData::Sculpt { input, .. } | NodeData::Transform { input, .. } => (*input, None),
+            NodeData::Sculpt { input, .. }
+            | NodeData::Transform { input, .. }
+            | NodeData::Modifier { input, .. } => (*input, None),
             NodeData::Primitive { .. } => (None, None),
         };
         a.into_iter().chain(b)
@@ -367,6 +467,9 @@ impl Scene {
                 NodeData::Transform { input, .. } if *input == Some(id) => {
                     Some((n.id, false, false, true))
                 }
+                NodeData::Modifier { input, .. } if *input == Some(id) => {
+                    Some((n.id, false, false, true))
+                }
                 _ => None,
             })
             .collect();
@@ -381,7 +484,9 @@ impl Scene {
                             *right = None;
                         }
                     }
-                    NodeData::Sculpt { input, .. } | NodeData::Transform { input, .. }
+                    NodeData::Sculpt { input, .. }
+                    | NodeData::Transform { input, .. }
+                    | NodeData::Modifier { input, .. }
                         if is_single_input =>
                     {
                         *input = None;
@@ -461,6 +566,71 @@ impl Scene {
         self.add_node(name, NodeData::Transform { kind, input, value })
     }
 
+    pub fn create_modifier(&mut self, kind: ModifierKind, input: Option<NodeId>) -> NodeId {
+        let name = self.next_name(kind.base_name());
+        let value = kind.default_value();
+        let extra = kind.default_extra();
+        self.add_node(name, NodeData::Modifier { kind, input, value, extra })
+    }
+
+    /// Insert a Modifier above `target_id`.
+    /// Creates a Modifier node with `input = target_id` and rewires all parents.
+    pub fn insert_modifier_above(&mut self, target_id: NodeId, kind: ModifierKind) -> NodeId {
+        let modifier_id = self.create_modifier(kind, Some(target_id));
+
+        let parents: Vec<(NodeId, bool, bool)> = self
+            .nodes
+            .values()
+            .filter_map(|n| {
+                if n.id == modifier_id {
+                    return None;
+                }
+                match &n.data {
+                    NodeData::Operation { left, right, .. } => {
+                        let is_left = *left == Some(target_id);
+                        let is_right = *right == Some(target_id);
+                        if is_left || is_right {
+                            Some((n.id, is_left, is_right))
+                        } else {
+                            None
+                        }
+                    }
+                    NodeData::Sculpt { input, .. }
+                    | NodeData::Transform { input, .. }
+                    | NodeData::Modifier { input, .. }
+                        if *input == Some(target_id) =>
+                    {
+                        Some((n.id, true, false))
+                    }
+                    _ => None,
+                }
+            })
+            .collect();
+
+        for (parent_id, is_left, is_right) in parents {
+            if let Some(parent) = self.nodes.get_mut(&parent_id) {
+                match &mut parent.data {
+                    NodeData::Operation { left, right, .. } => {
+                        if is_left {
+                            *left = Some(modifier_id);
+                        }
+                        if is_right {
+                            *right = Some(modifier_id);
+                        }
+                    }
+                    NodeData::Sculpt { input, .. }
+                    | NodeData::Transform { input, .. }
+                    | NodeData::Modifier { input, .. } => {
+                        *input = Some(modifier_id);
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        modifier_id
+    }
+
     /// Insert a Transform modifier above `target_id`.
     /// Creates a Transform node with `input = target_id` and rewires all parents.
     pub fn insert_transform_above(&mut self, target_id: NodeId, kind: TransformKind) -> NodeId {
@@ -490,6 +660,9 @@ impl Scene {
                     NodeData::Transform { input, .. } if *input == Some(target_id) => {
                         Some((n.id, true, false))
                     }
+                    NodeData::Modifier { input, .. } if *input == Some(target_id) => {
+                        Some((n.id, true, false))
+                    }
                     _ => None,
                 }
             })
@@ -506,7 +679,9 @@ impl Scene {
                             *right = Some(transform_id);
                         }
                     }
-                    NodeData::Sculpt { input, .. } | NodeData::Transform { input, .. } => {
+                    NodeData::Sculpt { input, .. }
+                    | NodeData::Transform { input, .. }
+                    | NodeData::Modifier { input, .. } => {
                         *input = Some(transform_id);
                     }
                     _ => {}
@@ -553,6 +728,9 @@ impl Scene {
                     NodeData::Transform { input, .. } if *input == Some(target_id) => {
                         Some((n.id, true, false))
                     }
+                    NodeData::Modifier { input, .. } if *input == Some(target_id) => {
+                        Some((n.id, true, false))
+                    }
                     _ => None,
                 }
             })
@@ -569,7 +747,9 @@ impl Scene {
                             *right = Some(sculpt_id);
                         }
                     }
-                    NodeData::Sculpt { input, .. } | NodeData::Transform { input, .. } => {
+                    NodeData::Sculpt { input, .. }
+                    | NodeData::Transform { input, .. }
+                    | NodeData::Modifier { input, .. } => {
                         *input = Some(sculpt_id);
                     }
                     _ => {}
@@ -601,7 +781,9 @@ impl Scene {
     pub fn set_sculpt_input(&mut self, node_id: NodeId, child_id: Option<NodeId>) {
         if let Some(node) = self.nodes.get_mut(&node_id) {
             match &mut node.data {
-                NodeData::Sculpt { input, .. } | NodeData::Transform { input, .. } => {
+                NodeData::Sculpt { input, .. }
+                | NodeData::Transform { input, .. }
+                | NodeData::Modifier { input, .. } => {
                     *input = child_id;
                 }
                 _ => {}
@@ -650,6 +832,11 @@ impl Scene {
                 }
                 NodeData::Transform { kind, input, .. } => {
                     3u8.hash(&mut hasher);
+                    std::mem::discriminant(kind).hash(&mut hasher);
+                    input.hash(&mut hasher);
+                }
+                NodeData::Modifier { kind, input, .. } => {
+                    4u8.hash(&mut hasher);
                     std::mem::discriminant(kind).hash(&mut hasher);
                     input.hash(&mut hasher);
                 }
@@ -712,6 +899,14 @@ impl Scene {
                     value.x.to_bits().hash(&mut hasher);
                     value.y.to_bits().hash(&mut hasher);
                     value.z.to_bits().hash(&mut hasher);
+                }
+                NodeData::Modifier { value, extra, .. } => {
+                    value.x.to_bits().hash(&mut hasher);
+                    value.y.to_bits().hash(&mut hasher);
+                    value.z.to_bits().hash(&mut hasher);
+                    extra.x.to_bits().hash(&mut hasher);
+                    extra.y.to_bits().hash(&mut hasher);
+                    extra.z.to_bits().hash(&mut hasher);
                 }
             }
         }
@@ -919,6 +1114,9 @@ impl Scene {
                     NodeData::Transform { input, .. } if *input == Some(subtree_root) => {
                         Some((n.id, true, false))
                     }
+                    NodeData::Modifier { input, .. } if *input == Some(subtree_root) => {
+                        Some((n.id, true, false))
+                    }
                     _ => None,
                 }
             })
@@ -953,7 +1151,9 @@ impl Scene {
                             *right = Some(new_id);
                         }
                     }
-                    NodeData::Sculpt { input, .. } | NodeData::Transform { input, .. } => {
+                    NodeData::Sculpt { input, .. }
+                    | NodeData::Transform { input, .. }
+                    | NodeData::Modifier { input, .. } => {
                         *input = Some(new_id);
                     }
                     _ => {}
@@ -1116,6 +1316,28 @@ impl Scene {
                     if std::mem::discriminant(k1) != std::mem::discriminant(k2)
                         || i1 != i2
                         || v1 != v2
+                    {
+                        return false;
+                    }
+                }
+                (
+                    NodeData::Modifier {
+                        kind: k1,
+                        input: i1,
+                        value: v1,
+                        extra: e1,
+                    },
+                    NodeData::Modifier {
+                        kind: k2,
+                        input: i2,
+                        value: v2,
+                        extra: e2,
+                    },
+                ) => {
+                    if std::mem::discriminant(k1) != std::mem::discriminant(k2)
+                        || i1 != i2
+                        || v1 != v2
+                        || e1 != e2
                     {
                         return false;
                     }

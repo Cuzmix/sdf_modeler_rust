@@ -49,7 +49,7 @@ fn extract_info(scene: &Scene, id: NodeId, selected: Option<NodeId>) -> Option<N
     let (is_leaf, children) = match &node.data {
         NodeData::Primitive { .. } => (true, vec![]),
         NodeData::Operation { left, right, .. } => (false, vec![*left, *right]),
-        NodeData::Sculpt { input, .. } | NodeData::Transform { input, .. } => (false, vec![*input]),
+        NodeData::Sculpt { input, .. } | NodeData::Transform { input, .. } | NodeData::Modifier { input, .. } => (false, vec![*input]),
     };
     Some(NodeInfo { label, is_selected, is_leaf, children })
 }
@@ -169,6 +169,7 @@ fn format_node_label(node: &SceneNode) -> String {
         NodeData::Operation { op, .. } => op.badge(),
         NodeData::Sculpt { .. } => "[Scl]",
         NodeData::Transform { kind, .. } => kind.badge(),
+        NodeData::Modifier { kind, .. } => kind.badge(),
     };
     format!("{} {}", badge, node.name)
 }

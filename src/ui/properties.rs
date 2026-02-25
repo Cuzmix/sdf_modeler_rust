@@ -1,7 +1,7 @@
 use eframe::egui;
 
 use crate::app::BakeRequest;
-use crate::graph::scene::{NodeData, NodeId, Scene, TransformKind};
+use crate::graph::scene::{ModifierKind, NodeData, NodeId, Scene, TransformKind};
 use crate::graph::voxel;
 use crate::sculpt::{BrushMode, FalloffMode, SculptState, DEFAULT_BRUSH_STRENGTH};
 
@@ -573,6 +573,94 @@ pub fn draw(
             if let Some(node) = scene.nodes.get_mut(&id) {
                 if let NodeData::Transform { value: ref mut v, .. } = node.data {
                     *v = value;
+                }
+            }
+        }
+        NodeData::Modifier {
+            kind,
+            input,
+            mut value,
+            mut extra,
+        } => {
+            ui.label(format!("Type: {}", kind.base_name()));
+            ui.separator();
+
+            match input {
+                Some(iid) => {
+                    let input_name = scene.nodes.get(&iid).map(|n| n.name.as_str()).unwrap_or("???");
+                    ui.label(format!("Input: {} (#{})", input_name, iid));
+                }
+                None => { ui.label("Input: (empty)"); }
+            }
+            ui.separator();
+
+            match kind {
+                ModifierKind::Twist => {
+                    ui.horizontal(|ui| {
+                        ui.label("Rate");
+                        ui.add(egui::DragValue::new(&mut value.x).speed(0.05));
+                    });
+                }
+                ModifierKind::Bend => {
+                    ui.horizontal(|ui| {
+                        ui.label("Amount");
+                        ui.add(egui::DragValue::new(&mut value.x).speed(0.05));
+                    });
+                }
+                ModifierKind::Taper => {
+                    ui.horizontal(|ui| {
+                        ui.label("Factor");
+                        ui.add(egui::DragValue::new(&mut value.x).speed(0.05));
+                    });
+                }
+                ModifierKind::Round => {
+                    ui.horizontal(|ui| {
+                        ui.label("Radius");
+                        ui.add(egui::DragValue::new(&mut value.x).speed(0.01).range(0.0..=5.0));
+                    });
+                }
+                ModifierKind::Onion => {
+                    ui.horizontal(|ui| {
+                        ui.label("Thickness");
+                        ui.add(egui::DragValue::new(&mut value.x).speed(0.01).range(0.001..=5.0));
+                    });
+                }
+                ModifierKind::Elongate => {
+                    vec3_editor(ui, "Elongation", &mut value, 0.05, Some(0.0..=10.0), "");
+                }
+                ModifierKind::Mirror => {
+                    ui.horizontal(|ui| {
+                        let mut mx = value.x > 0.5;
+                        let mut my = value.y > 0.5;
+                        let mut mz = value.z > 0.5;
+                        ui.checkbox(&mut mx, "X");
+                        ui.checkbox(&mut my, "Y");
+                        ui.checkbox(&mut mz, "Z");
+                        value.x = if mx { 1.0 } else { 0.0 };
+                        value.y = if my { 1.0 } else { 0.0 };
+                        value.z = if mz { 1.0 } else { 0.0 };
+                    });
+                }
+                ModifierKind::Repeat => {
+                    vec3_editor(ui, "Spacing", &mut value, 0.1, Some(0.0..=20.0), "");
+                }
+                ModifierKind::FiniteRepeat => {
+                    vec3_editor(ui, "Spacing", &mut value, 0.1, Some(0.0..=20.0), "");
+                    vec3_editor(ui, "Count", &mut extra, 1.0, Some(0.0..=50.0), "");
+                }
+            }
+
+            ui.separator();
+            if ui.button("Delete Node").on_hover_text("Remove this node from the scene").clicked() {
+                scene.remove_node(id);
+                return;
+            }
+
+            // Write back
+            if let Some(node) = scene.nodes.get_mut(&id) {
+                if let NodeData::Modifier { value: ref mut v, extra: ref mut e, .. } = node.data {
+                    *v = value;
+                    *e = extra;
                 }
             }
         }
