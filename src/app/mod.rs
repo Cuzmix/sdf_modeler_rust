@@ -312,6 +312,12 @@ impl eframe::App for SdfApp {
         let mut settings_dirty = false;
         let mut bake_request: Option<BakeRequest> = None;
         let sculpt_count = self.sculpt_tex_indices.len();
+        let fps_info = if self.settings.show_fps_overlay {
+            Some((self.timings.avg_fps, self.timings.avg_frame_ms))
+        } else {
+            None
+        };
+        let initial_vsync = self.initial_vsync;
         let mut tab_viewer = SdfTabViewer {
             camera: &mut self.camera,
             scene: &mut self.scene,
@@ -330,7 +336,9 @@ impl eframe::App for SdfApp {
             sculpt_count,
             renaming_node: &mut self.renaming_node,
             rename_buf: &mut self.rename_buf,
-            fps_info: Some((self.timings.avg_fps, self.timings.avg_frame_ms)),
+            fps_info,
+            show_debug: &mut self.show_debug,
+            initial_vsync,
         };
 
         egui::CentralPanel::default()
@@ -458,7 +466,8 @@ impl eframe::App for SdfApp {
             || !matches!(self.export_status, ExportStatus::Idle)
             || !matches!(self.pick_state, PickState::Idle)
             || self.pending_pick.is_some()
-            || settings_dirty;
+            || settings_dirty
+            || self.settings.continuous_repaint;
         if needs_repaint {
             ctx.request_repaint();
         }

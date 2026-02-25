@@ -4,6 +4,10 @@ use std::path::PathBuf;
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Settings {
     pub vsync_enabled: bool,
+    #[serde(default = "default_true")]
+    pub show_fps_overlay: bool,
+    #[serde(default)]
+    pub continuous_repaint: bool,
     #[serde(default)]
     pub render: RenderConfig,
 }
@@ -12,6 +16,8 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             vsync_enabled: true,
+            show_fps_overlay: true,
+            continuous_repaint: false,
             render: RenderConfig::default(),
         }
     }

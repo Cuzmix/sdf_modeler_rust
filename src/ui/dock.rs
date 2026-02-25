@@ -10,7 +10,7 @@ use crate::sculpt::SculptState;
 use crate::ui::gizmo::{GizmoMode, GizmoSpace, GizmoState};
 use crate::ui::node_graph::{self, NodeGraphState};
 use crate::settings::Settings;
-use crate::ui::{properties, render_settings, scene_tree, viewport};
+use crate::ui::{dev_settings, properties, render_settings, scene_tree, viewport};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Tab {
@@ -19,6 +19,7 @@ pub enum Tab {
     Properties,
     SceneTree,
     RenderSettings,
+    DevSettings,
 }
 
 pub fn create_dock_state() -> DockState<Tab> {
@@ -29,7 +30,7 @@ pub fn create_dock_state() -> DockState<Tab> {
         NodeIndex::root(),
         Split::Right,
         0.8,
-        Node::leaf_with(vec![Tab::Properties, Tab::RenderSettings]),
+        Node::leaf_with(vec![Tab::Properties, Tab::RenderSettings, Tab::DevSettings]),
     );
 
     let [_props, _tree] = surface.split(
@@ -73,6 +74,10 @@ pub struct SdfTabViewer<'a> {
     pub rename_buf: &'a mut String,
     /// FPS info for viewport overlay: (fps, frame_ms).
     pub fps_info: Option<(f64, f64)>,
+    /// Controls profiler window visibility (mirrors F4 toggle).
+    pub show_debug: &'a mut bool,
+    /// VSync state at app startup (to detect restart-required).
+    pub initial_vsync: bool,
 }
 
 impl<'a> TabViewer for SdfTabViewer<'a> {
@@ -85,6 +90,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
             Tab::Properties => "Properties".into(),
             Tab::SceneTree => "Scene Tree".into(),
             Tab::RenderSettings => "Render Settings".into(),
+            Tab::DevSettings => "Dev Settings".into(),
         }
     }
 
@@ -147,6 +153,13 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
             }
             Tab::RenderSettings => {
                 if render_settings::draw(ui, self.settings) {
+                    *self.settings_dirty = true;
+                }
+            }
+            Tab::DevSettings => {
+                let before = self.settings.render.clone();
+                dev_settings::draw(ui, self.settings, self.show_debug, self.initial_vsync);
+                if self.settings.render != before {
                     *self.settings_dirty = true;
                 }
             }

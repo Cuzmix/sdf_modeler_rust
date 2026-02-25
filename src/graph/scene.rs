@@ -38,18 +38,7 @@ impl SdfPrimitive {
     }
 
     pub fn default_position(&self) -> Vec3 {
-        match self {
-            Self::Sphere => Vec3::ZERO,
-            Self::Box => Vec3::new(2.0, 0.0, 0.0),
-            Self::Cylinder => Vec3::new(0.0, 0.0, 2.0),
-            Self::Torus => Vec3::new(-2.0, 0.0, 0.0),
-            Self::Cone => Vec3::new(0.0, 0.0, -2.0),
-            Self::Capsule => Vec3::new(-2.0, 0.0, 2.0),
-            Self::Plane => Vec3::ZERO,
-            Self::Ellipsoid => Vec3::new(2.0, 0.0, 2.0),
-            Self::HexPrism => Vec3::new(-2.0, 0.0, -2.0),
-            Self::Pyramid => Vec3::new(2.0, 0.0, -2.0),
-        }
+        Vec3::ZERO
     }
 
     pub fn default_scale(&self) -> Vec3 {

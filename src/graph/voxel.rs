@@ -325,7 +325,7 @@ fn evaluate_sdf(kind: &SdfPrimitive, p: Vec3, s: Vec3) -> f32 {
             let t = ((q.y - 0.5 * xz.y) / (m2 + 0.25)).clamp(0.0, 1.0);
             let a = m2 * (q.x + ss) * (q.x + ss) + q.y * q.y;
             let bb = m2 * (q.x + 0.5 * t) * (q.x + 0.5 * t) + (q.y - m2 * t) * (q.y - m2 * t);
-            let d2 = if q.y.min(-q.x * m2 - q.y * 0.5) > 0.0 { a } else { bb };
+            let d2 = if q.y.min(-q.x * m2 - q.y * 0.5) > 0.0 { 0.0 } else { a.min(bb) };
             ((d2 + q.z * q.z) / m2).sqrt() * q.z.max(-p.y).signum()
         }
     }

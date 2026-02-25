@@ -189,53 +189,11 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
             }
         });
 
-    // --- Performance ---
-    egui::CollapsingHeader::new("Performance")
-        .default_open(true)
-        .show(ui, |ui| {
-            ui.checkbox(&mut config.sculpt_fast_mode, "Fast mode while sculpting")
-                .on_hover_text("Half steps + skip AO/shadows during brush strokes");
-            ui.checkbox(&mut config.auto_reduce_steps, "Auto-reduce steps (multi-sculpt)")
-                .on_hover_text("Halve march steps when 2+ sculpt nodes exist");
-            ui.separator();
-            labeled_slider(ui, "Interaction Scale", &mut config.interaction_render_scale, 0.25..=1.0, false);
-            ui.indent("scale_hint", |ui| {
-                ui.weak("Render resolution during orbit/sculpt (0.5 = half res)");
-            });
-            labeled_slider(ui, "Rest Scale", &mut config.rest_render_scale, 0.25..=1.0, false);
-            ui.indent("rest_hint", |ui| {
-                ui.weak("Render resolution when idle (1.0 = full res)");
-            });
-            ui.separator();
-            ui.checkbox(&mut config.composite_volume_enabled, "Composite Volume Cache")
-                .on_hover_text("Pre-composite all sculpts into a single 3D texture.\nDecouples render cost from sculpt count.");
-            ui.add_enabled_ui(config.composite_volume_enabled, |ui| {
-                let mut res_i32 = config.composite_volume_resolution as i32;
-                labeled_slider_i32(ui, "Volume Resolution", &mut res_i32, 64..=256);
-                config.composite_volume_resolution = res_i32 as u32;
-                ui.indent("comp_hint", |ui| {
-                    // R32Float (4B) + R32Uint (4B) + Rgba8Snorm (4B) = 12 bytes per voxel
-                    let mem_mb = (res_i32 as f32).powi(3) * 12.0 / (1024.0 * 1024.0);
-                    ui.weak(format!("~{:.0} MB VRAM ({}^3 x 3 textures)", mem_mb, res_i32));
-                });
-            });
-        });
-
     let changed = settings.render != before;
     if changed {
         settings.save();
     }
     changed
-}
-
-fn labeled_slider(
-    ui: &mut egui::Ui,
-    label: &str,
-    value: &mut f32,
-    range: std::ops::RangeInclusive<f32>,
-    logarithmic: bool,
-) {
-    labeled_slider_tip(ui, label, value, range, logarithmic, "");
 }
 
 fn labeled_slider_tip(
@@ -257,15 +215,6 @@ fn labeled_slider_tip(
         }
         ui.add(slider);
     });
-}
-
-fn labeled_slider_i32(
-    ui: &mut egui::Ui,
-    label: &str,
-    value: &mut i32,
-    range: std::ops::RangeInclusive<i32>,
-) {
-    labeled_slider_i32_tip(ui, label, value, range, "");
 }
 
 fn labeled_slider_i32_tip(

@@ -214,7 +214,7 @@ fn sdf_pyramid(p: vec3f, s: vec3f) -> f32 {
     let t = clamp((q.y - 0.5 * xz.y) / (m2 + 0.25), 0.0, 1.0);
     let a = m2 * (q.x + ss) * (q.x + ss) + q.y * q.y;
     let bb = m2 * (q.x + 0.5 * t) * (q.x + 0.5 * t) + (q.y - m2 * t) * (q.y - m2 * t);
-    let d2 = select(bb, a, min(q.y, -q.x * m2 - q.y * 0.5) > 0.0);
+    let d2 = select(min(a, bb), 0.0, min(q.y, -q.x * m2 - q.y * 0.5) > 0.0);
     return sqrt((d2 + q.z * q.z) / m2) * sign(max(q.z, -p.y));
 }
 

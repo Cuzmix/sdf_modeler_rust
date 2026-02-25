@@ -1,3 +1,4 @@
+pub mod dev_settings;
 pub mod dock;
 pub mod gizmo;
 pub mod node_graph;

@@ -98,17 +98,6 @@ impl SdfApp {
                     }
                 });
 
-                // --- Settings ---
-                ui.menu_button("Settings", |ui| {
-                    let mut vsync = self.settings.vsync_enabled;
-                    if ui.checkbox(&mut vsync, "VSync").changed() {
-                        self.settings.vsync_enabled = vsync;
-                        self.settings.save();
-                    }
-                    if self.settings.vsync_enabled != self.initial_vsync {
-                        ui.weak("(restart required)");
-                    }
-                });
 
                 // Progress indicators (right-aligned)
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
