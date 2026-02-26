@@ -96,7 +96,7 @@ impl SdfApp {
                 // Flatten: replace entire subtree with standalone Sculpt
                 let new_id = self.scene.flatten_subtree(subtree_root, grid, center, color);
                 self.node_graph_state.selected = Some(new_id);
-                self.node_graph_state.layout_dirty = true;
+                self.node_graph_state.needs_initial_rebuild = true;
                 self.sculpt_state = SculptState::new_active(new_id);
             } else if let Some(sculpt_id) = existing_sculpt {
                 // Re-bake: update existing sculpt node

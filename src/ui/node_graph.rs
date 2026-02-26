@@ -1,87 +1,769 @@
 use std::collections::{HashMap, HashSet};
 
-use eframe::egui::{self, Color32, Pos2, Rect, Stroke, Vec2};
+use eframe::egui::{self, Color32};
+use egui_node_graph2::*;
 
-use crate::graph::scene::{CsgOp, ModifierKind, NodeData, NodeId, Scene, SdfPrimitive, TransformKind};
+use crate::graph::scene::{
+    CsgOp, ModifierKind, NodeData, NodeId as SceneNodeId, Scene, SdfPrimitive, TransformKind,
+};
 
 // ---------------------------------------------------------------------------
-// Constants
+// Badge / port colors (matching old theme)
 // ---------------------------------------------------------------------------
 
-const NODE_WIDTH: f32 = 140.0;
-const NODE_HEIGHT: f32 = 48.0;
-const PORT_RADIUS: f32 = 5.0;
-const COL_SPACING: f32 = 200.0;
-const ROW_SPACING: f32 = 70.0;
-
-const COLOR_BG: Color32 = Color32::from_rgb(30, 30, 38);
-const COLOR_NODE: Color32 = Color32::from_rgb(50, 50, 58);
-const COLOR_NODE_SEL: Color32 = Color32::from_rgb(60, 60, 80);
 const COLOR_PRIM_BADGE: Color32 = Color32::from_rgb(70, 130, 180);
 const COLOR_OP_BADGE: Color32 = Color32::from_rgb(200, 120, 50);
-const COLOR_PORT_OUT: Color32 = Color32::from_rgb(100, 200, 100);
-const COLOR_PORT_IN: Color32 = Color32::from_rgb(200, 100, 100);
-const COLOR_WIRE: Color32 = Color32::from_rgb(160, 160, 180);
-const COLOR_WIRE_DRAG: Color32 = Color32::from_rgb(100, 180, 255);
-const COLOR_SEL_BORDER: Color32 = Color32::from_rgb(255, 200, 60);
 const COLOR_SCULPT_BADGE: Color32 = Color32::from_rgb(150, 100, 200);
 const COLOR_TRANSFORM_BADGE: Color32 = Color32::from_rgb(100, 180, 170);
 const COLOR_MODIFIER_BADGE: Color32 = Color32::from_rgb(180, 160, 80);
+const COLOR_PORT: Color32 = Color32::from_rgb(100, 200, 100);
+
+const COL_SPACING: f32 = 260.0;
+const NODE_WIDTH: f32 = 140.0;
 
 // ---------------------------------------------------------------------------
-// State types
+// Custom types for the graph library
 // ---------------------------------------------------------------------------
 
-#[derive(Clone, Debug)]
-pub enum DragState {
+/// Single data type — all connections carry SDF signals.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SdfDataType {
+    Sdf,
+}
+
+/// We don't use per-port inline value widgets; all editing is in bottom_ui.
+#[derive(Clone, Debug, Default)]
+pub enum SdfValueType {
+    #[default]
     None,
-    MovingNode(NodeId),
-    WireDrag {
-        from_node: NodeId,
-        from_port: PortKind,
-    },
-    Panning,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum PortKind {
-    Output,
-    InputLeft,
-    InputRight,
-    InputSingle,
+/// Custom response type for user events from bottom_ui.
+#[derive(Clone, Debug)]
+pub enum SdfResponse {
+    /// Placeholder — inline editing is tracked via dirty_nodes in user_state.
+    _Unused,
+}
+impl UserResponseTrait for SdfResponse {}
+
+/// Per-node user data stored inside the library's Graph.
+#[derive(Clone, Debug)]
+pub struct SdfNodeData {
+    /// Maps back to the Scene's NodeId.
+    pub scene_node_id: SceneNodeId,
 }
 
-pub struct NodeGraphState {
-    pub node_positions: HashMap<NodeId, Pos2>,
-    pub pan_offset: Vec2,
-    pub selected: Option<NodeId>,
-    pub drag: DragState,
-    pub layout_dirty: bool,
-    pub pinned_positions: HashSet<NodeId>,
-    pub needs_center: bool,
-    pub last_node_count: usize,
+/// Node categories for the node finder.
+#[derive(Clone, Debug)]
+pub enum SdfCategory {
+    Primitive,
+    Operation,
+    Transform,
+    Modifier,
+}
+impl CategoryTrait for SdfCategory {
+    fn name(&self) -> String {
+        match self {
+            Self::Primitive => "Primitive".into(),
+            Self::Operation => "Operation".into(),
+            Self::Transform => "Transform".into(),
+            Self::Modifier => "Modifier".into(),
+        }
+    }
 }
 
-impl NodeGraphState {
+/// Node templates — one per creatable node variant.
+#[derive(Clone, Debug)]
+pub enum SdfNodeTemplate {
+    Primitive(SdfPrimitive),
+    Operation(CsgOp),
+    Transform(TransformKind),
+    Modifier(ModifierKind),
+}
+
+/// User state passed through to all trait methods.
+pub struct SdfGraphUserState {
+    /// Mutable access to scene data for inline editing.
+    /// We snapshot node data before drawing so bottom_ui can mutate it,
+    /// then write back changes after drawing.
+    pub node_data_snapshot: HashMap<SceneNodeId, NodeData>,
+    /// Tracks which snapshot entries were mutated.
+    pub dirty_nodes: HashSet<SceneNodeId>,
+    /// Nodes that were created via the node finder during this frame.
+    pub created_via_finder: Vec<(NodeId, SdfNodeTemplate)>,
+}
+
+impl SdfGraphUserState {
     pub fn new() -> Self {
         Self {
-            node_positions: HashMap::new(),
-            pan_offset: Vec2::ZERO,
-            selected: None,
-            drag: DragState::None,
-            layout_dirty: true,
-            pinned_positions: HashSet::new(),
-            needs_center: true,
-            last_node_count: 0,
+            node_data_snapshot: HashMap::new(),
+            dirty_nodes: HashSet::new(),
+            created_via_finder: Vec::new(),
         }
     }
 }
 
 // ---------------------------------------------------------------------------
-// Auto-layout
+// Trait implementations
 // ---------------------------------------------------------------------------
 
-fn compute_depth(scene: &Scene, id: NodeId, cache: &mut HashMap<NodeId, u32>) -> u32 {
+impl DataTypeTrait<SdfGraphUserState> for SdfDataType {
+    fn data_type_color(&self, _user_state: &mut SdfGraphUserState) -> Color32 {
+        COLOR_PORT
+    }
+
+    fn name(&self) -> std::borrow::Cow<'_, str> {
+        std::borrow::Cow::Borrowed("SDF")
+    }
+}
+
+impl WidgetValueTrait for SdfValueType {
+    type Response = SdfResponse;
+    type UserState = SdfGraphUserState;
+    type NodeData = SdfNodeData;
+
+    fn value_widget(
+        &mut self,
+        param_name: &str,
+        _node_id: NodeId,
+        ui: &mut egui::Ui,
+        _user_state: &mut Self::UserState,
+        _node_data: &Self::NodeData,
+    ) -> Vec<Self::Response> {
+        ui.label(param_name);
+        vec![]
+    }
+
+    fn value_widget_connected(
+        &mut self,
+        param_name: &str,
+        _node_id: NodeId,
+        ui: &mut egui::Ui,
+        _user_state: &mut Self::UserState,
+        _node_data: &Self::NodeData,
+    ) -> Vec<Self::Response> {
+        ui.label(param_name);
+        vec![]
+    }
+}
+
+impl NodeDataTrait for SdfNodeData {
+    type Response = SdfResponse;
+    type UserState = SdfGraphUserState;
+    type DataType = SdfDataType;
+    type ValueType = SdfValueType;
+
+    fn titlebar_color(
+        &self,
+        _ui: &egui::Ui,
+        _node_id: NodeId,
+        _graph: &Graph<Self, Self::DataType, Self::ValueType>,
+        user_state: &mut Self::UserState,
+    ) -> Option<Color32> {
+        user_state
+            .node_data_snapshot
+            .get(&self.scene_node_id)
+            .map(|data| match data {
+                NodeData::Primitive { .. } => COLOR_PRIM_BADGE,
+                NodeData::Operation { .. } => COLOR_OP_BADGE,
+                NodeData::Sculpt { .. } => COLOR_SCULPT_BADGE,
+                NodeData::Transform { .. } => COLOR_TRANSFORM_BADGE,
+                NodeData::Modifier { .. } => COLOR_MODIFIER_BADGE,
+            })
+    }
+
+    fn bottom_ui(
+        &self,
+        ui: &mut egui::Ui,
+        _node_id: NodeId,
+        _graph: &Graph<Self, Self::DataType, Self::ValueType>,
+        user_state: &mut Self::UserState,
+    ) -> Vec<NodeResponse<Self::Response, Self>>
+    where
+        Self::Response: UserResponseTrait,
+    {
+        let sid = self.scene_node_id;
+        let Some(data) = user_state.node_data_snapshot.get_mut(&sid) else {
+            return vec![];
+        };
+
+        ui.spacing_mut().item_spacing.y = 2.0;
+
+        let mut changed = false;
+
+        match data {
+            NodeData::Primitive {
+                ref mut kind,
+                ref mut position,
+                ref mut rotation,
+                ref mut scale,
+                ref mut color,
+                ref mut metallic,
+                ref mut roughness,
+                ..
+            } => {
+                let mut new_kind = kind.clone();
+                egui::ComboBox::from_id_salt(egui::Id::new(("prim_type", sid)))
+                    .selected_text(new_kind.base_name())
+                    .width(NODE_WIDTH - 12.0)
+                    .show_ui(ui, |ui| {
+                        for v in SdfPrimitive::ALL {
+                            ui.selectable_value(&mut new_kind, v.clone(), v.base_name());
+                        }
+                    });
+                if new_kind != *kind {
+                    *scale = new_kind.default_scale();
+                    *kind = new_kind;
+                    changed = true;
+                }
+
+                changed |= compact_vec3(ui, "Pos", position, 0.05, None);
+                changed |= compact_rotation(ui, "Rot", rotation);
+
+                let params = kind.scale_params();
+                if !params.is_empty() {
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 2.0;
+                        for &(label, axis) in params {
+                            ui.label(egui::RichText::new(label).small());
+                            let val = match axis {
+                                0 => &mut scale.x,
+                                1 => &mut scale.y,
+                                _ => &mut scale.z,
+                            };
+                            if ui
+                                .add(
+                                    egui::DragValue::new(val)
+                                        .speed(0.05)
+                                        .range(0.01..=100.0)
+                                        .max_decimals(2),
+                                )
+                                .changed()
+                            {
+                                changed = true;
+                            }
+                        }
+                    });
+                }
+
+                let mut c = [color.x, color.y, color.z];
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("Col").small());
+                    if ui.color_edit_button_rgb(&mut c).changed() {
+                        changed = true;
+                    }
+                });
+                *color = glam::Vec3::new(c[0], c[1], c[2]);
+
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("Met").small());
+                    if ui
+                        .add(
+                            egui::DragValue::new(metallic)
+                                .speed(0.01)
+                                .range(0.0..=1.0)
+                                .max_decimals(2),
+                        )
+                        .changed()
+                    {
+                        changed = true;
+                    }
+                    ui.label(egui::RichText::new("Rgh").small());
+                    if ui
+                        .add(
+                            egui::DragValue::new(roughness)
+                                .speed(0.01)
+                                .range(0.0..=1.0)
+                                .max_decimals(2),
+                        )
+                        .changed()
+                    {
+                        changed = true;
+                    }
+                });
+            }
+            NodeData::Operation {
+                ref mut op,
+                ref mut smooth_k,
+                ..
+            } => {
+                let mut new_op = op.clone();
+                egui::ComboBox::from_id_salt(egui::Id::new(("op_type", sid)))
+                    .selected_text(new_op.base_name())
+                    .width(NODE_WIDTH - 12.0)
+                    .show_ui(ui, |ui| {
+                        for v in CsgOp::ALL {
+                            ui.selectable_value(&mut new_op, v.clone(), v.base_name());
+                        }
+                    });
+                if new_op != *op {
+                    *smooth_k = new_op.default_smooth_k();
+                    *op = new_op;
+                    changed = true;
+                }
+
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("Smooth K").small());
+                    if ui
+                        .add(
+                            egui::DragValue::new(smooth_k)
+                                .speed(0.01)
+                                .range(0.0..=2.0)
+                                .max_decimals(2),
+                        )
+                        .changed()
+                    {
+                        changed = true;
+                    }
+                });
+            }
+            NodeData::Transform {
+                ref mut kind,
+                ref mut value,
+                ..
+            } => {
+                let mut new_kind = kind.clone();
+                egui::ComboBox::from_id_salt(egui::Id::new(("xform_type", sid)))
+                    .selected_text(new_kind.base_name())
+                    .width(NODE_WIDTH - 12.0)
+                    .show_ui(ui, |ui| {
+                        for v in TransformKind::ALL {
+                            ui.selectable_value(&mut new_kind, v.clone(), v.base_name());
+                        }
+                    });
+                if new_kind != *kind {
+                    *value = new_kind.default_value();
+                    *kind = new_kind;
+                    changed = true;
+                }
+
+                changed |= match kind {
+                    TransformKind::Translate => compact_vec3(ui, "Offset", value, 0.05, None),
+                    TransformKind::Rotate => compact_rotation(ui, "Rot", value),
+                    TransformKind::Scale => {
+                        compact_vec3(ui, "Scale", value, 0.05, Some(0.01..=100.0))
+                    }
+                };
+            }
+            NodeData::Modifier {
+                ref mut kind,
+                ref mut value,
+                ref mut extra,
+                ..
+            } => {
+                let mut new_kind = kind.clone();
+                egui::ComboBox::from_id_salt(egui::Id::new(("mod_type", sid)))
+                    .selected_text(new_kind.base_name())
+                    .width(NODE_WIDTH - 12.0)
+                    .show_ui(ui, |ui| {
+                        for v in ModifierKind::ALL {
+                            ui.selectable_value(&mut new_kind, v.clone(), v.base_name());
+                        }
+                    });
+                if new_kind != *kind {
+                    *value = new_kind.default_value();
+                    *extra = new_kind.default_extra();
+                    *kind = new_kind;
+                    changed = true;
+                }
+
+                changed |= match kind {
+                    ModifierKind::Twist => scalar_drag(ui, "Rate", &mut value.x, 0.05, None),
+                    ModifierKind::Bend => scalar_drag(ui, "Amount", &mut value.x, 0.05, None),
+                    ModifierKind::Taper => scalar_drag(ui, "Factor", &mut value.x, 0.05, None),
+                    ModifierKind::Round => {
+                        scalar_drag(ui, "Radius", &mut value.x, 0.01, Some(0.0..=5.0))
+                    }
+                    ModifierKind::Onion => {
+                        scalar_drag(ui, "Thick", &mut value.x, 0.01, Some(0.001..=5.0))
+                    }
+                    ModifierKind::Elongate => {
+                        compact_vec3(ui, "Elong", value, 0.05, Some(0.0..=10.0))
+                    }
+                    ModifierKind::Mirror => {
+                        let mut c = false;
+                        ui.horizontal(|ui| {
+                            let mut mx = value.x > 0.5;
+                            let mut my = value.y > 0.5;
+                            let mut mz = value.z > 0.5;
+                            c |= ui.checkbox(&mut mx, "X").changed();
+                            c |= ui.checkbox(&mut my, "Y").changed();
+                            c |= ui.checkbox(&mut mz, "Z").changed();
+                            value.x = if mx { 1.0 } else { 0.0 };
+                            value.y = if my { 1.0 } else { 0.0 };
+                            value.z = if mz { 1.0 } else { 0.0 };
+                        });
+                        c
+                    }
+                    ModifierKind::Repeat => {
+                        compact_vec3(ui, "Space", value, 0.1, Some(0.0..=20.0))
+                    }
+                    ModifierKind::FiniteRepeat => {
+                        let c1 = compact_vec3(ui, "Space", value, 0.1, Some(0.0..=20.0));
+                        let c2 = compact_vec3(ui, "Count", extra, 1.0, Some(0.0..=50.0));
+                        c1 || c2
+                    }
+                };
+            }
+            NodeData::Sculpt {
+                ref mut position,
+                ref mut rotation,
+                ref mut color,
+                ref mut metallic,
+                ref mut roughness,
+                ..
+            } => {
+                changed |= compact_vec3(ui, "Pos", position, 0.05, None);
+                changed |= compact_rotation(ui, "Rot", rotation);
+
+                let mut c = [color.x, color.y, color.z];
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("Col").small());
+                    if ui.color_edit_button_rgb(&mut c).changed() {
+                        changed = true;
+                    }
+                });
+                *color = glam::Vec3::new(c[0], c[1], c[2]);
+
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("Met").small());
+                    if ui
+                        .add(
+                            egui::DragValue::new(metallic)
+                                .speed(0.01)
+                                .range(0.0..=1.0)
+                                .max_decimals(2),
+                        )
+                        .changed()
+                    {
+                        changed = true;
+                    }
+                    ui.label(egui::RichText::new("Rgh").small());
+                    if ui
+                        .add(
+                            egui::DragValue::new(roughness)
+                                .speed(0.01)
+                                .range(0.0..=1.0)
+                                .max_decimals(2),
+                        )
+                        .changed()
+                    {
+                        changed = true;
+                    }
+                });
+            }
+        }
+
+        if changed {
+            user_state.dirty_nodes.insert(sid);
+        }
+
+        vec![]
+    }
+}
+
+impl NodeTemplateTrait for SdfNodeTemplate {
+    type NodeData = SdfNodeData;
+    type DataType = SdfDataType;
+    type ValueType = SdfValueType;
+    type UserState = SdfGraphUserState;
+    type CategoryType = SdfCategory;
+
+    fn node_finder_label(&self, _user_state: &mut Self::UserState) -> std::borrow::Cow<'_, str> {
+        match self {
+            Self::Primitive(p) => std::borrow::Cow::Borrowed(p.base_name()),
+            Self::Operation(o) => std::borrow::Cow::Borrowed(o.base_name()),
+            Self::Transform(t) => std::borrow::Cow::Borrowed(t.base_name()),
+            Self::Modifier(m) => std::borrow::Cow::Borrowed(m.base_name()),
+        }
+    }
+
+    fn node_finder_categories(
+        &self,
+        _user_state: &mut Self::UserState,
+    ) -> Vec<Self::CategoryType> {
+        match self {
+            Self::Primitive(_) => vec![SdfCategory::Primitive],
+            Self::Operation(_) => vec![SdfCategory::Operation],
+            Self::Transform(_) => vec![SdfCategory::Transform],
+            Self::Modifier(_) => vec![SdfCategory::Modifier],
+        }
+    }
+
+    fn node_graph_label(&self, _user_state: &mut Self::UserState) -> String {
+        match self {
+            Self::Primitive(p) => p.base_name().to_string(),
+            Self::Operation(o) => o.base_name().to_string(),
+            Self::Transform(t) => t.base_name().to_string(),
+            Self::Modifier(m) => m.base_name().to_string(),
+        }
+    }
+
+    fn user_data(&self, _user_state: &mut Self::UserState) -> Self::NodeData {
+        // scene_node_id will be set by the sync layer after scene creation
+        SdfNodeData { scene_node_id: 0 }
+    }
+
+    fn build_node(
+        &self,
+        graph: &mut Graph<Self::NodeData, Self::DataType, Self::ValueType>,
+        user_state: &mut Self::UserState,
+        node_id: NodeId,
+    ) {
+        // Add ports based on node type
+        match self {
+            Self::Primitive(_) => {
+                // Output only
+                graph.add_output_param(node_id, "out".to_string(), SdfDataType::Sdf);
+            }
+            Self::Operation(_) => {
+                graph.add_input_param(
+                    node_id,
+                    "left".to_string(),
+                    SdfDataType::Sdf,
+                    SdfValueType::None,
+                    InputParamKind::ConnectionOnly,
+                    true,
+                );
+                graph.add_input_param(
+                    node_id,
+                    "right".to_string(),
+                    SdfDataType::Sdf,
+                    SdfValueType::None,
+                    InputParamKind::ConnectionOnly,
+                    true,
+                );
+                graph.add_output_param(node_id, "out".to_string(), SdfDataType::Sdf);
+            }
+            Self::Transform(_) | Self::Modifier(_) => {
+                graph.add_input_param(
+                    node_id,
+                    "input".to_string(),
+                    SdfDataType::Sdf,
+                    SdfValueType::None,
+                    InputParamKind::ConnectionOnly,
+                    true,
+                );
+                graph.add_output_param(node_id, "out".to_string(), SdfDataType::Sdf);
+            }
+        }
+
+        // Record so the sync layer can create the scene node
+        user_state
+            .created_via_finder
+            .push((node_id, self.clone()));
+    }
+}
+
+/// Enumerates all templates for the node finder.
+pub struct AllSdfTemplates;
+
+impl NodeTemplateIter for AllSdfTemplates {
+    type Item = SdfNodeTemplate;
+
+    fn all_kinds(&self) -> Vec<Self::Item> {
+        let mut templates = Vec::new();
+        for p in SdfPrimitive::ALL {
+            templates.push(SdfNodeTemplate::Primitive(p.clone()));
+        }
+        for o in CsgOp::ALL {
+            templates.push(SdfNodeTemplate::Operation(o.clone()));
+        }
+        for t in TransformKind::ALL {
+            templates.push(SdfNodeTemplate::Transform(t.clone()));
+        }
+        for m in ModifierKind::ALL {
+            templates.push(SdfNodeTemplate::Modifier(m.clone()));
+        }
+        templates
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Type aliases
+// ---------------------------------------------------------------------------
+
+pub type SdfGraphState =
+    GraphEditorState<SdfNodeData, SdfDataType, SdfValueType, SdfNodeTemplate, SdfGraphUserState>;
+
+// ---------------------------------------------------------------------------
+// ID Mapping
+// ---------------------------------------------------------------------------
+
+pub struct NodeIdMap {
+    pub scene_to_graph: HashMap<SceneNodeId, NodeId>,
+    pub graph_to_scene: HashMap<NodeId, SceneNodeId>,
+}
+
+impl NodeIdMap {
+    pub fn new() -> Self {
+        Self {
+            scene_to_graph: HashMap::new(),
+            graph_to_scene: HashMap::new(),
+        }
+    }
+
+    pub fn insert(&mut self, scene_id: SceneNodeId, graph_id: NodeId) {
+        self.scene_to_graph.insert(scene_id, graph_id);
+        self.graph_to_scene.insert(graph_id, scene_id);
+    }
+
+    pub fn clear(&mut self) {
+        self.scene_to_graph.clear();
+        self.graph_to_scene.clear();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Sync: Scene -> Graph (full rebuild)
+// ---------------------------------------------------------------------------
+
+pub fn rebuild_graph_from_scene(
+    scene: &Scene,
+    graph_state: &mut SdfGraphState,
+    id_map: &mut NodeIdMap,
+) {
+    // Save old positions (keyed by scene_node_id) before clearing
+    let mut saved_positions: HashMap<SceneNodeId, egui::Pos2> = HashMap::new();
+    for (graph_id, pos) in graph_state.node_positions.iter() {
+        if let Some(&scene_id) = id_map.graph_to_scene.get(&graph_id) {
+            saved_positions.insert(scene_id, *pos);
+        }
+    }
+
+    // Clear the graph
+    id_map.clear();
+    graph_state.graph = Graph::new();
+    graph_state.node_order.clear();
+    graph_state.node_positions = Default::default();
+    graph_state.selected_nodes.clear();
+    graph_state.connection_in_progress = None;
+
+    // Create nodes (sorted by id for determinism)
+    let mut scene_ids: Vec<SceneNodeId> = scene.nodes.keys().copied().collect();
+    scene_ids.sort();
+
+    for &sid in &scene_ids {
+        let Some(node) = scene.nodes.get(&sid) else {
+            continue;
+        };
+        let user_data = SdfNodeData {
+            scene_node_id: sid,
+        };
+        let label = node.name.clone();
+
+        let graph_node_id = graph_state.graph.add_node(label, user_data, |graph, node_id| {
+            // Add ports based on node type
+            match &node.data {
+                NodeData::Primitive { .. } => {
+                    graph.add_output_param(node_id, "out".to_string(), SdfDataType::Sdf);
+                }
+                NodeData::Operation { .. } => {
+                    graph.add_input_param(
+                        node_id,
+                        "left".to_string(),
+                        SdfDataType::Sdf,
+                        SdfValueType::None,
+                        InputParamKind::ConnectionOnly,
+                        true,
+                    );
+                    graph.add_input_param(
+                        node_id,
+                        "right".to_string(),
+                        SdfDataType::Sdf,
+                        SdfValueType::None,
+                        InputParamKind::ConnectionOnly,
+                        true,
+                    );
+                    graph.add_output_param(node_id, "out".to_string(), SdfDataType::Sdf);
+                }
+                NodeData::Sculpt { .. }
+                | NodeData::Transform { .. }
+                | NodeData::Modifier { .. } => {
+                    graph.add_input_param(
+                        node_id,
+                        "input".to_string(),
+                        SdfDataType::Sdf,
+                        SdfValueType::None,
+                        InputParamKind::ConnectionOnly,
+                        true,
+                    );
+                    graph.add_output_param(node_id, "out".to_string(), SdfDataType::Sdf);
+                }
+            }
+        });
+
+        graph_state.node_order.push(graph_node_id);
+        id_map.insert(sid, graph_node_id);
+
+        // Restore saved position or leave for auto-layout
+        if let Some(pos) = saved_positions.get(&sid) {
+            graph_state.node_positions.insert(graph_node_id, *pos);
+        }
+    }
+
+    // Create connections
+    for &sid in &scene_ids {
+        let Some(node) = scene.nodes.get(&sid) else {
+            continue;
+        };
+        let Some(&graph_id) = id_map.scene_to_graph.get(&sid) else {
+            continue;
+        };
+
+        match &node.data {
+            NodeData::Operation { left, right, .. } => {
+                if let Some(left_id) = left {
+                    if let Some(&left_graph_id) = id_map.scene_to_graph.get(left_id) {
+                        let input_id = graph_state.graph[graph_id]
+                            .get_input("left")
+                            .expect("left input");
+                        let output_id = graph_state.graph[left_graph_id]
+                            .get_output("out")
+                            .expect("out output");
+                        graph_state.graph.add_connection(output_id, input_id, 0);
+                    }
+                }
+                if let Some(right_id) = right {
+                    if let Some(&right_graph_id) = id_map.scene_to_graph.get(right_id) {
+                        let input_id = graph_state.graph[graph_id]
+                            .get_input("right")
+                            .expect("right input");
+                        let output_id = graph_state.graph[right_graph_id]
+                            .get_output("out")
+                            .expect("out output");
+                        graph_state.graph.add_connection(output_id, input_id, 0);
+                    }
+                }
+            }
+            NodeData::Sculpt { input, .. }
+            | NodeData::Transform { input, .. }
+            | NodeData::Modifier { input, .. } => {
+                if let Some(input_id_scene) = input {
+                    if let Some(&input_graph_id) = id_map.scene_to_graph.get(input_id_scene) {
+                        let input_id = graph_state.graph[graph_id]
+                            .get_input("input")
+                            .expect("input param");
+                        let output_id = graph_state.graph[input_graph_id]
+                            .get_output("out")
+                            .expect("out output");
+                        graph_state.graph.add_connection(output_id, input_id, 0);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // Auto-layout nodes that don't have saved positions
+    auto_layout_graph(scene, graph_state, id_map);
+}
+
+// ---------------------------------------------------------------------------
+// Auto-layout (depth-based columnar)
+// ---------------------------------------------------------------------------
+
+fn compute_depth(scene: &Scene, id: SceneNodeId, cache: &mut HashMap<SceneNodeId, u32>) -> u32 {
     if let Some(&d) = cache.get(&id) {
         return d;
     }
@@ -102,102 +784,259 @@ fn compute_depth(scene: &Scene, id: NodeId, cache: &mut HashMap<NodeId, u32>) ->
     depth
 }
 
-fn auto_layout(scene: &Scene, state: &mut NodeGraphState) {
-    let mut depth_cache: HashMap<NodeId, u32> = HashMap::new();
-
-    // Compute depth for all nodes
+fn auto_layout_graph(scene: &Scene, graph_state: &mut SdfGraphState, id_map: &NodeIdMap) {
+    let mut depth_cache: HashMap<SceneNodeId, u32> = HashMap::new();
     for &id in scene.nodes.keys() {
         compute_depth(scene, id, &mut depth_cache);
     }
 
-    // Group by column
-    let mut columns: HashMap<u32, Vec<NodeId>> = HashMap::new();
+    let mut columns: HashMap<u32, Vec<SceneNodeId>> = HashMap::new();
     for (&id, &col) in &depth_cache {
         columns.entry(col).or_default().push(id);
     }
-    // Sort each column by id for stable ordering
     for col in columns.values_mut() {
         col.sort();
     }
 
-    // Assign positions
     for (&col, nodes) in &columns {
-        for (row, &id) in nodes.iter().enumerate() {
-            if !state.pinned_positions.contains(&id) {
-                let x = col as f32 * COL_SPACING;
-                let y = row as f32 * ROW_SPACING;
-                state.node_positions.insert(id, Pos2::new(x, y));
+        let mut y = 0.0f32;
+        for &sid in nodes {
+            if let Some(&graph_id) = id_map.scene_to_graph.get(&sid) {
+                // Only set position if not already set (from saved positions)
+                if !graph_state.node_positions.contains_key(graph_id) {
+                    let x = col as f32 * COL_SPACING;
+                    graph_state
+                        .node_positions
+                        .insert(graph_id, egui::Pos2::new(x, y));
+                }
+            }
+            y += 200.0; // Default row spacing
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Process graph responses (Graph -> Scene sync)
+// ---------------------------------------------------------------------------
+
+fn process_graph_responses(
+    responses: &GraphResponse<SdfResponse, SdfNodeData>,
+    scene: &mut Scene,
+    graph_state: &mut SdfGraphState,
+    id_map: &mut NodeIdMap,
+    selected: &mut Option<SceneNodeId>,
+    layout_dirty: &mut bool,
+) {
+    for response in &responses.node_responses {
+        match response {
+            NodeResponse::ConnectEventEnded {
+                output, input, ..
+            } => {
+                // Find which scene nodes are involved
+                let output_graph_node = graph_state.graph.get_output(*output).node;
+                let input_graph_node = graph_state.graph.get_input(*input).node;
+
+                let Some(&source_scene_id) = id_map.graph_to_scene.get(&output_graph_node) else {
+                    continue;
+                };
+                let Some(&target_scene_id) = id_map.graph_to_scene.get(&input_graph_node) else {
+                    continue;
+                };
+
+                // Determine which input port it is by name
+                let input_name = graph_state.graph[input_graph_node]
+                    .inputs
+                    .iter()
+                    .find(|(_, iid)| *iid == *input)
+                    .map(|(name, _)| name.as_str());
+
+                match input_name {
+                    Some("left") => scene.set_left_child(target_scene_id, Some(source_scene_id)),
+                    Some("right") => scene.set_right_child(target_scene_id, Some(source_scene_id)),
+                    Some("input") => {
+                        scene.set_sculpt_input(target_scene_id, Some(source_scene_id))
+                    }
+                    _ => {}
+                }
+                *layout_dirty = true;
+            }
+            NodeResponse::DisconnectEvent { input, .. } => {
+                let input_graph_node = graph_state.graph.get_input(*input).node;
+                let Some(&target_scene_id) = id_map.graph_to_scene.get(&input_graph_node) else {
+                    continue;
+                };
+
+                let input_name = graph_state.graph[input_graph_node]
+                    .inputs
+                    .iter()
+                    .find(|(_, iid)| *iid == *input)
+                    .map(|(name, _)| name.as_str());
+
+                match input_name {
+                    Some("left") => scene.set_left_child(target_scene_id, None),
+                    Some("right") => scene.set_right_child(target_scene_id, None),
+                    Some("input") => scene.set_sculpt_input(target_scene_id, None),
+                    _ => {}
+                }
+                *layout_dirty = true;
+            }
+            NodeResponse::SelectNode(graph_id) => {
+                if let Some(&scene_id) = id_map.graph_to_scene.get(graph_id) {
+                    *selected = Some(scene_id);
+                }
+            }
+            NodeResponse::DeleteNodeFull { node_id, node } => {
+                let scene_id = node.user_data.scene_node_id;
+                scene.remove_node(scene_id);
+                id_map.scene_to_graph.remove(&scene_id);
+                id_map.graph_to_scene.remove(node_id);
+                if *selected == Some(scene_id) {
+                    *selected = None;
+                }
+                *layout_dirty = true;
+            }
+            NodeResponse::CreatedNode(graph_id) => {
+                // Node was created via the node finder.
+                // We need to create the corresponding scene node.
+                // The template was recorded in user_state.created_via_finder
+                // (handled below in draw())
+                let _ = graph_id;
+            }
+            _ => {}
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Public state & draw
+// ---------------------------------------------------------------------------
+
+pub struct NodeGraphState {
+    pub graph_state: SdfGraphState,
+    pub id_map: NodeIdMap,
+    pub user_state: SdfGraphUserState,
+    pub selected: Option<SceneNodeId>,
+    pub layout_dirty: bool,
+    pub last_structure_key: u64,
+    pub needs_initial_rebuild: bool,
+}
+
+impl NodeGraphState {
+    pub fn new() -> Self {
+        Self {
+            graph_state: SdfGraphState::new(1.0),
+            id_map: NodeIdMap::new(),
+            user_state: SdfGraphUserState::new(),
+            selected: None,
+            layout_dirty: true,
+            last_structure_key: 0,
+            needs_initial_rebuild: true,
+        }
+    }
+}
+
+pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState) {
+    // Draw toolbar above the graph
+    draw_toolbar(ui, scene, state);
+
+    // Detect if scene changed externally (undo/redo, load, scene tree edit)
+    let structure_key = scene.structure_key();
+    if state.needs_initial_rebuild || structure_key != state.last_structure_key {
+        rebuild_graph_from_scene(scene, &mut state.graph_state, &mut state.id_map);
+        state.last_structure_key = structure_key;
+        state.needs_initial_rebuild = false;
+
+        // Restore selection in graph
+        if let Some(sel) = state.selected {
+            if let Some(&graph_id) = state.id_map.scene_to_graph.get(&sel) {
+                state.graph_state.selected_nodes = vec![graph_id];
             }
         }
     }
 
-    state.layout_dirty = false;
-}
+    // Snapshot node data for inline editing
+    state.user_state.node_data_snapshot.clear();
+    state.user_state.dirty_nodes.clear();
+    state.user_state.created_via_finder.clear();
+    for (sid, node) in &scene.nodes {
+        state
+            .user_state
+            .node_data_snapshot
+            .insert(*sid, node.data.clone());
+    }
 
-// ---------------------------------------------------------------------------
-// Port position helpers
-// ---------------------------------------------------------------------------
+    // Draw the graph editor in remaining space (below toolbar)
+    let graph_rect = ui.available_rect_before_wrap();
+    let responses = ui
+        .allocate_ui(graph_rect.size(), |ui| {
+            state.graph_state.draw_graph_editor(
+                ui,
+                AllSdfTemplates,
+                &mut state.user_state,
+                vec![],
+            )
+        })
+        .inner;
 
-fn output_port_pos(node_pos: Pos2, pan: Vec2) -> Pos2 {
-    let screen = node_pos + pan;
-    Pos2::new(screen.x + NODE_WIDTH, screen.y + NODE_HEIGHT / 2.0)
-}
+    // Handle nodes created via the node finder
+    let created: Vec<_> = state.user_state.created_via_finder.drain(..).collect();
+    for (graph_id, template) in created {
+        let scene_id = match template {
+            SdfNodeTemplate::Primitive(kind) => scene.create_primitive(kind),
+            SdfNodeTemplate::Operation(op) => scene.create_operation(op, None, None),
+            SdfNodeTemplate::Transform(kind) => scene.create_transform(kind, None),
+            SdfNodeTemplate::Modifier(kind) => scene.create_modifier(kind, None),
+        };
+        // Update the graph node's user_data with the real scene id
+        state.graph_state.graph[graph_id].user_data.scene_node_id = scene_id;
+        // Update the label to match the scene node name
+        if let Some(node) = scene.nodes.get(&scene_id) {
+            state.graph_state.graph[graph_id].label = node.name.clone();
+        }
+        state.id_map.insert(scene_id, graph_id);
+        state.selected = Some(scene_id);
+        state.last_structure_key = scene.structure_key();
+    }
 
-fn input_left_port_pos(node_pos: Pos2, pan: Vec2) -> Pos2 {
-    let screen = node_pos + pan;
-    Pos2::new(screen.x, screen.y + NODE_HEIGHT * 0.33)
-}
+    // Write back dirty node data from inline editing
+    for sid in &state.user_state.dirty_nodes {
+        if let Some(data) = state.user_state.node_data_snapshot.get(sid) {
+            if let Some(node) = scene.nodes.get_mut(sid) {
+                node.data = data.clone();
+            }
+        }
+    }
 
-fn input_right_port_pos(node_pos: Pos2, pan: Vec2) -> Pos2 {
-    let screen = node_pos + pan;
-    Pos2::new(screen.x, screen.y + NODE_HEIGHT * 0.67)
-}
-
-fn input_single_port_pos(node_pos: Pos2, pan: Vec2) -> Pos2 {
-    let screen = node_pos + pan;
-    Pos2::new(screen.x, screen.y + NODE_HEIGHT * 0.5)
-}
-
-fn node_screen_rect(node_pos: Pos2, pan: Vec2) -> Rect {
-    let tl = node_pos + pan;
-    Rect::from_min_size(tl, Vec2::new(NODE_WIDTH, NODE_HEIGHT))
-}
-
-// ---------------------------------------------------------------------------
-// Drawing helpers
-// ---------------------------------------------------------------------------
-
-fn draw_bezier(painter: &egui::Painter, from: Pos2, to: Pos2, color: Color32) {
-    let cp_offset = (to.x - from.x).abs() * 0.5;
-    let cp1 = Pos2::new(from.x + cp_offset, from.y);
-    let cp2 = Pos2::new(to.x - cp_offset, to.y);
-    let bezier = egui::epaint::CubicBezierShape::from_points_stroke(
-        [from, cp1, cp2, to],
-        false,
-        Color32::TRANSPARENT,
-        Stroke::new(2.0, color),
+    // Process graph events
+    let mut layout_dirty = false;
+    process_graph_responses(
+        &responses,
+        scene,
+        &mut state.graph_state,
+        &mut state.id_map,
+        &mut state.selected,
+        &mut layout_dirty,
     );
-    painter.add(bezier);
-}
-
-fn node_type_label(data: &NodeData) -> &str {
-    match data {
-        NodeData::Primitive { kind, .. } => kind.base_name(),
-        NodeData::Operation { op, .. } => op.base_name(),
-        NodeData::Sculpt { .. } => "Sculpt",
-        NodeData::Transform { kind, .. } => kind.base_name(),
-        NodeData::Modifier { kind, .. } => kind.base_name(),
+    if layout_dirty {
+        state.layout_dirty = true;
+        state.last_structure_key = scene.structure_key();
     }
-}
 
-fn badge_color(data: &NodeData) -> Color32 {
-    match data {
-        NodeData::Primitive { .. } => COLOR_PRIM_BADGE,
-        NodeData::Operation { .. } => COLOR_OP_BADGE,
-        NodeData::Sculpt { .. } => COLOR_SCULPT_BADGE,
-        NodeData::Transform { .. } => COLOR_TRANSFORM_BADGE,
-        NodeData::Modifier { .. } => COLOR_MODIFIER_BADGE,
+    // Sync selection from graph to our state
+    if let Some(first_selected) = state.graph_state.selected_nodes.first() {
+        if let Some(&scene_id) = state.id_map.graph_to_scene.get(first_selected) {
+            state.selected = Some(scene_id);
+        }
+    } else if responses.cursor_in_editor && !responses.cursor_in_finder {
+        // User clicked empty space in the graph
+        // Only deselect if no nodes are selected and cursor is in editor
+        if state.graph_state.selected_nodes.is_empty() {
+            state.selected = None;
+        }
     }
+
+    // Draw minimap overlay in the bottom-right corner
+    draw_minimap(ui, graph_rect, scene, state);
 }
 
 // ---------------------------------------------------------------------------
@@ -205,112 +1044,75 @@ fn badge_color(data: &NodeData) -> Color32 {
 // ---------------------------------------------------------------------------
 
 fn draw_toolbar(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState) {
-    ui.horizontal(|ui| {
-        // Primitives dropdown
+    egui::Frame::none()
+        .fill(Color32::from_rgb(30, 30, 35))
+        .inner_margin(egui::Margin::symmetric(6.0, 4.0))
+        .show(ui, |ui| { ui.horizontal(|ui| {
         ui.menu_button("+ Primitive", |ui| {
-            for kind in [
-                SdfPrimitive::Sphere,
-                SdfPrimitive::Box,
-                SdfPrimitive::Cylinder,
-                SdfPrimitive::Torus,
-                SdfPrimitive::Cone,
-                SdfPrimitive::Capsule,
-                SdfPrimitive::Ellipsoid,
-                SdfPrimitive::HexPrism,
-                SdfPrimitive::Pyramid,
-            ] {
+            for kind in SdfPrimitive::ALL {
                 if ui.button(kind.base_name()).clicked() {
-                    scene.create_primitive(kind);
-                    state.layout_dirty = true;
-                    state.needs_center = true;
+                    let id = scene.create_primitive(kind.clone());
+                    state.selected = Some(id);
+                    state.needs_initial_rebuild = true;
                     ui.close_menu();
                 }
             }
         });
 
-        // Operations dropdown
         ui.menu_button("+ Operation", |ui| {
-            for op in [
-                CsgOp::Union,
-                CsgOp::SmoothUnion,
-                CsgOp::Subtract,
-                CsgOp::Intersect,
-            ] {
+            for op in CsgOp::ALL {
                 if ui.button(op.base_name()).clicked() {
-                    create_op_from_selection(scene, state, op);
+                    create_op_from_selection(scene, state, op.clone());
                     ui.close_menu();
                 }
             }
         });
 
-        // Transforms dropdown
         ui.menu_button("+ Transform", |ui| {
-            for kind in [
-                TransformKind::Translate,
-                TransformKind::Rotate,
-                TransformKind::Scale,
-            ] {
+            for kind in TransformKind::ALL {
                 if ui.button(kind.base_name()).clicked() {
                     if let Some(sel) = state.selected {
-                        let transform_id = scene.insert_transform_above(sel, kind);
+                        let transform_id = scene.insert_transform_above(sel, kind.clone());
                         state.selected = Some(transform_id);
                     } else {
-                        let transform_id = scene.create_transform(kind, None);
+                        let transform_id = scene.create_transform(kind.clone(), None);
                         state.selected = Some(transform_id);
                     }
-                    state.layout_dirty = true;
-                    state.needs_center = true;
+                    state.needs_initial_rebuild = true;
                     ui.close_menu();
                 }
             }
         });
 
-        // Modifiers dropdown
         ui.menu_button("+ Modifier", |ui| {
             ui.label("Deform");
             for kind in [ModifierKind::Twist, ModifierKind::Bend, ModifierKind::Taper] {
                 if ui.button(kind.base_name()).clicked() {
-                    if let Some(sel) = state.selected {
-                        let id = scene.insert_modifier_above(sel, kind);
-                        state.selected = Some(id);
-                    } else {
-                        let id = scene.create_modifier(kind, None);
-                        state.selected = Some(id);
-                    }
-                    state.layout_dirty = true;
-                    state.needs_center = true;
+                    toolbar_add_modifier(scene, state, kind);
                     ui.close_menu();
                 }
             }
             ui.separator();
             ui.label("Shape");
-            for kind in [ModifierKind::Round, ModifierKind::Onion, ModifierKind::Elongate] {
+            for kind in [
+                ModifierKind::Round,
+                ModifierKind::Onion,
+                ModifierKind::Elongate,
+            ] {
                 if ui.button(kind.base_name()).clicked() {
-                    if let Some(sel) = state.selected {
-                        let id = scene.insert_modifier_above(sel, kind);
-                        state.selected = Some(id);
-                    } else {
-                        let id = scene.create_modifier(kind, None);
-                        state.selected = Some(id);
-                    }
-                    state.layout_dirty = true;
-                    state.needs_center = true;
+                    toolbar_add_modifier(scene, state, kind);
                     ui.close_menu();
                 }
             }
             ui.separator();
             ui.label("Repeat");
-            for kind in [ModifierKind::Mirror, ModifierKind::Repeat, ModifierKind::FiniteRepeat] {
+            for kind in [
+                ModifierKind::Mirror,
+                ModifierKind::Repeat,
+                ModifierKind::FiniteRepeat,
+            ] {
                 if ui.button(kind.base_name()).clicked() {
-                    if let Some(sel) = state.selected {
-                        let id = scene.insert_modifier_above(sel, kind);
-                        state.selected = Some(id);
-                    } else {
-                        let id = scene.create_modifier(kind, None);
-                        state.selected = Some(id);
-                    }
-                    state.layout_dirty = true;
-                    state.needs_center = true;
+                    toolbar_add_modifier(scene, state, kind);
                     ui.close_menu();
                 }
             }
@@ -319,541 +1121,336 @@ fn draw_toolbar(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState
         ui.separator();
 
         let has_selection = state.selected.is_some();
-        if ui.add_enabled(has_selection, egui::Button::new("Delete")).clicked() {
+        if ui
+            .add_enabled(has_selection, egui::Button::new("Delete"))
+            .clicked()
+        {
             if let Some(sel) = state.selected {
                 scene.remove_node(sel);
                 state.selected = None;
-                state.layout_dirty = true;
-                state.pinned_positions.remove(&sel);
+                state.needs_initial_rebuild = true;
             }
         }
-    });
+    }); });
 }
 
 // ---------------------------------------------------------------------------
-// Connections (wires between nodes)
+// Minimap
 // ---------------------------------------------------------------------------
 
-fn draw_connections(
-    painter: &egui::Painter,
-    node_snapshot: &[(NodeId, NodeData)],
-    state: &NodeGraphState,
-    pan: Vec2,
-) {
-    for (id, data) in node_snapshot {
-        match data {
-            NodeData::Operation { left, right, .. } => {
-                if let Some(left_id) = left {
-                    if let (Some(&left_pos), Some(&op_pos)) =
-                        (state.node_positions.get(left_id), state.node_positions.get(id))
-                    {
-                        draw_bezier(
-                            painter,
-                            output_port_pos(left_pos, pan),
-                            input_left_port_pos(op_pos, pan),
-                            COLOR_WIRE,
-                        );
-                    }
-                }
-                if let Some(right_id) = right {
-                    if let (Some(&right_pos), Some(&op_pos)) =
-                        (state.node_positions.get(right_id), state.node_positions.get(id))
-                    {
-                        draw_bezier(
-                            painter,
-                            output_port_pos(right_pos, pan),
-                            input_right_port_pos(op_pos, pan),
-                            COLOR_WIRE,
-                        );
-                    }
-                }
-            }
-            NodeData::Sculpt { input, .. } | NodeData::Transform { input, .. } | NodeData::Modifier { input, .. } => {
-                if let Some(input_id) = input {
-                    if let (Some(&input_pos), Some(&node_pos)) =
-                        (state.node_positions.get(input_id), state.node_positions.get(id))
-                    {
-                        draw_bezier(
-                            painter,
-                            output_port_pos(input_pos, pan),
-                            input_single_port_pos(node_pos, pan),
-                            COLOR_WIRE,
-                        );
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
+const MINIMAP_W: f32 = 180.0;
+const MINIMAP_H: f32 = 130.0;
+const MINIMAP_MARGIN: f32 = 8.0;
+const MINIMAP_NODE_W: f32 = 18.0;
+const MINIMAP_NODE_H: f32 = 10.0;
+const MINIMAP_BG: Color32 = Color32::from_rgba_premultiplied(20, 20, 25, 200);
+const MINIMAP_VIEWPORT_COLOR: Color32 = Color32::from_rgba_premultiplied(255, 255, 255, 18);
+const MINIMAP_VIEWPORT_STROKE: Color32 = Color32::from_rgba_premultiplied(180, 180, 190, 100);
+const MINIMAP_VIEWPORT_ROUNDING: f32 = 4.0;
+const MINIMAP_PAN_LERP: f32 = 0.25; // smoothing factor for drag panning
 
-    // Wire drag preview
-    if let DragState::WireDrag {
-        from_node,
-        from_port,
-    } = &state.drag
-    {
-        if let Some(&from_pos) = state.node_positions.get(from_node) {
-            let start = match from_port {
-                PortKind::Output => output_port_pos(from_pos, pan),
-                PortKind::InputLeft => input_left_port_pos(from_pos, pan),
-                PortKind::InputRight => input_right_port_pos(from_pos, pan),
-                PortKind::InputSingle => input_single_port_pos(from_pos, pan),
-            };
-            if let Some(mouse) = painter.ctx().pointer_hover_pos() {
-                draw_bezier(painter, start, mouse, COLOR_WIRE_DRAG);
-            }
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Single node card
-// ---------------------------------------------------------------------------
-
-fn draw_node_card(
-    painter: &egui::Painter,
+fn draw_minimap(
+    ui: &mut egui::Ui,
+    graph_rect: egui::Rect,
     scene: &Scene,
-    id: NodeId,
-    data: &NodeData,
-    node_pos: Pos2,
-    pan: Vec2,
-    is_selected: bool,
-) -> Rect {
-    let rect = node_screen_rect(node_pos, pan);
-
-    // Node body
-    let bg = if is_selected { COLOR_NODE_SEL } else { COLOR_NODE };
-    painter.rect_filled(rect, 4.0, bg);
-    if is_selected {
-        painter.rect_stroke(rect, 4.0, Stroke::new(2.0, COLOR_SEL_BORDER));
-    } else {
-        painter.rect_stroke(rect, 4.0, Stroke::new(1.0, Color32::from_rgb(70, 70, 80)));
-    }
-
-    // Badge bar
-    let badge_rect = Rect::from_min_size(rect.min, Vec2::new(NODE_WIDTH, 18.0));
-    painter.rect_filled(
-        badge_rect,
-        egui::Rounding { nw: 4.0, ne: 4.0, sw: 0.0, se: 0.0 },
-        badge_color(data),
-    );
-
-    // Type label
-    painter.text(
-        badge_rect.center(),
-        egui::Align2::CENTER_CENTER,
-        node_type_label(data),
-        egui::FontId::proportional(11.0),
-        Color32::WHITE,
-    );
-
-    // Node name
-    let name = scene.nodes.get(&id).map(|n| n.name.as_str()).unwrap_or("?");
-    painter.text(
-        Pos2::new(rect.center().x, rect.min.y + 32.0),
-        egui::Align2::CENTER_CENTER,
-        name,
-        egui::FontId::proportional(10.0),
-        Color32::from_rgb(200, 200, 210),
-    );
-
-    // Output port (all nodes)
-    painter.circle_filled(output_port_pos(node_pos, pan), PORT_RADIUS, COLOR_PORT_OUT);
-
-    // Input ports
-    match data {
-        NodeData::Operation { .. } => {
-            painter.circle_filled(input_left_port_pos(node_pos, pan), PORT_RADIUS, COLOR_PORT_IN);
-            painter.circle_filled(input_right_port_pos(node_pos, pan), PORT_RADIUS, COLOR_PORT_IN);
-        }
-        NodeData::Sculpt { .. } | NodeData::Transform { .. } | NodeData::Modifier { .. } => {
-            painter.circle_filled(input_single_port_pos(node_pos, pan), PORT_RADIUS, COLOR_PORT_IN);
-        }
-        _ => {}
-    }
-
-    rect
-}
-
-// ---------------------------------------------------------------------------
-// Interaction handling
-// ---------------------------------------------------------------------------
-
-fn handle_interaction(
-    response: &egui::Response,
-    scene: &mut Scene,
     state: &mut NodeGraphState,
-    node_rects: &[(NodeId, Rect)],
-    node_snapshot: &[(NodeId, NodeData)],
-    pan: Vec2,
 ) {
-    let pointer = response
-        .interact_pointer_pos()
-        .or_else(|| response.hover_pos());
+    let node_positions = &state.graph_state.node_positions;
+    if node_positions.is_empty() {
+        return;
+    }
 
-    // Drag started: check ports first, then node bodies
-    if response.drag_started_by(egui::PointerButton::Primary) {
-        if let Some(pos) = pointer {
-            let mut handled = false;
+    let pan = state.graph_state.pan_zoom.pan;
+    let zoom = state.graph_state.pan_zoom.zoom;
 
-            // Check ports (output ports for wire dragging)
-            for (id, data) in node_snapshot {
-                let Some(&np) = state.node_positions.get(id) else {
+    // Collect node positions and their badge colors
+    let mut nodes_info: Vec<(egui::Pos2, Color32, bool)> = Vec::new();
+    let selected_set: HashSet<_> = state.graph_state.selected_nodes.iter().copied().collect();
+
+    for node_id in state.graph_state.node_order.iter().copied() {
+        if let Some(&pos) = node_positions.get(node_id) {
+            let color = state
+                .graph_state
+                .graph
+                .nodes
+                .get(node_id)
+                .and_then(|n| {
+                    scene
+                        .nodes
+                        .get(&n.user_data.scene_node_id)
+                        .map(|sn| match &sn.data {
+                            NodeData::Primitive { .. } => COLOR_PRIM_BADGE,
+                            NodeData::Operation { .. } => COLOR_OP_BADGE,
+                            NodeData::Sculpt { .. } => COLOR_SCULPT_BADGE,
+                            NodeData::Transform { .. } => COLOR_TRANSFORM_BADGE,
+                            NodeData::Modifier { .. } => COLOR_MODIFIER_BADGE,
+                        })
+                })
+                .unwrap_or(Color32::GRAY);
+            let is_selected = selected_set.contains(&node_id);
+            nodes_info.push((pos, color, is_selected));
+        }
+    }
+
+    if nodes_info.is_empty() {
+        return;
+    }
+
+    // Compute bounding box of all nodes in graph space
+    let mut min_x = f32::MAX;
+    let mut min_y = f32::MAX;
+    let mut max_x = f32::MIN;
+    let mut max_y = f32::MIN;
+    for &(pos, _, _) in &nodes_info {
+        min_x = min_x.min(pos.x);
+        min_y = min_y.min(pos.y);
+        max_x = max_x.max(pos.x + NODE_WIDTH);
+        max_y = max_y.max(pos.y + 60.0); // approximate node height
+    }
+
+    // Include viewport bounds in the world bounding box
+    let vp_min_x = -pan.x / zoom;
+    let vp_min_y = -pan.y / zoom;
+    let vp_max_x = (graph_rect.width() - pan.x) / zoom;
+    let vp_max_y = (graph_rect.height() - pan.y) / zoom;
+    min_x = min_x.min(vp_min_x);
+    min_y = min_y.min(vp_min_y);
+    max_x = max_x.max(vp_max_x);
+    max_y = max_y.max(vp_max_y);
+
+    // Add padding
+    let pad = 40.0;
+    min_x -= pad;
+    min_y -= pad;
+    max_x += pad;
+    max_y += pad;
+
+    let world_w = (max_x - min_x).max(1.0);
+    let world_h = (max_y - min_y).max(1.0);
+
+    // Compute scale to fit world into minimap
+    let inner_w = MINIMAP_W - 8.0;
+    let inner_h = MINIMAP_H - 8.0;
+    let scale = (inner_w / world_w).min(inner_h / world_h);
+
+    // Minimap position: bottom-right of graph area
+    let minimap_pos = egui::Pos2::new(
+        graph_rect.right() - MINIMAP_W - MINIMAP_MARGIN,
+        graph_rect.bottom() - MINIMAP_H - MINIMAP_MARGIN,
+    );
+
+    // Use a foreground Area so the minimap floats above the graph and captures input
+    let area_resp = egui::Area::new(egui::Id::new("node_graph_minimap"))
+        .order(egui::Order::Foreground)
+        .fixed_pos(minimap_pos)
+        .interactable(true)
+        .show(ui.ctx(), |ui| {
+            let (minimap_rect, minimap_response) = ui.allocate_exact_size(
+                egui::Vec2::new(MINIMAP_W, MINIMAP_H),
+                egui::Sense::click_and_drag(),
+            );
+
+            let painter = ui.painter();
+
+            // Background
+            painter.rect_filled(minimap_rect, 4.0, MINIMAP_BG);
+            painter.rect_stroke(
+                minimap_rect,
+                4.0,
+                egui::Stroke::new(1.0, Color32::from_rgb(60, 60, 65)),
+            );
+
+            let inner_origin = minimap_rect.min + egui::Vec2::new(4.0, 4.0);
+
+            // Center the content within the minimap
+            let content_w = world_w * scale;
+            let content_h = world_h * scale;
+            let offset_x = (inner_w - content_w) * 0.5;
+            let offset_y = (inner_h - content_h) * 0.5;
+            let origin = inner_origin + egui::Vec2::new(offset_x, offset_y);
+
+            // Helper: world pos to minimap pos
+            let to_minimap = |wx: f32, wy: f32| -> egui::Pos2 {
+                egui::Pos2::new(
+                    origin.x + (wx - min_x) * scale,
+                    origin.y + (wy - min_y) * scale,
+                )
+            };
+
+            // Draw viewport rectangle with rounded corners
+            let vp_tl = to_minimap(vp_min_x, vp_min_y);
+            let vp_br = to_minimap(vp_max_x, vp_max_y);
+            let vp_rect = egui::Rect::from_min_max(vp_tl, vp_br).intersect(minimap_rect);
+            painter.rect_filled(vp_rect, MINIMAP_VIEWPORT_ROUNDING, MINIMAP_VIEWPORT_COLOR);
+            painter.rect_stroke(
+                vp_rect,
+                MINIMAP_VIEWPORT_ROUNDING,
+                egui::Stroke::new(1.0, MINIMAP_VIEWPORT_STROKE),
+            );
+
+            // Draw nodes
+            let node_w = MINIMAP_NODE_W.min(NODE_WIDTH * scale);
+            let node_h = MINIMAP_NODE_H.min(60.0 * scale);
+            for &(pos, color, is_selected) in &nodes_info {
+                let tl = to_minimap(pos.x, pos.y);
+                let node_rect =
+                    egui::Rect::from_min_size(tl, egui::Vec2::new(node_w, node_h));
+
+                if !minimap_rect.intersects(node_rect) {
                     continue;
-                };
-                let out = output_port_pos(np, pan);
-                if pos.distance(out) < PORT_RADIUS * 3.0 {
-                    state.drag = DragState::WireDrag {
-                        from_node: *id,
-                        from_port: PortKind::Output,
-                    };
-                    handled = true;
-                    break;
                 }
-                // Input ports (for rewiring)
-                if matches!(data, NodeData::Operation { .. }) {
-                    let in_l = input_left_port_pos(np, pan);
-                    let in_r = input_right_port_pos(np, pan);
-                    if pos.distance(in_l) < PORT_RADIUS * 3.0 {
-                        state.drag = DragState::WireDrag {
-                            from_node: *id,
-                            from_port: PortKind::InputLeft,
-                        };
-                        handled = true;
-                        break;
-                    }
-                    if pos.distance(in_r) < PORT_RADIUS * 3.0 {
-                        state.drag = DragState::WireDrag {
-                            from_node: *id,
-                            from_port: PortKind::InputRight,
-                        };
-                        handled = true;
-                        break;
-                    }
-                }
-                if matches!(data, NodeData::Sculpt { .. } | NodeData::Transform { .. } | NodeData::Modifier { .. }) {
-                    let in_s = input_single_port_pos(np, pan);
-                    if pos.distance(in_s) < PORT_RADIUS * 3.0 {
-                        state.drag = DragState::WireDrag {
-                            from_node: *id,
-                            from_port: PortKind::InputSingle,
-                        };
-                        handled = true;
-                        break;
-                    }
+
+                painter.rect_filled(node_rect, 2.0, color);
+                if is_selected {
+                    painter.rect_stroke(
+                        node_rect,
+                        2.0,
+                        egui::Stroke::new(1.5, Color32::WHITE),
+                    );
                 }
             }
 
-            // Check node bodies (iterate in reverse draw order for z-priority)
-            if !handled {
-                for &(id, rect) in node_rects.iter().rev() {
-                    if rect.contains(pos) {
-                        state.selected = Some(id);
-                        state.drag = DragState::MovingNode(id);
-                        handled = true;
-                        break;
-                    }
-                }
-            }
+            minimap_response
+        });
 
-            // Click empty space: deselect
-            if !handled {
-                state.selected = None;
-            }
-        }
-    }
-
-    // Dragging: apply movement
-    if response.dragged_by(egui::PointerButton::Primary) {
-        match &state.drag {
-            DragState::MovingNode(id) => {
-                let id = *id;
-                if let Some(pos) = state.node_positions.get_mut(&id) {
-                    *pos += response.drag_delta();
-                    state.pinned_positions.insert(id);
-                }
-            }
-            DragState::WireDrag { .. } => {
-                // Preview wire drawn above — nothing else to do here
-            }
-            _ => {}
-        }
-    }
-
-    // Drag ended: complete wire connection
-    if response.drag_stopped_by(egui::PointerButton::Primary) {
-        if let DragState::WireDrag {
-            from_node,
-            from_port,
-        } = &state.drag
-        {
-            let from_node = *from_node;
-            let from_port = from_port.clone();
-            if let Some(pos) = pointer {
-                try_complete_wire(scene, state, node_snapshot, from_node, &from_port, pos);
-            }
-        }
-        state.drag = DragState::None;
-    }
-
-    // Simple click (no drag): select node or deselect
-    if response.clicked() {
-        if let Some(pos) = pointer {
-            let mut clicked_node = false;
-            for &(id, rect) in node_rects.iter().rev() {
-                if rect.contains(pos) {
-                    state.selected = Some(id);
-                    clicked_node = true;
-                    break;
-                }
-            }
-            if !clicked_node {
-                state.selected = None;
+    let resp = area_resp.inner;
+    // Click-to-pan: clicking/dragging on the minimap centers the viewport
+    if resp.clicked() || resp.dragged() {
+        if let Some(pointer) = ui.ctx().input(|i| i.pointer.hover_pos()) {
+            let minimap_rect = egui::Rect::from_min_size(
+                minimap_pos,
+                egui::Vec2::new(MINIMAP_W, MINIMAP_H),
+            );
+            if minimap_rect.contains(pointer) {
+                let inner_origin = minimap_rect.min + egui::Vec2::new(4.0, 4.0);
+                let content_w = world_w * scale;
+                let content_h = world_h * scale;
+                let offset_x = (inner_w - content_w) * 0.5;
+                let offset_y = (inner_h - content_h) * 0.5;
+                let origin = inner_origin + egui::Vec2::new(offset_x, offset_y);
+                let rel = pointer - origin;
+                let world_x = min_x + rel.x / scale;
+                let world_y = min_y + rel.y / scale;
+                // Target: center viewport on clicked world position
+                let half_vp_w = graph_rect.width() / zoom * 0.5;
+                let half_vp_h = graph_rect.height() / zoom * 0.5;
+                let target_pan = egui::Vec2::new(
+                    -(world_x - half_vp_w) * zoom,
+                    -(world_y - half_vp_h) * zoom,
+                );
+                // Lerp for smooth, lower-sensitivity panning
+                let t = if resp.clicked() { 0.5 } else { MINIMAP_PAN_LERP };
+                let current = state.graph_state.pan_zoom.pan;
+                state.graph_state.pan_zoom.pan = egui::Vec2::new(
+                    current.x + (target_pan.x - current.x) * t,
+                    current.y + (target_pan.y - current.y) * t,
+                );
+                ui.ctx().request_repaint(); // keep animating while dragging
             }
         }
     }
 }
 
-// ---------------------------------------------------------------------------
-// Main draw function
-// ---------------------------------------------------------------------------
-
-pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState) {
-    draw_toolbar(ui, scene, state);
-
-    // Canvas setup
-    let canvas_rect = ui.available_rect_before_wrap();
-    let response = ui.allocate_rect(canvas_rect, egui::Sense::click_and_drag());
-    let painter = ui.painter_at(canvas_rect);
-    painter.rect_filled(canvas_rect, 0.0, COLOR_BG);
-
-    let node_count = scene.nodes.len();
-    if node_count != state.last_node_count {
-        state.layout_dirty = true;
-        state.last_node_count = node_count;
+fn toolbar_add_modifier(scene: &mut Scene, state: &mut NodeGraphState, kind: ModifierKind) {
+    if let Some(sel) = state.selected {
+        let id = scene.insert_modifier_above(sel, kind);
+        state.selected = Some(id);
+    } else {
+        let id = scene.create_modifier(kind, None);
+        state.selected = Some(id);
     }
-
-    if state.layout_dirty {
-        auto_layout(scene, state);
-    }
-
-    // Auto-center graph in canvas after first layout
-    if state.needs_center && !state.node_positions.is_empty() {
-        let mut min = Pos2::new(f32::MAX, f32::MAX);
-        let mut max = Pos2::new(f32::MIN, f32::MIN);
-        for pos in state.node_positions.values() {
-            min.x = min.x.min(pos.x);
-            min.y = min.y.min(pos.y);
-            max.x = max.x.max(pos.x + NODE_WIDTH);
-            max.y = max.y.max(pos.y + NODE_HEIGHT);
-        }
-        let graph_center = Pos2::new((min.x + max.x) / 2.0, (min.y + max.y) / 2.0);
-        let canvas_center = canvas_rect.center();
-        state.pan_offset = Vec2::new(
-            canvas_center.x - graph_center.x,
-            canvas_center.y - graph_center.y,
-        );
-        state.needs_center = false;
-    }
-
-    // Pan: right-drag, middle-drag, or scroll
-    if response.dragged_by(egui::PointerButton::Secondary)
-        || response.dragged_by(egui::PointerButton::Middle)
-    {
-        if !matches!(state.drag, DragState::WireDrag { .. }) {
-            state.pan_offset += response.drag_delta();
-        }
-    }
-    if response.hovered() {
-        let scroll = ui.input(|i| i.smooth_scroll_delta);
-        if scroll != Vec2::ZERO {
-            state.pan_offset += scroll;
-        }
-    }
-
-    let pan = state.pan_offset;
-
-    // Snapshot node data for drawing (avoids borrow conflicts)
-    let node_snapshot: Vec<(NodeId, NodeData)> = scene
-        .nodes
-        .values()
-        .map(|n| (n.id, n.data.clone()))
-        .collect();
-
-    draw_connections(&painter, &node_snapshot, state, pan);
-
-    // Draw node cards + collect rects for hit testing
-    let mut node_rects: Vec<(NodeId, Rect)> = Vec::new();
-    for (id, data) in &node_snapshot {
-        let Some(&node_pos) = state.node_positions.get(id) else {
-            continue;
-        };
-        let rect = node_screen_rect(node_pos, pan);
-        if !canvas_rect.intersects(rect) {
-            continue;
-        }
-        let is_selected = state.selected == Some(*id);
-        draw_node_card(&painter, scene, *id, data, node_pos, pan, is_selected);
-        node_rects.push((*id, rect));
-    }
-
-    handle_interaction(&response, scene, state, &node_rects, &node_snapshot, pan);
+    state.needs_initial_rebuild = true;
 }
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 fn create_op_from_selection(scene: &mut Scene, state: &mut NodeGraphState, op: CsgOp) {
     let tops = scene.top_level_nodes();
-    let left = if tops.len() >= 2 { Some(tops[tops.len() - 2]) } else { None };
+    let left = if tops.len() >= 2 {
+        Some(tops[tops.len() - 2])
+    } else {
+        None
+    };
     let right = tops.last().copied();
     let op_id = scene.create_operation(op, left, right);
     state.selected = Some(op_id);
-    state.layout_dirty = true;
-    state.needs_center = true;
+    state.needs_initial_rebuild = true;
 }
 
-fn get_input_connection(scene: &Scene, node_id: NodeId, port: &PortKind) -> Option<NodeId> {
-    scene.nodes.get(&node_id).and_then(|n| match (&n.data, port) {
-        (NodeData::Operation { left, .. }, PortKind::InputLeft) => *left,
-        (NodeData::Operation { right, .. }, PortKind::InputRight) => *right,
-        (NodeData::Sculpt { input, .. }, PortKind::InputSingle) => *input,
-        (NodeData::Transform { input, .. }, PortKind::InputSingle) => *input,
-        (NodeData::Modifier { input, .. }, PortKind::InputSingle) => *input,
-        _ => None,
-    })
+// ---------------------------------------------------------------------------
+// Widget helpers
+// ---------------------------------------------------------------------------
+
+fn compact_vec3(
+    ui: &mut egui::Ui,
+    label: &str,
+    value: &mut glam::Vec3,
+    speed: f32,
+    range: Option<std::ops::RangeInclusive<f32>>,
+) -> bool {
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 2.0;
+        ui.label(egui::RichText::new(label).small());
+        for (color, comp) in [
+            (Color32::from_rgb(200, 80, 80), &mut value.x),
+            (Color32::from_rgb(80, 200, 80), &mut value.y),
+            (Color32::from_rgb(80, 80, 200), &mut value.z),
+        ] {
+            let mut drag = egui::DragValue::new(comp)
+                .speed(speed)
+                .max_decimals(2)
+                .update_while_editing(false);
+            if let Some(ref r) = range {
+                drag = drag.range(r.clone());
+            }
+            let response = ui.add(drag);
+            if response.changed() {
+                changed = true;
+            }
+            let r = response.rect;
+            ui.painter().line_segment(
+                [
+                    egui::Pos2::new(r.left(), r.bottom()),
+                    egui::Pos2::new(r.right(), r.bottom()),
+                ],
+                egui::Stroke::new(2.0, color),
+            );
+        }
+    });
+    changed
 }
 
-fn set_input_connection(scene: &mut Scene, node_id: NodeId, port: &PortKind, value: Option<NodeId>) {
-    match port {
-        PortKind::InputLeft => scene.set_left_child(node_id, value),
-        PortKind::InputRight => scene.set_right_child(node_id, value),
-        PortKind::InputSingle => scene.set_sculpt_input(node_id, value),
-        PortKind::Output => {}
-    }
+fn compact_rotation(ui: &mut egui::Ui, label: &str, value: &mut glam::Vec3) -> bool {
+    let mut deg = glam::Vec3::new(
+        value.x.to_degrees(),
+        value.y.to_degrees(),
+        value.z.to_degrees(),
+    );
+    let changed = compact_vec3(ui, label, &mut deg, 1.0, None);
+    *value = glam::Vec3::new(
+        deg.x.to_radians(),
+        deg.y.to_radians(),
+        deg.z.to_radians(),
+    );
+    changed
 }
 
-/// Check if the release position hits an input port on this node.
-/// Returns the matching PortKind if hit, skipping the exact same port we started from.
-fn hit_input_port(
-    data: &NodeData,
-    np: Pos2,
-    pan: Vec2,
-    release_pos: Pos2,
-    from_node: NodeId,
-    from_port: &PortKind,
-    target_node: NodeId,
-) -> Option<PortKind> {
-    let same_port = |pk: &PortKind| target_node == from_node && pk == from_port;
-
-    match data {
-        NodeData::Operation { .. } => {
-            if !same_port(&PortKind::InputLeft)
-                && release_pos.distance(input_left_port_pos(np, pan)) < PORT_RADIUS * 4.0
-            {
-                return Some(PortKind::InputLeft);
-            }
-            if !same_port(&PortKind::InputRight)
-                && release_pos.distance(input_right_port_pos(np, pan)) < PORT_RADIUS * 4.0
-            {
-                return Some(PortKind::InputRight);
-            }
+fn scalar_drag(
+    ui: &mut egui::Ui,
+    label: &str,
+    value: &mut f32,
+    speed: f32,
+    range: Option<std::ops::RangeInclusive<f32>>,
+) -> bool {
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        ui.label(egui::RichText::new(label).small());
+        let mut drag = egui::DragValue::new(value).speed(speed).max_decimals(2);
+        if let Some(r) = range {
+            drag = drag.range(r);
         }
-        NodeData::Sculpt { .. } | NodeData::Transform { .. } | NodeData::Modifier { .. } => {
-            if !same_port(&PortKind::InputSingle)
-                && release_pos.distance(input_single_port_pos(np, pan)) < PORT_RADIUS * 4.0
-            {
-                return Some(PortKind::InputSingle);
-            }
+        if ui.add(drag).changed() {
+            changed = true;
         }
-        _ => {}
-    }
-    None
-}
-
-fn try_complete_wire(
-    scene: &mut Scene,
-    state: &mut NodeGraphState,
-    node_snapshot: &[(NodeId, NodeData)],
-    from_node: NodeId,
-    from_port: &PortKind,
-    release_pos: Pos2,
-) {
-    let pan = state.pan_offset;
-
-    for (id, data) in node_snapshot {
-        let Some(&np) = state.node_positions.get(id) else {
-            continue;
-        };
-
-        match from_port {
-            PortKind::Output => {
-                if *id == from_node {
-                    continue;
-                }
-                // Dragged from output → looking for input ports on operations
-                if matches!(data, NodeData::Operation { .. }) {
-                    let in_l = input_left_port_pos(np, pan);
-                    let in_r = input_right_port_pos(np, pan);
-                    if release_pos.distance(in_l) < PORT_RADIUS * 4.0 {
-                        scene.set_left_child(*id, Some(from_node));
-                        state.layout_dirty = true;
-                        return;
-                    }
-                    if release_pos.distance(in_r) < PORT_RADIUS * 4.0 {
-                        scene.set_right_child(*id, Some(from_node));
-                        state.layout_dirty = true;
-                        return;
-                    }
-                }
-                // Dragged from output → looking for Sculpt/Transform input port
-                if matches!(data, NodeData::Sculpt { .. } | NodeData::Transform { .. } | NodeData::Modifier { .. }) {
-                    let in_s = input_single_port_pos(np, pan);
-                    if release_pos.distance(in_s) < PORT_RADIUS * 4.0 {
-                        scene.set_sculpt_input(*id, Some(from_node));
-                        state.layout_dirty = true;
-                        return;
-                    }
-                }
-            }
-            PortKind::InputLeft | PortKind::InputRight | PortKind::InputSingle => {
-                // Dragged from input → check output ports first (rewire)
-                if *id != from_node {
-                    let out = output_port_pos(np, pan);
-                    if release_pos.distance(out) < PORT_RADIUS * 4.0 {
-                        set_input_connection(scene, from_node, from_port, Some(*id));
-                        state.layout_dirty = true;
-                        return;
-                    }
-                }
-                // Dragged from input → check other input ports (swap)
-                if let Some(target_port) = hit_input_port(data, np, pan, release_pos, from_node, from_port, *id) {
-                    let src_val = get_input_connection(scene, from_node, from_port);
-                    let dst_val = get_input_connection(scene, *id, &target_port);
-                    set_input_connection(scene, from_node, from_port, dst_val);
-                    set_input_connection(scene, *id, &target_port, src_val);
-                    state.layout_dirty = true;
-                    return;
-                }
-            }
-        }
-    }
-
-    // No port was hit — disconnect if dragged from an input port
-    match from_port {
-        PortKind::InputLeft => {
-            scene.set_left_child(from_node, None);
-            state.layout_dirty = true;
-        }
-        PortKind::InputRight => {
-            scene.set_right_child(from_node, None);
-            state.layout_dirty = true;
-        }
-        PortKind::InputSingle => {
-            scene.set_sculpt_input(from_node, None);
-            state.layout_dirty = true;
-        }
-        PortKind::Output => {}
-    }
+    });
+    changed
 }

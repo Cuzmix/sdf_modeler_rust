@@ -7,7 +7,7 @@ use super::voxel::VoxelGrid;
 
 pub type NodeId = u64;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum SdfPrimitive {
     Sphere,
     Box,
@@ -22,6 +22,11 @@ pub enum SdfPrimitive {
 }
 
 impl SdfPrimitive {
+    pub const ALL: &[Self] = &[
+        Self::Sphere, Self::Box, Self::Cylinder, Self::Torus, Self::Plane,
+        Self::Cone, Self::Capsule, Self::Ellipsoid, Self::HexPrism, Self::Pyramid,
+    ];
+
     pub fn base_name(&self) -> &'static str {
         match self {
             Self::Sphere => "Sphere",
@@ -130,7 +135,7 @@ impl SdfPrimitive {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum TransformKind {
     Translate,
     Rotate,
@@ -138,6 +143,8 @@ pub enum TransformKind {
 }
 
 impl TransformKind {
+    pub const ALL: &[Self] = &[Self::Translate, Self::Rotate, Self::Scale];
+
     pub fn base_name(&self) -> &'static str {
         match self {
             Self::Translate => "Translate",
@@ -171,7 +178,7 @@ impl TransformKind {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum ModifierKind {
     // Domain deformations (modify point before child eval)
     Twist,
@@ -188,6 +195,12 @@ pub enum ModifierKind {
 }
 
 impl ModifierKind {
+    pub const ALL: &[Self] = &[
+        Self::Twist, Self::Bend, Self::Taper,
+        Self::Round, Self::Onion, Self::Elongate,
+        Self::Mirror, Self::Repeat, Self::FiniteRepeat,
+    ];
+
     pub fn base_name(&self) -> &'static str {
         match self {
             Self::Twist => "Twist",
@@ -262,7 +275,7 @@ impl ModifierKind {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum CsgOp {
     Union,
     SmoothUnion,
@@ -271,6 +284,8 @@ pub enum CsgOp {
 }
 
 impl CsgOp {
+    pub const ALL: &[Self] = &[Self::Union, Self::SmoothUnion, Self::Subtract, Self::Intersect];
+
     pub fn base_name(&self) -> &'static str {
         match self {
             Self::Union => "Union",

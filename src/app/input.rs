@@ -12,7 +12,7 @@ impl SdfApp {
         if let Some(sel) = self.node_graph_state.selected {
             self.scene.remove_node(sel);
             self.node_graph_state.selected = None;
-            self.node_graph_state.layout_dirty = true;
+            self.node_graph_state.needs_initial_rebuild = true;
             self.sculpt_state = SculptState::Inactive;
             self.buffer_dirty = true;
         }
@@ -55,7 +55,7 @@ impl SdfApp {
             {
                 self.scene = restored_scene;
                 self.node_graph_state.selected = restored_sel;
-                self.node_graph_state.layout_dirty = true;
+                self.node_graph_state.needs_initial_rebuild = true;
                 self.buffer_dirty = true;
             }
         } else if redo_pressed {
@@ -65,7 +65,7 @@ impl SdfApp {
             {
                 self.scene = restored_scene;
                 self.node_graph_state.selected = restored_sel;
-                self.node_graph_state.layout_dirty = true;
+                self.node_graph_state.needs_initial_rebuild = true;
                 self.buffer_dirty = true;
             }
         }
@@ -88,7 +88,7 @@ impl SdfApp {
                         self.camera = project.camera;
                         self.history = History::new();
                         self.node_graph_state.selected = None;
-                        self.node_graph_state.layout_dirty = true;
+                        self.node_graph_state.needs_initial_rebuild = true;
                         self.sculpt_state = SculptState::Inactive;
                         self.current_structure_key = 0; // Force pipeline rebuild
                         self.buffer_dirty = true;

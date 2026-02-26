@@ -365,7 +365,7 @@ impl eframe::App for SdfApp {
         if let Some(sel) = self.node_graph_state.selected {
             if !self.scene.nodes.contains_key(&sel) {
                 self.node_graph_state.selected = None;
-                self.node_graph_state.layout_dirty = true;
+                self.node_graph_state.needs_initial_rebuild = true;
                 self.sculpt_state = SculptState::Inactive;
                 self.buffer_dirty = true;
             }

@@ -1,7 +1,7 @@
 use eframe::egui;
 
 use crate::app::BakeRequest;
-use crate::graph::scene::{ModifierKind, NodeData, NodeId, Scene, TransformKind};
+use crate::graph::scene::{CsgOp, ModifierKind, NodeData, NodeId, Scene, SdfPrimitive, TransformKind};
 use crate::graph::voxel;
 use crate::sculpt::{BrushMode, FalloffMode, SculptState, DEFAULT_BRUSH_STRENGTH};
 
@@ -111,7 +111,7 @@ pub fn draw(
 
     match node_data {
         NodeData::Primitive {
-            kind,
+            mut kind,
             mut position,
             mut rotation,
             mut scale,
@@ -120,7 +120,18 @@ pub fn draw(
             mut metallic,
             ..
         } => {
-            ui.label(format!("Type: {}", kind.base_name()));
+            let mut new_kind = kind.clone();
+            egui::ComboBox::from_id_salt("prop_prim_type")
+                .selected_text(new_kind.base_name())
+                .show_ui(ui, |ui| {
+                    for v in SdfPrimitive::ALL {
+                        ui.selectable_value(&mut new_kind, v.clone(), v.base_name());
+                    }
+                });
+            if new_kind != kind {
+                scale = new_kind.default_scale();
+                kind = new_kind;
+            }
             ui.separator();
 
             vec3_editor(ui, "Position", &mut position, 0.05, None, "");
@@ -205,6 +216,7 @@ pub fn draw(
             // Write back
             if let Some(node) = scene.nodes.get_mut(&id) {
                 if let NodeData::Primitive {
+                    kind: ref mut k,
                     position: ref mut p,
                     rotation: ref mut r,
                     scale: ref mut s,
@@ -214,6 +226,7 @@ pub fn draw(
                     ..
                 } = node.data
                 {
+                    *k = kind;
                     *p = position;
                     *r = rotation;
                     *s = scale;
@@ -224,12 +237,23 @@ pub fn draw(
             }
         }
         NodeData::Operation {
-            op,
+            mut op,
             mut smooth_k,
             left,
             right,
         } => {
-            ui.label(format!("Operation: {}", op.base_name()));
+            let mut new_op = op.clone();
+            egui::ComboBox::from_id_salt("prop_op_type")
+                .selected_text(new_op.base_name())
+                .show_ui(ui, |ui| {
+                    for v in CsgOp::ALL {
+                        ui.selectable_value(&mut new_op, v.clone(), v.base_name());
+                    }
+                });
+            if new_op != op {
+                smooth_k = new_op.default_smooth_k();
+                op = new_op;
+            }
             ui.separator();
 
             ui.horizontal(|ui| {
@@ -298,10 +322,12 @@ pub fn draw(
             // Write back
             if let Some(node) = scene.nodes.get_mut(&id) {
                 if let NodeData::Operation {
+                    op: ref mut o,
                     smooth_k: ref mut k,
                     ..
                 } = node.data
                 {
+                    *o = op;
                     *k = smooth_k;
                 }
             }
@@ -525,11 +551,22 @@ pub fn draw(
             }
         }
         NodeData::Transform {
-            kind,
+            mut kind,
             input,
             mut value,
         } => {
-            ui.label(format!("Type: {}", kind.base_name()));
+            let mut new_kind = kind.clone();
+            egui::ComboBox::from_id_salt("prop_xform_type")
+                .selected_text(new_kind.base_name())
+                .show_ui(ui, |ui| {
+                    for v in TransformKind::ALL {
+                        ui.selectable_value(&mut new_kind, v.clone(), v.base_name());
+                    }
+                });
+            if new_kind != kind {
+                value = new_kind.default_value();
+                kind = new_kind;
+            }
             ui.separator();
 
             match input {
@@ -571,18 +608,31 @@ pub fn draw(
 
             // Write back
             if let Some(node) = scene.nodes.get_mut(&id) {
-                if let NodeData::Transform { value: ref mut v, .. } = node.data {
+                if let NodeData::Transform { kind: ref mut k, value: ref mut v, .. } = node.data {
+                    *k = kind;
                     *v = value;
                 }
             }
         }
         NodeData::Modifier {
-            kind,
+            mut kind,
             input,
             mut value,
             mut extra,
         } => {
-            ui.label(format!("Type: {}", kind.base_name()));
+            let mut new_kind = kind.clone();
+            egui::ComboBox::from_id_salt("prop_mod_type")
+                .selected_text(new_kind.base_name())
+                .show_ui(ui, |ui| {
+                    for v in ModifierKind::ALL {
+                        ui.selectable_value(&mut new_kind, v.clone(), v.base_name());
+                    }
+                });
+            if new_kind != kind {
+                value = new_kind.default_value();
+                extra = new_kind.default_extra();
+                kind = new_kind;
+            }
             ui.separator();
 
             match input {
@@ -658,7 +708,8 @@ pub fn draw(
 
             // Write back
             if let Some(node) = scene.nodes.get_mut(&id) {
-                if let NodeData::Modifier { value: ref mut v, extra: ref mut e, .. } = node.data {
+                if let NodeData::Modifier { kind: ref mut k, value: ref mut v, extra: ref mut e, .. } = node.data {
+                    *k = kind;
                     *v = value;
                     *e = extra;
                 }

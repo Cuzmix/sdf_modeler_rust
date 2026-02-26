@@ -128,7 +128,7 @@ impl SdfApp {
             self.scene = Scene::new();
             self.history = History::new();
             self.node_graph_state.selected = None;
-            self.node_graph_state.layout_dirty = true;
+            self.node_graph_state.needs_initial_rebuild = true;
             self.sculpt_state = SculptState::Inactive;
             self.current_structure_key = 0;
             self.buffer_dirty = true;
@@ -143,7 +143,7 @@ impl SdfApp {
                         self.camera = project.camera;
                         self.history = History::new();
                         self.node_graph_state.selected = None;
-                        self.node_graph_state.layout_dirty = true;
+                        self.node_graph_state.needs_initial_rebuild = true;
                         self.sculpt_state = SculptState::Inactive;
                         self.current_structure_key = 0;
                         self.buffer_dirty = true;
@@ -176,7 +176,7 @@ impl SdfApp {
             {
                 self.scene = restored_scene;
                 self.node_graph_state.selected = restored_sel;
-                self.node_graph_state.layout_dirty = true;
+                self.node_graph_state.needs_initial_rebuild = true;
                 self.buffer_dirty = true;
             }
         }
@@ -186,7 +186,7 @@ impl SdfApp {
             {
                 self.scene = restored_scene;
                 self.node_graph_state.selected = restored_sel;
-                self.node_graph_state.layout_dirty = true;
+                self.node_graph_state.needs_initial_rebuild = true;
                 self.buffer_dirty = true;
             }
         }

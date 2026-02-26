@@ -131,7 +131,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                 if let Some(sel) = self.node_graph_state.selected {
                     if !self.scene.nodes.contains_key(&sel) {
                         self.node_graph_state.selected = None;
-                        self.node_graph_state.layout_dirty = true;
+                        self.node_graph_state.needs_initial_rebuild = true;
                     }
                 }
             }
@@ -147,7 +147,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                 if let Some(sel) = self.node_graph_state.selected {
                     if !self.scene.nodes.contains_key(&sel) {
                         self.node_graph_state.selected = None;
-                        self.node_graph_state.layout_dirty = true;
+                        self.node_graph_state.needs_initial_rebuild = true;
                     }
                 }
             }
