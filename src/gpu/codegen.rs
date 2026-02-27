@@ -1,612 +1,589 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use super::scene::{NodeData, NodeId, Scene, SdfOperation, SdfPrimitive, SdfTransform};
+use crate::graph::scene::{ModifierKind, NodeData, NodeId, Scene, SceneNode, TransformKind};
+use crate::settings::RenderConfig;
 
-/// WGSL prelude: structs, bindings, vertex shader, SDF primitives, boolean operations.
-pub const WGSL_PRELUDE: &str = r#"// SDF Raymarching — expression builder codegen
-
-// ── Camera Uniform (group 0) ───────────────────────────────────
-struct Camera {
-    view:          mat4x4f,
-    projection:    mat4x4f,
-    inv_view_proj: mat4x4f,
-    eye:           vec3f,
-    _pad1:         f32,
-    resolution:    vec2f,
-    time:          f32,
-    _pad2:         f32,
-};
-@group(0) @binding(0) var<uniform> camera: Camera;
-
-// ── Scene Data (group 1) ───────────────────────────────────────
-struct SdfNodeGpu {
-    type_op:   vec4f,
-    position:  vec4f,
-    scale:     vec4f,
-    color:     vec4f,
-    _reserved: vec4f,
+use super::buffers::collect_sculpt_tex_info;
+use super::shader_templates::{
+    apply_march_placeholders, build_postlude, format_f32, format_vec3,
+    COMPOSITE_COMPUTE_ENTRY, PICK_COMPUTE_POSTLUDE, SHADER_PRELUDE,
 };
 
-struct SceneInfo {
-    node_count:   u32,
-    selected_idx: i32,
-    _pad0:        u32,
-    _pad1:        u32,
-};
+// ---------------------------------------------------------------------------
+// Voxel texture declarations
+// ---------------------------------------------------------------------------
 
-@group(1) @binding(0) var<storage, read> nodes: array<SdfNodeGpu>;
-@group(1) @binding(1) var<uniform> scene_info: SceneInfo;
-
-// ── Pick Pass (group 2) ──────────────────────────────────────────
-struct PickInfo {
-    click_ndc: vec2f,
-    _pad:      vec2f,
-};
-@group(2) @binding(0) var<uniform> pick_info: PickInfo;
-
-// ── Vertex ──────────────────────────────────────────────────────
-struct VertexOutput {
-    @builtin(position) position: vec4f,
-    @location(0)       uv:       vec2f,
-};
-
-@vertex
-fn vs_main(@builtin(vertex_index) vi: u32) -> VertexOutput {
-    var pos = array<vec2f, 3>(
-        vec2f(-1.0, -1.0),
-        vec2f( 3.0, -1.0),
-        vec2f(-1.0,  3.0),
-    );
-    var out: VertexOutput;
-    out.position = vec4f(pos[vi], 0.0, 1.0);
-    out.uv = pos[vi] * 0.5 + 0.5;
-    return out;
-}
-
-// ── SDF Primitives ──────────────────────────────────────────────
-
-fn sdf_sphere(p: vec3f, s: vec3f) -> f32 {
-    return length(p) - s.x;
-}
-
-fn sdf_box(p: vec3f, s: vec3f) -> f32 {
-    let q = abs(p) - s;
-    return length(max(q, vec3f(0.0))) + min(max(q.x, max(q.y, q.z)), 0.0);
-}
-
-fn sdf_cylinder(p: vec3f, s: vec3f) -> f32 {
-    let d = vec2f(length(p.xz) - s.x, abs(p.y) - s.y);
-    return min(max(d.x, d.y), 0.0) + length(max(d, vec2f(0.0)));
-}
-
-fn sdf_torus(p: vec3f, s: vec3f) -> f32 {
-    let q = vec2f(length(p.xz) - s.x, p.y);
-    return length(q) - s.y;
-}
-
-fn sdf_plane_y(p: vec3f) -> f32 {
-    return p.y;
-}
-
-// ── Boolean Operations ──────────────────────────────────────────
-
-fn op_union(a: f32, b: f32) -> f32 {
-    return min(a, b);
-}
-
-fn op_smooth_union(a: f32, b: f32, k: f32) -> f32 {
-    let h = clamp(0.5 + 0.5 * (b - a) / max(k, 0.0001), 0.0, 1.0);
-    return mix(b, a, h) - k * h * (1.0 - h);
-}
-
-fn op_subtract(a: f32, b: f32) -> f32 {
-    return max(a, -b);
-}
-
-fn op_intersect(a: f32, b: f32) -> f32 {
-    return max(a, b);
-}
-
-// ── Transform Helpers ──────────────────────────────────────────
-
-fn rotate_xyz(p: vec3f, angles: vec3f) -> vec3f {
-    let cx = cos(angles.x); let sx = sin(angles.x);
-    let cy = cos(angles.y); let sy = sin(angles.y);
-    let cz = cos(angles.z); let sz = sin(angles.z);
-    var q = p;
-    q = vec3f(q.x, cx*q.y - sx*q.z, sx*q.y + cx*q.z); // X
-    q = vec3f(cy*q.x + sy*q.z, q.y, -sy*q.x + cy*q.z); // Y
-    q = vec3f(cz*q.x - sz*q.y, sz*q.x + cz*q.y, q.z); // Z
-    return q;
-}
-
-"#;
-
-/// WGSL postlude: raymarching, lighting, gizmo, fragment shaders.
-pub const WGSL_POSTLUDE: &str = r#"
-// ── Raymarching ─────────────────────────────────────────────────
-const MAX_STEPS: i32    = 96;
-const MAX_DIST: f32     = 50.0;
-const SURFACE_DIST: f32 = 0.0005;
-
-struct HitInfo {
-    t:        f32,
-    mat_id:   f32,
-};
-
-fn raymarch(ro: vec3f, rd: vec3f) -> HitInfo {
-    var t = 0.0;
-    var mat_id = -1.0;
-    for (var i = 0; i < MAX_STEPS; i++) {
-        let p = ro + rd * t;
-        let hit = scene_sdf(p);
-        let d = hit.x;
-        mat_id = hit.y;
-        if d < SURFACE_DIST {
-            return HitInfo(t, mat_id);
-        }
-        if t > MAX_DIST {
-            break;
-        }
-        // Conservative step (0.9x) to avoid overshooting at surface creases
-        t += d * 0.9;
-    }
-    return HitInfo(-1.0, -1.0);
-}
-
-// ── Normal via gradient ─────────────────────────────────────────
-fn calc_normal(p: vec3f) -> vec3f {
-    let e = 0.001;
-    let n = vec3f(
-        scene_dist(p + vec3f(e, 0.0, 0.0)) - scene_dist(p - vec3f(e, 0.0, 0.0)),
-        scene_dist(p + vec3f(0.0, e, 0.0)) - scene_dist(p - vec3f(0.0, e, 0.0)),
-        scene_dist(p + vec3f(0.0, 0.0, e)) - scene_dist(p - vec3f(0.0, 0.0, e)),
-    );
-    return normalize(n);
-}
-
-// ── Soft Shadow ─────────────────────────────────────────────────
-fn soft_shadow(ro: vec3f, rd: vec3f, mint: f32, maxt: f32, k: f32) -> f32 {
-    var res = 1.0;
-    var t = mint;
-    for (var i = 0; i < 16; i++) {
-        let d = scene_dist(ro + rd * t);
-        if d < SURFACE_DIST {
-            return 0.0;
-        }
-        res = min(res, k * d / t);
-        t += clamp(d, 0.02, 0.2);
-        if t > maxt {
-            break;
-        }
-    }
-    return clamp(res, 0.0, 1.0);
-}
-
-// ── Ambient Occlusion ───────────────────────────────────────────
-fn calc_ao(p: vec3f, n: vec3f) -> f32 {
-    var occ = 0.0;
-    var scale = 1.0;
-    for (var i = 1; i <= 5; i++) {
-        let step = f32(i) * 0.05;
-        let d = scene_dist(p + n * step);
-        occ += (step - d) * scale;
-        scale *= 0.6;
-    }
-    return clamp(1.0 - 2.0 * occ, 0.0, 1.0);
-}
-
-// ── Gizmo (screen-space lines) ─────────────────────────────────
-
-// Project world point to screen pixel coordinates
-fn world_to_screen(p: vec3f) -> vec3f {
-    let clip = camera.projection * camera.view * vec4f(p, 1.0);
-    if clip.w <= 0.0 { return vec3f(-1000.0, -1000.0, -1.0); } // behind camera
-    let ndc = clip.xy / clip.w;
-    return vec3f((ndc * 0.5 + 0.5) * camera.resolution, clip.w);
-}
-
-// Distance from 2D point to 2D line segment
-fn dist_to_segment_2d(p: vec2f, a: vec2f, b: vec2f) -> f32 {
-    let pa = p - a;
-    let ba = b - a;
-    let h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-8), 0.0, 1.0);
-    return length(pa - ba * h);
-}
-
-// Gizmo axis colors
-fn gizmo_axis_color(axis: u32) -> vec3f {
-    if axis == 1u { return vec3f(1.0, 0.2, 0.2); } // X = red
-    if axis == 2u { return vec3f(0.2, 1.0, 0.2); } // Y = green
-    return vec3f(0.4, 0.4, 1.0);                     // Z = blue
-}
-
-// Compute gizmo endpoints in screen space.
-// Returns axis hit (0=none, 1=X, 2=Y, 3=Z) and pixel distance.
-fn gizmo_hit_axis(pixel: vec2f, center: vec3f, threshold: f32) -> vec2f {
-    let cam_dist = length(camera.eye - center);
-    let gizmo_len = cam_dist * 0.25;
-
-    let cs = world_to_screen(center).xy;
-    let xe = world_to_screen(center + vec3f(gizmo_len, 0.0, 0.0)).xy;
-    let ye = world_to_screen(center + vec3f(0.0, gizmo_len, 0.0)).xy;
-    let ze = world_to_screen(center + vec3f(0.0, 0.0, gizmo_len)).xy;
-
-    let dx = dist_to_segment_2d(pixel, cs, xe);
-    let dy = dist_to_segment_2d(pixel, cs, ye);
-    let dz = dist_to_segment_2d(pixel, cs, ze);
-
-    // Find closest axis within threshold
-    var min_d = threshold;
-    var axis = 0.0;
-    if dz < min_d { min_d = dz; axis = 3.0; }
-    if dy < min_d { min_d = dy; axis = 2.0; }
-    if dx < min_d { min_d = dx; axis = 1.0; }
-    return vec2f(axis, min_d);
-}
-
-// ── Lighting ────────────────────────────────────────────────────
-fn shade(p: vec3f, n: vec3f, rd: vec3f, mat_id: f32) -> vec3f {
-    // Material color
-    var albedo: vec3f;
-    var is_selected = false;
-
-    if mat_id < 0.0 {
-        // Floor: checkerboard
-        let checker = step(0.0, sin(p.x * 3.14159 * 2.0) * sin(p.z * 3.14159 * 2.0));
-        albedo = mix(vec3f(0.15, 0.15, 0.18), vec3f(0.25, 0.25, 0.3), checker);
-    } else {
-        let idx = u32(mat_id);
-        albedo = nodes[idx].color.xyz;
-        is_selected = nodes[idx].type_op.w > 0.5;
+/// Generate WGSL texture declarations and per-sculpt sampling functions.
+/// Returns (wgsl_code, node_id→tex_idx map).
+fn generate_voxel_texture_decls(scene: &Scene) -> (String, HashMap<NodeId, usize>) {
+    let infos = collect_sculpt_tex_info(scene);
+    if infos.is_empty() {
+        return (String::new(), HashMap::new());
     }
 
-    // Directional light
-    let light_dir = normalize(vec3f(0.6, 0.8, 0.4));
-    let light_col = vec3f(1.0, 0.95, 0.9);
+    let mut lines = Vec::new();
+    lines.push("@group(2) @binding(0) var voxel_sampler: sampler;".to_string());
 
-    // Diffuse
-    let ndl = max(dot(n, light_dir), 0.0);
-
-    // Specular (Blinn-Phong)
-    let half_dir = normalize(light_dir - rd);
-    let spec = pow(max(dot(n, half_dir), 0.0), 32.0);
-    let spec_strength = select(0.5, 0.05, mat_id < 0.0);
-
-    // Shadow
-    let shadow = soft_shadow(p + n * 0.01, light_dir, 0.01, 10.0, 16.0);
-
-    // Ambient occlusion
-    let ao = calc_ao(p, n);
-
-    // Ambient
-    let ambient = vec3f(0.12, 0.14, 0.18);
-
-    // Combine
-    var col = albedo * (ambient * ao + light_col * ndl * shadow);
-    col += light_col * spec * spec_strength * shadow;
-
-    // Selection rim highlight
-    if is_selected {
-        let rim = 1.0 - max(dot(n, -rd), 0.0);
-        let rim_intensity = pow(rim, 3.0) * 0.6;
-        col += vec3f(0.3, 0.6, 1.0) * rim_intensity;
+    let mut tex_map = HashMap::new();
+    for info in &infos {
+        let i = info.tex_idx;
+        let binding = i + 1;
+        lines.push(format!(
+            "@group(2) @binding({binding}) var voxel_tex_{i}: texture_3d<f32>;"
+        ));
+        tex_map.insert(info.node_id, i);
     }
 
-    return col;
-}
+    lines.push(String::new());
 
-// ── Fragment ────────────────────────────────────────────────────
-@fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4f {
-    let ndc = in.uv * 2.0 - 1.0;
-
-    let clip_near = vec4f(ndc.x, ndc.y, 0.0, 1.0);
-    let clip_far  = vec4f(ndc.x, ndc.y, 1.0, 1.0);
-
-    let world_near = camera.inv_view_proj * clip_near;
-    let world_far  = camera.inv_view_proj * clip_far;
-
-    let ro = world_near.xyz / world_near.w;
-    let rd = normalize(world_far.xyz / world_far.w - ro);
-
-    let hit = raymarch(ro, rd);
-
-    // Sky background
-    var col: vec3f;
-    var scene_t = hit.t;
-
-    if hit.t < 0.0 {
-        let sky_t = rd.y * 0.5 + 0.5;
-        col = mix(vec3f(0.08, 0.08, 0.12), vec3f(0.15, 0.18, 0.25), sky_t);
-        scene_t = 1e10;
-    } else {
-        let p = ro + rd * hit.t;
-        let n = calc_normal(p);
-        col = shade(p, n, rd, hit.mat_id);
-    }
-
-    // Gizmo overlay (screen-space lines, always on top)
-    if scene_info.selected_idx >= 0 {
-        let sel_idx = u32(scene_info.selected_idx);
-        let gizmo_center = nodes[sel_idx].position.xyz;
-        let pixel = in.uv * camera.resolution;
-        let line_width = 2.0;  // visual line width in pixels
-        let aa_width = 1.5;    // anti-alias feather
-        let g = gizmo_hit_axis(pixel, gizmo_center, line_width + aa_width);
-        if g.x > 0.0 {
-            let axis_col = gizmo_axis_color(u32(g.x));
-            let alpha = 1.0 - smoothstep(line_width - 0.5, line_width + aa_width, g.y);
-            col = mix(col, axis_col, alpha);
-        }
-    }
-
-    // Gamma correction
-    col = pow(col, vec3f(1.0 / 2.2));
-
-    return vec4f(col, 1.0);
-}
-
-// ── Pick Fragment (outputs encoded node ID) ─────────────────────
-@fragment
-fn pick_fs_main(in: VertexOutput) -> @location(0) vec4f {
-    // Use click NDC instead of fragment UV for ray generation
-    let ndc = pick_info.click_ndc;
-
-    let clip_near = vec4f(ndc.x, ndc.y, 0.0, 1.0);
-    let clip_far  = vec4f(ndc.x, ndc.y, 1.0, 1.0);
-
-    let world_near = camera.inv_view_proj * clip_near;
-    let world_far  = camera.inv_view_proj * clip_far;
-
-    let ro = world_near.xyz / world_near.w;
-    let rd = normalize(world_far.xyz / world_far.w - ro);
-
-    let hit = raymarch(ro, rd);
-
-    // Encode: 0=background, 1=floor, 2+=node(index+2), 253=X, 254=Y, 255=Z
-    var id = 0u;
-    if hit.t >= 0.0 {
-        if hit.mat_id < 0.0 {
-            id = 1u;  // floor
+    // Per-sculpt sampling function (differential or total-SDF depending on has_input)
+    for info in &infos {
+        let i = info.tex_idx;
+        if info.has_input {
+            // Differential sculpt: displacement-only sampling (returns 0 outside grid)
+            lines.push(format!("fn disp_voxel_tex_{i}(local_p: vec3f, node_idx: u32) -> f32 {{"));
+            lines.push("    let bmin = nodes[node_idx].extra1.xyz;".to_string());
+            lines.push("    let bmax = nodes[node_idx].extra2.xyz;".to_string());
+            lines.push("    let norm = (local_p - bmin) / (bmax - bmin);".to_string());
+            lines.push("    if any(norm < vec3f(0.0)) || any(norm > vec3f(1.0)) { return 0.0; }".to_string());
+            lines.push(format!(
+                "    return textureSampleLevel(voxel_tex_{i}, voxel_sampler, norm, 0.0).x;"
+            ));
+            lines.push("}".to_string());
         } else {
-            id = u32(hit.mat_id) + 2u;  // node
+            // Standalone sculpt: total-SDF sampling (clamp to edge + box_dist)
+            lines.push(format!("fn sdf_voxel_tex_{i}(local_p: vec3f, node_idx: u32) -> f32 {{"));
+            lines.push("    let bmin = nodes[node_idx].extra1.xyz;".to_string());
+            lines.push("    let bmax = nodes[node_idx].extra2.xyz;".to_string());
+            lines.push("    let clamped = clamp(local_p, bmin, bmax);".to_string());
+            lines.push("    let box_dist = length(local_p - clamped);".to_string());
+            lines.push("    let uv = (clamped - bmin) / (bmax - bmin);".to_string());
+            lines.push(format!(
+                "    return textureSampleLevel(voxel_tex_{i}, voxel_sampler, uv, 0.0).x + box_dist;"
+            ));
+            lines.push("}".to_string());
         }
+        lines.push(String::new());
     }
 
-    // Check gizmo lines (takes priority over scene)
-    if scene_info.selected_idx >= 0 {
-        let sel_idx = u32(scene_info.selected_idx);
-        let gizmo_center = nodes[sel_idx].position.xyz;
-        // Convert click NDC to pixel coordinates
-        let click_pixel = (pick_info.click_ndc * 0.5 + 0.5) * camera.resolution;
-        let pick_threshold = 8.0; // wider hitbox for picking
-        let g = gizmo_hit_axis(click_pixel, gizmo_center, pick_threshold);
-        if g.x > 0.0 {
-            // 253=X, 254=Y, 255=Z
-            id = 252u + u32(g.x);
-        }
-    }
-
-    return vec4f(f32(id) / 255.0, 0.0, 0.0, 1.0);
-}
-"#;
-
-/// Compose a complete WGSL shader from prelude + generated scene_sdf + postlude.
-pub fn compose_shader(scene: &Scene) -> String {
-    let mut wgsl = String::with_capacity(8192);
-    wgsl.push_str(WGSL_PRELUDE);
-    wgsl.push_str("// ── Scene Evaluation (codegen) ──────────────────────────────\n\n");
-    generate_scene_sdf(scene, &mut wgsl);
-    wgsl.push_str(WGSL_POSTLUDE);
-    wgsl
+    (lines.join("\n"), tex_map)
 }
 
-/// Compute a structure key that changes only when graph topology changes.
-/// Excludes parameter values (position, scale, color, smooth_k).
-pub fn structure_key(scene: &Scene) -> u64 {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::Hasher;
-    let mut hasher = DefaultHasher::new();
-    if let Some(root_id) = scene.root_id() {
-        hash_topology(scene, root_id, &mut hasher);
-    }
-    hasher.finish()
+// ---------------------------------------------------------------------------
+// Shader generation (public API)
+// ---------------------------------------------------------------------------
+
+pub fn generate_shader(scene: &Scene, config: &RenderConfig) -> String {
+    let (tex_decls, sculpt_tex_map) = generate_voxel_texture_decls(scene);
+    let tex_map = if sculpt_tex_map.is_empty() { None } else { Some(&sculpt_tex_map) };
+    let scene_sdf = generate_scene_sdf(scene, tex_map);
+    let sel_sdf = generate_selected_sdf(scene, tex_map);
+    let postlude = build_postlude(config);
+    format!("{}\n{}\n{}\n{}\n{}", SHADER_PRELUDE, tex_decls, scene_sdf, sel_sdf, postlude)
 }
 
-fn hash_topology(scene: &Scene, node_id: NodeId, hasher: &mut impl std::hash::Hasher) {
-    use std::hash::Hash;
-    node_id.hash(hasher);
-    if let Some(node) = scene.get_node(node_id) {
-        match &node.data {
-            NodeData::Primitive(prim) => {
-                0u8.hash(hasher);
-                (prim.primitive as u32).hash(hasher);
-            }
-            NodeData::Operation(op) => {
-                1u8.hash(hasher);
-                (op.operation as u32).hash(hasher);
-                hash_topology(scene, op.left, hasher);
-                hash_topology(scene, op.right, hasher);
-            }
-            NodeData::Transform(tr) => {
-                2u8.hash(hasher);
-                (tr.transform as u32).hash(hasher);
-                hash_topology(scene, tr.input, hasher);
-            }
-        }
-    }
+pub fn generate_pick_shader(scene: &Scene, config: &RenderConfig) -> String {
+    let scene_sdf = generate_scene_sdf(scene, None);
+    let pick_postlude = apply_march_placeholders(PICK_COMPUTE_POSTLUDE, config);
+    format!("{}\n{}\n{}", SHADER_PRELUDE, scene_sdf, pick_postlude)
 }
 
-/// Generate the scene_sdf() and scene_dist() WGSL functions.
-fn generate_scene_sdf(scene: &Scene, out: &mut String) {
-    out.push_str("fn scene_sdf(p: vec3f) -> vec2f {\n");
+/// Generate the composite compute shader that pre-evaluates scene_sdf at every voxel
+/// in a 3D grid and writes SDF + material ID to storage textures.
+pub fn generate_composite_shader(scene: &Scene, _config: &RenderConfig) -> String {
+    let (tex_decls, sculpt_tex_map) = generate_voxel_texture_decls(scene);
+    let tex_map = if sculpt_tex_map.is_empty() { None } else { Some(&sculpt_tex_map) };
+    let scene_sdf = generate_scene_sdf(scene, tex_map);
+    format!("{}\n{}\n{}\n{}", SHADER_PRELUDE, tex_decls, scene_sdf, COMPOSITE_COMPUTE_ENTRY)
+}
 
-    if let Some(root_id) = scene.root_id() {
-        let mut ctx = CodegenCtx {
-            scene,
-            counter: 0,
-            next_gpu_idx: 0,
-            node_var: HashMap::new(),
-        };
-        let root_var = ctx.emit_node(root_id, "p", out);
+/// Generate the composite render shader that reads the pre-composited scene volume.
+/// `scene_sdf()` becomes a single texture lookup regardless of scene complexity.
+pub fn generate_composite_render_shader(
+    config: &RenderConfig,
+    bounds_min: [f32; 3],
+    bounds_max: [f32; 3],
+) -> String {
+    let comp_scene_sdf = format!(
+        r#"
+@group(2) @binding(0) var comp_sampler: sampler;
+@group(2) @binding(1) var comp_sdf_tex: texture_3d<f32>;
+@group(2) @binding(2) var comp_mat_tex: texture_3d<u32>;
+@group(2) @binding(3) var comp_normal_tex: texture_3d<f32>;
 
-        // Hard union with floor plane
-        out.push_str("    let floor_d = sdf_plane_y(p);\n");
-        out.push_str(&format!(
-            "    if (floor_d < d{root_var}) {{ return vec2f(floor_d, -1.0); }}\n"
-        ));
-        out.push_str(&format!(
-            "    return vec2f(d{root_var}, m{root_var});\n"
-        ));
+const COMP_BMIN: vec3f = vec3f({bmin});
+const COMP_BMAX: vec3f = vec3f({bmax});
+
+fn comp_to_uv(p: vec3f) -> vec3f {{
+    return clamp((p - COMP_BMIN) / (COMP_BMAX - COMP_BMIN), vec3f(0.0), vec3f(1.0));
+}}
+
+fn scene_sdf(p: vec3f) -> vec2f {{
+    let size = COMP_BMAX - COMP_BMIN;
+    let norm = (p - COMP_BMIN) / size;
+
+    // Outside bounds: return distance to AABB
+    if any(norm < vec3f(-0.01)) || any(norm > vec3f(1.01)) {{
+        return vec2f(length(max(p - COMP_BMAX, COMP_BMIN - p)), -1.0);
+    }}
+
+    let uv = clamp(norm, vec3f(0.0), vec3f(1.0));
+    let d = textureSampleLevel(comp_sdf_tex, comp_sampler, uv, 0.0).x;
+    let dims = textureDimensions(comp_mat_tex);
+    let fc = clamp(uv * vec3f(dims), vec3f(0.0), vec3f(dims - vec3u(1u)));
+    let ic = vec3u(fc);
+    let mat_raw = textureLoad(comp_mat_tex, ic, 0).x;
+    let mat_id = f32(mat_raw) - 1.0;
+    return vec2f(d, mat_id);
+}}
+"#,
+        bmin = format_vec3(bounds_min),
+        bmax = format_vec3(bounds_max),
+    );
+    let mut postlude = build_postlude(config);
+
+    // Replace calc_normal with precomputed normal texture lookup
+    let old_calc_normal = r#"fn calc_normal(p: vec3f, t: f32) -> vec3f {
+    // Tetrahedron technique: 4 SDF evals instead of 6.
+    // Distance-adaptive epsilon: larger at distance (reduces aliasing), tighter up close (more detail).
+    let e = clamp(0.001 * t, 0.0005, 0.05);
+    let k = vec2f(1.0, -1.0);
+    return normalize(
+        k.xyy * scene_sdf(p + k.xyy * e).x +
+        k.yyx * scene_sdf(p + k.yyx * e).x +
+        k.yxy * scene_sdf(p + k.yxy * e).x +
+        k.xxx * scene_sdf(p + k.xxx * e).x
+    );
+}"#;
+    let new_calc_normal = r#"fn calc_normal(p: vec3f, t: f32) -> vec3f {
+    // Precomputed normal from composite volume (single texture lookup).
+    let uv = comp_to_uv(p);
+    return normalize(textureSampleLevel(comp_normal_tex, comp_sampler, uv, 0.0).xyz);
+}"#;
+    if postlude.contains(old_calc_normal) {
+        postlude = postlude.replace(old_calc_normal, new_calc_normal);
     } else {
-        // Empty scene: just floor
-        out.push_str("    let floor_d = sdf_plane_y(p);\n");
-        out.push_str("    return vec2f(floor_d, -1.0);\n");
+        log::warn!("Composite render: calc_normal string replace FAILED — using analytical normals as fallback");
     }
 
-    out.push_str("}\n\n");
-    out.push_str("fn scene_dist(p: vec3f) -> f32 {\n");
-    out.push_str("    return scene_sdf(p).x;\n");
-    out.push_str("}\n");
+    format!("{}\n{}\n{}", SHADER_PRELUDE, comp_scene_sdf, postlude)
 }
 
-struct CodegenCtx<'a> {
-    scene: &'a Scene,
-    counter: usize,
-    next_gpu_idx: usize,
-    node_var: HashMap<NodeId, usize>,
+// ---------------------------------------------------------------------------
+// Transform chain helpers
+// ---------------------------------------------------------------------------
+
+/// Chain entry: either a Transform or a point-modifying Modifier.
+#[derive(Clone)]
+enum ChainEntry {
+    Transform(TransformKind),
+    Modifier(ModifierKind),
 }
 
-impl<'a> CodegenCtx<'a> {
-    /// Emit WGSL for a node. Returns the variable index (N in dN/mN).
-    /// `p_expr` is the current query point expression (e.g., "p").
-    fn emit_node(&mut self, node_id: NodeId, p_expr: &str, out: &mut String) -> usize {
-        // DAG sharing: if already emitted, reuse variable
-        if let Some(&var_idx) = self.node_var.get(&node_id) {
-            return var_idx;
-        }
-
-        let node = self.scene.get_node(node_id).expect("node must exist");
-        let var_idx = self.counter;
-        self.counter += 1;
-        self.node_var.insert(node_id, var_idx);
-
-        match &node.data {
-            NodeData::Primitive(prim) => {
-                // Primitives push gpu_idx when visited (matches flatten_for_gpu)
-                let gpu_idx = self.next_gpu_idx;
-                self.next_gpu_idx += 1;
-
-                let sdf_fn = match prim.primitive {
-                    SdfPrimitive::Sphere => "sdf_sphere",
-                    SdfPrimitive::Box => "sdf_box",
-                    SdfPrimitive::Cylinder => "sdf_cylinder",
-                    SdfPrimitive::Torus => "sdf_torus",
-                    SdfPrimitive::Plane => "sdf_plane_y",
-                };
-
-                if matches!(prim.primitive, SdfPrimitive::Plane) {
-                    out.push_str(&format!(
-                        "    let d{var_idx} = {sdf_fn}({p_expr} - nodes[{gpu_idx}].position.xyz);\n"
-                    ));
-                } else {
-                    out.push_str(&format!(
-                        "    let d{var_idx} = {sdf_fn}({p_expr} - nodes[{gpu_idx}].position.xyz, nodes[{gpu_idx}].scale.xyz);\n"
-                    ));
+/// Walk up from `node_id` through ancestors, collecting all Transform and
+/// point-modifying Modifier ancestors. Returns chain from innermost to outermost.
+fn get_transform_chain(
+    node_id: NodeId,
+    parent_map: &HashMap<NodeId, NodeId>,
+    scene: &Scene,
+    idx_map: &HashMap<NodeId, usize>,
+) -> Vec<(usize, ChainEntry)> {
+    let mut chain = Vec::new();
+    let mut current = node_id;
+    while let Some(&parent_id) = parent_map.get(&current) {
+        if let Some(node) = scene.nodes.get(&parent_id) {
+            if let Some(&idx) = idx_map.get(&parent_id) {
+                match &node.data {
+                    NodeData::Transform { kind, .. } => {
+                        chain.push((idx, ChainEntry::Transform(kind.clone())));
+                    }
+                    NodeData::Modifier { kind, .. } if kind.is_point_modifier() => {
+                        chain.push((idx, ChainEntry::Modifier(kind.clone())));
+                    }
+                    _ => {}
                 }
-                out.push_str(&format!(
-                    "    let m{var_idx}: f32 = f32({gpu_idx});\n"
+            }
+        }
+        current = parent_id;
+    }
+    chain
+}
+
+/// Emit WGSL code for a transform chain. Returns the final point variable name.
+/// Chain is innermost-first; we process outermost-first (reversed).
+fn emit_transform_chain(
+    lines: &mut Vec<String>,
+    node_idx: usize,
+    chain: &[(usize, ChainEntry)],
+) -> String {
+    if chain.is_empty() {
+        return "p".to_string();
+    }
+    let mut current_var = "p".to_string();
+    for (step, (idx, entry)) in chain.iter().rev().enumerate() {
+        let new_var = format!("tp{}_{}", node_idx, step);
+        match entry {
+            ChainEntry::Transform(TransformKind::Translate) => {
+                lines.push(format!(
+                    "    let {new_var} = {current_var} - nodes[{idx}].position.xyz;"
                 ));
             }
-            NodeData::Operation(op) => {
-                let left = op.left;
-                let right = op.right;
-                let operation = op.operation;
-
-                // Post-order: emit children first
-                let left_var = self.emit_node(left, p_expr, out);
-                let right_var = self.emit_node(right, p_expr, out);
-
-                // Operation pushed AFTER both children (matches flatten_for_gpu)
-                let gpu_idx = self.next_gpu_idx;
-                self.next_gpu_idx += 1;
-
-                let op_call = match operation {
-                    SdfOperation::Union => {
-                        format!("op_union(d{left_var}, d{right_var})")
-                    }
-                    SdfOperation::SmoothUnion => {
-                        format!(
-                            "op_smooth_union(d{left_var}, d{right_var}, nodes[{gpu_idx}].type_op.z)"
-                        )
-                    }
-                    SdfOperation::Subtract => {
-                        format!("op_subtract(d{left_var}, d{right_var})")
-                    }
-                    SdfOperation::Intersect => {
-                        format!("op_intersect(d{left_var}, d{right_var})")
-                    }
-                };
-
-                out.push_str(&format!("    let d{var_idx} = {op_call};\n"));
-
-                // Material: subtract keeps A's material, others pick closer
-                let mat_expr = match operation {
-                    SdfOperation::Subtract => format!("m{left_var}"),
-                    _ => format!(
-                        "select(m{left_var}, m{right_var}, d{right_var} < d{left_var})"
-                    ),
-                };
-                out.push_str(&format!("    let m{var_idx} = {mat_expr};\n"));
+            ChainEntry::Transform(TransformKind::Rotate) => {
+                lines.push(format!(
+                    "    let {new_var} = rotate_euler({current_var}, nodes[{idx}].rotation.xyz);"
+                ));
             }
-            NodeData::Transform(tr) => {
-                let input = tr.input;
-                let transform = tr.transform;
+            ChainEntry::Transform(TransformKind::Scale) => {
+                lines.push(format!(
+                    "    let {new_var} = {current_var} / nodes[{idx}].scale.xyz;"
+                ));
+            }
+            ChainEntry::Modifier(ModifierKind::Twist) => {
+                lines.push(format!(
+                    "    let {new_var} = twist_point({current_var}, nodes[{idx}].position.x);"
+                ));
+            }
+            ChainEntry::Modifier(ModifierKind::Bend) => {
+                lines.push(format!(
+                    "    let {new_var} = bend_point({current_var}, nodes[{idx}].position.x);"
+                ));
+            }
+            ChainEntry::Modifier(ModifierKind::Taper) => {
+                lines.push(format!(
+                    "    let {new_var} = taper_point({current_var}, nodes[{idx}].position.x);"
+                ));
+            }
+            ChainEntry::Modifier(ModifierKind::Elongate) => {
+                lines.push(format!(
+                    "    let {new_var} = elongate_point({current_var}, nodes[{idx}].position.xyz);"
+                ));
+            }
+            ChainEntry::Modifier(ModifierKind::Mirror) => {
+                lines.push(format!(
+                    "    let {new_var} = mirror_point({current_var}, nodes[{idx}].position.xyz);"
+                ));
+            }
+            ChainEntry::Modifier(ModifierKind::Repeat) => {
+                lines.push(format!(
+                    "    let {new_var} = repeat_point({current_var}, nodes[{idx}].position.xyz);"
+                ));
+            }
+            ChainEntry::Modifier(ModifierKind::FiniteRepeat) => {
+                lines.push(format!(
+                    "    let {new_var} = finite_repeat_point({current_var}, nodes[{idx}].position.xyz, nodes[{idx}].rotation.xyz);"
+                ));
+            }
+            // Round/Onion are distance modifiers, not in chain
+            ChainEntry::Modifier(ModifierKind::Round | ModifierKind::Onion) => unreachable!(),
+        }
+        current_var = new_var;
+    }
+    current_var
+}
 
-                // Pre-order: assign gpu_idx BEFORE child (matches flatten_for_gpu)
-                let gpu_idx = self.next_gpu_idx;
-                self.next_gpu_idx += 1;
+// ---------------------------------------------------------------------------
+// Node WGSL emission
+// ---------------------------------------------------------------------------
 
-                // Transform modifies the query point
-                let new_p = format!("p{var_idx}");
-                match transform {
-                    SdfTransform::Translate => {
-                        out.push_str(&format!(
-                            "    let {new_p} = {p_expr} - nodes[{gpu_idx}].position.xyz;\n"
-                        ));
-                    }
-                    SdfTransform::Rotate => {
-                        out.push_str(&format!(
-                            "    let {new_p} = rotate_xyz({p_expr}, nodes[{gpu_idx}].position.xyz);\n"
-                        ));
-                    }
-                    SdfTransform::Scale => {
-                        out.push_str(&format!(
-                            "    let {new_p} = {p_expr} / nodes[{gpu_idx}].position.xyz;\n"
-                        ));
-                    }
+/// Emit WGSL for a single node. Extracted so both cheap and expensive phases can use it.
+/// `sculpt_tex_map`: if Some, sculpt nodes use `sdf_voxel_tex_N` (texture path);
+///                    if None, they use `sdf_voxel_grid` (storage buffer path).
+fn emit_node_wgsl(
+    lines: &mut Vec<String>,
+    i: usize,
+    node_id: NodeId,
+    node: &SceneNode,
+    parent_map: &HashMap<NodeId, NodeId>,
+    scene: &Scene,
+    idx_map: &HashMap<NodeId, usize>,
+    sculpt_tex_map: Option<&HashMap<NodeId, usize>>,
+) {
+    match &node.data {
+        NodeData::Primitive { kind, .. } => {
+            let chain = get_transform_chain(node_id, parent_map, scene, idx_map);
+            let point_var = emit_transform_chain(lines, i, &chain);
+            lines.push(format!(
+                "    let lp{i} = rotate_euler({point_var} - nodes[{i}].position.xyz, nodes[{i}].rotation.xyz);"
+            ));
+            let sdf_fn = kind.sdf_function_name();
+            lines.push(format!(
+                "    let n{i} = vec2f({sdf_fn}(lp{i}, nodes[{i}].scale.xyz), f32({i}));"
+            ));
+        }
+        NodeData::Operation { op, left, right, .. } => {
+            let li = left.and_then(|id| idx_map.get(&id).copied());
+            let ri = right.and_then(|id| idx_map.get(&id).copied());
+            match (li, ri) {
+                (Some(li), Some(ri)) => {
+                    let op_fn = op.wgsl_function_name();
+                    lines.push(format!(
+                        "    let n{i} = {op_fn}(n{li}, n{ri}, nodes[{i}].type_op.y);"
+                    ));
                 }
+                (Some(ci), None) | (None, Some(ci)) => {
+                    lines.push(format!("    let n{i} = n{ci};"));
+                }
+                (None, None) => {
+                    lines.push(format!("    let n{i} = vec2f(1e10, -1.0);"));
+                }
+            }
+        }
+        NodeData::Sculpt { input, .. } => {
+            let chain = get_transform_chain(node_id, parent_map, scene, idx_map);
+            let point_var = emit_transform_chain(lines, i, &chain);
+            lines.push(format!(
+                "    let lp{i} = rotate_euler({point_var} - nodes[{i}].position.xyz, nodes[{i}].rotation.xyz);"
+            ));
 
-                // Emit child with the transformed query point
-                let child_var = self.emit_node(input, &new_p, out);
+            let child_idx = input.and_then(|id| idx_map.get(&id).copied());
 
-                // Alias distance and material from child
-                match transform {
-                    SdfTransform::Scale => {
-                        // Scale requires distance correction: d * min(sx, sy, sz)
-                        out.push_str(&format!(
-                            "    let d{var_idx} = d{child_var} * min(nodes[{gpu_idx}].position.x, min(nodes[{gpu_idx}].position.y, nodes[{gpu_idx}].position.z));\n"
+            if child_idx.is_some() {
+                // DIFFERENTIAL: analytical child SDF + displacement from grid
+                let ci = child_idx.unwrap();
+                let disp_call = if let Some(tex_map) = sculpt_tex_map {
+                    if let Some(&tex_idx) = tex_map.get(&node_id) {
+                        format!("disp_voxel_tex_{tex_idx}(lp{i}, {i}u)")
+                    } else {
+                        format!("disp_voxel_grid(lp{i}, {i}u)")
+                    }
+                } else {
+                    format!("disp_voxel_grid(lp{i}, {i}u)")
+                };
+                lines.push(format!(
+                    "    let n{i} = vec2f(n{ci}.x + {disp_call}, f32({i}));"
+                ));
+            } else {
+                // STANDALONE: total SDF from grid (unchanged behavior)
+                let sdf_call = if let Some(tex_map) = sculpt_tex_map {
+                    if let Some(&tex_idx) = tex_map.get(&node_id) {
+                        format!("sdf_voxel_tex_{tex_idx}(lp{i}, {i}u)")
+                    } else {
+                        format!("sdf_voxel_grid(lp{i}, {i}u)")
+                    }
+                } else {
+                    format!("sdf_voxel_grid(lp{i}, {i}u)")
+                };
+                lines.push(format!(
+                    "    let n{i} = vec2f({sdf_call}, f32({i}));"
+                ));
+            }
+        }
+        NodeData::Transform { kind, input, .. } => {
+            let child_idx = input.and_then(|id| idx_map.get(&id).copied());
+            if let Some(ci) = child_idx {
+                match kind {
+                    TransformKind::Scale => {
+                        lines.push(format!(
+                            "    let n{i} = vec2f(n{ci}.x * min(nodes[{i}].scale.x, min(nodes[{i}].scale.y, nodes[{i}].scale.z)), n{ci}.y);"
                         ));
                     }
                     _ => {
-                        out.push_str(&format!("    let d{var_idx} = d{child_var};\n"));
+                        lines.push(format!("    let n{i} = n{ci};"));
                     }
                 }
-                out.push_str(&format!("    let m{var_idx} = m{child_var};\n"));
+            } else {
+                lines.push(format!("    let n{i} = vec2f(1e10, -1.0);"));
             }
         }
-
-        var_idx
+        NodeData::Modifier { kind, input, .. } => {
+            let child_idx = input.and_then(|id| idx_map.get(&id).copied());
+            if let Some(ci) = child_idx {
+                match kind {
+                    ModifierKind::Round => {
+                        lines.push(format!(
+                            "    let n{i} = vec2f(n{ci}.x - nodes[{i}].position.x, n{ci}.y);"
+                        ));
+                    }
+                    ModifierKind::Onion => {
+                        lines.push(format!(
+                            "    let n{i} = vec2f(abs(n{ci}.x) - nodes[{i}].position.x, n{ci}.y);"
+                        ));
+                    }
+                    // Point modifiers just pass through (transform chain handles the point)
+                    _ => {
+                        lines.push(format!("    let n{i} = n{ci};"));
+                    }
+                }
+            } else {
+                lines.push(format!("    let n{i} = vec2f(1e10, -1.0);"));
+            }
+        }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Scene SDF generation
+// ---------------------------------------------------------------------------
+
+fn generate_scene_sdf(
+    scene: &Scene,
+    sculpt_tex_map: Option<&HashMap<NodeId, usize>>,
+) -> String {
+    let order = scene.topo_order();
+    if order.is_empty() {
+        return "fn scene_sdf(p: vec3f) -> vec2f {\n    return vec2f(1e10, -1.0);\n}"
+            .to_string();
+    }
+
+    let idx_map: HashMap<NodeId, usize> = order.iter().enumerate().map(|(i, &id)| (id, i)).collect();
+    let parent_map = scene.build_parent_map();
+    let tops = scene.top_level_nodes();
+
+    // Classify top-level subtrees: cheap (no sculpt) vs expensive (has sculpt)
+    let mut cheap_tops = Vec::new();
+    let mut expensive_tops = Vec::new();
+    for &top_id in &tops {
+        if scene.subtree_has_sculpt(top_id) {
+            expensive_tops.push(top_id);
+        } else {
+            cheap_tops.push(top_id);
+        }
+    }
+
+    // No sculpts at all: use flat codegen (no bounding skip needed)
+    if expensive_tops.is_empty() {
+        return generate_scene_sdf_flat(scene, &order, &idx_map, &parent_map, &tops, sculpt_tex_map);
+    }
+
+    // Only one expensive subtree and no cheap tops: flat codegen (no skip benefit)
+    if expensive_tops.len() == 1 && cheap_tops.is_empty() {
+        return generate_scene_sdf_flat(scene, &order, &idx_map, &parent_map, &tops, sculpt_tex_map);
+    }
+
+    // Two-phase codegen with bounding skip for expensive subtrees
+    let mut lines = Vec::new();
+    lines.push("fn scene_sdf(p: vec3f) -> vec2f {".to_string());
+
+    // Phase 1: Emit all cheap subtree nodes unconditionally
+    let cheap_node_set: HashSet<NodeId> = cheap_tops.iter()
+        .flat_map(|&id| scene.collect_subtree(id))
+        .collect();
+
+    for (i, &node_id) in order.iter().enumerate() {
+        if !cheap_node_set.contains(&node_id) { continue; }
+        let Some(node) = scene.nodes.get(&node_id) else { continue; };
+        emit_node_wgsl(&mut lines, i, node_id, node, &parent_map, scene, &idx_map, sculpt_tex_map);
+    }
+
+    // Initialize result from cheap tops
+    let cheap_indices: Vec<usize> = cheap_tops.iter()
+        .filter_map(|id| idx_map.get(id).copied())
+        .collect();
+    if cheap_indices.is_empty() {
+        lines.push("    var result = vec2f(1e10, -1.0);".to_string());
+    } else {
+        lines.push(format!("    var result = n{};", cheap_indices[0]));
+        for &idx in &cheap_indices[1..] {
+            lines.push(format!("    result = op_union(result, n{idx}, 0.0);"));
+        }
+    }
+
+    // Phase 2: Emit expensive subtrees wrapped in bounding sphere check
+    for &top_id in &expensive_tops {
+        let (center, radius) = scene.compute_subtree_sphere(top_id, &parent_map);
+        let subtree_nodes = scene.collect_subtree(top_id);
+
+        lines.push(format!(
+            "    {{ let _bd = length(p - vec3f({}, {}, {})) - {};",
+            format_f32(center[0]), format_f32(center[1]), format_f32(center[2]),
+            format_f32(radius),
+        ));
+        lines.push("    if _bd < result.x {".to_string());
+
+        // Emit all nodes in this subtree (preserving topo order)
+        for (i, &node_id) in order.iter().enumerate() {
+            if !subtree_nodes.contains(&node_id) { continue; }
+            let Some(node) = scene.nodes.get(&node_id) else { continue; };
+            emit_node_wgsl(&mut lines, i, node_id, node, &parent_map, scene, &idx_map, sculpt_tex_map);
+        }
+
+        // Union this subtree's root with the result
+        if let Some(&top_idx) = idx_map.get(&top_id) {
+            lines.push(format!("        result = op_union(result, n{top_idx}, 0.0);"));
+        }
+        lines.push("    } }".to_string());
+    }
+
+    lines.push("    return result;".to_string());
+    lines.push("}".to_string());
+
+    lines.join("\n")
+}
+
+/// Original flat codegen (no expensive subtrees).
+fn generate_scene_sdf_flat(
+    scene: &Scene,
+    order: &[NodeId],
+    idx_map: &HashMap<NodeId, usize>,
+    parent_map: &HashMap<NodeId, NodeId>,
+    tops: &[NodeId],
+    sculpt_tex_map: Option<&HashMap<NodeId, usize>>,
+) -> String {
+    let mut lines = Vec::new();
+    lines.push("fn scene_sdf(p: vec3f) -> vec2f {".to_string());
+
+    for (i, &node_id) in order.iter().enumerate() {
+        let Some(node) = scene.nodes.get(&node_id) else { continue; };
+        emit_node_wgsl(&mut lines, i, node_id, node, parent_map, scene, idx_map, sculpt_tex_map);
+    }
+
+    let top_indices: Vec<usize> = tops
+        .iter()
+        .filter_map(|id| idx_map.get(id).copied())
+        .collect();
+    match top_indices.len() {
+        0 => lines.push("    return vec2f(1e10, -1.0);".to_string()),
+        1 => lines.push(format!("    return n{};", top_indices[0])),
+        _ => {
+            lines.push(format!("    var result = n{};", top_indices[0]));
+            for &idx in &top_indices[1..] {
+                lines.push(format!("    result = op_union(result, n{idx}, 0.0);"));
+            }
+            lines.push("    return result;".to_string());
+        }
+    }
+    lines.push("}".to_string());
+
+    lines.join("\n")
+}
+
+// ---------------------------------------------------------------------------
+// Selected SDF generation
+// ---------------------------------------------------------------------------
+
+/// Generate `selected_sdf(p) -> f32`: evaluates all nodes, returns the selected
+/// node's distance based on `camera.selected_idx`. Used for screen-space outline.
+fn generate_selected_sdf(
+    scene: &Scene,
+    sculpt_tex_map: Option<&HashMap<NodeId, usize>>,
+) -> String {
+    let order = scene.topo_order();
+    if order.is_empty() {
+        return "fn selected_sdf(p: vec3f) -> f32 {\n    return 1e10;\n}".to_string();
+    }
+
+    let idx_map: HashMap<NodeId, usize> =
+        order.iter().enumerate().map(|(i, &id)| (id, i)).collect();
+    let parent_map = scene.build_parent_map();
+
+    let mut lines = Vec::new();
+    lines.push("fn selected_sdf(p: vec3f) -> f32 {".to_string());
+    lines.push("    if camera.selected_idx < 0.0 { return 1e10; }".to_string());
+    lines.push("    let _sel_idx = i32(camera.selected_idx + 0.5);".to_string());
+
+    for (i, &node_id) in order.iter().enumerate() {
+        let Some(node) = scene.nodes.get(&node_id) else { continue; };
+        emit_node_wgsl(
+            &mut lines, i, node_id, node, &parent_map, scene, &idx_map, sculpt_tex_map,
+        );
+    }
+
+    for i in 0..order.len() {
+        lines.push(format!("    if _sel_idx == {i} {{ return n{i}.x; }}"));
+    }
+    lines.push("    return 1e10;".to_string());
+    lines.push("}".to_string());
+
+    lines.join("\n")
+}
+

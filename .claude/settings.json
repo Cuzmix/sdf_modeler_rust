@@ -1,7 +1,18 @@
 {
   "permissions": {
     "allow": [
-      "WebFetch(domain:api.github.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:crates.io)",
+      "WebFetch(domain:docs.rs)",
+      "Read(//c/Users/Manny/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/egui_node_graph2-0.7.0/src/**)",
+      "Read(//c/Users/Manny/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eframe-0.29.1/src/web/**)",
+      "Bash(wasm-bindgen --version)",
+      "Bash(cargo install wasm-bindgen-cli --version 0.2.108)",
+      "Bash(wasm-bindgen --out-dir web/pkg --target web --no-typescript target/wasm32-unknown-unknown/release/sdf_modeler.wasm)",
+      "Read(//c/Users/Manny/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eframe-0.29.1/src/**)",
+      "Read(//c/Users/Manny/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eframe-0.29.1/**)",
+      "WebFetch(domain:developer.chrome.com)",
+      "Read(//c/Users/Manny/.cargo/registry/src/**)"
     ]
   }
 }
