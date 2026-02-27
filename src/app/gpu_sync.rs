@@ -24,8 +24,14 @@ impl SdfApp {
                     &self.render_state.device, &shader_src, &pick_shader_src, sculpt_count,
                 );
 
-                // Rebuild composite pipelines if enabled and there are sculpt nodes
-                if self.settings.render.composite_volume_enabled && sculpt_count > 0 {
+                // Rebuild composite pipelines if enabled and there are sculpt nodes.
+                // Composite uses 3D storage textures — not supported on WebGPU,
+                // so always disable on WASM.
+                let want_composite = !cfg!(target_arch = "wasm32")
+                    && self.settings.render.composite_volume_enabled
+                    && sculpt_count > 0;
+
+                if want_composite {
                     let bounds = self.scene.compute_bounds();
                     let padding = 1.5;
                     let bounds_min = [

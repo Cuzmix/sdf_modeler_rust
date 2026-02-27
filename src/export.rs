@@ -4,7 +4,9 @@ use std::path::Path;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use glam::Vec3;
+#[cfg(not(target_arch = "wasm32"))]
 use rayon::prelude::*;
+use crate::compat::maybe_par_iter;
 
 use crate::graph::scene::Scene;
 use crate::graph::voxel;
@@ -374,8 +376,7 @@ pub fn marching_cubes(
     let roots = scene.top_level_nodes();
 
     // Sample in parallel by z-slice
-    let slices: Vec<Vec<f32>> = (0..grid_size)
-        .into_par_iter()
+    let slices: Vec<Vec<f32>> = maybe_par_iter!(0..grid_size)
         .map(|z| {
             let mut slice = vec![0.0f32; grid_size * grid_size];
             for y in 0..grid_size {
@@ -401,8 +402,7 @@ pub fn marching_cubes(
     }
 
     // Phase 2: Process cells to extract triangles (parallelized by z-slice)
-    let cell_slices: Vec<(Vec<[f32; 3]>, Vec<[u32; 3]>)> = (0..res)
-        .into_par_iter()
+    let cell_slices: Vec<(Vec<[f32; 3]>, Vec<[u32; 3]>)> = maybe_par_iter!(0..res)
         .map(|z| {
             let mut local_verts: Vec<[f32; 3]> = Vec::new();
             let mut local_tris: Vec<[u32; 3]> = Vec::new();
@@ -510,10 +510,7 @@ pub fn marching_cubes(
     ExportMesh { vertices, triangles }
 }
 
-pub fn write_obj(mesh: &ExportMesh, path: &Path) -> Result<(), String> {
-    let file = std::fs::File::create(path).map_err(|e| format!("Failed to create file: {}", e))?;
-    let mut writer = std::io::BufWriter::new(file);
-
+pub fn write_obj_to(mesh: &ExportMesh, writer: &mut impl Write) -> Result<(), String> {
     writeln!(writer, "# SDF Modeler Export").map_err(|e| e.to_string())?;
     writeln!(writer, "# Vertices: {}, Triangles: {}", mesh.vertices.len(), mesh.triangles.len())
         .map_err(|e| e.to_string())?;
@@ -529,6 +526,12 @@ pub fn write_obj(mesh: &ExportMesh, path: &Path) -> Result<(), String> {
 
     writer.flush().map_err(|e| e.to_string())?;
     Ok(())
+}
+
+pub fn write_obj(mesh: &ExportMesh, path: &Path) -> Result<(), String> {
+    let file = std::fs::File::create(path).map_err(|e| format!("Failed to create file: {}", e))?;
+    let mut writer = std::io::BufWriter::new(file);
+    write_obj_to(mesh, &mut writer)
 }
 
 pub fn write_stl(mesh: &ExportMesh, path: &Path) -> Result<(), String> {

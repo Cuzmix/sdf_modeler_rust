@@ -7,11 +7,15 @@ use glam::Vec3;
 use crate::graph::scene::NodeData;
 use crate::graph::voxel;
 use crate::sculpt::SculptState;
-use crate::ui::viewport::ViewportResources;
 
-use super::{BakeRequest, BakeStatus, ExportStatus, SdfApp};
+#[cfg(not(target_arch = "wasm32"))]
+use super::{BakeStatus, ExportStatus};
+use super::{BakeRequest, SdfApp};
 
 impl SdfApp {
+    // ── Bake ─────────────────────────────────────────────────────────────
+
+    #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn start_async_bake(&mut self, req: BakeRequest, ctx: &egui::Context) {
         let scene_clone = self.scene.clone();
         let progress = Arc::new(AtomicU32::new(0));
@@ -43,8 +47,18 @@ impl SdfApp {
         };
     }
 
-    /// Instantly create a displacement grid for a non-flatten bake request.
-    /// No async thread needed — displacement grids start at 0.0 (O(1)).
+    #[cfg(target_arch = "wasm32")]
+    pub(super) fn start_async_bake(&mut self, req: BakeRequest, _ctx: &egui::Context) {
+        let progress = Arc::new(AtomicU32::new(0));
+        let (grid, center) = voxel::bake_subtree_with_progress(
+            &self.scene,
+            req.subtree_root,
+            req.resolution,
+            progress,
+        );
+        self.apply_bake_result(grid, center, req.existing_sculpt, req.subtree_root, req.color, req.flatten);
+    }
+
     /// Instantly create a displacement grid for a non-flatten bake request.
     /// No async thread needed — displacement grids start at 0.0 (O(1)).
     pub(super) fn apply_instant_displacement_bake(&mut self, req: BakeRequest) {
@@ -53,7 +67,6 @@ impl SdfApp {
         );
 
         if let Some(sculpt_id) = req.existing_sculpt {
-            // Re-bake: reset existing sculpt's displacement to zero
             if let Some(node) = self.scene.nodes.get_mut(&sculpt_id) {
                 if let NodeData::Sculpt {
                     voxel_grid: ref mut vg,
@@ -66,7 +79,6 @@ impl SdfApp {
                 }
             }
         } else {
-            // New sculpt: create above subtree_root
             let sculpt_id = self.scene.insert_sculpt_above(
                 req.subtree_root, center, Vec3::ZERO, req.color, grid,
             );
@@ -76,6 +88,7 @@ impl SdfApp {
         self.buffer_dirty = true;
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn poll_async_bake(&mut self) {
         let completed = if let BakeStatus::InProgress { ref receiver, .. } = self.bake_status {
             receiver.try_recv().ok()
@@ -84,7 +97,6 @@ impl SdfApp {
         };
 
         if let Some((grid, center)) = completed {
-            // Extract fields before replacing status
             let (existing_sculpt, subtree_root, color, flatten) = match &self.bake_status {
                 BakeStatus::InProgress {
                     existing_sculpt, subtree_root, color, flatten, ..
@@ -92,40 +104,58 @@ impl SdfApp {
                 _ => unreachable!(),
             };
 
-            if flatten {
-                // Flatten: replace entire subtree with standalone Sculpt
-                let new_id = self.scene.flatten_subtree(subtree_root, grid, center, color);
-                self.node_graph_state.selected = Some(new_id);
-                self.node_graph_state.needs_initial_rebuild = true;
-                self.sculpt_state = SculptState::new_active(new_id);
-            } else if let Some(sculpt_id) = existing_sculpt {
-                // Re-bake: update existing sculpt node
-                if let Some(node) = self.scene.nodes.get_mut(&sculpt_id) {
-                    if let NodeData::Sculpt {
-                        voxel_grid: ref mut vg,
-                        position: ref mut p,
-                        ..
-                    } = node.data
-                    {
-                        *vg = grid;
-                        *p = center;
-                    }
-                }
-            } else {
-                // New sculpt: create above subtree_root
-                let sculpt_id = self.scene.insert_sculpt_above(
-                    subtree_root, center, Vec3::ZERO, color, grid,
-                );
-                self.node_graph_state.selected = Some(sculpt_id);
-                self.sculpt_state = SculptState::new_active(sculpt_id);
-            }
-
-            self.buffer_dirty = true;
+            self.apply_bake_result(grid, center, existing_sculpt, subtree_root, color, flatten);
             self.bake_status = BakeStatus::Idle;
         }
     }
 
+    #[cfg(target_arch = "wasm32")]
+    pub(super) fn poll_async_bake(&mut self) {
+        // Bake runs synchronously on WASM — nothing to poll.
+    }
+
+    fn apply_bake_result(
+        &mut self,
+        grid: voxel::VoxelGrid,
+        center: Vec3,
+        existing_sculpt: Option<crate::graph::scene::NodeId>,
+        subtree_root: crate::graph::scene::NodeId,
+        color: Vec3,
+        flatten: bool,
+    ) {
+        if flatten {
+            let new_id = self.scene.flatten_subtree(subtree_root, grid, center, color);
+            self.node_graph_state.selected = Some(new_id);
+            self.node_graph_state.needs_initial_rebuild = true;
+            self.sculpt_state = SculptState::new_active(new_id);
+        } else if let Some(sculpt_id) = existing_sculpt {
+            if let Some(node) = self.scene.nodes.get_mut(&sculpt_id) {
+                if let NodeData::Sculpt {
+                    voxel_grid: ref mut vg,
+                    position: ref mut p,
+                    ..
+                } = node.data
+                {
+                    *vg = grid;
+                    *p = center;
+                }
+            }
+        } else {
+            let sculpt_id = self.scene.insert_sculpt_above(
+                subtree_root, center, Vec3::ZERO, color, grid,
+            );
+            self.node_graph_state.selected = Some(sculpt_id);
+            self.sculpt_state = SculptState::new_active(sculpt_id);
+        }
+        self.buffer_dirty = true;
+    }
+
+    // ── Screenshot ───────────────────────────────────────────────────────
+
+    #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn take_screenshot(&self) {
+        use crate::ui::viewport::ViewportResources;
+
         let Some(path) = rfd::FileDialog::new()
             .set_title("Save Screenshot")
             .add_filter("PNG Image", &["png"])
@@ -140,7 +170,6 @@ impl SdfApp {
             .get::<ViewportResources>()
             .unwrap();
 
-        // Use a reasonable default size; actual viewport size isn't easily accessible here
         let width = 1920u32;
         let height = 1080u32;
         let scene_bounds = self.scene.compute_bounds();
@@ -168,6 +197,14 @@ impl SdfApp {
         }
     }
 
+    #[cfg(target_arch = "wasm32")]
+    pub(super) fn take_screenshot(&self) {
+        log::warn!("Screenshot is not supported on web");
+    }
+
+    // ── Export ────────────────────────────────────────────────────────────
+
+    #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn start_export(&mut self, ctx: &egui::Context) {
         let Some(path) = rfd::FileDialog::new()
             .set_title("Export Mesh")
@@ -186,7 +223,7 @@ impl SdfApp {
         let padding = 0.5;
         let bounds_min = Vec3::from(bounds.0) - Vec3::splat(padding);
         let bounds_max = Vec3::from(bounds.1) + Vec3::splat(padding);
-        let resolution = 128u32; // Default export resolution
+        let resolution = 128u32;
         let progress = Arc::new(AtomicU32::new(0));
         let progress_clone = Arc::clone(&progress);
         let (tx, rx) = std::sync::mpsc::channel();
@@ -204,7 +241,6 @@ impl SdfApp {
             ctx_clone.request_repaint();
         });
 
-        // Total progress = (resolution+1) sampling slices + resolution cell slices
         let total = (resolution + 1) + resolution;
         self.export_status = ExportStatus::InProgress {
             progress,
@@ -214,6 +250,43 @@ impl SdfApp {
         };
     }
 
+    #[cfg(target_arch = "wasm32")]
+    pub(super) fn start_export(&mut self, _ctx: &egui::Context) {
+        let bounds = self.scene.compute_bounds();
+        let padding = 0.5;
+        let bounds_min = Vec3::from(bounds.0) - Vec3::splat(padding);
+        let bounds_max = Vec3::from(bounds.1) + Vec3::splat(padding);
+        let resolution = 128u32;
+        let progress = Arc::new(AtomicU32::new(0));
+
+        let mesh = crate::export::marching_cubes(
+            &self.scene,
+            resolution,
+            bounds_min,
+            bounds_max,
+            &progress,
+        );
+
+        let mut buf = std::io::Cursor::new(Vec::new());
+        if let Err(e) = crate::export::write_obj_to(&mesh, &mut buf) {
+            log::error!("Export failed: {}", e);
+            return;
+        }
+
+        let msg = format!(
+            "Exported OBJ ({} verts, {} tris)",
+            mesh.vertices.len(), mesh.triangles.len(),
+        );
+        crate::io::web_download("export.obj", &buf.into_inner(), "model/obj");
+        self.toasts.push(super::Toast {
+            message: msg,
+            is_error: false,
+            created: crate::compat::Instant::now(),
+            duration: crate::compat::Duration::from_secs(4),
+        });
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn poll_export(&mut self) {
         let completed = if let ExportStatus::InProgress { ref receiver, .. } = self.export_status {
             receiver.try_recv().ok()
@@ -239,8 +312,8 @@ impl SdfApp {
                     self.toasts.push(super::Toast {
                         message: msg,
                         is_error: false,
-                        created: std::time::Instant::now(),
-                        duration: std::time::Duration::from_secs(4),
+                        created: crate::compat::Instant::now(),
+                        duration: crate::compat::Duration::from_secs(4),
                     });
                 }
                 Err(e) => {
@@ -248,8 +321,8 @@ impl SdfApp {
                     self.toasts.push(super::Toast {
                         message: format!("Export failed: {}", e),
                         is_error: true,
-                        created: std::time::Instant::now(),
-                        duration: std::time::Duration::from_secs(6),
+                        created: crate::compat::Instant::now(),
+                        duration: crate::compat::Duration::from_secs(6),
                     });
                 }
             }
@@ -258,4 +331,8 @@ impl SdfApp {
         }
     }
 
+    #[cfg(target_arch = "wasm32")]
+    pub(super) fn poll_export(&mut self) {
+        // Export runs synchronously on WASM — nothing to poll.
+    }
 }

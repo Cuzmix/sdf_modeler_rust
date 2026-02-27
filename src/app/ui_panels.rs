@@ -136,6 +136,7 @@ impl SdfApp {
             self.scene_dirty = false;
         }
         if action_open {
+            #[cfg(not(target_arch = "wasm32"))]
             if let Some(path) = crate::io::open_dialog() {
                 match crate::io::load_project(&path) {
                     Ok(project) => {
@@ -155,6 +156,7 @@ impl SdfApp {
             }
         }
         if action_save {
+            #[cfg(not(target_arch = "wasm32"))]
             if let Some(path) = crate::io::save_dialog() {
                 if let Err(e) = crate::io::save_project(&self.scene, &self.camera, &path) {
                     log::error!("Failed to save project: {}", e);
@@ -162,6 +164,12 @@ impl SdfApp {
                     self.saved_fingerprint = self.scene.data_fingerprint();
                     self.scene_dirty = false;
                 }
+            }
+            #[cfg(target_arch = "wasm32")]
+            {
+                crate::io::web_save_project(&self.scene, &self.camera);
+                self.saved_fingerprint = self.scene.data_fingerprint();
+                self.scene_dirty = false;
             }
         }
         if action_screenshot {
@@ -456,7 +464,7 @@ impl SdfApp {
     }
 
     pub(super) fn show_toasts(&mut self, ctx: &egui::Context) {
-        let now = std::time::Instant::now();
+        let now = crate::compat::Instant::now();
         self.toasts.retain(|t| now.duration_since(t.created) < t.duration);
 
         if self.toasts.is_empty() {

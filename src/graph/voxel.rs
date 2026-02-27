@@ -2,7 +2,9 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
 use glam::{Vec2, Vec3, Vec3Swizzles};
+#[cfg(not(target_arch = "wasm32"))]
 use rayon::prelude::*;
+use crate::compat::maybe_par_iter;
 use serde::{Deserialize, Serialize};
 
 use crate::graph::scene::{CsgOp, NodeData, NodeId, Scene, SdfPrimitive, TransformKind};
@@ -580,8 +582,7 @@ pub fn bake_from_analytical(kind: &SdfPrimitive, scale: Vec3, resolution: u32) -
     let res_f = (res - 1) as f32;
     let size = bounds_max - bounds_min;
 
-    let data: Vec<f32> = (0..res)
-        .into_par_iter()
+    let data: Vec<f32> = maybe_par_iter!(0..res)
         .flat_map(|z| {
             let mut slice = Vec::with_capacity((res * res) as usize);
             for y in 0..res {
@@ -611,8 +612,7 @@ pub fn bake_subtree(scene: &Scene, subtree_root: NodeId, resolution: u32) -> (Vo
     let res_f = (res - 1) as f32;
     let size = local_max - local_min;
 
-    let data: Vec<f32> = (0..res)
-        .into_par_iter()
+    let data: Vec<f32> = maybe_par_iter!(0..res)
         .flat_map(|z| {
             let mut slice = Vec::with_capacity((res * res) as usize);
             for y in 0..res {
@@ -648,8 +648,7 @@ pub fn bake_subtree_with_progress(
     let res_f = (res - 1) as f32;
     let size = local_max - local_min;
 
-    let data: Vec<f32> = (0..res)
-        .into_par_iter()
+    let data: Vec<f32> = maybe_par_iter!(0..res)
         .flat_map(|z| {
             let mut slice = Vec::with_capacity((res * res) as usize);
             for y in 0..res {

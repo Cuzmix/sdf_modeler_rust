@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SDF Modeler</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #1a1a2e;
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        #loading {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ccc;
+            font-family: system-ui, sans-serif;
+            font-size: 1.2rem;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">Loading SDF Modeler...</div>
+    <canvas id="sdf_canvas"></canvas>
+
+    <script type="module">
+        import init, { WebHandle } from './pkg/sdf_modeler.js';
+
+        async function main() {
+            await init();
+            const handle = new WebHandle();
+            await handle.start("sdf_canvas");
+            document.getElementById("loading").remove();
+        }
+
+        main().catch(err => {
+            document.getElementById("loading").textContent =
+                "Failed to start: " + err;
+            console.error(err);
+        });
+    </script>
+</body>
+</html>

@@ -91,6 +91,8 @@ pub struct SdfGraphUserState {
     pub dirty_nodes: HashSet<SceneNodeId>,
     /// Nodes that were created via the node finder during this frame.
     pub created_via_finder: Vec<(NodeId, SdfNodeTemplate)>,
+    /// Current graph zoom level, used to scale hardcoded widget widths.
+    pub zoom: f32,
 }
 
 impl SdfGraphUserState {
@@ -99,6 +101,7 @@ impl SdfGraphUserState {
             node_data_snapshot: HashMap::new(),
             dirty_nodes: HashSet::new(),
             created_via_finder: Vec::new(),
+            zoom: 1.0,
         }
     }
 }
@@ -187,7 +190,8 @@ impl NodeDataTrait for SdfNodeData {
             return vec![];
         };
 
-        ui.spacing_mut().item_spacing.y = 2.0;
+        let zoom = user_state.zoom;
+        ui.spacing_mut().item_spacing.y = 2.0 * zoom;
 
         let mut changed = false;
 
@@ -205,7 +209,7 @@ impl NodeDataTrait for SdfNodeData {
                 let mut new_kind = kind.clone();
                 egui::ComboBox::from_id_salt(egui::Id::new(("prim_type", sid)))
                     .selected_text(new_kind.base_name())
-                    .width(NODE_WIDTH - 12.0)
+                    .width((NODE_WIDTH - 12.0) * zoom)
                     .show_ui(ui, |ui| {
                         for v in SdfPrimitive::ALL {
                             ui.selectable_value(&mut new_kind, v.clone(), v.base_name());
@@ -290,7 +294,7 @@ impl NodeDataTrait for SdfNodeData {
                 let mut new_op = op.clone();
                 egui::ComboBox::from_id_salt(egui::Id::new(("op_type", sid)))
                     .selected_text(new_op.base_name())
-                    .width(NODE_WIDTH - 12.0)
+                    .width((NODE_WIDTH - 12.0) * zoom)
                     .show_ui(ui, |ui| {
                         for v in CsgOp::ALL {
                             ui.selectable_value(&mut new_op, v.clone(), v.base_name());
@@ -325,7 +329,7 @@ impl NodeDataTrait for SdfNodeData {
                 let mut new_kind = kind.clone();
                 egui::ComboBox::from_id_salt(egui::Id::new(("xform_type", sid)))
                     .selected_text(new_kind.base_name())
-                    .width(NODE_WIDTH - 12.0)
+                    .width((NODE_WIDTH - 12.0) * zoom)
                     .show_ui(ui, |ui| {
                         for v in TransformKind::ALL {
                             ui.selectable_value(&mut new_kind, v.clone(), v.base_name());
@@ -354,7 +358,7 @@ impl NodeDataTrait for SdfNodeData {
                 let mut new_kind = kind.clone();
                 egui::ComboBox::from_id_salt(egui::Id::new(("mod_type", sid)))
                     .selected_text(new_kind.base_name())
-                    .width(NODE_WIDTH - 12.0)
+                    .width((NODE_WIDTH - 12.0) * zoom)
                     .show_ui(ui, |ui| {
                         for v in ModifierKind::ALL {
                             ui.selectable_value(&mut new_kind, v.clone(), v.base_name());
@@ -919,6 +923,8 @@ pub struct NodeGraphState {
     pub layout_dirty: bool,
     pub last_structure_key: u64,
     pub needs_initial_rebuild: bool,
+    /// When set, the next frame will place this node at the viewport center.
+    pub pending_center_node: Option<SceneNodeId>,
 }
 
 impl NodeGraphState {
@@ -931,13 +937,18 @@ impl NodeGraphState {
             layout_dirty: true,
             last_structure_key: 0,
             needs_initial_rebuild: true,
+            pending_center_node: None,
         }
     }
 }
 
 pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState) {
+    // Peek at graph_rect for toolbar's Organize button (toolbar is drawn first,
+    // but the rect doesn't change between toolbar and graph area).
+    let full_rect = ui.available_rect_before_wrap();
+
     // Draw toolbar above the graph
-    draw_toolbar(ui, scene, state);
+    draw_toolbar(ui, scene, state, full_rect);
 
     // Detect if scene changed externally (undo/redo, load, scene tree edit)
     let structure_key = scene.structure_key();
@@ -967,6 +978,21 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState) {
 
     // Draw the graph editor in remaining space (below toolbar)
     let graph_rect = ui.available_rect_before_wrap();
+
+    // Place newly created nodes at the viewport center
+    if let Some(sid) = state.pending_center_node.take() {
+        if let Some(&graph_id) = state.id_map.scene_to_graph.get(&sid) {
+            let pan = state.graph_state.pan_zoom.pan;
+            let zoom = state.graph_state.pan_zoom.zoom;
+            let center = egui::Pos2::new(
+                (graph_rect.width() / 2.0 - pan.x) / zoom,
+                (graph_rect.height() / 2.0 - pan.y) / zoom,
+            );
+            state.graph_state.node_positions.insert(graph_id, center);
+        }
+    }
+
+    state.user_state.zoom = state.graph_state.pan_zoom.zoom;
     let responses = ui
         .allocate_ui(graph_rect.size(), |ui| {
             state.graph_state.draw_graph_editor(
@@ -1043,7 +1069,7 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState) {
 // Toolbar
 // ---------------------------------------------------------------------------
 
-fn draw_toolbar(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState) {
+fn draw_toolbar(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState, graph_rect: egui::Rect) {
     egui::Frame::none()
         .fill(Color32::from_rgb(30, 30, 35))
         .inner_margin(egui::Margin::symmetric(6.0, 4.0))
@@ -1053,6 +1079,7 @@ fn draw_toolbar(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState
                 if ui.button(kind.base_name()).clicked() {
                     let id = scene.create_primitive(kind.clone());
                     state.selected = Some(id);
+                    state.pending_center_node = Some(id);
                     state.needs_initial_rebuild = true;
                     ui.close_menu();
                 }
@@ -1074,9 +1101,11 @@ fn draw_toolbar(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState
                     if let Some(sel) = state.selected {
                         let transform_id = scene.insert_transform_above(sel, kind.clone());
                         state.selected = Some(transform_id);
+                        state.pending_center_node = Some(transform_id);
                     } else {
                         let transform_id = scene.create_transform(kind.clone(), None);
                         state.selected = Some(transform_id);
+                        state.pending_center_node = Some(transform_id);
                     }
                     state.needs_initial_rebuild = true;
                     ui.close_menu();
@@ -1130,6 +1159,14 @@ fn draw_toolbar(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState
                 state.selected = None;
                 state.needs_initial_rebuild = true;
             }
+        }
+
+        ui.separator();
+
+        if ui.button("Organize").clicked() {
+            state.graph_state.node_positions = Default::default();
+            auto_layout_graph(scene, &mut state.graph_state, &state.id_map);
+            center_view_on_nodes(state, graph_rect);
         }
     }); });
 }
@@ -1351,13 +1388,37 @@ fn draw_minimap(
     }
 }
 
+fn center_view_on_nodes(state: &mut NodeGraphState, graph_rect: egui::Rect) {
+    let positions = &state.graph_state.node_positions;
+    if positions.is_empty() {
+        return;
+    }
+    let (mut min_x, mut min_y) = (f32::MAX, f32::MAX);
+    let (mut max_x, mut max_y) = (f32::MIN, f32::MIN);
+    for (_, pos) in positions.iter() {
+        min_x = min_x.min(pos.x);
+        min_y = min_y.min(pos.y);
+        max_x = max_x.max(pos.x + NODE_WIDTH);
+        max_y = max_y.max(pos.y + 200.0);
+    }
+    let center_x = (min_x + max_x) / 2.0;
+    let center_y = (min_y + max_y) / 2.0;
+    state.graph_state.pan_zoom.zoom = 1.0;
+    state.graph_state.pan_zoom.pan = egui::Vec2::new(
+        graph_rect.width() / 2.0 - center_x,
+        graph_rect.height() / 2.0 - center_y,
+    );
+}
+
 fn toolbar_add_modifier(scene: &mut Scene, state: &mut NodeGraphState, kind: ModifierKind) {
     if let Some(sel) = state.selected {
         let id = scene.insert_modifier_above(sel, kind);
         state.selected = Some(id);
+        state.pending_center_node = Some(id);
     } else {
         let id = scene.create_modifier(kind, None);
         state.selected = Some(id);
+        state.pending_center_node = Some(id);
     }
     state.needs_initial_rebuild = true;
 }
@@ -1372,6 +1433,7 @@ fn create_op_from_selection(scene: &mut Scene, state: &mut NodeGraphState, op: C
     let right = tops.last().copied();
     let op_id = scene.create_operation(op, left, right);
     state.selected = Some(op_id);
+    state.pending_center_node = Some(op_id);
     state.needs_initial_rebuild = true;
 }
 

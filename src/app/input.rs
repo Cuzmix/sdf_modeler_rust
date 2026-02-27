@@ -75,12 +75,16 @@ impl SdfApp {
         let open_pressed = ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::O));
 
         if save_pressed {
+            #[cfg(not(target_arch = "wasm32"))]
             if let Some(path) = crate::io::save_dialog() {
                 if let Err(e) = crate::io::save_project(&self.scene, &self.camera, &path) {
                     log::error!("Failed to save project: {}", e);
                 }
             }
+            #[cfg(target_arch = "wasm32")]
+            crate::io::web_save_project(&self.scene, &self.camera);
         } else if open_pressed {
+            #[cfg(not(target_arch = "wasm32"))]
             if let Some(path) = crate::io::open_dialog() {
                 match crate::io::load_project(&path) {
                     Ok(project) => {

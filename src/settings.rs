@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Settings {
@@ -23,8 +22,9 @@ impl Default for Settings {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Settings {
-    fn path() -> PathBuf {
+    fn path() -> std::path::PathBuf {
         let mut path = std::env::current_exe().unwrap_or_default();
         path.pop();
         path.push("settings.json");
@@ -44,6 +44,32 @@ impl Settings {
         if let Ok(json) = serde_json::to_string_pretty(self) {
             if let Err(e) = std::fs::write(&path, json) {
                 log::error!("Failed to save settings: {}", e);
+            }
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl Settings {
+    const STORAGE_KEY: &'static str = "sdf_modeler_settings";
+
+    pub fn load() -> Self {
+        let storage = web_sys::window()
+            .and_then(|w| w.local_storage().ok().flatten());
+        let Some(storage) = storage else { return Self::default() };
+        match storage.get_item(Self::STORAGE_KEY) {
+            Ok(Some(json)) => serde_json::from_str(&json).unwrap_or_default(),
+            _ => Self::default(),
+        }
+    }
+
+    pub fn save(&self) {
+        let storage = web_sys::window()
+            .and_then(|w| w.local_storage().ok().flatten());
+        let Some(storage) = storage else { return };
+        if let Ok(json) = serde_json::to_string_pretty(self) {
+            if let Err(e) = storage.set_item(Self::STORAGE_KEY, &json) {
+                log::error!("Failed to save settings: {:?}", e);
             }
         }
     }

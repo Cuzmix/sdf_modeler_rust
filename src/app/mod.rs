@@ -7,7 +7,7 @@ mod ui_panels;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use crate::compat::{Duration, Instant};
 
 use eframe::egui;
 use eframe::egui_wgpu::RenderState;
