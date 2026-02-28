@@ -5,8 +5,8 @@ use crate::settings::RenderConfig;
 
 use super::buffers::collect_sculpt_tex_info;
 use super::shader_templates::{
-    apply_march_placeholders, build_postlude, format_f32, format_vec3,
-    COMPOSITE_COMPUTE_ENTRY, PICK_COMPUTE_POSTLUDE, SHADER_PRELUDE,
+    apply_march_placeholders, build_postlude, compute_prelude, format_f32, format_vec3,
+    render_prelude, COMPOSITE_COMPUTE_ENTRY, PICK,
 };
 
 // ---------------------------------------------------------------------------
@@ -79,13 +79,13 @@ pub fn generate_shader(scene: &Scene, config: &RenderConfig) -> String {
     let scene_sdf = generate_scene_sdf(scene, tex_map);
     let sel_sdf = generate_selected_sdf(scene, tex_map);
     let postlude = build_postlude(config);
-    format!("{}\n{}\n{}\n{}\n{}", SHADER_PRELUDE, tex_decls, scene_sdf, sel_sdf, postlude)
+    format!("{}\n{}\n{}\n{}\n{}", render_prelude(), tex_decls, scene_sdf, sel_sdf, postlude)
 }
 
 pub fn generate_pick_shader(scene: &Scene, config: &RenderConfig) -> String {
     let scene_sdf = generate_scene_sdf(scene, None);
-    let pick_postlude = apply_march_placeholders(PICK_COMPUTE_POSTLUDE, config);
-    format!("{}\n{}\n{}", SHADER_PRELUDE, scene_sdf, pick_postlude)
+    let pick_postlude = apply_march_placeholders(PICK, config);
+    format!("{}\n{}\n{}", compute_prelude(), scene_sdf, pick_postlude)
 }
 
 /// Generate the composite compute shader that pre-evaluates scene_sdf at every voxel
@@ -94,7 +94,7 @@ pub fn generate_composite_shader(scene: &Scene, _config: &RenderConfig) -> Strin
     let (tex_decls, sculpt_tex_map) = generate_voxel_texture_decls(scene);
     let tex_map = if sculpt_tex_map.is_empty() { None } else { Some(&sculpt_tex_map) };
     let scene_sdf = generate_scene_sdf(scene, tex_map);
-    format!("{}\n{}\n{}\n{}", SHADER_PRELUDE, tex_decls, scene_sdf, COMPOSITE_COMPUTE_ENTRY)
+    format!("{}\n{}\n{}\n{}", compute_prelude(), tex_decls, scene_sdf, COMPOSITE_COMPUTE_ENTRY)
 }
 
 /// Generate the composite render shader that reads the pre-composited scene volume.
@@ -166,7 +166,7 @@ fn scene_sdf(p: vec3f) -> vec2f {{
         log::warn!("Composite render: calc_normal string replace FAILED — using analytical normals as fallback");
     }
 
-    format!("{}\n{}\n{}", SHADER_PRELUDE, comp_scene_sdf, postlude)
+    format!("{}\n{}\n{}", render_prelude(), comp_scene_sdf, postlude)
 }
 
 // ---------------------------------------------------------------------------
@@ -419,7 +419,7 @@ fn generate_scene_sdf(
     scene: &Scene,
     sculpt_tex_map: Option<&HashMap<NodeId, usize>>,
 ) -> String {
-    let order = scene.topo_order();
+    let order = scene.visible_topo_order();
     if order.is_empty() {
         return "fn scene_sdf(p: vec3f) -> vec2f {\n    return vec2f(1e10, -1.0);\n}"
             .to_string();
@@ -557,7 +557,7 @@ fn generate_selected_sdf(
     scene: &Scene,
     sculpt_tex_map: Option<&HashMap<NodeId, usize>>,
 ) -> String {
-    let order = scene.topo_order();
+    let order = scene.visible_topo_order();
     if order.is_empty() {
         return "fn selected_sdf(p: vec3f) -> f32 {\n    return 1e10;\n}".to_string();
     }

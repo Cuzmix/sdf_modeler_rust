@@ -956,6 +956,7 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState) {
         rebuild_graph_from_scene(scene, &mut state.graph_state, &mut state.id_map);
         state.last_structure_key = structure_key;
         state.needs_initial_rebuild = false;
+        state.layout_dirty = false;
 
         // Restore selection in graph
         if let Some(sel) = state.selected {
@@ -1047,6 +1048,11 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState) {
         state.layout_dirty = true;
         state.last_structure_key = scene.structure_key();
     }
+    // Consume layout_dirty: run auto-layout for any new/repositioned nodes
+    if state.layout_dirty {
+        auto_layout_graph(scene, &mut state.graph_state, &state.id_map);
+        state.layout_dirty = false;
+    }
 
     // Sync selection from graph to our state
     if let Some(first_selected) = state.graph_state.selected_nodes.first() {
@@ -1123,11 +1129,7 @@ fn draw_toolbar(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState
             }
             ui.separator();
             ui.label("Shape");
-            for kind in [
-                ModifierKind::Round,
-                ModifierKind::Onion,
-                ModifierKind::Elongate,
-            ] {
+            for kind in [ModifierKind::Round, ModifierKind::Onion, ModifierKind::Elongate] {
                 if ui.button(kind.base_name()).clicked() {
                     toolbar_add_modifier(scene, state, kind);
                     ui.close_menu();
@@ -1135,11 +1137,7 @@ fn draw_toolbar(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState
             }
             ui.separator();
             ui.label("Repeat");
-            for kind in [
-                ModifierKind::Mirror,
-                ModifierKind::Repeat,
-                ModifierKind::FiniteRepeat,
-            ] {
+            for kind in [ModifierKind::Mirror, ModifierKind::Repeat, ModifierKind::FiniteRepeat] {
                 if ui.button(kind.base_name()).clicked() {
                     toolbar_add_modifier(scene, state, kind);
                     ui.close_menu();
@@ -1162,6 +1160,23 @@ fn draw_toolbar(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState
         }
 
         ui.separator();
+
+        if ui
+            .add_enabled(has_selection, egui::Button::new("Focus Selected"))
+            .clicked()
+        {
+            if let Some(sel) = state.selected {
+                if let Some(&graph_id) = state.id_map.scene_to_graph.get(&sel) {
+                    if let Some(&pos) = state.graph_state.node_positions.get(graph_id) {
+                        let zoom = state.graph_state.pan_zoom.zoom;
+                        state.graph_state.pan_zoom.pan = egui::Vec2::new(
+                            graph_rect.width() / 2.0 - (pos.x + NODE_WIDTH / 2.0) * zoom,
+                            graph_rect.height() / 2.0 - (pos.y + 30.0) * zoom,
+                        );
+                    }
+                }
+            }
+        }
 
         if ui.button("Organize").clicked() {
             state.graph_state.node_positions = Default::default();

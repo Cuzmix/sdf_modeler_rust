@@ -19,6 +19,7 @@ pub struct CompositeParams {
 const _: () = assert!(std::mem::size_of::<CompositeParams>() == 64);
 
 /// GPU resources for the composite scene volume cache.
+#[allow(dead_code)]
 pub struct CompositeResources {
     pub sdf_texture: wgpu::Texture,
     pub sdf_view: wgpu::TextureView,

@@ -51,6 +51,14 @@ pub fn json_to_project(json: &str) -> Result<ProjectFile, String> {
 // ── Native file I/O ─────────────────────────────────────────────────────────
 
 #[cfg(not(target_arch = "wasm32"))]
+pub fn auto_save_path() -> std::path::PathBuf {
+    let mut path = std::env::current_exe().unwrap_or_default();
+    path.pop();
+    path.push("autosave.sdf");
+    path
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 pub fn save_project(scene: &Scene, camera: &Camera, path: &std::path::PathBuf) -> Result<(), String> {
     let json = project_to_json(scene, camera)?;
     std::fs::write(path, json).map_err(|e| e.to_string())?;

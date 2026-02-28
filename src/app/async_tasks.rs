@@ -223,7 +223,7 @@ impl SdfApp {
         let padding = 0.5;
         let bounds_min = Vec3::from(bounds.0) - Vec3::splat(padding);
         let bounds_max = Vec3::from(bounds.1) + Vec3::splat(padding);
-        let resolution = 128u32;
+        let resolution = self.settings.export_resolution.clamp(32, 512);
         let progress = Arc::new(AtomicU32::new(0));
         let progress_clone = Arc::clone(&progress);
         let (tx, rx) = std::sync::mpsc::channel();
@@ -256,7 +256,7 @@ impl SdfApp {
         let padding = 0.5;
         let bounds_min = Vec3::from(bounds.0) - Vec3::splat(padding);
         let bounds_max = Vec3::from(bounds.1) + Vec3::splat(padding);
-        let resolution = 128u32;
+        let resolution = self.settings.export_resolution.clamp(32, 512);
         let progress = Arc::new(AtomicU32::new(0));
 
         let mesh = crate::export::marching_cubes(

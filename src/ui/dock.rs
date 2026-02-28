@@ -6,7 +6,7 @@ use crate::app::BakeRequest;
 use crate::gpu::camera::Camera;
 use crate::gpu::picking::PendingPick;
 use crate::graph::scene::{NodeId, Scene};
-use crate::sculpt::SculptState;
+use crate::sculpt::{ActiveTool, SculptState};
 use crate::ui::gizmo::{GizmoMode, GizmoSpace, GizmoState};
 use crate::ui::node_graph::{self, NodeGraphState};
 use crate::settings::Settings;
@@ -58,6 +58,7 @@ pub struct SdfTabViewer<'a> {
     pub gizmo_mode: &'a GizmoMode,
     pub gizmo_space: &'a GizmoSpace,
     pub pivot_offset: &'a mut Vec3,
+    pub active_tool: &'a ActiveTool,
     pub sculpt_state: &'a mut SculptState,
     pub settings: &'a mut Settings,
     pub settings_dirty: &'a mut bool,
@@ -78,6 +79,10 @@ pub struct SdfTabViewer<'a> {
     pub show_debug: &'a mut bool,
     /// VSync state at app startup (to detect restart-required).
     pub initial_vsync: bool,
+    /// Tool switch requested by viewport toolbar (consumed after dock UI).
+    pub tool_switch: &'a mut Option<ActiveTool>,
+    /// Drag state for scene tree drag & drop reparenting.
+    pub scene_tree_drag: &'a mut Option<NodeId>,
 }
 
 impl<'a> TabViewer for SdfTabViewer<'a> {
@@ -97,22 +102,32 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
     fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
         match tab {
             Tab::Viewport => {
-                if let Some(pick) = viewport::draw(
+                let vp_output = viewport::draw(
                     ui,
                     self.camera,
                     self.scene,
-                    self.node_graph_state.selected,
+                    &mut self.node_graph_state.selected,
                     self.gizmo_state,
                     self.gizmo_mode,
                     self.gizmo_space,
                     self.pivot_offset,
                     self.sculpt_state,
+                    self.active_tool,
                     self.time,
                     &self.settings.render,
                     self.sculpt_count,
                     self.fps_info,
-                ) {
+                );
+                if let Some(pick) = vp_output.pending_pick {
                     *self.pending_pick = Some(pick);
+                }
+                if let Some(node_id) = vp_output.created_node {
+                    self.node_graph_state.selected = Some(node_id);
+                    self.node_graph_state.needs_initial_rebuild = true;
+                    self.node_graph_state.pending_center_node = Some(node_id);
+                }
+                if let Some(tool) = vp_output.tool_switch {
+                    *self.tool_switch = Some(tool);
                 }
             }
             Tab::NodeGraph => {
@@ -136,13 +151,21 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                 }
             }
             Tab::SceneTree => {
+                let prev_selected = self.node_graph_state.selected;
                 scene_tree::draw(
                     ui,
                     self.scene,
                     &mut self.node_graph_state.selected,
                     self.renaming_node,
                     self.rename_buf,
+                    self.scene_tree_drag,
                 );
+                // If scene tree changed selection, scroll graph to it
+                if self.node_graph_state.selected != prev_selected {
+                    if let Some(sel) = self.node_graph_state.selected {
+                        self.node_graph_state.pending_center_node = Some(sel);
+                    }
+                }
                 // Defensive: mark layout dirty if a node was deleted via context menu
                 if let Some(sel) = self.node_graph_state.selected {
                     if !self.scene.nodes.contains_key(&sel) {

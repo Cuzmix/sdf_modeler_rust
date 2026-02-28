@@ -331,6 +331,7 @@ impl CsgOp {
 }
 
 fn default_roughness() -> f32 { 0.5 }
+fn default_fresnel() -> f32 { 0.04 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum NodeData {
@@ -344,6 +345,12 @@ pub enum NodeData {
         roughness: f32,
         #[serde(default)]
         metallic: f32,
+        #[serde(default)]
+        emissive: Vec3,
+        #[serde(default)]
+        emissive_intensity: f32,
+        #[serde(default = "default_fresnel")]
+        fresnel: f32,
         /// Legacy: kept for v2 save file migration only. Always None at runtime.
         #[serde(default, skip_serializing)]
         voxel_grid: Option<VoxelGrid>,
@@ -363,6 +370,12 @@ pub enum NodeData {
         roughness: f32,
         #[serde(default)]
         metallic: f32,
+        #[serde(default)]
+        emissive: Vec3,
+        #[serde(default)]
+        emissive_intensity: f32,
+        #[serde(default = "default_fresnel")]
+        fresnel: f32,
         voxel_grid: VoxelGrid,
         #[serde(default = "crate::graph::voxel::default_resolution")]
         desired_resolution: u32,
@@ -430,6 +443,8 @@ pub struct Scene {
     pub nodes: HashMap<NodeId, SceneNode>,
     pub(crate) next_id: u64,
     pub(crate) name_counters: HashMap<String, u32>,
+    #[serde(default)]
+    pub hidden_nodes: HashSet<NodeId>,
 }
 
 impl Scene {
@@ -438,6 +453,7 @@ impl Scene {
             nodes: HashMap::new(),
             next_id: 0,
             name_counters: HashMap::new(),
+            hidden_nodes: HashSet::new(),
         };
         scene.create_primitive(SdfPrimitive::Sphere);
         scene
@@ -460,7 +476,18 @@ impl Scene {
         id
     }
 
+    pub fn is_hidden(&self, id: NodeId) -> bool {
+        self.hidden_nodes.contains(&id)
+    }
+
+    pub fn toggle_visibility(&mut self, id: NodeId) {
+        if !self.hidden_nodes.remove(&id) {
+            self.hidden_nodes.insert(id);
+        }
+    }
+
     pub fn remove_node(&mut self, id: NodeId) -> Option<SceneNode> {
+        self.hidden_nodes.remove(&id);
         let node = self.nodes.remove(&id);
         // Null out any references to this node (instead of cascade-deleting)
         let to_patch: Vec<(NodeId, bool, bool, bool)> = self
@@ -526,6 +553,9 @@ impl Scene {
                 color: kind.default_color(),
                 roughness: 0.5,
                 metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
                 kind,
                 voxel_grid: None,
             },
@@ -569,6 +599,9 @@ impl Scene {
                 color,
                 roughness: 0.5,
                 metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
                 voxel_grid,
                 desired_resolution,
             },
@@ -820,6 +853,13 @@ impl Scene {
     pub fn structure_key(&self) -> u64 {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         self.nodes.len().hash(&mut hasher);
+        // Hash hidden_nodes so visibility changes trigger shader regen
+        self.hidden_nodes.len().hash(&mut hasher);
+        let mut hidden_sorted: Vec<NodeId> = self.hidden_nodes.iter().cloned().collect();
+        hidden_sorted.sort();
+        for id in &hidden_sorted {
+            id.hash(&mut hasher);
+        }
         let mut ids: Vec<NodeId> = self.nodes.keys().cloned().collect();
         ids.sort();
         for id in ids {
@@ -874,7 +914,7 @@ impl Scene {
             node.name.hash(&mut hasher);
             match &node.data {
                 NodeData::Primitive {
-                    position, rotation, scale, color, metallic, roughness, ..
+                    position, rotation, scale, color, metallic, roughness, emissive, emissive_intensity, fresnel, ..
                 } => {
                     position.x.to_bits().hash(&mut hasher);
                     position.y.to_bits().hash(&mut hasher);
@@ -890,12 +930,17 @@ impl Scene {
                     color.z.to_bits().hash(&mut hasher);
                     metallic.to_bits().hash(&mut hasher);
                     roughness.to_bits().hash(&mut hasher);
+                    emissive.x.to_bits().hash(&mut hasher);
+                    emissive.y.to_bits().hash(&mut hasher);
+                    emissive.z.to_bits().hash(&mut hasher);
+                    emissive_intensity.to_bits().hash(&mut hasher);
+                    fresnel.to_bits().hash(&mut hasher);
                 }
                 NodeData::Operation { smooth_k, .. } => {
                     smooth_k.to_bits().hash(&mut hasher);
                 }
                 NodeData::Sculpt {
-                    position, rotation, color, metallic, roughness, desired_resolution, ..
+                    position, rotation, color, metallic, roughness, emissive, emissive_intensity, fresnel, desired_resolution, ..
                 } => {
                     position.x.to_bits().hash(&mut hasher);
                     position.y.to_bits().hash(&mut hasher);
@@ -908,6 +953,11 @@ impl Scene {
                     color.z.to_bits().hash(&mut hasher);
                     metallic.to_bits().hash(&mut hasher);
                     roughness.to_bits().hash(&mut hasher);
+                    emissive.x.to_bits().hash(&mut hasher);
+                    emissive.y.to_bits().hash(&mut hasher);
+                    emissive.z.to_bits().hash(&mut hasher);
+                    emissive_intensity.to_bits().hash(&mut hasher);
+                    fresnel.to_bits().hash(&mut hasher);
                     desired_resolution.hash(&mut hasher);
                 }
                 NodeData::Transform { value, .. } => {
@@ -941,8 +991,9 @@ impl Scene {
         top
     }
 
-    /// Post-order traversal from all top-level nodes. Returns nodes in evaluation order.
-    pub fn topo_order(&self) -> Vec<NodeId> {
+    /// Post-order traversal that skips hidden nodes and their entire subtrees.
+    /// Used by codegen and buffer upload — hidden geometry should not appear in the shader.
+    pub fn visible_topo_order(&self) -> Vec<NodeId> {
         let tops = self.top_level_nodes();
         if tops.is_empty() {
             return Vec::new();
@@ -950,16 +1001,17 @@ impl Scene {
         let mut result = Vec::new();
         let mut visited = HashSet::new();
         for &root in &tops {
-            self.topo_visit(root, &mut visited, &mut result);
+            self.visible_topo_visit(root, &mut visited, &mut result);
         }
         result
     }
 
-    fn topo_visit(&self, id: NodeId, visited: &mut HashSet<NodeId>, result: &mut Vec<NodeId>) {
+    fn visible_topo_visit(&self, id: NodeId, visited: &mut HashSet<NodeId>, result: &mut Vec<NodeId>) {
         if !visited.insert(id) { return; }
+        if self.hidden_nodes.contains(&id) { return; }
         let Some(node) = self.nodes.get(&id) else { return; };
         for child_id in node.data.children() {
-            self.topo_visit(child_id, visited, result);
+            self.visible_topo_visit(child_id, visited, result);
         }
         result.push(id);
     }
@@ -1042,6 +1094,106 @@ impl Scene {
             }
         }
         set
+    }
+
+    /// Duplicate an entire subtree rooted at `root_id`.
+    /// Returns the new root ID, or None if `root_id` doesn't exist.
+    /// Sculpt nodes get their voxel grids deep-cloned. Names get " Copy" appended.
+    pub fn duplicate_subtree(&mut self, root_id: NodeId) -> Option<NodeId> {
+        let subtree = self.collect_subtree(root_id);
+        if subtree.is_empty() || !self.nodes.contains_key(&root_id) {
+            return None;
+        }
+
+        // Allocate new IDs
+        let mut id_map: HashMap<NodeId, NodeId> = HashMap::new();
+        for &old_id in &subtree {
+            let new_id = self.next_id;
+            self.next_id += 1;
+            id_map.insert(old_id, new_id);
+        }
+
+        // Clone nodes with remapped references
+        let remap = |opt: &Option<NodeId>| -> Option<NodeId> {
+            opt.and_then(|id| {
+                if subtree.contains(&id) {
+                    id_map.get(&id).copied()
+                } else {
+                    Some(id) // external reference, keep as-is
+                }
+            })
+        };
+
+        let cloned_nodes: Vec<SceneNode> = subtree.iter().filter_map(|&old_id| {
+            let node = self.nodes.get(&old_id)?;
+            let new_id = *id_map.get(&old_id)?;
+            let new_data = match &node.data {
+                NodeData::Primitive { kind, position, rotation, scale, color, roughness, metallic, emissive, emissive_intensity, fresnel, .. } => {
+                    NodeData::Primitive {
+                        kind: kind.clone(),
+                        position: *position,
+                        rotation: *rotation,
+                        scale: *scale,
+                        color: *color,
+                        roughness: *roughness,
+                        metallic: *metallic,
+                        emissive: *emissive,
+                        emissive_intensity: *emissive_intensity,
+                        fresnel: *fresnel,
+                        voxel_grid: None,
+                    }
+                }
+                NodeData::Operation { op, smooth_k, left, right } => {
+                    NodeData::Operation {
+                        op: op.clone(),
+                        smooth_k: *smooth_k,
+                        left: remap(left),
+                        right: remap(right),
+                    }
+                }
+                NodeData::Sculpt { input, position, rotation, color, roughness, metallic, emissive, emissive_intensity, fresnel, voxel_grid, desired_resolution } => {
+                    NodeData::Sculpt {
+                        input: remap(input),
+                        position: *position,
+                        rotation: *rotation,
+                        color: *color,
+                        roughness: *roughness,
+                        metallic: *metallic,
+                        emissive: *emissive,
+                        emissive_intensity: *emissive_intensity,
+                        fresnel: *fresnel,
+                        voxel_grid: voxel_grid.clone(),
+                        desired_resolution: *desired_resolution,
+                    }
+                }
+                NodeData::Transform { kind, input, value } => {
+                    NodeData::Transform {
+                        kind: kind.clone(),
+                        input: remap(input),
+                        value: *value,
+                    }
+                }
+                NodeData::Modifier { kind, input, value, extra } => {
+                    NodeData::Modifier {
+                        kind: kind.clone(),
+                        input: remap(input),
+                        value: *value,
+                        extra: *extra,
+                    }
+                }
+            };
+            Some(SceneNode {
+                id: new_id,
+                name: format!("{} Copy", node.name),
+                data: new_data,
+            })
+        }).collect();
+
+        for node in cloned_nodes {
+            self.nodes.insert(node.id, node);
+        }
+
+        id_map.get(&root_id).copied()
     }
 
     /// Compute world-space bounding sphere (center, radius) for a subtree.
@@ -1149,6 +1301,9 @@ impl Scene {
                 color,
                 roughness: 0.5,
                 metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
                 voxel_grid,
                 desired_resolution,
             },
@@ -1216,6 +1371,9 @@ impl Scene {
 
     /// Deep equality check (topology + parameters). Used by undo system.
     pub fn content_eq(&self, other: &Scene) -> bool {
+        if self.hidden_nodes != other.hidden_nodes {
+            return false;
+        }
         if self.nodes.len() != other.nodes.len() {
             return false;
         }
@@ -1236,6 +1394,9 @@ impl Scene {
                         color: c1,
                         roughness: rgh1,
                         metallic: m1,
+                        emissive: e1,
+                        emissive_intensity: ei1,
+                        fresnel: f1,
                         ..
                     },
                     NodeData::Primitive {
@@ -1246,6 +1407,9 @@ impl Scene {
                         color: c2,
                         roughness: rgh2,
                         metallic: m2,
+                        emissive: e2,
+                        emissive_intensity: ei2,
+                        fresnel: f2,
                         ..
                     },
                 ) => {
@@ -1256,6 +1420,9 @@ impl Scene {
                         || c1 != c2
                         || rgh1 != rgh2
                         || m1 != m2
+                        || e1 != e2
+                        || ei1 != ei2
+                        || f1 != f2
                     {
                         return false;
                     }
@@ -1290,6 +1457,9 @@ impl Scene {
                         color: c1,
                         roughness: rgh1,
                         metallic: m1,
+                        emissive: e1,
+                        emissive_intensity: ei1,
+                        fresnel: f1,
                         voxel_grid: v1,
                         desired_resolution: dr1,
                     },
@@ -1300,6 +1470,9 @@ impl Scene {
                         color: c2,
                         roughness: rgh2,
                         metallic: m2,
+                        emissive: e2,
+                        emissive_intensity: ei2,
+                        fresnel: f2,
                         voxel_grid: v2,
                         desired_resolution: dr2,
                     },
@@ -1310,6 +1483,9 @@ impl Scene {
                         || c1 != c2
                         || rgh1 != rgh2
                         || m1 != m2
+                        || e1 != e2
+                        || ei1 != ei2
+                        || f1 != f2
                         || dr1 != dr2
                         || !v1.content_eq(v2)
                     {

@@ -4,8 +4,8 @@ use eframe::wgpu;
 
 use crate::gpu::camera::{Camera, CameraUniform};
 use crate::gpu::picking::PendingPick;
-use crate::graph::scene::{NodeId, Scene};
-use crate::sculpt::SculptState;
+use crate::graph::scene::{CsgOp, ModifierKind, NodeId, Scene, SdfPrimitive, TransformKind};
+use crate::sculpt::{ActiveTool, BrushMode, SculptState};
 use crate::ui::gizmo::{self, GizmoMode, GizmoSpace, GizmoState};
 
 use super::ViewportResources;
@@ -114,7 +114,16 @@ impl egui_wgpu::CallbackTrait for ViewportCallback {
     }
 }
 
-const BRUSH_CURSOR_COLOR: egui::Color32 = egui::Color32::from_rgba_premultiplied(200, 200, 200, 128);
+fn brush_cursor_color(mode: &BrushMode) -> egui::Color32 {
+    match mode {
+        BrushMode::Add => egui::Color32::from_rgba_premultiplied(100, 200, 100, 160),
+        BrushMode::Carve => egui::Color32::from_rgba_premultiplied(200, 100, 100, 160),
+        BrushMode::Smooth => egui::Color32::from_rgba_premultiplied(100, 150, 255, 160),
+        BrushMode::Flatten => egui::Color32::from_rgba_premultiplied(255, 200, 80, 160),
+        BrushMode::Inflate => egui::Color32::from_rgba_premultiplied(200, 140, 255, 160),
+        BrushMode::Grab => egui::Color32::from_rgba_premultiplied(255, 160, 60, 160),
+    }
+}
 
 /// Draw a semi-transparent symmetry plane overlay at the mirror axis.
 fn draw_symmetry_plane(painter: &egui::Painter, camera: &Camera, rect: egui::Rect, axis: u8) {
@@ -174,22 +183,33 @@ fn draw_symmetry_plane(painter: &egui::Painter, camera: &Camera, rect: egui::Rec
     ));
 }
 
-/// Returns an optional PendingPick if the user clicked/dragged in the viewport.
+pub struct ViewportOutput {
+    pub pending_pick: Option<PendingPick>,
+    pub created_node: Option<NodeId>,
+    pub tool_switch: Option<ActiveTool>,
+}
+
 pub fn draw(
     ui: &mut egui::Ui,
     camera: &mut Camera,
     scene: &mut Scene,
-    selected: Option<NodeId>,
+    selected: &mut Option<NodeId>,
     gizmo_state: &mut GizmoState,
     gizmo_mode: &GizmoMode,
     gizmo_space: &GizmoSpace,
     pivot_offset: &mut glam::Vec3,
     sculpt_state: &SculptState,
+    active_tool: &ActiveTool,
     time: f32,
     render_config: &crate::settings::RenderConfig,
     sculpt_count: usize,
     fps_info: Option<(f64, f64)>, // (fps, frame_ms)
-) -> Option<PendingPick> {
+) -> ViewportOutput {
+    let mut output = ViewportOutput {
+        pending_pick: None,
+        created_node: None,
+        tool_switch: None,
+    };
     let rect = ui.available_rect_before_wrap();
     let response = ui.allocate_rect(rect, egui::Sense::click_and_drag());
 
@@ -235,9 +255,9 @@ pub fn draw(
     let render_w = (viewport[2] * render_scale).max(1.0);
     let render_h = (viewport[3] * render_scale).max(1.0);
     let render_viewport = [0.0, 0.0, render_w, render_h];
-    let selected_idx = selected
+    let selected_idx = (*selected)
         .and_then(|id| {
-            let order = scene.topo_order();
+            let order = scene.visible_topo_order();
             order.iter().position(|&nid| nid == id)
         })
         .map(|i| i as f32)
@@ -268,7 +288,7 @@ pub fn draw(
             &response,
             camera,
             scene,
-            selected,
+            *selected,
             gizmo_state,
             gizmo_mode,
             gizmo_space,
@@ -278,7 +298,6 @@ pub fn draw(
     };
 
     // --- Interaction priority: sculpt > gizmo > pick > orbit ---
-    let mut pending_pick = None;
 
     if sculpt_active {
         // Sculpt mode: drag applies brush continuously via pick
@@ -289,7 +308,7 @@ pub fn draw(
                         (pos.x - rect.min.x) * pixels_per_point,
                         (pos.y - rect.min.y) * pixels_per_point,
                     ];
-                    pending_pick = Some(PendingPick {
+                    output.pending_pick = Some(PendingPick {
                         mouse_pos: mouse_px,
                         camera_uniform: camera.to_uniform(viewport, time, 0.0, false, scene_bounds, -1.0),
                     });
@@ -299,6 +318,7 @@ pub fn draw(
 
         // Enhanced brush cursor preview
         if let SculptState::Active {
+            ref brush_mode,
             brush_radius,
             brush_strength,
             symmetry_axis,
@@ -307,20 +327,23 @@ pub fn draw(
         {
             if let Some(hover_pos) = response.hover_pos() {
                 let screen_radius = brush_radius / camera.distance * rect.height() * 0.5;
+                let mode_color = brush_cursor_color(brush_mode);
 
-                // Outer ring: brush extent
+                // Outer ring: brush extent (color-coded by mode)
                 ui.painter().circle_stroke(
                     hover_pos,
                     screen_radius,
-                    egui::Stroke::new(1.5, BRUSH_CURSOR_COLOR),
+                    egui::Stroke::new(1.5, mode_color),
                 );
 
-                // Inner fill: strength indicator (opacity proportional to strength)
+                // Inner fill: strength indicator with mode tint
                 let strength_alpha = (brush_strength / 0.5 * 60.0).clamp(8.0, 60.0) as u8;
                 ui.painter().circle_filled(
                     hover_pos,
                     screen_radius * 0.6,
-                    egui::Color32::from_rgba_premultiplied(200, 200, 200, strength_alpha),
+                    egui::Color32::from_rgba_premultiplied(
+                        mode_color.r(), mode_color.g(), mode_color.b(), strength_alpha,
+                    ),
                 );
 
                 // Crosshair center dot
@@ -381,6 +404,33 @@ pub fn draw(
                         }
                     }
                 }
+
+                // Brush HUD text near cursor
+                let mode_name = match brush_mode {
+                    BrushMode::Add => "Add",
+                    BrushMode::Carve => "Carve",
+                    BrushMode::Smooth => "Smooth",
+                    BrushMode::Flatten => "Flatten",
+                    BrushMode::Inflate => "Inflate",
+                    BrushMode::Grab => "Grab",
+                };
+                let hud_text = format!("{} R:{:.2} S:{:.3}", mode_name, brush_radius, brush_strength);
+                let text_pos = hover_pos + egui::vec2(screen_radius + 8.0, screen_radius + 4.0);
+                let font = egui::FontId::monospace(10.0);
+                ui.painter().text(
+                    text_pos + egui::vec2(1.0, 1.0),
+                    egui::Align2::LEFT_TOP,
+                    &hud_text,
+                    font.clone(),
+                    egui::Color32::from_black_alpha(180),
+                );
+                ui.painter().text(
+                    text_pos,
+                    egui::Align2::LEFT_TOP,
+                    &hud_text,
+                    font,
+                    egui::Color32::from_white_alpha(200),
+                );
             }
         }
 
@@ -402,7 +452,7 @@ pub fn draw(
                     (pos.y - rect.min.y) * pixels_per_point,
                 ];
                 let pick_uniform = camera.to_uniform(viewport, time, 0.0, false, scene_bounds, -1.0);
-                pending_pick = Some(PendingPick {
+                output.pending_pick = Some(PendingPick {
                     mouse_pos: mouse_px,
                     camera_uniform: pick_uniform,
                 });
@@ -456,5 +506,181 @@ pub fn draw(
         );
     }
 
-    pending_pick
+    // --- Floating toolbar overlay ---
+    let toolbar_id = ui.id().with("viewport_toolbar");
+    egui::Area::new(toolbar_id)
+        .order(egui::Order::Foreground)
+        .fixed_pos(rect.min + egui::vec2(8.0, 28.0)) // Below FPS counter
+        .show(ui.ctx(), |ui| {
+            egui::Frame::none()
+                .fill(egui::Color32::from_rgba_premultiplied(30, 30, 38, 200))
+                .rounding(6.0)
+                .inner_margin(6.0)
+                .show(ui, |ui| {
+                    ui.set_min_width(32.0);
+
+                    // Tool strip
+                    ui.horizontal(|ui| {
+                        let sel_style = |active: bool| {
+                            if active {
+                                egui::RichText::new("").color(egui::Color32::from_rgb(255, 200, 60))
+                            } else {
+                                egui::RichText::new("").color(egui::Color32::from_gray(180))
+                            }
+                        };
+                        let _ = sel_style; // suppress unused
+
+                        let select_active = *active_tool == ActiveTool::Select;
+                        let sculpt_tool_active = *active_tool == ActiveTool::Sculpt;
+
+                        if ui.selectable_label(select_active, "Select").clicked() && !select_active {
+                            output.tool_switch = Some(ActiveTool::Select);
+                        }
+                        if ui.selectable_label(sculpt_tool_active, "Sculpt").clicked() && !sculpt_tool_active {
+                            output.tool_switch = Some(ActiveTool::Sculpt);
+                        }
+                    });
+
+                    // Shape/Boolean/Modifier buttons (hidden when sculpt tool active)
+                    if *active_tool != ActiveTool::Sculpt {
+                        ui.separator();
+
+                        // + Shape menu
+                        ui.menu_button("+ Shape", |ui| {
+                            for prim in SdfPrimitive::ALL {
+                                if ui.button(prim.base_name()).clicked() {
+                                    let id = scene.create_primitive(prim.clone());
+                                    output.created_node = Some(id);
+                                    ui.close_menu();
+                                }
+                            }
+                        });
+
+                        // Boolean menu
+                        ui.menu_button("Boolean", |ui| {
+                            for op in CsgOp::ALL {
+                                if ui.button(op.base_name()).clicked() {
+                                    let tops = scene.top_level_nodes();
+                                    if tops.len() >= 2 {
+                                        let left = Some(tops[tops.len() - 2]);
+                                        let right = Some(tops[tops.len() - 1]);
+                                        let id = scene.create_operation(op.clone(), left, right);
+                                        output.created_node = Some(id);
+                                    }
+                                    ui.close_menu();
+                                }
+                            }
+                        });
+
+                        // + Modifier menu (needs selection)
+                        let has_selection = selected.is_some();
+                        ui.add_enabled_ui(has_selection, |ui| {
+                            ui.menu_button("+ Modifier", |ui| {
+                                if let Some(sel_id) = *selected {
+                                    ui.label("Deform");
+                                    for kind in &[ModifierKind::Twist, ModifierKind::Bend, ModifierKind::Taper] {
+                                        if ui.button(kind.base_name()).clicked() {
+                                            scene.insert_modifier_above(sel_id, kind.clone());
+                                            ui.close_menu();
+                                        }
+                                    }
+                                    ui.separator();
+                                    ui.label("Shape");
+                                    for kind in &[ModifierKind::Round, ModifierKind::Onion, ModifierKind::Elongate] {
+                                        if ui.button(kind.base_name()).clicked() {
+                                            scene.insert_modifier_above(sel_id, kind.clone());
+                                            ui.close_menu();
+                                        }
+                                    }
+                                    ui.separator();
+                                    ui.label("Repeat");
+                                    for kind in &[ModifierKind::Mirror, ModifierKind::Repeat, ModifierKind::FiniteRepeat] {
+                                        if ui.button(kind.base_name()).clicked() {
+                                            scene.insert_modifier_above(sel_id, kind.clone());
+                                            ui.close_menu();
+                                        }
+                                    }
+                                    ui.separator();
+                                    ui.label("Transform");
+                                    for kind in TransformKind::ALL {
+                                        if ui.button(kind.base_name()).clicked() {
+                                            scene.insert_transform_above(sel_id, kind.clone());
+                                            ui.close_menu();
+                                        }
+                                    }
+                                }
+                            });
+                        });
+
+                        ui.separator();
+
+                        // Delete button (needs selection)
+                        ui.add_enabled_ui(has_selection, |ui| {
+                            if ui.button("Delete").clicked() {
+                                if let Some(sel_id) = *selected {
+                                    scene.remove_node(sel_id);
+                                    *selected = None;
+                                }
+                            }
+                        });
+                    }
+                });
+        });
+
+    // --- Orientation Gizmo (top-right corner) ---
+    {
+        let gizmo_size = 60.0_f32;
+        let gizmo_center = egui::pos2(
+            rect.right() - gizmo_size * 0.6,
+            rect.top() + gizmo_size * 0.6 + 4.0,
+        );
+        let arm_len = gizmo_size * 0.35;
+
+        let view = camera.view_matrix();
+        let project_axis = |axis: glam::Vec3| -> egui::Vec2 {
+            let v = view.transform_vector3(axis);
+            egui::vec2(v.x, -v.y) * arm_len
+        };
+
+        let axes: [(glam::Vec3, egui::Color32, &str); 3] = [
+            (glam::Vec3::X, egui::Color32::from_rgb(220, 60, 60), "X"),
+            (glam::Vec3::Y, egui::Color32::from_rgb(60, 200, 60), "Y"),
+            (glam::Vec3::Z, egui::Color32::from_rgb(60, 100, 220), "Z"),
+        ];
+
+        let mut sorted_axes: Vec<_> = axes.iter().map(|(axis, color, label)| {
+            let v = view.transform_vector3(*axis);
+            (v.z, *axis, *color, *label)
+        }).collect();
+        sorted_axes.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+
+        ui.painter().circle_filled(
+            gizmo_center,
+            arm_len + 8.0,
+            egui::Color32::from_rgba_premultiplied(20, 20, 25, 180),
+        );
+
+        for (depth, axis, color, label) in &sorted_axes {
+            let end = gizmo_center + project_axis(*axis);
+            let alpha = if *depth > 0.0 { 255u8 } else { 80u8 };
+            let line_color = egui::Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), alpha);
+            let thickness = if *depth > 0.0 { 2.0 } else { 1.0 };
+
+            ui.painter().line_segment(
+                [gizmo_center, end],
+                egui::Stroke::new(thickness, line_color),
+            );
+            if *depth > -0.3 {
+                ui.painter().text(
+                    end,
+                    egui::Align2::CENTER_CENTER,
+                    label,
+                    egui::FontId::proportional(10.0),
+                    line_color,
+                );
+            }
+        }
+    }
+
+    output
 }

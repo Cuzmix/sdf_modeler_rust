@@ -1,5 +1,17 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
+pub enum BackgroundMode {
+    SkyGradient,
+    SolidColor,
+}
+
+impl Default for BackgroundMode {
+    fn default() -> Self {
+        Self::SkyGradient
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Settings {
     pub vsync_enabled: bool,
@@ -9,6 +21,14 @@ pub struct Settings {
     pub continuous_repaint: bool,
     #[serde(default)]
     pub render: RenderConfig,
+    #[serde(default = "default_true")]
+    pub auto_save_enabled: bool,
+    #[serde(default = "default_auto_save_interval")]
+    pub auto_save_interval_secs: u32,
+    #[serde(default)]
+    pub recent_files: Vec<String>,
+    #[serde(default = "default_export_resolution")]
+    pub export_resolution: u32,
 }
 
 impl Default for Settings {
@@ -18,7 +38,20 @@ impl Default for Settings {
             show_fps_overlay: true,
             continuous_repaint: false,
             render: RenderConfig::default(),
+            auto_save_enabled: true,
+            auto_save_interval_secs: 120,
+            recent_files: Vec::new(),
+            export_resolution: 128,
         }
+    }
+}
+
+impl Settings {
+    pub fn add_recent_file(&mut self, path: &str) {
+        self.recent_files.retain(|p| p != path);
+        self.recent_files.insert(0, path.to_string());
+        self.recent_files.truncate(10);
+        self.save();
     }
 }
 
@@ -107,9 +140,13 @@ pub struct RenderConfig {
     pub fill_intensity: f32,
     pub ambient: f32,
 
-    // Sky
+    // Sky / Background
     pub sky_horizon: [f32; 3],
     pub sky_zenith: [f32; 3],
+    #[serde(default)]
+    pub background_mode: BackgroundMode,
+    #[serde(default = "default_bg_solid_color")]
+    pub bg_solid_color: [f32; 3],
 
     // Fog
     pub fog_enabled: bool,
@@ -153,6 +190,9 @@ pub struct RenderConfig {
 }
 
 fn default_true() -> bool { true }
+fn default_auto_save_interval() -> u32 { 120 }
+fn default_export_resolution() -> u32 { 128 }
+fn default_bg_solid_color() -> [f32; 3] { [0.12, 0.12, 0.15] }
 fn default_interaction_scale() -> f32 { 0.5 }
 fn default_rest_scale() -> f32 { 1.0 }
 fn default_composite_resolution() -> u32 { 128 }
@@ -190,6 +230,8 @@ impl Default for RenderConfig {
 
             sky_horizon: [0.10, 0.10, 0.16],
             sky_zenith: [0.02, 0.02, 0.05],
+            background_mode: BackgroundMode::SkyGradient,
+            bg_solid_color: [0.12, 0.12, 0.15],
 
             fog_enabled: false,
             fog_density: 0.04,
@@ -256,6 +298,8 @@ impl RenderConfig {
         let d = Self::default();
         self.sky_horizon = d.sky_horizon;
         self.sky_zenith = d.sky_zenith;
+        self.background_mode = d.background_mode;
+        self.bg_solid_color = d.bg_solid_color;
     }
 
     pub fn reset_fog(&mut self) {

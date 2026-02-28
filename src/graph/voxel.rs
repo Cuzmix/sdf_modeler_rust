@@ -143,18 +143,6 @@ mod sparse_voxel_data {
 }
 
 impl VoxelGrid {
-    /// Create a total-SDF grid (fill = FAR_DISTANCE). Used for standalone sculpts / flatten.
-    pub fn new(resolution: u32, bounds_min: Vec3, bounds_max: Vec3) -> Self {
-        let total = (resolution * resolution * resolution) as usize;
-        Self {
-            resolution,
-            bounds_min,
-            bounds_max,
-            is_displacement: false,
-            data: vec![FAR_DISTANCE; total],
-        }
-    }
-
     /// Create a displacement grid (fill = 0.0). Used for sculpts with an analytical child.
     /// O(1) — no per-voxel SDF evaluation needed.
     pub fn new_displacement(resolution: u32, bounds_min: Vec3, bounds_max: Vec3) -> Self {
@@ -172,9 +160,6 @@ impl VoxelGrid {
         (z * resolution * resolution + y * resolution + x) as usize
     }
 
-    pub fn total_floats(&self) -> usize {
-        (self.resolution * self.resolution * self.resolution) as usize
-    }
 
     /// Maps a local-space position to continuous grid coordinates [0, res-1].
     pub fn world_to_grid(&self, local_pos: Vec3) -> Vec3 {
@@ -549,14 +534,6 @@ fn bounds_for_subtree(scene: &Scene, root_id: NodeId) -> (Vec3, Vec3) {
 // Baking
 // ---------------------------------------------------------------------------
 
-/// Create a displacement grid for a primitive sculpt node (differential SDF).
-/// The grid starts at 0.0 everywhere — the analytical SDF is evaluated live in the shader.
-/// O(1) — no per-voxel evaluation needed!
-pub fn create_displacement_grid(scale: Vec3, resolution: u32) -> VoxelGrid {
-    let extent = scale * (1.0 + GRID_PADDING);
-    VoxelGrid::new_displacement(resolution, -extent, extent)
-}
-
 /// Create a displacement grid for an arbitrary subtree (differential SDF).
 /// Computes bounds from the subtree but does NOT evaluate SDF — grid starts at 0.0.
 /// Returns (grid in local space, center in world space).
@@ -572,66 +549,7 @@ pub fn create_displacement_grid_for_subtree(
     (grid, center)
 }
 
-/// Sample the analytical SDF of a primitive into a VoxelGrid (total SDF).
-/// Used for flatten_subtree (standalone sculpts with no analytical child).
-pub fn bake_from_analytical(kind: &SdfPrimitive, scale: Vec3, resolution: u32) -> VoxelGrid {
-    let extent = scale * (1.0 + GRID_PADDING);
-    let bounds_min = -extent;
-    let bounds_max = extent;
-    let res = resolution;
-    let res_f = (res - 1) as f32;
-    let size = bounds_max - bounds_min;
-
-    let data: Vec<f32> = maybe_par_iter!(0..res)
-        .flat_map(|z| {
-            let mut slice = Vec::with_capacity((res * res) as usize);
-            for y in 0..res {
-                for x in 0..res {
-                    let norm = Vec3::new(x as f32, y as f32, z as f32) / res_f;
-                    let pos = bounds_min + norm * size;
-                    slice.push(evaluate_sdf(kind, pos, scale));
-                }
-            }
-            slice
-        })
-        .collect();
-
-    VoxelGrid { resolution, bounds_min, bounds_max, is_displacement: false, data }
-}
-
-/// Bake any subtree's SDF into a VoxelGrid.
-/// Returns (grid in local space, center position in world space).
-pub fn bake_subtree(scene: &Scene, subtree_root: NodeId, resolution: u32) -> (VoxelGrid, Vec3) {
-    let (world_min, world_max) = bounds_for_subtree(scene, subtree_root);
-    let center = (world_min + world_max) * 0.5;
-    let half_extent = (world_max - world_min) * 0.5;
-
-    let local_min = -half_extent;
-    let local_max = half_extent;
-    let res = resolution;
-    let res_f = (res - 1) as f32;
-    let size = local_max - local_min;
-
-    let data: Vec<f32> = maybe_par_iter!(0..res)
-        .flat_map(|z| {
-            let mut slice = Vec::with_capacity((res * res) as usize);
-            for y in 0..res {
-                for x in 0..res {
-                    let norm = Vec3::new(x as f32, y as f32, z as f32) / res_f;
-                    let local_pos = local_min + norm * size;
-                    let world_pos = local_pos + center;
-                    slice.push(evaluate_sdf_tree(scene, subtree_root, world_pos));
-                }
-            }
-            slice
-        })
-        .collect();
-
-    let grid = VoxelGrid { resolution, bounds_min: local_min, bounds_max: local_max, is_displacement: false, data };
-    (grid, center)
-}
-
-/// Same as `bake_subtree` but reports progress via an atomic counter (incremented per z-slice).
+/// Bake any subtree's SDF into a VoxelGrid with progress reporting (incremented per z-slice).
 pub fn bake_subtree_with_progress(
     scene: &Scene,
     subtree_root: NodeId,

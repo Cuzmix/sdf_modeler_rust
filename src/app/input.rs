@@ -2,7 +2,8 @@ use eframe::egui;
 use glam::Vec3;
 
 use crate::graph::history::History;
-use crate::sculpt::{BrushMode, SculptState, DEFAULT_BRUSH_STRENGTH};
+use crate::graph::scene::NodeData;
+use crate::sculpt::{ActiveTool, BrushMode, SculptState, DEFAULT_BRUSH_STRENGTH};
 use crate::ui::gizmo::{GizmoMode, GizmoSpace};
 
 use super::{ExportStatus, SdfApp};
@@ -32,6 +33,18 @@ impl SdfApp {
         }
         if ctx.input(|i| i.key_pressed(egui::Key::F7)) {
             self.camera.set_right();
+        }
+
+        // Focus on selected node
+        if ctx.input(|i| i.key_pressed(egui::Key::F) && !i.modifiers.ctrl) {
+            if let Some(sel) = self.node_graph_state.selected {
+                let parent_map = self.scene.build_parent_map();
+                let (center, radius) = self.scene.compute_subtree_sphere(sel, &parent_map);
+                self.camera.focus_on(
+                    Vec3::new(center[0], center[1], center[2]),
+                    radius.max(0.5),
+                );
+            }
         }
 
         // Debug toggle
@@ -76,9 +89,21 @@ impl SdfApp {
 
         if save_pressed {
             #[cfg(not(target_arch = "wasm32"))]
-            if let Some(path) = crate::io::save_dialog() {
-                if let Err(e) = crate::io::save_project(&self.scene, &self.camera, &path) {
-                    log::error!("Failed to save project: {}", e);
+            {
+                // Quick save if we already have a file path, otherwise show dialog
+                let path = if let Some(ref p) = self.current_file_path {
+                    Some(p.clone())
+                } else {
+                    crate::io::save_dialog()
+                };
+                if let Some(path) = path {
+                    if let Err(e) = crate::io::save_project(&self.scene, &self.camera, &path) {
+                        log::error!("Failed to save project: {}", e);
+                    } else {
+                        self.current_file_path = Some(path.clone());
+                        self.saved_fingerprint = self.scene.data_fingerprint();
+                        self.settings.add_recent_file(&path.to_string_lossy());
+                    }
                 }
             }
             #[cfg(target_arch = "wasm32")]
@@ -96,6 +121,9 @@ impl SdfApp {
                         self.sculpt_state = SculptState::Inactive;
                         self.current_structure_key = 0; // Force pipeline rebuild
                         self.buffer_dirty = true;
+                        self.current_file_path = Some(path.clone());
+                        self.saved_fingerprint = self.scene.data_fingerprint();
+                        self.settings.add_recent_file(&path.to_string_lossy());
                     }
                     Err(e) => {
                         log::error!("Failed to load project: {}", e);
@@ -109,10 +137,55 @@ impl SdfApp {
             self.take_screenshot();
         }
 
-        // Export OBJ
+        // Export
         if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::E)) {
             if matches!(self.export_status, ExportStatus::Idle) {
-                self.start_export(ctx);
+                self.show_export_dialog = true;
+            }
+        }
+
+        // Copy / Paste / Duplicate (consume_key prevents egui clipboard noise)
+        let ctrl = egui::Modifiers::CTRL;
+        if ctx.input_mut(|i| i.consume_key(ctrl, egui::Key::C)) {
+            self.clipboard_node = self.node_graph_state.selected;
+        }
+        if ctx.input_mut(|i| i.consume_key(ctrl, egui::Key::V)) {
+            if let Some(src) = self.clipboard_node {
+                if self.scene.nodes.contains_key(&src) {
+                    if let Some(new_id) = self.scene.duplicate_subtree(src) {
+                        // Offset the new root's position
+                        if let Some(node) = self.scene.nodes.get_mut(&new_id) {
+                            match &mut node.data {
+                                NodeData::Primitive { ref mut position, .. }
+                                | NodeData::Sculpt { ref mut position, .. } => {
+                                    position.x += 1.0;
+                                }
+                                _ => {}
+                            }
+                        }
+                        self.node_graph_state.selected = Some(new_id);
+                        self.node_graph_state.needs_initial_rebuild = true;
+                        self.buffer_dirty = true;
+                    }
+                }
+            }
+        }
+        if ctx.input_mut(|i| i.consume_key(ctrl, egui::Key::D)) {
+            if let Some(sel) = self.node_graph_state.selected {
+                if let Some(new_id) = self.scene.duplicate_subtree(sel) {
+                    if let Some(node) = self.scene.nodes.get_mut(&new_id) {
+                        match &mut node.data {
+                            NodeData::Primitive { ref mut position, .. }
+                            | NodeData::Sculpt { ref mut position, .. } => {
+                                position.x += 1.0;
+                            }
+                            _ => {}
+                        }
+                    }
+                    self.node_graph_state.selected = Some(new_id);
+                    self.node_graph_state.needs_initial_rebuild = true;
+                    self.buffer_dirty = true;
+                }
             }
         }
 
@@ -134,6 +207,23 @@ impl SdfApp {
         }
         if ctx.input(|i| i.modifiers.alt && i.key_pressed(egui::Key::C)) {
             self.pivot_offset = Vec3::ZERO;
+        }
+
+        // Tool switching shortcuts
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) && self.active_tool == ActiveTool::Sculpt {
+            self.active_tool = ActiveTool::Select;
+            self.sculpt_state = SculptState::Inactive;
+            self.last_sculpt_hit = None;
+            self.lazy_brush_pos = None;
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::S) && !i.modifiers.ctrl) && self.active_tool == ActiveTool::Select {
+            self.active_tool = ActiveTool::Sculpt;
+            // Auto-activate sculpt if a Sculpt node is selected
+            if let Some(sel) = self.node_graph_state.selected {
+                if self.scene.nodes.get(&sel).map_or(false, |n| matches!(n.data, NodeData::Sculpt { .. })) {
+                    self.sculpt_state = SculptState::new_active(sel);
+                }
+            }
         }
 
         // Sculpt brush mode shortcuts (when sculpt is active)
