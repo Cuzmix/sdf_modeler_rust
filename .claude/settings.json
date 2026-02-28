@@ -15,7 +15,28 @@
       "Read(//c/Users/Manny/.cargo/registry/src/**)",
       "Bash(wc -l \"c:\\\\Users\\\\Manny\\\\Documents\\\\Code Projects\\\\Typscript\\\\sdf_modeler_rust\\\\src\"/**/*.rs)",
       "Read(//c/Users/Manny/Documents/Code/ Projects/Typscript/sdf_modeler_rust/src/graph/**)",
-      "Read(//c/Users/Manny/Documents/Code/ Projects/Typscript/sdf_modeler_rust/src/gpu/**)"
+      "Read(//c/Users/Manny/Documents/Code/ Projects/Typscript/sdf_modeler_rust/src/gpu/**)",
+      "WebFetch(domain:pub.dev)",
+      "WebFetch(domain:cjycode.com)",
+      "WebFetch(domain:api.flutter.dev)",
+      "Bash(flutter --version)",
+      "Bash(rustup show)",
+      "Bash(flutter_rust_bridge_codegen --version)",
+      "Bash(rustc --version)",
+      "Bash(cargo install flutter_rust_bridge_codegen)",
+      "Bash(flutter doctor -v)",
+      "Bash(flutter create --platforms=windows,linux,macos,android,ios --org com.sdfmodeler --project-name sdf_modeler flutter_app)",
+      "Bash(flutter pub add flutter_rust_bridge)",
+      "Bash(flutter pub add rust_lib_sdf_modeler)",
+      "WebFetch(domain:trdthg.github.io)",
+      "Bash(flutter_rust_bridge_codegen generate)",
+      "Bash(flutter_rust_bridge_codegen --help)",
+      "Bash(flutter_rust_bridge_codegen integrate --rust-crate-dir ..)",
+      "Bash(grep -n \"extra_flags\\\\|flags\\\\|features\" \"/c/Users/Manny/Documents/Code Projects/Typscript/sdf_modeler_rust/flutter_app/rust_builder/cargokit/build_tool/lib/src\"/*.dart)",
+      "Bash(flutter build windows --verbose)",
+      "Bash(powershell -NoProfile -Command '$PSVersionTable.PSVersion')",
+      "Bash(powershell -NoProfile -Command '\\(Get-Item \"\"C:/Users/Manny/Documents/Code Projects/Typscript/sdf_modeler_rust/flutter_app/windows/flutter/ephemeral/.plugin_symlinks/rust_lib_sdf_modeler\"\"\\).LinkTarget')",
+      "Bash(powershell -NoProfile -Command '\\(Get-Item \"\"C:/Users/Manny/Documents/Code Projects/Typscript/sdf_modeler_rust/flutter_app/windows/flutter/ephemeral/.plugin_symlinks/rust_lib_sdf_modeler\"\"\\).Target')"
     ]
   }
 }

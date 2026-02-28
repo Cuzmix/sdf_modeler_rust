@@ -1,4 +1,17 @@
+#[cfg(feature = "flutter_ui")]
+mod frb_generated;
+#[cfg(feature = "flutter_ui")]
+mod api;
+// --- egui UI (feature-gated) ---
+#[cfg(feature = "egui_ui")]
 mod app;
+#[cfg(feature = "egui_ui")]
+mod ui;
+
+// --- Flutter bridge (always available for codegen to parse) ---
+pub mod bridge;
+
+// --- Core modules (always available) ---
 mod compat;
 mod export;
 mod gpu;
@@ -6,11 +19,11 @@ mod graph;
 mod io;
 mod sculpt;
 mod settings;
-mod ui;
+mod viewport;
 
-// ── Native entry point ──────────────────────────────────────────────────────
+// ── Native entry point (egui) ─────────────────────────────────────────────
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(feature = "egui_ui", not(target_arch = "wasm32")))]
 pub fn run_native() -> eframe::Result<()> {
     use std::sync::Arc;
     use eframe::egui;
@@ -64,18 +77,18 @@ pub fn run_native() -> eframe::Result<()> {
     )
 }
 
-// ── WASM entry point ────────────────────────────────────────────────────────
+// ── WASM entry point (egui) ───────────────────────────────────────────────
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(feature = "egui_ui", target_arch = "wasm32"))]
 use wasm_bindgen::prelude::*;
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(feature = "egui_ui", target_arch = "wasm32"))]
 #[wasm_bindgen]
 pub struct WebHandle {
     runner: eframe::WebRunner,
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(feature = "egui_ui", target_arch = "wasm32"))]
 #[wasm_bindgen]
 impl WebHandle {
     #[wasm_bindgen(constructor)]

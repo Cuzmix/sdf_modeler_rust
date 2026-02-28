@@ -1,0 +1,13 @@
+cargo:
+  release:
+    toolchain: stable
+    extra_flags:
+      - --no-default-features
+      - --features
+      - flutter_ui
+  debug:
+    toolchain: stable
+    extra_flags:
+      - --no-default-features
+      - --features
+      - flutter_ui
