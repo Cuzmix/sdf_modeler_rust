@@ -5,7 +5,7 @@ mod pipelines;
 mod textures;
 
 pub use composite::CompositeResources;
-pub use draw::{draw, ViewportOutput};
+pub use draw::draw;
 
 use bytemuck::{Pod, Zeroable};
 use eframe::wgpu;

@@ -8,6 +8,28 @@ use crate::sculpt::{BrushMode, FalloffMode, SculptState, DEFAULT_BRUSH_STRENGTH}
 const SCALE_MIN: f32 = 0.01;
 const SCALE_MAX: f32 = 100.0;
 
+/// Material preset: (name, optional_color, metallic, roughness, fresnel, emissive_intensity).
+/// `None` for color means "keep current color".
+struct MaterialPreset {
+    name: &'static str,
+    color: Option<[f32; 3]>,
+    metallic: f32,
+    roughness: f32,
+    fresnel: f32,
+    emissive_intensity: f32,
+}
+
+const MATERIAL_PRESETS: &[MaterialPreset] = &[
+    MaterialPreset { name: "Default",  color: None,                        metallic: 0.0, roughness: 0.5,  fresnel: 0.04, emissive_intensity: 0.0 },
+    MaterialPreset { name: "Gold",     color: Some([1.0, 0.76, 0.33]),     metallic: 1.0, roughness: 0.3,  fresnel: 0.95, emissive_intensity: 0.0 },
+    MaterialPreset { name: "Silver",   color: Some([0.95, 0.93, 0.88]),    metallic: 1.0, roughness: 0.2,  fresnel: 0.97, emissive_intensity: 0.0 },
+    MaterialPreset { name: "Chrome",   color: Some([0.77, 0.78, 0.78]),    metallic: 1.0, roughness: 0.05, fresnel: 0.98, emissive_intensity: 0.0 },
+    MaterialPreset { name: "Plastic",  color: None,                        metallic: 0.0, roughness: 0.4,  fresnel: 0.04, emissive_intensity: 0.0 },
+    MaterialPreset { name: "Ceramic",  color: None,                        metallic: 0.0, roughness: 0.1,  fresnel: 0.04, emissive_intensity: 0.0 },
+    MaterialPreset { name: "Rubber",   color: None,                        metallic: 0.0, roughness: 0.9,  fresnel: 0.02, emissive_intensity: 0.0 },
+    MaterialPreset { name: "Glow",     color: None,                        metallic: 0.0, roughness: 0.5,  fresnel: 0.04, emissive_intensity: 2.0 },
+];
+
 /// Common color presets as (name, [r, g, b]).
 const COLOR_PRESETS: &[(&str, [f32; 3])] = &[
     ("R", [0.85, 0.15, 0.15]),
@@ -28,6 +50,9 @@ fn color_presets_row(ui: &mut egui::Ui, color: &mut [f32; 3]) {
                 (preset[1] * 255.0) as u8,
                 (preset[2] * 255.0) as u8,
             );
+            let is_match = (color[0] - preset[0]).abs() < 0.02
+                && (color[1] - preset[1]).abs() < 0.02
+                && (color[2] - preset[2]).abs() < 0.02;
             let btn = egui::Button::new(
                 egui::RichText::new(label).small().color(
                     if preset[0] + preset[1] + preset[2] > 1.5 {
@@ -38,7 +63,12 @@ fn color_presets_row(ui: &mut egui::Ui, color: &mut [f32; 3]) {
                 ),
             )
             .fill(c32)
-            .min_size(egui::vec2(20.0, 16.0));
+            .min_size(egui::vec2(20.0, 16.0))
+            .stroke(if is_match {
+                egui::Stroke::new(2.0, egui::Color32::WHITE)
+            } else {
+                egui::Stroke::NONE
+            });
             if ui.add(btn).clicked() {
                 *color = preset;
             }
@@ -136,6 +166,9 @@ pub fn draw(
             mut color,
             mut roughness,
             mut metallic,
+            mut emissive,
+            mut emissive_intensity,
+            mut fresnel,
             ..
         } => {
             let mut new_kind = kind.clone();
@@ -152,57 +185,108 @@ pub fn draw(
             }
             ui.separator();
 
-            vec3_editor(ui, "Position", &mut position, 0.05, None, "");
+            egui::CollapsingHeader::new("Transform")
+                .default_open(true)
+                .show(ui, |ui| {
+                    vec3_editor(ui, "Position", &mut position, 0.05, None, "");
 
-            // Rotation: display in degrees, store in radians
-            let mut rot_deg = glam::Vec3::new(
-                rotation.x.to_degrees(),
-                rotation.y.to_degrees(),
-                rotation.z.to_degrees(),
-            );
-            vec3_editor(ui, "Rotation", &mut rot_deg, 1.0, None, "\u{00B0}");
-            rotation = glam::Vec3::new(
-                rot_deg.x.to_radians(),
-                rot_deg.y.to_radians(),
-                rot_deg.z.to_radians(),
-            );
+                    // Rotation: display in degrees, store in radians
+                    let mut rot_deg = glam::Vec3::new(
+                        rotation.x.to_degrees(),
+                        rotation.y.to_degrees(),
+                        rotation.z.to_degrees(),
+                    );
+                    vec3_editor(ui, "Rotation", &mut rot_deg, 1.0, None, "\u{00B0}");
+                    rotation = glam::Vec3::new(
+                        rot_deg.x.to_radians(),
+                        rot_deg.y.to_radians(),
+                        rot_deg.z.to_radians(),
+                    );
 
-            let params = kind.scale_params();
-            if !params.is_empty() {
-                ui.label("Size");
-                ui.horizontal(|ui| {
-                    for &(label, axis) in params {
-                        ui.label(format!("{}:", label));
-                        let val = match axis {
-                            0 => &mut scale.x,
-                            1 => &mut scale.y,
-                            _ => &mut scale.z,
-                        };
-                        ui.add(
-                            egui::DragValue::new(val)
-                                .speed(0.05)
-                                .range(SCALE_MIN..=SCALE_MAX),
-                        );
+                    let params = kind.scale_params();
+                    if !params.is_empty() {
+                        ui.label("Size");
+                        ui.horizontal(|ui| {
+                            for &(label, axis) in params {
+                                ui.label(format!("{}:", label));
+                                let val = match axis {
+                                    0 => &mut scale.x,
+                                    1 => &mut scale.y,
+                                    _ => &mut scale.z,
+                                };
+                                ui.add(
+                                    egui::DragValue::new(val)
+                                        .speed(0.05)
+                                        .range(SCALE_MIN..=SCALE_MAX),
+                                );
+                            }
+                        });
                     }
                 });
-            }
 
-            ui.label("Color");
-            let mut color_arr = [color.x, color.y, color.z];
-            ui.horizontal(|ui| {
-                ui.color_edit_button_rgb(&mut color_arr);
-                color_presets_row(ui, &mut color_arr);
-            });
-            color = glam::Vec3::new(color_arr[0], color_arr[1], color_arr[2]);
+            egui::CollapsingHeader::new("Material")
+                .default_open(true)
+                .show(ui, |ui| {
+                    // Material presets
+                    ui.horizontal(|ui| {
+                        ui.label("Preset:");
+                        egui::ComboBox::from_id_salt("prim_mat_preset")
+                            .selected_text("Apply...")
+                            .width(80.0)
+                            .show_ui(ui, |ui| {
+                                for preset in MATERIAL_PRESETS {
+                                    if ui.selectable_label(false, preset.name).clicked() {
+                                        if let Some(c) = preset.color {
+                                            color = glam::Vec3::new(c[0], c[1], c[2]);
+                                        }
+                                        metallic = preset.metallic;
+                                        roughness = preset.roughness;
+                                        fresnel = preset.fresnel;
+                                        emissive_intensity = preset.emissive_intensity;
+                                        if preset.emissive_intensity > 0.0 && emissive == glam::Vec3::ZERO {
+                                            emissive = color;
+                                        }
+                                    }
+                                }
+                            });
+                    });
 
-            ui.horizontal(|ui| {
-                ui.label("Metallic:");
-                ui.add(egui::Slider::new(&mut metallic, 0.0..=1.0));
-            });
-            ui.horizontal(|ui| {
-                ui.label("Roughness:");
-                ui.add(egui::Slider::new(&mut roughness, 0.0..=1.0));
-            });
+                    ui.label("Color");
+                    let mut color_arr = [color.x, color.y, color.z];
+                    ui.horizontal(|ui| {
+                        ui.color_edit_button_rgb(&mut color_arr);
+                        color_presets_row(ui, &mut color_arr);
+                    });
+                    color = glam::Vec3::new(color_arr[0], color_arr[1], color_arr[2]);
+
+                    ui.horizontal(|ui| {
+                        ui.label("Metallic:");
+                        ui.add(egui::Slider::new(&mut metallic, 0.0..=1.0));
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Roughness:");
+                        ui.add(egui::Slider::new(&mut roughness, 0.0..=1.0));
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Fresnel:");
+                        ui.add(egui::Slider::new(&mut fresnel, 0.0..=1.0));
+                    });
+
+                    ui.separator();
+                    ui.label("Emissive");
+                    let mut emissive_arr = [emissive.x, emissive.y, emissive.z];
+                    ui.horizontal(|ui| {
+                        ui.color_edit_button_rgb(&mut emissive_arr);
+                        if ui.small_button("= Color").on_hover_text("Set emissive to object color").clicked() {
+                            emissive_arr = [color.x, color.y, color.z];
+                        }
+                    });
+                    emissive = glam::Vec3::new(emissive_arr[0], emissive_arr[1], emissive_arr[2]);
+                    ui.horizontal(|ui| {
+                        ui.label("Intensity:");
+                        ui.add(egui::Slider::new(&mut emissive_intensity, 0.0..=5.0));
+                    });
+                });
 
             // Add Sculpt Modifier button
             ui.separator();
@@ -241,6 +325,9 @@ pub fn draw(
                     color: ref mut c,
                     metallic: ref mut m,
                     roughness: ref mut rgh,
+                    emissive: ref mut em,
+                    emissive_intensity: ref mut ei,
+                    fresnel: ref mut fr,
                     ..
                 } = node.data
                 {
@@ -251,6 +338,9 @@ pub fn draw(
                     *c = color;
                     *m = metallic;
                     *rgh = roughness;
+                    *em = emissive;
+                    *ei = emissive_intensity;
+                    *fr = fresnel;
                 }
             }
         }
@@ -357,6 +447,9 @@ pub fn draw(
             mut color,
             mut roughness,
             mut metallic,
+            mut emissive,
+            mut emissive_intensity,
+            mut fresnel,
             voxel_grid: _,
             mut desired_resolution,
         } => {
@@ -372,48 +465,103 @@ pub fn draw(
             }
             ui.separator();
 
-            vec3_editor(ui, "Position", &mut position, 0.05, None, "");
+            egui::CollapsingHeader::new("Transform")
+                .default_open(true)
+                .id_salt("sculpt_transform")
+                .show(ui, |ui| {
+                    vec3_editor(ui, "Position", &mut position, 0.05, None, "");
 
-            let mut rot_deg = glam::Vec3::new(
-                rotation.x.to_degrees(),
-                rotation.y.to_degrees(),
-                rotation.z.to_degrees(),
-            );
-            vec3_editor(ui, "Rotation", &mut rot_deg, 1.0, None, "\u{00B0}");
-            rotation = glam::Vec3::new(
-                rot_deg.x.to_radians(),
-                rot_deg.y.to_radians(),
-                rot_deg.z.to_radians(),
-            );
+                    let mut rot_deg = glam::Vec3::new(
+                        rotation.x.to_degrees(),
+                        rotation.y.to_degrees(),
+                        rotation.z.to_degrees(),
+                    );
+                    vec3_editor(ui, "Rotation", &mut rot_deg, 1.0, None, "\u{00B0}");
+                    rotation = glam::Vec3::new(
+                        rot_deg.x.to_radians(),
+                        rot_deg.y.to_radians(),
+                        rot_deg.z.to_radians(),
+                    );
+                });
 
-            ui.label("Color");
-            let mut color_arr = [color.x, color.y, color.z];
-            ui.horizontal(|ui| {
-                ui.color_edit_button_rgb(&mut color_arr);
-                color_presets_row(ui, &mut color_arr);
-            });
-            color = glam::Vec3::new(color_arr[0], color_arr[1], color_arr[2]);
+            egui::CollapsingHeader::new("Material")
+                .default_open(true)
+                .id_salt("sculpt_material")
+                .show(ui, |ui| {
+                    // Material presets
+                    ui.horizontal(|ui| {
+                        ui.label("Preset:");
+                        egui::ComboBox::from_id_salt("sculpt_mat_preset")
+                            .selected_text("Apply...")
+                            .width(80.0)
+                            .show_ui(ui, |ui| {
+                                for preset in MATERIAL_PRESETS {
+                                    if ui.selectable_label(false, preset.name).clicked() {
+                                        if let Some(c) = preset.color {
+                                            color = glam::Vec3::new(c[0], c[1], c[2]);
+                                        }
+                                        metallic = preset.metallic;
+                                        roughness = preset.roughness;
+                                        fresnel = preset.fresnel;
+                                        emissive_intensity = preset.emissive_intensity;
+                                        if preset.emissive_intensity > 0.0 && emissive == glam::Vec3::ZERO {
+                                            emissive = color;
+                                        }
+                                    }
+                                }
+                            });
+                    });
 
-            ui.horizontal(|ui| {
-                ui.label("Metallic:");
-                ui.add(egui::Slider::new(&mut metallic, 0.0..=1.0));
-            });
-            ui.horizontal(|ui| {
-                ui.label("Roughness:");
-                ui.add(egui::Slider::new(&mut roughness, 0.0..=1.0));
-            });
+                    ui.label("Color");
+                    let mut color_arr = [color.x, color.y, color.z];
+                    ui.horizontal(|ui| {
+                        ui.color_edit_button_rgb(&mut color_arr);
+                        color_presets_row(ui, &mut color_arr);
+                    });
+                    color = glam::Vec3::new(color_arr[0], color_arr[1], color_arr[2]);
 
-            ui.separator();
-            ui.label("Sculpting");
-            let mut res_i32 = desired_resolution as i32;
-            ui.horizontal(|ui| {
-                ui.label("Resolution:");
-                ui.add(egui::Slider::new(&mut res_i32, 32..=256).suffix("^3"));
-            });
-            desired_resolution = res_i32 as u32;
-            let voxels = (desired_resolution as u64).pow(3);
-            let mem_mb = (voxels * 4) as f64 / (1024.0 * 1024.0);
-            ui.weak(format!("{} voxels ({:.1} MB)", voxels, mem_mb));
+                    ui.horizontal(|ui| {
+                        ui.label("Metallic:");
+                        ui.add(egui::Slider::new(&mut metallic, 0.0..=1.0));
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Roughness:");
+                        ui.add(egui::Slider::new(&mut roughness, 0.0..=1.0));
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Fresnel:");
+                        ui.add(egui::Slider::new(&mut fresnel, 0.0..=1.0));
+                    });
+
+                    ui.separator();
+                    ui.label("Emissive");
+                    let mut emissive_arr = [emissive.x, emissive.y, emissive.z];
+                    ui.horizontal(|ui| {
+                        ui.color_edit_button_rgb(&mut emissive_arr);
+                        if ui.small_button("= Color").on_hover_text("Set emissive to object color").clicked() {
+                            emissive_arr = [color.x, color.y, color.z];
+                        }
+                    });
+                    emissive = glam::Vec3::new(emissive_arr[0], emissive_arr[1], emissive_arr[2]);
+                    ui.horizontal(|ui| {
+                        ui.label("Intensity:");
+                        ui.add(egui::Slider::new(&mut emissive_intensity, 0.0..=5.0));
+                    });
+                });
+
+            egui::CollapsingHeader::new("Sculpting")
+                .default_open(true)
+                .show(ui, |ui| {
+                    let mut res_i32 = desired_resolution as i32;
+                    ui.horizontal(|ui| {
+                        ui.label("Resolution:");
+                        ui.add(egui::Slider::new(&mut res_i32, 32..=256).suffix("^3"));
+                    });
+                    desired_resolution = res_i32 as u32;
+                    let voxels = (desired_resolution as u64).pow(3);
+                    let mem_mb = (voxels * 4) as f64 / (1024.0 * 1024.0);
+                    ui.weak(format!("{} voxels ({:.1} MB)", voxels, mem_mb));
+                });
 
             let sculpt_active = sculpt_state.active_node() == Some(id);
 
@@ -555,6 +703,9 @@ pub fn draw(
                     color: ref mut c,
                     metallic: ref mut m,
                     roughness: ref mut rgh,
+                    emissive: ref mut em,
+                    emissive_intensity: ref mut ei,
+                    fresnel: ref mut fr,
                     desired_resolution: ref mut dr,
                     ..
                 } = node.data
@@ -564,6 +715,9 @@ pub fn draw(
                     *c = color;
                     *m = metallic;
                     *rgh = roughness;
+                    *em = emissive;
+                    *ei = emissive_intensity;
+                    *fr = fresnel;
                     *dr = desired_resolution;
                 }
             }
@@ -742,69 +896,72 @@ pub fn draw(
     if show_stack {
         let chain = collect_modifier_chain(scene, id);
         ui.separator();
-        ui.heading("Modifier Stack");
-        if chain.is_empty() {
-            ui.weak("No modifiers applied");
-        } else {
-            let mut to_delete = None;
-            for &mod_id in &chain {
-                if let Some(mod_node) = scene.nodes.get(&mod_id) {
-                    let badge = match &mod_node.data {
-                        NodeData::Transform { kind, .. } => kind.badge(),
-                        NodeData::Modifier { kind, .. } => kind.badge(),
-                        _ => "???",
-                    };
-                    ui.horizontal(|ui| {
-                        ui.label(
-                            egui::RichText::new(format!("{} {}", badge, mod_node.name))
-                                .small(),
-                        );
-                        if ui.small_button("X").on_hover_text("Remove modifier").clicked() {
-                            to_delete = Some(mod_id);
+        egui::CollapsingHeader::new("Modifier Stack")
+            .default_open(true)
+            .show(ui, |ui| {
+                if chain.is_empty() {
+                    ui.weak("No modifiers applied");
+                } else {
+                    let mut to_delete = None;
+                    for &mod_id in &chain {
+                        if let Some(mod_node) = scene.nodes.get(&mod_id) {
+                            let badge = match &mod_node.data {
+                                NodeData::Transform { kind, .. } => kind.badge(),
+                                NodeData::Modifier { kind, .. } => kind.badge(),
+                                _ => "???",
+                            };
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    egui::RichText::new(format!("{} {}", badge, mod_node.name))
+                                        .small(),
+                                );
+                                if ui.small_button("X").on_hover_text("Remove modifier").clicked() {
+                                    to_delete = Some(mod_id);
+                                }
+                            });
+                        }
+                    }
+                    if let Some(del_id) = to_delete {
+                        scene.remove_node(del_id);
+                    }
+                }
+                // Add Modifier menu
+                ui.horizontal(|ui| {
+                    ui.menu_button("+ Modifier", |ui| {
+                        ui.label("Deform");
+                        for kind in &[ModifierKind::Twist, ModifierKind::Bend, ModifierKind::Taper] {
+                            if ui.button(kind.base_name()).clicked() {
+                                scene.insert_modifier_above(id, kind.clone());
+                                ui.close_menu();
+                            }
+                        }
+                        ui.separator();
+                        ui.label("Shape");
+                        for kind in &[ModifierKind::Round, ModifierKind::Onion, ModifierKind::Elongate] {
+                            if ui.button(kind.base_name()).clicked() {
+                                scene.insert_modifier_above(id, kind.clone());
+                                ui.close_menu();
+                            }
+                        }
+                        ui.separator();
+                        ui.label("Repeat");
+                        for kind in &[ModifierKind::Mirror, ModifierKind::Repeat, ModifierKind::FiniteRepeat] {
+                            if ui.button(kind.base_name()).clicked() {
+                                scene.insert_modifier_above(id, kind.clone());
+                                ui.close_menu();
+                            }
                         }
                     });
-                }
-            }
-            if let Some(del_id) = to_delete {
-                scene.remove_node(del_id);
-            }
-        }
-        // Add Modifier menu
-        ui.horizontal(|ui| {
-            ui.menu_button("+ Modifier", |ui| {
-                ui.label("Deform");
-                for kind in &[ModifierKind::Twist, ModifierKind::Bend, ModifierKind::Taper] {
-                    if ui.button(kind.base_name()).clicked() {
-                        scene.insert_modifier_above(id, kind.clone());
-                        ui.close_menu();
-                    }
-                }
-                ui.separator();
-                ui.label("Shape");
-                for kind in &[ModifierKind::Round, ModifierKind::Onion, ModifierKind::Elongate] {
-                    if ui.button(kind.base_name()).clicked() {
-                        scene.insert_modifier_above(id, kind.clone());
-                        ui.close_menu();
-                    }
-                }
-                ui.separator();
-                ui.label("Repeat");
-                for kind in &[ModifierKind::Mirror, ModifierKind::Repeat, ModifierKind::FiniteRepeat] {
-                    if ui.button(kind.base_name()).clicked() {
-                        scene.insert_modifier_above(id, kind.clone());
-                        ui.close_menu();
-                    }
-                }
+                    ui.menu_button("+ Transform", |ui| {
+                        for kind in TransformKind::ALL {
+                            if ui.button(kind.base_name()).clicked() {
+                                scene.insert_transform_above(id, kind.clone());
+                                ui.close_menu();
+                            }
+                        }
+                    });
+                });
             });
-            ui.menu_button("+ Transform", |ui| {
-                for kind in TransformKind::ALL {
-                    if ui.button(kind.base_name()).clicked() {
-                        scene.insert_transform_above(id, kind.clone());
-                        ui.close_menu();
-                    }
-                }
-            });
-        });
     }
 
     // Write name back

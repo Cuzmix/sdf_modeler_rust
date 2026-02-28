@@ -81,6 +81,8 @@ pub struct SdfTabViewer<'a> {
     pub initial_vsync: bool,
     /// Tool switch requested by viewport toolbar (consumed after dock UI).
     pub tool_switch: &'a mut Option<ActiveTool>,
+    /// Drag state for scene tree drag & drop reparenting.
+    pub scene_tree_drag: &'a mut Option<NodeId>,
 }
 
 impl<'a> TabViewer for SdfTabViewer<'a> {
@@ -122,6 +124,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                 if let Some(node_id) = vp_output.created_node {
                     self.node_graph_state.selected = Some(node_id);
                     self.node_graph_state.needs_initial_rebuild = true;
+                    self.node_graph_state.pending_center_node = Some(node_id);
                 }
                 if let Some(tool) = vp_output.tool_switch {
                     *self.tool_switch = Some(tool);
@@ -148,13 +151,21 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                 }
             }
             Tab::SceneTree => {
+                let prev_selected = self.node_graph_state.selected;
                 scene_tree::draw(
                     ui,
                     self.scene,
                     &mut self.node_graph_state.selected,
                     self.renaming_node,
                     self.rename_buf,
+                    self.scene_tree_drag,
                 );
+                // If scene tree changed selection, scroll graph to it
+                if self.node_graph_state.selected != prev_selected {
+                    if let Some(sel) = self.node_graph_state.selected {
+                        self.node_graph_state.pending_center_node = Some(sel);
+                    }
+                }
                 // Defensive: mark layout dirty if a node was deleted via context menu
                 if let Some(sel) = self.node_graph_state.selected {
                     if !self.scene.nodes.contains_key(&sel) {

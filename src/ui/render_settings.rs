@@ -94,6 +94,22 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
     egui::CollapsingHeader::new("Lighting")
         .default_open(false)
         .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label("Presets:");
+                if ui.small_button("Studio").on_hover_text("Dark studio environment").clicked() {
+                    apply_lighting_preset_studio(config);
+                }
+                if ui.small_button("Outdoor").on_hover_text("Bright outdoor lighting").clicked() {
+                    apply_lighting_preset_outdoor(config);
+                }
+                if ui.small_button("Dramatic").on_hover_text("High-contrast dramatic lighting").clicked() {
+                    apply_lighting_preset_dramatic(config);
+                }
+                if ui.small_button("Flat").on_hover_text("Even, low-contrast lighting").clicked() {
+                    apply_lighting_preset_flat(config);
+                }
+            });
+            ui.separator();
             ui.label("Key Light Direction");
             dir_editor(ui, &mut config.key_light_dir);
             labeled_slider_tip(ui, "Diffuse", &mut config.key_diffuse, 0.0..=2.0, false,
@@ -117,18 +133,40 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
             }
         });
 
-    // --- Sky ---
-    egui::CollapsingHeader::new("Sky")
+    // --- Sky / Background ---
+    egui::CollapsingHeader::new("Sky / Background")
         .default_open(false)
         .show(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.label("Horizon:");
-                ui.color_edit_button_rgb(&mut config.sky_horizon);
+                ui.selectable_value(
+                    &mut config.background_mode,
+                    crate::settings::BackgroundMode::SkyGradient,
+                    "Sky Gradient",
+                );
+                ui.selectable_value(
+                    &mut config.background_mode,
+                    crate::settings::BackgroundMode::SolidColor,
+                    "Solid Color",
+                );
             });
-            ui.horizontal(|ui| {
-                ui.label("Zenith:");
-                ui.color_edit_button_rgb(&mut config.sky_zenith);
-            });
+            match config.background_mode {
+                crate::settings::BackgroundMode::SkyGradient => {
+                    ui.horizontal(|ui| {
+                        ui.label("Horizon:");
+                        ui.color_edit_button_rgb(&mut config.sky_horizon);
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Zenith:");
+                        ui.color_edit_button_rgb(&mut config.sky_zenith);
+                    });
+                }
+                crate::settings::BackgroundMode::SolidColor => {
+                    ui.horizontal(|ui| {
+                        ui.label("Color:");
+                        ui.color_edit_button_rgb(&mut config.bg_solid_color);
+                    });
+                }
+            }
             if ui.small_button("Reset").clicked() {
                 config.reset_sky();
             }
@@ -187,6 +225,20 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
             if ui.small_button("Reset").clicked() {
                 config.reset_outline();
             }
+        });
+
+    // --- Export ---
+    egui::CollapsingHeader::new("Export")
+        .default_open(false)
+        .show(ui, |ui| {
+            let mut res_i32 = settings.export_resolution as i32;
+            ui.horizontal(|ui| {
+                ui.label("Resolution:");
+                ui.add(egui::Slider::new(&mut res_i32, 32..=512).suffix("^3"));
+            });
+            settings.export_resolution = res_i32 as u32;
+            let voxels = (settings.export_resolution as u64).pow(3);
+            ui.weak(format!("{} voxels", voxels));
         });
 
     let changed = settings.render != before;
@@ -287,4 +339,52 @@ fn apply_preset_quality(config: &mut crate::settings::RenderConfig) {
     config.auto_reduce_steps = false;
     config.interaction_render_scale = 0.5;
     config.rest_render_scale = 1.0;
+}
+
+fn apply_lighting_preset_studio(config: &mut crate::settings::RenderConfig) {
+    config.key_light_dir = [1.0, 2.0, 3.0];
+    config.key_diffuse = 0.85;
+    config.key_spec_power = 32.0;
+    config.key_spec_intensity = 0.4;
+    config.fill_light_dir = [-1.0, 0.5, -1.0];
+    config.fill_intensity = 0.25;
+    config.ambient = 0.06;
+    config.sky_horizon = [0.10, 0.10, 0.16];
+    config.sky_zenith = [0.02, 0.02, 0.05];
+}
+
+fn apply_lighting_preset_outdoor(config: &mut crate::settings::RenderConfig) {
+    config.key_light_dir = [0.5, 3.0, 1.0];
+    config.key_diffuse = 1.0;
+    config.key_spec_power = 24.0;
+    config.key_spec_intensity = 0.3;
+    config.fill_light_dir = [-0.5, 0.3, -1.0];
+    config.fill_intensity = 0.35;
+    config.ambient = 0.1;
+    config.sky_horizon = [0.55, 0.65, 0.80];
+    config.sky_zenith = [0.20, 0.30, 0.60];
+}
+
+fn apply_lighting_preset_dramatic(config: &mut crate::settings::RenderConfig) {
+    config.key_light_dir = [2.0, 1.0, 0.5];
+    config.key_diffuse = 1.2;
+    config.key_spec_power = 64.0;
+    config.key_spec_intensity = 0.6;
+    config.fill_light_dir = [-1.0, -0.2, -0.5];
+    config.fill_intensity = 0.08;
+    config.ambient = 0.02;
+    config.sky_horizon = [0.05, 0.04, 0.06];
+    config.sky_zenith = [0.01, 0.01, 0.02];
+}
+
+fn apply_lighting_preset_flat(config: &mut crate::settings::RenderConfig) {
+    config.key_light_dir = [0.0, 1.0, 0.5];
+    config.key_diffuse = 0.5;
+    config.key_spec_power = 8.0;
+    config.key_spec_intensity = 0.1;
+    config.fill_light_dir = [0.0, 0.5, -1.0];
+    config.fill_intensity = 0.4;
+    config.ambient = 0.2;
+    config.sky_horizon = [0.3, 0.3, 0.35];
+    config.sky_zenith = [0.15, 0.15, 0.20];
 }

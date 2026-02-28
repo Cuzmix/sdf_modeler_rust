@@ -107,6 +107,11 @@ impl Camera {
         self.yaw = std::f32::consts::FRAC_PI_2;
         self.pitch = 0.0;
     }
+
+    pub fn focus_on(&mut self, center: Vec3, radius: f32) {
+        self.target = center;
+        self.distance = (radius / (self.fov * 0.5).tan()).clamp(MIN_DISTANCE, MAX_DISTANCE);
+    }
 }
 
 #[repr(C)]

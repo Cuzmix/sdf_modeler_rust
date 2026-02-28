@@ -13,7 +13,9 @@
       "Read(//c/Users/Manny/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/eframe-0.29.1/**)",
       "WebFetch(domain:developer.chrome.com)",
       "Read(//c/Users/Manny/.cargo/registry/src/**)",
-      "Bash(wc -l \"c:\\\\Users\\\\Manny\\\\Documents\\\\Code Projects\\\\Typscript\\\\sdf_modeler_rust\\\\src\"/**/*.rs)"
+      "Bash(wc -l \"c:\\\\Users\\\\Manny\\\\Documents\\\\Code Projects\\\\Typscript\\\\sdf_modeler_rust\\\\src\"/**/*.rs)",
+      "Read(//c/Users/Manny/Documents/Code/ Projects/Typscript/sdf_modeler_rust/src/graph/**)",
+      "Read(//c/Users/Manny/Documents/Code/ Projects/Typscript/sdf_modeler_rust/src/gpu/**)"
     ]
   }
 }

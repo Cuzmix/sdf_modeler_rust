@@ -113,8 +113,14 @@ pub(crate) fn build_postlude(config: &RenderConfig) -> String {
         .replace("/*FILL_LIGHT_DIR*/", &format_vec3(config.fill_light_dir))
         .replace("/*FILL_INTENSITY*/", &format_f32(config.fill_intensity))
         .replace("/*AMBIENT*/", &format_f32(config.ambient))
-        .replace("/*SKY_HORIZON*/", &format_vec3(config.sky_horizon))
-        .replace("/*SKY_ZENITH*/", &format_vec3(config.sky_zenith))
+        .replace("/*SKY_HORIZON*/", &format_vec3(match config.background_mode {
+            crate::settings::BackgroundMode::SkyGradient => config.sky_horizon,
+            crate::settings::BackgroundMode::SolidColor => config.bg_solid_color,
+        }))
+        .replace("/*SKY_ZENITH*/", &format_vec3(match config.background_mode {
+            crate::settings::BackgroundMode::SkyGradient => config.sky_zenith,
+            crate::settings::BackgroundMode::SolidColor => config.bg_solid_color,
+        }))
         .replace("/*SKY_CUTOFF*/", &format_f32(sky_cutoff))
         .replace("/*GAMMA*/", &format_f32(config.gamma))
         .replace("/*SHADOW_LINE*/", &shadow_line)

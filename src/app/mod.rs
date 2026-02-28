@@ -193,6 +193,14 @@ pub struct SdfApp {
     pub(super) saved_fingerprint: u64,
     /// Toast notifications (success/error messages).
     pub(super) toasts: Vec<Toast>,
+    /// Last auto-save timestamp.
+    pub(super) last_auto_save: Instant,
+    /// Current file path (for quick Ctrl+S save without dialog).
+    pub(super) current_file_path: Option<std::path::PathBuf>,
+    /// Clipboard node for copy/paste.
+    pub(super) clipboard_node: Option<NodeId>,
+    /// Drag state for scene tree reparenting.
+    pub(super) scene_tree_drag: Option<NodeId>,
 }
 
 impl SdfApp {
@@ -269,6 +277,10 @@ impl SdfApp {
             scene_dirty: false,
             saved_fingerprint: 0,
             toasts: Vec::new(),
+            last_auto_save: Instant::now(),
+            current_file_path: None,
+            clipboard_node: None,
+            scene_tree_drag: None,
         }
     }
 }
@@ -355,6 +367,7 @@ impl eframe::App for SdfApp {
             show_debug: &mut self.show_debug,
             initial_vsync,
             tool_switch: &mut tool_switch,
+            scene_tree_drag: &mut self.scene_tree_drag,
         };
 
         egui::CentralPanel::default()
@@ -459,6 +472,21 @@ impl eframe::App for SdfApp {
             self.scene_dirty = now_dirty;
             let title = if now_dirty { "SDF Modeler *" } else { "SDF Modeler" };
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.into()));
+        }
+
+        // Auto-save
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.settings.auto_save_enabled
+            && self.scene_dirty
+            && self.last_auto_save.elapsed() >= Duration::from_secs(self.settings.auto_save_interval_secs as u64)
+        {
+            self.last_auto_save = Instant::now();
+            let path = self.current_file_path.clone().unwrap_or_else(crate::io::auto_save_path);
+            if let Err(e) = crate::io::save_project(&self.scene, &self.camera, &path) {
+                log::error!("Auto-save failed: {}", e);
+            } else {
+                log::info!("Auto-saved to {}", path.display());
+            }
         }
 
         // Upload GPU buffers only when scene data actually changed

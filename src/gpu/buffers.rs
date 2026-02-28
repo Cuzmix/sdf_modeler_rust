@@ -13,9 +13,9 @@ pub struct SdfNodeGpu {
     pub rotation: [f32; 4],  // [rx, ry, rz, 0] (radians)
     pub scale: [f32; 4],     // [sx, sy, sz, 0]
     pub color: [f32; 4],     // [r, g, b, is_selected]
-    pub extra0: [f32; 4],    // sculpt: [voxel_offset, resolution, 0, 0]
-    pub extra1: [f32; 4],    // sculpt: [bounds_min.xyz, 0]
-    pub extra2: [f32; 4],    // sculpt: [bounds_max.xyz, 0]
+    pub extra0: [f32; 4],    // prim: [0,0,0,0]; sculpt: [voxel_offset, resolution, emissive.x, emissive.y]
+    pub extra1: [f32; 4],    // prim: [emissive.xyz, emissive_intensity]; sculpt: [bounds_min.xyz, emissive.z]
+    pub extra2: [f32; 4],    // prim: [fresnel,0,0,0]; sculpt: [bounds_max.xyz, fresnel]
 }
 
 /// Info about sculpt nodes for texture binding.
@@ -88,6 +88,9 @@ pub fn build_node_buffer(
                 color,
                 metallic,
                 roughness,
+                emissive,
+                emissive_intensity,
+                fresnel,
                 ..
             } => {
                 buffer.push(SdfNodeGpu {
@@ -97,8 +100,8 @@ pub fn build_node_buffer(
                     scale: [scale.x, scale.y, scale.z, 0.0],
                     color: [color.x, color.y, color.z, is_sel],
                     extra0: [0.0; 4],
-                    extra1: [0.0; 4],
-                    extra2: [0.0; 4],
+                    extra1: [emissive.x, emissive.y, emissive.z, *emissive_intensity],
+                    extra2: [*fresnel, 0.0, 0.0, 0.0],
                 });
             }
             NodeData::Operation { op, smooth_k, .. } => {
@@ -119,19 +122,22 @@ pub fn build_node_buffer(
                 color,
                 metallic,
                 roughness,
+                emissive,
+                emissive_intensity,
+                fresnel,
                 voxel_grid,
                 ..
             } => {
                 let offset = voxel_offsets.get(&node_id).copied().unwrap_or(0);
                 buffer.push(SdfNodeGpu {
-                    type_op: [20.0, 0.0, *metallic, *roughness],
+                    type_op: [20.0, *emissive_intensity, *metallic, *roughness],
                     position: [position.x, position.y, position.z, 0.0],
                     rotation: [rotation.x, rotation.y, rotation.z, 0.0],
                     scale: [1.0, 1.0, 1.0, 0.0],
                     color: [color.x, color.y, color.z, is_sel],
-                    extra0: [offset as f32, voxel_grid.resolution as f32, 0.0, 0.0],
-                    extra1: [voxel_grid.bounds_min.x, voxel_grid.bounds_min.y, voxel_grid.bounds_min.z, 0.0],
-                    extra2: [voxel_grid.bounds_max.x, voxel_grid.bounds_max.y, voxel_grid.bounds_max.z, 0.0],
+                    extra0: [offset as f32, voxel_grid.resolution as f32, emissive.x, emissive.y],
+                    extra1: [voxel_grid.bounds_min.x, voxel_grid.bounds_min.y, voxel_grid.bounds_min.z, emissive.z],
+                    extra2: [voxel_grid.bounds_max.x, voxel_grid.bounds_max.y, voxel_grid.bounds_max.z, *fresnel],
                 });
             }
             NodeData::Transform { kind, value, .. } => {

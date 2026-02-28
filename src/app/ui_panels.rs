@@ -1,6 +1,7 @@
 use std::sync::atomic::Ordering;
 
 use eframe::egui;
+use glam::Vec3;
 
 use crate::graph::history::History;
 use crate::graph::scene::Scene;
@@ -19,6 +20,11 @@ impl SdfApp {
         let mut action_undo = false;
         let mut action_redo = false;
         let mut action_delete = false;
+        let mut action_focus = false;
+        let mut action_copy = false;
+        let mut action_paste = false;
+        let mut action_duplicate = false;
+        let mut action_open_recent: Option<String> = None;
 
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
@@ -33,11 +39,31 @@ impl SdfApp {
                         action_open = true;
                         ui.close_menu();
                     }
-                    if ui.add(egui::Button::new("Save As...").shortcut_text("Ctrl+S")).clicked() {
+                    let save_label = if self.current_file_path.is_some() { "Save" } else { "Save As..." };
+                    if ui.add(egui::Button::new(save_label).shortcut_text("Ctrl+S")).clicked() {
                         action_save = true;
                         ui.close_menu();
                     }
                     ui.separator();
+
+                    // Recent files
+                    if !self.settings.recent_files.is_empty() {
+                        ui.menu_button("Recent Files", |ui| {
+                            let files = self.settings.recent_files.clone();
+                            for file_path in &files {
+                                let name = std::path::Path::new(file_path)
+                                    .file_name()
+                                    .map(|n| n.to_string_lossy().to_string())
+                                    .unwrap_or_else(|| file_path.clone());
+                                if ui.button(&name).on_hover_text(file_path).clicked() {
+                                    action_open_recent = Some(file_path.clone());
+                                    ui.close_menu();
+                                }
+                            }
+                        });
+                        ui.separator();
+                    }
+
                     if ui.add(egui::Button::new("Screenshot...").shortcut_text("Ctrl+P")).clicked() {
                         action_screenshot = true;
                         ui.close_menu();
@@ -46,6 +72,26 @@ impl SdfApp {
                     if ui.add_enabled(export_idle, egui::Button::new("Export Mesh...").shortcut_text("Ctrl+E")).clicked() {
                         action_export = true;
                         ui.close_menu();
+                    }
+                    ui.separator();
+
+                    // Auto-save settings
+                    ui.horizontal(|ui| {
+                        let mut auto_save = self.settings.auto_save_enabled;
+                        if ui.checkbox(&mut auto_save, "Auto-save").changed() {
+                            self.settings.auto_save_enabled = auto_save;
+                            self.settings.save();
+                        }
+                    });
+                    if self.settings.auto_save_enabled {
+                        ui.horizontal(|ui| {
+                            ui.label("Interval:");
+                            let mut secs = self.settings.auto_save_interval_secs;
+                            if ui.add(egui::DragValue::new(&mut secs).range(30..=600).suffix("s").speed(5)).changed() {
+                                self.settings.auto_save_interval_secs = secs;
+                                self.settings.save();
+                            }
+                        });
                     }
                 });
 
@@ -61,6 +107,20 @@ impl SdfApp {
                     }
                     ui.separator();
                     let has_sel = self.node_graph_state.selected.is_some();
+                    if ui.add_enabled(has_sel, egui::Button::new("Copy").shortcut_text("Ctrl+C")).clicked() {
+                        action_copy = true;
+                        ui.close_menu();
+                    }
+                    let has_clip = self.clipboard_node.map_or(false, |id| self.scene.nodes.contains_key(&id));
+                    if ui.add_enabled(has_clip, egui::Button::new("Paste").shortcut_text("Ctrl+V")).clicked() {
+                        action_paste = true;
+                        ui.close_menu();
+                    }
+                    if ui.add_enabled(has_sel, egui::Button::new("Duplicate").shortcut_text("Ctrl+D")).clicked() {
+                        action_duplicate = true;
+                        ui.close_menu();
+                    }
+                    ui.separator();
                     if ui.add_enabled(has_sel, egui::Button::new("Delete").shortcut_text("Del")).clicked() {
                         action_delete = true;
                         ui.close_menu();
@@ -69,6 +129,12 @@ impl SdfApp {
 
                 // --- View ---
                 ui.menu_button("View", |ui| {
+                    let has_sel = self.node_graph_state.selected.is_some();
+                    if ui.add_enabled(has_sel, egui::Button::new("Focus Selected").shortcut_text("F")).clicked() {
+                        action_focus = true;
+                        ui.close_menu();
+                    }
+                    ui.separator();
                     let profiler_label = if self.show_debug { "Hide Profiler" } else { "Show Profiler" };
                     if ui.add(egui::Button::new(profiler_label).shortcut_text("F4")).clicked() {
                         self.show_debug = !self.show_debug;
@@ -134,35 +200,66 @@ impl SdfApp {
             self.buffer_dirty = true;
             self.saved_fingerprint = self.scene.data_fingerprint();
             self.scene_dirty = false;
+            self.current_file_path = None;
         }
+        // Helper closure for loading a project from a path
+        let load_from_path = |app: &mut Self, path: &std::path::Path| {
+            match crate::io::load_project(&path.to_path_buf()) {
+                Ok(project) => {
+                    app.scene = project.scene;
+                    app.camera = project.camera;
+                    app.history = History::new();
+                    app.node_graph_state.selected = None;
+                    app.node_graph_state.needs_initial_rebuild = true;
+                    app.sculpt_state = SculptState::Inactive;
+                    app.current_structure_key = 0;
+                    app.buffer_dirty = true;
+                    app.saved_fingerprint = app.scene.data_fingerprint();
+                    app.scene_dirty = false;
+                    app.current_file_path = Some(path.to_path_buf());
+                    app.settings.add_recent_file(&path.to_string_lossy());
+                    true
+                }
+                Err(e) => {
+                    log::error!("Failed to load project: {}", e);
+                    false
+                }
+            }
+        };
         if action_open {
             #[cfg(not(target_arch = "wasm32"))]
             if let Some(path) = crate::io::open_dialog() {
-                match crate::io::load_project(&path) {
-                    Ok(project) => {
-                        self.scene = project.scene;
-                        self.camera = project.camera;
-                        self.history = History::new();
-                        self.node_graph_state.selected = None;
-                        self.node_graph_state.needs_initial_rebuild = true;
-                        self.sculpt_state = SculptState::Inactive;
-                        self.current_structure_key = 0;
-                        self.buffer_dirty = true;
-                        self.saved_fingerprint = self.scene.data_fingerprint();
-                        self.scene_dirty = false;
-                    }
-                    Err(e) => log::error!("Failed to load project: {}", e),
+                load_from_path(self, &path);
+            }
+        }
+        if let Some(ref recent_path) = action_open_recent {
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let path = std::path::PathBuf::from(recent_path);
+                if !load_from_path(self, &path) {
+                    // Remove stale entry
+                    self.settings.recent_files.retain(|p| p != recent_path);
+                    self.settings.save();
                 }
             }
         }
         if action_save {
             #[cfg(not(target_arch = "wasm32"))]
-            if let Some(path) = crate::io::save_dialog() {
-                if let Err(e) = crate::io::save_project(&self.scene, &self.camera, &path) {
-                    log::error!("Failed to save project: {}", e);
+            {
+                let path = if let Some(ref p) = self.current_file_path {
+                    Some(p.clone())
                 } else {
-                    self.saved_fingerprint = self.scene.data_fingerprint();
-                    self.scene_dirty = false;
+                    crate::io::save_dialog()
+                };
+                if let Some(path) = path {
+                    if let Err(e) = crate::io::save_project(&self.scene, &self.camera, &path) {
+                        log::error!("Failed to save project: {}", e);
+                    } else {
+                        self.current_file_path = Some(path.clone());
+                        self.saved_fingerprint = self.scene.data_fingerprint();
+                        self.scene_dirty = false;
+                        self.settings.add_recent_file(&path.to_string_lossy());
+                    }
                 }
             }
             #[cfg(target_arch = "wasm32")]
@@ -200,6 +297,57 @@ impl SdfApp {
         }
         if action_delete {
             self.delete_selected();
+        }
+        if action_focus {
+            if let Some(sel) = self.node_graph_state.selected {
+                let parent_map = self.scene.build_parent_map();
+                let (center, radius) = self.scene.compute_subtree_sphere(sel, &parent_map);
+                self.camera.focus_on(
+                    Vec3::new(center[0], center[1], center[2]),
+                    radius.max(0.5),
+                );
+            }
+        }
+        if action_copy {
+            self.clipboard_node = self.node_graph_state.selected;
+        }
+        if action_paste {
+            if let Some(src) = self.clipboard_node {
+                if self.scene.nodes.contains_key(&src) {
+                    if let Some(new_id) = self.scene.duplicate_subtree(src) {
+                        if let Some(node) = self.scene.nodes.get_mut(&new_id) {
+                            match &mut node.data {
+                                crate::graph::scene::NodeData::Primitive { ref mut position, .. }
+                                | crate::graph::scene::NodeData::Sculpt { ref mut position, .. } => {
+                                    position.x += 1.0;
+                                }
+                                _ => {}
+                            }
+                        }
+                        self.node_graph_state.selected = Some(new_id);
+                        self.node_graph_state.needs_initial_rebuild = true;
+                        self.buffer_dirty = true;
+                    }
+                }
+            }
+        }
+        if action_duplicate {
+            if let Some(sel) = self.node_graph_state.selected {
+                if let Some(new_id) = self.scene.duplicate_subtree(sel) {
+                    if let Some(node) = self.scene.nodes.get_mut(&new_id) {
+                        match &mut node.data {
+                            crate::graph::scene::NodeData::Primitive { ref mut position, .. }
+                            | crate::graph::scene::NodeData::Sculpt { ref mut position, .. } => {
+                                position.x += 1.0;
+                            }
+                            _ => {}
+                        }
+                    }
+                    self.node_graph_state.selected = Some(new_id);
+                    self.node_graph_state.needs_initial_rebuild = true;
+                    self.buffer_dirty = true;
+                }
+            }
         }
     }
 
@@ -357,6 +505,9 @@ impl SdfApp {
                         row(ui, "Ctrl+S", "Save project");
                         row(ui, "Ctrl+Z", "Undo");
                         row(ui, "Ctrl+Y", "Redo");
+                        row(ui, "Ctrl+C", "Copy node");
+                        row(ui, "Ctrl+V", "Paste node");
+                        row(ui, "Ctrl+D", "Duplicate node");
                         row(ui, "Delete", "Delete selected node");
                         row(ui, "Ctrl+P", "Screenshot");
                         row(ui, "Ctrl+E", "Export OBJ");
@@ -368,6 +519,7 @@ impl SdfApp {
                         row(ui, "LMB drag", "Orbit");
                         row(ui, "RMB drag", "Pan");
                         row(ui, "Scroll", "Zoom");
+                        row(ui, "F", "Focus selected");
                         row(ui, "F5", "Front view");
                         row(ui, "F6", "Top view");
                         row(ui, "F7", "Right view");

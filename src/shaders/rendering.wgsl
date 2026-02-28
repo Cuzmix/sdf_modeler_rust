@@ -121,6 +121,40 @@ fn is_selected(mat_id: i32) -> bool {
     return nodes[mat_id].color.w > 0.5;
 }
 
+// Material helpers: Primitive packs emissive in extra1/extra2, Sculpt uses spare .w slots
+fn get_node_emissive(mat_id: i32) -> vec3f {
+    if mat_id < 0 { return vec3f(0.0); }
+    let is_sculpt = nodes[mat_id].type_op.x > 19.5;
+    if is_sculpt {
+        // Sculpt: extra0.zw = emissive.xy, extra1.w = emissive.z
+        return vec3f(nodes[mat_id].extra0.z, nodes[mat_id].extra0.w, nodes[mat_id].extra1.w);
+    }
+    // Primitive: extra1.xyz = emissive
+    return nodes[mat_id].extra1.xyz;
+}
+
+fn get_node_emissive_intensity(mat_id: i32) -> f32 {
+    if mat_id < 0 { return 0.0; }
+    let is_sculpt = nodes[mat_id].type_op.x > 19.5;
+    if is_sculpt {
+        // Sculpt: type_op.y = emissive_intensity
+        return nodes[mat_id].type_op.y;
+    }
+    // Primitive: extra1.w = emissive_intensity
+    return nodes[mat_id].extra1.w;
+}
+
+fn get_node_fresnel(mat_id: i32) -> f32 {
+    if mat_id < 0 { return 0.04; }
+    let is_sculpt = nodes[mat_id].type_op.x > 19.5;
+    if is_sculpt {
+        // Sculpt: extra2.w = fresnel
+        return nodes[mat_id].extra2.w;
+    }
+    // Primitive: extra2.x = fresnel
+    return nodes[mat_id].extra2.x;
+}
+
 @fragment
 fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
     let local = frag_coord.xy - camera.viewport.xy;
@@ -161,13 +195,18 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
         // Material properties
         let mat_metallic = select(0.0, nodes[mat_id].type_op.z, mat_id >= 0);
         let mat_roughness = select(0.5, nodes[mat_id].type_op.w, mat_id >= 0);
+        let mat_fresnel = get_node_fresnel(mat_id);
 
         // Key light
         let key_dir = normalize(vec3f(/*KEY_LIGHT_DIR*/));
         let key_h = normalize(key_dir - rd);
         let key_diff = max(dot(n, key_dir), 0.0);
         let spec_power = max(4.0, /*KEY_SPEC_POWER*/ * (1.0 - mat_roughness) * (1.0 - mat_roughness));
-        let key_spec = pow(max(dot(n, key_h), 0.0), spec_power);
+        let key_spec_raw = pow(max(dot(n, key_h), 0.0), spec_power);
+        // Schlick Fresnel approximation
+        let VdotH = max(dot(-rd, key_h), 0.0);
+        let F = mat_fresnel + (1.0 - mat_fresnel) * pow(1.0 - VdotH, 5.0);
+        let key_spec = key_spec_raw * F;
         /*SHADOW_LINE*/
 
         // Fill light
@@ -185,6 +224,11 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
         let shadow_col = pow(vec3f(shadow), vec3f(1.0, 1.2, 1.5));
         color = albedo * diff_factor * (sky * /*AMBIENT*/ * ao + key_diff * shadow_col * /*KEY_DIFFUSE*/ + fill_diff * ao)
                   + spec_tint * key_spec * shadow * /*KEY_SPEC_INTENSITY*/;
+
+        // Emissive contribution (added before tonemapping for natural overbright bloom)
+        let emissive_col = get_node_emissive(mat_id);
+        let emissive_int = get_node_emissive_intensity(mat_id);
+        color += emissive_col * emissive_int;
 
         // Selection outline via selected_sdf distance check
         if !is_selected(mat_id) {

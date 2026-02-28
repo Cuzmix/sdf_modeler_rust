@@ -8,7 +8,7 @@ use glam::Vec3;
 use rayon::prelude::*;
 use crate::compat::maybe_par_iter;
 
-use crate::graph::scene::Scene;
+use crate::graph::scene::{NodeData, Scene};
 use crate::graph::voxel;
 
 // ---------------------------------------------------------------------------
@@ -320,6 +320,7 @@ const TRI_TABLE: [[i8; 16]; 256] = [
 pub struct ExportMesh {
     pub vertices: Vec<[f32; 3]>,
     pub triangles: Vec<[u32; 3]>,
+    pub vertex_colors: Vec<[f32; 3]>,
 }
 
 /// Corner offsets for a unit cube (matches edge/tri table convention).
@@ -356,6 +357,37 @@ fn quantize(v: &[f32; 3]) -> (i32, i32, i32) {
         (v[1] * 10000.0).round() as i32,
         (v[2] * 10000.0).round() as i32,
     )
+}
+
+/// Collect all leaf (Primitive/Sculpt) node IDs and their colors from the scene.
+fn collect_leaf_colors(scene: &Scene) -> Vec<(crate::graph::scene::NodeId, [f32; 3])> {
+    let order = scene.visible_topo_order();
+    let mut leaves = Vec::new();
+    for &id in &order {
+        if let Some(node) = scene.nodes.get(&id) {
+            match &node.data {
+                NodeData::Primitive { color, .. } | NodeData::Sculpt { color, .. } => {
+                    leaves.push((id, [color.x, color.y, color.z]));
+                }
+                _ => {}
+            }
+        }
+    }
+    leaves
+}
+
+/// Find the color of the closest leaf node at a given point.
+fn sample_color_at(scene: &Scene, p: Vec3, leaves: &[(crate::graph::scene::NodeId, [f32; 3])]) -> [f32; 3] {
+    let mut best_dist = f32::MAX;
+    let mut best_color = [0.5, 0.5, 0.5];
+    for &(id, color) in leaves {
+        let d = voxel::evaluate_sdf_tree(scene, id, p).abs();
+        if d < best_dist {
+            best_dist = d;
+            best_color = color;
+        }
+    }
+    best_color
 }
 
 pub fn marching_cubes(
@@ -507,7 +539,17 @@ pub fn marching_cubes(
         }
     }
 
-    ExportMesh { vertices, triangles }
+    // Phase 4: Sample vertex colors (parallelized)
+    let leaves = collect_leaf_colors(scene);
+    let vertex_colors: Vec<[f32; 3]> = if leaves.is_empty() {
+        vec![[0.5, 0.5, 0.5]; vertices.len()]
+    } else {
+        maybe_par_iter!(&vertices)
+            .map(|v| sample_color_at(scene, Vec3::new(v[0], v[1], v[2]), &leaves))
+            .collect()
+    };
+
+    ExportMesh { vertices, triangles, vertex_colors }
 }
 
 pub fn write_obj_to(mesh: &ExportMesh, writer: &mut impl Write) -> Result<(), String> {
@@ -584,12 +626,26 @@ pub fn write_ply(mesh: &ExportMesh, path: &Path) -> Result<(), String> {
     writeln!(w, "property float x").map_err(|e| e.to_string())?;
     writeln!(w, "property float y").map_err(|e| e.to_string())?;
     writeln!(w, "property float z").map_err(|e| e.to_string())?;
+    let has_colors = mesh.vertex_colors.len() == mesh.vertices.len();
+    if has_colors {
+        writeln!(w, "property uchar red").map_err(|e| e.to_string())?;
+        writeln!(w, "property uchar green").map_err(|e| e.to_string())?;
+        writeln!(w, "property uchar blue").map_err(|e| e.to_string())?;
+    }
     writeln!(w, "element face {}", mesh.triangles.len()).map_err(|e| e.to_string())?;
     writeln!(w, "property list uchar uint vertex_indices").map_err(|e| e.to_string())?;
     writeln!(w, "end_header").map_err(|e| e.to_string())?;
 
-    for v in &mesh.vertices {
-        writeln!(w, "{} {} {}", v[0], v[1], v[2]).map_err(|e| e.to_string())?;
+    for (i, v) in mesh.vertices.iter().enumerate() {
+        if has_colors {
+            let c = &mesh.vertex_colors[i];
+            let r = (c[0].clamp(0.0, 1.0) * 255.0) as u8;
+            let g = (c[1].clamp(0.0, 1.0) * 255.0) as u8;
+            let b = (c[2].clamp(0.0, 1.0) * 255.0) as u8;
+            writeln!(w, "{} {} {} {} {} {}", v[0], v[1], v[2], r, g, b).map_err(|e| e.to_string())?;
+        } else {
+            writeln!(w, "{} {} {}", v[0], v[1], v[2]).map_err(|e| e.to_string())?;
+        }
     }
 
     for t in &mesh.triangles {
@@ -604,10 +660,13 @@ pub fn write_glb(mesh: &ExportMesh, path: &Path) -> Result<(), String> {
     let file = std::fs::File::create(path).map_err(|e| format!("Failed to create file: {}", e))?;
     let mut w = std::io::BufWriter::new(file);
 
-    // --- Build binary buffer: [positions (f32x3)...] [indices (u32x3)...] ---
+    let has_colors = mesh.vertex_colors.len() == mesh.vertices.len();
+
+    // --- Build binary buffer: [positions] [colors?] [indices] ---
     let pos_bytes = mesh.vertices.len() * 12; // 3 x f32
+    let col_bytes = if has_colors { mesh.vertex_colors.len() * 12 } else { 0 }; // 3 x f32
     let idx_bytes = mesh.triangles.len() * 12; // 3 x u32
-    let bin_len = pos_bytes + idx_bytes;
+    let bin_len = pos_bytes + col_bytes + idx_bytes;
 
     // Compute position min/max for accessor bounds
     let mut pos_min = [f32::MAX; 3];
@@ -620,17 +679,32 @@ pub fn write_glb(mesh: &ExportMesh, path: &Path) -> Result<(), String> {
     }
 
     // --- Build JSON ---
-    let json = format!(
-        r#"{{"asset":{{"version":"2.0","generator":"SDF Modeler"}},"scene":0,"scenes":[{{"nodes":[0]}}],"nodes":[{{"mesh":0}}],"meshes":[{{"primitives":[{{"attributes":{{"POSITION":0}},"indices":1}}]}}],"accessors":[{{"bufferView":0,"componentType":5126,"count":{},"type":"VEC3","min":[{},{},{}],"max":[{},{},{}]}},{{"bufferView":1,"componentType":5125,"count":{},"type":"SCALAR"}}],"bufferViews":[{{"buffer":0,"byteOffset":0,"byteLength":{},"target":34962}},{{"buffer":0,"byteOffset":{},"byteLength":{},"target":34963}}],"buffers":[{{"byteLength":{}}}]}}"#,
-        mesh.vertices.len(),
-        pos_min[0], pos_min[1], pos_min[2],
-        pos_max[0], pos_max[1], pos_max[2],
-        mesh.triangles.len() * 3,
-        pos_bytes,
-        pos_bytes,
-        idx_bytes,
-        bin_len,
-    );
+    let json = if has_colors {
+        let idx_offset = pos_bytes + col_bytes;
+        format!(
+            r#"{{"asset":{{"version":"2.0","generator":"SDF Modeler"}},"scene":0,"scenes":[{{"nodes":[0]}}],"nodes":[{{"mesh":0}}],"meshes":[{{"primitives":[{{"attributes":{{"POSITION":0,"COLOR_0":2}},"indices":1}}]}}],"accessors":[{{"bufferView":0,"componentType":5126,"count":{},"type":"VEC3","min":[{},{},{}],"max":[{},{},{}]}},{{"bufferView":2,"componentType":5125,"count":{},"type":"SCALAR"}},{{"bufferView":1,"componentType":5126,"count":{},"type":"VEC3"}}],"bufferViews":[{{"buffer":0,"byteOffset":0,"byteLength":{},"target":34962}},{{"buffer":0,"byteOffset":{},"byteLength":{},"target":34962}},{{"buffer":0,"byteOffset":{},"byteLength":{},"target":34963}}],"buffers":[{{"byteLength":{}}}]}}"#,
+            mesh.vertices.len(),
+            pos_min[0], pos_min[1], pos_min[2],
+            pos_max[0], pos_max[1], pos_max[2],
+            mesh.triangles.len() * 3,
+            mesh.vertex_colors.len(),
+            pos_bytes,
+            pos_bytes, col_bytes,
+            idx_offset, idx_bytes,
+            bin_len,
+        )
+    } else {
+        format!(
+            r#"{{"asset":{{"version":"2.0","generator":"SDF Modeler"}},"scene":0,"scenes":[{{"nodes":[0]}}],"nodes":[{{"mesh":0}}],"meshes":[{{"primitives":[{{"attributes":{{"POSITION":0}},"indices":1}}]}}],"accessors":[{{"bufferView":0,"componentType":5126,"count":{},"type":"VEC3","min":[{},{},{}],"max":[{},{},{}]}},{{"bufferView":1,"componentType":5125,"count":{},"type":"SCALAR"}}],"bufferViews":[{{"buffer":0,"byteOffset":0,"byteLength":{},"target":34962}},{{"buffer":0,"byteOffset":{},"byteLength":{},"target":34963}}],"buffers":[{{"byteLength":{}}}]}}"#,
+            mesh.vertices.len(),
+            pos_min[0], pos_min[1], pos_min[2],
+            pos_max[0], pos_max[1], pos_max[2],
+            mesh.triangles.len() * 3,
+            pos_bytes,
+            pos_bytes, idx_bytes,
+            bin_len,
+        )
+    };
 
     let json_bytes = json.as_bytes();
     // Pad JSON to 4-byte alignment with spaces (0x20)
@@ -661,6 +735,14 @@ pub fn write_glb(mesh: &ExportMesh, path: &Path) -> Result<(), String> {
     for v in &mesh.vertices {
         for c in v {
             w.write_all(&c.to_le_bytes()).map_err(|e| e.to_string())?;
+        }
+    }
+    // Colors
+    if has_colors {
+        for c in &mesh.vertex_colors {
+            for ch in c {
+                w.write_all(&ch.to_le_bytes()).map_err(|e| e.to_string())?;
+            }
         }
     }
     // Indices
@@ -716,6 +798,17 @@ pub fn write_usda(mesh: &ExportMesh, path: &Path) -> Result<(), String> {
         }
     }
     writeln!(w, "]").map_err(|e| e.to_string())?;
+
+    // Vertex colors
+    if mesh.vertex_colors.len() == mesh.vertices.len() {
+        write!(w, "    color3f[] primvars:displayColor = [").map_err(|e| e.to_string())?;
+        for (i, c) in mesh.vertex_colors.iter().enumerate() {
+            if i > 0 { write!(w, ", ").map_err(|e| e.to_string())?; }
+            write!(w, "({}, {}, {})", c[0], c[1], c[2]).map_err(|e| e.to_string())?;
+        }
+        writeln!(w, "]").map_err(|e| e.to_string())?;
+        writeln!(w, "    uniform token primvars:displayColor:interpolation = \"vertex\"").map_err(|e| e.to_string())?;
+    }
 
     writeln!(w, "}}").map_err(|e| e.to_string())?;
 
