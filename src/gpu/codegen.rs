@@ -419,7 +419,7 @@ fn generate_scene_sdf(
     scene: &Scene,
     sculpt_tex_map: Option<&HashMap<NodeId, usize>>,
 ) -> String {
-    let order = scene.topo_order();
+    let order = scene.visible_topo_order();
     if order.is_empty() {
         return "fn scene_sdf(p: vec3f) -> vec2f {\n    return vec2f(1e10, -1.0);\n}"
             .to_string();
@@ -557,7 +557,7 @@ fn generate_selected_sdf(
     scene: &Scene,
     sculpt_tex_map: Option<&HashMap<NodeId, usize>>,
 ) -> String {
-    let order = scene.topo_order();
+    let order = scene.visible_topo_order();
     if order.is_empty() {
         return "fn selected_sdf(p: vec3f) -> f32 {\n    return 1e10;\n}".to_string();
     }

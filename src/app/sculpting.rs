@@ -4,7 +4,7 @@ use glam::Vec3;
 use crate::gpu::picking::PickResult;
 use crate::graph::scene::{NodeData, NodeId};
 use crate::graph::voxel;
-use crate::sculpt::{self, BrushMode, FalloffMode, SculptState};
+use crate::sculpt::{self, ActiveTool, BrushMode, FalloffMode, SculptState};
 use crate::ui::viewport::{BrushDispatch, BrushGpuParams, ViewportResources};
 
 use super::{PickState, SdfApp};
@@ -50,7 +50,7 @@ impl SdfApp {
     /// Handle a sculpt pick result: apply brush with interpolation.
     /// Handle a sculpt pick result: apply brush with interpolation.
     pub(super) fn handle_sculpt_hit(&mut self, result: PickResult) {
-        let topo_order = self.scene.topo_order();
+        let topo_order = self.scene.visible_topo_order();
         let idx = result.material_id as usize;
         if idx >= topo_order.len() {
             return;
@@ -414,23 +414,34 @@ impl SdfApp {
     }
 
     pub(super) fn sync_sculpt_state(&mut self) {
-        // Auto-deactivate sculpt when selection changes away from sculpted node
-        if let Some(active_node) = self.sculpt_state.active_node() {
-            let mut deactivate = false;
-            if self.node_graph_state.selected != Some(active_node) {
-                deactivate = true;
-            }
-            // Also deactivate if the node is no longer a Sculpt node
-            if let Some(node) = self.scene.nodes.get(&active_node) {
-                if !matches!(node.data, NodeData::Sculpt { .. }) {
-                    deactivate = true;
+        match self.active_tool {
+            ActiveTool::Select => {
+                // Original behavior: always deactivate sculpt in Select mode
+                if self.sculpt_state.is_active() {
+                    self.sculpt_state = SculptState::Inactive;
+                    self.last_sculpt_hit = None;
+                    self.lazy_brush_pos = None;
+                    self.pick_state = PickState::Idle;
                 }
             }
-            if deactivate {
-                self.sculpt_state = SculptState::Inactive;
-                self.last_sculpt_hit = None;
-                self.lazy_brush_pos = None;
-                self.pick_state = PickState::Idle;
+            ActiveTool::Sculpt => {
+                let sel = self.node_graph_state.selected;
+                let active = self.sculpt_state.active_node();
+                if sel != active {
+                    // Selection changed — try to activate on new node
+                    if let Some(id) = sel {
+                        if self.scene.nodes.get(&id).map_or(false, |n| matches!(n.data, NodeData::Sculpt { .. })) {
+                            self.sculpt_state = SculptState::new_active(id);
+                        } else {
+                            self.sculpt_state = SculptState::Inactive;
+                        }
+                    } else {
+                        self.sculpt_state = SculptState::Inactive;
+                    }
+                    self.last_sculpt_hit = None;
+                    self.lazy_brush_pos = None;
+                    self.pick_state = PickState::Idle;
+                }
             }
         }
     }

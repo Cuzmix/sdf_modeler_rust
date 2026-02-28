@@ -11,6 +11,18 @@ pub const DEFAULT_BRUSH_RADIUS: f32 = 0.3;
 pub const DEFAULT_BRUSH_STRENGTH: f32 = 0.05;
 
 // ---------------------------------------------------------------------------
+// Tool system
+// ---------------------------------------------------------------------------
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum ActiveTool {
+    #[default]
+    Select,
+    Sculpt,
+    // Future: Mask, Paint, Polygroup
+}
+
+// ---------------------------------------------------------------------------
 // Brush types
 // ---------------------------------------------------------------------------
 

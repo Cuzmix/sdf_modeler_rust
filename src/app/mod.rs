@@ -22,7 +22,7 @@ use crate::gpu::picking::PendingPick;
 use crate::graph::history::History;
 use crate::graph::scene::{NodeId, Scene};
 use crate::graph::voxel;
-use crate::sculpt::SculptState;
+use crate::sculpt::{ActiveTool, SculptState};
 use crate::settings::Settings;
 use crate::ui::dock::{self, SdfTabViewer, Tab};
 use crate::ui::gizmo::{GizmoMode, GizmoSpace, GizmoState};
@@ -157,6 +157,7 @@ pub struct SdfApp {
     pub(super) gizmo_space: GizmoSpace,
     pub(super) pivot_offset: Vec3,
     pub(super) last_gizmo_selection: Option<NodeId>,
+    pub(super) active_tool: ActiveTool,
     pub(super) sculpt_state: SculptState,
     pub(super) settings: Settings,
     pub(super) initial_vsync: bool,
@@ -246,6 +247,7 @@ impl SdfApp {
             gizmo_space: GizmoSpace::Local,
             pivot_offset: Vec3::ZERO,
             last_gizmo_selection: None,
+            active_tool: ActiveTool::default(),
             sculpt_state: SculptState::Inactive,
             initial_vsync: settings.vsync_enabled,
             settings,
@@ -322,6 +324,7 @@ impl eframe::App for SdfApp {
         let mut pending_pick = None;
         let mut settings_dirty = false;
         let mut bake_request: Option<BakeRequest> = None;
+        let mut tool_switch: Option<ActiveTool> = None;
         let sculpt_count = self.sculpt_tex_indices.len();
         let fps_info = if self.settings.show_fps_overlay {
             Some((self.timings.avg_fps, self.timings.avg_frame_ms))
@@ -337,6 +340,7 @@ impl eframe::App for SdfApp {
             gizmo_mode: &self.gizmo_mode,
             gizmo_space: &self.gizmo_space,
             pivot_offset: &mut self.pivot_offset,
+            active_tool: &self.active_tool,
             sculpt_state: &mut self.sculpt_state,
             settings: &mut self.settings,
             settings_dirty: &mut settings_dirty,
@@ -350,6 +354,7 @@ impl eframe::App for SdfApp {
             fps_info,
             show_debug: &mut self.show_debug,
             initial_vsync,
+            tool_switch: &mut tool_switch,
         };
 
         egui::CentralPanel::default()
@@ -373,6 +378,28 @@ impl eframe::App for SdfApp {
 
         if pending_pick.is_some() {
             self.pending_pick = pending_pick;
+        }
+
+        // Handle tool switch from viewport toolbar
+        if let Some(tool) = tool_switch {
+            self.active_tool = tool;
+            match tool {
+                ActiveTool::Select => {
+                    self.sculpt_state = SculptState::Inactive;
+                    self.last_sculpt_hit = None;
+                    self.lazy_brush_pos = None;
+                }
+                ActiveTool::Sculpt => {
+                    // Auto-activate sculpt on selected node if it's a Sculpt node
+                    if let Some(sel) = self.node_graph_state.selected {
+                        if self.scene.nodes.get(&sel).map_or(false, |n| {
+                            matches!(n.data, crate::graph::scene::NodeData::Sculpt { .. })
+                        }) {
+                            self.sculpt_state = SculptState::new_active(sel);
+                        }
+                    }
+                }
+            }
         }
 
         // Sculpt mode: submit async pick for next frame's poll_sculpt_pick

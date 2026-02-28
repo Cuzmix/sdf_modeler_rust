@@ -4,8 +4,8 @@ use eframe::wgpu;
 
 use crate::gpu::camera::{Camera, CameraUniform};
 use crate::gpu::picking::PendingPick;
-use crate::graph::scene::{NodeId, Scene};
-use crate::sculpt::SculptState;
+use crate::graph::scene::{CsgOp, ModifierKind, NodeId, Scene, SdfPrimitive, TransformKind};
+use crate::sculpt::{ActiveTool, SculptState};
 use crate::ui::gizmo::{self, GizmoMode, GizmoSpace, GizmoState};
 
 use super::ViewportResources;
@@ -174,22 +174,33 @@ fn draw_symmetry_plane(painter: &egui::Painter, camera: &Camera, rect: egui::Rec
     ));
 }
 
-/// Returns an optional PendingPick if the user clicked/dragged in the viewport.
+pub struct ViewportOutput {
+    pub pending_pick: Option<PendingPick>,
+    pub created_node: Option<NodeId>,
+    pub tool_switch: Option<ActiveTool>,
+}
+
 pub fn draw(
     ui: &mut egui::Ui,
     camera: &mut Camera,
     scene: &mut Scene,
-    selected: Option<NodeId>,
+    selected: &mut Option<NodeId>,
     gizmo_state: &mut GizmoState,
     gizmo_mode: &GizmoMode,
     gizmo_space: &GizmoSpace,
     pivot_offset: &mut glam::Vec3,
     sculpt_state: &SculptState,
+    active_tool: &ActiveTool,
     time: f32,
     render_config: &crate::settings::RenderConfig,
     sculpt_count: usize,
     fps_info: Option<(f64, f64)>, // (fps, frame_ms)
-) -> Option<PendingPick> {
+) -> ViewportOutput {
+    let mut output = ViewportOutput {
+        pending_pick: None,
+        created_node: None,
+        tool_switch: None,
+    };
     let rect = ui.available_rect_before_wrap();
     let response = ui.allocate_rect(rect, egui::Sense::click_and_drag());
 
@@ -235,9 +246,9 @@ pub fn draw(
     let render_w = (viewport[2] * render_scale).max(1.0);
     let render_h = (viewport[3] * render_scale).max(1.0);
     let render_viewport = [0.0, 0.0, render_w, render_h];
-    let selected_idx = selected
+    let selected_idx = (*selected)
         .and_then(|id| {
-            let order = scene.topo_order();
+            let order = scene.visible_topo_order();
             order.iter().position(|&nid| nid == id)
         })
         .map(|i| i as f32)
@@ -268,7 +279,7 @@ pub fn draw(
             &response,
             camera,
             scene,
-            selected,
+            *selected,
             gizmo_state,
             gizmo_mode,
             gizmo_space,
@@ -278,7 +289,6 @@ pub fn draw(
     };
 
     // --- Interaction priority: sculpt > gizmo > pick > orbit ---
-    let mut pending_pick = None;
 
     if sculpt_active {
         // Sculpt mode: drag applies brush continuously via pick
@@ -289,7 +299,7 @@ pub fn draw(
                         (pos.x - rect.min.x) * pixels_per_point,
                         (pos.y - rect.min.y) * pixels_per_point,
                     ];
-                    pending_pick = Some(PendingPick {
+                    output.pending_pick = Some(PendingPick {
                         mouse_pos: mouse_px,
                         camera_uniform: camera.to_uniform(viewport, time, 0.0, false, scene_bounds, -1.0),
                     });
@@ -402,7 +412,7 @@ pub fn draw(
                     (pos.y - rect.min.y) * pixels_per_point,
                 ];
                 let pick_uniform = camera.to_uniform(viewport, time, 0.0, false, scene_bounds, -1.0);
-                pending_pick = Some(PendingPick {
+                output.pending_pick = Some(PendingPick {
                     mouse_pos: mouse_px,
                     camera_uniform: pick_uniform,
                 });
@@ -456,5 +466,126 @@ pub fn draw(
         );
     }
 
-    pending_pick
+    // --- Floating toolbar overlay ---
+    let toolbar_id = ui.id().with("viewport_toolbar");
+    egui::Area::new(toolbar_id)
+        .order(egui::Order::Foreground)
+        .fixed_pos(rect.min + egui::vec2(8.0, 28.0)) // Below FPS counter
+        .show(ui.ctx(), |ui| {
+            egui::Frame::none()
+                .fill(egui::Color32::from_rgba_premultiplied(30, 30, 38, 200))
+                .rounding(6.0)
+                .inner_margin(6.0)
+                .show(ui, |ui| {
+                    ui.set_min_width(32.0);
+
+                    // Tool strip
+                    ui.horizontal(|ui| {
+                        let sel_style = |active: bool| {
+                            if active {
+                                egui::RichText::new("").color(egui::Color32::from_rgb(255, 200, 60))
+                            } else {
+                                egui::RichText::new("").color(egui::Color32::from_gray(180))
+                            }
+                        };
+                        let _ = sel_style; // suppress unused
+
+                        let select_active = *active_tool == ActiveTool::Select;
+                        let sculpt_tool_active = *active_tool == ActiveTool::Sculpt;
+
+                        if ui.selectable_label(select_active, "Select").clicked() && !select_active {
+                            output.tool_switch = Some(ActiveTool::Select);
+                        }
+                        if ui.selectable_label(sculpt_tool_active, "Sculpt").clicked() && !sculpt_tool_active {
+                            output.tool_switch = Some(ActiveTool::Sculpt);
+                        }
+                    });
+
+                    // Shape/Boolean/Modifier buttons (hidden when sculpt tool active)
+                    if *active_tool != ActiveTool::Sculpt {
+                        ui.separator();
+
+                        // + Shape menu
+                        ui.menu_button("+ Shape", |ui| {
+                            for prim in SdfPrimitive::ALL {
+                                if ui.button(prim.base_name()).clicked() {
+                                    let id = scene.create_primitive(prim.clone());
+                                    output.created_node = Some(id);
+                                    ui.close_menu();
+                                }
+                            }
+                        });
+
+                        // Boolean menu
+                        ui.menu_button("Boolean", |ui| {
+                            for op in CsgOp::ALL {
+                                if ui.button(op.base_name()).clicked() {
+                                    let tops = scene.top_level_nodes();
+                                    if tops.len() >= 2 {
+                                        let left = Some(tops[tops.len() - 2]);
+                                        let right = Some(tops[tops.len() - 1]);
+                                        let id = scene.create_operation(op.clone(), left, right);
+                                        output.created_node = Some(id);
+                                    }
+                                    ui.close_menu();
+                                }
+                            }
+                        });
+
+                        // + Modifier menu (needs selection)
+                        let has_selection = selected.is_some();
+                        ui.add_enabled_ui(has_selection, |ui| {
+                            ui.menu_button("+ Modifier", |ui| {
+                                if let Some(sel_id) = *selected {
+                                    ui.label("Deform");
+                                    for kind in &[ModifierKind::Twist, ModifierKind::Bend, ModifierKind::Taper] {
+                                        if ui.button(kind.base_name()).clicked() {
+                                            scene.insert_modifier_above(sel_id, kind.clone());
+                                            ui.close_menu();
+                                        }
+                                    }
+                                    ui.separator();
+                                    ui.label("Shape");
+                                    for kind in &[ModifierKind::Round, ModifierKind::Onion, ModifierKind::Elongate] {
+                                        if ui.button(kind.base_name()).clicked() {
+                                            scene.insert_modifier_above(sel_id, kind.clone());
+                                            ui.close_menu();
+                                        }
+                                    }
+                                    ui.separator();
+                                    ui.label("Repeat");
+                                    for kind in &[ModifierKind::Mirror, ModifierKind::Repeat, ModifierKind::FiniteRepeat] {
+                                        if ui.button(kind.base_name()).clicked() {
+                                            scene.insert_modifier_above(sel_id, kind.clone());
+                                            ui.close_menu();
+                                        }
+                                    }
+                                    ui.separator();
+                                    ui.label("Transform");
+                                    for kind in TransformKind::ALL {
+                                        if ui.button(kind.base_name()).clicked() {
+                                            scene.insert_transform_above(sel_id, kind.clone());
+                                            ui.close_menu();
+                                        }
+                                    }
+                                }
+                            });
+                        });
+
+                        ui.separator();
+
+                        // Delete button (needs selection)
+                        ui.add_enabled_ui(has_selection, |ui| {
+                            if ui.button("Delete").clicked() {
+                                if let Some(sel_id) = *selected {
+                                    scene.remove_node(sel_id);
+                                    *selected = None;
+                                }
+                            }
+                        });
+                    }
+                });
+        });
+
+    output
 }

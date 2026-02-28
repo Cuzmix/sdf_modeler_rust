@@ -70,6 +70,24 @@ fn vec3_editor(
     });
 }
 
+/// Walk up from a leaf node, collecting Transform/Modifier ancestors
+/// until hitting an Operation or top-level node. Returns innermost first.
+fn collect_modifier_chain(scene: &Scene, leaf_id: NodeId) -> Vec<NodeId> {
+    let parent_map = scene.build_parent_map();
+    let mut chain = Vec::new();
+    let mut current = leaf_id;
+    while let Some(&parent_id) = parent_map.get(&current) {
+        match scene.nodes.get(&parent_id).map(|n| &n.data) {
+            Some(NodeData::Transform { .. } | NodeData::Modifier { .. }) => {
+                chain.push(parent_id);
+                current = parent_id;
+            }
+            _ => break,
+        }
+    }
+    chain
+}
+
 pub fn draw(
     ui: &mut egui::Ui,
     scene: &mut Scene,
@@ -715,6 +733,78 @@ pub fn draw(
                 }
             }
         }
+    }
+
+    // --- Modifier Stack (for Primitive and Sculpt nodes) ---
+    let show_stack = scene.nodes.get(&id).map_or(false, |n| {
+        matches!(n.data, NodeData::Primitive { .. } | NodeData::Sculpt { .. })
+    });
+    if show_stack {
+        let chain = collect_modifier_chain(scene, id);
+        ui.separator();
+        ui.heading("Modifier Stack");
+        if chain.is_empty() {
+            ui.weak("No modifiers applied");
+        } else {
+            let mut to_delete = None;
+            for &mod_id in &chain {
+                if let Some(mod_node) = scene.nodes.get(&mod_id) {
+                    let badge = match &mod_node.data {
+                        NodeData::Transform { kind, .. } => kind.badge(),
+                        NodeData::Modifier { kind, .. } => kind.badge(),
+                        _ => "???",
+                    };
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            egui::RichText::new(format!("{} {}", badge, mod_node.name))
+                                .small(),
+                        );
+                        if ui.small_button("X").on_hover_text("Remove modifier").clicked() {
+                            to_delete = Some(mod_id);
+                        }
+                    });
+                }
+            }
+            if let Some(del_id) = to_delete {
+                scene.remove_node(del_id);
+            }
+        }
+        // Add Modifier menu
+        ui.horizontal(|ui| {
+            ui.menu_button("+ Modifier", |ui| {
+                ui.label("Deform");
+                for kind in &[ModifierKind::Twist, ModifierKind::Bend, ModifierKind::Taper] {
+                    if ui.button(kind.base_name()).clicked() {
+                        scene.insert_modifier_above(id, kind.clone());
+                        ui.close_menu();
+                    }
+                }
+                ui.separator();
+                ui.label("Shape");
+                for kind in &[ModifierKind::Round, ModifierKind::Onion, ModifierKind::Elongate] {
+                    if ui.button(kind.base_name()).clicked() {
+                        scene.insert_modifier_above(id, kind.clone());
+                        ui.close_menu();
+                    }
+                }
+                ui.separator();
+                ui.label("Repeat");
+                for kind in &[ModifierKind::Mirror, ModifierKind::Repeat, ModifierKind::FiniteRepeat] {
+                    if ui.button(kind.base_name()).clicked() {
+                        scene.insert_modifier_above(id, kind.clone());
+                        ui.close_menu();
+                    }
+                }
+            });
+            ui.menu_button("+ Transform", |ui| {
+                for kind in TransformKind::ALL {
+                    if ui.button(kind.base_name()).clicked() {
+                        scene.insert_transform_above(id, kind.clone());
+                        ui.close_menu();
+                    }
+                }
+            });
+        });
     }
 
     // Write name back

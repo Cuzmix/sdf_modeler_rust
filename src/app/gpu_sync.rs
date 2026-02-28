@@ -235,7 +235,7 @@ impl SdfApp {
         let Some(pending) = self.pending_pick.take() else {
             return;
         };
-        let topo_order = self.scene.topo_order();
+        let topo_order = self.scene.visible_topo_order();
         let renderer = self.render_state.renderer.read();
         let Some(res) = renderer.callback_resources.get::<ViewportResources>() else {
             return;

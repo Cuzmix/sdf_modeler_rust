@@ -28,7 +28,7 @@ pub struct SculptTexInfo {
 
 /// Count sculpt nodes in topo order and return their info for texture creation.
 pub fn collect_sculpt_tex_info(scene: &Scene) -> Vec<SculptTexInfo> {
-    let order = scene.topo_order();
+    let order = scene.visible_topo_order();
     let mut infos = Vec::new();
     for &node_id in &order {
         if let Some(node) = scene.nodes.get(&node_id) {
@@ -47,7 +47,7 @@ pub fn collect_sculpt_tex_info(scene: &Scene) -> Vec<SculptTexInfo> {
 /// Build the concatenated voxel data buffer.
 /// Returns (flat_data, offset_map) where offset_map maps NodeId → offset in flat_data (f32 elements).
 pub fn build_voxel_buffer(scene: &Scene) -> (Vec<f32>, HashMap<NodeId, u32>) {
-    let order = scene.topo_order();
+    let order = scene.visible_topo_order();
     let mut flat_data = Vec::new();
     let mut offsets = HashMap::new();
 
@@ -69,7 +69,7 @@ pub fn build_node_buffer(
     selected: Option<NodeId>,
     voxel_offsets: &HashMap<NodeId, u32>,
 ) -> Vec<SdfNodeGpu> {
-    let order = scene.topo_order();
+    let order = scene.visible_topo_order();
     let mut buffer = Vec::with_capacity(order.len().max(1));
 
     for &node_id in &order {

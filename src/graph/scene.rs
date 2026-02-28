@@ -430,6 +430,8 @@ pub struct Scene {
     pub nodes: HashMap<NodeId, SceneNode>,
     pub(crate) next_id: u64,
     pub(crate) name_counters: HashMap<String, u32>,
+    #[serde(default)]
+    pub hidden_nodes: HashSet<NodeId>,
 }
 
 impl Scene {
@@ -438,6 +440,7 @@ impl Scene {
             nodes: HashMap::new(),
             next_id: 0,
             name_counters: HashMap::new(),
+            hidden_nodes: HashSet::new(),
         };
         scene.create_primitive(SdfPrimitive::Sphere);
         scene
@@ -460,7 +463,18 @@ impl Scene {
         id
     }
 
+    pub fn is_hidden(&self, id: NodeId) -> bool {
+        self.hidden_nodes.contains(&id)
+    }
+
+    pub fn toggle_visibility(&mut self, id: NodeId) {
+        if !self.hidden_nodes.remove(&id) {
+            self.hidden_nodes.insert(id);
+        }
+    }
+
     pub fn remove_node(&mut self, id: NodeId) -> Option<SceneNode> {
+        self.hidden_nodes.remove(&id);
         let node = self.nodes.remove(&id);
         // Null out any references to this node (instead of cascade-deleting)
         let to_patch: Vec<(NodeId, bool, bool, bool)> = self
@@ -820,6 +834,13 @@ impl Scene {
     pub fn structure_key(&self) -> u64 {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         self.nodes.len().hash(&mut hasher);
+        // Hash hidden_nodes so visibility changes trigger shader regen
+        self.hidden_nodes.len().hash(&mut hasher);
+        let mut hidden_sorted: Vec<NodeId> = self.hidden_nodes.iter().cloned().collect();
+        hidden_sorted.sort();
+        for id in &hidden_sorted {
+            id.hash(&mut hasher);
+        }
         let mut ids: Vec<NodeId> = self.nodes.keys().cloned().collect();
         ids.sort();
         for id in ids {
@@ -960,6 +981,31 @@ impl Scene {
         let Some(node) = self.nodes.get(&id) else { return; };
         for child_id in node.data.children() {
             self.topo_visit(child_id, visited, result);
+        }
+        result.push(id);
+    }
+
+    /// Post-order traversal that skips hidden nodes and their entire subtrees.
+    /// Used by codegen and buffer upload — hidden geometry should not appear in the shader.
+    pub fn visible_topo_order(&self) -> Vec<NodeId> {
+        let tops = self.top_level_nodes();
+        if tops.is_empty() {
+            return Vec::new();
+        }
+        let mut result = Vec::new();
+        let mut visited = HashSet::new();
+        for &root in &tops {
+            self.visible_topo_visit(root, &mut visited, &mut result);
+        }
+        result
+    }
+
+    fn visible_topo_visit(&self, id: NodeId, visited: &mut HashSet<NodeId>, result: &mut Vec<NodeId>) {
+        if !visited.insert(id) { return; }
+        if self.hidden_nodes.contains(&id) { return; }
+        let Some(node) = self.nodes.get(&id) else { return; };
+        for child_id in node.data.children() {
+            self.visible_topo_visit(child_id, visited, result);
         }
         result.push(id);
     }
@@ -1216,6 +1262,9 @@ impl Scene {
 
     /// Deep equality check (topology + parameters). Used by undo system.
     pub fn content_eq(&self, other: &Scene) -> bool {
+        if self.hidden_nodes != other.hidden_nodes {
+            return false;
+        }
         if self.nodes.len() != other.nodes.len() {
             return false;
         }

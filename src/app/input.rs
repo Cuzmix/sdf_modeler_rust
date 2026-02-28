@@ -2,7 +2,8 @@ use eframe::egui;
 use glam::Vec3;
 
 use crate::graph::history::History;
-use crate::sculpt::{BrushMode, SculptState, DEFAULT_BRUSH_STRENGTH};
+use crate::graph::scene::NodeData;
+use crate::sculpt::{ActiveTool, BrushMode, SculptState, DEFAULT_BRUSH_STRENGTH};
 use crate::ui::gizmo::{GizmoMode, GizmoSpace};
 
 use super::{ExportStatus, SdfApp};
@@ -134,6 +135,23 @@ impl SdfApp {
         }
         if ctx.input(|i| i.modifiers.alt && i.key_pressed(egui::Key::C)) {
             self.pivot_offset = Vec3::ZERO;
+        }
+
+        // Tool switching shortcuts
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) && self.active_tool == ActiveTool::Sculpt {
+            self.active_tool = ActiveTool::Select;
+            self.sculpt_state = SculptState::Inactive;
+            self.last_sculpt_hit = None;
+            self.lazy_brush_pos = None;
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::S) && !i.modifiers.ctrl) && self.active_tool == ActiveTool::Select {
+            self.active_tool = ActiveTool::Sculpt;
+            // Auto-activate sculpt if a Sculpt node is selected
+            if let Some(sel) = self.node_graph_state.selected {
+                if self.scene.nodes.get(&sel).map_or(false, |n| matches!(n.data, NodeData::Sculpt { .. })) {
+                    self.sculpt_state = SculptState::new_active(sel);
+                }
+            }
         }
 
         // Sculpt brush mode shortcuts (when sculpt is active)
