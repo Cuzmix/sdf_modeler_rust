@@ -273,7 +273,7 @@ impl SdfApp {
             self.take_screenshot();
         }
         if action_export {
-            self.start_export(ctx);
+            self.show_export_dialog = true;
         }
         if action_undo {
             if let Some((restored_scene, restored_sel)) =
@@ -613,6 +613,63 @@ impl SdfApp {
                     });
                 });
             });
+    }
+
+    pub(super) fn show_export_dialog(&mut self, ctx: &egui::Context) {
+        if !self.show_export_dialog {
+            return;
+        }
+        let mut open = self.show_export_dialog;
+        let mut do_export = false;
+        let mut do_cancel = false;
+
+        egui::Window::new("Export Mesh")
+            .open(&mut open)
+            .resizable(false)
+            .collapsible(false)
+            .default_width(300.0)
+            .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+            .show(ctx, |ui| {
+                ui.heading("Export Settings");
+                ui.add_space(4.0);
+
+                // Resolution slider
+                let mut res_i32 = self.settings.export_resolution as i32;
+                ui.horizontal(|ui| {
+                    ui.label("Resolution:");
+                    ui.add(egui::Slider::new(&mut res_i32, 32..=512).suffix("^3"));
+                });
+                self.settings.export_resolution = res_i32 as u32;
+
+                let voxels = (self.settings.export_resolution as u64).pow(3);
+                ui.weak(format!("{} voxels", voxels));
+                ui.add_space(8.0);
+
+                // Info text
+                ui.label("Supported formats: OBJ, STL, PLY, glTF (.glb), USD (.usda)");
+                ui.weak("PLY, glTF, and USD include vertex colors.");
+                ui.add_space(8.0);
+
+                // Export button
+                let export_idle = matches!(self.export_status, ExportStatus::Idle);
+                ui.horizontal(|ui| {
+                    if ui.add_enabled(export_idle, egui::Button::new("Export...")).clicked() {
+                        do_export = true;
+                    }
+                    if ui.button("Cancel").clicked() {
+                        do_cancel = true;
+                    }
+                });
+            });
+
+        if !open || do_cancel {
+            self.show_export_dialog = false;
+        }
+        if do_export {
+            self.settings.save();
+            self.show_export_dialog = false;
+            self.start_export(ctx);
+        }
     }
 
     pub(super) fn show_toasts(&mut self, ctx: &egui::Context) {

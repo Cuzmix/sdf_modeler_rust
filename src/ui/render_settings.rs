@@ -227,20 +227,6 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
             }
         });
 
-    // --- Export ---
-    egui::CollapsingHeader::new("Export")
-        .default_open(false)
-        .show(ui, |ui| {
-            let mut res_i32 = settings.export_resolution as i32;
-            ui.horizontal(|ui| {
-                ui.label("Resolution:");
-                ui.add(egui::Slider::new(&mut res_i32, 32..=512).suffix("^3"));
-            });
-            settings.export_resolution = res_i32 as u32;
-            let voxels = (settings.export_resolution as u64).pow(3);
-            ui.weak(format!("{} voxels", voxels));
-        });
-
     let changed = settings.render != before;
     if changed {
         settings.save();

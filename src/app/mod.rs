@@ -201,6 +201,8 @@ pub struct SdfApp {
     pub(super) clipboard_node: Option<NodeId>,
     /// Drag state for scene tree reparenting.
     pub(super) scene_tree_drag: Option<NodeId>,
+    /// Show the export dialog window.
+    pub(super) show_export_dialog: bool,
 }
 
 impl SdfApp {
@@ -281,6 +283,7 @@ impl SdfApp {
             current_file_path: None,
             clipboard_node: None,
             scene_tree_drag: None,
+            show_export_dialog: false,
         }
     }
 }
@@ -321,6 +324,7 @@ impl eframe::App for SdfApp {
         self.show_menu_bar(ctx);
         self.show_status_bar(ctx);
         self.show_help_window(ctx);
+        self.show_export_dialog(ctx);
         self.show_debug_window(ctx);
         self.show_toasts(ctx);
 

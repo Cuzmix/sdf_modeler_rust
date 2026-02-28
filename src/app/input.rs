@@ -137,10 +137,10 @@ impl SdfApp {
             self.take_screenshot();
         }
 
-        // Export OBJ
+        // Export
         if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::E)) {
             if matches!(self.export_status, ExportStatus::Idle) {
-                self.start_export(ctx);
+                self.show_export_dialog = true;
             }
         }
 
