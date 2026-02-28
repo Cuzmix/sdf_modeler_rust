@@ -1,8 +1,15 @@
+#[cfg(feature = "egui_ui")]
 pub mod dev_settings;
+#[cfg(feature = "egui_ui")]
 pub mod dock;
+#[cfg(feature = "egui_ui")]
 pub mod gizmo;
+#[cfg(feature = "egui_ui")]
 pub mod node_graph;
+#[cfg(feature = "egui_ui")]
 pub mod properties;
+#[cfg(feature = "egui_ui")]
 pub mod render_settings;
+#[cfg(feature = "egui_ui")]
 pub mod scene_tree;
 pub mod viewport;

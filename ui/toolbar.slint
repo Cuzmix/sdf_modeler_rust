@@ -1,0 +1,66 @@
+// ui/toolbar.slint — Top toolbar with file/edit/add actions
+
+import { Button } from "std-widgets.slint";
+
+export component Toolbar inherits Rectangle {
+    height: 36px;
+    background: #2a2a35;
+
+    callback undo();
+    callback redo();
+    callback save();
+    callback open();
+    callback new-scene();
+    callback add-primitive(/* kind-index */ int);
+    callback add-operation(/* op-index */ int);
+    callback delete-selected();
+    callback focus-selected();
+
+    in property <bool> has-selection;
+
+    HorizontalLayout {
+        padding: 4px;
+        spacing: 4px;
+
+        // File group
+        Button { text: "New"; clicked => { root.new-scene(); } }
+        Button { text: "Open"; clicked => { root.open(); } }
+        Button { text: "Save"; clicked => { root.save(); } }
+
+        // Separator
+        Rectangle { width: 1px; background: #555; }
+
+        // Edit group
+        Button { text: "Undo"; clicked => { root.undo(); } }
+        Button { text: "Redo"; clicked => { root.redo(); } }
+
+        // Separator
+        Rectangle { width: 1px; background: #555; }
+
+        // Add primitives
+        Text { text: "Add:"; vertical-alignment: center; color: #aaa; font-size: 12px; }
+        Button { text: "Sphere"; clicked => { root.add-primitive(0); } }
+        Button { text: "Box"; clicked => { root.add-primitive(1); } }
+        Button { text: "Cyl"; clicked => { root.add-primitive(2); } }
+        Button { text: "Torus"; clicked => { root.add-primitive(3); } }
+        Button { text: "Cone"; clicked => { root.add-primitive(5); } }
+
+        // Separator
+        Rectangle { width: 1px; background: #555; }
+
+        // Add operations
+        Text { text: "Op:"; vertical-alignment: center; color: #aaa; font-size: 12px; }
+        Button { text: "Union"; clicked => { root.add-operation(0); } }
+        Button { text: "Sub"; clicked => { root.add-operation(2); } }
+        Button { text: "Int"; clicked => { root.add-operation(3); } }
+
+        // Separator
+        Rectangle { width: 1px; background: #555; }
+
+        Button { text: "Del"; enabled: root.has-selection; clicked => { root.delete-selected(); } }
+        Button { text: "Focus"; enabled: root.has-selection; clicked => { root.focus-selected(); } }
+
+        // Spacer
+        Rectangle { horizontal-stretch: 1; }
+    }
+}

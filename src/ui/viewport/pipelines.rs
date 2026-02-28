@@ -1,4 +1,4 @@
-use eframe::wgpu;
+use wgpu;
 
 use super::{ViewportResources, BLIT_SHADER_SRC};
 
@@ -19,7 +19,7 @@ impl ViewportResources {
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("SDF Pipeline Layout"),
             bind_group_layouts: &[camera_bgl, scene_bgl, voxel_tex_bgl],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
 
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -27,13 +27,13 @@ impl ViewportResources {
             layout: Some(&layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 buffers: &[],
                 compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: target_format,
                     blend: None,
@@ -47,7 +47,7 @@ impl ViewportResources {
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         })
     }
@@ -67,14 +67,14 @@ impl ViewportResources {
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Pick Pipeline Layout"),
             bind_group_layouts: &[camera_bgl, scene_bgl, pick_bgl],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
 
         device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("Pick Compute Pipeline"),
             layout: Some(&layout),
             module: &shader,
-            entry_point: "cs_pick",
+            entry_point: Some("cs_pick"),
             compilation_options: Default::default(),
             cache: None,
         })
@@ -148,14 +148,14 @@ impl ViewportResources {
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Brush Pipeline Layout"),
             bind_group_layouts: &[brush_bgl],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
 
         device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("Brush Compute Pipeline"),
             layout: Some(&layout),
             module: &shader,
-            entry_point: "cs_brush",
+            entry_point: Some("cs_brush"),
             compilation_options: Default::default(),
             cache: None,
         })
@@ -207,20 +207,20 @@ impl ViewportResources {
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Blit Pipeline Layout"),
             bind_group_layouts: &[blit_bgl],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Blit Pipeline"),
             layout: Some(&layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: "vs_blit",
+                entry_point: Some("vs_blit"),
                 buffers: &[],
                 compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "fs_blit",
+                entry_point: Some("fs_blit"),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: target_format,
                     blend: None,
@@ -234,7 +234,7 @@ impl ViewportResources {
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         })
     }

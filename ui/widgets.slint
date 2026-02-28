@@ -1,0 +1,173 @@
+// ui/widgets.slint — Reusable UI components for SDF Modeler
+
+import { Slider, LineEdit, Button } from "std-widgets.slint";
+
+// A horizontal labeled slider with value display
+export component LabeledSlider inherits HorizontalLayout {
+    in property <string> label;
+    in-out property <float> value;
+    in property <float> minimum: 0;
+    in property <float> maximum: 1;
+    callback changed(/* value */ float);
+
+    spacing: 4px;
+
+    Text {
+        text: root.label;
+        vertical-alignment: center;
+        width: 80px;
+        color: #c8c8d2;
+        font-size: 12px;
+    }
+    Slider {
+        horizontal-stretch: 1;
+        minimum: root.minimum;
+        maximum: root.maximum;
+        value <=> root.value;
+        changed(v) => { root.changed(v); }
+    }
+    Text {
+        text: Math.round(root.value * 100) / 100;
+        width: 45px;
+        vertical-alignment: center;
+        horizontal-alignment: right;
+        color: #999;
+        font-size: 11px;
+    }
+}
+
+// Three labeled LineEdit fields for editing an XYZ vector
+// Note: properties are vx/vy/vz (not x/y/z) to avoid shadowing built-in position properties
+export component Vec3Editor inherits VerticalLayout {
+    in property <string> label;
+    in property <float> vx;
+    in property <float> vy;
+    in property <float> vz;
+    callback value-changed(/* axis 0=x,1=y,2=z */ int, /* text */ string);
+
+    spacing: 2px;
+
+    Text {
+        text: root.label;
+        color: #aaa;
+        font-size: 12px;
+    }
+    HorizontalLayout {
+        spacing: 4px;
+        Text { text: "X"; width: 12px; vertical-alignment: center; color: #e66; font-size: 11px; }
+        LineEdit {
+            horizontal-stretch: 1;
+            text: Math.round(root.vx * 1000) / 1000;
+            accepted(text) => { root.value-changed(0, text); }
+        }
+        Text { text: "Y"; width: 12px; vertical-alignment: center; color: #6e6; font-size: 11px; }
+        LineEdit {
+            horizontal-stretch: 1;
+            text: Math.round(root.vy * 1000) / 1000;
+            accepted(text) => { root.value-changed(1, text); }
+        }
+        Text { text: "Z"; width: 12px; vertical-alignment: center; color: #66e; font-size: 11px; }
+        LineEdit {
+            horizontal-stretch: 1;
+            text: Math.round(root.vz * 1000) / 1000;
+            accepted(text) => { root.value-changed(2, text); }
+        }
+    }
+}
+
+// Simple RGB color picker: swatch + three sliders + preset buttons
+export component ColorPickerSimple inherits VerticalLayout {
+    in-out property <float> red;
+    in-out property <float> green;
+    in-out property <float> blue;
+    callback changed(/* r */ float, /* g */ float, /* b */ float);
+
+    spacing: 2px;
+
+    // Color swatch preview
+    Rectangle {
+        height: 20px;
+        border-radius: 3px;
+        background: Colors.rgb(root.red * 255, root.green * 255, root.blue * 255);
+    }
+
+    HorizontalLayout {
+        spacing: 4px;
+        Text { text: "R"; width: 12px; vertical-alignment: center; color: #e66; font-size: 11px; }
+        Slider {
+            horizontal-stretch: 1;
+            minimum: 0; maximum: 1;
+            value <=> root.red;
+            changed(v) => { root.changed(root.red, root.green, root.blue); }
+        }
+    }
+    HorizontalLayout {
+        spacing: 4px;
+        Text { text: "G"; width: 12px; vertical-alignment: center; color: #6e6; font-size: 11px; }
+        Slider {
+            horizontal-stretch: 1;
+            minimum: 0; maximum: 1;
+            value <=> root.green;
+            changed(v) => { root.changed(root.red, root.green, root.blue); }
+        }
+    }
+    HorizontalLayout {
+        spacing: 4px;
+        Text { text: "B"; width: 12px; vertical-alignment: center; color: #66e; font-size: 11px; }
+        Slider {
+            horizontal-stretch: 1;
+            minimum: 0; maximum: 1;
+            value <=> root.blue;
+            changed(v) => { root.changed(root.red, root.green, root.blue); }
+        }
+    }
+
+    // Preset buttons
+    HorizontalLayout {
+        spacing: 2px;
+        Button { text: "R"; max-width: 28px; clicked => { root.red=1; root.green=0.2; root.blue=0.2; root.changed(1,0.2,0.2); } }
+        Button { text: "G"; max-width: 28px; clicked => { root.red=0.2; root.green=0.8; root.blue=0.2; root.changed(0.2,0.8,0.2); } }
+        Button { text: "B"; max-width: 28px; clicked => { root.red=0.2; root.green=0.4; root.blue=1; root.changed(0.2,0.4,1); } }
+        Button { text: "Y"; max-width: 28px; clicked => { root.red=1; root.green=0.9; root.blue=0.2; root.changed(1,0.9,0.2); } }
+        Button { text: "O"; max-width: 28px; clicked => { root.red=1; root.green=0.5; root.blue=0.1; root.changed(1,0.5,0.1); } }
+        Button { text: "W"; max-width: 28px; clicked => { root.red=0.9; root.green=0.9; root.blue=0.9; root.changed(0.9,0.9,0.9); } }
+        Button { text: "Gr"; max-width: 28px; clicked => { root.red=0.5; root.green=0.5; root.blue=0.5; root.changed(0.5,0.5,0.5); } }
+        Button { text: "Tn"; max-width: 28px; clicked => { root.red=0.82; root.green=0.71; root.blue=0.55; root.changed(0.82,0.71,0.55); } }
+    }
+}
+
+// Collapsible section with a clickable header
+export component Section inherits VerticalLayout {
+    in property <string> title;
+    in-out property <bool> expanded: true;
+
+    spacing: 2px;
+
+    TouchArea {
+        height: 22px;
+        clicked => { root.expanded = !root.expanded; }
+        HorizontalLayout {
+            padding-left: 4px;
+            Text {
+                text: root.expanded ? "▾ " : "▸ ";
+                font-size: 12px;
+                color: #888;
+                vertical-alignment: center;
+                width: 16px;
+            }
+            Text {
+                text: root.title;
+                font-weight: 600;
+                font-size: 13px;
+                color: #ccc;
+                vertical-alignment: center;
+            }
+        }
+    }
+    VerticalLayout {
+        visible: root.expanded;
+        padding-left: 8px;
+        spacing: 4px;
+        @children
+    }
+}

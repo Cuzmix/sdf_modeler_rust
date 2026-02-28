@@ -15,7 +15,14 @@
       "Read(//c/Users/Manny/.cargo/registry/src/**)",
       "Bash(wc -l \"c:\\\\Users\\\\Manny\\\\Documents\\\\Code Projects\\\\Typscript\\\\sdf_modeler_rust\\\\src\"/**/*.rs)",
       "Read(//c/Users/Manny/Documents/Code/ Projects/Typscript/sdf_modeler_rust/src/graph/**)",
-      "Read(//c/Users/Manny/Documents/Code/ Projects/Typscript/sdf_modeler_rust/src/gpu/**)"
+      "Read(//c/Users/Manny/Documents/Code/ Projects/Typscript/sdf_modeler_rust/src/gpu/**)",
+      "WebFetch(domain:slint.dev)",
+      "WebFetch(domain:docs.slint.dev)",
+      "Bash(sort -t: -k3)",
+      "Read(//c/Users/Manny/Documents/**)",
+      "Bash(cargo search wgpu --limit 1)",
+      "Bash(cargo info wgpu)",
+      "Bash(git -C \"c:\\\\Users\\\\Manny\\\\Documents\\\\Code Projects\\\\Typscript\\\\sdf_modeler_rust\" log --all --full-history --source -- \"*.slint\")"
     ]
   }
 }

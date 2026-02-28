@@ -1,0 +1,232 @@
+// ui/properties.slint — Node properties editor panel
+
+import { ComboBox, Button, Slider, LineEdit, ScrollView } from "std-widgets.slint";
+import { SelectedNodeProps } from "types.slint";
+import { LabeledSlider, Vec3Editor, ColorPickerSimple, Section } from "widgets.slint";
+
+export component PropertiesPanel inherits VerticalLayout {
+    in property <SelectedNodeProps> props;
+    in property <[string]> primitive-types;
+    in property <[string]> csg-op-types;
+    in property <[string]> transform-types;
+    in property <[string]> modifier-types;
+
+    // Generic callbacks — Rust dispatches based on param ID
+    callback update-name(/* id */ int, /* name */ string);
+    callback update-kind(/* id */ int, /* kind-index */ int);
+    callback update-float(/* id */ int, /* param */ int, /* value */ float);
+    callback update-vec3(/* id */ int, /* param-group */ int, /* axis */ int, /* text */ string);
+    callback delete-node(/* id */ int);
+    callback swap-inputs(/* id */ int);
+
+    Text {
+        text: "Properties";
+        font-weight: 700;
+        font-size: 13px;
+        color: #ccc;
+        horizontal-alignment: center;
+    }
+    Rectangle { height: 1px; background: #444; }
+
+    ScrollView {
+        vertical-stretch: 1;
+        VerticalLayout {
+            padding: 8px;
+            spacing: 6px;
+
+            // Empty state
+            if props.node-type == 0: Text {
+                text: "No selection";
+                color: #666;
+                horizontal-alignment: center;
+            }
+
+            // Header
+            if props.node-type > 0: VerticalLayout {
+                spacing: 4px;
+                HorizontalLayout {
+                    spacing: 4px;
+                    Text { text: "Name:"; width: 42px; vertical-alignment: center; color: #999; font-size: 12px; }
+                    LineEdit {
+                        horizontal-stretch: 1;
+                        text: props.name;
+                        accepted(text) => { root.update-name(root.props.id, text); }
+                    }
+                }
+                Rectangle { height: 1px; background: #333; }
+            }
+
+            // === PRIMITIVE ===
+            if props.node-type == 1: VerticalLayout {
+                spacing: 6px;
+
+                ComboBox {
+                    model: root.primitive-types;
+                    current-index: root.props.primitive-kind;
+                    selected(text) => { root.update-kind(root.props.id, self.current-index); }
+                }
+
+                Section {
+                    title: "Transform";
+                    Vec3Editor {
+                        label: "Position";
+                        vx: root.props.pos-x; vy: root.props.pos-y; vz: root.props.pos-z;
+                        value-changed(axis, text) => { root.update-vec3(root.props.id, 0, axis, text); }
+                    }
+                    Vec3Editor {
+                        label: "Rotation (°)";
+                        vx: root.props.rot-x; vy: root.props.rot-y; vz: root.props.rot-z;
+                        value-changed(axis, text) => { root.update-vec3(root.props.id, 1, axis, text); }
+                    }
+                    Vec3Editor {
+                        label: "Scale";
+                        vx: root.props.scale-x; vy: root.props.scale-y; vz: root.props.scale-z;
+                        value-changed(axis, text) => { root.update-vec3(root.props.id, 2, axis, text); }
+                    }
+                }
+
+                Section {
+                    title: "Material";
+                    ColorPickerSimple {
+                        red: root.props.color-r; green: root.props.color-g; blue: root.props.color-b;
+                        changed(r, g, b) => {
+                            root.update-float(root.props.id, 10, r);
+                            root.update-float(root.props.id, 11, g);
+                            root.update-float(root.props.id, 12, b);
+                        }
+                    }
+                    LabeledSlider {
+                        label: "Roughness"; value: root.props.roughness; minimum: 0; maximum: 1;
+                        changed(v) => { root.update-float(root.props.id, 13, v); }
+                    }
+                    LabeledSlider {
+                        label: "Metallic"; value: root.props.metallic; minimum: 0; maximum: 1;
+                        changed(v) => { root.update-float(root.props.id, 14, v); }
+                    }
+                    LabeledSlider {
+                        label: "Fresnel"; value: root.props.fresnel; minimum: 0; maximum: 1;
+                        changed(v) => { root.update-float(root.props.id, 15, v); }
+                    }
+                    LabeledSlider {
+                        label: "Emissive"; value: root.props.emissive-intensity; minimum: 0; maximum: 5;
+                        changed(v) => { root.update-float(root.props.id, 19, v); }
+                    }
+                }
+
+                Button { text: "Delete Node"; clicked => { root.delete-node(root.props.id); } }
+            }
+
+            // === OPERATION ===
+            if props.node-type == 2: VerticalLayout {
+                spacing: 6px;
+
+                ComboBox {
+                    model: root.csg-op-types;
+                    current-index: root.props.csg-op;
+                    selected(text) => { root.update-kind(root.props.id, self.current-index); }
+                }
+                LabeledSlider {
+                    label: "Smooth K"; value: root.props.smooth-k; minimum: 0; maximum: 2;
+                    changed(v) => { root.update-float(root.props.id, 20, v); }
+                }
+
+                Rectangle { height: 1px; background: #333; }
+                Text { text: "Left: " + (root.props.has-left ? root.props.left-name : "(empty)"); color: #aaa; font-size: 12px; }
+                Text { text: "Right: " + (root.props.has-right ? root.props.right-name : "(empty)"); color: #aaa; font-size: 12px; }
+                if root.props.has-left && root.props.has-right: Button {
+                    text: "Swap Inputs";
+                    clicked => { root.swap-inputs(root.props.id); }
+                }
+                Button { text: "Delete Node"; clicked => { root.delete-node(root.props.id); } }
+            }
+
+            // === TRANSFORM ===
+            if props.node-type == 3: VerticalLayout {
+                spacing: 6px;
+
+                ComboBox {
+                    model: root.transform-types;
+                    current-index: root.props.transform-kind;
+                    selected(text) => { root.update-kind(root.props.id, self.current-index); }
+                }
+                Vec3Editor {
+                    label: root.props.transform-kind == 0 ? "Offset" :
+                           root.props.transform-kind == 1 ? "Rotation (°)" : "Scale";
+                    vx: root.props.value-x; vy: root.props.value-y; vz: root.props.value-z;
+                    value-changed(axis, text) => { root.update-vec3(root.props.id, 3, axis, text); }
+                }
+                Button { text: "Delete Node"; clicked => { root.delete-node(root.props.id); } }
+            }
+
+            // === MODIFIER ===
+            if props.node-type == 4: VerticalLayout {
+                spacing: 6px;
+
+                ComboBox {
+                    model: root.modifier-types;
+                    current-index: root.props.modifier-kind;
+                    selected(text) => { root.update-kind(root.props.id, self.current-index); }
+                }
+                Vec3Editor {
+                    label: "Value";
+                    vx: root.props.value-x; vy: root.props.value-y; vz: root.props.value-z;
+                    value-changed(axis, text) => { root.update-vec3(root.props.id, 4, axis, text); }
+                }
+                // FiniteRepeat gets extra count
+                if root.props.modifier-kind == 8: Vec3Editor {
+                    label: "Count";
+                    vx: root.props.extra-x; vy: root.props.extra-y; vz: root.props.extra-z;
+                    value-changed(axis, text) => { root.update-vec3(root.props.id, 5, axis, text); }
+                }
+                Button { text: "Delete Node"; clicked => { root.delete-node(root.props.id); } }
+            }
+
+            // === SCULPT (simplified — no brush settings) ===
+            if props.node-type == 5: VerticalLayout {
+                spacing: 6px;
+
+                Text { text: "Sculpt Modifier"; color: #b090e0; font-weight: 600; }
+
+                Section {
+                    title: "Transform";
+                    Vec3Editor {
+                        label: "Position";
+                        vx: root.props.pos-x; vy: root.props.pos-y; vz: root.props.pos-z;
+                        value-changed(axis, text) => { root.update-vec3(root.props.id, 0, axis, text); }
+                    }
+                    Vec3Editor {
+                        label: "Rotation (°)";
+                        vx: root.props.rot-x; vy: root.props.rot-y; vz: root.props.rot-z;
+                        value-changed(axis, text) => { root.update-vec3(root.props.id, 1, axis, text); }
+                    }
+                }
+
+                Section {
+                    title: "Material";
+                    ColorPickerSimple {
+                        red: root.props.color-r; green: root.props.color-g; blue: root.props.color-b;
+                        changed(r, g, b) => {
+                            root.update-float(root.props.id, 10, r);
+                            root.update-float(root.props.id, 11, g);
+                            root.update-float(root.props.id, 12, b);
+                        }
+                    }
+                    LabeledSlider {
+                        label: "Roughness"; value: root.props.roughness; minimum: 0; maximum: 1;
+                        changed(v) => { root.update-float(root.props.id, 13, v); }
+                    }
+                    LabeledSlider {
+                        label: "Metallic"; value: root.props.metallic; minimum: 0; maximum: 1;
+                        changed(v) => { root.update-float(root.props.id, 14, v); }
+                    }
+                    LabeledSlider {
+                        label: "Fresnel"; value: root.props.fresnel; minimum: 0; maximum: 1;
+                        changed(v) => { root.update-float(root.props.id, 15, v); }
+                    }
+                }
+
+                Button { text: "Delete Node"; clicked => { root.delete-node(root.props.id); } }
+            }
+        }
+    }
+}

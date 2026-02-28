@@ -1,14 +1,16 @@
 mod composite;
+#[cfg(feature = "egui_ui")]
 mod draw;
 mod gpu_ops;
 mod pipelines;
 mod textures;
 
 pub use composite::CompositeResources;
+#[cfg(feature = "egui_ui")]
 pub use draw::draw;
 
 use bytemuck::{Pod, Zeroable};
-use eframe::wgpu;
+use wgpu;
 
 use crate::gpu::buffers::SdfNodeGpu;
 use crate::gpu::camera::CameraUniform;
@@ -179,7 +181,7 @@ impl ViewportResources {
             label: Some("Voxel Sampler"),
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,

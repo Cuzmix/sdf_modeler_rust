@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use eframe::wgpu;
+use wgpu;
 
 use super::ViewportResources;
 
@@ -187,7 +187,7 @@ impl ViewportResources {
             label: Some("Comp Sampler"),
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
@@ -221,13 +221,13 @@ impl ViewportResources {
         let compute_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Comp Compute Layout"),
             bind_group_layouts: &[&self.camera_bgl, &self.scene_bgl, &self.voxel_tex_bgl, &compute_bgl],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
         let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("Comp Compute Pipeline"),
             layout: Some(&compute_layout),
             module: &compute_shader,
-            entry_point: "cs_composite",
+            entry_point: Some("cs_composite"),
             compilation_options: Default::default(),
             cache: None,
         });
@@ -252,20 +252,20 @@ impl ViewportResources {
         let render_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Comp Render Layout"),
             bind_group_layouts: &[&self.camera_bgl, &self.scene_bgl, &render_bgl],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Comp Render Pipeline"),
             layout: Some(&render_layout),
             vertex: wgpu::VertexState {
                 module: &render_shader,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 buffers: &[],
                 compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &render_shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: self.target_format,
                     blend: None,
@@ -279,7 +279,7 @@ impl ViewportResources {
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 

@@ -1,0 +1,102 @@
+// ui/types.slint — Shared data structures (no circular imports)
+
+export struct ViewportPointerEvent {
+    x: float,
+    y: float,
+    button: int,   // 0=left, 1=right, 2=middle
+    pressed: bool,
+}
+
+export struct ViewportScrollEvent {
+    delta-x: float,
+    delta-y: float,
+}
+
+export struct SceneNodeInfo {
+    id: int,
+    name: string,
+    node-type: string,     // "Primitive", "Operation", "Transform", "Modifier", "Sculpt"
+    badge: string,         // "[Sph]", "[Uni]", etc.
+    depth: int,
+    is-selected: bool,
+    is-hidden: bool,
+    has-children: bool,
+}
+
+export struct SelectedNodeProps {
+    id: int,
+    name: string,
+    node-type: int,        // 0=none, 1=primitive, 2=operation, 3=transform, 4=modifier, 5=sculpt
+    // Primitive
+    primitive-kind: int,
+    // Operation
+    csg-op: int,
+    smooth-k: float,
+    left-name: string,
+    right-name: string,
+    has-left: bool,
+    has-right: bool,
+    // Transform
+    transform-kind: int,
+    // Modifier
+    modifier-kind: int,
+    // Common geometry (Primitive+Sculpt)
+    pos-x: float, pos-y: float, pos-z: float,
+    rot-x: float, rot-y: float, rot-z: float,
+    scale-x: float, scale-y: float, scale-z: float,
+    // Material (Primitive+Sculpt)
+    color-r: float, color-g: float, color-b: float,
+    roughness: float, metallic: float, fresnel: float,
+    emissive-r: float, emissive-g: float, emissive-b: float,
+    emissive-intensity: float,
+    // Transform/Modifier value + extra
+    value-x: float, value-y: float, value-z: float,
+    extra-x: float, extra-y: float, extra-z: float,
+    // Scale labels
+    scale-label-x: string, scale-label-y: string, scale-label-z: string,
+    scale-count: int,
+}
+
+export struct RenderSettingsData {
+    // Shadows
+    shadows-enabled: bool,
+    shadow-steps: float,
+    shadow-penumbra-k: float,
+    shadow-bias: float,
+    shadow-mint: float,
+    shadow-maxt: float,
+    // AO
+    ao-enabled: bool,
+    ao-samples: float,
+    ao-step: float,
+    ao-decay: float,
+    ao-intensity: float,
+    // Raymarching
+    march-max-steps: float,
+    march-epsilon: float,
+    march-step-multiplier: float,
+    march-max-distance: float,
+    // Lighting
+    key-light-dir-x: float, key-light-dir-y: float, key-light-dir-z: float,
+    key-diffuse: float,
+    key-spec-power: float,
+    key-spec-intensity: float,
+    fill-light-dir-x: float, fill-light-dir-y: float, fill-light-dir-z: float,
+    fill-intensity: float,
+    ambient: float,
+    // Sky
+    sky-horizon-r: float, sky-horizon-g: float, sky-horizon-b: float,
+    sky-zenith-r: float, sky-zenith-g: float, sky-zenith-b: float,
+    // Fog
+    fog-enabled: bool,
+    fog-density: float,
+    fog-color-r: float, fog-color-g: float, fog-color-b: float,
+    // Gamma
+    gamma: float,
+    tonemapping-aces: bool,
+    // Outline
+    outline-color-r: float, outline-color-g: float, outline-color-b: float,
+    outline-thickness: float,
+    // Viewport
+    show-grid: bool,
+}

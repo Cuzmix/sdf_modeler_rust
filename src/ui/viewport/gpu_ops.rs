@@ -1,4 +1,4 @@
-use eframe::wgpu;
+use wgpu;
 
 use crate::gpu::buffers::SdfNodeGpu;
 use crate::gpu::camera::CameraUniform;
@@ -82,7 +82,7 @@ impl ViewportResources {
         pending: &PendingPick,
     ) -> Option<PickResult> {
         let rx = self.submit_pick(device, queue, pending);
-        device.poll(wgpu::Maintain::Wait);
+        let _ = device.poll(wgpu::PollType::wait_indefinitely());
         Self::read_pick_from_receiver(&self.pick_staging_buffer, rx)
     }
 
@@ -265,6 +265,7 @@ impl ViewportResources {
                 label: Some("Screenshot Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &view,
+                    depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
@@ -274,6 +275,7 @@ impl ViewportResources {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
             pass.set_pipeline(&self.pipeline);
             pass.set_bind_group(0, &self.camera_bind_group, &[]);
@@ -284,15 +286,15 @@ impl ViewportResources {
 
         // Copy texture to staging buffer
         encoder.copy_texture_to_buffer(
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 texture: &texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            wgpu::ImageCopyBuffer {
+            wgpu::TexelCopyBufferInfo {
                 buffer: &staging,
-                layout: wgpu::ImageDataLayout {
+                layout: wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(padded_row),
                     rows_per_image: Some(height),
@@ -309,7 +311,7 @@ impl ViewportResources {
         buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
             let _ = tx.send(result);
         });
-        device.poll(wgpu::Maintain::Wait);
+        let _ = device.poll(wgpu::PollType::wait_indefinitely());
         let _ = rx.recv();
 
         let data = buffer_slice.get_mapped_range();

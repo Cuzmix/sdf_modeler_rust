@@ -1,4 +1,11 @@
+#[cfg(feature = "egui_ui")]
 mod app;
+#[cfg(all(not(feature = "egui_ui"), not(feature = "slint_ui")))]
+mod app_core;
+#[cfg(feature = "slint_ui")]
+mod app_slint;
+#[cfg(feature = "slint_ui")]
+mod app_slint_sync;
 mod compat;
 mod export;
 mod gpu;
@@ -8,9 +15,51 @@ mod sculpt;
 mod settings;
 mod ui;
 
-// ── Native entry point ──────────────────────────────────────────────────────
+// ── Native entry point (Slint + wgpu 28) ─────────────────────────────────
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "slint_ui"))]
+pub fn run_native() {
+    env_logger::init();
+    log::info!("SDF Modeler — Slint + wgpu 28");
+
+    let settings = settings::Settings::load();
+    let file_path = std::env::args().nth(1).map(std::path::PathBuf::from);
+    let scene = graph::scene::Scene::new();
+    let camera = gpu::camera::Camera::default();
+
+    app_slint::run(settings, scene, camera, file_path);
+}
+
+// ── Native entry point (winit + wgpu direct bootstrap, no UI framework) ──
+
+#[cfg(all(not(target_arch = "wasm32"), not(feature = "egui_ui"), not(feature = "slint_ui")))]
+pub fn run_native() {
+    use winit::event_loop::{ControlFlow, EventLoop};
+
+    env_logger::init();
+    log::info!("SDF Modeler — winit + wgpu 28");
+
+    let settings = settings::Settings::load();
+
+    // Parse CLI args for optional project file
+    let file_path = std::env::args().nth(1).map(std::path::PathBuf::from);
+
+    let scene = graph::scene::Scene::new();
+    let camera = gpu::camera::Camera::default();
+
+    let event_loop = EventLoop::new().expect("Failed to create event loop");
+    event_loop.set_control_flow(ControlFlow::Wait);
+
+    let mut app = app_core::AppState::PreInit {
+        settings,
+        scene,
+        camera,
+        file_path,
+    };
+    event_loop.run_app(&mut app).expect("Event loop error");
+}
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "egui_ui"))]
 pub fn run_native() -> eframe::Result<()> {
     use std::sync::Arc;
     use eframe::egui;
@@ -69,13 +118,13 @@ pub fn run_native() -> eframe::Result<()> {
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", feature = "egui_ui"))]
 #[wasm_bindgen]
 pub struct WebHandle {
     runner: eframe::WebRunner,
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", feature = "egui_ui"))]
 #[wasm_bindgen]
 impl WebHandle {
     #[wasm_bindgen(constructor)]

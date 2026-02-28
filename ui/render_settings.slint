@@ -1,0 +1,216 @@
+// ui/render_settings.slint — Render settings panel
+
+import { Slider, CheckBox, Button, ScrollView } from "std-widgets.slint";
+import { RenderSettingsData } from "types.slint";
+import { LabeledSlider, Vec3Editor, ColorPickerSimple, Section } from "widgets.slint";
+
+export component RenderSettingsPanel inherits VerticalLayout {
+    in property <RenderSettingsData> settings;
+
+    callback update-bool(/* param */ int, /* value */ bool);
+    callback update-float(/* param */ int, /* value */ float);
+    callback update-int(/* param */ int, /* value */ int);
+    callback apply-preset(/* 0=Fast,1=Balanced,2=Quality */ int);
+    callback reset-section(/* section */ int);
+    callback reset-all();
+
+    Text {
+        text: "Render Settings";
+        font-weight: 700;
+        font-size: 13px;
+        color: #ccc;
+        horizontal-alignment: center;
+    }
+    Rectangle { height: 1px; background: #444; }
+
+    ScrollView {
+        vertical-stretch: 1;
+        VerticalLayout {
+            padding: 8px;
+            spacing: 6px;
+
+            // Presets
+            HorizontalLayout {
+                spacing: 4px;
+                Button { text: "Reset"; clicked => { root.reset-all(); } }
+                Button { text: "Fast"; clicked => { root.apply-preset(0); } }
+                Button { text: "Balanced"; clicked => { root.apply-preset(1); } }
+                Button { text: "Quality"; clicked => { root.apply-preset(2); } }
+            }
+
+            // Shadows
+            Section {
+                title: "Shadows";
+                expanded: false;
+                CheckBox {
+                    text: "Enable";
+                    checked: root.settings.shadows-enabled;
+                    toggled => { root.update-bool(0, self.checked); }
+                }
+                if root.settings.shadows-enabled: VerticalLayout {
+                    spacing: 4px;
+                    LabeledSlider { label: "Steps"; value: root.settings.shadow-steps; minimum: 8; maximum: 128;
+                        changed(v) => { root.update-int(1, Math.round(v)); } }
+                    LabeledSlider { label: "Penumbra"; value: root.settings.shadow-penumbra-k; minimum: 1; maximum: 32;
+                        changed(v) => { root.update-float(2, v); } }
+                    LabeledSlider { label: "Bias"; value: root.settings.shadow-bias; minimum: 0.001; maximum: 0.2;
+                        changed(v) => { root.update-float(3, v); } }
+                    LabeledSlider { label: "Min T"; value: root.settings.shadow-mint; minimum: 0.001; maximum: 1;
+                        changed(v) => { root.update-float(4, v); } }
+                    LabeledSlider { label: "Max T"; value: root.settings.shadow-maxt; minimum: 5; maximum: 100;
+                        changed(v) => { root.update-float(5, v); } }
+                }
+                Button { text: "Reset"; clicked => { root.reset-section(0); } }
+            }
+
+            // AO
+            Section {
+                title: "Ambient Occlusion";
+                expanded: false;
+                CheckBox {
+                    text: "Enable";
+                    checked: root.settings.ao-enabled;
+                    toggled => { root.update-bool(10, self.checked); }
+                }
+                if root.settings.ao-enabled: VerticalLayout {
+                    spacing: 4px;
+                    LabeledSlider { label: "Samples"; value: root.settings.ao-samples; minimum: 1; maximum: 16;
+                        changed(v) => { root.update-int(11, Math.round(v)); } }
+                    LabeledSlider { label: "Step"; value: root.settings.ao-step; minimum: 0.01; maximum: 0.5;
+                        changed(v) => { root.update-float(12, v); } }
+                    LabeledSlider { label: "Decay"; value: root.settings.ao-decay; minimum: 0.5; maximum: 1;
+                        changed(v) => { root.update-float(13, v); } }
+                    LabeledSlider { label: "Intensity"; value: root.settings.ao-intensity; minimum: 0.5; maximum: 10;
+                        changed(v) => { root.update-float(14, v); } }
+                }
+                Button { text: "Reset"; clicked => { root.reset-section(1); } }
+            }
+
+            // Raymarching
+            Section {
+                title: "Raymarching";
+                expanded: false;
+                LabeledSlider { label: "Max Steps"; value: root.settings.march-max-steps; minimum: 32; maximum: 512;
+                    changed(v) => { root.update-int(20, Math.round(v)); } }
+                LabeledSlider { label: "Epsilon"; value: root.settings.march-epsilon; minimum: 0.0001; maximum: 0.01;
+                    changed(v) => { root.update-float(21, v); } }
+                LabeledSlider { label: "Step Mult"; value: root.settings.march-step-multiplier; minimum: 0.5; maximum: 1;
+                    changed(v) => { root.update-float(22, v); } }
+                LabeledSlider { label: "Max Dist"; value: root.settings.march-max-distance; minimum: 10; maximum: 200;
+                    changed(v) => { root.update-float(23, v); } }
+                Button { text: "Reset"; clicked => { root.reset-section(2); } }
+            }
+
+            // Lighting
+            Section {
+                title: "Lighting";
+                expanded: false;
+                Vec3Editor { label: "Key Light Dir";
+                    vx: root.settings.key-light-dir-x; vy: root.settings.key-light-dir-y; vz: root.settings.key-light-dir-z;
+                    value-changed(axis, text) => {
+                        if axis == 0 { root.update-float(30, text.to-float()); }
+                        if axis == 1 { root.update-float(31, text.to-float()); }
+                        if axis == 2 { root.update-float(32, text.to-float()); }
+                    }
+                }
+                LabeledSlider { label: "Diffuse"; value: root.settings.key-diffuse; minimum: 0; maximum: 2;
+                    changed(v) => { root.update-float(33, v); } }
+                LabeledSlider { label: "Spec Power"; value: root.settings.key-spec-power; minimum: 1; maximum: 128;
+                    changed(v) => { root.update-float(34, v); } }
+                LabeledSlider { label: "Spec Int"; value: root.settings.key-spec-intensity; minimum: 0; maximum: 2;
+                    changed(v) => { root.update-float(35, v); } }
+                Vec3Editor { label: "Fill Light Dir";
+                    vx: root.settings.fill-light-dir-x; vy: root.settings.fill-light-dir-y; vz: root.settings.fill-light-dir-z;
+                    value-changed(axis, text) => {
+                        if axis == 0 { root.update-float(36, text.to-float()); }
+                        if axis == 1 { root.update-float(37, text.to-float()); }
+                        if axis == 2 { root.update-float(38, text.to-float()); }
+                    }
+                }
+                LabeledSlider { label: "Fill Int"; value: root.settings.fill-intensity; minimum: 0; maximum: 1;
+                    changed(v) => { root.update-float(39, v); } }
+                LabeledSlider { label: "Ambient"; value: root.settings.ambient; minimum: 0; maximum: 0.5;
+                    changed(v) => { root.update-float(40, v); } }
+                Button { text: "Reset"; clicked => { root.reset-section(3); } }
+            }
+
+            // Sky
+            Section {
+                title: "Sky / Background";
+                expanded: false;
+                CheckBox {
+                    text: "Show Grid";
+                    checked: root.settings.show-grid;
+                    toggled => { root.update-bool(50, self.checked); }
+                }
+                Text { text: "Horizon Color"; color: #999; font-size: 11px; }
+                ColorPickerSimple {
+                    red: root.settings.sky-horizon-r; green: root.settings.sky-horizon-g; blue: root.settings.sky-horizon-b;
+                    changed(r, g, b) => {
+                        root.update-float(51, r); root.update-float(52, g); root.update-float(53, b);
+                    }
+                }
+                Text { text: "Zenith Color"; color: #999; font-size: 11px; }
+                ColorPickerSimple {
+                    red: root.settings.sky-zenith-r; green: root.settings.sky-zenith-g; blue: root.settings.sky-zenith-b;
+                    changed(r, g, b) => {
+                        root.update-float(54, r); root.update-float(55, g); root.update-float(56, b);
+                    }
+                }
+                Button { text: "Reset"; clicked => { root.reset-section(4); } }
+            }
+
+            // Fog
+            Section {
+                title: "Fog";
+                expanded: false;
+                CheckBox {
+                    text: "Enable";
+                    checked: root.settings.fog-enabled;
+                    toggled => { root.update-bool(60, self.checked); }
+                }
+                if root.settings.fog-enabled: VerticalLayout {
+                    spacing: 4px;
+                    LabeledSlider { label: "Density"; value: root.settings.fog-density; minimum: 0.001; maximum: 0.2;
+                        changed(v) => { root.update-float(61, v); } }
+                    ColorPickerSimple {
+                        red: root.settings.fog-color-r; green: root.settings.fog-color-g; blue: root.settings.fog-color-b;
+                        changed(r, g, b) => {
+                            root.update-float(62, r); root.update-float(63, g); root.update-float(64, b);
+                        }
+                    }
+                }
+                Button { text: "Reset"; clicked => { root.reset-section(5); } }
+            }
+
+            // Gamma
+            Section {
+                title: "Gamma / Tone";
+                expanded: false;
+                LabeledSlider { label: "Gamma"; value: root.settings.gamma; minimum: 1; maximum: 3;
+                    changed(v) => { root.update-float(70, v); } }
+                CheckBox {
+                    text: "ACES Tonemapping";
+                    checked: root.settings.tonemapping-aces;
+                    toggled => { root.update-bool(71, self.checked); }
+                }
+                Button { text: "Reset"; clicked => { root.reset-section(6); } }
+            }
+
+            // Selection Outline
+            Section {
+                title: "Selection Outline";
+                expanded: false;
+                ColorPickerSimple {
+                    red: root.settings.outline-color-r; green: root.settings.outline-color-g; blue: root.settings.outline-color-b;
+                    changed(r, g, b) => {
+                        root.update-float(80, r); root.update-float(81, g); root.update-float(82, b);
+                    }
+                }
+                LabeledSlider { label: "Thickness"; value: root.settings.outline-thickness; minimum: 1; maximum: 5;
+                    changed(v) => { root.update-float(83, v); } }
+                Button { text: "Reset"; clicked => { root.reset-section(7); } }
+            }
+        }
+    }
+}

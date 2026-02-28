@@ -1,0 +1,210 @@
+// ui/main.slint — Phase 3: Full layout with toolbar, viewport, scene tree, properties, render settings
+
+import { Toolbar } from "toolbar.slint";
+import { SceneTreePanel } from "scene_tree.slint";
+import { PropertiesPanel } from "properties.slint";
+import { RenderSettingsPanel } from "render_settings.slint";
+import { ViewportPointerEvent, ViewportScrollEvent, SceneNodeInfo, SelectedNodeProps, RenderSettingsData } from "types.slint";
+
+// Re-export structs so Rust sees them via include_modules!
+export { ViewportPointerEvent, ViewportScrollEvent, SceneNodeInfo, SelectedNodeProps, RenderSettingsData }
+
+// --- Main window ---
+
+export component MainWindow inherits Window {
+    title: "SDF Modeler";
+    preferred-width: 1280px;
+    preferred-height: 800px;
+    background: #1a1a22;
+
+    // --- Viewport (Phase 2, preserved) ---
+    in-out property <image> viewport-image;
+    out property <float> viewport-width: viewport-area.width / 1px;
+    out property <float> viewport-height: viewport-area.height / 1px;
+
+    // Phase 2 callbacks
+    callback viewport-pointer-event(ViewportPointerEvent);
+    callback viewport-mouse-moved(/* x */ float, /* y */ float, /* any-pressed */ bool);
+    callback viewport-scroll(ViewportScrollEvent);
+    callback viewport-key-pressed(/* key */ string, /* ctrl */ bool, /* shift */ bool);
+
+    // --- Phase 3: Data (set from Rust) ---
+    in property <[SceneNodeInfo]> scene-tree-nodes;
+    in property <SelectedNodeProps> selected-props;
+    in property <RenderSettingsData> render-settings;
+    in property <bool> has-selection;
+
+    // Static dropdown lists (set once at startup)
+    in property <[string]> primitive-types;
+    in property <[string]> csg-op-types;
+    in property <[string]> transform-types;
+    in property <[string]> modifier-types;
+
+    // --- Phase 3: Callbacks (Slint -> Rust) ---
+    // Toolbar
+    callback toolbar-undo();
+    callback toolbar-redo();
+    callback toolbar-save();
+    callback toolbar-open();
+    callback toolbar-new();
+    callback add-primitive(int);
+    callback add-operation(int);
+    // Scene tree
+    callback tree-select-node(int);
+    callback tree-toggle-visibility(int);
+    // Properties
+    callback props-update-name(int, string);
+    callback props-update-kind(int, int);
+    callback props-update-float(int, int, float);
+    callback props-update-vec3(int, int, int, string);
+    callback props-delete-node(int);
+    callback props-swap-inputs(int);
+    // Render settings
+    callback render-update-bool(int, bool);
+    callback render-update-float(int, float);
+    callback render-update-int(int, int);
+    callback render-apply-preset(int);
+    callback render-reset-section(int);
+    callback render-reset-all();
+
+    // --- Layout ---
+    VerticalLayout {
+        // Toolbar
+        Toolbar {
+            has-selection: root.has-selection;
+            undo => { root.toolbar-undo(); }
+            redo => { root.toolbar-redo(); }
+            save => { root.toolbar-save(); }
+            open => { root.toolbar-open(); }
+            new-scene => { root.toolbar-new(); }
+            add-primitive(idx) => { root.add-primitive(idx); }
+            add-operation(idx) => { root.add-operation(idx); }
+            delete-selected => { root.props-delete-node(root.selected-props.id); }
+            focus-selected => { /* handled via key F */ }
+        }
+
+        // Main content
+        HorizontalLayout {
+            // Viewport (left, stretches to fill)
+            viewport-area := Rectangle {
+                horizontal-stretch: 3;
+
+                Image {
+                    source: root.viewport-image;
+                    width: 100%;
+                    height: 100%;
+                    image-fit: fill;
+                }
+
+                viewport-touch := TouchArea {
+                    width: 100%;
+                    height: 100%;
+
+                    pointer-event(event) => {
+                        if event.kind == PointerEventKind.down {
+                            root.viewport-pointer-event({
+                                x: self.mouse-x / 1px,
+                                y: self.mouse-y / 1px,
+                                button: event.button == PointerEventButton.left ? 0 :
+                                        event.button == PointerEventButton.right ? 1 : 2,
+                                pressed: true,
+                            });
+                        }
+                        if event.kind == PointerEventKind.up {
+                            root.viewport-pointer-event({
+                                x: self.mouse-x / 1px,
+                                y: self.mouse-y / 1px,
+                                button: event.button == PointerEventButton.left ? 0 :
+                                        event.button == PointerEventButton.right ? 1 : 2,
+                                pressed: false,
+                            });
+                        }
+                    }
+
+                    moved => {
+                        root.viewport-mouse-moved(
+                            self.mouse-x / 1px,
+                            self.mouse-y / 1px,
+                            self.pressed,
+                        );
+                    }
+
+                    scroll-event(event) => {
+                        root.viewport-scroll({
+                            delta-x: event.delta-x / 1px,
+                            delta-y: event.delta-y / 1px,
+                        });
+                        return accept;
+                    }
+                }
+
+                key-scope := FocusScope {
+                    width: 0px;
+                    height: 0px;
+
+                    key-pressed(event) => {
+                        root.viewport-key-pressed(
+                            event.text,
+                            event.modifiers.control,
+                            event.modifiers.shift,
+                        );
+                        return accept;
+                    }
+                }
+            }
+
+            // Right panel
+            Rectangle {
+                width: 300px;
+                background: #222230;
+
+                VerticalLayout {
+                    // Scene tree (top)
+                    SceneTreePanel {
+                        vertical-stretch: 1;
+                        nodes: root.scene-tree-nodes;
+                        node-selected(id) => { root.tree-select-node(id); }
+                        toggle-visibility(id) => { root.tree-toggle-visibility(id); }
+                    }
+
+                    Rectangle { height: 1px; background: #444; }
+
+                    // Properties (middle)
+                    PropertiesPanel {
+                        vertical-stretch: 2;
+                        props: root.selected-props;
+                        primitive-types: root.primitive-types;
+                        csg-op-types: root.csg-op-types;
+                        transform-types: root.transform-types;
+                        modifier-types: root.modifier-types;
+                        update-name(id, name) => { root.props-update-name(id, name); }
+                        update-kind(id, kind) => { root.props-update-kind(id, kind); }
+                        update-float(id, param, val) => { root.props-update-float(id, param, val); }
+                        update-vec3(id, param, axis, text) => { root.props-update-vec3(id, param, axis, text); }
+                        delete-node(id) => { root.props-delete-node(id); }
+                        swap-inputs(id) => { root.props-swap-inputs(id); }
+                    }
+
+                    Rectangle { height: 1px; background: #444; }
+
+                    // Render settings (bottom)
+                    RenderSettingsPanel {
+                        vertical-stretch: 1;
+                        settings: root.render-settings;
+                        update-bool(p, v) => { root.render-update-bool(p, v); }
+                        update-float(p, v) => { root.render-update-float(p, v); }
+                        update-int(p, v) => { root.render-update-int(p, v); }
+                        apply-preset(p) => { root.render-apply-preset(p); }
+                        reset-section(s) => { root.render-reset-section(s); }
+                        reset-all => { root.render-reset-all(); }
+                    }
+                }
+            }
+        }
+    }
+
+    // Auto-focus the key scope on startup
+    init => {
+        key-scope.focus();
+    }
+}

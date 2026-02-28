@@ -1,0 +1,71 @@
+// ui/scene_tree.slint — Scene tree panel (flat list with depth indentation)
+
+import { ScrollView, CheckBox } from "std-widgets.slint";
+import { SceneNodeInfo } from "types.slint";
+
+component SceneTreeRow inherits Rectangle {
+    in property <SceneNodeInfo> info;
+    callback selected(/* node id */ int);
+    callback toggle-visibility(/* node id */ int);
+
+    height: 24px;
+    background: info.is-selected ? #3a3a55 : transparent;
+
+    HorizontalLayout {
+        padding-left: info.depth * 16px;
+        spacing: 4px;
+
+        // Expand indicator (visual only)
+        Text {
+            text: info.has-children ? "▸" : " ";
+            width: 14px;
+            font-size: 10px;
+            vertical-alignment: center;
+            color: #666;
+        }
+
+        // Visibility checkbox
+        CheckBox {
+            checked: !info.is-hidden;
+            toggled => { root.toggle-visibility(root.info.id); }
+        }
+
+        // Badge + Name (clickable)
+        TouchArea {
+            horizontal-stretch: 1;
+            clicked => { root.selected(root.info.id); }
+            Text {
+                text: info.badge + " " + info.name;
+                color: info.is-hidden ? #555 : (info.is-selected ? #ffc83c : #c8c8d2);
+                font-size: 12px;
+                vertical-alignment: center;
+            }
+        }
+    }
+}
+
+export component SceneTreePanel inherits VerticalLayout {
+    in property <[SceneNodeInfo]> nodes;
+    callback node-selected(/* node id */ int);
+    callback toggle-visibility(/* node id */ int);
+
+    Text {
+        text: "Scene Tree";
+        font-weight: 700;
+        font-size: 13px;
+        color: #ccc;
+        horizontal-alignment: center;
+    }
+    Rectangle { height: 1px; background: #444; }
+
+    ScrollView {
+        vertical-stretch: 1;
+        VerticalLayout {
+            for node in root.nodes: SceneTreeRow {
+                info: node;
+                selected(id) => { root.node-selected(id); }
+                toggle-visibility(id) => { root.toggle-visibility(id); }
+            }
+        }
+    }
+}
