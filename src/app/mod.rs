@@ -240,6 +240,8 @@ impl SdfApp {
                 pending_pick: None,
                 last_sculpt_hit: None,
                 lazy_brush_pos: None,
+                sculpt_ctrl_held: false,
+                sculpt_shift_held: false,
             },
             ui: UiState {
                 dock_state: dock::create_dock_state(),
@@ -280,6 +282,9 @@ impl eframe::App for SdfApp {
         let dt = now - self.last_time;
         self.last_time = now;
         self.perf.timings.push_frame(dt);
+
+        // Tick camera view transition animation
+        let camera_animating = self.doc.camera.tick_transition(dt);
 
         self.doc.history
             .begin_frame(&self.doc.scene, self.ui.node_graph_state.selected);
@@ -355,6 +360,8 @@ impl eframe::App for SdfApp {
         };
 
         let mut pending_pick = None;
+        let mut sculpt_ctrl_held = false;
+        let mut sculpt_shift_held = false;
         let sculpt_count = self.gpu.sculpt_tex_indices.len();
         let fps_info = if self.settings.show_fps_overlay {
             Some((self.perf.timings.avg_fps, self.perf.timings.avg_frame_ms))
@@ -378,6 +385,8 @@ impl eframe::App for SdfApp {
                 pending_pick: &mut pending_pick,
                 sculpt_count,
                 fps_info,
+                sculpt_ctrl_held: &mut sculpt_ctrl_held,
+                sculpt_shift_held: &mut sculpt_shift_held,
             },
             scene_tree: SceneTreeContext {
                 renaming_node: &mut self.ui.renaming_node,
@@ -413,6 +422,8 @@ impl eframe::App for SdfApp {
 
         if pending_pick.is_some() {
             self.async_state.pending_pick = pending_pick;
+            self.async_state.sculpt_ctrl_held = sculpt_ctrl_held;
+            self.async_state.sculpt_shift_held = sculpt_shift_held;
         }
 
         // Sculpt mode: submit async pick for next frame's poll_sculpt_pick
@@ -492,6 +503,7 @@ impl eframe::App for SdfApp {
 
         // Only repaint when something needs updating (saves GPU when idle)
         let needs_repaint = is_dragging
+            || camera_animating
             || self.doc.sculpt_state.is_active()
             || !matches!(self.async_state.bake_status, BakeStatus::Idle)
             || !matches!(self.async_state.export_status, ExportStatus::Idle)

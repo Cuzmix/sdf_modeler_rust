@@ -42,6 +42,10 @@ pub enum Action {
     CameraFront,
     CameraTop,
     CameraRight,
+    CameraBack,
+    CameraLeft,
+    CameraBottom,
+    ToggleOrtho,
 
     // ── Tools ────────────────────────────────────────────────────────
     SetTool(ActiveTool),

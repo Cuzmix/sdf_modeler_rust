@@ -136,6 +136,23 @@ fn brush_cursor_color(mode: &BrushMode) -> egui::Color32 {
     }
 }
 
+/// Compute the effective brush mode given modifier key state.
+/// Shift → Smooth (overrides everything), Ctrl → invert (Add↔Carve, Inflate→Carve).
+fn effective_brush_mode(base: &BrushMode, ctrl: bool, shift: bool) -> BrushMode {
+    if shift {
+        return BrushMode::Smooth;
+    }
+    if ctrl {
+        return match base {
+            BrushMode::Add => BrushMode::Carve,
+            BrushMode::Carve => BrushMode::Add,
+            BrushMode::Inflate => BrushMode::Carve,
+            other => other.clone(),
+        };
+    }
+    base.clone()
+}
+
 /// Draw a semi-transparent symmetry plane overlay at the mirror axis.
 fn draw_symmetry_plane(painter: &egui::Painter, camera: &Camera, rect: egui::Rect, axis: u8) {
     let aspect = rect.width() / rect.height();
@@ -196,6 +213,9 @@ fn draw_symmetry_plane(painter: &egui::Painter, camera: &Camera, rect: egui::Rec
 
 pub struct ViewportOutput {
     pub pending_pick: Option<PendingPick>,
+    /// Modifier keys at time of sculpt drag (Ctrl = invert, Shift = smooth).
+    pub sculpt_ctrl_held: bool,
+    pub sculpt_shift_held: bool,
 }
 
 pub fn draw(
@@ -217,6 +237,8 @@ pub fn draw(
 ) -> ViewportOutput {
     let mut output = ViewportOutput {
         pending_pick: None,
+        sculpt_ctrl_held: false,
+        sculpt_shift_held: false,
     };
     let rect = ui.available_rect_before_wrap();
     let response = ui.allocate_rect(rect, egui::Sense::click_and_drag());
@@ -323,6 +345,10 @@ pub fn draw(
                         mouse_pos: mouse_px,
                         camera_uniform: camera.to_uniform(viewport, time, 0.0, false, scene_bounds, -1.0),
                     });
+                    // Capture modifier keys for Ctrl-invert / Shift-smooth
+                    let modifiers = ui.input(|i| i.modifiers);
+                    output.sculpt_ctrl_held = modifiers.ctrl;
+                    output.sculpt_shift_held = modifiers.shift;
                 }
             }
         }
@@ -338,7 +364,10 @@ pub fn draw(
         {
             if let Some(hover_pos) = response.hover_pos() {
                 let screen_radius = brush_radius / camera.distance * rect.height() * 0.5;
-                let mode_color = brush_cursor_color(brush_mode);
+                // Reflect Ctrl/Shift modifier overrides in cursor color
+                let modifiers = ui.input(|i| i.modifiers);
+                let effective_mode = effective_brush_mode(brush_mode, modifiers.ctrl, modifiers.shift);
+                let mode_color = brush_cursor_color(&effective_mode);
 
                 // Outer ring: brush extent (color-coded by mode)
                 ui.painter().circle_stroke(
@@ -669,7 +698,7 @@ pub fn draw(
                 });
         });
 
-    // --- Orientation Gizmo (top-right corner) ---
+    // --- Orientation Gizmo (top-right corner, interactive) ---
     {
         let gizmo_size = 60.0_f32;
         let gizmo_center = egui::pos2(
@@ -677,6 +706,7 @@ pub fn draw(
             rect.top() + gizmo_size * 0.6 + 4.0,
         );
         let arm_len = gizmo_size * 0.35;
+        let hit_radius = 12.0_f32;
 
         let view = camera.view_matrix();
         let project_axis = |axis: glam::Vec3| -> egui::Vec2 {
@@ -684,15 +714,16 @@ pub fn draw(
             egui::vec2(v.x, -v.y) * arm_len
         };
 
-        let axes: [(glam::Vec3, egui::Color32, &str); 3] = [
-            (glam::Vec3::X, egui::Color32::from_rgb(220, 60, 60), "X"),
-            (glam::Vec3::Y, egui::Color32::from_rgb(60, 200, 60), "Y"),
-            (glam::Vec3::Z, egui::Color32::from_rgb(60, 100, 220), "Z"),
+        // Axis definitions: positive and negative directions with their view actions
+        let axes: [(glam::Vec3, egui::Color32, &str, Action, Action); 3] = [
+            (glam::Vec3::X, egui::Color32::from_rgb(220, 60, 60), "X", Action::CameraRight, Action::CameraLeft),
+            (glam::Vec3::Y, egui::Color32::from_rgb(60, 200, 60), "Y", Action::CameraTop, Action::CameraBottom),
+            (glam::Vec3::Z, egui::Color32::from_rgb(60, 100, 220), "Z", Action::CameraFront, Action::CameraBack),
         ];
 
-        let mut sorted_axes: Vec<_> = axes.iter().map(|(axis, color, label)| {
+        let mut sorted_axes: Vec<_> = axes.iter().map(|(axis, color, label, pos_action, neg_action)| {
             let v = view.transform_vector3(*axis);
-            (v.z, *axis, *color, *label)
+            (v.z, *axis, *color, *label, pos_action, neg_action)
         }).collect();
         sorted_axes.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
 
@@ -702,26 +733,91 @@ pub fn draw(
             egui::Color32::from_rgba_premultiplied(20, 20, 25, 180),
         );
 
-        for (depth, axis, color, label) in &sorted_axes {
-            let end = gizmo_center + project_axis(*axis);
-            let alpha = if *depth > 0.0 { 255u8 } else { 80u8 };
-            let line_color = egui::Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), alpha);
-            let thickness = if *depth > 0.0 { 2.0 } else { 1.0 };
+        // Check for clicks on axis endpoints
+        let click_pos = if response.clicked() {
+            ui.input(|i| i.pointer.interact_pos())
+        } else {
+            None
+        };
+        let hover_pos = ui.input(|i| i.pointer.hover_pos());
+
+        for (depth, axis, color, label, pos_action, neg_action) in &sorted_axes {
+            let pos_end = gizmo_center + project_axis(*axis);
+            let neg_end = gizmo_center + project_axis(-*axis);
+
+            // Check hover for highlighting
+            let pos_hovered = hover_pos.map_or(false, |p| p.distance(pos_end) < hit_radius);
+            let neg_hovered = hover_pos.map_or(false, |p| p.distance(neg_end) < hit_radius);
+
+            let pos_alpha = if *depth > 0.0 { 255u8 } else { 80u8 };
+            let neg_alpha = if *depth < 0.0 { 255u8 } else { 80u8 };
+
+            let pos_color = if pos_hovered {
+                egui::Color32::WHITE
+            } else {
+                egui::Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), pos_alpha)
+            };
+            let neg_color = if neg_hovered {
+                egui::Color32::from_rgba_unmultiplied(200, 200, 200, 180)
+            } else {
+                egui::Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), neg_alpha)
+            };
+
+            let pos_thickness = if pos_hovered { 3.0 } else if *depth > 0.0 { 2.0 } else { 1.0 };
 
             ui.painter().line_segment(
-                [gizmo_center, end],
-                egui::Stroke::new(thickness, line_color),
+                [gizmo_center, pos_end],
+                egui::Stroke::new(pos_thickness, pos_color),
             );
             if *depth > -0.3 {
                 ui.painter().text(
-                    end,
+                    pos_end,
                     egui::Align2::CENTER_CENTER,
                     label,
-                    egui::FontId::proportional(10.0),
-                    line_color,
+                    egui::FontId::proportional(if pos_hovered { 12.0 } else { 10.0 }),
+                    pos_color,
                 );
             }
+            // Small dot for negative axis endpoint (clickable)
+            let neg_radius = if neg_hovered { 4.0 } else { 3.0 };
+            ui.painter().circle_filled(neg_end, neg_radius, neg_color);
+
+            // Handle clicks on axis endpoints
+            if let Some(cp) = click_pos {
+                if cp.distance(pos_end) < hit_radius {
+                    actions.push(match pos_action {
+                        Action::CameraFront => Action::CameraFront,
+                        Action::CameraTop => Action::CameraTop,
+                        Action::CameraRight => Action::CameraRight,
+                        Action::CameraBack => Action::CameraBack,
+                        Action::CameraLeft => Action::CameraLeft,
+                        Action::CameraBottom => Action::CameraBottom,
+                        _ => Action::CameraFront,
+                    });
+                } else if cp.distance(neg_end) < hit_radius {
+                    actions.push(match neg_action {
+                        Action::CameraFront => Action::CameraFront,
+                        Action::CameraTop => Action::CameraTop,
+                        Action::CameraRight => Action::CameraRight,
+                        Action::CameraBack => Action::CameraBack,
+                        Action::CameraLeft => Action::CameraLeft,
+                        Action::CameraBottom => Action::CameraBottom,
+                        _ => Action::CameraFront,
+                    });
+                }
+            }
         }
+
+        // Ortho/Persp label below the gizmo
+        let label_pos = egui::pos2(gizmo_center.x, gizmo_center.y + arm_len + 14.0);
+        let proj_label = if camera.orthographic { "Ortho" } else { "Persp" };
+        ui.painter().text(
+            label_pos,
+            egui::Align2::CENTER_CENTER,
+            proj_label,
+            egui::FontId::proportional(9.0),
+            egui::Color32::from_rgb(160, 160, 170),
+        );
     }
 
     output

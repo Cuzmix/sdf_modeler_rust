@@ -35,6 +35,19 @@ impl SdfApp {
         if ctx.input(|i| i.key_pressed(egui::Key::F7)) {
             actions.push(Action::CameraRight);
         }
+        if ctx.input(|i| i.key_pressed(egui::Key::F8)) {
+            actions.push(Action::CameraBack);
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::F9)) {
+            actions.push(Action::CameraLeft);
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::F10)) {
+            actions.push(Action::CameraBottom);
+        }
+        // Orthographic toggle
+        if ctx.input(|i| i.key_pressed(egui::Key::O) && !i.modifiers.ctrl) {
+            actions.push(Action::ToggleOrtho);
+        }
 
         // Focus on selected node
         if ctx.input(|i| i.key_pressed(egui::Key::F) && !i.modifiers.ctrl) {
@@ -154,6 +167,17 @@ impl SdfApp {
                     if *brush_strength < 0.5 {
                         *brush_strength = 1.0;
                     }
+                }
+            }
+            // Bracket keys: resize brush
+            if ctx.input(|i| i.key_pressed(egui::Key::OpenBracket)) {
+                if let SculptState::Active { ref mut brush_radius, .. } = self.doc.sculpt_state {
+                    *brush_radius = (*brush_radius - 0.05).max(0.05);
+                }
+            }
+            if ctx.input(|i| i.key_pressed(egui::Key::CloseBracket)) {
+                if let SculptState::Active { ref mut brush_radius, .. } = self.doc.sculpt_state {
+                    *brush_radius = (*brush_radius + 0.05).min(2.0);
                 }
             }
             // Symmetry toggles: X/Y/Z

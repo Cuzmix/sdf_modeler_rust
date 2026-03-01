@@ -137,9 +137,13 @@ impl SdfApp {
                         );
                     }
                 }
-                Action::CameraFront => self.doc.camera.set_front(),
-                Action::CameraTop => self.doc.camera.set_top(),
-                Action::CameraRight => self.doc.camera.set_right(),
+                Action::CameraFront => self.doc.camera.start_transition(0.0, 0.0, 0.0),
+                Action::CameraTop => self.doc.camera.start_transition(0.0, std::f32::consts::FRAC_PI_2, 0.0),
+                Action::CameraRight => self.doc.camera.start_transition(std::f32::consts::FRAC_PI_2, 0.0, 0.0),
+                Action::CameraBack => self.doc.camera.start_transition(std::f32::consts::PI, 0.0, 0.0),
+                Action::CameraLeft => self.doc.camera.start_transition(-std::f32::consts::FRAC_PI_2, 0.0, 0.0),
+                Action::CameraBottom => self.doc.camera.start_transition(0.0, -std::f32::consts::FRAC_PI_2, 0.0),
+                Action::ToggleOrtho => self.doc.camera.toggle_ortho(),
 
                 // ── Tools ────────────────────────────────────────────
                 Action::SetTool(tool) => {

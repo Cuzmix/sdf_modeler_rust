@@ -80,7 +80,19 @@ impl SdfApp {
         }
 
         let hit_world = Vec3::new(result.world_pos[0], result.world_pos[1], result.world_pos[2]);
-        let brush_mode = brush_mode.clone();
+        // Apply Ctrl/Shift modifier overrides (ZBrush/Blender convention)
+        let brush_mode = if self.async_state.sculpt_shift_held {
+            BrushMode::Smooth
+        } else if self.async_state.sculpt_ctrl_held {
+            match brush_mode {
+                BrushMode::Add => BrushMode::Carve,
+                BrushMode::Carve => BrushMode::Add,
+                BrushMode::Inflate => BrushMode::Carve,
+                _ => brush_mode.clone(),
+            }
+        } else {
+            brush_mode.clone()
+        };
         let falloff_mode = falloff_mode.clone();
 
         // Grab brush: initialize snapshot and start position on first hit

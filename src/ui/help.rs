@@ -42,10 +42,16 @@ pub fn draw(ctx: &egui::Context, open: &mut bool) {
                     row(ui, "LMB drag", "Orbit");
                     row(ui, "RMB drag", "Pan");
                     row(ui, "Scroll", "Zoom");
+                    row(ui, "Ctrl+Alt+Drag", "Roll camera");
                     row(ui, "F", "Focus selected");
+                    row(ui, "O", "Toggle Ortho / Perspective");
                     row(ui, "F5", "Front view");
                     row(ui, "F6", "Top view");
                     row(ui, "F7", "Right view");
+                    row(ui, "F8", "Back view");
+                    row(ui, "F9", "Left view");
+                    row(ui, "F10", "Bottom view");
+                    row(ui, "Gizmo click", "Snap to axis view");
 
                     ui.separator(); ui.end_row();
                     section(ui, "Gizmo");
@@ -59,8 +65,11 @@ pub fn draw(ctx: &egui::Context, open: &mut bool) {
                     ui.separator(); ui.end_row();
                     section(ui, "Sculpt Mode");
                     row(ui, "LMB drag", "Paint brush");
+                    row(ui, "Ctrl+drag", "Invert brush (Add\u{2194}Carve)");
+                    row(ui, "Shift+drag", "Smooth override");
                     row(ui, "RMB drag", "Pan camera");
                     row(ui, "MMB drag", "Orbit camera");
+                    row(ui, "[ / ]", "Decrease / increase brush size");
                     row(ui, "1", "Add brush");
                     row(ui, "2", "Carve brush");
                     row(ui, "3", "Smooth brush");

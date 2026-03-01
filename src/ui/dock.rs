@@ -62,6 +62,9 @@ pub struct ViewportContext<'a> {
     pub pending_pick: &'a mut Option<PendingPick>,
     pub sculpt_count: usize,
     pub fps_info: Option<(f64, f64)>,
+    /// Modifier keys captured during sculpt drag (output channel).
+    pub sculpt_ctrl_held: &'a mut bool,
+    pub sculpt_shift_held: &'a mut bool,
 }
 
 /// Refs needed only by the scene tree tab.
@@ -128,6 +131,8 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                 );
                 if let Some(pick) = vp_output.pending_pick {
                     *self.viewport.pending_pick = Some(pick);
+                    *self.viewport.sculpt_ctrl_held = vp_output.sculpt_ctrl_held;
+                    *self.viewport.sculpt_shift_held = vp_output.sculpt_shift_held;
                 }
             }
             Tab::NodeGraph => {

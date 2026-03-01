@@ -26,6 +26,8 @@ pub fn project_to_json(scene: &Scene, camera: &Camera) -> Result<String, String>
             distance: camera.distance,
             target: camera.target,
             fov: camera.fov,
+            orthographic: camera.orthographic,
+            transition: None,
         },
     };
     serde_json::to_string_pretty(&project).map_err(|e| e.to_string())

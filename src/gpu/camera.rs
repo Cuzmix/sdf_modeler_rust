@@ -9,6 +9,37 @@ const MIN_DISTANCE: f32 = 0.1;
 const MAX_DISTANCE: f32 = 100.0;
 const PITCH_LIMIT: f32 = 89.0 * std::f32::consts::PI / 180.0;
 
+/// Animated transition state for smooth view preset changes.
+#[derive(Clone)]
+pub struct ViewTransition {
+    pub start_yaw: f32,
+    pub start_pitch: f32,
+    pub start_roll: f32,
+    pub target_yaw: f32,
+    pub target_pitch: f32,
+    pub target_roll: f32,
+    pub progress: f32,
+}
+
+const TRANSITION_DURATION: f32 = 0.3;
+
+fn ease_out_cubic(t: f32) -> f32 {
+    1.0 - (1.0 - t).powi(3)
+}
+
+/// Lerp with shortest-path angle wrapping.
+fn lerp_angle(a: f32, b: f32, t: f32) -> f32 {
+    let mut diff = b - a;
+    // Wrap to [-PI, PI]
+    while diff > std::f32::consts::PI { diff -= std::f32::consts::TAU; }
+    while diff < -std::f32::consts::PI { diff += std::f32::consts::TAU; }
+    a + diff * t
+}
+
+fn lerp(a: f32, b: f32, t: f32) -> f32 {
+    a + (b - a) * t
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct Camera {
     pub yaw: f32,
@@ -18,6 +49,10 @@ pub struct Camera {
     pub distance: f32,
     pub target: Vec3,
     pub fov: f32,
+    #[serde(default)]
+    pub orthographic: bool,
+    #[serde(skip)]
+    pub transition: Option<ViewTransition>,
 }
 
 impl Default for Camera {
@@ -29,6 +64,8 @@ impl Default for Camera {
             distance: 5.0,
             target: Vec3::ZERO,
             fov: 45.0_f32.to_radians(),
+            orthographic: false,
+            transition: None,
         }
     }
 }
@@ -55,7 +92,13 @@ impl Camera {
     }
 
     pub fn projection_matrix(&self, aspect: f32) -> Mat4 {
-        Mat4::perspective_rh(self.fov, aspect, 0.01, 100.0)
+        if self.orthographic {
+            let half_h = self.distance * (self.fov * 0.5).tan();
+            let half_w = half_h * aspect;
+            Mat4::orthographic_rh(-half_w, half_w, -half_h, half_h, 0.01, 200.0)
+        } else {
+            Mat4::perspective_rh(self.fov, aspect, 0.01, 100.0)
+        }
     }
 
     pub fn to_uniform(
@@ -112,27 +155,46 @@ impl Camera {
         self.distance = self.distance.clamp(MIN_DISTANCE, MAX_DISTANCE);
     }
 
-    pub fn set_front(&mut self) {
-        self.yaw = 0.0;
-        self.pitch = 0.0;
-        self.roll = 0.0;
-    }
-
-    pub fn set_top(&mut self) {
-        self.yaw = 0.0;
-        self.pitch = std::f32::consts::FRAC_PI_2;
-        self.roll = 0.0;
-    }
-
-    pub fn set_right(&mut self) {
-        self.yaw = std::f32::consts::FRAC_PI_2;
-        self.pitch = 0.0;
-        self.roll = 0.0;
-    }
-
     pub fn focus_on(&mut self, center: Vec3, radius: f32) {
         self.target = center;
         self.distance = (radius / (self.fov * 0.5).tan()).clamp(MIN_DISTANCE, MAX_DISTANCE);
+    }
+
+    pub fn toggle_ortho(&mut self) {
+        self.orthographic = !self.orthographic;
+    }
+
+    // --- Animated transitions ---
+
+    /// Start an animated transition to the given yaw/pitch/roll.
+    pub fn start_transition(&mut self, target_yaw: f32, target_pitch: f32, target_roll: f32) {
+        self.transition = Some(ViewTransition {
+            start_yaw: self.yaw,
+            start_pitch: self.pitch,
+            start_roll: self.roll,
+            target_yaw,
+            target_pitch,
+            target_roll,
+            progress: 0.0,
+        });
+    }
+
+    /// Advance the transition animation. Returns true if still animating (caller should repaint).
+    pub fn tick_transition(&mut self, dt: f64) -> bool {
+        if let Some(ref mut t) = self.transition {
+            t.progress = (t.progress + dt as f32 / TRANSITION_DURATION).min(1.0);
+            let e = ease_out_cubic(t.progress);
+            self.yaw = lerp_angle(t.start_yaw, t.target_yaw, e);
+            self.pitch = lerp(t.start_pitch, t.target_pitch, e);
+            self.roll = lerp(t.start_roll, t.target_roll, e);
+            if t.progress >= 1.0 {
+                self.transition = None;
+                return false;
+            }
+            true
+        } else {
+            false
+        }
     }
 }
 

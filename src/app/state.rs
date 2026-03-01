@@ -66,6 +66,9 @@ pub struct AsyncState {
     pub pending_pick: Option<PendingPick>,
     pub last_sculpt_hit: Option<Vec3>,
     pub lazy_brush_pos: Option<Vec3>,
+    /// Modifier keys captured at the time of sculpt drag (for Ctrl-invert / Shift-smooth).
+    pub sculpt_ctrl_held: bool,
+    pub sculpt_shift_held: bool,
 }
 
 // ---------------------------------------------------------------------------
