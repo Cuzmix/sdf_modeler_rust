@@ -60,7 +60,7 @@ pub fn draw(
         // Handle drop: detach from parent, making it top-level
         if is_hovered && ui.input(|i| i.pointer.any_released()) {
             if let Some(dragged_id) = drag_state.take() {
-                detach_from_parent(scene, dragged_id);
+                scene.detach_from_parent(dragged_id);
             }
         }
     }
@@ -124,94 +124,6 @@ fn node_context_menu(
     });
 }
 
-/// Check if `target_id` is a valid drop target for `dragged_id`.
-fn is_valid_drop_target(scene: &Scene, target_id: NodeId, dragged_id: NodeId) -> bool {
-    // Can't drop on self
-    if target_id == dragged_id {
-        return false;
-    }
-    // Can't drop on a descendant (would create a cycle)
-    if is_descendant(scene, target_id, dragged_id) {
-        return false;
-    }
-    // Target must accept children and have a free slot
-    let Some(target_node) = scene.nodes.get(&target_id) else {
-        return false;
-    };
-    match &target_node.data {
-        NodeData::Primitive { .. } => false,  // Primitives can't have children
-        NodeData::Operation { left, right, .. } => left.is_none() || right.is_none(),
-        NodeData::Sculpt { input, .. }
-        | NodeData::Transform { input, .. }
-        | NodeData::Modifier { input, .. } => input.is_none(),
-    }
-}
-
-/// Returns true if `candidate` is a descendant of `ancestor`.
-fn is_descendant(scene: &Scene, candidate: NodeId, ancestor: NodeId) -> bool {
-    let Some(node) = scene.nodes.get(&ancestor) else {
-        return false;
-    };
-    for child_id in node.data.children() {
-        if child_id == candidate || is_descendant(scene, candidate, child_id) {
-            return true;
-        }
-    }
-    false
-}
-
-/// Detach a node from its parent (null out the reference).
-fn detach_from_parent(scene: &mut Scene, child_id: NodeId) {
-    let parent_map = scene.build_parent_map();
-    let Some(&parent_id) = parent_map.get(&child_id) else {
-        return; // Already top-level
-    };
-    if let Some(parent) = scene.nodes.get_mut(&parent_id) {
-        match &mut parent.data {
-            NodeData::Operation { left, right, .. } => {
-                if *left == Some(child_id) {
-                    *left = None;
-                }
-                if *right == Some(child_id) {
-                    *right = None;
-                }
-            }
-            NodeData::Sculpt { input, .. }
-            | NodeData::Transform { input, .. }
-            | NodeData::Modifier { input, .. } => {
-                if *input == Some(child_id) {
-                    *input = None;
-                }
-            }
-            _ => {}
-        }
-    }
-}
-
-/// Reparent: detach from old parent, attach to first free slot of new parent.
-fn perform_reparent(scene: &mut Scene, dragged_id: NodeId, target_id: NodeId) {
-    detach_from_parent(scene, dragged_id);
-    if let Some(target) = scene.nodes.get_mut(&target_id) {
-        match &mut target.data {
-            NodeData::Operation { left, right, .. } => {
-                if left.is_none() {
-                    *left = Some(dragged_id);
-                } else if right.is_none() {
-                    *right = Some(dragged_id);
-                }
-            }
-            NodeData::Sculpt { input, .. }
-            | NodeData::Transform { input, .. }
-            | NodeData::Modifier { input, .. } => {
-                if input.is_none() {
-                    *input = Some(dragged_id);
-                }
-            }
-            _ => {}
-        }
-    }
-}
-
 fn handle_drag_drop(
     ui: &egui::Ui,
     response: &egui::Response,
@@ -227,7 +139,7 @@ fn handle_drag_drop(
     // Drop target: highlight and handle release
     if let Some(dragged_id) = *drag_state {
         if dragged_id != id && response.hovered() {
-            if is_valid_drop_target(scene, id, dragged_id) {
+            if scene.is_valid_drop_target(id, dragged_id) {
                 // Visual highlight
                 ui.painter().rect_stroke(
                     response.rect,
@@ -237,7 +149,7 @@ fn handle_drag_drop(
 
                 // Handle drop on release
                 if ui.input(|i| i.pointer.any_released()) {
-                    perform_reparent(scene, dragged_id, id);
+                    scene.reparent(dragged_id, id);
                     *drag_state = None;
                 }
             }

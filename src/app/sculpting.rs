@@ -409,6 +409,31 @@ impl SdfApp {
         self.async_state.pick_state = PickState::Pending { receiver: rx };
     }
 
+    /// Reset stroke interpolation and flatten/grab references when the pointer
+    /// is released during sculpting (no pending pick, pick state idle).
+    pub(super) fn reset_sculpt_stroke_if_idle(&mut self) {
+        if self.doc.sculpt_state.is_active()
+            && self.async_state.pending_pick.is_none()
+            && matches!(self.async_state.pick_state, PickState::Idle)
+        {
+            self.async_state.last_sculpt_hit = None;
+            self.async_state.lazy_brush_pos = None;
+            if let SculptState::Active {
+                ref mut flatten_reference,
+                ref mut grab_snapshot,
+                ref mut grab_start,
+                ref mut grab_child_input,
+                ..
+            } = self.doc.sculpt_state
+            {
+                *flatten_reference = None;
+                *grab_snapshot = None;
+                *grab_start = None;
+                *grab_child_input = None;
+            }
+        }
+    }
+
     pub(super) fn sync_sculpt_state(&mut self) {
         match self.doc.active_tool {
             ActiveTool::Select => {

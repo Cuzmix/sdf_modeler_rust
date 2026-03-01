@@ -49,32 +49,46 @@ pub fn create_dock_state() -> DockState<Tab> {
     state
 }
 
-pub struct SdfTabViewer<'a> {
-    pub camera: &'a mut Camera,
-    pub scene: &'a mut Scene,
-    pub node_graph_state: &'a mut NodeGraphState,
+// ---------------------------------------------------------------------------
+// Context bundles — group related refs so SdfTabViewer stays manageable.
+// ---------------------------------------------------------------------------
+
+/// Refs needed only by the viewport tab.
+pub struct ViewportContext<'a> {
     pub gizmo_state: &'a mut GizmoState,
     pub gizmo_mode: &'a GizmoMode,
     pub gizmo_space: &'a GizmoSpace,
     pub pivot_offset: &'a mut Vec3,
+    pub pending_pick: &'a mut Option<PendingPick>,
+    pub sculpt_count: usize,
+    pub fps_info: Option<(f64, f64)>,
+}
+
+/// Refs needed only by the scene tree tab.
+pub struct SceneTreeContext<'a> {
+    pub renaming_node: &'a mut Option<NodeId>,
+    pub rename_buf: &'a mut String,
+    pub drag_state: &'a mut Option<NodeId>,
+}
+
+// ---------------------------------------------------------------------------
+// Tab viewer
+// ---------------------------------------------------------------------------
+
+pub struct SdfTabViewer<'a> {
+    pub camera: &'a mut Camera,
+    pub scene: &'a mut Scene,
+    pub node_graph_state: &'a mut NodeGraphState,
     pub active_tool: &'a ActiveTool,
     pub sculpt_state: &'a mut SculptState,
     pub settings: &'a mut Settings,
-    pub settings_dirty: &'a mut bool,
     pub time: f32,
-    pub pending_pick: &'a mut Option<PendingPick>,
     /// (done_slices, total_slices) when a bake is in progress, None when idle.
     pub bake_progress: Option<(u32, u32)>,
-    /// Number of sculpt nodes in the scene (for auto step reduction).
-    pub sculpt_count: usize,
-    /// Node currently being renamed in scene tree (None = not renaming).
-    pub renaming_node: &'a mut Option<NodeId>,
-    /// Rename text buffer.
-    pub rename_buf: &'a mut String,
-    /// FPS info for viewport overlay: (fps, frame_ms).
-    pub fps_info: Option<(f64, f64)>,
-    /// Drag state for scene tree drag & drop reparenting.
-    pub scene_tree_drag: &'a mut Option<NodeId>,
+    /// Viewport-specific refs (gizmo, pick, fps overlay).
+    pub viewport: ViewportContext<'a>,
+    /// Scene tree-specific refs (rename, drag & drop).
+    pub scene_tree: SceneTreeContext<'a>,
     /// Action sink — structural mutations flow through here.
     pub actions: &'a mut ActionSink,
 }
@@ -100,24 +114,24 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.camera,
                     self.scene,
                     &mut self.node_graph_state.selected,
-                    self.gizmo_state,
-                    self.gizmo_mode,
-                    self.gizmo_space,
-                    self.pivot_offset,
+                    self.viewport.gizmo_state,
+                    self.viewport.gizmo_mode,
+                    self.viewport.gizmo_space,
+                    self.viewport.pivot_offset,
                     self.sculpt_state,
                     self.active_tool,
                     self.time,
                     &self.settings.render,
-                    self.sculpt_count,
-                    self.fps_info,
+                    self.viewport.sculpt_count,
+                    self.viewport.fps_info,
                     self.actions,
                 );
                 if let Some(pick) = vp_output.pending_pick {
-                    *self.pending_pick = Some(pick);
+                    *self.viewport.pending_pick = Some(pick);
                 }
             }
             Tab::NodeGraph => {
-                node_graph::draw(ui, self.scene, self.node_graph_state);
+                node_graph::draw(ui, self.scene, self.node_graph_state, self.actions);
             }
             Tab::Properties => {
                 properties::draw(
@@ -142,9 +156,9 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     ui,
                     self.scene,
                     &mut self.node_graph_state.selected,
-                    self.renaming_node,
-                    self.rename_buf,
-                    self.scene_tree_drag,
+                    self.scene_tree.renaming_node,
+                    self.scene_tree.rename_buf,
+                    self.scene_tree.drag_state,
                     self.actions,
                 );
                 // If scene tree changed selection, scroll graph to it
@@ -162,9 +176,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                 }
             }
             Tab::RenderSettings => {
-                if render_settings::draw(ui, self.settings) {
-                    *self.settings_dirty = true;
-                }
+                render_settings::draw(ui, self.settings, self.actions);
             }
         }
     }

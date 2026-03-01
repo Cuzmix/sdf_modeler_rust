@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use eframe::egui::{self, Color32};
 use egui_node_graph2::*;
 
+use crate::app::actions::{Action, ActionSink};
 use crate::graph::scene::{
     CsgOp, ModifierKind, NodeData, NodeId as SceneNodeId, Scene, SdfPrimitive, TransformKind,
 };
@@ -825,11 +826,11 @@ fn auto_layout_graph(scene: &Scene, graph_state: &mut SdfGraphState, id_map: &No
 
 fn process_graph_responses(
     responses: &GraphResponse<SdfResponse, SdfNodeData>,
-    scene: &mut Scene,
     graph_state: &mut SdfGraphState,
     id_map: &mut NodeIdMap,
     selected: &mut Option<SceneNodeId>,
     layout_dirty: &mut bool,
+    actions: &mut ActionSink,
 ) {
     for response in &responses.node_responses {
         match response {
@@ -855,11 +856,9 @@ fn process_graph_responses(
                     .map(|(name, _)| name.as_str());
 
                 match input_name {
-                    Some("left") => scene.set_left_child(target_scene_id, Some(source_scene_id)),
-                    Some("right") => scene.set_right_child(target_scene_id, Some(source_scene_id)),
-                    Some("input") => {
-                        scene.set_sculpt_input(target_scene_id, Some(source_scene_id))
-                    }
+                    Some("left") => actions.push(Action::SetLeftChild { parent: target_scene_id, child: Some(source_scene_id) }),
+                    Some("right") => actions.push(Action::SetRightChild { parent: target_scene_id, child: Some(source_scene_id) }),
+                    Some("input") => actions.push(Action::SetSculptInput { parent: target_scene_id, child: Some(source_scene_id) }),
                     _ => {}
                 }
                 *layout_dirty = true;
@@ -877,9 +876,9 @@ fn process_graph_responses(
                     .map(|(name, _)| name.as_str());
 
                 match input_name {
-                    Some("left") => scene.set_left_child(target_scene_id, None),
-                    Some("right") => scene.set_right_child(target_scene_id, None),
-                    Some("input") => scene.set_sculpt_input(target_scene_id, None),
+                    Some("left") => actions.push(Action::SetLeftChild { parent: target_scene_id, child: None }),
+                    Some("right") => actions.push(Action::SetRightChild { parent: target_scene_id, child: None }),
+                    Some("input") => actions.push(Action::SetSculptInput { parent: target_scene_id, child: None }),
                     _ => {}
                 }
                 *layout_dirty = true;
@@ -891,7 +890,7 @@ fn process_graph_responses(
             }
             NodeResponse::DeleteNodeFull { node_id, node } => {
                 let scene_id = node.user_data.scene_node_id;
-                scene.remove_node(scene_id);
+                actions.push(Action::DeleteNode(scene_id));
                 id_map.scene_to_graph.remove(&scene_id);
                 id_map.graph_to_scene.remove(node_id);
                 if *selected == Some(scene_id) {
@@ -942,13 +941,13 @@ impl NodeGraphState {
     }
 }
 
-pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState) {
+pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState, actions: &mut ActionSink) {
     // Peek at graph_rect for toolbar's Organize button (toolbar is drawn first,
     // but the rect doesn't change between toolbar and graph area).
     let full_rect = ui.available_rect_before_wrap();
 
     // Draw toolbar above the graph
-    draw_toolbar(ui, scene, state, full_rect);
+    draw_toolbar(ui, scene, state, full_rect, actions);
 
     // Detect if scene changed externally (undo/redo, load, scene tree edit)
     let structure_key = scene.structure_key();
@@ -1038,11 +1037,11 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState) {
     let mut layout_dirty = false;
     process_graph_responses(
         &responses,
-        scene,
         &mut state.graph_state,
         &mut state.id_map,
         &mut state.selected,
         &mut layout_dirty,
+        actions,
     );
     if layout_dirty {
         state.layout_dirty = true;
@@ -1075,7 +1074,7 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState) {
 // Toolbar
 // ---------------------------------------------------------------------------
 
-fn draw_toolbar(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState, graph_rect: egui::Rect) {
+fn draw_toolbar(ui: &mut egui::Ui, scene: &Scene, state: &mut NodeGraphState, graph_rect: egui::Rect, actions: &mut ActionSink) {
     egui::Frame::none()
         .fill(Color32::from_rgb(30, 30, 35))
         .inner_margin(egui::Margin::symmetric(6.0, 4.0))
@@ -1083,10 +1082,7 @@ fn draw_toolbar(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState
         ui.menu_button("+ Primitive", |ui| {
             for kind in SdfPrimitive::ALL {
                 if ui.button(kind.base_name()).clicked() {
-                    let id = scene.create_primitive(kind.clone());
-                    state.selected = Some(id);
-                    state.pending_center_node = Some(id);
-                    state.needs_initial_rebuild = true;
+                    actions.push(Action::CreatePrimitive(kind.clone()));
                     ui.close_menu();
                 }
             }
@@ -1095,7 +1091,7 @@ fn draw_toolbar(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState
         ui.menu_button("+ Operation", |ui| {
             for op in CsgOp::ALL {
                 if ui.button(op.base_name()).clicked() {
-                    create_op_from_selection(scene, state, op.clone());
+                    create_op_from_selection(scene, op.clone(), actions);
                     ui.close_menu();
                 }
             }
@@ -1105,15 +1101,10 @@ fn draw_toolbar(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState
             for kind in TransformKind::ALL {
                 if ui.button(kind.base_name()).clicked() {
                     if let Some(sel) = state.selected {
-                        let transform_id = scene.insert_transform_above(sel, kind.clone());
-                        state.selected = Some(transform_id);
-                        state.pending_center_node = Some(transform_id);
+                        actions.push(Action::InsertTransformAbove { target: sel, kind: kind.clone() });
                     } else {
-                        let transform_id = scene.create_transform(kind.clone(), None);
-                        state.selected = Some(transform_id);
-                        state.pending_center_node = Some(transform_id);
+                        actions.push(Action::CreateTransform { kind: kind.clone(), input: None });
                     }
-                    state.needs_initial_rebuild = true;
                     ui.close_menu();
                 }
             }
@@ -1123,7 +1114,7 @@ fn draw_toolbar(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState
             ui.label("Deform");
             for kind in [ModifierKind::Twist, ModifierKind::Bend, ModifierKind::Taper] {
                 if ui.button(kind.base_name()).clicked() {
-                    toolbar_add_modifier(scene, state, kind);
+                    toolbar_add_modifier(state.selected, kind, actions);
                     ui.close_menu();
                 }
             }
@@ -1131,7 +1122,7 @@ fn draw_toolbar(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState
             ui.label("Shape");
             for kind in [ModifierKind::Round, ModifierKind::Onion, ModifierKind::Elongate] {
                 if ui.button(kind.base_name()).clicked() {
-                    toolbar_add_modifier(scene, state, kind);
+                    toolbar_add_modifier(state.selected, kind, actions);
                     ui.close_menu();
                 }
             }
@@ -1139,7 +1130,7 @@ fn draw_toolbar(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState
             ui.label("Repeat");
             for kind in [ModifierKind::Mirror, ModifierKind::Repeat, ModifierKind::FiniteRepeat] {
                 if ui.button(kind.base_name()).clicked() {
-                    toolbar_add_modifier(scene, state, kind);
+                    toolbar_add_modifier(state.selected, kind, actions);
                     ui.close_menu();
                 }
             }
@@ -1153,9 +1144,7 @@ fn draw_toolbar(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState
             .clicked()
         {
             if let Some(sel) = state.selected {
-                scene.remove_node(sel);
-                state.selected = None;
-                state.needs_initial_rebuild = true;
+                actions.push(Action::DeleteNode(sel));
             }
         }
 
@@ -1425,20 +1414,15 @@ fn center_view_on_nodes(state: &mut NodeGraphState, graph_rect: egui::Rect) {
     );
 }
 
-fn toolbar_add_modifier(scene: &mut Scene, state: &mut NodeGraphState, kind: ModifierKind) {
-    if let Some(sel) = state.selected {
-        let id = scene.insert_modifier_above(sel, kind);
-        state.selected = Some(id);
-        state.pending_center_node = Some(id);
+fn toolbar_add_modifier(selected: Option<SceneNodeId>, kind: ModifierKind, actions: &mut ActionSink) {
+    if let Some(sel) = selected {
+        actions.push(Action::InsertModifierAbove { target: sel, kind });
     } else {
-        let id = scene.create_modifier(kind, None);
-        state.selected = Some(id);
-        state.pending_center_node = Some(id);
+        actions.push(Action::CreateModifier { kind, input: None });
     }
-    state.needs_initial_rebuild = true;
 }
 
-fn create_op_from_selection(scene: &mut Scene, state: &mut NodeGraphState, op: CsgOp) {
+fn create_op_from_selection(scene: &Scene, op: CsgOp, actions: &mut ActionSink) {
     let tops = scene.top_level_nodes();
     let left = if tops.len() >= 2 {
         Some(tops[tops.len() - 2])
@@ -1446,10 +1430,7 @@ fn create_op_from_selection(scene: &mut Scene, state: &mut NodeGraphState, op: C
         None
     };
     let right = tops.last().copied();
-    let op_id = scene.create_operation(op, left, right);
-    state.selected = Some(op_id);
-    state.pending_center_node = Some(op_id);
-    state.needs_initial_rebuild = true;
+    actions.push(Action::CreateOperation { op, left, right });
 }
 
 // ---------------------------------------------------------------------------

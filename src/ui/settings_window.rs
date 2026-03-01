@@ -1,15 +1,18 @@
 use eframe::egui;
 
+use crate::app::actions::{Action, ActionSink};
 use crate::settings::Settings;
 
-/// Draw the System Settings window. Returns `true` if a shader-affecting setting changed.
+/// Draw the System Settings window. Pushes `Action::SettingsChanged` if a
+/// shader-affecting setting changed.
 pub fn draw(
     ctx: &egui::Context,
     open: &mut bool,
     settings: &mut Settings,
     show_debug: &mut bool,
     initial_vsync: bool,
-) -> bool {
+    actions: &mut ActionSink,
+) {
     let before = settings.render.clone();
     let mut imported = false;
 
@@ -129,9 +132,9 @@ pub fn draw(
             });
         });
 
-    let changed = imported || settings.render != before;
-    settings.save();
-    changed
+    if imported || settings.render != before {
+        actions.push(Action::SettingsChanged);
+    }
 }
 
 fn labeled_slider(

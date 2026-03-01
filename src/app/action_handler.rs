@@ -189,6 +189,20 @@ impl SdfApp {
                     self.ui.node_graph_state.pending_center_node = Some(id);
                     self.gpu.buffer_dirty = true;
                 }
+                Action::CreateTransform { kind, input } => {
+                    let id = self.doc.scene.create_transform(kind, input);
+                    self.ui.node_graph_state.selected = Some(id);
+                    self.ui.node_graph_state.needs_initial_rebuild = true;
+                    self.ui.node_graph_state.pending_center_node = Some(id);
+                    self.gpu.buffer_dirty = true;
+                }
+                Action::CreateModifier { kind, input } => {
+                    let id = self.doc.scene.create_modifier(kind, input);
+                    self.ui.node_graph_state.selected = Some(id);
+                    self.ui.node_graph_state.needs_initial_rebuild = true;
+                    self.ui.node_graph_state.pending_center_node = Some(id);
+                    self.gpu.buffer_dirty = true;
+                }
                 Action::InsertModifierAbove { target, kind } => {
                     let new_id = self.doc.scene.insert_modifier_above(target, kind);
                     self.ui.node_graph_state.selected = Some(new_id);
@@ -211,14 +225,32 @@ impl SdfApp {
                     self.doc.scene.swap_children(id);
                     self.gpu.buffer_dirty = true;
                 }
-                Action::ReparentNode { .. } => {
-                    // Reparenting is complex and handled inline in scene_tree for now
-                    // (requires detach + attach logic with slot awareness)
+                Action::ReparentNode { dragged, new_parent } => {
+                    self.doc.scene.reparent(dragged, new_parent);
+                    self.ui.node_graph_state.needs_initial_rebuild = true;
+                    self.gpu.buffer_dirty = true;
                 }
                 Action::RenameNode { id, name } => {
                     if let Some(node) = self.doc.scene.nodes.get_mut(&id) {
                         node.name = name;
                     }
+                }
+
+                // ── Graph connections ─────────────────────────────────
+                Action::SetLeftChild { parent, child } => {
+                    self.doc.scene.set_left_child(parent, child);
+                    self.ui.node_graph_state.needs_initial_rebuild = true;
+                    self.gpu.buffer_dirty = true;
+                }
+                Action::SetRightChild { parent, child } => {
+                    self.doc.scene.set_right_child(parent, child);
+                    self.ui.node_graph_state.needs_initial_rebuild = true;
+                    self.gpu.buffer_dirty = true;
+                }
+                Action::SetSculptInput { parent, child } => {
+                    self.doc.scene.set_sculpt_input(parent, child);
+                    self.ui.node_graph_state.needs_initial_rebuild = true;
+                    self.gpu.buffer_dirty = true;
                 }
 
                 // ── Bake / Export ────────────────────────────────────
@@ -264,6 +296,7 @@ impl SdfApp {
 
                 // ── Settings / GPU ───────────────────────────────────
                 Action::SettingsChanged => {
+                    self.settings.save();
                     self.gpu.current_structure_key = 0;
                     self.gpu.buffer_dirty = true;
                 }

@@ -22,7 +22,7 @@ use crate::graph::scene::NodeId;
 use crate::graph::voxel;
 use crate::sculpt::{ActiveTool, SculptState};
 use crate::settings::Settings;
-use crate::ui::dock::{self, SdfTabViewer};
+use crate::ui::dock::{self, SceneTreeContext, SdfTabViewer, ViewportContext};
 use crate::ui::gizmo::{GizmoMode, GizmoSpace, GizmoState};
 use crate::ui::node_graph::NodeGraphState;
 use crate::ui::viewport::ViewportResources;
@@ -118,7 +118,7 @@ pub(super) enum BakeStatus {
     },
 }
 
-pub(super) enum ExportStatus {
+pub enum ExportStatus {
     Idle,
     InProgress {
         progress: Arc<AtomicU32>,
@@ -129,7 +129,7 @@ pub(super) enum ExportStatus {
     },
 }
 
-pub(super) struct Toast {
+pub struct Toast {
     pub message: String,
     pub is_error: bool,
     pub created: Instant,
@@ -310,18 +310,40 @@ impl eframe::App for SdfApp {
 
         self.show_menu_bar(ctx, &mut action_sink);
         self.show_status_bar(ctx);
-        self.show_help_window(ctx);
-        self.show_export_dialog(ctx);
-        self.show_debug_window(ctx);
-        self.show_toasts(ctx);
+        crate::ui::help::draw(ctx, &mut self.ui.show_help);
+        crate::ui::profiler::draw(
+            ctx,
+            self.ui.show_debug,
+            &self.perf.timings,
+            &self.doc.scene,
+            &self.gpu,
+            &self.settings,
+            &self.doc.camera,
+        );
+        crate::ui::toasts::draw(ctx, &mut self.ui.toasts);
+
+        // Export dialog — acts on result
+        match crate::ui::export_dialog::draw(
+            ctx,
+            &mut self.ui.show_export_dialog,
+            &mut self.settings,
+            &self.async_state.export_status,
+        ) {
+            crate::ui::export_dialog::ExportDialogResult::Export => {
+                self.settings.save();
+                self.start_export(ctx);
+            }
+            _ => {}
+        }
 
         // Unified settings window
-        let settings_dirty_from_window = crate::ui::settings_window::draw(
+        crate::ui::settings_window::draw(
             ctx,
             &mut self.ui.show_settings,
             &mut self.settings,
             &mut self.ui.show_debug,
             self.initial_vsync,
+            &mut action_sink,
         );
 
         let t_ui = Instant::now();
@@ -333,7 +355,6 @@ impl eframe::App for SdfApp {
         };
 
         let mut pending_pick = None;
-        let mut settings_dirty = settings_dirty_from_window;
         let sculpt_count = self.gpu.sculpt_tex_indices.len();
         let fps_info = if self.settings.show_fps_overlay {
             Some((self.perf.timings.avg_fps, self.perf.timings.avg_frame_ms))
@@ -344,22 +365,25 @@ impl eframe::App for SdfApp {
             camera: &mut self.doc.camera,
             scene: &mut self.doc.scene,
             node_graph_state: &mut self.ui.node_graph_state,
-            gizmo_state: &mut self.gizmo.state,
-            gizmo_mode: &self.gizmo.mode,
-            gizmo_space: &self.gizmo.space,
-            pivot_offset: &mut self.gizmo.pivot_offset,
             active_tool: &self.doc.active_tool,
             sculpt_state: &mut self.doc.sculpt_state,
             settings: &mut self.settings,
-            settings_dirty: &mut settings_dirty,
             time: now as f32,
-            pending_pick: &mut pending_pick,
             bake_progress,
-            sculpt_count,
-            renaming_node: &mut self.ui.renaming_node,
-            rename_buf: &mut self.ui.rename_buf,
-            fps_info,
-            scene_tree_drag: &mut self.ui.scene_tree_drag,
+            viewport: ViewportContext {
+                gizmo_state: &mut self.gizmo.state,
+                gizmo_mode: &self.gizmo.mode,
+                gizmo_space: &self.gizmo.space,
+                pivot_offset: &mut self.gizmo.pivot_offset,
+                pending_pick: &mut pending_pick,
+                sculpt_count,
+                fps_info,
+            },
+            scene_tree: SceneTreeContext {
+                renaming_node: &mut self.ui.renaming_node,
+                rename_buf: &mut self.ui.rename_buf,
+                drag_state: &mut self.ui.scene_tree_drag,
+            },
             actions: &mut action_sink,
         };
 
@@ -371,12 +395,6 @@ impl eframe::App for SdfApp {
             });
 
         self.perf.timings.ui_draw_s = t_ui.elapsed().as_secs_f64();
-
-        // Convert remaining tab-viewer output signals into actions.
-        let settings_changed = settings_dirty;
-        if settings_dirty {
-            action_sink.push(actions::Action::SettingsChanged);
-        }
 
         // ── 5. Process all collected actions (single mutation point) ───
         self.process_actions(action_sink, ctx);
@@ -401,26 +419,7 @@ impl eframe::App for SdfApp {
         self.submit_sculpt_pick();
 
         // Reset stroke interpolation and flatten reference when mouse is released during sculpting
-        if self.doc.sculpt_state.is_active()
-            && self.async_state.pending_pick.is_none()
-            && matches!(self.async_state.pick_state, PickState::Idle)
-        {
-            self.async_state.last_sculpt_hit = None;
-            self.async_state.lazy_brush_pos = None;
-            if let SculptState::Active {
-                ref mut flatten_reference,
-                ref mut grab_snapshot,
-                ref mut grab_start,
-                ref mut grab_child_input,
-                ..
-            } = self.doc.sculpt_state
-            {
-                *flatten_reference = None;
-                *grab_snapshot = None;
-                *grab_start = None;
-                *grab_child_input = None;
-            }
-        }
+        self.reset_sculpt_stroke_if_idle();
 
         // ── 7. GPU upload + dirty tracking ─────────────────────────────
 
@@ -498,7 +497,7 @@ impl eframe::App for SdfApp {
             || !matches!(self.async_state.export_status, ExportStatus::Idle)
             || !matches!(self.async_state.pick_state, PickState::Idle)
             || self.async_state.pending_pick.is_some()
-            || settings_changed
+            || self.gpu.buffer_dirty
             || self.settings.continuous_repaint;
         if needs_repaint {
             ctx.request_repaint();

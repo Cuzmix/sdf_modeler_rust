@@ -847,6 +847,96 @@ impl Scene {
         }
     }
 
+    // --- Reparenting ---
+
+    /// Returns true if `candidate` is a descendant of `ancestor`.
+    pub fn is_descendant(&self, candidate: NodeId, ancestor: NodeId) -> bool {
+        let Some(node) = self.nodes.get(&ancestor) else {
+            return false;
+        };
+        for child_id in node.data.children() {
+            if child_id == candidate || self.is_descendant(candidate, child_id) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Check if `target_id` is a valid drop target for `dragged_id`.
+    /// Returns false if: same node, target is a descendant of dragged (cycle),
+    /// target is a primitive, or target has no free child slot.
+    pub fn is_valid_drop_target(&self, target_id: NodeId, dragged_id: NodeId) -> bool {
+        if target_id == dragged_id {
+            return false;
+        }
+        if self.is_descendant(target_id, dragged_id) {
+            return false;
+        }
+        let Some(target_node) = self.nodes.get(&target_id) else {
+            return false;
+        };
+        match &target_node.data {
+            NodeData::Primitive { .. } => false,
+            NodeData::Operation { left, right, .. } => left.is_none() || right.is_none(),
+            NodeData::Sculpt { input, .. }
+            | NodeData::Transform { input, .. }
+            | NodeData::Modifier { input, .. } => input.is_none(),
+        }
+    }
+
+    /// Detach a node from its parent (null out the parent's reference to it).
+    /// If the node is already top-level, this is a no-op.
+    pub fn detach_from_parent(&mut self, child_id: NodeId) {
+        let parent_map = self.build_parent_map();
+        let Some(&parent_id) = parent_map.get(&child_id) else {
+            return;
+        };
+        if let Some(parent) = self.nodes.get_mut(&parent_id) {
+            match &mut parent.data {
+                NodeData::Operation { left, right, .. } => {
+                    if *left == Some(child_id) {
+                        *left = None;
+                    }
+                    if *right == Some(child_id) {
+                        *right = None;
+                    }
+                }
+                NodeData::Sculpt { input, .. }
+                | NodeData::Transform { input, .. }
+                | NodeData::Modifier { input, .. } => {
+                    if *input == Some(child_id) {
+                        *input = None;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    /// Reparent: detach from old parent, attach to first free slot of new parent.
+    pub fn reparent(&mut self, dragged_id: NodeId, target_id: NodeId) {
+        self.detach_from_parent(dragged_id);
+        if let Some(target) = self.nodes.get_mut(&target_id) {
+            match &mut target.data {
+                NodeData::Operation { left, right, .. } => {
+                    if left.is_none() {
+                        *left = Some(dragged_id);
+                    } else if right.is_none() {
+                        *right = Some(dragged_id);
+                    }
+                }
+                NodeData::Sculpt { input, .. }
+                | NodeData::Transform { input, .. }
+                | NodeData::Modifier { input, .. } => {
+                    if input.is_none() {
+                        *input = Some(dragged_id);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
     // --- Graph analysis ---
 
     /// Hash of graph topology only (not parameter values).

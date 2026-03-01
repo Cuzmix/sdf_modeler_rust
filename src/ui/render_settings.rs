@@ -1,9 +1,11 @@
 use eframe::egui;
 
+use crate::app::actions::{Action, ActionSink};
 use crate::settings::{BackgroundMode, Settings};
 
-/// Draw the Render Settings panel. Returns `true` if a shader-affecting setting changed.
-pub fn draw(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
+/// Draw the Render Settings panel. Pushes `Action::SettingsChanged` if a shader-affecting
+/// setting changed.
+pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink) {
     let before = settings.render.clone();
 
     ui.heading("Render Settings");
@@ -211,11 +213,9 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
             }
         });
 
-    let changed = settings.render != before;
-    if changed {
-        settings.save();
+    if settings.render != before {
+        actions.push(Action::SettingsChanged);
     }
-    changed
 }
 
 fn labeled_slider(

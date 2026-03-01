@@ -52,12 +52,19 @@ pub enum Action {
     // ── Scene mutations (structural) ─────────────────────────────────
     CreatePrimitive(SdfPrimitive),
     CreateOperation { op: CsgOp, left: Option<NodeId>, right: Option<NodeId> },
+    CreateTransform { kind: TransformKind, input: Option<NodeId> },
+    CreateModifier { kind: ModifierKind, input: Option<NodeId> },
     InsertModifierAbove { target: NodeId, kind: ModifierKind },
     InsertTransformAbove { target: NodeId, kind: TransformKind },
     ReparentNode { dragged: NodeId, new_parent: NodeId },
     RenameNode { id: NodeId, name: String },
     ToggleVisibility(NodeId),
     SwapChildren(NodeId),
+
+    // ── Graph connections ────────────────────────────────────────────
+    SetLeftChild { parent: NodeId, child: Option<NodeId> },
+    SetRightChild { parent: NodeId, child: Option<NodeId> },
+    SetSculptInput { parent: NodeId, child: Option<NodeId> },
 
     // ── Bake / Export ────────────────────────────────────────────────
     RequestBake(BakeRequest),
