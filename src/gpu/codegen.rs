@@ -73,11 +73,15 @@ fn generate_voxel_texture_decls(scene: &Scene) -> (String, HashMap<NodeId, usize
 // Shader generation (public API)
 // ---------------------------------------------------------------------------
 
-pub fn generate_shader(scene: &Scene, config: &RenderConfig) -> String {
+pub fn generate_shader(
+    scene: &Scene,
+    config: &RenderConfig,
+    selected: Option<NodeId>,
+) -> String {
     let (tex_decls, sculpt_tex_map) = generate_voxel_texture_decls(scene);
     let tex_map = if sculpt_tex_map.is_empty() { None } else { Some(&sculpt_tex_map) };
     let scene_sdf = generate_scene_sdf(scene, tex_map);
-    let sel_sdf = generate_selected_sdf(scene, tex_map);
+    let sel_sdf = generate_selected_sdf(scene, tex_map, selected);
     let postlude = build_postlude(config);
     format!("{}\n{}\n{}\n{}\n{}", render_prelude(), tex_decls, scene_sdf, sel_sdf, postlude)
 }
@@ -166,7 +170,11 @@ fn scene_sdf(p: vec3f) -> vec2f {{
         log::warn!("Composite render: calc_normal string replace FAILED — using analytical normals as fallback");
     }
 
-    format!("{}\n{}\n{}", render_prelude(), comp_scene_sdf, postlude)
+    // Stub selected_sdf so the postlude (rendering.wgsl) compiles in composite mode.
+    // Composite mode does not support selection outlines — returns max distance.
+    let selected_sdf_stub = "fn selected_sdf(p: vec3f) -> f32 { return 1e10; }";
+
+    format!("{}\n{}\n{}\n{}", render_prelude(), comp_scene_sdf, selected_sdf_stub, postlude)
 }
 
 // ---------------------------------------------------------------------------
@@ -551,37 +559,56 @@ fn generate_scene_sdf_flat(
 // Selected SDF generation
 // ---------------------------------------------------------------------------
 
-/// Generate `selected_sdf(p) -> f32`: evaluates all nodes, returns the selected
-/// node's distance based on `camera.selected_idx`. Used for screen-space outline.
+/// Generate `selected_sdf(p) -> f32`: evaluates only the selected node's subtree
+/// and returns its SDF distance. Used for screen-space outline rendering.
+///
+/// When `selected` is `Some(id)`, only the selected node and its child dependencies
+/// are emitted — not the entire scene. This makes the outline cost proportional to
+/// one subtree instead of duplicating the full scene evaluation.
 fn generate_selected_sdf(
     scene: &Scene,
     sculpt_tex_map: Option<&HashMap<NodeId, usize>>,
+    selected: Option<NodeId>,
 ) -> String {
+    let stub = "fn selected_sdf(p: vec3f) -> f32 {\n    return 1e10;\n}";
+
+    let selected_id = match selected {
+        Some(id) => id,
+        None => return stub.to_string(),
+    };
+
     let order = scene.visible_topo_order();
     if order.is_empty() {
-        return "fn selected_sdf(p: vec3f) -> f32 {\n    return 1e10;\n}".to_string();
+        return stub.to_string();
     }
 
     let idx_map: HashMap<NodeId, usize> =
         order.iter().enumerate().map(|(i, &id)| (id, i)).collect();
+
+    // Selected node must be in the visible topo order
+    let Some(&selected_topo_index) = idx_map.get(&selected_id) else {
+        return stub.to_string();
+    };
+
     let parent_map = scene.build_parent_map();
+    let subtree_node_ids = scene.collect_subtree(selected_id);
 
     let mut lines = Vec::new();
     lines.push("fn selected_sdf(p: vec3f) -> f32 {".to_string());
-    lines.push("    if camera.selected_idx < 0.0 { return 1e10; }".to_string());
-    lines.push("    let _sel_idx = i32(camera.selected_idx + 0.5);".to_string());
 
-    for (i, &node_id) in order.iter().enumerate() {
+    // Emit only the selected node's subtree, preserving topo order for dependencies
+    for (topo_index, &node_id) in order.iter().enumerate() {
+        if !subtree_node_ids.contains(&node_id) {
+            continue;
+        }
         let Some(node) = scene.nodes.get(&node_id) else { continue; };
         emit_node_wgsl(
-            &mut lines, i, node_id, node, &parent_map, scene, &idx_map, sculpt_tex_map,
+            &mut lines, topo_index, node_id, node, &parent_map, scene, &idx_map,
+            sculpt_tex_map,
         );
     }
 
-    for i in 0..order.len() {
-        lines.push(format!("    if _sel_idx == {i} {{ return n{i}.x; }}"));
-    }
-    lines.push("    return 1e10;".to_string());
+    lines.push(format!("    return n{selected_topo_index}.x;"));
     lines.push("}".to_string());
 
     lines.join("\n")

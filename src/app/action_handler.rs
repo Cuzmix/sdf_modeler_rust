@@ -74,6 +74,7 @@ impl SdfApp {
                 // ── Selection ────────────────────────────────────────
                 Action::Select(id) => {
                     self.ui.node_graph_state.selected = id;
+                    self.gpu.current_structure_key = 0; // Force shader rebuild for selected_sdf
                     self.gpu.buffer_dirty = true;
                 }
                 Action::DeleteSelected => {
