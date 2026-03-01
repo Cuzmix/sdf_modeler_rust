@@ -193,6 +193,16 @@ pub struct RenderConfig {
     pub touch_zoom_sensitivity: f32,
     #[serde(default)]
     pub invert_touch_pan: bool,
+
+    // Roll
+    #[serde(default = "default_roll_sensitivity")]
+    pub roll_sensitivity: f32,
+    #[serde(default)]
+    pub invert_roll: bool,
+
+    // Navigation
+    #[serde(default)]
+    pub clamp_orbit_pitch: bool,
 }
 
 fn default_true() -> bool { true }
@@ -205,6 +215,7 @@ fn default_composite_resolution() -> u32 { 128 }
 fn default_outline_color() -> [f32; 3] { [1.0, 0.8, 0.2] }
 fn default_outline_thickness() -> f32 { 2.5 }
 fn default_touch_zoom_sensitivity() -> f32 { 500.0 }
+fn default_roll_sensitivity() -> f32 { 0.005 }
 
 impl Default for RenderConfig {
     fn default() -> Self {
@@ -261,6 +272,9 @@ impl Default for RenderConfig {
 
             touch_zoom_sensitivity: 500.0,
             invert_touch_pan: false,
+            roll_sensitivity: 0.005,
+            invert_roll: false,
+            clamp_orbit_pitch: false,
         }
     }
 }

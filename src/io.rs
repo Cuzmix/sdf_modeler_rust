@@ -22,6 +22,7 @@ pub fn project_to_json(scene: &Scene, camera: &Camera) -> Result<String, String>
         camera: Camera {
             yaw: camera.yaw,
             pitch: camera.pitch,
+            roll: camera.roll,
             distance: camera.distance,
             target: camera.target,
             fov: camera.fov,

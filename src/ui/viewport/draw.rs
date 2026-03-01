@@ -442,7 +442,16 @@ pub fn draw(
         }
         if response.dragged_by(egui::PointerButton::Middle) {
             let delta = response.drag_delta();
-            camera.orbit(delta.x, delta.y);
+            let modifiers = ui.input(|i| i.modifiers);
+            if modifiers.ctrl && modifiers.alt {
+                let sign = if render_config.invert_roll { -1.0 } else { 1.0 };
+                camera.roll_by(sign * delta.x, render_config.roll_sensitivity);
+            } else {
+                camera.orbit(delta.x, delta.y);
+                if render_config.clamp_orbit_pitch {
+                    camera.clamp_pitch();
+                }
+            }
         }
     } else if !gizmo_consumed {
         // Normal mode: click to pick
@@ -462,7 +471,16 @@ pub fn draw(
 
         if response.dragged_by(egui::PointerButton::Primary) && !multi_touch_active {
             let delta = response.drag_delta();
-            camera.orbit(delta.x, delta.y);
+            let modifiers = ui.input(|i| i.modifiers);
+            if modifiers.ctrl && modifiers.alt {
+                let sign = if render_config.invert_roll { -1.0 } else { 1.0 };
+                camera.roll_by(sign * delta.x, render_config.roll_sensitivity);
+            } else {
+                camera.orbit(delta.x, delta.y);
+                if render_config.clamp_orbit_pitch {
+                    camera.clamp_pitch();
+                }
+            }
         }
 
         if response.dragged_by(egui::PointerButton::Secondary) {
@@ -487,6 +505,10 @@ pub fn draw(
         if touch.translation_delta != egui::Vec2::ZERO {
             let sign = if render_config.invert_touch_pan { -1.0 } else { 1.0 };
             camera.pan(sign * touch.translation_delta.x, sign * touch.translation_delta.y);
+        }
+        if touch.rotation_delta != 0.0 {
+            let sign = if render_config.invert_roll { -1.0 } else { 1.0 };
+            camera.roll += sign * touch.rotation_delta;
         }
     }
 

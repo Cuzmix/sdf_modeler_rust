@@ -41,6 +41,13 @@ pub fn draw(
                     .show(ui, |ui| {
                         ui.checkbox(&mut settings.render.show_grid, "Show Grid")
                             .on_hover_text("Display ground plane grid at Y=0");
+                        ui.checkbox(&mut settings.render.clamp_orbit_pitch, "Clamp Orbit Pitch")
+                            .on_hover_text("Limit vertical orbit to ±89°. When off, allows full 360° gimbal rotation.");
+                        ui.separator();
+                        labeled_slider(ui, "Roll Sensitivity", &mut settings.render.roll_sensitivity, 0.001..=0.02, false,
+                            "How fast Ctrl+Alt+drag and touch twist roll the camera");
+                        ui.checkbox(&mut settings.render.invert_roll, "Invert Roll")
+                            .on_hover_text("Reverse the roll direction for both touch twist and Ctrl+Alt+drag");
                     });
 
                 // --- Touch Input ---

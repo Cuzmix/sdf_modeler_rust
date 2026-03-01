@@ -7,12 +7,14 @@ const PAN_SPEED_FACTOR: f32 = 0.002;
 const ZOOM_SENSITIVITY: f32 = 0.001;
 const MIN_DISTANCE: f32 = 0.1;
 const MAX_DISTANCE: f32 = 100.0;
-const PITCH_LIMIT_RAD: f32 = 89.0 * (std::f32::consts::PI / 180.0);
+const PITCH_LIMIT: f32 = 89.0 * std::f32::consts::PI / 180.0;
 
 #[derive(Serialize, Deserialize)]
 pub struct Camera {
     pub yaw: f32,
     pub pitch: f32,
+    #[serde(default)]
+    pub roll: f32,
     pub distance: f32,
     pub target: Vec3,
     pub fov: f32,
@@ -23,6 +25,7 @@ impl Default for Camera {
         Self {
             yaw: std::f32::consts::FRAC_PI_4,
             pitch: 0.4,
+            roll: 0.0,
             distance: 5.0,
             target: Vec3::ZERO,
             fov: 45.0_f32.to_radians(),
@@ -38,8 +41,17 @@ impl Camera {
         self.target + Vec3::new(x, y, z)
     }
 
+    fn up(&self) -> Vec3 {
+        if self.pitch.cos() >= 0.0 { Vec3::Y } else { Vec3::NEG_Y }
+    }
+
     pub fn view_matrix(&self) -> Mat4 {
-        Mat4::look_at_rh(self.eye(), self.target, Vec3::Y)
+        let view = Mat4::look_at_rh(self.eye(), self.target, self.up());
+        if self.roll == 0.0 {
+            view
+        } else {
+            Mat4::from_rotation_z(self.roll) * view
+        }
     }
 
     pub fn projection_matrix(&self, aspect: f32) -> Mat4 {
@@ -76,12 +88,19 @@ impl Camera {
     pub fn orbit(&mut self, dx: f32, dy: f32) {
         self.yaw += dx * ORBIT_SENSITIVITY;
         self.pitch += dy * ORBIT_SENSITIVITY;
-        self.pitch = self.pitch.clamp(-PITCH_LIMIT_RAD, PITCH_LIMIT_RAD);
+    }
+
+    pub fn clamp_pitch(&mut self) {
+        self.pitch = self.pitch.clamp(-PITCH_LIMIT, PITCH_LIMIT);
+    }
+
+    pub fn roll_by(&mut self, delta: f32, sensitivity: f32) {
+        self.roll += delta * sensitivity;
     }
 
     pub fn pan(&mut self, dx: f32, dy: f32) {
         let forward = (self.target - self.eye()).normalize();
-        let right = forward.cross(Vec3::Y).normalize();
+        let right = forward.cross(self.up()).normalize();
         let up = right.cross(forward).normalize();
         let speed = self.distance * PAN_SPEED_FACTOR;
         self.target -= right * dx * speed;
@@ -96,16 +115,19 @@ impl Camera {
     pub fn set_front(&mut self) {
         self.yaw = 0.0;
         self.pitch = 0.0;
+        self.roll = 0.0;
     }
 
     pub fn set_top(&mut self) {
         self.yaw = 0.0;
-        self.pitch = PITCH_LIMIT_RAD;
+        self.pitch = std::f32::consts::FRAC_PI_2;
+        self.roll = 0.0;
     }
 
     pub fn set_right(&mut self) {
         self.yaw = std::f32::consts::FRAC_PI_2;
         self.pitch = 0.0;
+        self.roll = 0.0;
     }
 
     pub fn focus_on(&mut self, center: Vec3, radius: f32) {
