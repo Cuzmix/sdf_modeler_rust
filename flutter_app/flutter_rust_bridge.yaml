@@ -1,3 +1,5 @@
 rust_input: crate::bridge
 rust_root: ../
 dart_output: lib/src/rust
+rust_features:
+  - flutter_ui

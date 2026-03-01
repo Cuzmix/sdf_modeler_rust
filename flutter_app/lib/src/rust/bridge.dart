@@ -3,11 +3,11 @@
 
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
+import 'bridge/gpu_context.dart';
+import 'bridge/scene_handle.dart';
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-/// Flutter bridge API — thin FFI layer between Dart and the Rust core.
-/// All public functions here are exposed to Dart via flutter_rust_bridge codegen.
 /// Simple hello function to verify the bridge is working end-to-end.
 Future<String> helloFromRust() =>
     RustLib.instance.api.crateBridgeHelloFromRust();
@@ -15,3 +15,48 @@ Future<String> helloFromRust() =>
 /// Returns the wgpu backend name for the default adapter (useful for diagnostics).
 Future<String> gpuBackendName() =>
     RustLib.instance.api.crateBridgeGpuBackendName();
+
+Future<GpuContext> createGpuContext() =>
+    RustLib.instance.api.crateBridgeCreateGpuContext();
+
+Future<SceneHandle> createScene() =>
+    RustLib.instance.api.crateBridgeCreateScene();
+
+/// Synchronize GPU pipelines and buffers with the current scene state.
+/// Call this after any scene modification (add/remove nodes, change topology).
+Future<void> syncGpu({required GpuContext gpu, required SceneHandle scene}) =>
+    RustLib.instance.api.crateBridgeSyncGpu(gpu: gpu, scene: scene);
+
+/// Render a single frame and return RGBA pixel data.
+/// Camera parameters are passed as primitives to avoid FFI struct complexity.
+Future<Uint8List> renderFrame({
+  required GpuContext gpu,
+  required SceneHandle scene,
+  required double yaw,
+  required double pitch,
+  required double distance,
+  required double targetX,
+  required double targetY,
+  required double targetZ,
+  required double fov,
+  required int width,
+  required int height,
+  required double qualityMode,
+  required double time,
+  required bool gridEnabled,
+}) => RustLib.instance.api.crateBridgeRenderFrame(
+  gpu: gpu,
+  scene: scene,
+  yaw: yaw,
+  pitch: pitch,
+  distance: distance,
+  targetX: targetX,
+  targetY: targetY,
+  targetZ: targetZ,
+  fov: fov,
+  width: width,
+  height: height,
+  qualityMode: qualityMode,
+  time: time,
+  gridEnabled: gridEnabled,
+);

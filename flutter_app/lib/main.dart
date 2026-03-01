@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'src/rust/frb_generated.dart';
 import 'src/rust/bridge.dart';
+import 'src/rust/bridge/gpu_context.dart';
+import 'src/rust/bridge/scene_handle.dart';
+import 'src/viewport_widget.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,20 +38,30 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  String _rustMessage = 'Loading...';
+  GpuContext? _gpu;
+  SceneHandle? _scene;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _callRust();
+    _initGpu();
   }
 
-  Future<void> _callRust() async {
-    final message = await helloFromRust();
-    final backend = await gpuBackendName();
-    setState(() {
-      _rustMessage = '$message\n$backend';
-    });
+  Future<void> _initGpu() async {
+    try {
+      final gpu = await createGpuContext();
+      final scene = await createScene();
+      await syncGpu(gpu: gpu, scene: scene);
+      setState(() {
+        _gpu = gpu;
+        _scene = scene;
+      });
+    } catch (e) {
+      setState(() {
+        _error = 'GPU init failed: $e';
+      });
+    }
   }
 
   @override
@@ -57,13 +70,23 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         title: const Text('SDF Modeler'),
       ),
-      body: Center(
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_error != null) {
+      return Center(
         child: Text(
-          _rustMessage,
-          style: Theme.of(context).textTheme.headlineSmall,
+          _error!,
+          style: const TextStyle(color: Colors.red, fontSize: 16),
           textAlign: TextAlign.center,
         ),
-      ),
-    );
+      );
+    }
+    if (_gpu == null || _scene == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    return ViewportWidget(gpu: _gpu!, scene: _scene!);
   }
 }
