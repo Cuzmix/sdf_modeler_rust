@@ -135,6 +135,18 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
             }
         });
 
+    // --- Environment Reflection ---
+    egui::CollapsingHeader::new("Environment Reflection")
+        .default_open(false)
+        .show(ui, |ui| {
+            ui.checkbox(&mut config.env_reflection_enabled, "Enable Env Reflection")
+                .on_hover_text("Reflect the sky gradient on glossy/metallic surfaces");
+            ui.add_enabled_ui(config.env_reflection_enabled, |ui| {
+                labeled_slider(ui, "Intensity", &mut config.env_reflection_intensity, 0.0..=2.0, false,
+                    "Strength of environment reflections");
+            });
+        });
+
     // --- Sky / Background ---
     egui::CollapsingHeader::new("Sky / Background")
         .default_open(false)
@@ -166,6 +178,25 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
             }
         });
 
+    // --- Subsurface Scattering ---
+    egui::CollapsingHeader::new("Subsurface Scattering")
+        .default_open(false)
+        .show(ui, |ui| {
+            ui.checkbox(&mut config.sss_enabled, "Enable SSS")
+                .on_hover_text("Thickness-based subsurface scattering (simulates light passing through thin geometry)");
+            ui.add_enabled_ui(config.sss_enabled, |ui| {
+                labeled_slider(ui, "Strength", &mut config.sss_strength, 0.5..=20.0, false,
+                    "How quickly light attenuates through the object. Lower = more translucent");
+                ui.horizontal(|ui| {
+                    ui.label("Color:");
+                    ui.color_edit_button_rgb(&mut config.sss_color);
+                });
+            });
+            if ui.small_button("Reset").clicked() {
+                config.reset_sss();
+            }
+        });
+
     // --- Fog ---
     egui::CollapsingHeader::new("Fog")
         .default_open(false)
@@ -183,6 +214,22 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
             if ui.small_button("Reset").clicked() {
                 config.reset_fog();
             }
+        });
+
+    // --- Bloom ---
+    egui::CollapsingHeader::new("Bloom")
+        .default_open(false)
+        .show(ui, |ui| {
+            ui.checkbox(&mut config.bloom_enabled, "Enable Bloom")
+                .on_hover_text("Glow effect on bright areas (post-process star pattern)");
+            ui.add_enabled_ui(config.bloom_enabled, |ui| {
+                labeled_slider(ui, "Threshold", &mut config.bloom_threshold, 0.1..=2.0, false,
+                    "Brightness cutoff for bloom. Lower = more glow");
+                labeled_slider(ui, "Intensity", &mut config.bloom_intensity, 0.05..=2.0, false,
+                    "Strength of the bloom glow");
+                labeled_slider(ui, "Radius", &mut config.bloom_radius, 1.0..=8.0, false,
+                    "Spread of the bloom in pixels per step");
+            });
         });
 
     // --- Gamma / Tonemapping ---

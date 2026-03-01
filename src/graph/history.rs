@@ -6,6 +6,7 @@ const MAX_UNDO_DEPTH: usize = 50;
 struct Snapshot {
     scene: Scene,
     selected: Option<NodeId>,
+    label: String,
 }
 
 pub struct History {
@@ -25,12 +26,26 @@ impl History {
         }
     }
 
+    /// Get labels of the undo stack (oldest first).
+    pub fn undo_labels(&self) -> Vec<String> {
+        self.undo_stack.iter().map(|s| s.label.clone()).collect()
+    }
+
+    /// Get labels of the redo stack (next-to-redo first).
+    pub fn redo_labels(&self) -> Vec<String> {
+        self.redo_stack.iter().rev().map(|s| s.label.clone()).collect()
+    }
+
+    pub fn undo_count(&self) -> usize { self.undo_stack.len() }
+    pub fn redo_count(&self) -> usize { self.redo_stack.len() }
+
     /// Call at the START of each frame. Captures the "before" state.
     pub fn begin_frame(&mut self, scene: &Scene, selected: Option<NodeId>) {
         if self.pending_snapshot.is_none() {
             self.pending_snapshot = Some(Snapshot {
                 scene: scene.clone(),
                 selected,
+                label: String::new(),
             });
         }
     }
@@ -51,7 +66,11 @@ impl History {
                 !scene.content_eq(&snapshot.scene) || selected != snapshot.selected;
 
             if changed && (!is_anything_dragged || drag_just_ended) {
-                self.push_undo(snapshot.clone());
+                // Auto-detect a label based on what changed
+                let label = Self::detect_change_label(&snapshot.scene, scene, snapshot.selected, selected);
+                let mut snap = snapshot.clone();
+                snap.label = label;
+                self.push_undo(snap);
                 self.redo_stack.clear();
                 self.pending_snapshot = None;
             } else if !changed && !is_anything_dragged {
@@ -78,6 +97,7 @@ impl History {
         self.redo_stack.push(Snapshot {
             scene: current_scene.clone(),
             selected: current_selected,
+            label: "Undo".into(),
         });
         self.pending_snapshot = None;
         Some((snapshot.scene, snapshot.selected))
@@ -93,8 +113,47 @@ impl History {
         self.undo_stack.push(Snapshot {
             scene: current_scene.clone(),
             selected: current_selected,
+            label: "Redo".into(),
         });
         self.pending_snapshot = None;
         Some((snapshot.scene, snapshot.selected))
+    }
+
+    /// Detect what kind of change happened between two scenes.
+    fn detect_change_label(old: &Scene, new: &Scene, old_sel: Option<NodeId>, new_sel: Option<NodeId>) -> String {
+        let old_count = old.nodes.len();
+        let new_count = new.nodes.len();
+
+        if new_count > old_count {
+            // Node(s) added
+            for (&id, node) in &new.nodes {
+                if !old.nodes.contains_key(&id) {
+                    return format!("Add {}", node.name);
+                }
+            }
+            return "Add node".into();
+        }
+
+        if new_count < old_count {
+            // Node(s) removed
+            for (&id, node) in &old.nodes {
+                if !new.nodes.contains_key(&id) {
+                    return format!("Delete {}", node.name);
+                }
+            }
+            return "Delete node".into();
+        }
+
+        // Same count — check for property/structure changes
+        if old_sel != new_sel {
+            return "Select".into();
+        }
+
+        // Check if structure changed (parent/child connections)
+        if old.structure_key() != new.structure_key() {
+            return "Restructure".into();
+        }
+
+        "Edit".into()
     }
 }

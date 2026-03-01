@@ -4,7 +4,7 @@ use crate::app::BakeRequest;
 use crate::app::actions::{Action, ActionSink};
 use crate::graph::scene::{CsgOp, ModifierKind, NodeData, NodeId, Scene, SdfPrimitive, TransformKind};
 use crate::graph::voxel;
-use crate::sculpt::{BrushMode, FalloffMode, SculptState, DEFAULT_BRUSH_STRENGTH};
+use crate::sculpt::{BrushMode, BrushShape, FalloffMode, SculptState, DEFAULT_BRUSH_STRENGTH};
 
 const SCALE_MIN: f32 = 0.01;
 const SCALE_MAX: f32 = 100.0;
@@ -144,16 +144,21 @@ pub fn draw(
         return;
     };
 
+    let is_locked = node.locked;
+
     // Clone data to avoid borrow conflicts with egui widgets
     let mut name = node.name.clone();
     let node_data = node.data.clone();
 
     ui.heading(format!("Node #{}", id));
+    if is_locked {
+        ui.colored_label(egui::Color32::from_rgb(255, 180, 80), "\u{1F512} Locked");
+    }
     ui.separator();
 
     ui.horizontal(|ui| {
         ui.label("Name:");
-        ui.text_edit_singleline(&mut name);
+        ui.add_enabled(!is_locked, egui::TextEdit::singleline(&mut name));
     });
 
     ui.separator();
@@ -451,6 +456,7 @@ pub fn draw(
             mut emissive,
             mut emissive_intensity,
             mut fresnel,
+            mut layer_intensity,
             voxel_grid: _,
             mut desired_resolution,
         } => {
@@ -464,6 +470,13 @@ pub fn draw(
                 }
                 None => { ui.label("Input: (empty)"); }
             }
+            ui.separator();
+
+            // Layer intensity (sculpt layer control)
+            ui.horizontal(|ui| {
+                ui.label("Layer Intensity:");
+                ui.add(egui::Slider::new(&mut layer_intensity, 0.0..=1.0).fixed_decimals(2));
+            });
             ui.separator();
 
             egui::CollapsingHeader::new("Transform")
@@ -572,6 +585,7 @@ pub fn draw(
                 ref mut brush_radius,
                 ref mut brush_strength,
                 ref mut falloff_mode,
+                ref mut brush_shape,
                 ref mut smooth_iterations,
                 ref mut lazy_radius,
                 ref mut surface_constraint,
@@ -602,6 +616,14 @@ pub fn draw(
                     ui.selectable_value(falloff_mode, FalloffMode::Linear, "Linear");
                     ui.selectable_value(falloff_mode, FalloffMode::Sharp, "Sharp");
                     ui.selectable_value(falloff_mode, FalloffMode::Flat, "Flat");
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Shape:");
+                    ui.selectable_value(brush_shape, BrushShape::Sphere, "Sphere");
+                    ui.selectable_value(brush_shape, BrushShape::Cube, "Cube");
+                    ui.selectable_value(brush_shape, BrushShape::Diamond, "Diamond");
+                    ui.selectable_value(brush_shape, BrushShape::Ring, "Ring");
+                    ui.selectable_value(brush_shape, BrushShape::Cylinder, "Cylinder");
                 });
                 ui.horizontal(|ui| {
                     ui.label("Radius:");
@@ -707,6 +729,7 @@ pub fn draw(
                     emissive: ref mut em,
                     emissive_intensity: ref mut ei,
                     fresnel: ref mut fr,
+                    layer_intensity: ref mut li,
                     desired_resolution: ref mut dr,
                     ..
                 } = node.data
@@ -719,6 +742,7 @@ pub fn draw(
                     *em = emissive;
                     *ei = emissive_intensity;
                     *fr = fresnel;
+                    *li = layer_intensity;
                     *dr = desired_resolution;
                 }
             }
@@ -871,6 +895,20 @@ pub fn draw(
                     vec3_editor(ui, "Spacing", &mut value, 0.1, Some(0.0..=20.0), "");
                     vec3_editor(ui, "Count", &mut extra, 1.0, Some(0.0..=50.0), "");
                 }
+                ModifierKind::RadialRepeat => {
+                    ui.horizontal(|ui| {
+                        ui.label("Count:");
+                        ui.add(egui::DragValue::new(&mut value.x).speed(1.0).range(1.0..=64.0));
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Axis:");
+                        let mut ax = value.y as i32;
+                        ui.selectable_value(&mut ax, 0, "X");
+                        ui.selectable_value(&mut ax, 1, "Y");
+                        ui.selectable_value(&mut ax, 2, "Z");
+                        value.y = ax as f32;
+                    });
+                }
             }
 
             ui.separator();
@@ -946,7 +984,7 @@ pub fn draw(
                         }
                         ui.separator();
                         ui.label("Repeat");
-                        for kind in &[ModifierKind::Mirror, ModifierKind::Repeat, ModifierKind::FiniteRepeat] {
+                        for kind in &[ModifierKind::Mirror, ModifierKind::Repeat, ModifierKind::FiniteRepeat, ModifierKind::RadialRepeat] {
                             if ui.button(kind.base_name()).clicked() {
                                 actions.push(Action::InsertModifierAbove { target: id, kind: kind.clone() });
                                 ui.close_menu();

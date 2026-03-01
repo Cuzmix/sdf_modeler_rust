@@ -41,3 +41,37 @@ fn finite_repeat_point(p: vec3f, s: vec3f, c: vec3f) -> vec3f {
     if s.z > 0.0 { q.z = q.z - s.z * clamp(round(q.z / s.z), -c.z, c.z); }
     return q;
 }
+
+// Radial repeat: rotate point to nearest angular sector.
+// count = number of copies, axis = 0(X), 1(Y), 2(Z).
+fn radial_repeat_point(p: vec3f, count: f32, axis: f32) -> vec3f {
+    let n = max(count, 1.0);
+    let sector = 6.28318530718 / n; // TAU / n
+    // Extract the 2D plane perpendicular to the chosen axis
+    var a: f32;
+    var r: f32;
+    if axis < 0.5 {
+        // X axis: repeat in YZ plane
+        a = atan2(p.z, p.y);
+        r = length(vec2f(p.y, p.z));
+    } else if axis < 1.5 {
+        // Y axis: repeat in XZ plane
+        a = atan2(p.z, p.x);
+        r = length(vec2f(p.x, p.z));
+    } else {
+        // Z axis: repeat in XY plane
+        a = atan2(p.y, p.x);
+        r = length(vec2f(p.x, p.y));
+    }
+    // Snap angle to nearest sector
+    a = a - sector * round(a / sector);
+    let ca = cos(a);
+    let sa = sin(a);
+    if axis < 0.5 {
+        return vec3f(p.x, r * ca, r * sa);
+    } else if axis < 1.5 {
+        return vec3f(r * ca, p.y, r * sa);
+    } else {
+        return vec3f(r * ca, r * sa, p.z);
+    }
+}

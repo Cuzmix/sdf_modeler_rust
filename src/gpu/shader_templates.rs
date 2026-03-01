@@ -87,6 +87,33 @@ pub(crate) fn build_postlude(config: &RenderConfig) -> String {
         "    let ao = 1.0;".to_string()
     };
 
+    let env_refl_line = if config.env_reflection_enabled {
+        format!(
+            "    {{ let refl_dir = reflect(rd, n); let env_t = refl_dir.y * 0.5 + 0.5; let env_col = mix(vec3f({}), vec3f({}), env_t); let env_f = mat_fresnel + (1.0 - mat_fresnel) * pow(1.0 - max(dot(-rd, n), 0.0), 5.0); color += spec_tint * env_col * env_f * {} * ao; }}",
+            format_vec3(match config.background_mode {
+                crate::settings::BackgroundMode::SkyGradient => config.sky_horizon,
+                crate::settings::BackgroundMode::SolidColor => config.bg_solid_color,
+            }),
+            format_vec3(match config.background_mode {
+                crate::settings::BackgroundMode::SkyGradient => config.sky_zenith,
+                crate::settings::BackgroundMode::SolidColor => config.bg_solid_color,
+            }),
+            format_f32(config.env_reflection_intensity),
+        )
+    } else {
+        "".to_string()
+    };
+
+    let sss_line = if config.sss_enabled {
+        format!(
+            "    {{ let sss_d = scene_sdf(p + key_dir * 0.05).x + scene_sdf(p + key_dir * 0.1).x + scene_sdf(p + key_dir * 0.2).x; let sss_thick = max(0.0, sss_d); let sss_trans = exp(-sss_thick * {}) * clamp(dot(-rd, key_dir), 0.0, 1.0) * 0.5; color += albedo * vec3f({}) * sss_trans; }}",
+            format_f32(config.sss_strength),
+            format_vec3(config.sss_color),
+        )
+    } else {
+        "".to_string()
+    };
+
     let fog_line = if config.fog_enabled {
         format!(
             "    {{ let fog_amt = 1.0 - exp(-t * {}); let sun_s = pow(max(dot(rd, key_dir), 0.0), 8.0); let fog_c = mix(vec3f({}), vec3f(1.0, 0.9, 0.7), sun_s); color = mix(color, fog_c, fog_amt); }}",
@@ -125,6 +152,8 @@ pub(crate) fn build_postlude(config: &RenderConfig) -> String {
         .replace("/*GAMMA*/", &format_f32(config.gamma))
         .replace("/*SHADOW_LINE*/", &shadow_line)
         .replace("/*AO_LINE*/", &ao_line)
+        .replace("/*ENV_REFL_LINE*/", &env_refl_line)
+        .replace("/*SSS_LINE*/", &sss_line)
         .replace("/*FOG_LINE*/", &fog_line)
         .replace("/*OUTLINE_COLOR*/", &format_vec3(config.outline_color))
         .replace("/*OUTLINE_THICKNESS*/", &format_f32(config.outline_thickness))

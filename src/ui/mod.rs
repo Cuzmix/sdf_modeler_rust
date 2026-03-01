@@ -3,6 +3,7 @@ pub mod dock;
 pub mod export_dialog;
 pub mod gizmo;
 pub mod help;
+pub mod history_panel;
 pub mod node_graph;
 pub mod profiler;
 pub mod properties;

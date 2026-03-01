@@ -382,19 +382,20 @@ pub fn evaluate_sdf_tree(scene: &Scene, node_id: NodeId, p: Vec3) -> f32 {
             input,
             position,
             rotation,
+            layer_intensity,
             voxel_grid,
             ..
         } => {
             let local_p = rotate_euler(p - *position, *rotation);
             if let Some(child_id) = input {
-                // Differential: analytical child SDF + displacement from grid
+                // Differential: analytical child SDF + displacement from grid * layer_intensity
                 let analytical = evaluate_sdf_tree(scene, *child_id, p);
                 let gc = voxel_grid.world_to_grid(local_p);
                 let max_c = (voxel_grid.resolution - 1) as f32;
                 let outside = gc.x < 0.0 || gc.y < 0.0 || gc.z < 0.0
                     || gc.x > max_c || gc.y > max_c || gc.z > max_c;
                 let disp = if outside { 0.0 } else { voxel_grid.sample(local_p) };
-                analytical + disp
+                analytical + disp * layer_intensity
             } else {
                 // Standalone: grid IS the total SDF (unchanged)
                 voxel_grid.sample(local_p)
@@ -472,6 +473,29 @@ pub fn evaluate_sdf_tree(scene: &Scene, node_id: NodeId, p: Vec3) -> f32 {
                     if s.y > 0.0 { q.y -= s.y * (q.y / s.y).round().clamp(-c.y, c.y); }
                     if s.z > 0.0 { q.z -= s.z * (q.z / s.z).round().clamp(-c.z, c.z); }
                     evaluate_sdf_tree(scene, *child_id, q)
+                }
+                ModifierKind::RadialRepeat => {
+                    let count = value.x.max(1.0);
+                    let axis = value.y;
+                    let sector = std::f32::consts::TAU / count;
+                    let (a, r, tp) = if axis < 0.5 {
+                        let a = p.z.atan2(p.y);
+                        let r = Vec2::new(p.y, p.z).length();
+                        let a = a - sector * (a / sector).round();
+                        (a, r, Vec3::new(p.x, r * a.cos(), r * a.sin()))
+                    } else if axis < 1.5 {
+                        let a = p.z.atan2(p.x);
+                        let r = Vec2::new(p.x, p.z).length();
+                        let a = a - sector * (a / sector).round();
+                        (a, r, Vec3::new(r * a.cos(), p.y, r * a.sin()))
+                    } else {
+                        let a = p.y.atan2(p.x);
+                        let r = Vec2::new(p.x, p.y).length();
+                        let a = a - sector * (a / sector).round();
+                        (a, r, Vec3::new(r * a.cos(), r * a.sin(), p.z))
+                    };
+                    let _ = (a, r); // suppress unused warnings
+                    evaluate_sdf_tree(scene, *child_id, tp)
                 }
                 // Distance modifiers: recurse first, then modify result
                 ModifierKind::Round => {

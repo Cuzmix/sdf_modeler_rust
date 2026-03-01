@@ -37,6 +37,20 @@ pub fn draw(
             ui.heading("Export Settings");
             ui.add_space(4.0);
 
+            // Preset buttons
+            if !settings.export_presets.is_empty() {
+                ui.label("Presets:");
+                ui.horizontal(|ui| {
+                    let presets = settings.export_presets.clone();
+                    for preset in &presets {
+                        if ui.button(&preset.name).clicked() {
+                            settings.export_resolution = preset.resolution;
+                        }
+                    }
+                });
+                ui.add_space(4.0);
+            }
+
             // Resolution slider
             let mut res_i32 = settings.export_resolution as i32;
             ui.horizontal(|ui| {
@@ -47,6 +61,11 @@ pub fn draw(
 
             let voxels = (settings.export_resolution as u64).pow(3);
             ui.weak(format!("{} voxels", voxels));
+            ui.add_space(4.0);
+
+            // Adaptive toggle
+            ui.checkbox(&mut settings.adaptive_export, "Adaptive sampling")
+                .on_hover_text("Skip empty regions for faster export at high resolutions");
             ui.add_space(8.0);
 
             // Info text

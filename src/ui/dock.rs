@@ -10,7 +10,8 @@ use crate::sculpt::{ActiveTool, SculptState};
 use crate::ui::gizmo::{GizmoMode, GizmoSpace, GizmoState};
 use crate::ui::node_graph::{self, NodeGraphState};
 use crate::settings::Settings;
-use crate::ui::{properties, render_settings, scene_tree, viewport};
+use crate::graph::history::History;
+use crate::ui::{history_panel, properties, render_settings, scene_tree, viewport};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Tab {
@@ -19,6 +20,7 @@ pub enum Tab {
     Properties,
     SceneTree,
     RenderSettings,
+    History,
 }
 
 pub fn create_dock_state() -> DockState<Tab> {
@@ -36,7 +38,7 @@ pub fn create_dock_state() -> DockState<Tab> {
         right,
         Split::Below,
         0.5,
-        Node::leaf(Tab::SceneTree),
+        Node::leaf_with(vec![Tab::SceneTree, Tab::History]),
     );
 
     let [_viewport, _graph] = surface.split(
@@ -46,6 +48,32 @@ pub fn create_dock_state() -> DockState<Tab> {
         Node::leaf(Tab::NodeGraph),
     );
 
+    state
+}
+
+/// Sculpting layout: large viewport, properties on right.
+pub fn create_dock_sculpting() -> DockState<Tab> {
+    let mut state = DockState::new(vec![Tab::Viewport]);
+    let surface = state.main_surface_mut();
+    let [_center, _right] = surface.split(
+        NodeIndex::root(),
+        Split::Right,
+        0.85,
+        Node::leaf_with(vec![Tab::Properties, Tab::SceneTree]),
+    );
+    state
+}
+
+/// Rendering layout: viewport + render settings side by side.
+pub fn create_dock_rendering() -> DockState<Tab> {
+    let mut state = DockState::new(vec![Tab::Viewport]);
+    let surface = state.main_surface_mut();
+    let [_center, _right] = surface.split(
+        NodeIndex::root(),
+        Split::Right,
+        0.75,
+        Node::leaf_with(vec![Tab::RenderSettings, Tab::Properties]),
+    );
     state
 }
 
@@ -65,6 +93,8 @@ pub struct ViewportContext<'a> {
     /// Modifier keys captured during sculpt drag (output channel).
     pub sculpt_ctrl_held: &'a mut bool,
     pub sculpt_shift_held: &'a mut bool,
+    /// Pen pressure during sculpt drag.
+    pub sculpt_pressure: &'a mut f32,
     /// Label for isolation mode indicator (None = not isolated).
     pub isolation_label: Option<String>,
     /// Whether turntable rotation is active.
@@ -99,6 +129,8 @@ pub struct SdfTabViewer<'a> {
     pub scene_tree: SceneTreeContext<'a>,
     /// Action sink — structural mutations flow through here.
     pub actions: &'a mut ActionSink,
+    /// History reference for the history panel tab.
+    pub history: &'a History,
 }
 
 impl<'a> TabViewer for SdfTabViewer<'a> {
@@ -111,6 +143,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
             Tab::Properties => "Properties".into(),
             Tab::SceneTree => "Scene Tree".into(),
             Tab::RenderSettings => "Render Settings".into(),
+            Tab::History => "History".into(),
         }
     }
 
@@ -141,6 +174,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     *self.viewport.pending_pick = Some(pick);
                     *self.viewport.sculpt_ctrl_held = vp_output.sculpt_ctrl_held;
                     *self.viewport.sculpt_shift_held = vp_output.sculpt_shift_held;
+                    *self.viewport.sculpt_pressure = vp_output.sculpt_pressure;
                 }
             }
             Tab::NodeGraph => {
@@ -191,6 +225,9 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
             }
             Tab::RenderSettings => {
                 render_settings::draw(ui, self.settings, self.actions);
+            }
+            Tab::History => {
+                history_panel::draw(ui, self.history, self.actions);
             }
         }
     }

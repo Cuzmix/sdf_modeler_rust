@@ -14,6 +14,9 @@ const AO_SAMPLES: i32 = /*AO_SAMPLES*/;
 const AO_STEP: f32 = /*AO_STEP*/;
 const AO_DECAY: f32 = /*AO_DECAY*/;
 
+// Step count for debug heatmap (written by ray_march, read by shading)
+var<private> debug_step_count: f32;
+
 // PERFORMANCE CRITICAL: keep simple, avoid branches.
 // This is the inner loop of the renderer — runs per-pixel, up to MARCH_MAX_STEPS iterations.
 fn ray_march(ro: vec3f, rd: vec3f) -> vec2f {
@@ -36,8 +39,10 @@ fn ray_march(ro: vec3f, rd: vec3f) -> vec2f {
     var prev_d = 1e10;
     var prev_step = 0.0;
     var mat_id = -1.0;
+    var steps_taken = 0;
     for (var i = 0; i < /*MARCH_MAX_STEPS*/; i++) {
         if i >= eff_steps { break; }
+        steps_taken = i + 1;
         let p = ro + rd * t;
         let hit = scene_sdf(p);
         let d = hit.x;
@@ -59,6 +64,7 @@ fn ray_march(ro: vec3f, rd: vec3f) -> vec2f {
         prev_d = d;
         if t > max_dist { break; }
     }
+    debug_step_count = f32(steps_taken) / f32(eff_steps);
     if mat_id < 0.0 {
         return vec2f(/*MARCH_MAX_DIST*/ + 1.0, -1.0);
     }
@@ -182,13 +188,38 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
 
     // --- Compute base color: sky or shaded SDF ---
     var color = bg_sky;
+    let shading_mode = camera.scene_min.w;
 
-    if !sdf_miss {
+    // Step Heatmap applies to ALL pixels (including misses) to show full cost
+    if shading_mode > 4.5 {
+        let ratio = debug_step_count;
+        let r = smoothstep(0.3, 0.7, ratio);
+        let g = 1.0 - smoothstep(0.5, 1.0, ratio);
+        color = vec3f(r, g, 0.0);
+    }
+
+    if !sdf_miss && !(shading_mode > 4.5) {
         let p = ro + rd * t;
         let n = calc_normal(p, t);
-        let shading_mode = camera.scene_min.w;
 
-        if shading_mode > 2.5 {
+        if shading_mode > 3.5 {
+            // Matcap: procedural ceramic sphere look from view-space normals
+            // Compute camera basis from rd
+            let cam_fwd = normalize(-rd);
+            let world_up = vec3f(0.0, 1.0, 0.0);
+            let cam_right = normalize(cross(world_up, cam_fwd));
+            let cam_up = cross(cam_fwd, cam_right);
+            let vn = vec3f(dot(n, cam_right), dot(n, cam_up), dot(n, cam_fwd));
+            // Procedural matcap: warm clay with rim darkening + specular highlight
+            let ndotv = max(dot(n, -rd), 0.0);
+            let rim = 1.0 - ndotv;
+            let rim2 = rim * rim;
+            let base_col = vec3f(0.85, 0.78, 0.72);
+            let rim_col = vec3f(0.35, 0.25, 0.2);
+            let highlight = pow(max(vn.z, 0.0), 32.0) * 0.6;
+            color = mix(base_col, rim_col, rim2) + vec3f(highlight);
+            color = pow(color, vec3f(1.0 / /*GAMMA*/));
+        } else if shading_mode > 2.5 {
             // Normals: map normal XYZ from [-1,1] to [0,1] as RGB
             color = n * 0.5 + 0.5;
         } else if shading_mode > 1.5 {
@@ -244,10 +275,16 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
         color = albedo * diff_factor * (sky * /*AMBIENT*/ * ao + key_diff * shadow_col * /*KEY_DIFFUSE*/ + fill_diff * ao)
                   + spec_tint * key_spec * shadow * /*KEY_SPEC_INTENSITY*/;
 
+        // Environment reflection (sky gradient sampled along reflected ray)
+        /*ENV_REFL_LINE*/
+
         // Emissive contribution (added before tonemapping for natural overbright bloom)
         let emissive_col = get_node_emissive(mat_id);
         let emissive_int = get_node_emissive_intensity(mat_id);
         color += emissive_col * emissive_int;
+
+        // Subsurface scattering (thickness-based approximation)
+        /*SSS_LINE*/
 
         /*FOG_LINE*/
 

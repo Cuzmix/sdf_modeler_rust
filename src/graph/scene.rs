@@ -192,13 +192,14 @@ pub enum ModifierKind {
     Mirror,
     Repeat,
     FiniteRepeat,
+    RadialRepeat,
 }
 
 impl ModifierKind {
     pub const ALL: &[Self] = &[
         Self::Twist, Self::Bend, Self::Taper,
         Self::Round, Self::Onion, Self::Elongate,
-        Self::Mirror, Self::Repeat, Self::FiniteRepeat,
+        Self::Mirror, Self::Repeat, Self::FiniteRepeat, Self::RadialRepeat,
     ];
 
     pub fn base_name(&self) -> &'static str {
@@ -212,6 +213,7 @@ impl ModifierKind {
             Self::Mirror => "Mirror",
             Self::Repeat => "Repeat",
             Self::FiniteRepeat => "Finite Repeat",
+            Self::RadialRepeat => "Radial Repeat",
         }
     }
 
@@ -226,6 +228,7 @@ impl ModifierKind {
             Self::Mirror => "[Mir]",
             Self::Repeat => "[Rep]",
             Self::FiniteRepeat => "[FRp]",
+            Self::RadialRepeat => "[Rad]",
         }
     }
 
@@ -240,6 +243,7 @@ impl ModifierKind {
             Self::Mirror => Vec3::new(1.0, 0.0, 0.0),
             Self::Repeat => Vec3::new(2.0, 0.0, 0.0),
             Self::FiniteRepeat => Vec3::new(2.0, 0.0, 0.0),
+            Self::RadialRepeat => Vec3::new(6.0, 1.0, 0.0), // 6 copies, Y axis
         }
     }
 
@@ -261,6 +265,7 @@ impl ModifierKind {
             Self::Mirror => 36.0,
             Self::Repeat => 37.0,
             Self::FiniteRepeat => 38.0,
+            Self::RadialRepeat => 39.0,
         }
     }
 
@@ -269,7 +274,8 @@ impl ModifierKind {
     pub fn is_point_modifier(&self) -> bool {
         match self {
             Self::Twist | Self::Bend | Self::Taper
-            | Self::Elongate | Self::Mirror | Self::Repeat | Self::FiniteRepeat => true,
+            | Self::Elongate | Self::Mirror | Self::Repeat | Self::FiniteRepeat
+            | Self::RadialRepeat => true,
             Self::Round | Self::Onion => false,
         }
     }
@@ -332,6 +338,7 @@ impl CsgOp {
 
 fn default_roughness() -> f32 { 0.5 }
 fn default_fresnel() -> f32 { 0.04 }
+fn default_layer_intensity() -> f32 { 1.0 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum NodeData {
@@ -376,6 +383,8 @@ pub enum NodeData {
         emissive_intensity: f32,
         #[serde(default = "default_fresnel")]
         fresnel: f32,
+        #[serde(default = "default_layer_intensity")]
+        layer_intensity: f32,
         voxel_grid: VoxelGrid,
         #[serde(default = "crate::graph::voxel::default_resolution")]
         desired_resolution: u32,
@@ -436,6 +445,8 @@ pub struct SceneNode {
     pub id: NodeId,
     pub name: String,
     pub data: NodeData,
+    #[serde(default)]
+    pub locked: bool,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -459,7 +470,7 @@ impl Scene {
         scene
     }
 
-    fn next_name(&mut self, base: &str) -> String {
+    pub fn next_name(&mut self, base: &str) -> String {
         let counter = self.name_counters.entry(base.to_string()).or_insert(0);
         *counter += 1;
         if *counter == 1 {
@@ -472,7 +483,7 @@ impl Scene {
     pub fn add_node(&mut self, name: String, data: NodeData) -> NodeId {
         let id = self.next_id;
         self.next_id += 1;
-        self.nodes.insert(id, SceneNode { id, name, data });
+        self.nodes.insert(id, SceneNode { id, name, data, locked: false });
         id
     }
 
@@ -602,6 +613,7 @@ impl Scene {
                 emissive: Vec3::ZERO,
                 emissive_intensity: 0.0,
                 fresnel: 0.04,
+                layer_intensity: 1.0,
                 voxel_grid,
                 desired_resolution,
             },
@@ -1241,7 +1253,7 @@ impl Scene {
                         right: remap(right),
                     }
                 }
-                NodeData::Sculpt { input, position, rotation, color, roughness, metallic, emissive, emissive_intensity, fresnel, voxel_grid, desired_resolution } => {
+                NodeData::Sculpt { input, position, rotation, color, roughness, metallic, emissive, emissive_intensity, fresnel, layer_intensity, voxel_grid, desired_resolution } => {
                     NodeData::Sculpt {
                         input: remap(input),
                         position: *position,
@@ -1252,6 +1264,7 @@ impl Scene {
                         emissive: *emissive,
                         emissive_intensity: *emissive_intensity,
                         fresnel: *fresnel,
+                        layer_intensity: *layer_intensity,
                         voxel_grid: voxel_grid.clone(),
                         desired_resolution: *desired_resolution,
                     }
@@ -1276,6 +1289,7 @@ impl Scene {
                 id: new_id,
                 name: format!("{} Copy", node.name),
                 data: new_data,
+                locked: false,
             })
         }).collect();
 
@@ -1394,6 +1408,7 @@ impl Scene {
                 emissive: Vec3::ZERO,
                 emissive_intensity: 0.0,
                 fresnel: 0.04,
+                layer_intensity: 1.0,
                 voxel_grid,
                 desired_resolution,
             },
@@ -1550,6 +1565,7 @@ impl Scene {
                         emissive: e1,
                         emissive_intensity: ei1,
                         fresnel: f1,
+                        layer_intensity: li1,
                         voxel_grid: v1,
                         desired_resolution: dr1,
                     },
@@ -1563,6 +1579,7 @@ impl Scene {
                         emissive: e2,
                         emissive_intensity: ei2,
                         fresnel: f2,
+                        layer_intensity: li2,
                         voxel_grid: v2,
                         desired_resolution: dr2,
                     },
@@ -1576,6 +1593,7 @@ impl Scene {
                         || e1 != e2
                         || ei1 != ei2
                         || f1 != f2
+                        || li1 != li2
                         || dr1 != dr2
                         || !v1.content_eq(v2)
                     {

@@ -125,13 +125,14 @@ pub fn build_node_buffer(
                 emissive,
                 emissive_intensity,
                 fresnel,
+                layer_intensity,
                 voxel_grid,
                 ..
             } => {
                 let offset = voxel_offsets.get(&node_id).copied().unwrap_or(0);
                 buffer.push(SdfNodeGpu {
                     type_op: [20.0, *emissive_intensity, *metallic, *roughness],
-                    position: [position.x, position.y, position.z, 0.0],
+                    position: [position.x, position.y, position.z, *layer_intensity],
                     rotation: [rotation.x, rotation.y, rotation.z, 0.0],
                     scale: [1.0, 1.0, 1.0, 0.0],
                     color: [color.x, color.y, color.z, is_sel],

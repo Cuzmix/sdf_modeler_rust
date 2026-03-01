@@ -4,6 +4,7 @@ mod export;
 mod gpu;
 mod graph;
 mod io;
+mod mesh_import;
 mod sculpt;
 mod settings;
 mod ui;

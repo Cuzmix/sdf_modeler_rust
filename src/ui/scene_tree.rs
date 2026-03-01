@@ -153,6 +153,11 @@ fn node_context_menu(
             actions.push(Action::ToggleVisibility(id));
             ui.close_menu();
         }
+        let locked = scene.nodes.get(&id).map_or(false, |n| n.locked);
+        if ui.button(if locked { "Unlock" } else { "Lock" }).clicked() {
+            actions.push(Action::ToggleLock(id));
+            ui.close_menu();
+        }
         if ui.button("Rename").clicked() {
             if let Some(node) = scene.nodes.get(&id) {
                 *rename_buf = node.name.clone();
@@ -160,7 +165,8 @@ fn node_context_menu(
             }
             ui.close_menu();
         }
-        if ui.button("Delete").clicked() {
+        let delete_enabled = !locked;
+        if ui.add_enabled(delete_enabled, egui::Button::new("Delete")).clicked() {
             actions.push(Action::DeleteNode(id));
             if *renaming == Some(id) { *renaming = None; }
             ui.close_menu();
@@ -326,7 +332,11 @@ fn format_node_label(node: &SceneNode) -> String {
         NodeData::Transform { kind, .. } => kind.badge(),
         NodeData::Modifier { kind, .. } => kind.badge(),
     };
-    format!("{} {}", badge, node.name)
+    if node.locked {
+        format!("{} \u{1F512} {}", badge, node.name)
+    } else {
+        format!("{} {}", badge, node.name)
+    }
 }
 
 fn node_type_color(data: &NodeData) -> egui::Color32 {

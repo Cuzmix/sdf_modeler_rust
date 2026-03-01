@@ -96,6 +96,59 @@ impl FalloffMode {
 }
 
 // ---------------------------------------------------------------------------
+// Brush shapes (alphas/stamps)
+// ---------------------------------------------------------------------------
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum BrushShape {
+    Sphere,
+    Cube,
+    Diamond,
+    Ring,
+    Cylinder,
+}
+
+impl BrushShape {
+    /// Compute the normalized distance [0, 1) for a voxel offset from brush center.
+    /// Returns None if the voxel is outside the brush region.
+    pub fn normalized_distance(&self, offset: Vec3, radius: f32) -> Option<f32> {
+        match self {
+            Self::Sphere => {
+                let dist = offset.length();
+                if dist < radius { Some(dist / radius) } else { None }
+            }
+            Self::Cube => {
+                let nt = offset.abs().max_element() / radius;
+                if nt < 1.0 { Some(nt) } else { None }
+            }
+            Self::Diamond => {
+                let nt = (offset.x.abs() + offset.y.abs() + offset.z.abs()) / radius;
+                if nt < 1.0 { Some(nt) } else { None }
+            }
+            Self::Ring => {
+                let dist = offset.length();
+                if dist < radius {
+                    let nt = dist / radius;
+                    // Ring peaks at 0.6 radius, falls off toward center and edge
+                    let ring_val = 1.0 - (2.0 * (nt - 0.6).abs()).clamp(0.0, 1.0);
+                    Some(1.0 - ring_val) // invert so 0 = strongest
+                } else {
+                    None
+                }
+            }
+            Self::Cylinder => {
+                // Uses XZ distance only (creates column-like strokes along Y)
+                let dist_xz = (offset.x * offset.x + offset.z * offset.z).sqrt();
+                let nt_xz = dist_xz / radius;
+                let nt_y = offset.y.abs() / radius;
+                if nt_xz < 1.0 && nt_y < 1.0 { Some(nt_xz) } else { None }
+            }
+        }
+    }
+
+}
+
+// ---------------------------------------------------------------------------
 // Sculpt state
 // ---------------------------------------------------------------------------
 
@@ -108,6 +161,7 @@ pub enum SculptState {
         brush_radius: f32,
         brush_strength: f32,
         falloff_mode: FalloffMode,
+        brush_shape: BrushShape,
         smooth_iterations: u32,
         /// SDF value at brush center when Flatten drag started. Reset on mouse release.
         flatten_reference: Option<f32>,
@@ -136,6 +190,7 @@ impl SculptState {
             brush_radius: DEFAULT_BRUSH_RADIUS,
             brush_strength: DEFAULT_BRUSH_STRENGTH,
             falloff_mode: FalloffMode::Sharp,
+            brush_shape: BrushShape::Sphere,
             smooth_iterations: 3,
             flatten_reference: None,
             lazy_radius: 0.0,
@@ -180,6 +235,7 @@ pub fn apply_brush(
     brush_radius: f32,
     brush_strength: f32,
     falloff_mode: &FalloffMode,
+    brush_shape: &BrushShape,
     smooth_iterations: u32,
     flatten_ref: f32,
     surface_constraint: f32,
@@ -209,6 +265,7 @@ pub fn apply_brush(
                 brush_radius,
                 brush_strength,
                 falloff_mode,
+                brush_shape,
                 smooth_iterations,
                 surface_constraint,
             )),
@@ -219,6 +276,7 @@ pub fn apply_brush(
                 brush_radius,
                 brush_strength,
                 falloff_mode,
+                brush_shape,
                 flatten_ref,
                 surface_constraint,
             )),
@@ -246,12 +304,13 @@ fn apply_brush_to_grid(
     radius: f32,
     strength: f32,
     falloff_mode: &FalloffMode,
+    brush_shape: &BrushShape,
     flatten_ref: f32,
     surface_constraint: f32,
 ) -> (u32, u32) {
     let res = grid.resolution;
 
-    // Compute grid-space bounding box of the brush sphere
+    // Compute grid-space bounding box of the brush region
     let brush_min = center - Vec3::splat(radius);
     let brush_max = center + Vec3::splat(radius);
     let g_min = grid.world_to_grid(brush_min);
@@ -268,9 +327,8 @@ fn apply_brush_to_grid(
         for y in y0..=y1 {
             for x in x0..=x1 {
                 let world_pos = grid.grid_to_world(x as f32, y as f32, z as f32);
-                let dist = (world_pos - center).length();
-                if dist < radius {
-                    let nt = dist / radius;
+                let offset = world_pos - center;
+                if let Some(nt) = brush_shape.normalized_distance(offset, radius) {
                     let falloff = falloff_mode.evaluate(nt);
                     let idx = VoxelGrid::index(x, y, z, res);
                     match brush_mode {
@@ -284,7 +342,6 @@ fn apply_brush_to_grid(
                                 (flatten_ref - grid.data[idx]) * falloff * strength * sf;
                         }
                         BrushMode::Inflate => {
-                            // Inflate = Add with implicit surface constraint (always on)
                             let threshold = radius * 0.5;
                             let sf = 1.0 - (grid.data[idx].abs() / threshold).clamp(0.0, 1.0);
                             grid.data[idx] += -1.0 * strength * falloff * sf;
@@ -306,6 +363,7 @@ fn apply_smooth_to_grid(
     radius: f32,
     strength: f32,
     falloff_mode: &FalloffMode,
+    brush_shape: &BrushShape,
     iterations: u32,
     surface_constraint: f32,
 ) -> (u32, u32) {
@@ -330,11 +388,10 @@ fn apply_smooth_to_grid(
             for y in y0..=y1 {
                 for x in x0..=x1 {
                     let world_pos = grid.grid_to_world(x as f32, y as f32, z as f32);
-                    let dist = (world_pos - center).length();
-                    if dist >= radius {
+                    let offset = world_pos - center;
+                    let Some(nt) = brush_shape.normalized_distance(offset, radius) else {
                         continue;
-                    }
-                    let nt = dist / radius;
+                    };
                     let falloff = falloff_mode.evaluate(nt);
 
                     // 6-neighbor Laplacian average (clamped at grid edges)

@@ -9,7 +9,7 @@ use crate::graph::voxel;
 use crate::sculpt::SculptState;
 
 #[cfg(not(target_arch = "wasm32"))]
-use super::{BakeStatus, ExportStatus};
+use super::{BakeStatus, ExportStatus, ImportStatus};
 use super::{BakeRequest, SdfApp};
 
 impl SdfApp {
@@ -224,6 +224,7 @@ impl SdfApp {
         let bounds_min = Vec3::from(bounds.0) - Vec3::splat(padding);
         let bounds_max = Vec3::from(bounds.1) + Vec3::splat(padding);
         let resolution = self.settings.export_resolution.clamp(32, 512);
+        let adaptive = self.settings.adaptive_export;
         let progress = Arc::new(AtomicU32::new(0));
         let progress_clone = Arc::clone(&progress);
         let (tx, rx) = std::sync::mpsc::channel();
@@ -236,6 +237,7 @@ impl SdfApp {
                 bounds_min,
                 bounds_max,
                 &progress_clone,
+                adaptive,
             );
             let _ = tx.send(mesh);
             ctx_clone.request_repaint();
@@ -265,6 +267,7 @@ impl SdfApp {
             bounds_min,
             bounds_max,
             &progress,
+            self.settings.adaptive_export,
         );
 
         let mut buf = std::io::Cursor::new(Vec::new());
@@ -334,5 +337,104 @@ impl SdfApp {
     #[cfg(target_arch = "wasm32")]
     pub(super) fn poll_export(&mut self) {
         // Export runs synchronously on WASM — nothing to poll.
+    }
+
+    // ── Import Mesh ──────────────────────────────────────────────────────
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn start_import(&mut self, ctx: &egui::Context) {
+        let Some(path) = rfd::FileDialog::new()
+            .set_title("Import Mesh")
+            .add_filter("Wavefront OBJ", &["obj"])
+            .add_filter("STL Binary", &["stl"])
+            .add_filter("All Mesh Files", &["obj", "stl"])
+            .pick_file()
+        else {
+            return;
+        };
+
+        let mesh = match crate::mesh_import::load_mesh(&path) {
+            Ok(m) => m,
+            Err(e) => {
+                log::error!("Failed to load mesh: {}", e);
+                self.ui.toasts.push(super::Toast {
+                    message: format!("Import failed: {}", e),
+                    is_error: true,
+                    created: crate::compat::Instant::now(),
+                    duration: crate::compat::Duration::from_secs(6),
+                });
+                return;
+            }
+        };
+
+        let resolution = 64u32;
+        let progress = Arc::new(AtomicU32::new(0));
+        let progress_clone = Arc::clone(&progress);
+        let (tx, rx) = std::sync::mpsc::channel();
+        let ctx_clone = ctx.clone();
+
+        std::thread::spawn(move || {
+            let result = crate::mesh_import::mesh_to_sdf(&mesh, resolution, &progress_clone);
+            let _ = tx.send(result);
+            ctx_clone.request_repaint();
+        });
+
+        self.async_state.import_status = ImportStatus::InProgress {
+            progress,
+            total: resolution,
+            receiver: rx,
+        };
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(super) fn start_import(&mut self, _ctx: &egui::Context) {
+        log::warn!("Mesh import is not supported on web");
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn poll_import(&mut self) {
+        let completed = if let ImportStatus::InProgress { ref receiver, .. } = self.async_state.import_status {
+            receiver.try_recv().ok()
+        } else {
+            None
+        };
+
+        if let Some((grid, center)) = completed {
+            let desired_resolution = grid.resolution;
+            let name = self.doc.scene.next_name("Import");
+            let sculpt_id = self.doc.scene.add_node(
+                name,
+                NodeData::Sculpt {
+                    input: None,
+                    position: center,
+                    rotation: Vec3::ZERO,
+                    color: Vec3::new(0.7, 0.7, 0.7),
+                    roughness: 0.5,
+                    metallic: 0.0,
+                    emissive: Vec3::ZERO,
+                    emissive_intensity: 0.0,
+                    fresnel: 0.04,
+                    layer_intensity: 1.0,
+                    voxel_grid: grid,
+                    desired_resolution,
+                },
+            );
+            self.ui.node_graph_state.selected = Some(sculpt_id);
+            self.ui.node_graph_state.needs_initial_rebuild = true;
+            self.doc.sculpt_state = SculptState::new_active(sculpt_id);
+            self.gpu.buffer_dirty = true;
+            self.ui.toasts.push(super::Toast {
+                message: "Mesh imported successfully".into(),
+                is_error: false,
+                created: crate::compat::Instant::now(),
+                duration: crate::compat::Duration::from_secs(4),
+            });
+            self.async_state.import_status = ImportStatus::Idle;
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(super) fn poll_import(&mut self) {
+        // Import not supported on WASM.
     }
 }

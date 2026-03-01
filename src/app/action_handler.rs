@@ -78,16 +78,24 @@ impl SdfApp {
                     self.gpu.buffer_dirty = true;
                 }
                 Action::DeleteSelected => {
-                    self.delete_selected();
+                    let locked = self.ui.node_graph_state.selected
+                        .and_then(|id| self.doc.scene.nodes.get(&id))
+                        .map_or(false, |n| n.locked);
+                    if !locked {
+                        self.delete_selected();
+                    }
                 }
                 Action::DeleteNode(id) => {
-                    self.doc.scene.remove_node(id);
-                    if self.ui.node_graph_state.selected == Some(id) {
-                        self.ui.node_graph_state.selected = None;
+                    let locked = self.doc.scene.nodes.get(&id).map_or(false, |n| n.locked);
+                    if !locked {
+                        self.doc.scene.remove_node(id);
+                        if self.ui.node_graph_state.selected == Some(id) {
+                            self.ui.node_graph_state.selected = None;
+                        }
+                        self.ui.node_graph_state.needs_initial_rebuild = true;
+                        self.doc.sculpt_state = SculptState::Inactive;
+                        self.gpu.buffer_dirty = true;
                     }
-                    self.ui.node_graph_state.needs_initial_rebuild = true;
-                    self.doc.sculpt_state = SculptState::Inactive;
-                    self.gpu.buffer_dirty = true;
                 }
 
                 // ── Clipboard ────────────────────────────────────────
@@ -242,6 +250,11 @@ impl SdfApp {
                     self.doc.scene.toggle_visibility(id);
                     self.gpu.buffer_dirty = true;
                 }
+                Action::ToggleLock(id) => {
+                    if let Some(node) = self.doc.scene.nodes.get_mut(&id) {
+                        node.locked = !node.locked;
+                    }
+                }
                 Action::SwapChildren(id) => {
                     self.doc.scene.swap_children(id);
                     self.gpu.buffer_dirty = true;
@@ -287,6 +300,12 @@ impl SdfApp {
                 }
                 Action::ShowExportDialog => {
                     self.ui.show_export_dialog = true;
+                }
+                Action::ImportMesh => {
+                    let importing = !matches!(self.async_state.import_status, super::ImportStatus::Idle);
+                    if !importing {
+                        self.start_import(ctx);
+                    }
                 }
                 Action::TakeScreenshot => {
                     self.take_screenshot();
@@ -491,6 +510,17 @@ impl SdfApp {
                             crate::compat::Duration::from_secs(4)
                         },
                     });
+                }
+
+                // ── Workspace ────────────────────────────────────────
+                Action::SetWorkspace(preset) => {
+                    use crate::app::actions::WorkspacePreset;
+                    use crate::ui::dock;
+                    self.ui.dock_state = match preset {
+                        WorkspacePreset::Modeling => dock::create_dock_state(),
+                        WorkspacePreset::Sculpting => dock::create_dock_sculpting(),
+                        WorkspacePreset::Rendering => dock::create_dock_rendering(),
+                    };
                 }
 
                 // ── Settings / GPU ───────────────────────────────────

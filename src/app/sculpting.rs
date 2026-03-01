@@ -60,8 +60,9 @@ impl SdfApp {
             node_id,
             ref brush_mode,
             brush_radius,
-            brush_strength,
+            brush_strength: base_brush_strength,
             ref falloff_mode,
+            ref brush_shape,
             smooth_iterations,
             ref mut flatten_reference,
             lazy_radius,
@@ -73,6 +74,15 @@ impl SdfApp {
         } = self.doc.sculpt_state
         else {
             return;
+        };
+
+        // Apply pen pressure sensitivity if enabled
+        let brush_strength = if self.settings.render.pressure_sensitivity
+            && self.async_state.sculpt_pressure > 0.0
+        {
+            base_brush_strength * self.async_state.sculpt_pressure
+        } else {
+            base_brush_strength
         };
 
         if hit_node_id != node_id {
@@ -94,6 +104,7 @@ impl SdfApp {
             brush_mode.clone()
         };
         let falloff_mode = falloff_mode.clone();
+        let brush_shape = brush_shape.clone();
 
         // Grab brush: initialize snapshot and start position on first hit
         let is_grab = brush_mode == BrushMode::Grab;
@@ -262,6 +273,7 @@ impl SdfApp {
                     brush_radius,
                     brush_strength,
                     &falloff_mode,
+                    &brush_shape,
                     smooth_iterations,
                     flatten_ref_val,
                     surface_constraint,

@@ -27,6 +27,8 @@ struct ViewportCallback {
     outline_color: [f32; 3],
     /// Outline width in pixels.
     outline_width: f32,
+    /// Bloom parameters: [threshold, intensity, radius, enabled].
+    bloom_params: [f32; 4],
 }
 
 impl egui_wgpu::CallbackTrait for ViewportCallback {
@@ -57,12 +59,13 @@ impl egui_wgpu::CallbackTrait for ViewportCallback {
             bytemuck::bytes_of(&self.render_uniform),
         );
 
-        // Write blit params (display viewport + outline settings for the blit shader)
-        let blit_data: [f32; 8] = [
+        // Write blit params (display viewport + outline settings + bloom for the blit shader)
+        let blit_data: [f32; 12] = [
             self.display_viewport[0], self.display_viewport[1],
             self.display_viewport[2], self.display_viewport[3],
             self.outline_color[0], self.outline_color[1], self.outline_color[2],
             self.outline_width,
+            self.bloom_params[0], self.bloom_params[1], self.bloom_params[2], self.bloom_params[3],
         ];
         queue.write_buffer(
             &resources.blit_params_buffer,
@@ -217,6 +220,8 @@ pub struct ViewportOutput {
     /// Modifier keys at time of sculpt drag (Ctrl = invert, Shift = smooth).
     pub sculpt_ctrl_held: bool,
     pub sculpt_shift_held: bool,
+    /// Pen pressure (0.0 = no pressure data, 1.0 = max).
+    pub sculpt_pressure: f32,
 }
 
 pub fn draw(
@@ -243,6 +248,7 @@ pub fn draw(
         pending_pick: None,
         sculpt_ctrl_held: false,
         sculpt_shift_held: false,
+        sculpt_pressure: 0.0,
     };
     let rect = ui.available_rect_before_wrap();
     let response = ui.allocate_rect(rect, egui::Sense::click_and_drag());
@@ -312,6 +318,11 @@ pub fn draw(
             render_scale,
             outline_color: render_config.outline_color,
             outline_width: render_config.outline_thickness,
+            bloom_params: if render_config.bloom_enabled {
+                [render_config.bloom_threshold, render_config.bloom_intensity, render_config.bloom_radius, 1.0]
+            } else {
+                [0.0, 0.0, 0.0, 0.0]
+            },
         },
     ));
 
@@ -371,6 +382,24 @@ pub fn draw(
                     let modifiers = ui.input(|i| i.modifiers);
                     output.sculpt_ctrl_held = modifiers.ctrl;
                     output.sculpt_shift_held = modifiers.shift;
+                    // Capture pen pressure from touch/stylus events
+                    output.sculpt_pressure = ui.input(|i| {
+                        // Check multi-touch info for force
+                        if let Some(touch) = i.multi_touch() {
+                            if touch.force > 0.0 {
+                                return touch.force;
+                            }
+                        }
+                        // Check raw touch events for force
+                        for event in &i.events {
+                            if let egui::Event::Touch { force: Some(f), .. } = event {
+                                if *f > 0.0 {
+                                    return *f;
+                                }
+                            }
+                        }
+                        0.0
+                    });
                 }
             }
         }

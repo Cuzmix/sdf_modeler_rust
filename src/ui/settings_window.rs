@@ -93,13 +93,16 @@ pub fn draw(
                     });
 
                 // --- Touch Input ---
-                egui::CollapsingHeader::new("Touch Input")
+                egui::CollapsingHeader::new("Touch / Tablet Input")
                     .default_open(true)
                     .show(ui, |ui| {
                         labeled_slider(ui, "Zoom Sensitivity", &mut settings.render.touch_zoom_sensitivity, 100.0..=2000.0, false,
                             "How fast pinch-to-zoom responds");
                         ui.checkbox(&mut settings.render.invert_touch_pan, "Invert Touch Pan")
                             .on_hover_text("Reverse two-finger pan direction");
+                        ui.separator();
+                        ui.checkbox(&mut settings.render.pressure_sensitivity, "Pen Pressure Sensitivity")
+                            .on_hover_text("Modulate sculpt brush strength by tablet pen pressure");
                     });
 
                 // --- Auto-save ---
@@ -126,10 +129,34 @@ pub fn draw(
                         ui.checkbox(&mut config.auto_reduce_steps, "Auto-reduce steps (multi-sculpt)")
                             .on_hover_text("Halve march steps when 2+ sculpt nodes exist");
                         ui.separator();
+                        // Anti-aliasing mode (convenience for rest scale)
+                        ui.horizontal(|ui| {
+                            ui.label("Anti-Aliasing:");
+                            let current = if config.rest_render_scale <= 1.01 {
+                                "Off"
+                            } else if config.rest_render_scale <= 1.45 {
+                                "SSAA 1.4x"
+                            } else {
+                                "SSAA 2x"
+                            };
+                            egui::ComboBox::from_id_salt("aa_mode")
+                                .selected_text(current)
+                                .show_ui(ui, |ui| {
+                                    if ui.selectable_label(current == "Off", "Off (1.0x)").clicked() {
+                                        config.rest_render_scale = 1.0;
+                                    }
+                                    if ui.selectable_label(current == "SSAA 1.4x", "SSAA 1.4x").clicked() {
+                                        config.rest_render_scale = 1.414;
+                                    }
+                                    if ui.selectable_label(current == "SSAA 2x", "SSAA 2x").clicked() {
+                                        config.rest_render_scale = 2.0;
+                                    }
+                                });
+                        });
                         labeled_slider(ui, "Interaction Scale", &mut config.interaction_render_scale, 0.25..=1.0, false,
                             "Render resolution during orbit/sculpt (0.5 = half res)");
-                        labeled_slider(ui, "Rest Scale", &mut config.rest_render_scale, 0.25..=1.0, false,
-                            "Render resolution when idle (1.0 = full res)");
+                        labeled_slider(ui, "Rest Scale", &mut config.rest_render_scale, 0.25..=2.0, false,
+                            "Render resolution when idle (1.0 = native, 2.0 = 2x SSAA)");
                         ui.separator();
                         ui.checkbox(&mut config.composite_volume_enabled, "Composite Volume Cache")
                             .on_hover_text("Pre-composite all sculpts into a single 3D texture.\nDecouples render cost from sculpt count.");

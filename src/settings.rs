@@ -22,6 +22,8 @@ pub enum ShadingMode {
     Solid,
     Clay,
     Normals,
+    Matcap,
+    StepHeatmap,
 }
 
 impl Default for ShadingMode {
@@ -35,6 +37,8 @@ impl ShadingMode {
             Self::Solid => 1.0,
             Self::Clay => 2.0,
             Self::Normals => 3.0,
+            Self::Matcap => 4.0,
+            Self::StepHeatmap => 5.0,
         }
     }
     pub fn label(&self) -> &'static str {
@@ -43,6 +47,8 @@ impl ShadingMode {
             Self::Solid => "Solid",
             Self::Clay => "Clay",
             Self::Normals => "Normals",
+            Self::Matcap => "Matcap",
+            Self::StepHeatmap => "Step Heatmap",
         }
     }
     pub fn cycle(&self) -> Self {
@@ -50,7 +56,9 @@ impl ShadingMode {
             Self::Full => Self::Solid,
             Self::Solid => Self::Clay,
             Self::Clay => Self::Normals,
-            Self::Normals => Self::Full,
+            Self::Normals => Self::Matcap,
+            Self::Matcap => Self::StepHeatmap,
+            Self::StepHeatmap => Self::Full,
         }
     }
 }
@@ -74,6 +82,25 @@ impl Default for SnapConfig {
             scale_snap: 0.1,
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Export presets
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ExportPreset {
+    pub name: String,
+    pub resolution: u32,
+}
+
+fn default_export_presets() -> Vec<ExportPreset> {
+    vec![
+        ExportPreset { name: "Draft".into(), resolution: 64 },
+        ExportPreset { name: "Medium".into(), resolution: 128 },
+        ExportPreset { name: "High".into(), resolution: 256 },
+        ExportPreset { name: "Ultra".into(), resolution: 512 },
+    ]
 }
 
 // ---------------------------------------------------------------------------
@@ -108,9 +135,13 @@ pub struct Settings {
     #[serde(default = "default_export_resolution")]
     pub export_resolution: u32,
     #[serde(default)]
+    pub adaptive_export: bool,
+    #[serde(default)]
     pub snap: SnapConfig,
     #[serde(default = "default_bookmarks")]
     pub bookmarks: Vec<Option<CameraBookmark>>,
+    #[serde(default = "default_export_presets")]
+    pub export_presets: Vec<ExportPreset>,
 }
 
 impl Default for Settings {
@@ -124,8 +155,10 @@ impl Default for Settings {
             auto_save_interval_secs: 120,
             recent_files: Vec::new(),
             export_resolution: 128,
+            adaptive_export: false,
             snap: SnapConfig::default(),
             bookmarks: default_bookmarks(),
+            export_presets: default_export_presets(),
         }
     }
 }
@@ -262,6 +295,12 @@ pub struct RenderConfig {
     pub fill_intensity: f32,
     pub ambient: f32,
 
+    // Environment Reflection
+    #[serde(default)]
+    pub env_reflection_enabled: bool,
+    #[serde(default = "default_env_reflection_intensity")]
+    pub env_reflection_intensity: f32,
+
     // Sky / Background
     pub sky_horizon: [f32; 3],
     pub sky_zenith: [f32; 3],
@@ -270,10 +309,28 @@ pub struct RenderConfig {
     #[serde(default = "default_bg_solid_color")]
     pub bg_solid_color: [f32; 3],
 
+    // Subsurface Scattering
+    #[serde(default)]
+    pub sss_enabled: bool,
+    #[serde(default = "default_sss_strength")]
+    pub sss_strength: f32,
+    #[serde(default = "default_sss_color")]
+    pub sss_color: [f32; 3],
+
     // Fog
     pub fog_enabled: bool,
     pub fog_density: f32,
     pub fog_color: [f32; 3],
+
+    // Bloom
+    #[serde(default)]
+    pub bloom_enabled: bool,
+    #[serde(default = "default_bloom_threshold")]
+    pub bloom_threshold: f32,
+    #[serde(default = "default_bloom_intensity")]
+    pub bloom_intensity: f32,
+    #[serde(default = "default_bloom_radius")]
+    pub bloom_radius: f32,
 
     // Gamma / Tonemapping
     pub gamma: f32,
@@ -322,6 +379,10 @@ pub struct RenderConfig {
     #[serde(default)]
     pub invert_roll: bool,
 
+    // Tablet / Pressure
+    #[serde(default)]
+    pub pressure_sensitivity: bool,
+
     // Navigation
     #[serde(default)]
     pub clamp_orbit_pitch: bool,
@@ -348,6 +409,12 @@ fn default_outline_color() -> [f32; 3] { [1.0, 0.8, 0.2] }
 fn default_outline_thickness() -> f32 { 2.5 }
 fn default_touch_zoom_sensitivity() -> f32 { 500.0 }
 fn default_roll_sensitivity() -> f32 { 0.005 }
+fn default_sss_strength() -> f32 { 5.0 }
+fn default_sss_color() -> [f32; 3] { [1.0, 0.4, 0.2] }
+fn default_env_reflection_intensity() -> f32 { 0.3 }
+fn default_bloom_threshold() -> f32 { 0.8 }
+fn default_bloom_intensity() -> f32 { 0.3 }
+fn default_bloom_radius() -> f32 { 3.0 }
 fn default_bookmarks() -> Vec<Option<CameraBookmark>> { vec![None; 9] }
 
 impl Default for RenderConfig {
@@ -379,14 +446,26 @@ impl Default for RenderConfig {
             fill_intensity: 0.25,
             ambient: 0.06,
 
+            env_reflection_enabled: false,
+            env_reflection_intensity: 0.3,
+
             sky_horizon: [0.10, 0.10, 0.16],
             sky_zenith: [0.02, 0.02, 0.05],
             background_mode: BackgroundMode::SkyGradient,
             bg_solid_color: [0.12, 0.12, 0.15],
 
+            sss_enabled: false,
+            sss_strength: 5.0,
+            sss_color: [1.0, 0.4, 0.2],
+
             fog_enabled: false,
             fog_density: 0.04,
             fog_color: [0.5, 0.55, 0.65],
+
+            bloom_enabled: false,
+            bloom_threshold: 0.8,
+            bloom_intensity: 0.3,
+            bloom_radius: 3.0,
 
             gamma: 2.2,
             tonemapping_aces: false,
@@ -407,6 +486,7 @@ impl Default for RenderConfig {
             invert_touch_pan: false,
             roll_sensitivity: 0.005,
             invert_roll: false,
+            pressure_sensitivity: false,
             clamp_orbit_pitch: false,
             shading_mode: ShadingMode::default(),
             show_node_labels: false,
@@ -460,6 +540,13 @@ impl RenderConfig {
         self.sky_zenith = d.sky_zenith;
         self.background_mode = d.background_mode;
         self.bg_solid_color = d.bg_solid_color;
+    }
+
+    pub fn reset_sss(&mut self) {
+        let d = Self::default();
+        self.sss_enabled = d.sss_enabled;
+        self.sss_strength = d.sss_strength;
+        self.sss_color = d.sss_color;
     }
 
     pub fn reset_fog(&mut self) {

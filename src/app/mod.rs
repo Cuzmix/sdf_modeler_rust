@@ -129,6 +129,15 @@ pub enum ExportStatus {
     },
 }
 
+pub(super) enum ImportStatus {
+    Idle,
+    InProgress {
+        progress: Arc<AtomicU32>,
+        total: u32,
+        receiver: std::sync::mpsc::Receiver<(crate::graph::voxel::VoxelGrid, glam::Vec3)>,
+    },
+}
+
 pub struct Toast {
     pub message: String,
     pub is_error: bool,
@@ -236,12 +245,14 @@ impl SdfApp {
             async_state: AsyncState {
                 bake_status: BakeStatus::Idle,
                 export_status: ExportStatus::Idle,
+                import_status: ImportStatus::Idle,
                 pick_state: PickState::Idle,
                 pending_pick: None,
                 last_sculpt_hit: None,
                 lazy_brush_pos: None,
                 sculpt_ctrl_held: false,
                 sculpt_shift_held: false,
+                sculpt_pressure: 0.0,
             },
             ui: UiState {
                 dock_state: dock::create_dock_state(),
@@ -305,6 +316,7 @@ impl eframe::App for SdfApp {
         self.sync_sculpt_state();
         self.poll_async_bake();
         self.poll_export();
+        self.poll_import();
         self.poll_sculpt_pick();
 
         // Reset pivot when selection changes
@@ -374,6 +386,7 @@ impl eframe::App for SdfApp {
         let mut pending_pick = None;
         let mut sculpt_ctrl_held = false;
         let mut sculpt_shift_held = false;
+        let mut sculpt_pressure: f32 = 0.0;
         let sculpt_count = self.gpu.sculpt_tex_indices.len();
         let isolation_label: Option<String> = self.ui.isolation_state.as_ref().and_then(|iso| {
             self.doc.scene.nodes.get(&iso.isolated_node).map(|n| n.name.clone())
@@ -402,6 +415,7 @@ impl eframe::App for SdfApp {
                 fps_info,
                 sculpt_ctrl_held: &mut sculpt_ctrl_held,
                 sculpt_shift_held: &mut sculpt_shift_held,
+                sculpt_pressure: &mut sculpt_pressure,
                 isolation_label: isolation_label.clone(),
                 turntable_active: self.ui.turntable_active,
             },
@@ -412,6 +426,7 @@ impl eframe::App for SdfApp {
                 search_filter: &mut self.ui.scene_tree_search,
             },
             actions: &mut action_sink,
+            history: &self.doc.history,
         };
 
         egui::CentralPanel::default()
@@ -452,6 +467,7 @@ impl eframe::App for SdfApp {
             self.async_state.pending_pick = pending_pick;
             self.async_state.sculpt_ctrl_held = sculpt_ctrl_held;
             self.async_state.sculpt_shift_held = sculpt_shift_held;
+            self.async_state.sculpt_pressure = sculpt_pressure;
         }
 
         // Sculpt mode: submit async pick for next frame's poll_sculpt_pick
@@ -536,6 +552,7 @@ impl eframe::App for SdfApp {
             || self.doc.sculpt_state.is_active()
             || !matches!(self.async_state.bake_status, BakeStatus::Idle)
             || !matches!(self.async_state.export_status, ExportStatus::Idle)
+            || !matches!(self.async_state.import_status, ImportStatus::Idle)
             || !matches!(self.async_state.pick_state, PickState::Idle)
             || self.async_state.pending_pick.is_some()
             || self.gpu.buffer_dirty

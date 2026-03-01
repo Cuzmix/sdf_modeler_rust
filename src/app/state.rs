@@ -15,7 +15,7 @@ use crate::ui::dock::Tab;
 use crate::ui::gizmo::{GizmoMode, GizmoSpace, GizmoState};
 use crate::ui::node_graph::NodeGraphState;
 
-use super::{BakeStatus, ExportStatus, FrameTimings, PickState, Toast};
+use super::{BakeStatus, ExportStatus, FrameTimings, ImportStatus, PickState, Toast};
 
 // ---------------------------------------------------------------------------
 // Core document state: the "model" being edited.
@@ -62,6 +62,7 @@ pub struct GpuSyncState {
 pub struct AsyncState {
     pub bake_status: BakeStatus,
     pub export_status: ExportStatus,
+    pub import_status: ImportStatus,
     pub pick_state: PickState,
     pub pending_pick: Option<PendingPick>,
     pub last_sculpt_hit: Option<Vec3>,
@@ -69,6 +70,8 @@ pub struct AsyncState {
     /// Modifier keys captured at the time of sculpt drag (for Ctrl-invert / Shift-smooth).
     pub sculpt_ctrl_held: bool,
     pub sculpt_shift_held: bool,
+    /// Pen pressure (0.0-1.0) during sculpt drag. 0.0 = no pressure data.
+    pub sculpt_pressure: f32,
 }
 
 // ---------------------------------------------------------------------------

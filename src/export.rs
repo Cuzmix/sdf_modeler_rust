@@ -396,16 +396,107 @@ pub fn marching_cubes(
     bounds_min: Vec3,
     bounds_max: Vec3,
     progress: &AtomicU32,
+    adaptive: bool,
 ) -> ExportMesh {
     let res = resolution as usize;
     let grid_size = res + 1; // Number of sample points per axis
     let step = (bounds_max - bounds_min) / resolution as f32;
 
-    // Phase 1: Sample SDF at all grid points (parallelized by z-slice)
-    let mut field = vec![0.0f32; grid_size * grid_size * grid_size];
-
     // Find root nodes to evaluate
     let roots = scene.top_level_nodes();
+
+    // Build surface mask if adaptive mode is on.
+    // Coarse pass identifies which fine-grid cells are near the surface,
+    // so we can skip SDF evaluation for cells deep inside or far outside.
+    let surface_mask: Option<Vec<bool>> = if adaptive && resolution >= 32 {
+        let coarse_div = (resolution / 4).max(8) as usize;
+        let coarse_gs = coarse_div + 1;
+        let coarse_step = (bounds_max - bounds_min) / coarse_div as f32;
+
+        // Sample coarse grid
+        let coarse_slices: Vec<Vec<f32>> = maybe_par_iter!(0..coarse_gs)
+            .map(|z| {
+                let mut slice = vec![0.0f32; coarse_gs * coarse_gs];
+                for y in 0..coarse_gs {
+                    for x in 0..coarse_gs {
+                        let p = bounds_min + Vec3::new(x as f32, y as f32, z as f32) * coarse_step;
+                        let mut d = f32::MAX;
+                        for &root_id in &roots {
+                            d = d.min(voxel::evaluate_sdf_tree(scene, root_id, p));
+                        }
+                        slice[y * coarse_gs + x] = d;
+                    }
+                }
+                slice
+            })
+            .collect();
+
+        // Identify coarse cells with sign changes (surface intersections)
+        let mut coarse_active = vec![false; coarse_div * coarse_div * coarse_div];
+        for z in 0..coarse_div {
+            for y in 0..coarse_div {
+                for x in 0..coarse_div {
+                    let mut has_neg = false;
+                    let mut has_pos = false;
+                    for c in &CORNERS {
+                        let gx = x + c[0] as usize;
+                        let gy = y + c[1] as usize;
+                        let gz = z + c[2] as usize;
+                        let v = coarse_slices[gz][gy * coarse_gs + gx];
+                        if v < 0.0 { has_neg = true; } else { has_pos = true; }
+                    }
+                    if has_neg && has_pos {
+                        coarse_active[z * coarse_div * coarse_div + y * coarse_div + x] = true;
+                    }
+                }
+            }
+        }
+
+        // Expand mask by 1 cell to catch boundary regions
+        let mut expanded = vec![false; coarse_div * coarse_div * coarse_div];
+        for z in 0..coarse_div {
+            for y in 0..coarse_div {
+                for x in 0..coarse_div {
+                    if coarse_active[z * coarse_div * coarse_div + y * coarse_div + x] {
+                        for dz in 0..3usize {
+                            for dy in 0..3usize {
+                                for dx in 0..3usize {
+                                    let nx = (x + dx).wrapping_sub(1);
+                                    let ny = (y + dy).wrapping_sub(1);
+                                    let nz = (z + dz).wrapping_sub(1);
+                                    if nx < coarse_div && ny < coarse_div && nz < coarse_div {
+                                        expanded[nz * coarse_div * coarse_div + ny * coarse_div + nx] = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Map fine-grid points to coarse mask
+        let scale = coarse_div as f32 / res as f32;
+        let mut fine_mask = vec![false; grid_size * grid_size * grid_size];
+        for z in 0..grid_size {
+            for y in 0..grid_size {
+                for x in 0..grid_size {
+                    let cx = ((x as f32 * scale) as usize).min(coarse_div - 1);
+                    let cy = ((y as f32 * scale) as usize).min(coarse_div - 1);
+                    let cz = ((z as f32 * scale) as usize).min(coarse_div - 1);
+                    if expanded[cz * coarse_div * coarse_div + cy * coarse_div + cx] {
+                        fine_mask[z * grid_size * grid_size + y * grid_size + x] = true;
+                    }
+                }
+            }
+        }
+        Some(fine_mask)
+    } else {
+        None
+    };
+
+    // Phase 1: Sample SDF at all grid points (parallelized by z-slice)
+    let mut field = vec![0.0f32; grid_size * grid_size * grid_size];
 
     // Sample in parallel by z-slice
     let slices: Vec<Vec<f32>> = maybe_par_iter!(0..grid_size)
@@ -413,6 +504,13 @@ pub fn marching_cubes(
             let mut slice = vec![0.0f32; grid_size * grid_size];
             for y in 0..grid_size {
                 for x in 0..grid_size {
+                    // Skip points not near the surface in adaptive mode
+                    if let Some(ref mask) = surface_mask {
+                        if !mask[z * grid_size * grid_size + y * grid_size + x] {
+                            slice[y * grid_size + x] = f32::MAX;
+                            continue;
+                        }
+                    }
                     let p = bounds_min + Vec3::new(x as f32, y as f32, z as f32) * step;
                     let mut d = f32::MAX;
                     for &root_id in &roots {

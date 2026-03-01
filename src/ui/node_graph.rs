@@ -408,6 +408,9 @@ impl NodeDataTrait for SdfNodeData {
                         let c2 = compact_vec3(ui, "Count", extra, 1.0, Some(0.0..=50.0));
                         c1 || c2
                     }
+                    ModifierKind::RadialRepeat => {
+                        scalar_drag(ui, "Count", &mut value.x, 1.0, Some(1.0..=64.0))
+                    }
                 };
             }
             NodeData::Sculpt {

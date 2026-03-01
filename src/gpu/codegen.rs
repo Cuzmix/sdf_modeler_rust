@@ -275,6 +275,11 @@ fn emit_transform_chain(
                     "    let {new_var} = finite_repeat_point({current_var}, nodes[{idx}].position.xyz, nodes[{idx}].rotation.xyz);"
                 ));
             }
+            ChainEntry::Modifier(ModifierKind::RadialRepeat) => {
+                lines.push(format!(
+                    "    let {new_var} = radial_repeat_point({current_var}, nodes[{idx}].position.x, nodes[{idx}].position.y);"
+                ));
+            }
             // Round/Onion are distance modifiers, not in chain
             ChainEntry::Modifier(ModifierKind::Round | ModifierKind::Onion) => unreachable!(),
         }
@@ -340,7 +345,7 @@ fn emit_node_wgsl(
             let child_idx = input.and_then(|id| idx_map.get(&id).copied());
 
             if child_idx.is_some() {
-                // DIFFERENTIAL: analytical child SDF + displacement from grid
+                // DIFFERENTIAL: analytical child SDF + displacement from grid * layer_intensity
                 let ci = child_idx.unwrap();
                 let disp_call = if let Some(tex_map) = sculpt_tex_map {
                     if let Some(&tex_idx) = tex_map.get(&node_id) {
@@ -352,7 +357,7 @@ fn emit_node_wgsl(
                     format!("disp_voxel_grid(lp{i}, {i}u)")
                 };
                 lines.push(format!(
-                    "    let n{i} = vec2f(n{ci}.x + {disp_call}, f32({i}));"
+                    "    let n{i} = vec2f(n{ci}.x + {disp_call} * nodes[{i}].position.w, f32({i}));"
                 ));
             } else {
                 // STANDALONE: total SDF from grid (unchanged behavior)

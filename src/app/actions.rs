@@ -7,6 +7,13 @@ use super::BakeRequest;
 /// Collects actions during a frame. Drained by the update loop.
 pub type ActionSink = Vec<Action>;
 
+#[derive(Debug, Clone)]
+pub enum WorkspacePreset {
+    Modeling,
+    Sculpting,
+    Rendering,
+}
+
 /// All possible state-mutating intents that UI components can express.
 /// Each variant contains exactly the data needed to execute the action.
 ///
@@ -64,6 +71,7 @@ pub enum Action {
     ReparentNode { dragged: NodeId, new_parent: NodeId },
     RenameNode { id: NodeId, name: String },
     ToggleVisibility(NodeId),
+    ToggleLock(NodeId),
     SwapChildren(NodeId),
 
     // ── Graph connections ────────────────────────────────────────────
@@ -71,9 +79,10 @@ pub enum Action {
     SetRightChild { parent: NodeId, child: Option<NodeId> },
     SetSculptInput { parent: NodeId, child: Option<NodeId> },
 
-    // ── Bake / Export ────────────────────────────────────────────────
+    // ── Bake / Export / Import ───────────────────────────────────────
     RequestBake(BakeRequest),
     ShowExportDialog,
+    ImportMesh,
     TakeScreenshot,
 
     // ── Viewport ────────────────────────────────────────────────────
@@ -88,6 +97,9 @@ pub enum Action {
     // ── Camera bookmarks ───────────────────────────────────────────
     SaveBookmark(usize),
     RestoreBookmark(usize),
+
+    // ── Workspace ─────────────────────────────────────────────────────
+    SetWorkspace(WorkspacePreset),
 
     // ── UI toggles ───────────────────────────────────────────────────
     ToggleDebug,

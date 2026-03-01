@@ -5,7 +5,7 @@ use eframe::egui;
 use crate::sculpt::{BrushMode, SculptState};
 
 use super::actions::{Action, ActionSink};
-use super::{BakeStatus, ExportStatus, SdfApp};
+use super::{BakeStatus, ExportStatus, ImportStatus, SdfApp};
 
 impl SdfApp {
     /// Draw the menu bar and push any triggered actions into the action sink.
@@ -54,6 +54,11 @@ impl SdfApp {
 
                     if ui.add(egui::Button::new("Screenshot...").shortcut_text("Ctrl+P")).clicked() {
                         actions.push(Action::TakeScreenshot);
+                        ui.close_menu();
+                    }
+                    let import_idle = matches!(self.async_state.import_status, ImportStatus::Idle);
+                    if ui.add_enabled(import_idle, egui::Button::new("Import Mesh...")).clicked() {
+                        actions.push(Action::ImportMesh);
                         ui.close_menu();
                     }
                     let export_idle = matches!(self.async_state.export_status, ExportStatus::Idle);
@@ -144,6 +149,22 @@ impl SdfApp {
                         ui.separator();
                         ui.weak("Ctrl+1-9 to save current view");
                     });
+                    ui.separator();
+                    ui.menu_button("Workspace", |ui| {
+                        use crate::app::actions::WorkspacePreset;
+                        if ui.button("Modeling").on_hover_text("Balanced layout with all panels").clicked() {
+                            actions.push(Action::SetWorkspace(WorkspacePreset::Modeling));
+                            ui.close_menu();
+                        }
+                        if ui.button("Sculpting").on_hover_text("Large viewport with properties sidebar").clicked() {
+                            actions.push(Action::SetWorkspace(WorkspacePreset::Sculpting));
+                            ui.close_menu();
+                        }
+                        if ui.button("Rendering").on_hover_text("Viewport with render settings sidebar").clicked() {
+                            actions.push(Action::SetWorkspace(WorkspacePreset::Rendering));
+                            ui.close_menu();
+                        }
+                    });
                 });
 
                 // --- Settings ---
@@ -168,6 +189,15 @@ impl SdfApp {
                         ui.add(
                             egui::ProgressBar::new(frac)
                                 .text(format!("Exporting... {:.0}%", frac * 100.0))
+                                .desired_width(200.0),
+                        );
+                    }
+                    if let ImportStatus::InProgress { ref progress, total, .. } = self.async_state.import_status {
+                        let done = progress.load(Ordering::Relaxed);
+                        let frac = done as f32 / total.max(1) as f32;
+                        ui.add(
+                            egui::ProgressBar::new(frac)
+                                .text(format!("Importing... {:.0}%", frac * 100.0))
                                 .desired_width(200.0),
                         );
                     }
