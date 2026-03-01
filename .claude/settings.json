@@ -18,7 +18,9 @@
       "Read(//c/Users/Manny/Documents/Code/ Projects/Typscript/sdf_modeler_rust/src/gpu/**)",
       "Read(//c/Users/Manny/Documents/Code/ Projects/Typscript/sdf_modeler_rust/src/app/**)",
       "WebFetch(domain:bgolus.medium.com)",
-      "WebFetch(domain:forum.babylonjs.com)"
+      "WebFetch(domain:forum.babylonjs.com)",
+      "Read(//c/Users/Manny/Documents/Code/ Projects/Typscript/sdf_modeler_rust/src/ui/**)",
+      "Bash(cargo doc --document-private-items -p egui_dock)"
     ]
   }
 }

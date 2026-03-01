@@ -150,6 +150,25 @@ impl SdfApp {
                         ui.weak("Ctrl+1-9 to save current view");
                     });
                     ui.separator();
+                    ui.menu_button("Panels", |ui| {
+                        use crate::ui::dock::Tab;
+                        for tab in Tab::ALL {
+                            let is_open = self.ui.dock_state.find_tab(tab).is_some();
+                            if ui.selectable_label(is_open, tab.label()).clicked() {
+                                if let Some(location) = self.ui.dock_state.find_tab(tab) {
+                                    self.ui.dock_state.remove_tab(location);
+                                } else {
+                                    self.ui.dock_state.push_to_focused_leaf(tab.clone());
+                                }
+                                ui.close_menu();
+                            }
+                        }
+                        ui.separator();
+                        if ui.button("Reset Layout").clicked() {
+                            self.ui.dock_state = crate::ui::dock::create_dock_state();
+                            ui.close_menu();
+                        }
+                    });
                     ui.menu_button("Workspace", |ui| {
                         use crate::app::actions::WorkspacePreset;
                         if ui.button("Modeling").on_hover_text("Balanced layout with all panels").clicked() {

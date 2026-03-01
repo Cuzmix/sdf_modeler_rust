@@ -23,6 +23,28 @@ pub enum Tab {
     History,
 }
 
+impl Tab {
+    pub const ALL: &[Tab] = &[
+        Tab::Viewport,
+        Tab::NodeGraph,
+        Tab::Properties,
+        Tab::SceneTree,
+        Tab::RenderSettings,
+        Tab::History,
+    ];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Tab::Viewport => "Viewport",
+            Tab::NodeGraph => "Node Graph",
+            Tab::Properties => "Properties",
+            Tab::SceneTree => "Scene Tree",
+            Tab::RenderSettings => "Render Settings",
+            Tab::History => "History",
+        }
+    }
+}
+
 pub fn create_dock_state() -> DockState<Tab> {
     let mut state = DockState::new(vec![Tab::Viewport]);
     let surface = state.main_surface_mut();
