@@ -3,6 +3,7 @@ use glam::{Mat4, Quat, Vec3, Vec4};
 
 use crate::gpu::camera::Camera;
 use crate::graph::scene::{NodeData, NodeId, Scene};
+use crate::settings::SnapConfig;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -636,6 +637,7 @@ pub fn draw_and_interact(
     gizmo_space: &GizmoSpace,
     pivot_offset: &mut Vec3,
     rect: Rect,
+    snap_config: &SnapConfig,
 ) -> bool {
     let Some(node_id) = selected else {
         *gizmo_state = GizmoState::Idle;
@@ -757,17 +759,28 @@ pub fn draw_and_interact(
                     camera, &vp, rect, pivot_offset, nt.rotation,
                 );
             } else {
+                let ctrl_held = response.ctx.input(|i| i.modifiers.ctrl);
                 match gizmo_mode {
-                    GizmoMode::Translate => handle_translate_drag(
-                        response, axis_dir, gizmo_center, origin_screen,
-                        camera, &vp, rect, scene, drag_node,
-                        pivot_offset, nt.rotation,
-                    ),
-                    GizmoMode::Scale => handle_scale_drag(
-                        response, &axis_clone, axis_dir, gizmo_center, origin_screen,
-                        camera, &vp, rect, scene, drag_node,
-                        pivot_offset, nt.rotation,
-                    ),
+                    GizmoMode::Translate => {
+                        handle_translate_drag(
+                            response, axis_dir, gizmo_center, origin_screen,
+                            camera, &vp, rect, scene, drag_node,
+                            pivot_offset, nt.rotation,
+                        );
+                        if ctrl_held {
+                            snap_position(scene, drag_node, axis_idx, snap_config.translate_snap);
+                        }
+                    }
+                    GizmoMode::Scale => {
+                        handle_scale_drag(
+                            response, &axis_clone, axis_dir, gizmo_center, origin_screen,
+                            camera, &vp, rect, scene, drag_node,
+                            pivot_offset, nt.rotation,
+                        );
+                        if ctrl_held {
+                            snap_scale(scene, drag_node, axis_idx, snap_config.scale_snap);
+                        }
+                    }
                     GizmoMode::Rotate => {
                         let view_dir = camera.eye() - gizmo_center;
                         handle_rotate_drag(
@@ -775,6 +788,9 @@ pub fn draw_and_interact(
                             scene, drag_node, pivot_offset, nt.rotation, gizmo_space,
                             view_dir,
                         );
+                        if ctrl_held {
+                            snap_rotation(scene, drag_node, axis_idx, snap_config.rotate_snap.to_radians());
+                        }
                     }
                 }
             }
@@ -791,4 +807,54 @@ pub fn draw_and_interact(
     }
 
     consumed
+}
+
+// ---------------------------------------------------------------------------
+// Snap helpers — quantize position/rotation/scale to grid increments
+// ---------------------------------------------------------------------------
+
+fn snap_value(val: f32, snap: f32) -> f32 {
+    (val / snap).round() * snap
+}
+
+fn snap_position(scene: &mut Scene, node_id: NodeId, axis_idx: usize, snap: f32) {
+    if let Some(node) = scene.nodes.get_mut(&node_id) {
+        let pos = match &mut node.data {
+            NodeData::Primitive { ref mut position, .. } => position,
+            NodeData::Sculpt { ref mut position, .. } => position,
+            _ => return,
+        };
+        match axis_idx {
+            0 => pos.x = snap_value(pos.x, snap),
+            1 => pos.y = snap_value(pos.y, snap),
+            _ => pos.z = snap_value(pos.z, snap),
+        }
+    }
+}
+
+fn snap_rotation(scene: &mut Scene, node_id: NodeId, axis_idx: usize, snap_rad: f32) {
+    if let Some(node) = scene.nodes.get_mut(&node_id) {
+        let rot = match &mut node.data {
+            NodeData::Primitive { ref mut rotation, .. } => rotation,
+            NodeData::Sculpt { ref mut rotation, .. } => rotation,
+            _ => return,
+        };
+        match axis_idx {
+            0 => rot.x = snap_value(rot.x, snap_rad),
+            1 => rot.y = snap_value(rot.y, snap_rad),
+            _ => rot.z = snap_value(rot.z, snap_rad),
+        }
+    }
+}
+
+fn snap_scale(scene: &mut Scene, node_id: NodeId, axis_idx: usize, snap: f32) {
+    if let Some(node) = scene.nodes.get_mut(&node_id) {
+        if let NodeData::Primitive { ref mut scale, .. } = node.data {
+            match axis_idx {
+                0 => scale.x = snap_value(scale.x, snap).max(0.01),
+                1 => scale.y = snap_value(scale.y, snap).max(0.01),
+                _ => scale.z = snap_value(scale.z, snap).max(0.01),
+            }
+        }
+    }
 }

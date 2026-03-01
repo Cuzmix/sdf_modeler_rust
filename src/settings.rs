@@ -12,6 +12,66 @@ impl Default for BackgroundMode {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Shading modes
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
+pub enum ShadingMode {
+    Full,
+    Solid,
+    Clay,
+}
+
+impl Default for ShadingMode {
+    fn default() -> Self { Self::Full }
+}
+
+impl ShadingMode {
+    pub fn gpu_value(&self) -> f32 {
+        match self {
+            Self::Full => 0.0,
+            Self::Solid => 1.0,
+            Self::Clay => 2.0,
+        }
+    }
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Full => "Full",
+            Self::Solid => "Solid",
+            Self::Clay => "Clay",
+        }
+    }
+    pub fn cycle(&self) -> Self {
+        match self {
+            Self::Full => Self::Solid,
+            Self::Solid => Self::Clay,
+            Self::Clay => Self::Full,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Snap configuration
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
+pub struct SnapConfig {
+    pub translate_snap: f32,
+    pub rotate_snap: f32,
+    pub scale_snap: f32,
+}
+
+impl Default for SnapConfig {
+    fn default() -> Self {
+        Self {
+            translate_snap: 0.25,
+            rotate_snap: 15.0,
+            scale_snap: 0.1,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Settings {
     pub vsync_enabled: bool,
@@ -29,6 +89,8 @@ pub struct Settings {
     pub recent_files: Vec<String>,
     #[serde(default = "default_export_resolution")]
     pub export_resolution: u32,
+    #[serde(default)]
+    pub snap: SnapConfig,
 }
 
 impl Default for Settings {
@@ -42,6 +104,7 @@ impl Default for Settings {
             auto_save_interval_secs: 120,
             recent_files: Vec::new(),
             export_resolution: 128,
+            snap: SnapConfig::default(),
         }
     }
 }
@@ -241,6 +304,14 @@ pub struct RenderConfig {
     // Navigation
     #[serde(default)]
     pub clamp_orbit_pitch: bool,
+
+    // Shading mode
+    #[serde(default)]
+    pub shading_mode: ShadingMode,
+
+    // Viewport overlays
+    #[serde(default)]
+    pub show_node_labels: bool,
 }
 
 fn default_true() -> bool { true }
@@ -313,6 +384,8 @@ impl Default for RenderConfig {
             roll_sensitivity: 0.005,
             invert_roll: false,
             clamp_orbit_pitch: false,
+            shading_mode: ShadingMode::default(),
+            show_node_labels: false,
         }
     }
 }

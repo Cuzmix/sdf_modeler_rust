@@ -44,6 +44,7 @@ pub fn draw(ctx: &egui::Context, open: &mut bool) {
                     row(ui, "Scroll", "Zoom");
                     row(ui, "Ctrl+Alt+Drag", "Roll camera");
                     row(ui, "F", "Focus selected");
+                    row(ui, "Home", "Frame all");
                     row(ui, "O", "Toggle Ortho / Perspective");
                     row(ui, "F5", "Front view");
                     row(ui, "F6", "Top view");
@@ -52,6 +53,8 @@ pub fn draw(ctx: &egui::Context, open: &mut bool) {
                     row(ui, "F9", "Left view");
                     row(ui, "F10", "Bottom view");
                     row(ui, "Gizmo click", "Snap to axis view");
+                    row(ui, "/", "Toggle isolation mode");
+                    row(ui, "Z", "Cycle shading mode");
 
                     ui.separator(); ui.end_row();
                     section(ui, "Gizmo");
@@ -59,6 +62,7 @@ pub fn draw(ctx: &egui::Context, open: &mut bool) {
                     row(ui, "E", "Rotate tool");
                     row(ui, "R", "Scale tool");
                     row(ui, "G", "Toggle Local / World");
+                    row(ui, "Ctrl+Drag", "Snap to grid");
                     row(ui, "Alt+Drag", "Move pivot");
                     row(ui, "Alt+C", "Reset pivot");
 

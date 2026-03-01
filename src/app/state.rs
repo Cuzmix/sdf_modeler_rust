@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use eframe::egui_wgpu::RenderState;
@@ -75,6 +75,12 @@ pub struct AsyncState {
 // UI-only state: dialog visibility, rename editing, toasts, dock layout.
 // ---------------------------------------------------------------------------
 
+/// Saved state when entering isolation mode.
+pub struct IsolationState {
+    pub pre_hidden: HashSet<NodeId>,
+    pub isolated_node: NodeId,
+}
+
 pub struct UiState {
     pub dock_state: DockState<Tab>,
     pub node_graph_state: NodeGraphState,
@@ -85,6 +91,8 @@ pub struct UiState {
     pub renaming_node: Option<NodeId>,
     pub rename_buf: String,
     pub scene_tree_drag: Option<NodeId>,
+    pub scene_tree_search: String,
+    pub isolation_state: Option<IsolationState>,
     pub toasts: Vec<Toast>,
 }
 

@@ -65,6 +65,8 @@ pub struct ViewportContext<'a> {
     /// Modifier keys captured during sculpt drag (output channel).
     pub sculpt_ctrl_held: &'a mut bool,
     pub sculpt_shift_held: &'a mut bool,
+    /// Label for isolation mode indicator (None = not isolated).
+    pub isolation_label: Option<String>,
 }
 
 /// Refs needed only by the scene tree tab.
@@ -72,6 +74,7 @@ pub struct SceneTreeContext<'a> {
     pub renaming_node: &'a mut Option<NodeId>,
     pub rename_buf: &'a mut String,
     pub drag_state: &'a mut Option<NodeId>,
+    pub search_filter: &'a mut String,
 }
 
 // ---------------------------------------------------------------------------
@@ -128,6 +131,8 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.viewport.sculpt_count,
                     self.viewport.fps_info,
                     self.actions,
+                    &self.settings.snap,
+                    self.viewport.isolation_label.as_deref(),
                 );
                 if let Some(pick) = vp_output.pending_pick {
                     *self.viewport.pending_pick = Some(pick);
@@ -165,6 +170,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.scene_tree.rename_buf,
                     self.scene_tree.drag_state,
                     self.actions,
+                    self.scene_tree.search_filter,
                 );
                 // If scene tree changed selection, scroll graph to it
                 if self.node_graph_state.selected != prev_selected {

@@ -49,9 +49,12 @@ impl SdfApp {
             actions.push(Action::ToggleOrtho);
         }
 
-        // Focus on selected node
+        // Focus on selected node / Frame all
         if ctx.input(|i| i.key_pressed(egui::Key::F) && !i.modifiers.ctrl) {
             actions.push(Action::FocusSelected);
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::Home)) {
+            actions.push(Action::FrameAll);
         }
 
         // Debug toggle
@@ -117,6 +120,16 @@ impl SdfApp {
         }
         if ctx.input(|i| i.modifiers.alt && i.key_pressed(egui::Key::C)) {
             actions.push(Action::ResetPivot);
+        }
+
+        // Isolation mode
+        if ctx.input(|i| i.key_pressed(egui::Key::Slash)) {
+            actions.push(Action::ToggleIsolation);
+        }
+
+        // Shading mode cycle (Z key, but not in sculpt mode — Z is symmetry toggle there)
+        if ctx.input(|i| i.key_pressed(egui::Key::Z) && !i.modifiers.ctrl) && !self.doc.sculpt_state.is_active() {
+            actions.push(Action::CycleShadingMode);
         }
 
         // Tool switching shortcuts

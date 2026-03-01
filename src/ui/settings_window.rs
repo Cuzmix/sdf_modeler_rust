@@ -66,6 +66,8 @@ pub fn draw(
                     .show(ui, |ui| {
                         ui.checkbox(&mut settings.render.show_grid, "Show Grid")
                             .on_hover_text("Display ground plane grid at Y=0");
+                        ui.checkbox(&mut settings.render.show_node_labels, "Show Node Labels")
+                            .on_hover_text("Display node names at their 3D positions in the viewport");
                         ui.checkbox(&mut settings.render.clamp_orbit_pitch, "Clamp Orbit Pitch")
                             .on_hover_text("Limit vertical orbit to ±89°. When off, allows full 360° gimbal rotation.");
                         ui.separator();
@@ -73,6 +75,19 @@ pub fn draw(
                             "How fast Ctrl+Alt+drag and touch twist roll the camera");
                         ui.checkbox(&mut settings.render.invert_roll, "Invert Roll")
                             .on_hover_text("Reverse the roll direction for both touch twist and Ctrl+Alt+drag");
+                    });
+
+                // --- Snapping ---
+                egui::CollapsingHeader::new("Snapping")
+                    .default_open(false)
+                    .show(ui, |ui| {
+                        ui.label("Hold Ctrl while dragging a gizmo to snap.");
+                        labeled_slider(ui, "Translate", &mut settings.snap.translate_snap, 0.05..=2.0, false,
+                            "Snap increment for position (world units)");
+                        labeled_slider(ui, "Rotate (°)", &mut settings.snap.rotate_snap, 1.0..=90.0, false,
+                            "Snap increment for rotation (degrees)");
+                        labeled_slider(ui, "Scale", &mut settings.snap.scale_snap, 0.01..=1.0, false,
+                            "Snap increment for scale");
                     });
 
                 // --- Touch Input ---

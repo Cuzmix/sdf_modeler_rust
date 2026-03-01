@@ -5,8 +5,9 @@ use eframe::wgpu;
 use crate::app::actions::{Action, ActionSink};
 use crate::gpu::camera::{Camera, CameraUniform};
 use crate::gpu::picking::PendingPick;
-use crate::graph::scene::{CsgOp, ModifierKind, NodeId, Scene, SdfPrimitive, TransformKind};
+use crate::graph::scene::{CsgOp, ModifierKind, NodeData, NodeId, Scene, SdfPrimitive, TransformKind};
 use crate::sculpt::{ActiveTool, BrushMode, SculptState};
+use crate::settings::SnapConfig;
 use crate::ui::gizmo::{self, GizmoMode, GizmoSpace, GizmoState};
 
 use super::ViewportResources;
@@ -234,6 +235,8 @@ pub fn draw(
     sculpt_count: usize,
     fps_info: Option<(f64, f64)>, // (fps, frame_ms)
     actions: &mut ActionSink,
+    snap_config: &SnapConfig,
+    isolation_label: Option<&str>,
 ) -> ViewportOutput {
     let mut output = ViewportOutput {
         pending_pick: None,
@@ -293,7 +296,8 @@ pub fn draw(
         })
         .map(|i| i as f32)
         .unwrap_or(-1.0);
-    let render_uniform = camera.to_uniform(render_viewport, time, quality_mode, render_config.show_grid, scene_bounds, selected_idx);
+    let shading_mode_val = render_config.shading_mode.gpu_value();
+    let render_uniform = camera.to_uniform(render_viewport, time, quality_mode, render_config.show_grid, scene_bounds, selected_idx, shading_mode_val);
 
     ui.painter().add(egui_wgpu::Callback::new_paint_callback(
         rect,
@@ -309,6 +313,11 @@ pub fn draw(
     // --- Symmetry plane overlay ---
     if let Some(axis) = sculpt_state.symmetry_axis() {
         draw_symmetry_plane(ui.painter(), camera, rect, axis);
+    }
+
+    // --- Node labels overlay ---
+    if render_config.show_node_labels {
+        draw_node_labels(ui.painter(), camera, scene, *selected, rect);
     }
 
     // --- Gizmo overlay (drawn on top of WGPU content) ---
@@ -327,6 +336,7 @@ pub fn draw(
             gizmo_space,
             pivot_offset,
             rect,
+            snap_config,
         )
     };
 
@@ -343,7 +353,7 @@ pub fn draw(
                     ];
                     output.pending_pick = Some(PendingPick {
                         mouse_pos: mouse_px,
-                        camera_uniform: camera.to_uniform(viewport, time, 0.0, false, scene_bounds, -1.0),
+                        camera_uniform: camera.to_uniform(viewport, time, 0.0, false, scene_bounds, -1.0, 0.0),
                     });
                     // Capture modifier keys for Ctrl-invert / Shift-smooth
                     let modifiers = ui.input(|i| i.modifiers);
@@ -500,7 +510,7 @@ pub fn draw(
                     (pos.x - rect.min.x) * pixels_per_point,
                     (pos.y - rect.min.y) * pixels_per_point,
                 ];
-                let pick_uniform = camera.to_uniform(viewport, time, 0.0, false, scene_bounds, -1.0);
+                let pick_uniform = camera.to_uniform(viewport, time, 0.0, false, scene_bounds, -1.0, 0.0);
                 output.pending_pick = Some(PendingPick {
                     mouse_pos: mouse_px,
                     camera_uniform: pick_uniform,
@@ -577,6 +587,27 @@ pub fn draw(
             &text,
             font,
             color,
+        );
+    }
+
+    // --- Isolation mode indicator ---
+    if let Some(label) = isolation_label {
+        let text = format!("ISOLATED: {}", label);
+        let font = egui::FontId::proportional(13.0);
+        let pos = egui::pos2(rect.center().x, rect.min.y + 8.0);
+        ui.painter().text(
+            pos + egui::vec2(1.0, 1.0),
+            egui::Align2::CENTER_TOP,
+            &text,
+            font.clone(),
+            egui::Color32::from_black_alpha(180),
+        );
+        ui.painter().text(
+            pos,
+            egui::Align2::CENTER_TOP,
+            &text,
+            font,
+            egui::Color32::from_rgb(255, 180, 60),
         );
     }
 
@@ -695,6 +726,19 @@ pub fn draw(
                             }
                         });
                     }
+
+                    // Shading mode buttons
+                    ui.separator();
+                    ui.horizontal(|ui| {
+                        let mode = &render_config.shading_mode;
+                        let mode_label = mode.label();
+                        if ui.selectable_label(false, format!("Shading: {}", mode_label))
+                            .on_hover_text("Click to cycle (Z key)")
+                            .clicked()
+                        {
+                            actions.push(Action::CycleShadingMode);
+                        }
+                    });
                 });
         });
 
@@ -821,4 +865,76 @@ pub fn draw(
     }
 
     output
+}
+
+fn draw_node_labels(
+    painter: &egui::Painter,
+    camera: &Camera,
+    scene: &Scene,
+    selected: Option<NodeId>,
+    rect: egui::Rect,
+) {
+    let view = camera.view_matrix();
+    let aspect = rect.width() / rect.height().max(1.0);
+    let proj = camera.projection_matrix(aspect);
+    let vp = proj * view;
+    let cam_pos = camera.eye();
+
+    for (&id, node) in &scene.nodes {
+        // Only show labels for geometry nodes with position
+        let pos = match &node.data {
+            NodeData::Primitive { position, .. } => *position,
+            NodeData::Sculpt { position, .. } => *position,
+            _ => continue,
+        };
+
+        // Skip hidden nodes
+        if scene.is_hidden(id) {
+            continue;
+        }
+
+        let dist = (pos - cam_pos).length();
+
+        // Project to screen
+        let Some(screen_pos) = gizmo::world_to_screen(pos, &vp, rect) else { continue };
+
+        // Skip if outside viewport
+        if !rect.contains(screen_pos) {
+            continue;
+        }
+
+        // Font size scales with distance
+        let font_size: f32 = (14.0_f32 / (dist * 0.3 + 1.0)).clamp(8.0, 14.0);
+        // Alpha fades with distance
+        let alpha: f32 = ((10.0_f32 - dist) / 8.0).clamp(0.3, 0.9);
+
+        let is_sel = selected == Some(id);
+        let base_color = if is_sel {
+            egui::Color32::from_rgb(255, 200, 60)
+        } else {
+            egui::Color32::from_rgb(200, 200, 210)
+        };
+        let color = base_color.gamma_multiply(alpha);
+        let shadow_color = egui::Color32::from_rgba_premultiplied(0, 0, 0, (alpha * 180.0) as u8);
+
+        let label_pos = egui::pos2(screen_pos.x, screen_pos.y - font_size - 4.0);
+        let font = egui::FontId::proportional(font_size);
+
+        // Text shadow
+        painter.text(
+            label_pos + egui::vec2(1.0, 1.0),
+            egui::Align2::CENTER_CENTER,
+            &node.name,
+            font.clone(),
+            shadow_color,
+        );
+        // Text
+        painter.text(
+            label_pos,
+            egui::Align2::CENTER_CENTER,
+            &node.name,
+            font,
+            color,
+        );
+    }
 }

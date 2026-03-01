@@ -39,6 +39,7 @@ pub enum Action {
 
     // ── Camera ───────────────────────────────────────────────────────
     FocusSelected,
+    FrameAll,
     CameraFront,
     CameraTop,
     CameraRight,
@@ -74,6 +75,10 @@ pub enum Action {
     RequestBake(BakeRequest),
     ShowExportDialog,
     TakeScreenshot,
+
+    // ── Viewport ────────────────────────────────────────────────────
+    ToggleIsolation,
+    CycleShadingMode,
 
     // ── UI toggles ───────────────────────────────────────────────────
     ToggleDebug,

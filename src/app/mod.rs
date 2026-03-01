@@ -253,6 +253,8 @@ impl SdfApp {
                 renaming_node: None,
                 rename_buf: String::new(),
                 scene_tree_drag: None,
+                scene_tree_search: String::new(),
+                isolation_state: None,
                 toasts: Vec::new(),
             },
             persistence: PersistenceState {
@@ -363,6 +365,9 @@ impl eframe::App for SdfApp {
         let mut sculpt_ctrl_held = false;
         let mut sculpt_shift_held = false;
         let sculpt_count = self.gpu.sculpt_tex_indices.len();
+        let isolation_label: Option<String> = self.ui.isolation_state.as_ref().and_then(|iso| {
+            self.doc.scene.nodes.get(&iso.isolated_node).map(|n| n.name.clone())
+        });
         let fps_info = if self.settings.show_fps_overlay {
             Some((self.perf.timings.avg_fps, self.perf.timings.avg_frame_ms))
         } else {
@@ -387,11 +392,13 @@ impl eframe::App for SdfApp {
                 fps_info,
                 sculpt_ctrl_held: &mut sculpt_ctrl_held,
                 sculpt_shift_held: &mut sculpt_shift_held,
+                isolation_label: isolation_label.clone(),
             },
             scene_tree: SceneTreeContext {
                 renaming_node: &mut self.ui.renaming_node,
                 rename_buf: &mut self.ui.rename_buf,
                 drag_state: &mut self.ui.scene_tree_drag,
+                search_filter: &mut self.ui.scene_tree_search,
             },
             actions: &mut action_sink,
         };

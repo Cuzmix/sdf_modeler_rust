@@ -10,6 +10,13 @@ const COLOR_NORMAL: egui::Color32 = egui::Color32::from_rgb(200, 200, 210);
 const COLOR_HIDDEN: egui::Color32 = egui::Color32::from_gray(100);
 const COLOR_DROP_TARGET: egui::Color32 = egui::Color32::from_rgb(80, 140, 255);
 
+// Type-coded dot colors
+const DOT_PRIMITIVE: egui::Color32 = egui::Color32::from_rgb(90, 140, 255);  // blue
+const DOT_OPERATION: egui::Color32 = egui::Color32::from_rgb(80, 200, 120);  // green
+const DOT_SCULPT: egui::Color32 = egui::Color32::from_rgb(240, 160, 60);    // orange
+const DOT_TRANSFORM: egui::Color32 = egui::Color32::from_rgb(180, 120, 240); // purple
+const DOT_MODIFIER: egui::Color32 = egui::Color32::from_rgb(230, 210, 60);   // yellow
+
 pub fn draw(
     ui: &mut egui::Ui,
     scene: &mut Scene,
@@ -18,8 +25,20 @@ pub fn draw(
     rename_buf: &mut String,
     drag_state: &mut Option<NodeId>,
     actions: &mut ActionSink,
+    search_filter: &mut String,
 ) {
     ui.heading("Scene Tree");
+
+    // Search / filter field
+    ui.horizontal(|ui| {
+        ui.label("\u{1F50D}");
+        ui.add(egui::TextEdit::singleline(search_filter)
+            .hint_text("Filter nodes...")
+            .desired_width(ui.available_width() - 24.0));
+        if !search_filter.is_empty() && ui.small_button("\u{2715}").clicked() {
+            search_filter.clear();
+        }
+    });
     ui.separator();
 
     if scene.nodes.is_empty() {
@@ -30,6 +49,31 @@ pub fn draw(
     let tops = scene.top_level_nodes();
     if tops.is_empty() {
         ui.label("Empty scene");
+        return;
+    }
+
+    // If search filter is active, show flat filtered list
+    if !search_filter.is_empty() {
+        let filter_lower = search_filter.to_lowercase();
+        let matching: Vec<NodeId> = scene.nodes.keys()
+            .filter(|id| {
+                if let Some(node) = scene.nodes.get(id) {
+                    node.name.to_lowercase().contains(&filter_lower)
+                } else {
+                    false
+                }
+            })
+            .copied()
+            .collect();
+
+        if matching.is_empty() {
+            ui.weak("No matches");
+            return;
+        }
+
+        for id in matching {
+            draw_flat_node(ui, scene, id, selected, renaming, rename_buf, actions);
+        }
         return;
     }
 
@@ -205,12 +249,19 @@ fn draw_node_recursive(
         COLOR_NORMAL
     };
 
+    // Pre-fetch type color before mutable borrows
+    let type_dot_color = scene.nodes.get(&id).map(|n| node_type_color(&n.data)).unwrap_or(COLOR_NORMAL);
+
     if info.is_leaf {
         ui.horizontal(|ui| {
             let mut visible = !info.is_hidden;
             if ui.checkbox(&mut visible, "").changed() {
                 scene.toggle_visibility(id);
             }
+            // Type dot
+            let (dot_rect, _) = ui.allocate_exact_size(egui::vec2(10.0, 10.0), egui::Sense::hover());
+            ui.painter().circle_filled(dot_rect.center(), 4.0, type_dot_color);
+
             let label = egui::Label::new(egui::RichText::new(&info.label).color(node_color))
                 .sense(egui::Sense::click_and_drag());
             let response = ui.add(label);
@@ -233,6 +284,10 @@ fn draw_node_recursive(
             if ui.checkbox(&mut visible, "").changed() {
                 scene.toggle_visibility(id);
             }
+            // Type dot
+            let (dot_rect, _) = ui.allocate_exact_size(egui::vec2(10.0, 10.0), egui::Sense::hover());
+            ui.painter().circle_filled(dot_rect.center(), 4.0, type_dot_color);
+
             let header = egui::CollapsingHeader::new(
                 egui::RichText::new(&info.label).color(node_color),
             )
@@ -272,4 +327,68 @@ fn format_node_label(node: &SceneNode) -> String {
         NodeData::Modifier { kind, .. } => kind.badge(),
     };
     format!("{} {}", badge, node.name)
+}
+
+fn node_type_color(data: &NodeData) -> egui::Color32 {
+    match data {
+        NodeData::Primitive { .. } => DOT_PRIMITIVE,
+        NodeData::Operation { .. } => DOT_OPERATION,
+        NodeData::Sculpt { .. } => DOT_SCULPT,
+        NodeData::Transform { .. } => DOT_TRANSFORM,
+        NodeData::Modifier { .. } => DOT_MODIFIER,
+    }
+}
+
+/// Flat node row (used in search results).
+fn draw_flat_node(
+    ui: &mut egui::Ui,
+    scene: &mut Scene,
+    id: NodeId,
+    selected: &mut Option<NodeId>,
+    renaming: &mut Option<NodeId>,
+    rename_buf: &mut String,
+    actions: &mut ActionSink,
+) {
+    let Some(info) = extract_info(scene, id, *selected) else { return };
+    let dot_color = scene.nodes.get(&id).map(|n| node_type_color(&n.data)).unwrap_or(COLOR_NORMAL);
+
+    // Inline rename editor
+    if *renaming == Some(id) {
+        ui.horizontal(|ui| {
+            let te = ui.text_edit_singleline(rename_buf);
+            if te.lost_focus() || ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                if let Some(node) = scene.nodes.get_mut(&id) {
+                    node.name = rename_buf.clone();
+                }
+                *renaming = None;
+            }
+            if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                *renaming = None;
+            }
+            te.request_focus();
+        });
+        return;
+    }
+
+    let node_color = if info.is_hidden { COLOR_HIDDEN } else if info.is_selected { COLOR_SELECTED } else { COLOR_NORMAL };
+
+    ui.horizontal(|ui| {
+        // Colored type dot
+        let (dot_rect, _) = ui.allocate_exact_size(egui::vec2(10.0, 10.0), egui::Sense::hover());
+        ui.painter().circle_filled(dot_rect.center(), 4.0, dot_color);
+
+        let label = egui::Label::new(egui::RichText::new(&info.label).color(node_color))
+            .sense(egui::Sense::click());
+        let response = ui.add(label);
+        if response.clicked() {
+            *selected = Some(id);
+        }
+        if response.double_clicked() {
+            if let Some(node) = scene.nodes.get(&id) {
+                *rename_buf = node.name.clone();
+                *renaming = Some(id);
+            }
+        }
+        node_context_menu(&response, ui, scene, id, selected, renaming, rename_buf, actions);
+    });
 }

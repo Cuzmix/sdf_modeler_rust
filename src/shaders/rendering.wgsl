@@ -186,6 +186,27 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
     if !sdf_miss {
         let p = ro + rd * t;
         let n = calc_normal(p, t);
+        let shading_mode = camera.scene_min.w;
+
+        if shading_mode > 1.5 {
+            // Clay: uniform gray, hemisphere + key diffuse only
+            let clay = vec3f(0.7, 0.7, 0.72);
+            let sky_l = clamp(0.5 + 0.5 * n.y, 0.0, 1.0);
+            let key_dir = normalize(vec3f(/*KEY_LIGHT_DIR*/));
+            let key_diff = max(dot(n, key_dir), 0.0);
+            color = clay * (sky_l * 0.4 + key_diff * 0.6 + 0.15);
+            color = pow(color, vec3f(1.0 / /*GAMMA*/));
+        } else if shading_mode > 0.5 {
+            // Solid: per-node colors, flat diffuse, no shadows/AO
+            let albedo = get_node_color(mat_id);
+            let key_dir = normalize(vec3f(/*KEY_LIGHT_DIR*/));
+            let key_diff = max(dot(n, key_dir), 0.0);
+            let fill_dir = normalize(vec3f(/*FILL_LIGHT_DIR*/));
+            let fill_diff = max(dot(n, fill_dir), 0.0) * /*FILL_INTENSITY*/;
+            color = albedo * (key_diff * 0.7 + fill_diff + 0.2);
+            color = pow(color, vec3f(1.0 / /*GAMMA*/));
+        } else {
+        // Full: existing PBR pipeline
 
         // Material properties
         let mat_metallic = select(0.0, nodes[mat_id].type_op.z, mat_id >= 0);
@@ -229,6 +250,7 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
 
         /*TONEMAP_LINE*/
         color = pow(color, vec3f(1.0 / /*GAMMA*/));
+        } // end Full shading
     }
 
     // --- Grid overlay: transparent blend AFTER base color ---

@@ -22,6 +22,7 @@ impl SdfApp {
                     self.ui.node_graph_state.selected = None;
                     self.ui.node_graph_state.needs_initial_rebuild = true;
                     self.doc.sculpt_state = SculptState::Inactive;
+                    self.ui.isolation_state = None;
                     self.gpu.current_structure_key = 0;
                     self.gpu.buffer_dirty = true;
                     self.persistence.saved_fingerprint = self.doc.scene.data_fingerprint();
@@ -112,6 +113,7 @@ impl SdfApp {
                         self.doc.scene = restored_scene;
                         self.ui.node_graph_state.selected = restored_sel;
                         self.ui.node_graph_state.needs_initial_rebuild = true;
+                        self.ui.isolation_state = None;
                         self.gpu.buffer_dirty = true;
                     }
                 }
@@ -122,6 +124,7 @@ impl SdfApp {
                         self.doc.scene = restored_scene;
                         self.ui.node_graph_state.selected = restored_sel;
                         self.ui.node_graph_state.needs_initial_rebuild = true;
+                        self.ui.isolation_state = None;
                         self.gpu.buffer_dirty = true;
                     }
                 }
@@ -136,6 +139,20 @@ impl SdfApp {
                             radius.max(0.5),
                         );
                     }
+                }
+                Action::FrameAll => {
+                    let bounds = self.doc.scene.compute_bounds();
+                    let center = Vec3::new(
+                        (bounds.0[0] + bounds.1[0]) * 0.5,
+                        (bounds.0[1] + bounds.1[1]) * 0.5,
+                        (bounds.0[2] + bounds.1[2]) * 0.5,
+                    );
+                    let half = Vec3::new(
+                        (bounds.1[0] - bounds.0[0]) * 0.5,
+                        (bounds.1[1] - bounds.0[1]) * 0.5,
+                        (bounds.1[2] - bounds.0[2]) * 0.5,
+                    );
+                    self.doc.camera.focus_on(center, half.length().max(0.5));
                 }
                 Action::CameraFront => self.doc.camera.start_transition(0.0, 0.0, 0.0),
                 Action::CameraTop => self.doc.camera.start_transition(0.0, std::f32::consts::FRAC_PI_2, 0.0),
@@ -273,6 +290,46 @@ impl SdfApp {
                 }
                 Action::TakeScreenshot => {
                     self.take_screenshot();
+                }
+
+                // ── Viewport ─────────────────────────────────────────
+                Action::ToggleIsolation => {
+                    if self.ui.isolation_state.is_some() {
+                        // Exit isolation: restore previous hidden set
+                        if let Some(iso) = self.ui.isolation_state.take() {
+                            self.doc.scene.hidden_nodes = iso.pre_hidden;
+                        }
+                    } else if let Some(sel) = self.ui.node_graph_state.selected {
+                        // Enter isolation: hide everything not in subtree + ancestors
+                        let pre_hidden = self.doc.scene.hidden_nodes.clone();
+                        let subtree = self.doc.scene.collect_subtree(sel);
+                        let parent_map = self.doc.scene.build_parent_map();
+                        // Walk ancestors
+                        let mut ancestors = std::collections::HashSet::new();
+                        let mut cur = sel;
+                        while let Some(&parent) = parent_map.get(&cur) {
+                            ancestors.insert(parent);
+                            cur = parent;
+                        }
+                        // Hide all nodes not in subtree or ancestor chain
+                        let all_ids: Vec<_> = self.doc.scene.nodes.keys().copied().collect();
+                        self.doc.scene.hidden_nodes.clear();
+                        for id in all_ids {
+                            if !subtree.contains(&id) && !ancestors.contains(&id) && id != sel {
+                                self.doc.scene.hidden_nodes.insert(id);
+                            }
+                        }
+                        self.ui.isolation_state = Some(super::state::IsolationState {
+                            pre_hidden,
+                            isolated_node: sel,
+                        });
+                    }
+                    self.gpu.buffer_dirty = true;
+                }
+                Action::CycleShadingMode => {
+                    self.settings.render.shading_mode = self.settings.render.shading_mode.cycle();
+                    self.settings.save();
+                    self.gpu.buffer_dirty = true;
                 }
 
                 // ── UI toggles ───────────────────────────────────────
