@@ -1,32 +1,26 @@
 import 'dart:math';
 import 'package:flutter/foundation.dart';
+import '../core/constants.dart';
 
 /// Pure-Dart camera state with orbit/pan/zoom.
 /// Port of src/gpu/camera.rs — no FFI calls for gesture handling.
 class CameraState extends ChangeNotifier {
-  static const double _orbitSensitivity = 0.005;
-  static const double _panSpeedFactor = 0.002;
-  static const double _zoomSensitivity = 0.001;
-  static const double _minDistance = 0.1;
-  static const double _maxDistance = 100.0;
-  static const double _pitchLimitRad = 89.0 * (pi / 180.0);
-
-  double yaw = pi / 4; // 45 degrees
-  double pitch = 0.4;
-  double distance = 5.0;
+  double yaw = defaultYaw;
+  double pitch = defaultPitch;
+  double distance = defaultDistance;
   double targetX = 0.0;
   double targetY = 0.0;
   double targetZ = 0.0;
-  double fov = 45.0 * (pi / 180.0);
+  double fov = defaultFov;
 
   bool _dirty = true;
   bool get dirty => _dirty;
   void clearDirty() => _dirty = false;
 
   void orbit(double dx, double dy) {
-    yaw += dx * _orbitSensitivity;
-    pitch += dy * _orbitSensitivity;
-    pitch = pitch.clamp(-_pitchLimitRad, _pitchLimitRad);
+    yaw += dx * orbitSensitivity;
+    pitch += dy * orbitSensitivity;
+    pitch = pitch.clamp(-pitchLimitRad, pitchLimitRad);
     _dirty = true;
     notifyListeners();
   }
@@ -44,7 +38,7 @@ class CameraState extends ChangeNotifier {
     final fz = -ez / fLen;
 
     // Right = normalize(forward x (0,1,0))
-    var rx = fz; // fy*0 - fz*0 → simplified cross product
+    var rx = fz;
     const ry = 0.0;
     var rz = -fx;
     final rLen = sqrt(rx * rx + rz * rz);
@@ -58,7 +52,7 @@ class CameraState extends ChangeNotifier {
     final uy = rz * fx - rx * fz;
     final uz = rx * fy - ry * fx;
 
-    final speed = distance * _panSpeedFactor;
+    final speed = distance * panSpeedFactor;
     targetX -= rx * dx * speed;
     targetY -= ry * dx * speed;
     targetZ -= rz * dx * speed;
@@ -72,8 +66,8 @@ class CameraState extends ChangeNotifier {
   }
 
   void zoom(double delta) {
-    distance *= 1.0 - delta * _zoomSensitivity;
-    distance = distance.clamp(_minDistance, _maxDistance);
+    distance *= 1.0 - delta * zoomSensitivity;
+    distance = distance.clamp(minDistance, maxDistance);
     _dirty = true;
     notifyListeners();
   }

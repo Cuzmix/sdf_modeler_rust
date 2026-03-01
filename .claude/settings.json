@@ -39,7 +39,8 @@
       "Bash(powershell -NoProfile -Command '\\(Get-Item \"\"C:/Users/Manny/Documents/Code Projects/Typscript/sdf_modeler_rust/flutter_app/windows/flutter/ephemeral/.plugin_symlinks/rust_lib_sdf_modeler\"\"\\).Target')",
       "Bash(flutter build windows)",
       "Bash(powershell -Command \"\\(Get-ChildItem ''C:\\\\Users\\\\Manny\\\\Documents\\\\Code Projects\\\\Typscript\\\\sdf_modeler_rust\\\\flutter_app\\\\build'' -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum\\).Sum / 1GB\")",
-      "Bash(powershell -Command \"\\(Get-ChildItem ''C:\\\\Users\\\\Manny\\\\Documents\\\\Code Projects\\\\Typscript\\\\sdf_modeler_rust\\\\target'' -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum\\).Sum / 1GB\")"
+      "Bash(powershell -Command \"\\(Get-ChildItem ''C:\\\\Users\\\\Manny\\\\Documents\\\\Code Projects\\\\Typscript\\\\sdf_modeler_rust\\\\target'' -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum\\).Sum / 1GB\")",
+      "Read(//c/Users/Manny/.claude/plans/**)"
     ]
   }
 }

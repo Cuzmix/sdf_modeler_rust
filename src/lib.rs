@@ -1,7 +1,5 @@
 #[cfg(feature = "flutter_ui")]
 mod frb_generated;
-#[cfg(feature = "flutter_ui")]
-mod api;
 // --- egui UI (feature-gated) ---
 #[cfg(feature = "egui_ui")]
 mod app;
