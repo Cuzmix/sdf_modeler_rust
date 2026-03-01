@@ -2,7 +2,7 @@ use eframe::egui;
 use egui_dock::{DockState, Node, NodeIndex, Split, TabViewer};
 use glam::Vec3;
 
-use crate::app::BakeRequest;
+use crate::app::actions::ActionSink;
 use crate::gpu::camera::Camera;
 use crate::gpu::picking::PendingPick;
 use crate::graph::scene::{NodeId, Scene};
@@ -63,7 +63,6 @@ pub struct SdfTabViewer<'a> {
     pub settings_dirty: &'a mut bool,
     pub time: f32,
     pub pending_pick: &'a mut Option<PendingPick>,
-    pub bake_request: &'a mut Option<BakeRequest>,
     /// (done_slices, total_slices) when a bake is in progress, None when idle.
     pub bake_progress: Option<(u32, u32)>,
     /// Number of sculpt nodes in the scene (for auto step reduction).
@@ -74,10 +73,10 @@ pub struct SdfTabViewer<'a> {
     pub rename_buf: &'a mut String,
     /// FPS info for viewport overlay: (fps, frame_ms).
     pub fps_info: Option<(f64, f64)>,
-    /// Tool switch requested by viewport toolbar (consumed after dock UI).
-    pub tool_switch: &'a mut Option<ActiveTool>,
     /// Drag state for scene tree drag & drop reparenting.
     pub scene_tree_drag: &'a mut Option<NodeId>,
+    /// Action sink — structural mutations flow through here.
+    pub actions: &'a mut ActionSink,
 }
 
 impl<'a> TabViewer for SdfTabViewer<'a> {
@@ -111,17 +110,10 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     &self.settings.render,
                     self.sculpt_count,
                     self.fps_info,
+                    self.actions,
                 );
                 if let Some(pick) = vp_output.pending_pick {
                     *self.pending_pick = Some(pick);
-                }
-                if let Some(node_id) = vp_output.created_node {
-                    self.node_graph_state.selected = Some(node_id);
-                    self.node_graph_state.needs_initial_rebuild = true;
-                    self.node_graph_state.pending_center_node = Some(node_id);
-                }
-                if let Some(tool) = vp_output.tool_switch {
-                    *self.tool_switch = Some(tool);
                 }
             }
             Tab::NodeGraph => {
@@ -133,8 +125,8 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.scene,
                     self.node_graph_state.selected,
                     self.sculpt_state,
-                    self.bake_request,
                     self.bake_progress,
+                    self.actions,
                 );
                 // Defensive: clear selection if the node was deleted by properties panel
                 if let Some(sel) = self.node_graph_state.selected {
@@ -153,6 +145,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.renaming_node,
                     self.rename_buf,
                     self.scene_tree_drag,
+                    self.actions,
                 );
                 // If scene tree changed selection, scroll graph to it
                 if self.node_graph_state.selected != prev_selected {

@@ -1,7 +1,10 @@
+mod action_handler;
+pub(crate) mod actions;
 mod async_tasks;
 mod gpu_sync;
 mod input;
 mod sculpting;
+pub(crate) mod state;
 mod ui_panels;
 
 use std::collections::HashMap;
@@ -10,24 +13,23 @@ use std::sync::Arc;
 use crate::compat::{Duration, Instant};
 
 use eframe::egui;
-use eframe::egui_wgpu::RenderState;
 use eframe::wgpu;
-use egui_dock::DockState;
 use glam::Vec3;
 
 use crate::gpu::buffers;
-use crate::gpu::camera::Camera;
 use crate::gpu::codegen;
-use crate::gpu::picking::PendingPick;
-use crate::graph::history::History;
-use crate::graph::scene::{NodeId, Scene};
+use crate::graph::scene::NodeId;
 use crate::graph::voxel;
 use crate::sculpt::{ActiveTool, SculptState};
 use crate::settings::Settings;
-use crate::ui::dock::{self, SdfTabViewer, Tab};
+use crate::ui::dock::{self, SdfTabViewer};
 use crate::ui::gizmo::{GizmoMode, GizmoSpace, GizmoState};
 use crate::ui::node_graph::NodeGraphState;
 use crate::ui::viewport::ViewportResources;
+
+use state::{
+    AsyncState, DocumentState, GizmoContext, GpuSyncState, PerfState, PersistenceState, UiState,
+};
 
 // ---------------------------------------------------------------------------
 // Frame timing / profiling
@@ -89,6 +91,7 @@ impl FrameTimings {
 // ---------------------------------------------------------------------------
 
 /// Request emitted by UI to start an async bake.
+#[derive(Debug)]
 pub struct BakeRequest {
     pub subtree_root: NodeId,
     pub resolution: u32,
@@ -141,70 +144,31 @@ pub(super) enum PickState {
     },
 }
 
+// ---------------------------------------------------------------------------
+// Main app struct — decomposed into cohesive sub-structs.
+// ---------------------------------------------------------------------------
+
 pub struct SdfApp {
-    pub(super) camera: Camera,
-    pub(super) scene: Scene,
-    pub(super) dock_state: DockState<Tab>,
-    pub(super) node_graph_state: NodeGraphState,
-    pub(super) render_state: RenderState,
-    pub(super) current_structure_key: u64,
-    pub(super) history: History,
-    pub(super) last_time: f64,
-    pub(super) show_debug: bool,
-    pub(super) pending_pick: Option<PendingPick>,
-    pub(super) gizmo_state: GizmoState,
-    pub(super) gizmo_mode: GizmoMode,
-    pub(super) gizmo_space: GizmoSpace,
-    pub(super) pivot_offset: Vec3,
-    pub(super) last_gizmo_selection: Option<NodeId>,
-    pub(super) active_tool: ActiveTool,
-    pub(super) sculpt_state: SculptState,
+    /// Core document state: scene, camera, history, tools.
+    pub(super) doc: DocumentState,
+    /// Gizmo interaction state.
+    pub(super) gizmo: GizmoContext,
+    /// GPU synchronization state.
+    pub(super) gpu: GpuSyncState,
+    /// Async task tracking (bake, export, pick).
+    pub(super) async_state: AsyncState,
+    /// UI-only state: layout, dialogs, toasts.
+    pub(super) ui: UiState,
+    /// File persistence state.
+    pub(super) persistence: PersistenceState,
+    /// Performance / profiling state.
+    pub(super) perf: PerfState,
+    /// Application settings (render quality, export, etc.).
     pub(super) settings: Settings,
+    /// Initial vsync state (preserved across settings changes).
     pub(super) initial_vsync: bool,
-    pub(super) buffer_dirty: bool,
-    pub(super) last_data_fingerprint: u64,
-    pub(super) bake_status: BakeStatus,
-    pub(super) voxel_gpu_offsets: HashMap<NodeId, u32>,
-    /// Maps sculpt NodeId -> texture index for voxel texture3D uploads.
-    pub(super) sculpt_tex_indices: HashMap<NodeId, usize>,
-    /// Async pick state for sculpt mode.
-    pub(super) pick_state: PickState,
-    /// Last brush hit for stroke interpolation.
-    pub(super) last_sculpt_hit: Option<Vec3>,
-    /// Lazy brush smoothed position (None = first hit of stroke).
-    pub(super) lazy_brush_pos: Option<Vec3>,
-    /// Async mesh export state.
-    pub(super) export_status: ExportStatus,
-    /// When true, request one more repaint at full resolution after interaction stops.
-    pub(super) resolution_upgrade_pending: bool,
-    /// When true, dispatch a full composite volume update next frame.
-    pub(super) composite_full_update_needed: bool,
-    /// Frame profiling data.
-    pub(super) timings: FrameTimings,
-    /// Node currently being renamed in scene tree.
-    pub(super) renaming_node: Option<NodeId>,
-    /// Rename text buffer.
-    pub(super) rename_buf: String,
-    /// Show keyboard shortcuts help window.
-    pub(super) show_help: bool,
-    /// Scene has unsaved modifications.
-    pub(super) scene_dirty: bool,
-    /// Fingerprint at last save/load (to detect unsaved changes).
-    pub(super) saved_fingerprint: u64,
-    /// Toast notifications (success/error messages).
-    pub(super) toasts: Vec<Toast>,
-    /// Last auto-save timestamp.
-    pub(super) last_auto_save: Instant,
-    /// Current file path (for quick Ctrl+S save without dialog).
-    pub(super) current_file_path: Option<std::path::PathBuf>,
-    /// Clipboard node for copy/paste.
-    pub(super) clipboard_node: Option<NodeId>,
-    /// Drag state for scene tree reparenting.
-    pub(super) scene_tree_drag: Option<NodeId>,
-    /// Show the export dialog window.
-    pub(super) show_export_dialog: bool,
-    /// Show the unified settings window.
-    pub(super) show_settings: bool,
+    /// Last frame timestamp for delta calculation.
+    pub(super) last_time: f64,
 }
 
 impl SdfApp {
@@ -214,7 +178,7 @@ impl SdfApp {
             .clone()
             .expect("WGPU render state required");
 
-        let scene = Scene::new();
+        let scene = crate::graph::scene::Scene::new();
         let shader_src = codegen::generate_shader(&scene, &settings.render);
         let pick_shader_src = codegen::generate_pick_shader(&scene, &settings.render);
         let structure_key = scene.structure_key();
@@ -243,88 +207,108 @@ impl SdfApp {
             res.update_voxel_buffer(&render_state.device, &render_state.queue, &voxel_data);
         }
 
+        let initial_vsync = settings.vsync_enabled;
+
         Self {
-            camera: Camera::default(),
-            scene,
-            dock_state: dock::create_dock_state(),
-            node_graph_state: NodeGraphState::new(),
-            render_state,
-            current_structure_key: structure_key,
-            history: History::new(),
-            last_time: 0.0,
-            show_debug: true,
-            pending_pick: None,
-            gizmo_state: GizmoState::Idle,
-            gizmo_mode: GizmoMode::Translate,
-            gizmo_space: GizmoSpace::Local,
-            pivot_offset: Vec3::ZERO,
-            last_gizmo_selection: None,
-            active_tool: ActiveTool::default(),
-            sculpt_state: SculptState::Inactive,
-            initial_vsync: settings.vsync_enabled,
+            doc: DocumentState {
+                camera: crate::gpu::camera::Camera::default(),
+                scene,
+                history: crate::graph::history::History::new(),
+                active_tool: ActiveTool::default(),
+                sculpt_state: SculptState::Inactive,
+                clipboard_node: None,
+            },
+            gizmo: GizmoContext {
+                state: GizmoState::Idle,
+                mode: GizmoMode::Translate,
+                space: GizmoSpace::Local,
+                pivot_offset: Vec3::ZERO,
+                last_selection: None,
+            },
+            gpu: GpuSyncState {
+                render_state,
+                current_structure_key: structure_key,
+                buffer_dirty: false, // initial upload already done above
+                last_data_fingerprint: 0,
+                voxel_gpu_offsets: voxel_offsets,
+                sculpt_tex_indices: HashMap::new(),
+            },
+            async_state: AsyncState {
+                bake_status: BakeStatus::Idle,
+                export_status: ExportStatus::Idle,
+                pick_state: PickState::Idle,
+                pending_pick: None,
+                last_sculpt_hit: None,
+                lazy_brush_pos: None,
+            },
+            ui: UiState {
+                dock_state: dock::create_dock_state(),
+                node_graph_state: NodeGraphState::new(),
+                show_debug: true,
+                show_help: false,
+                show_export_dialog: false,
+                show_settings: false,
+                renaming_node: None,
+                rename_buf: String::new(),
+                scene_tree_drag: None,
+                toasts: Vec::new(),
+            },
+            persistence: PersistenceState {
+                current_file_path: None,
+                scene_dirty: false,
+                saved_fingerprint: 0,
+                last_auto_save: Instant::now(),
+            },
+            perf: PerfState {
+                timings: FrameTimings::new(),
+                resolution_upgrade_pending: false,
+                composite_full_update_needed: false,
+            },
             settings,
-            buffer_dirty: false, // initial upload already done above
-            last_data_fingerprint: 0,
-            bake_status: BakeStatus::Idle,
-            voxel_gpu_offsets: voxel_offsets,
-            sculpt_tex_indices: HashMap::new(),
-            pick_state: PickState::Idle,
-            last_sculpt_hit: None,
-            lazy_brush_pos: None,
-            export_status: ExportStatus::Idle,
-            resolution_upgrade_pending: false,
-            composite_full_update_needed: false,
-            timings: FrameTimings::new(),
-            renaming_node: None,
-            rename_buf: String::new(),
-            show_help: false,
-            scene_dirty: false,
-            saved_fingerprint: 0,
-            toasts: Vec::new(),
-            last_auto_save: Instant::now(),
-            current_file_path: None,
-            clipboard_node: None,
-            scene_tree_drag: None,
-            show_export_dialog: false,
-            show_settings: false,
+            initial_vsync,
+            last_time: 0.0,
         }
     }
 }
 
 impl eframe::App for SdfApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // ── 1. Frame setup ─────────────────────────────────────────────
         let frame_start = Instant::now();
 
         let now = ctx.input(|i| i.time);
         let dt = now - self.last_time;
         self.last_time = now;
-        self.timings.push_frame(dt);
+        self.perf.timings.push_frame(dt);
 
-        self.history
-            .begin_frame(&self.scene, self.node_graph_state.selected);
+        self.doc.history
+            .begin_frame(&self.doc.scene, self.ui.node_graph_state.selected);
 
-        self.handle_keyboard_input(ctx);
-
-        // Reset pivot when selection changes
-        let current_sel = self.node_graph_state.selected;
-        if current_sel != self.last_gizmo_selection {
-            self.pivot_offset = Vec3::ZERO;
-            self.last_gizmo_selection = current_sel;
-        }
-
+        // ── 2. Async polling ───────────────────────────────────────────
         self.sync_sculpt_state();
         self.poll_async_bake();
         self.poll_export();
-        self.poll_sculpt_pick(); // Read async pick result from previous frame
+        self.poll_sculpt_pick();
 
+        // Reset pivot when selection changes
+        let current_sel = self.ui.node_graph_state.selected;
+        if current_sel != self.gizmo.last_selection {
+            self.gizmo.pivot_offset = Vec3::ZERO;
+            self.gizmo.last_selection = current_sel;
+        }
+
+        // ── 3. GPU pipeline sync ───────────────────────────────────────
         let t0 = Instant::now();
         self.sync_gpu_pipeline();
-        self.timings.pipeline_sync_s = t0.elapsed().as_secs_f64();
+        self.perf.timings.pipeline_sync_s = t0.elapsed().as_secs_f64();
 
-        self.process_pending_pick(); // Synchronous pick for normal (non-sculpt) mode
+        self.process_pending_pick();
 
-        // --- UI ---
-        self.show_menu_bar(ctx);
+        // ── 4. Collect actions from keyboard + UI drawing ──────────────
+        let mut action_sink = actions::ActionSink::new();
+        self.collect_keyboard_actions(ctx, &mut action_sink);
+
+        self.show_menu_bar(ctx, &mut action_sink);
         self.show_status_bar(ctx);
         self.show_help_window(ctx);
         self.show_export_dialog(ctx);
@@ -334,15 +318,14 @@ impl eframe::App for SdfApp {
         // Unified settings window
         let settings_dirty_from_window = crate::ui::settings_window::draw(
             ctx,
-            &mut self.show_settings,
+            &mut self.ui.show_settings,
             &mut self.settings,
-            &mut self.show_debug,
+            &mut self.ui.show_debug,
             self.initial_vsync,
         );
 
         let t_ui = Instant::now();
-        let baking = !matches!(self.bake_status, BakeStatus::Idle);
-        let bake_progress = match &self.bake_status {
+        let bake_progress = match &self.async_state.bake_status {
             BakeStatus::InProgress { progress, total, .. } => {
                 Some((progress.load(Ordering::Relaxed), *total))
             }
@@ -351,100 +334,86 @@ impl eframe::App for SdfApp {
 
         let mut pending_pick = None;
         let mut settings_dirty = settings_dirty_from_window;
-        let mut bake_request: Option<BakeRequest> = None;
-        let mut tool_switch: Option<ActiveTool> = None;
-        let sculpt_count = self.sculpt_tex_indices.len();
+        let sculpt_count = self.gpu.sculpt_tex_indices.len();
         let fps_info = if self.settings.show_fps_overlay {
-            Some((self.timings.avg_fps, self.timings.avg_frame_ms))
+            Some((self.perf.timings.avg_fps, self.perf.timings.avg_frame_ms))
         } else {
             None
         };
         let mut tab_viewer = SdfTabViewer {
-            camera: &mut self.camera,
-            scene: &mut self.scene,
-            node_graph_state: &mut self.node_graph_state,
-            gizmo_state: &mut self.gizmo_state,
-            gizmo_mode: &self.gizmo_mode,
-            gizmo_space: &self.gizmo_space,
-            pivot_offset: &mut self.pivot_offset,
-            active_tool: &self.active_tool,
-            sculpt_state: &mut self.sculpt_state,
+            camera: &mut self.doc.camera,
+            scene: &mut self.doc.scene,
+            node_graph_state: &mut self.ui.node_graph_state,
+            gizmo_state: &mut self.gizmo.state,
+            gizmo_mode: &self.gizmo.mode,
+            gizmo_space: &self.gizmo.space,
+            pivot_offset: &mut self.gizmo.pivot_offset,
+            active_tool: &self.doc.active_tool,
+            sculpt_state: &mut self.doc.sculpt_state,
             settings: &mut self.settings,
             settings_dirty: &mut settings_dirty,
             time: now as f32,
             pending_pick: &mut pending_pick,
-            bake_request: &mut bake_request,
             bake_progress,
             sculpt_count,
-            renaming_node: &mut self.renaming_node,
-            rename_buf: &mut self.rename_buf,
+            renaming_node: &mut self.ui.renaming_node,
+            rename_buf: &mut self.ui.rename_buf,
             fps_info,
-            tool_switch: &mut tool_switch,
-            scene_tree_drag: &mut self.scene_tree_drag,
+            scene_tree_drag: &mut self.ui.scene_tree_drag,
+            actions: &mut action_sink,
         };
 
         egui::CentralPanel::default()
             .frame(egui::Frame::none())
             .show(ctx, |ui| {
-                egui_dock::DockArea::new(&mut self.dock_state)
+                egui_dock::DockArea::new(&mut self.ui.dock_state)
                     .show_inside(ui, &mut tab_viewer);
             });
 
-        self.timings.ui_draw_s = t_ui.elapsed().as_secs_f64();
+        self.perf.timings.ui_draw_s = t_ui.elapsed().as_secs_f64();
+
+        // Convert remaining tab-viewer output signals into actions.
+        let settings_changed = settings_dirty;
+        if settings_dirty {
+            action_sink.push(actions::Action::SettingsChanged);
+        }
+
+        // ── 5. Process all collected actions (single mutation point) ───
+        self.process_actions(action_sink, ctx);
+
+        // ── 6. Post-action cleanup ─────────────────────────────────────
 
         // Defensive: if a node was deleted via any UI panel, clean up state
-        if let Some(sel) = self.node_graph_state.selected {
-            if !self.scene.nodes.contains_key(&sel) {
-                self.node_graph_state.selected = None;
-                self.node_graph_state.needs_initial_rebuild = true;
-                self.sculpt_state = SculptState::Inactive;
-                self.buffer_dirty = true;
+        if let Some(sel) = self.ui.node_graph_state.selected {
+            if !self.doc.scene.nodes.contains_key(&sel) {
+                self.ui.node_graph_state.selected = None;
+                self.ui.node_graph_state.needs_initial_rebuild = true;
+                self.doc.sculpt_state = SculptState::Inactive;
+                self.gpu.buffer_dirty = true;
             }
         }
 
         if pending_pick.is_some() {
-            self.pending_pick = pending_pick;
-        }
-
-        // Handle tool switch from viewport toolbar
-        if let Some(tool) = tool_switch {
-            self.active_tool = tool;
-            match tool {
-                ActiveTool::Select => {
-                    self.sculpt_state = SculptState::Inactive;
-                    self.last_sculpt_hit = None;
-                    self.lazy_brush_pos = None;
-                }
-                ActiveTool::Sculpt => {
-                    // Auto-activate sculpt on selected node if it's a Sculpt node
-                    if let Some(sel) = self.node_graph_state.selected {
-                        if self.scene.nodes.get(&sel).map_or(false, |n| {
-                            matches!(n.data, crate::graph::scene::NodeData::Sculpt { .. })
-                        }) {
-                            self.sculpt_state = SculptState::new_active(sel);
-                        }
-                    }
-                }
-            }
+            self.async_state.pending_pick = pending_pick;
         }
 
         // Sculpt mode: submit async pick for next frame's poll_sculpt_pick
         self.submit_sculpt_pick();
 
         // Reset stroke interpolation and flatten reference when mouse is released during sculpting
-        if self.sculpt_state.is_active()
-            && self.pending_pick.is_none()
-            && matches!(self.pick_state, PickState::Idle)
+        if self.doc.sculpt_state.is_active()
+            && self.async_state.pending_pick.is_none()
+            && matches!(self.async_state.pick_state, PickState::Idle)
         {
-            self.last_sculpt_hit = None;
-            self.lazy_brush_pos = None;
+            self.async_state.last_sculpt_hit = None;
+            self.async_state.lazy_brush_pos = None;
             if let SculptState::Active {
                 ref mut flatten_reference,
                 ref mut grab_snapshot,
                 ref mut grab_start,
                 ref mut grab_child_input,
                 ..
-            } = self.sculpt_state
+            } = self.doc.sculpt_state
             {
                 *flatten_reference = None;
                 *grab_snapshot = None;
@@ -453,36 +422,20 @@ impl eframe::App for SdfApp {
             }
         }
 
-        // Start bake if requested by UI
-        if let Some(req) = bake_request {
-            if !baking {
-                if req.flatten {
-                    // Flatten: needs full SDF evaluation (async bake)
-                    self.start_async_bake(req, ctx);
-                } else {
-                    // Differential SDF: instant displacement grid (no async needed)
-                    self.apply_instant_displacement_bake(req);
-                }
-            }
-        }
-
-        if settings_dirty {
-            self.current_structure_key = 0; // Force pipeline rebuild
-            self.buffer_dirty = true;
-        }
+        // ── 7. GPU upload + dirty tracking ─────────────────────────────
 
         // Detect UI-driven scene data changes via lightweight fingerprint
-        let fp = self.scene.data_fingerprint();
-        if fp != self.last_data_fingerprint {
-            self.last_data_fingerprint = fp;
-            self.buffer_dirty = true;
+        let fp = self.doc.scene.data_fingerprint();
+        if fp != self.gpu.last_data_fingerprint {
+            self.gpu.last_data_fingerprint = fp;
+            self.gpu.buffer_dirty = true;
         }
 
         // Track unsaved changes and update window title
-        let now_dirty = fp != self.saved_fingerprint
-            || self.scene.structure_key() != 0 && self.saved_fingerprint == 0 && !self.scene.nodes.is_empty();
-        if now_dirty != self.scene_dirty {
-            self.scene_dirty = now_dirty;
+        let now_dirty = fp != self.persistence.saved_fingerprint
+            || self.doc.scene.structure_key() != 0 && self.persistence.saved_fingerprint == 0 && !self.doc.scene.nodes.is_empty();
+        if now_dirty != self.persistence.scene_dirty {
+            self.persistence.scene_dirty = now_dirty;
             let title = if now_dirty { "SDF Modeler *" } else { "SDF Modeler" };
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.into()));
         }
@@ -490,12 +443,12 @@ impl eframe::App for SdfApp {
         // Auto-save
         #[cfg(not(target_arch = "wasm32"))]
         if self.settings.auto_save_enabled
-            && self.scene_dirty
-            && self.last_auto_save.elapsed() >= Duration::from_secs(self.settings.auto_save_interval_secs as u64)
+            && self.persistence.scene_dirty
+            && self.persistence.last_auto_save.elapsed() >= Duration::from_secs(self.settings.auto_save_interval_secs as u64)
         {
-            self.last_auto_save = Instant::now();
-            let path = self.current_file_path.clone().unwrap_or_else(crate::io::auto_save_path);
-            if let Err(e) = crate::io::save_project(&self.scene, &self.camera, &path) {
+            self.persistence.last_auto_save = Instant::now();
+            let path = self.persistence.current_file_path.clone().unwrap_or_else(crate::io::auto_save_path);
+            if let Err(e) = crate::io::save_project(&self.doc.scene, &self.doc.camera, &path) {
                 log::error!("Auto-save failed: {}", e);
             } else {
                 log::info!("Auto-saved to {}", path.display());
@@ -504,53 +457,53 @@ impl eframe::App for SdfApp {
 
         // Upload GPU buffers only when scene data actually changed
         let t_upload = Instant::now();
-        if self.buffer_dirty {
+        if self.gpu.buffer_dirty {
             self.upload_scene_buffer();
-            self.buffer_dirty = false;
+            self.gpu.buffer_dirty = false;
             // Composite volume needs full update when scene buffer changes
             if self.settings.render.composite_volume_enabled {
-                self.composite_full_update_needed = true;
+                self.perf.composite_full_update_needed = true;
             }
         }
-        self.timings.buffer_upload_s = t_upload.elapsed().as_secs_f64();
+        self.perf.timings.buffer_upload_s = t_upload.elapsed().as_secs_f64();
 
         // Dispatch composite volume update after buffers are uploaded
         let t_comp = Instant::now();
-        if self.composite_full_update_needed {
+        if self.perf.composite_full_update_needed {
             self.dispatch_composite_full();
-            self.composite_full_update_needed = false;
+            self.perf.composite_full_update_needed = false;
         }
-        self.timings.composite_dispatch_s = t_comp.elapsed().as_secs_f64();
+        self.perf.timings.composite_dispatch_s = t_comp.elapsed().as_secs_f64();
 
-        // Undo/Redo: end-of-frame commit
+        // ── 8. Finalize ────────────────────────────────────────────────
         let is_dragging = ctx.dragged_id().is_some();
-        self.history.end_frame(
-            &self.scene,
-            self.node_graph_state.selected,
+        self.doc.history.end_frame(
+            &self.doc.scene,
+            self.ui.node_graph_state.selected,
             is_dragging,
         );
 
         // Resolution upgrade: when interaction stops, request one more frame at full res
-        if is_dragging || self.sculpt_state.is_active() {
-            self.resolution_upgrade_pending = true;
-        } else if self.resolution_upgrade_pending {
-            self.resolution_upgrade_pending = false;
+        if is_dragging || self.doc.sculpt_state.is_active() {
+            self.perf.resolution_upgrade_pending = true;
+        } else if self.perf.resolution_upgrade_pending {
+            self.perf.resolution_upgrade_pending = false;
             ctx.request_repaint();
         }
 
         // Only repaint when something needs updating (saves GPU when idle)
         let needs_repaint = is_dragging
-            || self.sculpt_state.is_active()
-            || !matches!(self.bake_status, BakeStatus::Idle)
-            || !matches!(self.export_status, ExportStatus::Idle)
-            || !matches!(self.pick_state, PickState::Idle)
-            || self.pending_pick.is_some()
-            || settings_dirty
+            || self.doc.sculpt_state.is_active()
+            || !matches!(self.async_state.bake_status, BakeStatus::Idle)
+            || !matches!(self.async_state.export_status, ExportStatus::Idle)
+            || !matches!(self.async_state.pick_state, PickState::Idle)
+            || self.async_state.pending_pick.is_some()
+            || settings_changed
             || self.settings.continuous_repaint;
         if needs_repaint {
             ctx.request_repaint();
         }
 
-        self.timings.total_cpu_s = frame_start.elapsed().as_secs_f64();
+        self.perf.timings.total_cpu_s = frame_start.elapsed().as_secs_f64();
     }
 }

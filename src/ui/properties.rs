@@ -1,6 +1,7 @@
 use eframe::egui;
 
 use crate::app::BakeRequest;
+use crate::app::actions::{Action, ActionSink};
 use crate::graph::scene::{CsgOp, ModifierKind, NodeData, NodeId, Scene, SdfPrimitive, TransformKind};
 use crate::graph::voxel;
 use crate::sculpt::{BrushMode, FalloffMode, SculptState, DEFAULT_BRUSH_STRENGTH};
@@ -123,8 +124,8 @@ pub fn draw(
     scene: &mut Scene,
     selected: Option<NodeId>,
     sculpt_state: &mut SculptState,
-    bake_request: &mut Option<BakeRequest>,
     bake_progress: Option<(u32, u32)>,
+    actions: &mut ActionSink,
 ) {
     let Some(id) = selected else {
         ui.vertical_centered(|ui| {
@@ -296,20 +297,20 @@ pub fn draw(
             } else {
                 ui.horizontal(|ui| {
                     if ui.button("Add Sculpt Modifier").clicked() {
-                        *bake_request = Some(BakeRequest {
+                        actions.push(Action::RequestBake(BakeRequest {
                             subtree_root: id,
                             resolution: voxel::DEFAULT_RESOLUTION,
                             color,
                             existing_sculpt: None,
                             flatten: false,
-                        });
+                        }));
                         if let Some(node) = scene.nodes.get_mut(&id) {
                             node.name = name.clone();
                         }
                         return;
                     }
                     if ui.button("Delete Node").on_hover_text("Remove this node from the scene").clicked() {
-                        scene.remove_node(id);
+                        actions.push(Action::DeleteNode(id));
                         return;
                     }
                 });
@@ -386,7 +387,7 @@ pub fn draw(
             }
             if left.is_some() && right.is_some() {
                 if ui.button("Swap Inputs").clicked() {
-                    scene.swap_children(id);
+                    actions.push(Action::SwapChildren(id));
                 }
             }
 
@@ -399,30 +400,30 @@ pub fn draw(
                 ui.horizontal(|ui| {
                     if ui.button("Add Sculpt Modifier").clicked() {
                         let sculpt_color = glam::Vec3::new(0.6, 0.6, 0.6);
-                        *bake_request = Some(BakeRequest {
+                        actions.push(Action::RequestBake(BakeRequest {
                             subtree_root: id,
                             resolution: voxel::DEFAULT_RESOLUTION,
                             color: sculpt_color,
                             existing_sculpt: None,
                             flatten: false,
-                        });
+                        }));
                         return;
                     }
                     if ui.button("Flatten to Sculpt").clicked() {
                         let resolution = voxel::max_subtree_resolution(scene, id);
                         let sculpt_color = glam::Vec3::new(0.6, 0.6, 0.6);
-                        *bake_request = Some(BakeRequest {
+                        actions.push(Action::RequestBake(BakeRequest {
                             subtree_root: id,
                             resolution,
                             color: sculpt_color,
                             existing_sculpt: None,
                             flatten: true,
-                        });
+                        }));
                         return;
                     }
                 });
                 if ui.button("Delete Node").on_hover_text("Remove this node from the scene").clicked() {
-                    scene.remove_node(id);
+                    actions.push(Action::DeleteNode(id));
                     return;
                 }
             }
@@ -647,17 +648,17 @@ pub fn draw(
                 } else {
                     ui.horizontal(|ui| {
                         if ui.button("Exit Sculpt Mode").clicked() {
-                            *sculpt_state = SculptState::Inactive;
+                            actions.push(Action::SetTool(crate::sculpt::ActiveTool::Select));
                         }
                         if let Some(input_id) = input {
                             if ui.button("Re-bake").clicked() {
-                                *bake_request = Some(BakeRequest {
+                                actions.push(Action::RequestBake(BakeRequest {
                                     subtree_root: input_id,
                                     resolution: desired_resolution,
                                     color,
                                     existing_sculpt: Some(id),
                                     flatten: false,
-                                });
+                                }));
                             }
                         }
                     });
@@ -672,7 +673,7 @@ pub fn draw(
                             *sculpt_state = SculptState::new_active(id);
                         }
                         if ui.button("Remove Modifier").clicked() {
-                            scene.remove_node(id);
+                            actions.push(Action::DeleteNode(id));
                             *sculpt_state = SculptState::Inactive;
                             return;
                         }
@@ -681,13 +682,13 @@ pub fn draw(
                     if input.is_some() {
                         if ui.button("Flatten (merge input + sculpt)").clicked() {
                             let resolution = voxel::max_subtree_resolution(scene, id);
-                            *bake_request = Some(BakeRequest {
+                            actions.push(Action::RequestBake(BakeRequest {
                                 subtree_root: id,
                                 resolution,
                                 color,
                                 existing_sculpt: None,
                                 flatten: true,
-                            });
+                            }));
                             *sculpt_state = SculptState::Inactive;
                             return;
                         }
@@ -774,7 +775,7 @@ pub fn draw(
 
             ui.separator();
             if ui.button("Delete Node").on_hover_text("Remove this node from the scene").clicked() {
-                scene.remove_node(id);
+                actions.push(Action::DeleteNode(id));
                 return;
             }
 
@@ -874,7 +875,7 @@ pub fn draw(
 
             ui.separator();
             if ui.button("Delete Node").on_hover_text("Remove this node from the scene").clicked() {
-                scene.remove_node(id);
+                actions.push(Action::DeleteNode(id));
                 return;
             }
 
@@ -922,7 +923,7 @@ pub fn draw(
                         }
                     }
                     if let Some(del_id) = to_delete {
-                        scene.remove_node(del_id);
+                        actions.push(Action::DeleteNode(del_id));
                     }
                 }
                 // Add Modifier menu
@@ -931,7 +932,7 @@ pub fn draw(
                         ui.label("Deform");
                         for kind in &[ModifierKind::Twist, ModifierKind::Bend, ModifierKind::Taper] {
                             if ui.button(kind.base_name()).clicked() {
-                                scene.insert_modifier_above(id, kind.clone());
+                                actions.push(Action::InsertModifierAbove { target: id, kind: kind.clone() });
                                 ui.close_menu();
                             }
                         }
@@ -939,7 +940,7 @@ pub fn draw(
                         ui.label("Shape");
                         for kind in &[ModifierKind::Round, ModifierKind::Onion, ModifierKind::Elongate] {
                             if ui.button(kind.base_name()).clicked() {
-                                scene.insert_modifier_above(id, kind.clone());
+                                actions.push(Action::InsertModifierAbove { target: id, kind: kind.clone() });
                                 ui.close_menu();
                             }
                         }
@@ -947,7 +948,7 @@ pub fn draw(
                         ui.label("Repeat");
                         for kind in &[ModifierKind::Mirror, ModifierKind::Repeat, ModifierKind::FiniteRepeat] {
                             if ui.button(kind.base_name()).clicked() {
-                                scene.insert_modifier_above(id, kind.clone());
+                                actions.push(Action::InsertModifierAbove { target: id, kind: kind.clone() });
                                 ui.close_menu();
                             }
                         }
@@ -955,7 +956,7 @@ pub fn draw(
                     ui.menu_button("+ Transform", |ui| {
                         for kind in TransformKind::ALL {
                             if ui.button(kind.base_name()).clicked() {
-                                scene.insert_transform_above(id, kind.clone());
+                                actions.push(Action::InsertTransformAbove { target: id, kind: kind.clone() });
                                 ui.close_menu();
                             }
                         }

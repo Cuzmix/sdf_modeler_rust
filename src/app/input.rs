@@ -1,265 +1,155 @@
 use eframe::egui;
-use glam::Vec3;
 
-use crate::graph::history::History;
-use crate::graph::scene::NodeData;
 use crate::sculpt::{ActiveTool, BrushMode, SculptState, DEFAULT_BRUSH_STRENGTH};
-use crate::ui::gizmo::{GizmoMode, GizmoSpace};
+use crate::ui::gizmo::GizmoMode;
 
+use super::actions::{Action, ActionSink};
 use super::{ExportStatus, SdfApp};
 
 impl SdfApp {
     pub(super) fn delete_selected(&mut self) {
-        if let Some(sel) = self.node_graph_state.selected {
-            self.scene.remove_node(sel);
-            self.node_graph_state.selected = None;
-            self.node_graph_state.needs_initial_rebuild = true;
-            self.sculpt_state = SculptState::Inactive;
-            self.buffer_dirty = true;
+        if let Some(sel) = self.ui.node_graph_state.selected {
+            self.doc.scene.remove_node(sel);
+            self.ui.node_graph_state.selected = None;
+            self.ui.node_graph_state.needs_initial_rebuild = true;
+            self.doc.sculpt_state = SculptState::Inactive;
+            self.gpu.buffer_dirty = true;
         }
     }
 
-    pub(super) fn handle_keyboard_input(&mut self, ctx: &egui::Context) {
+    /// Collect keyboard-triggered actions into the action sink.
+    /// Reads state immutably to decide what actions to emit; does not
+    /// mutate app state directly (except for egui input consumption).
+    pub(super) fn collect_keyboard_actions(&mut self, ctx: &egui::Context, actions: &mut ActionSink) {
         // Help
         if ctx.input(|i| i.key_pressed(egui::Key::F1)) {
-            self.show_help = !self.show_help;
+            actions.push(Action::ToggleHelp);
         }
         // Camera presets
         if ctx.input(|i| i.key_pressed(egui::Key::F5)) {
-            self.camera.set_front();
+            actions.push(Action::CameraFront);
         }
         if ctx.input(|i| i.key_pressed(egui::Key::F6)) {
-            self.camera.set_top();
+            actions.push(Action::CameraTop);
         }
         if ctx.input(|i| i.key_pressed(egui::Key::F7)) {
-            self.camera.set_right();
+            actions.push(Action::CameraRight);
         }
 
         // Focus on selected node
         if ctx.input(|i| i.key_pressed(egui::Key::F) && !i.modifiers.ctrl) {
-            if let Some(sel) = self.node_graph_state.selected {
-                let parent_map = self.scene.build_parent_map();
-                let (center, radius) = self.scene.compute_subtree_sphere(sel, &parent_map);
-                self.camera.focus_on(
-                    Vec3::new(center[0], center[1], center[2]),
-                    radius.max(0.5),
-                );
-            }
+            actions.push(Action::FocusSelected);
         }
 
         // Debug toggle
         if ctx.input(|i| i.key_pressed(egui::Key::F4)) {
-            self.show_debug = !self.show_debug;
+            actions.push(Action::ToggleDebug);
         }
 
         // Delete selected node
         if ctx.input(|i| i.key_pressed(egui::Key::Delete)) {
-            self.delete_selected();
+            actions.push(Action::DeleteSelected);
         }
 
         // Undo / Redo
-        let undo_pressed = ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Z));
-        let redo_pressed = ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Y));
-
-        if undo_pressed {
-            if let Some((restored_scene, restored_sel)) = self
-                .history
-                .undo(&self.scene, self.node_graph_state.selected)
-            {
-                self.scene = restored_scene;
-                self.node_graph_state.selected = restored_sel;
-                self.node_graph_state.needs_initial_rebuild = true;
-                self.buffer_dirty = true;
-            }
-        } else if redo_pressed {
-            if let Some((restored_scene, restored_sel)) = self
-                .history
-                .redo(&self.scene, self.node_graph_state.selected)
-            {
-                self.scene = restored_scene;
-                self.node_graph_state.selected = restored_sel;
-                self.node_graph_state.needs_initial_rebuild = true;
-                self.buffer_dirty = true;
-            }
+        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Z)) {
+            actions.push(Action::Undo);
+        } else if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Y)) {
+            actions.push(Action::Redo);
         }
 
         // Save / Load
-        let save_pressed = ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::S));
-        let open_pressed = ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::O));
-
-        if save_pressed {
-            #[cfg(not(target_arch = "wasm32"))]
-            {
-                // Quick save if we already have a file path, otherwise show dialog
-                let path = if let Some(ref p) = self.current_file_path {
-                    Some(p.clone())
-                } else {
-                    crate::io::save_dialog()
-                };
-                if let Some(path) = path {
-                    if let Err(e) = crate::io::save_project(&self.scene, &self.camera, &path) {
-                        log::error!("Failed to save project: {}", e);
-                    } else {
-                        self.current_file_path = Some(path.clone());
-                        self.saved_fingerprint = self.scene.data_fingerprint();
-                        self.settings.add_recent_file(&path.to_string_lossy());
-                    }
-                }
-            }
-            #[cfg(target_arch = "wasm32")]
-            crate::io::web_save_project(&self.scene, &self.camera);
-        } else if open_pressed {
-            #[cfg(not(target_arch = "wasm32"))]
-            if let Some(path) = crate::io::open_dialog() {
-                match crate::io::load_project(&path) {
-                    Ok(project) => {
-                        self.scene = project.scene;
-                        self.camera = project.camera;
-                        self.history = History::new();
-                        self.node_graph_state.selected = None;
-                        self.node_graph_state.needs_initial_rebuild = true;
-                        self.sculpt_state = SculptState::Inactive;
-                        self.current_structure_key = 0; // Force pipeline rebuild
-                        self.buffer_dirty = true;
-                        self.current_file_path = Some(path.clone());
-                        self.saved_fingerprint = self.scene.data_fingerprint();
-                        self.settings.add_recent_file(&path.to_string_lossy());
-                    }
-                    Err(e) => {
-                        log::error!("Failed to load project: {}", e);
-                    }
-                }
-            }
+        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::S)) {
+            actions.push(Action::SaveProject);
+        } else if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::O)) {
+            actions.push(Action::OpenProject);
         }
 
         // Screenshot
         if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::P)) {
-            self.take_screenshot();
+            actions.push(Action::TakeScreenshot);
         }
 
         // Export
         if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::E)) {
-            if matches!(self.export_status, ExportStatus::Idle) {
-                self.show_export_dialog = true;
+            if matches!(self.async_state.export_status, ExportStatus::Idle) {
+                actions.push(Action::ShowExportDialog);
             }
         }
 
         // Copy / Paste / Duplicate (consume_key prevents egui clipboard noise)
         let ctrl = egui::Modifiers::CTRL;
         if ctx.input_mut(|i| i.consume_key(ctrl, egui::Key::C)) {
-            self.clipboard_node = self.node_graph_state.selected;
+            actions.push(Action::Copy);
         }
         if ctx.input_mut(|i| i.consume_key(ctrl, egui::Key::V)) {
-            if let Some(src) = self.clipboard_node {
-                if self.scene.nodes.contains_key(&src) {
-                    if let Some(new_id) = self.scene.duplicate_subtree(src) {
-                        // Offset the new root's position
-                        if let Some(node) = self.scene.nodes.get_mut(&new_id) {
-                            match &mut node.data {
-                                NodeData::Primitive { ref mut position, .. }
-                                | NodeData::Sculpt { ref mut position, .. } => {
-                                    position.x += 1.0;
-                                }
-                                _ => {}
-                            }
-                        }
-                        self.node_graph_state.selected = Some(new_id);
-                        self.node_graph_state.needs_initial_rebuild = true;
-                        self.buffer_dirty = true;
-                    }
-                }
-            }
+            actions.push(Action::Paste);
         }
         if ctx.input_mut(|i| i.consume_key(ctrl, egui::Key::D)) {
-            if let Some(sel) = self.node_graph_state.selected {
-                if let Some(new_id) = self.scene.duplicate_subtree(sel) {
-                    if let Some(node) = self.scene.nodes.get_mut(&new_id) {
-                        match &mut node.data {
-                            NodeData::Primitive { ref mut position, .. }
-                            | NodeData::Sculpt { ref mut position, .. } => {
-                                position.x += 1.0;
-                            }
-                            _ => {}
-                        }
-                    }
-                    self.node_graph_state.selected = Some(new_id);
-                    self.node_graph_state.needs_initial_rebuild = true;
-                    self.buffer_dirty = true;
-                }
-            }
+            actions.push(Action::Duplicate);
         }
 
         // Gizmo mode
         if ctx.input(|i| i.key_pressed(egui::Key::W)) {
-            self.gizmo_mode = GizmoMode::Translate;
+            actions.push(Action::SetGizmoMode(GizmoMode::Translate));
         }
         if ctx.input(|i| i.key_pressed(egui::Key::E) && !i.modifiers.ctrl) {
-            self.gizmo_mode = GizmoMode::Rotate;
+            actions.push(Action::SetGizmoMode(GizmoMode::Rotate));
         }
         if ctx.input(|i| i.key_pressed(egui::Key::R)) {
-            self.gizmo_mode = GizmoMode::Scale;
+            actions.push(Action::SetGizmoMode(GizmoMode::Scale));
         }
         if ctx.input(|i| i.key_pressed(egui::Key::G)) {
-            self.gizmo_space = match self.gizmo_space {
-                GizmoSpace::Local => GizmoSpace::World,
-                GizmoSpace::World => GizmoSpace::Local,
-            };
+            actions.push(Action::ToggleGizmoSpace);
         }
         if ctx.input(|i| i.modifiers.alt && i.key_pressed(egui::Key::C)) {
-            self.pivot_offset = Vec3::ZERO;
+            actions.push(Action::ResetPivot);
         }
 
         // Tool switching shortcuts
-        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) && self.active_tool == ActiveTool::Sculpt {
-            self.active_tool = ActiveTool::Select;
-            self.sculpt_state = SculptState::Inactive;
-            self.last_sculpt_hit = None;
-            self.lazy_brush_pos = None;
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) && self.doc.active_tool == ActiveTool::Sculpt {
+            actions.push(Action::SetTool(ActiveTool::Select));
         }
-        if ctx.input(|i| i.key_pressed(egui::Key::S) && !i.modifiers.ctrl) && self.active_tool == ActiveTool::Select {
-            self.active_tool = ActiveTool::Sculpt;
-            // Auto-activate sculpt if a Sculpt node is selected
-            if let Some(sel) = self.node_graph_state.selected {
-                if self.scene.nodes.get(&sel).map_or(false, |n| matches!(n.data, NodeData::Sculpt { .. })) {
-                    self.sculpt_state = SculptState::new_active(sel);
-                }
-            }
+        if ctx.input(|i| i.key_pressed(egui::Key::S) && !i.modifiers.ctrl) && self.doc.active_tool == ActiveTool::Select {
+            actions.push(Action::SetTool(ActiveTool::Sculpt));
         }
 
         // Sculpt brush mode shortcuts (when sculpt is active)
-        if self.sculpt_state.is_active() {
+        // These are direct mutations on sculpt_state fields — kept inline
+        // because they are data-level edits (like slider drags), not structural.
+        if self.doc.sculpt_state.is_active() {
             if ctx.input(|i| i.key_pressed(egui::Key::Num1)) {
-                if let SculptState::Active { ref mut brush_mode, ref mut brush_strength, .. } = self.sculpt_state {
+                if let SculptState::Active { ref mut brush_mode, ref mut brush_strength, .. } = self.doc.sculpt_state {
                     if *brush_mode == BrushMode::Grab && *brush_strength > 0.5 { *brush_strength = DEFAULT_BRUSH_STRENGTH; }
                     *brush_mode = BrushMode::Add;
                 }
             }
             if ctx.input(|i| i.key_pressed(egui::Key::Num2)) {
-                if let SculptState::Active { ref mut brush_mode, ref mut brush_strength, .. } = self.sculpt_state {
+                if let SculptState::Active { ref mut brush_mode, ref mut brush_strength, .. } = self.doc.sculpt_state {
                     if *brush_mode == BrushMode::Grab && *brush_strength > 0.5 { *brush_strength = DEFAULT_BRUSH_STRENGTH; }
                     *brush_mode = BrushMode::Carve;
                 }
             }
             if ctx.input(|i| i.key_pressed(egui::Key::Num3)) {
-                if let SculptState::Active { ref mut brush_mode, ref mut brush_strength, .. } = self.sculpt_state {
+                if let SculptState::Active { ref mut brush_mode, ref mut brush_strength, .. } = self.doc.sculpt_state {
                     if *brush_mode == BrushMode::Grab && *brush_strength > 0.5 { *brush_strength = DEFAULT_BRUSH_STRENGTH; }
                     *brush_mode = BrushMode::Smooth;
                 }
             }
             if ctx.input(|i| i.key_pressed(egui::Key::Num4)) {
-                if let SculptState::Active { ref mut brush_mode, ref mut brush_strength, .. } = self.sculpt_state {
+                if let SculptState::Active { ref mut brush_mode, ref mut brush_strength, .. } = self.doc.sculpt_state {
                     if *brush_mode == BrushMode::Grab && *brush_strength > 0.5 { *brush_strength = DEFAULT_BRUSH_STRENGTH; }
                     *brush_mode = BrushMode::Flatten;
                 }
             }
             if ctx.input(|i| i.key_pressed(egui::Key::Num5)) {
-                if let SculptState::Active { ref mut brush_mode, ref mut brush_strength, .. } = self.sculpt_state {
+                if let SculptState::Active { ref mut brush_mode, ref mut brush_strength, .. } = self.doc.sculpt_state {
                     if *brush_mode == BrushMode::Grab && *brush_strength > 0.5 { *brush_strength = DEFAULT_BRUSH_STRENGTH; }
                     *brush_mode = BrushMode::Inflate;
                 }
             }
             if ctx.input(|i| i.key_pressed(egui::Key::Num6)) {
-                if let SculptState::Active { ref mut brush_mode, ref mut brush_strength, .. } = self.sculpt_state {
+                if let SculptState::Active { ref mut brush_mode, ref mut brush_strength, .. } = self.doc.sculpt_state {
                     *brush_mode = BrushMode::Grab;
                     if *brush_strength < 0.5 {
                         *brush_strength = 1.0;
@@ -268,21 +158,20 @@ impl SdfApp {
             }
             // Symmetry toggles: X/Y/Z
             if ctx.input(|i| i.key_pressed(egui::Key::X)) {
-                if let SculptState::Active { ref mut symmetry_axis, .. } = self.sculpt_state {
+                if let SculptState::Active { ref mut symmetry_axis, .. } = self.doc.sculpt_state {
                     *symmetry_axis = if *symmetry_axis == Some(0) { None } else { Some(0) };
                 }
             }
             if ctx.input(|i| i.key_pressed(egui::Key::Y)) {
-                if let SculptState::Active { ref mut symmetry_axis, .. } = self.sculpt_state {
+                if let SculptState::Active { ref mut symmetry_axis, .. } = self.doc.sculpt_state {
                     *symmetry_axis = if *symmetry_axis == Some(1) { None } else { Some(1) };
                 }
             }
             if ctx.input(|i| i.key_pressed(egui::Key::Z)) {
-                if let SculptState::Active { ref mut symmetry_axis, .. } = self.sculpt_state {
+                if let SculptState::Active { ref mut symmetry_axis, .. } = self.doc.sculpt_state {
                     *symmetry_axis = if *symmetry_axis == Some(2) { None } else { Some(2) };
                 }
             }
         }
     }
-
 }

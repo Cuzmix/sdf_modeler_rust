@@ -1,29 +1,18 @@
 use std::sync::atomic::Ordering;
 
 use eframe::egui;
-use glam::Vec3;
 
-use crate::graph::history::History;
-use crate::graph::scene::Scene;
 use crate::sculpt::{BrushMode, SculptState};
 use crate::ui::viewport::ViewportResources;
 
+use super::actions::{Action, ActionSink};
 use super::{BakeStatus, ExportStatus, SdfApp, TIMING_HISTORY_LEN};
 
 impl SdfApp {
-    pub(super) fn show_menu_bar(&mut self, ctx: &egui::Context) {
-        let mut action_new = false;
-        let mut action_open = false;
-        let mut action_save = false;
-        let mut action_screenshot = false;
-        let mut action_export = false;
-        let mut action_undo = false;
-        let mut action_redo = false;
-        let mut action_delete = false;
-        let mut action_focus = false;
-        let mut action_copy = false;
-        let mut action_paste = false;
-        let mut action_duplicate = false;
+    /// Draw the menu bar and push any triggered actions into the action sink.
+    /// The menu bar reads state to show enabled/disabled items, and emits
+    /// actions for anything the user clicks — no direct state mutation.
+    pub(super) fn show_menu_bar(&mut self, ctx: &egui::Context, actions: &mut ActionSink) {
         let mut action_open_recent: Option<String> = None;
 
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
@@ -31,17 +20,17 @@ impl SdfApp {
                 // --- File ---
                 ui.menu_button("File", |ui| {
                     if ui.button("New Scene").clicked() {
-                        action_new = true;
+                        actions.push(Action::NewScene);
                         ui.close_menu();
                     }
                     ui.separator();
                     if ui.add(egui::Button::new("Open...").shortcut_text("Ctrl+O")).clicked() {
-                        action_open = true;
+                        actions.push(Action::OpenProject);
                         ui.close_menu();
                     }
-                    let save_label = if self.current_file_path.is_some() { "Save" } else { "Save As..." };
+                    let save_label = if self.persistence.current_file_path.is_some() { "Save" } else { "Save As..." };
                     if ui.add(egui::Button::new(save_label).shortcut_text("Ctrl+S")).clicked() {
-                        action_save = true;
+                        actions.push(Action::SaveProject);
                         ui.close_menu();
                     }
                     ui.separator();
@@ -65,12 +54,12 @@ impl SdfApp {
                     }
 
                     if ui.add(egui::Button::new("Screenshot...").shortcut_text("Ctrl+P")).clicked() {
-                        action_screenshot = true;
+                        actions.push(Action::TakeScreenshot);
                         ui.close_menu();
                     }
-                    let export_idle = matches!(self.export_status, ExportStatus::Idle);
+                    let export_idle = matches!(self.async_state.export_status, ExportStatus::Idle);
                     if ui.add_enabled(export_idle, egui::Button::new("Export Mesh...").shortcut_text("Ctrl+E")).clicked() {
-                        action_export = true;
+                        actions.push(Action::ShowExportDialog);
                         ui.close_menu();
                     }
                 });
@@ -78,73 +67,73 @@ impl SdfApp {
                 // --- Edit ---
                 ui.menu_button("Edit", |ui| {
                     if ui.add(egui::Button::new("Undo").shortcut_text("Ctrl+Z")).clicked() {
-                        action_undo = true;
+                        actions.push(Action::Undo);
                         ui.close_menu();
                     }
                     if ui.add(egui::Button::new("Redo").shortcut_text("Ctrl+Y")).clicked() {
-                        action_redo = true;
+                        actions.push(Action::Redo);
                         ui.close_menu();
                     }
                     ui.separator();
-                    let has_sel = self.node_graph_state.selected.is_some();
+                    let has_sel = self.ui.node_graph_state.selected.is_some();
                     if ui.add_enabled(has_sel, egui::Button::new("Copy").shortcut_text("Ctrl+C")).clicked() {
-                        action_copy = true;
+                        actions.push(Action::Copy);
                         ui.close_menu();
                     }
-                    let has_clip = self.clipboard_node.map_or(false, |id| self.scene.nodes.contains_key(&id));
+                    let has_clip = self.doc.clipboard_node.map_or(false, |id| self.doc.scene.nodes.contains_key(&id));
                     if ui.add_enabled(has_clip, egui::Button::new("Paste").shortcut_text("Ctrl+V")).clicked() {
-                        action_paste = true;
+                        actions.push(Action::Paste);
                         ui.close_menu();
                     }
                     if ui.add_enabled(has_sel, egui::Button::new("Duplicate").shortcut_text("Ctrl+D")).clicked() {
-                        action_duplicate = true;
+                        actions.push(Action::Duplicate);
                         ui.close_menu();
                     }
                     ui.separator();
                     if ui.add_enabled(has_sel, egui::Button::new("Delete").shortcut_text("Del")).clicked() {
-                        action_delete = true;
+                        actions.push(Action::DeleteSelected);
                         ui.close_menu();
                     }
                 });
 
                 // --- View ---
                 ui.menu_button("View", |ui| {
-                    let has_sel = self.node_graph_state.selected.is_some();
+                    let has_sel = self.ui.node_graph_state.selected.is_some();
                     if ui.add_enabled(has_sel, egui::Button::new("Focus Selected").shortcut_text("F")).clicked() {
-                        action_focus = true;
+                        actions.push(Action::FocusSelected);
                         ui.close_menu();
                     }
                     ui.separator();
-                    let profiler_label = if self.show_debug { "Hide Profiler" } else { "Show Profiler" };
+                    let profiler_label = if self.ui.show_debug { "Hide Profiler" } else { "Show Profiler" };
                     if ui.add(egui::Button::new(profiler_label).shortcut_text("F4")).clicked() {
-                        self.show_debug = !self.show_debug;
+                        actions.push(Action::ToggleDebug);
                         ui.close_menu();
                     }
                     ui.separator();
                     ui.label("Camera Presets");
                     if ui.add(egui::Button::new("Front").shortcut_text("F5")).clicked() {
-                        self.camera.set_front();
+                        actions.push(Action::CameraFront);
                         ui.close_menu();
                     }
                     if ui.add(egui::Button::new("Top").shortcut_text("F6")).clicked() {
-                        self.camera.set_top();
+                        actions.push(Action::CameraTop);
                         ui.close_menu();
                     }
                     if ui.add(egui::Button::new("Right").shortcut_text("F7")).clicked() {
-                        self.camera.set_right();
+                        actions.push(Action::CameraRight);
                         ui.close_menu();
                     }
                 });
 
                 // --- Settings ---
                 if ui.button("Settings").clicked() {
-                    self.show_settings = !self.show_settings;
+                    actions.push(Action::ToggleSettings);
                 }
 
                 // --- Help ---
                 ui.menu_button("Help", |ui| {
                     if ui.add(egui::Button::new("Keyboard Shortcuts").shortcut_text("F1")).clicked() {
-                        self.show_help = !self.show_help;
+                        actions.push(Action::ToggleHelp);
                         ui.close_menu();
                     }
                 });
@@ -152,7 +141,7 @@ impl SdfApp {
 
                 // Progress indicators (right-aligned)
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if let ExportStatus::InProgress { ref progress, total, .. } = self.export_status {
+                    if let ExportStatus::InProgress { ref progress, total, .. } = self.async_state.export_status {
                         let done = progress.load(Ordering::Relaxed);
                         let frac = done as f32 / total.max(1) as f32;
                         ui.add(
@@ -161,7 +150,7 @@ impl SdfApp {
                                 .desired_width(200.0),
                         );
                     }
-                    if let BakeStatus::InProgress { ref progress, total, .. } = self.bake_status {
+                    if let BakeStatus::InProgress { ref progress, total, .. } = self.async_state.bake_status {
                         let done = progress.load(Ordering::Relaxed);
                         let frac = done as f32 / total.max(1) as f32;
                         ui.add(
@@ -174,173 +163,17 @@ impl SdfApp {
             });
         });
 
-        // Process deferred menu actions
-        if action_new {
-            self.scene = Scene::new();
-            self.history = History::new();
-            self.node_graph_state.selected = None;
-            self.node_graph_state.needs_initial_rebuild = true;
-            self.sculpt_state = SculptState::Inactive;
-            self.current_structure_key = 0;
-            self.buffer_dirty = true;
-            self.saved_fingerprint = self.scene.data_fingerprint();
-            self.scene_dirty = false;
-            self.current_file_path = None;
-        }
-        // Helper closure for loading a project from a path
-        let load_from_path = |app: &mut Self, path: &std::path::Path| {
-            match crate::io::load_project(&path.to_path_buf()) {
-                Ok(project) => {
-                    app.scene = project.scene;
-                    app.camera = project.camera;
-                    app.history = History::new();
-                    app.node_graph_state.selected = None;
-                    app.node_graph_state.needs_initial_rebuild = true;
-                    app.sculpt_state = SculptState::Inactive;
-                    app.current_structure_key = 0;
-                    app.buffer_dirty = true;
-                    app.saved_fingerprint = app.scene.data_fingerprint();
-                    app.scene_dirty = false;
-                    app.current_file_path = Some(path.to_path_buf());
-                    app.settings.add_recent_file(&path.to_string_lossy());
-                    true
-                }
-                Err(e) => {
-                    log::error!("Failed to load project: {}", e);
-                    false
-                }
-            }
-        };
-        if action_open {
-            #[cfg(not(target_arch = "wasm32"))]
-            if let Some(path) = crate::io::open_dialog() {
-                load_from_path(self, &path);
-            }
-        }
-        if let Some(ref recent_path) = action_open_recent {
-            #[cfg(not(target_arch = "wasm32"))]
-            {
-                let path = std::path::PathBuf::from(recent_path);
-                if !load_from_path(self, &path) {
-                    // Remove stale entry
-                    self.settings.recent_files.retain(|p| p != recent_path);
-                    self.settings.save();
-                }
-            }
-        }
-        if action_save {
-            #[cfg(not(target_arch = "wasm32"))]
-            {
-                let path = if let Some(ref p) = self.current_file_path {
-                    Some(p.clone())
-                } else {
-                    crate::io::save_dialog()
-                };
-                if let Some(path) = path {
-                    if let Err(e) = crate::io::save_project(&self.scene, &self.camera, &path) {
-                        log::error!("Failed to save project: {}", e);
-                    } else {
-                        self.current_file_path = Some(path.clone());
-                        self.saved_fingerprint = self.scene.data_fingerprint();
-                        self.scene_dirty = false;
-                        self.settings.add_recent_file(&path.to_string_lossy());
-                    }
-                }
-            }
-            #[cfg(target_arch = "wasm32")]
-            {
-                crate::io::web_save_project(&self.scene, &self.camera);
-                self.saved_fingerprint = self.scene.data_fingerprint();
-                self.scene_dirty = false;
-            }
-        }
-        if action_screenshot {
-            self.take_screenshot();
-        }
-        if action_export {
-            self.show_export_dialog = true;
-        }
-        if action_undo {
-            if let Some((restored_scene, restored_sel)) =
-                self.history.undo(&self.scene, self.node_graph_state.selected)
-            {
-                self.scene = restored_scene;
-                self.node_graph_state.selected = restored_sel;
-                self.node_graph_state.needs_initial_rebuild = true;
-                self.buffer_dirty = true;
-            }
-        }
-        if action_redo {
-            if let Some((restored_scene, restored_sel)) =
-                self.history.redo(&self.scene, self.node_graph_state.selected)
-            {
-                self.scene = restored_scene;
-                self.node_graph_state.selected = restored_sel;
-                self.node_graph_state.needs_initial_rebuild = true;
-                self.buffer_dirty = true;
-            }
-        }
-        if action_delete {
-            self.delete_selected();
-        }
-        if action_focus {
-            if let Some(sel) = self.node_graph_state.selected {
-                let parent_map = self.scene.build_parent_map();
-                let (center, radius) = self.scene.compute_subtree_sphere(sel, &parent_map);
-                self.camera.focus_on(
-                    Vec3::new(center[0], center[1], center[2]),
-                    radius.max(0.5),
-                );
-            }
-        }
-        if action_copy {
-            self.clipboard_node = self.node_graph_state.selected;
-        }
-        if action_paste {
-            if let Some(src) = self.clipboard_node {
-                if self.scene.nodes.contains_key(&src) {
-                    if let Some(new_id) = self.scene.duplicate_subtree(src) {
-                        if let Some(node) = self.scene.nodes.get_mut(&new_id) {
-                            match &mut node.data {
-                                crate::graph::scene::NodeData::Primitive { ref mut position, .. }
-                                | crate::graph::scene::NodeData::Sculpt { ref mut position, .. } => {
-                                    position.x += 1.0;
-                                }
-                                _ => {}
-                            }
-                        }
-                        self.node_graph_state.selected = Some(new_id);
-                        self.node_graph_state.needs_initial_rebuild = true;
-                        self.buffer_dirty = true;
-                    }
-                }
-            }
-        }
-        if action_duplicate {
-            if let Some(sel) = self.node_graph_state.selected {
-                if let Some(new_id) = self.scene.duplicate_subtree(sel) {
-                    if let Some(node) = self.scene.nodes.get_mut(&new_id) {
-                        match &mut node.data {
-                            crate::graph::scene::NodeData::Primitive { ref mut position, .. }
-                            | crate::graph::scene::NodeData::Sculpt { ref mut position, .. } => {
-                                position.x += 1.0;
-                            }
-                            _ => {}
-                        }
-                    }
-                    self.node_graph_state.selected = Some(new_id);
-                    self.node_graph_state.needs_initial_rebuild = true;
-                    self.buffer_dirty = true;
-                }
-            }
+        // Recent file action must be pushed after the panel closure
+        if let Some(recent_path) = action_open_recent {
+            actions.push(Action::OpenRecentProject(recent_path));
         }
     }
 
     pub(super) fn show_debug_window(&self, ctx: &egui::Context) {
-        if !self.show_debug {
+        if !self.ui.show_debug {
             return;
         }
-        let t = &self.timings;
+        let t = &self.perf.timings;
         egui::Window::new("Profiler")
             .default_pos([10.0, 10.0])
             .default_size([280.0, 320.0])
@@ -425,9 +258,9 @@ impl SdfApp {
                 egui::CollapsingHeader::new("Scene")
                     .default_open(true)
                     .show(ui, |ui| {
-                        ui.label(format!("Nodes: {}", self.scene.nodes.len()));
-                        ui.label(format!("Top-level: {}", self.scene.top_level_nodes().len()));
-                        ui.label(format!("Sculpt textures: {}", self.sculpt_tex_indices.len()));
+                        ui.label(format!("Nodes: {}", self.doc.scene.nodes.len()));
+                        ui.label(format!("Top-level: {}", self.doc.scene.top_level_nodes().len()));
+                        ui.label(format!("Sculpt textures: {}", self.gpu.sculpt_tex_indices.len()));
                         ui.label(format!(
                             "Composite: {}",
                             if self.settings.render.composite_volume_enabled { "ON" } else { "OFF" }
@@ -438,7 +271,7 @@ impl SdfApp {
                 egui::CollapsingHeader::new("Render State")
                     .default_open(true)
                     .show(ui, |ui| {
-                        let renderer = self.render_state.renderer.read();
+                        let renderer = self.gpu.render_state.renderer.read();
                         if let Some(res) = renderer.callback_resources.get::<ViewportResources>() {
                             ui.label(format!(
                                 "Render size: {}x{}", res.render_width, res.render_height
@@ -451,22 +284,22 @@ impl SdfApp {
                 egui::CollapsingHeader::new("Camera")
                     .default_open(false)
                     .show(ui, |ui| {
-                        let eye = self.camera.eye();
+                        let eye = self.doc.camera.eye();
                         ui.label(format!("Eye: ({:.2}, {:.2}, {:.2})", eye.x, eye.y, eye.z));
-                        ui.label(format!("Distance: {:.2}", self.camera.distance));
+                        ui.label(format!("Distance: {:.2}", self.doc.camera.distance));
                         ui.label(format!(
                             "Yaw: {:.1} Pitch: {:.1}",
-                            self.camera.yaw.to_degrees(),
-                            self.camera.pitch.to_degrees(),
+                            self.doc.camera.yaw.to_degrees(),
+                            self.doc.camera.pitch.to_degrees(),
                         ));
                     });
             });
     }
 
     pub(super) fn show_help_window(&mut self, ctx: &egui::Context) {
-        if !self.show_help { return; }
+        if !self.ui.show_help { return; }
         egui::Window::new("Keyboard Shortcuts")
-            .open(&mut self.show_help)
+            .open(&mut self.ui.show_help)
             .resizable(false)
             .default_width(380.0)
             .show(ctx, |ui| {
@@ -545,7 +378,7 @@ impl SdfApp {
             .show(ctx, |ui| {
                 ui.horizontal_centered(|ui| {
                     // Mode indicator
-                    match &self.sculpt_state {
+                    match &self.doc.sculpt_state {
                         SculptState::Active { brush_mode, symmetry_axis, .. } => {
                             let mode_name = match brush_mode {
                                 BrushMode::Add => "Add",
@@ -572,25 +405,25 @@ impl SdfApp {
                         SculptState::Inactive => {
                             ui.colored_label(
                                 egui::Color32::from_rgb(130, 200, 255),
-                                self.gizmo_mode.label(),
+                                self.gizmo.mode.label(),
                             );
                             ui.separator();
-                            ui.weak(self.gizmo_space.label());
+                            ui.weak(self.gizmo.space.label());
                         }
                     }
 
                     ui.separator();
 
                     // Selection info
-                    if let Some(sel) = self.node_graph_state.selected {
-                        if let Some(node) = self.scene.nodes.get(&sel) {
+                    if let Some(sel) = self.ui.node_graph_state.selected {
+                        if let Some(node) = self.doc.scene.nodes.get(&sel) {
                             ui.weak(&node.name);
                         }
                     }
 
                     // Right-aligned control hints
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if self.sculpt_state.is_active() {
+                        if self.doc.sculpt_state.is_active() {
                             ui.weak("LMB: Paint | RMB: Pan | MMB: Orbit | 1-6: Brush | X/Y/Z: Sym");
                         } else {
                             ui.weak("LMB: Orbit | RMB: Pan | Scroll: Zoom | Del: Delete");
@@ -601,10 +434,10 @@ impl SdfApp {
     }
 
     pub(super) fn show_export_dialog(&mut self, ctx: &egui::Context) {
-        if !self.show_export_dialog {
+        if !self.ui.show_export_dialog {
             return;
         }
-        let mut open = self.show_export_dialog;
+        let mut open = self.ui.show_export_dialog;
         let mut do_export = false;
         let mut do_cancel = false;
 
@@ -636,7 +469,7 @@ impl SdfApp {
                 ui.add_space(8.0);
 
                 // Export button
-                let export_idle = matches!(self.export_status, ExportStatus::Idle);
+                let export_idle = matches!(self.async_state.export_status, ExportStatus::Idle);
                 ui.horizontal(|ui| {
                     if ui.add_enabled(export_idle, egui::Button::new("Export...")).clicked() {
                         do_export = true;
@@ -648,20 +481,20 @@ impl SdfApp {
             });
 
         if !open || do_cancel {
-            self.show_export_dialog = false;
+            self.ui.show_export_dialog = false;
         }
         if do_export {
             self.settings.save();
-            self.show_export_dialog = false;
+            self.ui.show_export_dialog = false;
             self.start_export(ctx);
         }
     }
 
     pub(super) fn show_toasts(&mut self, ctx: &egui::Context) {
         let now = crate::compat::Instant::now();
-        self.toasts.retain(|t| now.duration_since(t.created) < t.duration);
+        self.ui.toasts.retain(|t| now.duration_since(t.created) < t.duration);
 
-        if self.toasts.is_empty() {
+        if self.ui.toasts.is_empty() {
             return;
         }
 
@@ -669,7 +502,7 @@ impl SdfApp {
             .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-12.0, -36.0))
             .order(egui::Order::Foreground)
             .show(ctx, |ui| {
-                for toast in &self.toasts {
+                for toast in &self.ui.toasts {
                     let elapsed = now.duration_since(toast.created).as_secs_f32();
                     let remaining = toast.duration.as_secs_f32() - elapsed;
                     // Fade out over last 0.5s

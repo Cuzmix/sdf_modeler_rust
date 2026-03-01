@@ -17,20 +17,20 @@ impl SdfApp {
     /// Poll for a previously submitted async sculpt pick result.
     /// If ready: apply brush at the hit point (CPU + GPU).
     pub(super) fn poll_sculpt_pick(&mut self) {
-        if !matches!(self.pick_state, PickState::Pending { .. }) {
+        if !matches!(self.async_state.pick_state, PickState::Pending { .. }) {
             return;
         }
 
         // Non-blocking GPU poll to advance async map
-        self.render_state.device.poll(wgpu::Maintain::Poll);
+        self.gpu.render_state.device.poll(wgpu::Maintain::Poll);
 
         // Try to read the result
         let ready = {
-            let renderer = self.render_state.renderer.read();
+            let renderer = self.gpu.render_state.renderer.read();
             let Some(res) = renderer.callback_resources.get::<ViewportResources>() else {
                 return;
             };
-            let PickState::Pending { ref receiver } = self.pick_state else {
+            let PickState::Pending { ref receiver } = self.async_state.pick_state else {
                 return;
             };
             res.try_read_pick_result(receiver)
@@ -40,7 +40,7 @@ impl SdfApp {
             return; // Not ready yet — try again next frame
         };
 
-        self.pick_state = PickState::Idle;
+        self.async_state.pick_state = PickState::Idle;
 
         if let Some(result) = pick_result {
             self.handle_sculpt_hit(result);
@@ -48,9 +48,8 @@ impl SdfApp {
     }
 
     /// Handle a sculpt pick result: apply brush with interpolation.
-    /// Handle a sculpt pick result: apply brush with interpolation.
     pub(super) fn handle_sculpt_hit(&mut self, result: PickResult) {
-        let topo_order = self.scene.visible_topo_order();
+        let topo_order = self.doc.scene.visible_topo_order();
         let idx = result.material_id as usize;
         if idx >= topo_order.len() {
             return;
@@ -71,7 +70,7 @@ impl SdfApp {
             ref mut grab_snapshot,
             ref mut grab_start,
             ref mut grab_child_input,
-        } = self.sculpt_state
+        } = self.doc.sculpt_state
         else {
             return;
         };
@@ -87,7 +86,7 @@ impl SdfApp {
         // Grab brush: initialize snapshot and start position on first hit
         let is_grab = brush_mode == BrushMode::Grab;
         if is_grab && grab_snapshot.is_none() {
-            if let Some(node) = self.scene.nodes.get(&node_id) {
+            if let Some(node) = self.doc.scene.nodes.get(&node_id) {
                 if let NodeData::Sculpt { input, ref voxel_grid, position, rotation, .. } = node.data {
                     if let Some(child_id) = input {
                         // Differential sculpt: build total-SDF snapshot (analytical + displacement)
@@ -98,7 +97,7 @@ impl SdfApp {
                                 for x in 0..res {
                                     let local_pos = voxel_grid.grid_to_world(x as f32, y as f32, z as f32);
                                     let world_pos = position + sculpt::inverse_rotate_euler(local_pos, rotation);
-                                    let analytical = voxel::evaluate_sdf_tree(&self.scene, child_id, world_pos);
+                                    let analytical = voxel::evaluate_sdf_tree(&self.doc.scene, child_id, world_pos);
                                     let idx = voxel::VoxelGrid::index(x, y, z, res);
                                     total_snap[idx] += analytical;
                                 }
@@ -121,7 +120,7 @@ impl SdfApp {
 
         // Lazy brush: smooth cursor with elastic dead zone
         let effective_hit = if lazy_radius > 0.0 {
-            if let Some(ref mut lazy_pos) = self.lazy_brush_pos {
+            if let Some(ref mut lazy_pos) = self.async_state.lazy_brush_pos {
                 let delta = hit_world - *lazy_pos;
                 let dist = delta.length();
                 if dist <= lazy_radius {
@@ -131,7 +130,7 @@ impl SdfApp {
                 *lazy_pos = *lazy_pos + delta * factor;
                 *lazy_pos
             } else {
-                self.lazy_brush_pos = Some(hit_world);
+                self.async_state.lazy_brush_pos = Some(hit_world);
                 hit_world
             }
         } else {
@@ -140,7 +139,7 @@ impl SdfApp {
 
         // Capture flatten reference on first hit of a Flatten stroke
         if brush_mode == BrushMode::Flatten && flatten_reference.is_none() {
-            if let Some(node) = self.scene.nodes.get(&node_id) {
+            if let Some(node) = self.doc.scene.nodes.get(&node_id) {
                 if let NodeData::Sculpt {
                     ref voxel_grid,
                     position,
@@ -161,8 +160,8 @@ impl SdfApp {
             if let (Some(ref snap), Some(origin)) = (&grab_snap, grab_origin) {
                 // Project mouse ray onto camera-facing plane at grab depth (like Blender).
                 // This gives 1:1 screen-to-world mapping regardless of surface curvature.
-                let eye = self.camera.eye();
-                let forward = (self.camera.target - eye).normalize();
+                let eye = self.doc.camera.eye();
+                let forward = (self.doc.camera.target - eye).normalize();
                 let ray_dir = (hit_world - eye).normalize();
                 let denom = ray_dir.dot(forward);
                 let grab_delta = if denom.abs() > 1e-6 {
@@ -171,7 +170,7 @@ impl SdfApp {
                 } else {
                     hit_world - origin
                 };
-                let (spos, srot) = match self.scene.nodes.get(&node_id).map(|n| &n.data) {
+                let (spos, srot) = match self.doc.scene.nodes.get(&node_id).map(|n| &n.data) {
                     Some(NodeData::Sculpt { position, rotation, .. }) => (*position, *rotation),
                     _ => return,
                 };
@@ -182,7 +181,7 @@ impl SdfApp {
                 let dirty = if let Some(child_id) = grab_child {
                     // Differential sculpt: snapshot is total SDF, write back displacement
                     sculpt::apply_grab_to_grid_differential_scene(
-                        &mut self.scene,
+                        &mut self.doc.scene,
                         node_id,
                         snap,
                         local_center,
@@ -196,7 +195,7 @@ impl SdfApp {
                     )
                 } else {
                     // Standalone sculpt: grid is total SDF, write directly
-                    if let Some(node) = self.scene.nodes.get_mut(&node_id) {
+                    if let Some(node) = self.doc.scene.nodes.get_mut(&node_id) {
                         if let NodeData::Sculpt { ref mut voxel_grid, .. } = node.data {
                             Some(sculpt::apply_grab_to_grid(
                                 voxel_grid,
@@ -216,7 +215,7 @@ impl SdfApp {
                     self.upload_voxel_texture_region(node_id, z0, z1);
                 }
             }
-            self.last_sculpt_hit = Some(effective_hit);
+            self.async_state.last_sculpt_hit = Some(effective_hit);
             return;
         }
 
@@ -244,7 +243,7 @@ impl SdfApp {
         for &pos in &all_hits {
             // Standard brush modes (Add/Carve/Smooth/Flatten/Inflate)
                 let dirty_range = sculpt::apply_brush(
-                    &mut self.scene,
+                    &mut self.doc.scene,
                     node_id,
                     pos,
                     &brush_mode,
@@ -285,13 +284,12 @@ impl SdfApp {
             self.dispatch_composite_region(effective_hit, brush_radius);
         }
 
-        self.last_sculpt_hit = Some(effective_hit);
+        self.async_state.last_sculpt_hit = Some(effective_hit);
     }
 
     /// Interpolate between last and current hit to prevent gaps.
-    /// Interpolate between last and current hit to prevent gaps.
     pub(super) fn interpolate_brush_hits(&self, current: Vec3, brush_radius: f32) -> Vec<Vec3> {
-        let Some(last) = self.last_sculpt_hit else {
+        let Some(last) = self.async_state.last_sculpt_hit else {
             return vec![current];
         };
         let dist = (current - last).length();
@@ -309,7 +307,6 @@ impl SdfApp {
     }
 
     /// Dispatch GPU compute brush to modify voxel_buffer directly on the GPU.
-    /// Dispatch GPU compute brush to modify voxel_buffer directly on the GPU.
     pub(super) fn dispatch_gpu_brush(
         &self,
         node_id: NodeId,
@@ -321,10 +318,10 @@ impl SdfApp {
         flatten_ref: f32,
         surface_constraint: f32,
     ) {
-        let Some(&gpu_offset) = self.voxel_gpu_offsets.get(&node_id) else {
+        let Some(&gpu_offset) = self.gpu.voxel_gpu_offsets.get(&node_id) else {
             return;
         };
-        let Some(node) = self.scene.nodes.get(&node_id) else {
+        let Some(node) = self.doc.scene.nodes.get(&node_id) else {
             return;
         };
         let NodeData::Sculpt {
@@ -381,66 +378,65 @@ impl SdfApp {
             ],
         };
 
-        let renderer = self.render_state.renderer.read();
+        let renderer = self.gpu.render_state.renderer.read();
         if let Some(vr) = renderer.callback_resources.get::<ViewportResources>() {
-            vr.dispatch_brush(&self.render_state.device, &self.render_state.queue, &dispatch);
+            vr.dispatch_brush(&self.gpu.render_state.device, &self.gpu.render_state.queue, &dispatch);
         }
     }
 
     /// Submit an async pick for sculpt mode (non-blocking).
-    /// Submit an async pick for sculpt mode (non-blocking).
     pub(super) fn submit_sculpt_pick(&mut self) {
-        if !self.sculpt_state.is_active() {
+        if !self.doc.sculpt_state.is_active() {
             return;
         }
-        if !matches!(self.pick_state, PickState::Idle) {
+        if !matches!(self.async_state.pick_state, PickState::Idle) {
             return;
         }
-        let Some(pending) = self.pending_pick.take() else {
+        let Some(pending) = self.async_state.pending_pick.take() else {
             return;
         };
-        let renderer = self.render_state.renderer.read();
+        let renderer = self.gpu.render_state.renderer.read();
         let Some(res) = renderer.callback_resources.get::<ViewportResources>() else {
             return;
         };
         let rx = res.submit_pick(
-            &self.render_state.device,
-            &self.render_state.queue,
+            &self.gpu.render_state.device,
+            &self.gpu.render_state.queue,
             &pending,
         );
         drop(renderer);
 
-        self.pick_state = PickState::Pending { receiver: rx };
+        self.async_state.pick_state = PickState::Pending { receiver: rx };
     }
 
     pub(super) fn sync_sculpt_state(&mut self) {
-        match self.active_tool {
+        match self.doc.active_tool {
             ActiveTool::Select => {
                 // Original behavior: always deactivate sculpt in Select mode
-                if self.sculpt_state.is_active() {
-                    self.sculpt_state = SculptState::Inactive;
-                    self.last_sculpt_hit = None;
-                    self.lazy_brush_pos = None;
-                    self.pick_state = PickState::Idle;
+                if self.doc.sculpt_state.is_active() {
+                    self.doc.sculpt_state = SculptState::Inactive;
+                    self.async_state.last_sculpt_hit = None;
+                    self.async_state.lazy_brush_pos = None;
+                    self.async_state.pick_state = PickState::Idle;
                 }
             }
             ActiveTool::Sculpt => {
-                let sel = self.node_graph_state.selected;
-                let active = self.sculpt_state.active_node();
+                let sel = self.ui.node_graph_state.selected;
+                let active = self.doc.sculpt_state.active_node();
                 if sel != active {
                     // Selection changed — try to activate on new node
                     if let Some(id) = sel {
-                        if self.scene.nodes.get(&id).map_or(false, |n| matches!(n.data, NodeData::Sculpt { .. })) {
-                            self.sculpt_state = SculptState::new_active(id);
+                        if self.doc.scene.nodes.get(&id).map_or(false, |n| matches!(n.data, NodeData::Sculpt { .. })) {
+                            self.doc.sculpt_state = SculptState::new_active(id);
                         } else {
-                            self.sculpt_state = SculptState::Inactive;
+                            self.doc.sculpt_state = SculptState::Inactive;
                         }
                     } else {
-                        self.sculpt_state = SculptState::Inactive;
+                        self.doc.sculpt_state = SculptState::Inactive;
                     }
-                    self.last_sculpt_hit = None;
-                    self.lazy_brush_pos = None;
-                    self.pick_state = PickState::Idle;
+                    self.async_state.last_sculpt_hit = None;
+                    self.async_state.lazy_brush_pos = None;
+                    self.async_state.pick_state = PickState::Idle;
                 }
             }
         }

@@ -9,19 +9,19 @@ use super::SdfApp;
 
 impl SdfApp {
     pub(super) fn sync_gpu_pipeline(&mut self) {
-        let new_key = self.scene.structure_key();
-        if new_key != self.current_structure_key {
-            let shader_src = codegen::generate_shader(&self.scene, &self.settings.render);
-            let pick_shader_src = codegen::generate_pick_shader(&self.scene, &self.settings.render);
-            let sculpt_count = buffers::collect_sculpt_tex_info(&self.scene).len();
-            let mut renderer = self.render_state.renderer.write();
+        let new_key = self.doc.scene.structure_key();
+        if new_key != self.gpu.current_structure_key {
+            let shader_src = codegen::generate_shader(&self.doc.scene, &self.settings.render);
+            let pick_shader_src = codegen::generate_pick_shader(&self.doc.scene, &self.settings.render);
+            let sculpt_count = buffers::collect_sculpt_tex_info(&self.doc.scene).len();
+            let mut renderer = self.gpu.render_state.renderer.write();
             if let Some(res) = renderer
                 .callback_resources
                 .get_mut::<ViewportResources>()
             {
                 // Always rebuild the normal + pick pipelines
                 res.rebuild_pipeline(
-                    &self.render_state.device, &shader_src, &pick_shader_src, sculpt_count,
+                    &self.gpu.render_state.device, &shader_src, &pick_shader_src, sculpt_count,
                 );
 
                 // Rebuild composite pipelines if enabled and there are sculpt nodes.
@@ -32,7 +32,7 @@ impl SdfApp {
                     && sculpt_count > 0;
 
                 if want_composite {
-                    let bounds = self.scene.compute_bounds();
+                    let bounds = self.doc.scene.compute_bounds();
                     let padding = 1.5;
                     let bounds_min = [
                         bounds.0[0] - padding,
@@ -54,14 +54,14 @@ impl SdfApp {
                     );
 
                     let comp_compute_src = codegen::generate_composite_shader(
-                        &self.scene, &self.settings.render,
+                        &self.doc.scene, &self.settings.render,
                     );
                     let comp_render_src = codegen::generate_composite_render_shader(
                         &self.settings.render, bounds_min, bounds_max,
                     );
 
                     res.rebuild_composite(
-                        &self.render_state.device,
+                        &self.gpu.render_state.device,
                         &comp_compute_src,
                         &comp_render_src,
                         resolution,
@@ -69,46 +69,46 @@ impl SdfApp {
                         bounds_max,
                     );
                     log::info!("Composite: pipelines built, use_composite={}", res.use_composite);
-                    self.composite_full_update_needed = true;
+                    self.perf.composite_full_update_needed = true;
                 } else {
                     res.use_composite = false;
                     res.composite = None;
                 }
             }
-            self.current_structure_key = new_key;
-            self.buffer_dirty = true; // new pipeline needs fresh buffer data
+            self.gpu.current_structure_key = new_key;
+            self.gpu.buffer_dirty = true; // new pipeline needs fresh buffer data
         }
     }
 
     pub(super) fn upload_scene_buffer(&mut self) {
-        let (voxel_data, voxel_offsets) = buffers::build_voxel_buffer(&self.scene);
+        let (voxel_data, voxel_offsets) = buffers::build_voxel_buffer(&self.doc.scene);
         let node_data =
-            buffers::build_node_buffer(&self.scene, self.node_graph_state.selected, &voxel_offsets);
-        let sculpt_infos = buffers::collect_sculpt_tex_info(&self.scene);
-        self.voxel_gpu_offsets = voxel_offsets;
-        self.sculpt_tex_indices = sculpt_infos.iter().map(|i| (i.node_id, i.tex_idx)).collect();
-        let mut renderer = self.render_state.renderer.write();
+            buffers::build_node_buffer(&self.doc.scene, self.ui.node_graph_state.selected, &voxel_offsets);
+        let sculpt_infos = buffers::collect_sculpt_tex_info(&self.doc.scene);
+        self.gpu.voxel_gpu_offsets = voxel_offsets;
+        self.gpu.sculpt_tex_indices = sculpt_infos.iter().map(|i| (i.node_id, i.tex_idx)).collect();
+        let mut renderer = self.gpu.render_state.renderer.write();
         if let Some(res) = renderer
             .callback_resources
             .get_mut::<ViewportResources>()
         {
             res.update_scene_buffer(
-                &self.render_state.device,
-                &self.render_state.queue,
+                &self.gpu.render_state.device,
+                &self.gpu.render_state.queue,
                 &node_data,
             );
             res.update_voxel_buffer(
-                &self.render_state.device,
-                &self.render_state.queue,
+                &self.gpu.render_state.device,
+                &self.gpu.render_state.queue,
                 &voxel_data,
             );
             // Upload voxel textures for render shader
             for info in &sculpt_infos {
-                if let Some(node) = self.scene.nodes.get(&info.node_id) {
+                if let Some(node) = self.doc.scene.nodes.get(&info.node_id) {
                     if let NodeData::Sculpt { ref voxel_grid, .. } = node.data {
                         res.upload_voxel_texture(
-                            &self.render_state.device,
-                            &self.render_state.queue,
+                            &self.gpu.render_state.device,
+                            &self.gpu.render_state.queue,
                             info.tex_idx,
                             voxel_grid.resolution,
                             &voxel_grid.data,
@@ -121,21 +121,21 @@ impl SdfApp {
 
     /// Dispatch a full composite volume update (all voxels).
     pub(super) fn try_incremental_voxel_upload(&self, node_id: NodeId, z0: u32, z1: u32) -> bool {
-        let Some(&gpu_offset) = self.voxel_gpu_offsets.get(&node_id) else {
+        let Some(&gpu_offset) = self.gpu.voxel_gpu_offsets.get(&node_id) else {
             return false;
         };
-        let Some(node) = self.scene.nodes.get(&node_id) else {
+        let Some(node) = self.doc.scene.nodes.get(&node_id) else {
             return false;
         };
         let NodeData::Sculpt { ref voxel_grid, .. } = node.data else {
             return false;
         };
-        let renderer = self.render_state.renderer.read();
+        let renderer = self.gpu.render_state.renderer.read();
         let Some(res) = renderer.callback_resources.get::<ViewportResources>() else {
             return false;
         };
         res.update_voxel_region(
-            &self.render_state.queue,
+            &self.gpu.render_state.queue,
             gpu_offset,
             voxel_grid.resolution,
             z0,
@@ -146,23 +146,22 @@ impl SdfApp {
     }
 
     /// Upload dirty z-slab region of a sculpt node's voxel data to its texture3D.
-    /// Upload dirty z-slab region of a sculpt node's voxel data to its texture3D.
     pub(super) fn upload_voxel_texture_region(&self, node_id: NodeId, z0: u32, z1: u32) {
-        let Some(&tex_idx) = self.sculpt_tex_indices.get(&node_id) else {
+        let Some(&tex_idx) = self.gpu.sculpt_tex_indices.get(&node_id) else {
             return;
         };
-        let Some(node) = self.scene.nodes.get(&node_id) else {
+        let Some(node) = self.doc.scene.nodes.get(&node_id) else {
             return;
         };
         let NodeData::Sculpt { ref voxel_grid, .. } = node.data else {
             return;
         };
-        let renderer = self.render_state.renderer.read();
+        let renderer = self.gpu.render_state.renderer.read();
         let Some(res) = renderer.callback_resources.get::<ViewportResources>() else {
             return;
         };
         res.upload_voxel_texture_region(
-            &self.render_state.queue,
+            &self.gpu.render_state.queue,
             tex_idx,
             voxel_grid.resolution,
             z0,
@@ -175,26 +174,23 @@ impl SdfApp {
     // Async sculpt pick (1-frame delay, eliminates GPU stall)
     // -----------------------------------------------------------------------
 
-    /// Poll for a previously submitted async sculpt pick result.
-    /// If ready: apply brush at the hit point (CPU + GPU).
     /// Dispatch a full composite volume update (all voxels).
     pub(super) fn dispatch_composite_full(&self) {
-        let renderer = self.render_state.renderer.read();
+        let renderer = self.gpu.render_state.renderer.read();
         let Some(res) = renderer.callback_resources.get::<ViewportResources>() else { return; };
         let Some(ref comp) = res.composite else { return; };
         let r = comp.resolution;
         res.dispatch_composite(
-            &self.render_state.device,
-            &self.render_state.queue,
+            &self.gpu.render_state.device,
+            &self.gpu.render_state.queue,
             [0, 0, 0],
             [r - 1, r - 1, r - 1],
         );
     }
 
     /// Dispatch an incremental composite update for the brush-affected region.
-    /// Dispatch an incremental composite update for the brush-affected region.
     pub(super) fn dispatch_composite_region(&self, center: Vec3, radius: f32) {
-        let renderer = self.render_state.renderer.read();
+        let renderer = self.gpu.render_state.renderer.read();
         let Some(res) = renderer.callback_resources.get::<ViewportResources>() else { return; };
         let Some(ref comp) = res.composite else { return; };
 
@@ -220,8 +216,8 @@ impl SdfApp {
         ];
 
         res.dispatch_composite(
-            &self.render_state.device,
-            &self.render_state.queue,
+            &self.gpu.render_state.device,
+            &self.gpu.render_state.queue,
             umin,
             umax,
         );
@@ -229,32 +225,32 @@ impl SdfApp {
 
     pub(super) fn process_pending_pick(&mut self) {
         // Sculpt mode uses async pick path (poll_sculpt_pick / submit_sculpt_pick)
-        if self.sculpt_state.is_active() {
+        if self.doc.sculpt_state.is_active() {
             return;
         }
-        let Some(pending) = self.pending_pick.take() else {
+        let Some(pending) = self.async_state.pending_pick.take() else {
             return;
         };
-        let topo_order = self.scene.visible_topo_order();
-        let renderer = self.render_state.renderer.read();
+        let topo_order = self.doc.scene.visible_topo_order();
+        let renderer = self.gpu.render_state.renderer.read();
         let Some(res) = renderer.callback_resources.get::<ViewportResources>() else {
             return;
         };
         if let Some(result) = res.execute_pick(
-            &self.render_state.device,
-            &self.render_state.queue,
+            &self.gpu.render_state.device,
+            &self.gpu.render_state.queue,
             &pending,
         ) {
             let idx = result.material_id as usize;
             if idx < topo_order.len() {
                 let hit_node_id = topo_order[idx];
-                self.node_graph_state.selected = Some(hit_node_id);
-                self.buffer_dirty = true;
+                self.ui.node_graph_state.selected = Some(hit_node_id);
+                self.gpu.buffer_dirty = true;
             }
         } else {
             // Clicked empty space — deselect
-            self.node_graph_state.selected = None;
-            self.buffer_dirty = true;
+            self.ui.node_graph_state.selected = None;
+            self.gpu.buffer_dirty = true;
         }
     }
 

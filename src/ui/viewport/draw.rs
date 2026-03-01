@@ -2,6 +2,7 @@ use eframe::egui;
 use eframe::egui_wgpu;
 use eframe::wgpu;
 
+use crate::app::actions::{Action, ActionSink};
 use crate::gpu::camera::{Camera, CameraUniform};
 use crate::gpu::picking::PendingPick;
 use crate::graph::scene::{CsgOp, ModifierKind, NodeId, Scene, SdfPrimitive, TransformKind};
@@ -185,8 +186,6 @@ fn draw_symmetry_plane(painter: &egui::Painter, camera: &Camera, rect: egui::Rec
 
 pub struct ViewportOutput {
     pub pending_pick: Option<PendingPick>,
-    pub created_node: Option<NodeId>,
-    pub tool_switch: Option<ActiveTool>,
 }
 
 pub fn draw(
@@ -204,11 +203,10 @@ pub fn draw(
     render_config: &crate::settings::RenderConfig,
     sculpt_count: usize,
     fps_info: Option<(f64, f64)>, // (fps, frame_ms)
+    actions: &mut ActionSink,
 ) -> ViewportOutput {
     let mut output = ViewportOutput {
         pending_pick: None,
-        created_node: None,
-        tool_switch: None,
     };
     let rect = ui.available_rect_before_wrap();
     let response = ui.allocate_rect(rect, egui::Sense::click_and_drag());
@@ -569,10 +567,10 @@ pub fn draw(
                         let sculpt_tool_active = *active_tool == ActiveTool::Sculpt;
 
                         if ui.selectable_label(select_active, "Select").clicked() && !select_active {
-                            output.tool_switch = Some(ActiveTool::Select);
+                            actions.push(Action::SetTool(ActiveTool::Select));
                         }
                         if ui.selectable_label(sculpt_tool_active, "Sculpt").clicked() && !sculpt_tool_active {
-                            output.tool_switch = Some(ActiveTool::Sculpt);
+                            actions.push(Action::SetTool(ActiveTool::Sculpt));
                         }
                     });
 
@@ -584,8 +582,7 @@ pub fn draw(
                         ui.menu_button("+ Shape", |ui| {
                             for prim in SdfPrimitive::ALL {
                                 if ui.button(prim.base_name()).clicked() {
-                                    let id = scene.create_primitive(prim.clone());
-                                    output.created_node = Some(id);
+                                    actions.push(Action::CreatePrimitive(prim.clone()));
                                     ui.close_menu();
                                 }
                             }
@@ -599,8 +596,7 @@ pub fn draw(
                                     if tops.len() >= 2 {
                                         let left = Some(tops[tops.len() - 2]);
                                         let right = Some(tops[tops.len() - 1]);
-                                        let id = scene.create_operation(op.clone(), left, right);
-                                        output.created_node = Some(id);
+                                        actions.push(Action::CreateOperation { op: op.clone(), left, right });
                                     }
                                     ui.close_menu();
                                 }
@@ -615,7 +611,7 @@ pub fn draw(
                                     ui.label("Deform");
                                     for kind in &[ModifierKind::Twist, ModifierKind::Bend, ModifierKind::Taper] {
                                         if ui.button(kind.base_name()).clicked() {
-                                            scene.insert_modifier_above(sel_id, kind.clone());
+                                            actions.push(Action::InsertModifierAbove { target: sel_id, kind: kind.clone() });
                                             ui.close_menu();
                                         }
                                     }
@@ -623,7 +619,7 @@ pub fn draw(
                                     ui.label("Shape");
                                     for kind in &[ModifierKind::Round, ModifierKind::Onion, ModifierKind::Elongate] {
                                         if ui.button(kind.base_name()).clicked() {
-                                            scene.insert_modifier_above(sel_id, kind.clone());
+                                            actions.push(Action::InsertModifierAbove { target: sel_id, kind: kind.clone() });
                                             ui.close_menu();
                                         }
                                     }
@@ -631,7 +627,7 @@ pub fn draw(
                                     ui.label("Repeat");
                                     for kind in &[ModifierKind::Mirror, ModifierKind::Repeat, ModifierKind::FiniteRepeat] {
                                         if ui.button(kind.base_name()).clicked() {
-                                            scene.insert_modifier_above(sel_id, kind.clone());
+                                            actions.push(Action::InsertModifierAbove { target: sel_id, kind: kind.clone() });
                                             ui.close_menu();
                                         }
                                     }
@@ -639,7 +635,7 @@ pub fn draw(
                                     ui.label("Transform");
                                     for kind in TransformKind::ALL {
                                         if ui.button(kind.base_name()).clicked() {
-                                            scene.insert_transform_above(sel_id, kind.clone());
+                                            actions.push(Action::InsertTransformAbove { target: sel_id, kind: kind.clone() });
                                             ui.close_menu();
                                         }
                                     }
@@ -653,8 +649,7 @@ pub fn draw(
                         ui.add_enabled_ui(has_selection, |ui| {
                             if ui.button("Delete").clicked() {
                                 if let Some(sel_id) = *selected {
-                                    scene.remove_node(sel_id);
-                                    *selected = None;
+                                    actions.push(Action::DeleteNode(sel_id));
                                 }
                             }
                         });

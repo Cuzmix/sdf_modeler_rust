@@ -17,7 +17,7 @@ impl SdfApp {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn start_async_bake(&mut self, req: BakeRequest, ctx: &egui::Context) {
-        let scene_clone = self.scene.clone();
+        let scene_clone = self.doc.scene.clone();
         let progress = Arc::new(AtomicU32::new(0));
         let progress_clone = Arc::clone(&progress);
         let (tx, rx) = std::sync::mpsc::channel();
@@ -36,7 +36,7 @@ impl SdfApp {
             ctx_clone.request_repaint();
         });
 
-        self.bake_status = BakeStatus::InProgress {
+        self.async_state.bake_status = BakeStatus::InProgress {
             existing_sculpt: req.existing_sculpt,
             subtree_root: req.subtree_root,
             color: req.color,
@@ -51,7 +51,7 @@ impl SdfApp {
     pub(super) fn start_async_bake(&mut self, req: BakeRequest, _ctx: &egui::Context) {
         let progress = Arc::new(AtomicU32::new(0));
         let (grid, center) = voxel::bake_subtree_with_progress(
-            &self.scene,
+            &self.doc.scene,
             req.subtree_root,
             req.resolution,
             progress,
@@ -63,11 +63,11 @@ impl SdfApp {
     /// No async thread needed — displacement grids start at 0.0 (O(1)).
     pub(super) fn apply_instant_displacement_bake(&mut self, req: BakeRequest) {
         let (grid, center) = voxel::create_displacement_grid_for_subtree(
-            &self.scene, req.subtree_root, req.resolution,
+            &self.doc.scene, req.subtree_root, req.resolution,
         );
 
         if let Some(sculpt_id) = req.existing_sculpt {
-            if let Some(node) = self.scene.nodes.get_mut(&sculpt_id) {
+            if let Some(node) = self.doc.scene.nodes.get_mut(&sculpt_id) {
                 if let NodeData::Sculpt {
                     voxel_grid: ref mut vg,
                     position: ref mut p,
@@ -79,25 +79,25 @@ impl SdfApp {
                 }
             }
         } else {
-            let sculpt_id = self.scene.insert_sculpt_above(
+            let sculpt_id = self.doc.scene.insert_sculpt_above(
                 req.subtree_root, center, Vec3::ZERO, req.color, grid,
             );
-            self.node_graph_state.selected = Some(sculpt_id);
-            self.sculpt_state = SculptState::new_active(sculpt_id);
+            self.ui.node_graph_state.selected = Some(sculpt_id);
+            self.doc.sculpt_state = SculptState::new_active(sculpt_id);
         }
-        self.buffer_dirty = true;
+        self.gpu.buffer_dirty = true;
     }
 
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn poll_async_bake(&mut self) {
-        let completed = if let BakeStatus::InProgress { ref receiver, .. } = self.bake_status {
+        let completed = if let BakeStatus::InProgress { ref receiver, .. } = self.async_state.bake_status {
             receiver.try_recv().ok()
         } else {
             None
         };
 
         if let Some((grid, center)) = completed {
-            let (existing_sculpt, subtree_root, color, flatten) = match &self.bake_status {
+            let (existing_sculpt, subtree_root, color, flatten) = match &self.async_state.bake_status {
                 BakeStatus::InProgress {
                     existing_sculpt, subtree_root, color, flatten, ..
                 } => (*existing_sculpt, *subtree_root, *color, *flatten),
@@ -105,7 +105,7 @@ impl SdfApp {
             };
 
             self.apply_bake_result(grid, center, existing_sculpt, subtree_root, color, flatten);
-            self.bake_status = BakeStatus::Idle;
+            self.async_state.bake_status = BakeStatus::Idle;
         }
     }
 
@@ -124,12 +124,12 @@ impl SdfApp {
         flatten: bool,
     ) {
         if flatten {
-            let new_id = self.scene.flatten_subtree(subtree_root, grid, center, color);
-            self.node_graph_state.selected = Some(new_id);
-            self.node_graph_state.needs_initial_rebuild = true;
-            self.sculpt_state = SculptState::new_active(new_id);
+            let new_id = self.doc.scene.flatten_subtree(subtree_root, grid, center, color);
+            self.ui.node_graph_state.selected = Some(new_id);
+            self.ui.node_graph_state.needs_initial_rebuild = true;
+            self.doc.sculpt_state = SculptState::new_active(new_id);
         } else if let Some(sculpt_id) = existing_sculpt {
-            if let Some(node) = self.scene.nodes.get_mut(&sculpt_id) {
+            if let Some(node) = self.doc.scene.nodes.get_mut(&sculpt_id) {
                 if let NodeData::Sculpt {
                     voxel_grid: ref mut vg,
                     position: ref mut p,
@@ -141,13 +141,13 @@ impl SdfApp {
                 }
             }
         } else {
-            let sculpt_id = self.scene.insert_sculpt_above(
+            let sculpt_id = self.doc.scene.insert_sculpt_above(
                 subtree_root, center, Vec3::ZERO, color, grid,
             );
-            self.node_graph_state.selected = Some(sculpt_id);
-            self.sculpt_state = SculptState::new_active(sculpt_id);
+            self.ui.node_graph_state.selected = Some(sculpt_id);
+            self.doc.sculpt_state = SculptState::new_active(sculpt_id);
         }
-        self.buffer_dirty = true;
+        self.gpu.buffer_dirty = true;
     }
 
     // ── Screenshot ───────────────────────────────────────────────────────
@@ -164,7 +164,7 @@ impl SdfApp {
             return;
         };
 
-        let renderer = self.render_state.renderer.read();
+        let renderer = self.gpu.render_state.renderer.read();
         let resources = renderer
             .callback_resources
             .get::<ViewportResources>()
@@ -172,13 +172,13 @@ impl SdfApp {
 
         let width = 1920u32;
         let height = 1080u32;
-        let scene_bounds = self.scene.compute_bounds();
+        let scene_bounds = self.doc.scene.compute_bounds();
         let viewport = [0.0, 0.0, width as f32, height as f32];
-        let uniform = self.camera.to_uniform(viewport, 0.0, 0.0, false, scene_bounds, -1.0);
+        let uniform = self.doc.camera.to_uniform(viewport, 0.0, 0.0, false, scene_bounds, -1.0);
 
         let pixels = resources.screenshot(
-            &self.render_state.device,
-            &self.render_state.queue,
+            &self.gpu.render_state.device,
+            &self.gpu.render_state.queue,
             &uniform,
             width,
             height,
@@ -218,8 +218,8 @@ impl SdfApp {
             return;
         };
 
-        let scene_clone = self.scene.clone();
-        let bounds = self.scene.compute_bounds();
+        let scene_clone = self.doc.scene.clone();
+        let bounds = self.doc.scene.compute_bounds();
         let padding = 0.5;
         let bounds_min = Vec3::from(bounds.0) - Vec3::splat(padding);
         let bounds_max = Vec3::from(bounds.1) + Vec3::splat(padding);
@@ -242,7 +242,7 @@ impl SdfApp {
         });
 
         let total = (resolution + 1) + resolution;
-        self.export_status = ExportStatus::InProgress {
+        self.async_state.export_status = ExportStatus::InProgress {
             progress,
             total,
             receiver: rx,
@@ -252,7 +252,7 @@ impl SdfApp {
 
     #[cfg(target_arch = "wasm32")]
     pub(super) fn start_export(&mut self, _ctx: &egui::Context) {
-        let bounds = self.scene.compute_bounds();
+        let bounds = self.doc.scene.compute_bounds();
         let padding = 0.5;
         let bounds_min = Vec3::from(bounds.0) - Vec3::splat(padding);
         let bounds_max = Vec3::from(bounds.1) + Vec3::splat(padding);
@@ -260,7 +260,7 @@ impl SdfApp {
         let progress = Arc::new(AtomicU32::new(0));
 
         let mesh = crate::export::marching_cubes(
-            &self.scene,
+            &self.doc.scene,
             resolution,
             bounds_min,
             bounds_max,
@@ -278,7 +278,7 @@ impl SdfApp {
             mesh.vertices.len(), mesh.triangles.len(),
         );
         crate::io::web_download("export.obj", &buf.into_inner(), "model/obj");
-        self.toasts.push(super::Toast {
+        self.ui.toasts.push(super::Toast {
             message: msg,
             is_error: false,
             created: crate::compat::Instant::now(),
@@ -288,14 +288,14 @@ impl SdfApp {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn poll_export(&mut self) {
-        let completed = if let ExportStatus::InProgress { ref receiver, .. } = self.export_status {
+        let completed = if let ExportStatus::InProgress { ref receiver, .. } = self.async_state.export_status {
             receiver.try_recv().ok()
         } else {
             None
         };
 
         if let Some(mesh) = completed {
-            let path = if let ExportStatus::InProgress { ref path, .. } = self.export_status {
+            let path = if let ExportStatus::InProgress { ref path, .. } = self.async_state.export_status {
                 path.clone()
             } else {
                 unreachable!()
@@ -309,7 +309,7 @@ impl SdfApp {
                         ext, mesh.vertices.len(), mesh.triangles.len(),
                     );
                     log::info!("{} to {:?}", msg, path);
-                    self.toasts.push(super::Toast {
+                    self.ui.toasts.push(super::Toast {
                         message: msg,
                         is_error: false,
                         created: crate::compat::Instant::now(),
@@ -318,7 +318,7 @@ impl SdfApp {
                 }
                 Err(e) => {
                     log::error!("Failed to write mesh: {}", e);
-                    self.toasts.push(super::Toast {
+                    self.ui.toasts.push(super::Toast {
                         message: format!("Export failed: {}", e),
                         is_error: true,
                         created: crate::compat::Instant::now(),
@@ -327,7 +327,7 @@ impl SdfApp {
                 }
             }
 
-            self.export_status = ExportStatus::Idle;
+            self.async_state.export_status = ExportStatus::Idle;
         }
     }
 

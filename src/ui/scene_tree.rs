@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use eframe::egui;
 
+use crate::app::actions::{Action, ActionSink};
 use crate::graph::scene::{NodeData, NodeId, Scene, SceneNode};
 
 const COLOR_SELECTED: egui::Color32 = egui::Color32::from_rgb(255, 200, 60);
@@ -16,6 +17,7 @@ pub fn draw(
     renaming: &mut Option<NodeId>,
     rename_buf: &mut String,
     drag_state: &mut Option<NodeId>,
+    actions: &mut ActionSink,
 ) {
     ui.heading("Scene Tree");
     ui.separator();
@@ -33,7 +35,7 @@ pub fn draw(
 
     let mut visited = HashSet::new();
     for id in tops {
-        draw_node_recursive(ui, scene, id, selected, renaming, rename_buf, &mut visited, drag_state);
+        draw_node_recursive(ui, scene, id, selected, renaming, rename_buf, &mut visited, drag_state, actions);
     }
 
     // "Drop here to make top-level" area when dragging
@@ -96,14 +98,15 @@ fn node_context_menu(
     _ui_ctx: &egui::Ui,
     scene: &mut Scene,
     id: NodeId,
-    selected: &mut Option<NodeId>,
+    _selected: &mut Option<NodeId>,
     renaming: &mut Option<NodeId>,
     rename_buf: &mut String,
+    actions: &mut ActionSink,
 ) {
     response.context_menu(|ui| {
         let hidden = scene.is_hidden(id);
         if ui.button(if hidden { "Show" } else { "Hide" }).clicked() {
-            scene.toggle_visibility(id);
+            actions.push(Action::ToggleVisibility(id));
             ui.close_menu();
         }
         if ui.button("Rename").clicked() {
@@ -114,8 +117,7 @@ fn node_context_menu(
             ui.close_menu();
         }
         if ui.button("Delete").clicked() {
-            scene.remove_node(id);
-            if *selected == Some(id) { *selected = None; }
+            actions.push(Action::DeleteNode(id));
             if *renaming == Some(id) { *renaming = None; }
             ui.close_menu();
         }
@@ -252,6 +254,7 @@ fn draw_node_recursive(
     rename_buf: &mut String,
     visited: &mut HashSet<NodeId>,
     drag_state: &mut Option<NodeId>,
+    actions: &mut ActionSink,
 ) {
     if !visited.insert(id) {
         ui.label(format!("  (cycle: #{})", id));
@@ -309,7 +312,7 @@ fn draw_node_recursive(
                 }
             }
             handle_drag_drop(ui, &response, scene, id, drag_state);
-            node_context_menu(&response, ui, scene, id, selected, renaming, rename_buf);
+            node_context_menu(&response, ui, scene, id, selected, renaming, rename_buf, actions);
         });
     } else {
         // Visibility checkbox before collapsing header
@@ -326,7 +329,7 @@ fn draw_node_recursive(
             .show(ui, |ui| {
                 for child_opt in &info.children {
                     if let Some(child_id) = child_opt {
-                        draw_node_recursive(ui, scene, *child_id, selected, renaming, rename_buf, visited, drag_state);
+                        draw_node_recursive(ui, scene, *child_id, selected, renaming, rename_buf, visited, drag_state, actions);
                     } else {
                         ui.label("  (empty)");
                     }
@@ -343,7 +346,7 @@ fn draw_node_recursive(
                 }
             }
             handle_drag_drop(ui, &header.header_response, scene, id, drag_state);
-            node_context_menu(&header.header_response, ui, scene, id, selected, renaming, rename_buf);
+            node_context_menu(&header.header_response, ui, scene, id, selected, renaming, rename_buf, actions);
         });
     }
 }
