@@ -11,12 +11,34 @@ pub fn draw(
     initial_vsync: bool,
 ) -> bool {
     let before = settings.render.clone();
+    let mut imported = false;
 
     egui::Window::new("Settings")
         .open(open)
         .default_width(300.0)
         .resizable(true)
         .show(ctx, |ui| {
+            // --- Top toolbar: Reset / Export / Import ---
+            ui.horizontal(|ui| {
+                if ui.button("Reset All").on_hover_text("Reset all settings to defaults").clicked() {
+                    let recent = std::mem::take(&mut settings.recent_files);
+                    *settings = Settings::default();
+                    settings.recent_files = recent;
+                    settings.save();
+                }
+                ui.separator();
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    if ui.button("Export...").on_hover_text("Save settings to a file").clicked() {
+                        settings.export_dialog();
+                    }
+                    if ui.button("Import...").on_hover_text("Load settings from a file").clicked() {
+                        imported = settings.import_dialog();
+                    }
+                }
+            });
+            ui.separator();
+
             egui::ScrollArea::vertical().show(ui, |ui| {
                 // --- Display ---
                 egui::CollapsingHeader::new("Display")
@@ -107,7 +129,7 @@ pub fn draw(
             });
         });
 
-    let changed = settings.render != before;
+    let changed = imported || settings.render != before;
     settings.save();
     changed
 }

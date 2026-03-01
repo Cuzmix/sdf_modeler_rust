@@ -80,6 +80,44 @@ impl Settings {
             }
         }
     }
+
+    pub fn export_dialog(&self) {
+        if let Some(path) = rfd::FileDialog::new()
+            .set_title("Export Settings")
+            .add_filter("JSON", &["json"])
+            .set_file_name("settings.json")
+            .save_file()
+        {
+            if let Ok(json) = serde_json::to_string_pretty(self) {
+                if let Err(e) = std::fs::write(&path, json) {
+                    log::error!("Failed to export settings: {}", e);
+                }
+            }
+        }
+    }
+
+    pub fn import_dialog(&mut self) -> bool {
+        if let Some(path) = rfd::FileDialog::new()
+            .set_title("Import Settings")
+            .add_filter("JSON", &["json"])
+            .pick_file()
+        {
+            match std::fs::read_to_string(&path) {
+                Ok(json) => match serde_json::from_str::<Settings>(&json) {
+                    Ok(imported) => {
+                        let recent = std::mem::take(&mut self.recent_files);
+                        *self = imported;
+                        self.recent_files = recent;
+                        self.save();
+                        return true;
+                    }
+                    Err(e) => log::error!("Failed to parse settings file: {}", e),
+                },
+                Err(e) => log::error!("Failed to read settings file: {}", e),
+            }
+        }
+        false
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
