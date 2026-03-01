@@ -203,6 +203,8 @@ pub struct SdfApp {
     pub(super) scene_tree_drag: Option<NodeId>,
     /// Show the export dialog window.
     pub(super) show_export_dialog: bool,
+    /// Show the unified settings window.
+    pub(super) show_settings: bool,
 }
 
 impl SdfApp {
@@ -284,6 +286,7 @@ impl SdfApp {
             clipboard_node: None,
             scene_tree_drag: None,
             show_export_dialog: false,
+            show_settings: false,
         }
     }
 }
@@ -328,6 +331,15 @@ impl eframe::App for SdfApp {
         self.show_debug_window(ctx);
         self.show_toasts(ctx);
 
+        // Unified settings window
+        let settings_dirty_from_window = crate::ui::settings_window::draw(
+            ctx,
+            &mut self.show_settings,
+            &mut self.settings,
+            &mut self.show_debug,
+            self.initial_vsync,
+        );
+
         let t_ui = Instant::now();
         let baking = !matches!(self.bake_status, BakeStatus::Idle);
         let bake_progress = match &self.bake_status {
@@ -338,7 +350,7 @@ impl eframe::App for SdfApp {
         };
 
         let mut pending_pick = None;
-        let mut settings_dirty = false;
+        let mut settings_dirty = settings_dirty_from_window;
         let mut bake_request: Option<BakeRequest> = None;
         let mut tool_switch: Option<ActiveTool> = None;
         let sculpt_count = self.sculpt_tex_indices.len();
@@ -347,7 +359,6 @@ impl eframe::App for SdfApp {
         } else {
             None
         };
-        let initial_vsync = self.initial_vsync;
         let mut tab_viewer = SdfTabViewer {
             camera: &mut self.camera,
             scene: &mut self.scene,
@@ -368,8 +379,6 @@ impl eframe::App for SdfApp {
             renaming_node: &mut self.renaming_node,
             rename_buf: &mut self.rename_buf,
             fps_info,
-            show_debug: &mut self.show_debug,
-            initial_vsync,
             tool_switch: &mut tool_switch,
             scene_tree_drag: &mut self.scene_tree_drag,
         };

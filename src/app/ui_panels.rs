@@ -73,26 +73,6 @@ impl SdfApp {
                         action_export = true;
                         ui.close_menu();
                     }
-                    ui.separator();
-
-                    // Auto-save settings
-                    ui.horizontal(|ui| {
-                        let mut auto_save = self.settings.auto_save_enabled;
-                        if ui.checkbox(&mut auto_save, "Auto-save").changed() {
-                            self.settings.auto_save_enabled = auto_save;
-                            self.settings.save();
-                        }
-                    });
-                    if self.settings.auto_save_enabled {
-                        ui.horizontal(|ui| {
-                            ui.label("Interval:");
-                            let mut secs = self.settings.auto_save_interval_secs;
-                            if ui.add(egui::DragValue::new(&mut secs).range(30..=600).suffix("s").speed(5)).changed() {
-                                self.settings.auto_save_interval_secs = secs;
-                                self.settings.save();
-                            }
-                        });
-                    }
                 });
 
                 // --- Edit ---
@@ -155,6 +135,11 @@ impl SdfApp {
                         ui.close_menu();
                     }
                 });
+
+                // --- Settings ---
+                if ui.button("Settings").clicked() {
+                    self.show_settings = !self.show_settings;
+                }
 
                 // --- Help ---
                 ui.menu_button("Help", |ui| {

@@ -1,6 +1,6 @@
 use eframe::egui;
 
-use crate::settings::Settings;
+use crate::settings::{BackgroundMode, Settings};
 
 /// Draw the Render Settings panel. Returns `true` if a shader-affecting setting changed.
 pub fn draw(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
@@ -36,15 +36,15 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
             ui.checkbox(&mut config.shadows_enabled, "Enable Shadows")
                 .on_hover_text("Soft shadows from key light (expensive)");
             ui.add_enabled_ui(config.shadows_enabled, |ui| {
-                labeled_slider_i32_tip(ui, "Steps", &mut config.shadow_steps, 8..=128,
+                labeled_slider_i32(ui, "Steps", &mut config.shadow_steps, 8..=128,
                     "Ray steps for shadow evaluation. More = sharper but slower");
-                labeled_slider_tip(ui, "Penumbra K", &mut config.shadow_penumbra_k, 1.0..=32.0, false,
+                labeled_slider(ui, "Penumbra K", &mut config.shadow_penumbra_k, 1.0..=32.0, false,
                     "Shadow softness. Higher = harder shadows");
-                labeled_slider_tip(ui, "Bias", &mut config.shadow_bias, 0.001..=0.2, true,
+                labeled_slider(ui, "Bias", &mut config.shadow_bias, 0.001..=0.2, true,
                     "Offset to prevent self-shadowing artifacts");
-                labeled_slider_tip(ui, "Min T", &mut config.shadow_mint, 0.01..=0.5, false,
+                labeled_slider(ui, "Min T", &mut config.shadow_mint, 0.01..=0.5, false,
                     "Shadow ray start distance (avoids self-intersection)");
-                labeled_slider_tip(ui, "Max T", &mut config.shadow_maxt, 5.0..=100.0, false,
+                labeled_slider(ui, "Max T", &mut config.shadow_maxt, 5.0..=100.0, false,
                     "Maximum shadow ray distance");
             });
             if ui.small_button("Reset").clicked() {
@@ -59,13 +59,13 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
             ui.checkbox(&mut config.ao_enabled, "Enable AO")
                 .on_hover_text("Ambient occlusion darkens crevices and corners");
             ui.add_enabled_ui(config.ao_enabled, |ui| {
-                labeled_slider_i32_tip(ui, "Samples", &mut config.ao_samples, 1..=16,
+                labeled_slider_i32(ui, "Samples", &mut config.ao_samples, 1..=16,
                     "Number of AO sample steps. More = smoother but slower");
-                labeled_slider_tip(ui, "Step Size", &mut config.ao_step, 0.01..=0.5, false,
+                labeled_slider(ui, "Step Size", &mut config.ao_step, 0.01..=0.5, false,
                     "Distance between AO samples. Larger = wider darkening");
-                labeled_slider_tip(ui, "Decay", &mut config.ao_decay, 0.5..=1.0, false,
+                labeled_slider(ui, "Decay", &mut config.ao_decay, 0.5..=1.0, false,
                     "How quickly AO fades with distance (closer to 1.0 = slower fade)");
-                labeled_slider_tip(ui, "Intensity", &mut config.ao_intensity, 0.5..=10.0, false,
+                labeled_slider(ui, "Intensity", &mut config.ao_intensity, 0.5..=10.0, false,
                     "Strength of the AO effect. Higher = darker crevices");
             });
             if ui.small_button("Reset").clicked() {
@@ -77,13 +77,13 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
     egui::CollapsingHeader::new("Raymarching")
         .default_open(false)
         .show(ui, |ui| {
-            labeled_slider_i32_tip(ui, "Max Steps", &mut config.march_max_steps, 32..=512,
+            labeled_slider_i32(ui, "Max Steps", &mut config.march_max_steps, 32..=512,
                 "Maximum ray march iterations. More = higher quality but slower");
-            labeled_slider_tip(ui, "Epsilon", &mut config.march_epsilon, 0.0001..=0.01, true,
+            labeled_slider(ui, "Epsilon", &mut config.march_epsilon, 0.0001..=0.01, true,
                 "Surface hit threshold. Smaller = more precise but needs more steps");
-            labeled_slider_tip(ui, "Step Multiplier", &mut config.march_step_multiplier, 0.5..=1.0, false,
+            labeled_slider(ui, "Step Multiplier", &mut config.march_step_multiplier, 0.5..=1.0, false,
                 "Conservative step factor (<1.0 prevents artifacts on thin features)");
-            labeled_slider_tip(ui, "Max Distance", &mut config.march_max_distance, 10.0..=200.0, false,
+            labeled_slider(ui, "Max Distance", &mut config.march_max_distance, 10.0..=200.0, false,
                 "Far plane distance. Rays beyond this are considered misses");
             if ui.small_button("Reset").clicked() {
                 config.reset_raymarching();
@@ -112,21 +112,21 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
             ui.separator();
             ui.label("Key Light Direction");
             dir_editor(ui, &mut config.key_light_dir);
-            labeled_slider_tip(ui, "Diffuse", &mut config.key_diffuse, 0.0..=2.0, false,
+            labeled_slider(ui, "Diffuse", &mut config.key_diffuse, 0.0..=2.0, false,
                 "Key light diffuse brightness");
-            labeled_slider_tip(ui, "Spec Power", &mut config.key_spec_power, 1.0..=128.0, true,
+            labeled_slider(ui, "Spec Power", &mut config.key_spec_power, 1.0..=128.0, true,
                 "Specular highlight sharpness (higher = tighter highlight)");
-            labeled_slider_tip(ui, "Spec Intensity", &mut config.key_spec_intensity, 0.0..=2.0, false,
+            labeled_slider(ui, "Spec Intensity", &mut config.key_spec_intensity, 0.0..=2.0, false,
                 "Specular highlight brightness");
 
             ui.separator();
             ui.label("Fill Light Direction");
             dir_editor(ui, &mut config.fill_light_dir);
-            labeled_slider_tip(ui, "Fill Intensity", &mut config.fill_intensity, 0.0..=1.0, false,
+            labeled_slider(ui, "Fill Intensity", &mut config.fill_intensity, 0.0..=1.0, false,
                 "Intensity of the secondary fill light");
 
             ui.separator();
-            labeled_slider_tip(ui, "Ambient", &mut config.ambient, 0.0..=0.5, false,
+            labeled_slider(ui, "Ambient", &mut config.ambient, 0.0..=0.5, false,
                 "Minimum base lighting (prevents fully black areas)");
             if ui.small_button("Reset").clicked() {
                 config.reset_lighting();
@@ -138,19 +138,11 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
         .default_open(false)
         .show(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.selectable_value(
-                    &mut config.background_mode,
-                    crate::settings::BackgroundMode::SkyGradient,
-                    "Sky Gradient",
-                );
-                ui.selectable_value(
-                    &mut config.background_mode,
-                    crate::settings::BackgroundMode::SolidColor,
-                    "Solid Color",
-                );
+                ui.selectable_value(&mut config.background_mode, BackgroundMode::SkyGradient, "Sky Gradient");
+                ui.selectable_value(&mut config.background_mode, BackgroundMode::SolidColor, "Solid Color");
             });
             match config.background_mode {
-                crate::settings::BackgroundMode::SkyGradient => {
+                BackgroundMode::SkyGradient => {
                     ui.horizontal(|ui| {
                         ui.label("Horizon:");
                         ui.color_edit_button_rgb(&mut config.sky_horizon);
@@ -160,7 +152,7 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
                         ui.color_edit_button_rgb(&mut config.sky_zenith);
                     });
                 }
-                crate::settings::BackgroundMode::SolidColor => {
+                BackgroundMode::SolidColor => {
                     ui.horizontal(|ui| {
                         ui.label("Color:");
                         ui.color_edit_button_rgb(&mut config.bg_solid_color);
@@ -179,7 +171,7 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
             ui.checkbox(&mut config.fog_enabled, "Enable Fog")
                 .on_hover_text("Distance-based exponential fog with sun scattering");
             ui.add_enabled_ui(config.fog_enabled, |ui| {
-                labeled_slider_tip(ui, "Density", &mut config.fog_density, 0.001..=0.2, true,
+                labeled_slider(ui, "Density", &mut config.fog_density, 0.001..=0.2, true,
                     "Fog thickness. Higher = objects fade sooner");
                 ui.horizontal(|ui| {
                     ui.label("Color:");
@@ -195,27 +187,13 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
     egui::CollapsingHeader::new("Gamma")
         .default_open(false)
         .show(ui, |ui| {
-            labeled_slider_tip(ui, "Gamma", &mut config.gamma, 1.0..=3.0, false,
+            labeled_slider(ui, "Gamma", &mut config.gamma, 1.0..=3.0, false,
                 "Display gamma correction (2.2 = standard sRGB)");
             ui.checkbox(&mut config.tonemapping_aces, "ACES Filmic Tonemapping")
                 .on_hover_text("Apply ACES filmic curve before gamma. Better highlight rolloff but shifts hue slightly.");
             if ui.small_button("Reset").clicked() {
                 config.reset_gamma();
             }
-        });
-
-    // --- Viewport ---
-    egui::CollapsingHeader::new("Viewport")
-        .default_open(true)
-        .show(ui, |ui| {
-            ui.checkbox(&mut config.show_grid, "Show Grid")
-                .on_hover_text("Display ground plane grid at Y=0");
-            ui.separator();
-            ui.label("Touch Input");
-            labeled_slider_tip(ui, "Zoom Sensitivity", &mut config.touch_zoom_sensitivity, 100.0..=2000.0, false,
-                "How fast pinch-to-zoom responds");
-            ui.checkbox(&mut config.invert_touch_pan, "Invert Touch Pan")
-                .on_hover_text("Reverse two-finger pan direction");
         });
 
     // --- Selection Outline ---
@@ -226,7 +204,7 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
                 ui.label("Color:");
                 ui.color_edit_button_rgb(&mut config.outline_color);
             });
-            labeled_slider_tip(ui, "Thickness", &mut config.outline_thickness, 1.0..=5.0, false,
+            labeled_slider(ui, "Thickness", &mut config.outline_thickness, 1.0..=5.0, false,
                 "Outline width in screen pixels");
             if ui.small_button("Reset").clicked() {
                 config.reset_outline();
@@ -240,7 +218,7 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
     changed
 }
 
-fn labeled_slider_tip(
+fn labeled_slider(
     ui: &mut egui::Ui,
     label: &str,
     value: &mut f32,
@@ -261,7 +239,7 @@ fn labeled_slider_tip(
     });
 }
 
-fn labeled_slider_i32_tip(
+fn labeled_slider_i32(
     ui: &mut egui::Ui,
     label: &str,
     value: &mut i32,
