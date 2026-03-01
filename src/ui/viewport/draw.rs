@@ -222,6 +222,7 @@ pub fn draw(
         rect.height() * pixels_per_point,
     ];
     // Interaction detection
+    let multi_touch_active = ui.input(|i| i.multi_touch()).is_some();
     let sculpt_active = sculpt_state.is_active();
     let camera_dragging = if sculpt_active {
         response.dragged_by(egui::PointerButton::Secondary)
@@ -301,7 +302,7 @@ pub fn draw(
 
     if sculpt_active {
         // Sculpt mode: drag applies brush continuously via pick
-        if response.dragged_by(egui::PointerButton::Primary) {
+        if response.dragged_by(egui::PointerButton::Primary) && !multi_touch_active {
             if let Some(pos) = ui.input(|i| i.pointer.hover_pos()) {
                 if rect.contains(pos) {
                     let mouse_px = [
@@ -459,7 +460,7 @@ pub fn draw(
             }
         }
 
-        if response.dragged_by(egui::PointerButton::Primary) {
+        if response.dragged_by(egui::PointerButton::Primary) && !multi_touch_active {
             let delta = response.drag_delta();
             camera.orbit(delta.x, delta.y);
         }
@@ -474,6 +475,18 @@ pub fn draw(
         let scroll = ui.input(|i| i.smooth_scroll_delta.y);
         if scroll != 0.0 {
             camera.zoom(scroll);
+        }
+    }
+
+    // --- Multi-touch: pinch-to-zoom + two-finger pan ---
+    if let Some(touch) = ui.input(|i| i.multi_touch()) {
+        if touch.zoom_delta != 1.0 {
+            let zoom_amount = (touch.zoom_delta - 1.0) * render_config.touch_zoom_sensitivity;
+            camera.zoom(zoom_amount);
+        }
+        if touch.translation_delta != egui::Vec2::ZERO {
+            let sign = if render_config.invert_touch_pan { -1.0 } else { 1.0 };
+            camera.pan(sign * touch.translation_delta.x, sign * touch.translation_delta.y);
         }
     }
 

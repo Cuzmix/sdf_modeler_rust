@@ -210,6 +210,12 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings) -> bool {
         .show(ui, |ui| {
             ui.checkbox(&mut config.show_grid, "Show Grid")
                 .on_hover_text("Display ground plane grid at Y=0");
+            ui.separator();
+            ui.label("Touch Input");
+            labeled_slider_tip(ui, "Zoom Sensitivity", &mut config.touch_zoom_sensitivity, 100.0..=2000.0, false,
+                "How fast pinch-to-zoom responds");
+            ui.checkbox(&mut config.invert_touch_pan, "Invert Touch Pan")
+                .on_hover_text("Reverse two-finger pan direction");
         });
 
     // --- Selection Outline ---

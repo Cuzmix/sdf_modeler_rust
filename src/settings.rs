@@ -187,6 +187,12 @@ pub struct RenderConfig {
     /// Resolution of the composite scene volume (64-256).
     #[serde(default = "default_composite_resolution")]
     pub composite_volume_resolution: u32,
+
+    // Touch input
+    #[serde(default = "default_touch_zoom_sensitivity")]
+    pub touch_zoom_sensitivity: f32,
+    #[serde(default)]
+    pub invert_touch_pan: bool,
 }
 
 fn default_true() -> bool { true }
@@ -198,6 +204,7 @@ fn default_rest_scale() -> f32 { 1.0 }
 fn default_composite_resolution() -> u32 { 128 }
 fn default_outline_color() -> [f32; 3] { [1.0, 0.8, 0.2] }
 fn default_outline_thickness() -> f32 { 2.5 }
+fn default_touch_zoom_sensitivity() -> f32 { 500.0 }
 
 impl Default for RenderConfig {
     fn default() -> Self {
@@ -251,6 +258,9 @@ impl Default for RenderConfig {
             rest_render_scale: 1.0,
             composite_volume_enabled: false,
             composite_volume_resolution: 128,
+
+            touch_zoom_sensitivity: 500.0,
+            invert_touch_pan: false,
         }
     }
 }
