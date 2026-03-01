@@ -22,6 +22,10 @@ struct ViewportCallback {
     display_viewport: [f32; 4],
     /// Render scale factor (0.25 - 1.0).
     render_scale: f32,
+    /// Outline color (RGB).
+    outline_color: [f32; 3],
+    /// Outline width in pixels.
+    outline_width: f32,
 }
 
 impl egui_wgpu::CallbackTrait for ViewportCallback {
@@ -52,11 +56,17 @@ impl egui_wgpu::CallbackTrait for ViewportCallback {
             bytemuck::bytes_of(&self.render_uniform),
         );
 
-        // Write blit params (display viewport for the blit shader)
+        // Write blit params (display viewport + outline settings for the blit shader)
+        let blit_data: [f32; 8] = [
+            self.display_viewport[0], self.display_viewport[1],
+            self.display_viewport[2], self.display_viewport[3],
+            self.outline_color[0], self.outline_color[1], self.outline_color[2],
+            self.outline_width,
+        ];
         queue.write_buffer(
             &resources.blit_params_buffer,
             0,
-            bytemuck::cast_slice(&self.display_viewport),
+            bytemuck::cast_slice(&blit_data),
         );
 
         // Render SDF scene to offscreen texture
@@ -269,6 +279,8 @@ pub fn draw(
             render_uniform,
             display_viewport: viewport,
             render_scale,
+            outline_color: render_config.outline_color,
+            outline_width: render_config.outline_thickness,
         },
     ));
 

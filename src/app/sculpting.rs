@@ -442,7 +442,7 @@ impl SdfApp {
                     self.doc.sculpt_state = SculptState::Inactive;
                     self.async_state.last_sculpt_hit = None;
                     self.async_state.lazy_brush_pos = None;
-                    self.async_state.pick_state = PickState::Idle;
+                    self.cancel_pending_pick_state();
                 }
             }
             ActiveTool::Sculpt => {
@@ -461,10 +461,25 @@ impl SdfApp {
                     }
                     self.async_state.last_sculpt_hit = None;
                     self.async_state.lazy_brush_pos = None;
-                    self.async_state.pick_state = PickState::Idle;
+                    self.cancel_pending_pick_state();
                 }
             }
         }
+    }
+
+    /// Cancel any in-flight async pick, unmapping the staging buffer so
+    /// subsequent `queue.submit` calls don't panic.
+    fn cancel_pending_pick_state(&mut self) {
+        if matches!(self.async_state.pick_state, PickState::Pending { .. }) {
+            // Wait for the pending map_async to complete before unmapping —
+            // wgpu 22 panics if you unmap a buffer that's still in "mapping" state.
+            self.gpu.render_state.device.poll(wgpu::Maintain::Wait);
+            let renderer = self.gpu.render_state.renderer.read();
+            if let Some(res) = renderer.callback_resources.get::<ViewportResources>() {
+                res.cancel_pending_pick();
+            }
+        }
+        self.async_state.pick_state = PickState::Idle;
     }
 
 }

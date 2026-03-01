@@ -295,7 +295,7 @@ impl ViewportResources {
         });
         let blit_params_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Blit Params"),
-            size: 16, // vec4f viewport
+            size: 32, // vec4f viewport + vec4f outline_color_and_width
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });

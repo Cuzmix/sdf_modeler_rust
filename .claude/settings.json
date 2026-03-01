@@ -16,7 +16,9 @@
       "Bash(wc -l \"c:\\\\Users\\\\Manny\\\\Documents\\\\Code Projects\\\\Typscript\\\\sdf_modeler_rust\\\\src\"/**/*.rs)",
       "Read(//c/Users/Manny/Documents/Code/ Projects/Typscript/sdf_modeler_rust/src/graph/**)",
       "Read(//c/Users/Manny/Documents/Code/ Projects/Typscript/sdf_modeler_rust/src/gpu/**)",
-      "Read(//c/Users/Manny/Documents/Code/ Projects/Typscript/sdf_modeler_rust/src/app/**)"
+      "Read(//c/Users/Manny/Documents/Code/ Projects/Typscript/sdf_modeler_rust/src/app/**)",
+      "WebFetch(domain:bgolus.medium.com)",
+      "WebFetch(domain:forum.babylonjs.com)"
     ]
   }
 }

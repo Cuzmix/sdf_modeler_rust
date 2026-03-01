@@ -14,7 +14,6 @@ impl SdfApp {
             let shader_src = codegen::generate_shader(
                 &self.doc.scene,
                 &self.settings.render,
-                self.ui.node_graph_state.selected,
             );
             let pick_shader_src = codegen::generate_pick_shader(&self.doc.scene, &self.settings.render);
             let sculpt_count = buffers::collect_sculpt_tex_info(&self.doc.scene).len();
@@ -249,13 +248,11 @@ impl SdfApp {
             if idx < topo_order.len() {
                 let hit_node_id = topo_order[idx];
                 self.ui.node_graph_state.selected = Some(hit_node_id);
-                self.gpu.current_structure_key = 0; // Force shader rebuild for selected_sdf
                 self.gpu.buffer_dirty = true;
             }
         } else {
             // Clicked empty space — deselect
             self.ui.node_graph_state.selected = None;
-            self.gpu.current_structure_key = 0; // Force shader rebuild for selected_sdf
             self.gpu.buffer_dirty = true;
         }
     }

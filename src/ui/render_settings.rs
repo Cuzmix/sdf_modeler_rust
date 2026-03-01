@@ -206,7 +206,7 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
                 ui.label("Color:");
                 ui.color_edit_button_rgb(&mut config.outline_color);
             });
-            labeled_slider(ui, "Thickness", &mut config.outline_thickness, 1.0..=5.0, false,
+            labeled_slider(ui, "Thickness", &mut config.outline_thickness, 1.0..=8.0, false,
                 "Outline width in screen pixels");
             if ui.small_button("Reset").clicked() {
                 config.reset_outline();

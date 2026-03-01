@@ -179,7 +179,7 @@ impl SdfApp {
             .expect("WGPU render state required");
 
         let scene = crate::graph::scene::Scene::new();
-        let shader_src = codegen::generate_shader(&scene, &settings.render, None);
+        let shader_src = codegen::generate_shader(&scene, &settings.render);
         let pick_shader_src = codegen::generate_pick_shader(&scene, &settings.render);
         let structure_key = scene.structure_key();
 
@@ -407,7 +407,6 @@ impl eframe::App for SdfApp {
                 self.ui.node_graph_state.selected = None;
                 self.ui.node_graph_state.needs_initial_rebuild = true;
                 self.doc.sculpt_state = SculptState::Inactive;
-                self.gpu.current_structure_key = 0; // Force shader rebuild for selected_sdf
                 self.gpu.buffer_dirty = true;
             }
         }

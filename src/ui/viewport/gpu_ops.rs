@@ -86,6 +86,11 @@ impl ViewportResources {
         Self::read_pick_from_receiver(&self.pick_staging_buffer, rx)
     }
 
+    /// Cancel any in-flight pick mapping. Safe to call even if nothing is mapped.
+    pub fn cancel_pending_pick(&self) {
+        self.pick_staging_buffer.unmap();
+    }
+
     /// Submit pick compute shader (non-blocking). Returns a channel receiver
     /// that will signal when the staging buffer is mapped and ready to read.
     pub fn submit_pick(

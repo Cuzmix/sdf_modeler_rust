@@ -5,7 +5,7 @@
 // Do not remove or rename these markers.
 //
 // Depends on: bindings.wgsl, operations.wgsl (ray_aabb), and the codegen-generated
-// scene_sdf() / selected_sdf() functions.
+// scene_sdf() function.
 
 // --- Rendering quality constants ---
 const SHADOW_STEPS: i32 = /*SHADOW_STEPS*/;
@@ -176,17 +176,12 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
     let dwdx = fwidth(gp.x);
     let dwdz = fwidth(gp.z);
 
-    // Selection outline: precompute in uniform control flow (fwidth requires this)
-    let sel_f = select(0.0, 1.0, is_selected(mat_id));
-    let fwidth_sel = fwidth(sel_f);
-
     // Sky gradient (base color when no SDF hit)
     let sky_grad_t = uv.y * 0.5 + 0.5;
     let bg_sky = mix(vec3f(/*SKY_HORIZON*/), vec3f(/*SKY_ZENITH*/), sky_grad_t);
 
     // --- Compute base color: sky or shaded SDF ---
     var color = bg_sky;
-    var outline_a = 0.0;
 
     if !sdf_miss {
         let p = ro + rd * t;
@@ -230,16 +225,6 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
         let emissive_int = get_node_emissive_intensity(mat_id);
         color += emissive_col * emissive_int;
 
-        // Selection outline via selected_sdf distance check
-        if !is_selected(mat_id) {
-            let sel_d = selected_sdf(p);
-            let pixel_world = t * 2.0 / camera.viewport.w;
-            outline_a = 1.0 - smoothstep(0.0, pixel_world * /*OUTLINE_THICKNESS*/, sel_d);
-        } else {
-            let ndotv = max(dot(n, -rd), 0.0);
-            outline_a = 1.0 - smoothstep(0.0, 0.15, ndotv);
-        }
-
         /*FOG_LINE*/
 
         /*TONEMAP_LINE*/
@@ -278,11 +263,8 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
         color = mix(color, grid_col, alpha);
     }
 
-    // Selection outline: selected_sdf for object boundaries, fwidth for sky boundary
-    let final_outline = max(outline_a, fwidth_sel);
-    if final_outline > 0.01 {
-        color = mix(color, vec3f(/*OUTLINE_COLOR*/), final_outline);
-    }
-
-    return vec4f(color, 1.0);
+    // Selection flag in alpha: 0 = selected, 1 = not selected.
+    // The blit shader reads this to draw post-process outline edges.
+    let sel_alpha = select(1.0, 0.0, !sdf_miss && is_selected(mat_id));
+    return vec4f(color, sel_alpha);
 }
