@@ -331,6 +331,137 @@ impl SdfApp {
                     self.settings.save();
                     self.gpu.buffer_dirty = true;
                 }
+                Action::ToggleTurntable => {
+                    self.ui.turntable_active = !self.ui.turntable_active;
+                }
+
+                // ── Properties ─────────────────────────────────────
+                Action::CopyProperties => {
+                    if let Some(sel) = self.ui.node_graph_state.selected {
+                        if let Some(node) = self.doc.scene.nodes.get(&sel) {
+                            let clip = match &node.data {
+                                crate::graph::scene::NodeData::Primitive {
+                                    color, roughness, metallic, emissive, emissive_intensity, fresnel, ..
+                                } => Some(super::state::PropertyClipboard {
+                                    color: [color.x, color.y, color.z],
+                                    roughness: *roughness,
+                                    metallic: *metallic,
+                                    emissive: [emissive.x, emissive.y, emissive.z],
+                                    emissive_intensity: *emissive_intensity,
+                                    fresnel: *fresnel,
+                                }),
+                                crate::graph::scene::NodeData::Sculpt {
+                                    color, roughness, metallic, emissive, emissive_intensity, fresnel, ..
+                                } => Some(super::state::PropertyClipboard {
+                                    color: [color.x, color.y, color.z],
+                                    roughness: *roughness,
+                                    metallic: *metallic,
+                                    emissive: [emissive.x, emissive.y, emissive.z],
+                                    emissive_intensity: *emissive_intensity,
+                                    fresnel: *fresnel,
+                                }),
+                                _ => None,
+                            };
+                            if let Some(c) = clip {
+                                self.ui.property_clipboard = Some(c);
+                                self.ui.toasts.push(super::Toast {
+                                    message: "Properties copied".into(),
+                                    is_error: false,
+                                    created: crate::compat::Instant::now(),
+                                    duration: crate::compat::Duration::from_secs(2),
+                                });
+                            }
+                        }
+                    }
+                }
+                Action::PasteProperties => {
+                    if let Some(ref clip) = self.ui.property_clipboard.clone() {
+                        if let Some(sel) = self.ui.node_graph_state.selected {
+                            if let Some(node) = self.doc.scene.nodes.get_mut(&sel) {
+                                let applied = match &mut node.data {
+                                    crate::graph::scene::NodeData::Primitive {
+                                        color, roughness, metallic, emissive, emissive_intensity, fresnel, ..
+                                    } => {
+                                        *color = Vec3::new(clip.color[0], clip.color[1], clip.color[2]);
+                                        *roughness = clip.roughness;
+                                        *metallic = clip.metallic;
+                                        *emissive = Vec3::new(clip.emissive[0], clip.emissive[1], clip.emissive[2]);
+                                        *emissive_intensity = clip.emissive_intensity;
+                                        *fresnel = clip.fresnel;
+                                        true
+                                    }
+                                    crate::graph::scene::NodeData::Sculpt {
+                                        color, roughness, metallic, emissive, emissive_intensity, fresnel, ..
+                                    } => {
+                                        *color = Vec3::new(clip.color[0], clip.color[1], clip.color[2]);
+                                        *roughness = clip.roughness;
+                                        *metallic = clip.metallic;
+                                        *emissive = Vec3::new(clip.emissive[0], clip.emissive[1], clip.emissive[2]);
+                                        *emissive_intensity = clip.emissive_intensity;
+                                        *fresnel = clip.fresnel;
+                                        true
+                                    }
+                                    _ => false,
+                                };
+                                if applied {
+                                    self.gpu.buffer_dirty = true;
+                                    self.ui.toasts.push(super::Toast {
+                                        message: "Properties pasted".into(),
+                                        is_error: false,
+                                        created: crate::compat::Instant::now(),
+                                        duration: crate::compat::Duration::from_secs(2),
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ── Camera bookmarks ───────────────────────────────
+                Action::SaveBookmark(slot) => {
+                    if slot < 9 {
+                        while self.settings.bookmarks.len() < 9 {
+                            self.settings.bookmarks.push(None);
+                        }
+                        self.settings.bookmarks[slot] = Some(crate::settings::CameraBookmark {
+                            yaw: self.doc.camera.yaw,
+                            pitch: self.doc.camera.pitch,
+                            roll: self.doc.camera.roll,
+                            distance: self.doc.camera.distance,
+                            target: [
+                                self.doc.camera.target.x,
+                                self.doc.camera.target.y,
+                                self.doc.camera.target.z,
+                            ],
+                            orthographic: self.doc.camera.orthographic,
+                        });
+                        self.settings.save();
+                        self.ui.toasts.push(super::Toast {
+                            message: format!("Bookmark {} saved", slot + 1),
+                            is_error: false,
+                            created: crate::compat::Instant::now(),
+                            duration: crate::compat::Duration::from_secs(2),
+                        });
+                    }
+                }
+                Action::RestoreBookmark(slot) => {
+                    if slot < self.settings.bookmarks.len() {
+                        if let Some(ref bm) = self.settings.bookmarks[slot].clone() {
+                            self.doc.camera.yaw = bm.yaw;
+                            self.doc.camera.pitch = bm.pitch;
+                            self.doc.camera.roll = bm.roll;
+                            self.doc.camera.distance = bm.distance;
+                            self.doc.camera.target = Vec3::new(bm.target[0], bm.target[1], bm.target[2]);
+                            self.doc.camera.orthographic = bm.orthographic;
+                            self.ui.toasts.push(super::Toast {
+                                message: format!("Bookmark {} restored", slot + 1),
+                                is_error: false,
+                                created: crate::compat::Instant::now(),
+                                duration: crate::compat::Duration::from_secs(2),
+                            });
+                        }
+                    }
+                }
 
                 // ── UI toggles ───────────────────────────────────────
                 Action::ToggleDebug => {
@@ -341,6 +472,13 @@ impl SdfApp {
                 }
                 Action::ToggleSettings => {
                     self.ui.show_settings = !self.ui.show_settings;
+                }
+                Action::ToggleCommandPalette => {
+                    self.ui.command_palette_open = !self.ui.command_palette_open;
+                    if self.ui.command_palette_open {
+                        self.ui.command_palette_query.clear();
+                        self.ui.command_palette_selected = 0;
+                    }
                 }
                 Action::ShowToast { message, is_error } => {
                     self.ui.toasts.push(super::Toast {

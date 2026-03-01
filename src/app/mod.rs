@@ -91,7 +91,7 @@ impl FrameTimings {
 // ---------------------------------------------------------------------------
 
 /// Request emitted by UI to start an async bake.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BakeRequest {
     pub subtree_root: NodeId,
     pub resolution: u32,
@@ -256,6 +256,11 @@ impl SdfApp {
                 scene_tree_search: String::new(),
                 isolation_state: None,
                 toasts: Vec::new(),
+                turntable_active: false,
+                property_clipboard: None,
+                command_palette_open: false,
+                command_palette_query: String::new(),
+                command_palette_selected: 0,
             },
             persistence: PersistenceState {
                 current_file_path: None,
@@ -287,6 +292,11 @@ impl eframe::App for SdfApp {
 
         // Tick camera view transition animation
         let camera_animating = self.doc.camera.tick_transition(dt);
+
+        // Turntable auto-rotate
+        if self.ui.turntable_active {
+            self.doc.camera.yaw += dt as f32 * 0.5; // ~0.5 rad/s
+        }
 
         self.doc.history
             .begin_frame(&self.doc.scene, self.ui.node_graph_state.selected);
@@ -393,6 +403,7 @@ impl eframe::App for SdfApp {
                 sculpt_ctrl_held: &mut sculpt_ctrl_held,
                 sculpt_shift_held: &mut sculpt_shift_held,
                 isolation_label: isolation_label.clone(),
+                turntable_active: self.ui.turntable_active,
             },
             scene_tree: SceneTreeContext {
                 renaming_node: &mut self.ui.renaming_node,
@@ -409,6 +420,16 @@ impl eframe::App for SdfApp {
                 egui_dock::DockArea::new(&mut self.ui.dock_state)
                     .show_inside(ui, &mut tab_viewer);
             });
+
+        // Command palette (drawn after dock, on top of everything)
+        crate::ui::command_palette::draw(
+            ctx,
+            &mut self.ui.command_palette_open,
+            &mut self.ui.command_palette_query,
+            &mut self.ui.command_palette_selected,
+            &self.doc.scene,
+            &mut action_sink,
+        );
 
         self.perf.timings.ui_draw_s = t_ui.elapsed().as_secs_f64();
 
@@ -511,6 +532,7 @@ impl eframe::App for SdfApp {
         // Only repaint when something needs updating (saves GPU when idle)
         let needs_repaint = is_dragging
             || camera_animating
+            || self.ui.turntable_active
             || self.doc.sculpt_state.is_active()
             || !matches!(self.async_state.bake_status, BakeStatus::Idle)
             || !matches!(self.async_state.export_status, ExportStatus::Idle)

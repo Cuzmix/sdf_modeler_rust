@@ -21,6 +21,7 @@ pub enum ShadingMode {
     Full,
     Solid,
     Clay,
+    Normals,
 }
 
 impl Default for ShadingMode {
@@ -33,6 +34,7 @@ impl ShadingMode {
             Self::Full => 0.0,
             Self::Solid => 1.0,
             Self::Clay => 2.0,
+            Self::Normals => 3.0,
         }
     }
     pub fn label(&self) -> &'static str {
@@ -40,13 +42,15 @@ impl ShadingMode {
             Self::Full => "Full",
             Self::Solid => "Solid",
             Self::Clay => "Clay",
+            Self::Normals => "Normals",
         }
     }
     pub fn cycle(&self) -> Self {
         match self {
             Self::Full => Self::Solid,
             Self::Solid => Self::Clay,
-            Self::Clay => Self::Full,
+            Self::Clay => Self::Normals,
+            Self::Normals => Self::Full,
         }
     }
 }
@@ -72,6 +76,20 @@ impl Default for SnapConfig {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Camera bookmarks
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct CameraBookmark {
+    pub yaw: f32,
+    pub pitch: f32,
+    pub roll: f32,
+    pub distance: f32,
+    pub target: [f32; 3],
+    pub orthographic: bool,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Settings {
     pub vsync_enabled: bool,
@@ -91,6 +109,8 @@ pub struct Settings {
     pub export_resolution: u32,
     #[serde(default)]
     pub snap: SnapConfig,
+    #[serde(default = "default_bookmarks")]
+    pub bookmarks: Vec<Option<CameraBookmark>>,
 }
 
 impl Default for Settings {
@@ -105,6 +125,7 @@ impl Default for Settings {
             recent_files: Vec::new(),
             export_resolution: 128,
             snap: SnapConfig::default(),
+            bookmarks: default_bookmarks(),
         }
     }
 }
@@ -312,6 +333,8 @@ pub struct RenderConfig {
     // Viewport overlays
     #[serde(default)]
     pub show_node_labels: bool,
+    #[serde(default = "default_true")]
+    pub show_bounding_box: bool,
 }
 
 fn default_true() -> bool { true }
@@ -325,6 +348,7 @@ fn default_outline_color() -> [f32; 3] { [1.0, 0.8, 0.2] }
 fn default_outline_thickness() -> f32 { 2.5 }
 fn default_touch_zoom_sensitivity() -> f32 { 500.0 }
 fn default_roll_sensitivity() -> f32 { 0.005 }
+fn default_bookmarks() -> Vec<Option<CameraBookmark>> { vec![None; 9] }
 
 impl Default for RenderConfig {
     fn default() -> Self {
@@ -386,6 +410,7 @@ impl Default for RenderConfig {
             clamp_orbit_pitch: false,
             shading_mode: ShadingMode::default(),
             show_node_labels: false,
+            show_bounding_box: true,
         }
     }
 }

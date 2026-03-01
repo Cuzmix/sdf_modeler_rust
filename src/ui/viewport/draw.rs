@@ -237,6 +237,7 @@ pub fn draw(
     actions: &mut ActionSink,
     snap_config: &SnapConfig,
     isolation_label: Option<&str>,
+    turntable_active: bool,
 ) -> ViewportOutput {
     let mut output = ViewportOutput {
         pending_pick: None,
@@ -269,6 +270,10 @@ pub fn draw(
         && response.dragged_by(egui::PointerButton::Primary);
     let multi_sculpt_reduce = render_config.auto_reduce_steps && sculpt_count >= 2;
     let is_interacting = camera_dragging || sculpt_brushing;
+    // Stop turntable on any camera interaction
+    if turntable_active && camera_dragging {
+        actions.push(Action::ToggleTurntable);
+    }
     // Fast quality mode: half steps + skip AO/shadows
     let quality_mode = if (is_interacting && render_config.sculpt_fast_mode) || multi_sculpt_reduce {
         1.0
@@ -318,6 +323,13 @@ pub fn draw(
     // --- Node labels overlay ---
     if render_config.show_node_labels {
         draw_node_labels(ui.painter(), camera, scene, *selected, rect);
+    }
+
+    // --- Bounding box overlay ---
+    if render_config.show_bounding_box {
+        if let Some(sel_id) = *selected {
+            draw_bounding_box(ui.painter(), camera, scene, sel_id, rect);
+        }
     }
 
     // --- Gizmo overlay (drawn on top of WGPU content) ---
@@ -608,6 +620,27 @@ pub fn draw(
             &text,
             font,
             egui::Color32::from_rgb(255, 180, 60),
+        );
+    }
+
+    // --- Turntable indicator (top-right, below orientation gizmo area) ---
+    if turntable_active {
+        let text = "TURNTABLE";
+        let font = egui::FontId::proportional(11.0);
+        let pos = egui::pos2(rect.right() - 40.0, rect.top() + 100.0);
+        ui.painter().text(
+            pos + egui::vec2(1.0, 1.0),
+            egui::Align2::CENTER_TOP,
+            text,
+            font.clone(),
+            egui::Color32::from_black_alpha(180),
+        );
+        ui.painter().text(
+            pos,
+            egui::Align2::CENTER_TOP,
+            text,
+            font,
+            egui::Color32::from_rgb(120, 200, 255),
         );
     }
 
@@ -936,5 +969,61 @@ fn draw_node_labels(
             font,
             color,
         );
+    }
+}
+
+fn draw_bounding_box(
+    painter: &egui::Painter,
+    camera: &Camera,
+    scene: &Scene,
+    sel_id: NodeId,
+    rect: egui::Rect,
+) {
+    let node = match scene.nodes.get(&sel_id) {
+        Some(n) => n,
+        None => return,
+    };
+    let (center, radius) = match node.data.geometry_local_sphere() {
+        Some(v) => v,
+        None => return,
+    };
+    let parent_map = scene.build_parent_map();
+    let (wc, wr) = scene.walk_transforms_sphere(center, radius, sel_id, &parent_map);
+
+    // Build 8 corners of the AABB
+    let min = glam::Vec3::new(wc[0] - wr, wc[1] - wr, wc[2] - wr);
+    let max = glam::Vec3::new(wc[0] + wr, wc[1] + wr, wc[2] + wr);
+    let corners = [
+        glam::Vec3::new(min.x, min.y, min.z),
+        glam::Vec3::new(max.x, min.y, min.z),
+        glam::Vec3::new(max.x, max.y, min.z),
+        glam::Vec3::new(min.x, max.y, min.z),
+        glam::Vec3::new(min.x, min.y, max.z),
+        glam::Vec3::new(max.x, min.y, max.z),
+        glam::Vec3::new(max.x, max.y, max.z),
+        glam::Vec3::new(min.x, max.y, max.z),
+    ];
+
+    let aspect = rect.width() / rect.height().max(1.0);
+    let vp = camera.projection_matrix(aspect) * camera.view_matrix();
+
+    // Project all corners to screen
+    let screen: Vec<Option<egui::Pos2>> = corners
+        .iter()
+        .map(|&c| gizmo::world_to_screen(c, &vp, rect))
+        .collect();
+
+    // 12 edges of a box: indices into corners
+    let edges: [(usize, usize); 12] = [
+        (0, 1), (1, 2), (2, 3), (3, 0), // front face
+        (4, 5), (5, 6), (6, 7), (7, 4), // back face
+        (0, 4), (1, 5), (2, 6), (3, 7), // connecting edges
+    ];
+
+    let stroke = egui::Stroke::new(1.0, egui::Color32::from_rgba_premultiplied(255, 200, 60, 140));
+    for (a, b) in &edges {
+        if let (Some(pa), Some(pb)) = (screen[*a], screen[*b]) {
+            painter.line_segment([pa, pb], stroke);
+        }
     }
 }

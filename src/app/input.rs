@@ -132,6 +132,37 @@ impl SdfApp {
             actions.push(Action::CycleShadingMode);
         }
 
+        // Turntable toggle (Space, only when no text field focused)
+        if ctx.input(|i| i.key_pressed(egui::Key::Space)) && !ctx.wants_keyboard_input() {
+            actions.push(Action::ToggleTurntable);
+        }
+
+        // Property copy/paste (Ctrl+Shift+C/V)
+        if ctx.input(|i| i.modifiers.ctrl && i.modifiers.shift && i.key_pressed(egui::Key::C)) {
+            actions.push(Action::CopyProperties);
+        }
+        if ctx.input(|i| i.modifiers.ctrl && i.modifiers.shift && i.key_pressed(egui::Key::V)) {
+            actions.push(Action::PasteProperties);
+        }
+
+        // Camera bookmarks: Ctrl+1-9 to save
+        if !self.doc.sculpt_state.is_active() {
+            for (idx, key) in [
+                egui::Key::Num1, egui::Key::Num2, egui::Key::Num3,
+                egui::Key::Num4, egui::Key::Num5, egui::Key::Num6,
+                egui::Key::Num7, egui::Key::Num8, egui::Key::Num9,
+            ].iter().enumerate() {
+                if ctx.input(|i| i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(*key)) {
+                    actions.push(Action::SaveBookmark(idx));
+                }
+            }
+        }
+
+        // Command palette (Ctrl+K)
+        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::K)) {
+            actions.push(Action::ToggleCommandPalette);
+        }
+
         // Tool switching shortcuts
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) && self.doc.active_tool == ActiveTool::Sculpt {
             actions.push(Action::SetTool(ActiveTool::Select));

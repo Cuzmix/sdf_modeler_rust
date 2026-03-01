@@ -67,6 +67,8 @@ pub struct ViewportContext<'a> {
     pub sculpt_shift_held: &'a mut bool,
     /// Label for isolation mode indicator (None = not isolated).
     pub isolation_label: Option<String>,
+    /// Whether turntable rotation is active.
+    pub turntable_active: bool,
 }
 
 /// Refs needed only by the scene tree tab.
@@ -133,6 +135,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.actions,
                     &self.settings.snap,
                     self.viewport.isolation_label.as_deref(),
+                    self.viewport.turntable_active,
                 );
                 if let Some(pick) = vp_output.pending_pick {
                     *self.viewport.pending_pick = Some(pick);

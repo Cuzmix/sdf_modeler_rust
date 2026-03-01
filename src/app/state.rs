@@ -81,6 +81,17 @@ pub struct IsolationState {
     pub isolated_node: NodeId,
 }
 
+/// Clipboard for property copy/paste.
+#[derive(Clone)]
+pub struct PropertyClipboard {
+    pub color: [f32; 3],
+    pub roughness: f32,
+    pub metallic: f32,
+    pub emissive: [f32; 3],
+    pub emissive_intensity: f32,
+    pub fresnel: f32,
+}
+
 pub struct UiState {
     pub dock_state: DockState<Tab>,
     pub node_graph_state: NodeGraphState,
@@ -94,6 +105,11 @@ pub struct UiState {
     pub scene_tree_search: String,
     pub isolation_state: Option<IsolationState>,
     pub toasts: Vec<Toast>,
+    pub turntable_active: bool,
+    pub property_clipboard: Option<PropertyClipboard>,
+    pub command_palette_open: bool,
+    pub command_palette_query: String,
+    pub command_palette_selected: usize,
 }
 
 // ---------------------------------------------------------------------------

@@ -1,3 +1,4 @@
+pub mod command_palette;
 pub mod dock;
 pub mod export_dialog;
 pub mod gizmo;

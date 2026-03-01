@@ -32,8 +32,11 @@ pub fn draw(ctx: &egui::Context, open: &mut bool) {
                     row(ui, "Ctrl+V", "Paste node");
                     row(ui, "Ctrl+D", "Duplicate node");
                     row(ui, "Delete", "Delete selected node");
+                    row(ui, "Ctrl+Shift+C", "Copy properties");
+                    row(ui, "Ctrl+Shift+V", "Paste properties");
                     row(ui, "Ctrl+P", "Screenshot");
                     row(ui, "Ctrl+E", "Export OBJ");
+                    row(ui, "Ctrl+K", "Command palette");
                     row(ui, "F1", "Toggle this help");
                     row(ui, "F4", "Toggle profiler");
 
@@ -55,6 +58,8 @@ pub fn draw(ctx: &egui::Context, open: &mut bool) {
                     row(ui, "Gizmo click", "Snap to axis view");
                     row(ui, "/", "Toggle isolation mode");
                     row(ui, "Z", "Cycle shading mode");
+                    row(ui, "Space", "Toggle turntable");
+                    row(ui, "Ctrl+1-9", "Save camera bookmark");
 
                     ui.separator(); ui.end_row();
                     section(ui, "Gizmo");

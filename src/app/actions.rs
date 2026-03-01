@@ -14,7 +14,7 @@ pub type ActionSink = Vec<Action>;
 /// The `process_actions()` method in `action_handler.rs` is the single
 /// place where these actions are applied to state — analogous to a
 /// Redux reducer.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[allow(dead_code)] // Variants used progressively as UI components adopt actions
 pub enum Action {
     // ── Scene ────────────────────────────────────────────────────────
@@ -79,11 +79,21 @@ pub enum Action {
     // ── Viewport ────────────────────────────────────────────────────
     ToggleIsolation,
     CycleShadingMode,
+    ToggleTurntable,
+
+    // ── Properties ─────────────────────────────────────────────────
+    CopyProperties,
+    PasteProperties,
+
+    // ── Camera bookmarks ───────────────────────────────────────────
+    SaveBookmark(usize),
+    RestoreBookmark(usize),
 
     // ── UI toggles ───────────────────────────────────────────────────
     ToggleDebug,
     ToggleHelp,
     ToggleSettings,
+    ToggleCommandPalette,
     ShowToast { message: String, is_error: bool },
 
     // ── Settings / GPU ───────────────────────────────────────────────

@@ -188,7 +188,10 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
         let n = calc_normal(p, t);
         let shading_mode = camera.scene_min.w;
 
-        if shading_mode > 1.5 {
+        if shading_mode > 2.5 {
+            // Normals: map normal XYZ from [-1,1] to [0,1] as RGB
+            color = n * 0.5 + 0.5;
+        } else if shading_mode > 1.5 {
             // Clay: uniform gray, hemisphere + key diffuse only
             let clay = vec3f(0.7, 0.7, 0.72);
             let sky_l = clamp(0.5 + 0.5 * n.y, 0.0, 1.0);

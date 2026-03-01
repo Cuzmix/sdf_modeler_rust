@@ -122,6 +122,28 @@ impl SdfApp {
                         actions.push(Action::CameraRight);
                         ui.close_menu();
                     }
+                    ui.separator();
+                    ui.menu_button("Bookmarks", |ui| {
+                        for i in 0..9 {
+                            let label = if i < self.settings.bookmarks.len() {
+                                if self.settings.bookmarks[i].is_some() {
+                                    format!("Slot {} (saved)", i + 1)
+                                } else {
+                                    format!("Slot {} (empty)", i + 1)
+                                }
+                            } else {
+                                format!("Slot {} (empty)", i + 1)
+                            };
+                            let has_bookmark = i < self.settings.bookmarks.len()
+                                && self.settings.bookmarks[i].is_some();
+                            if ui.add_enabled(has_bookmark, egui::Button::new(&label)).clicked() {
+                                actions.push(Action::RestoreBookmark(i));
+                                ui.close_menu();
+                            }
+                        }
+                        ui.separator();
+                        ui.weak("Ctrl+1-9 to save current view");
+                    });
                 });
 
                 // --- Settings ---

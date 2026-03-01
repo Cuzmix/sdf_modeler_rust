@@ -1121,7 +1121,7 @@ impl Scene {
 
     /// Walk up from a leaf through ancestor transforms and compute world-space
     /// bounding sphere (center, radius).
-    fn walk_transforms_sphere(
+    pub fn walk_transforms_sphere(
         &self,
         center: [f32; 3],
         extent: f32,
