@@ -5,7 +5,9 @@ use eframe::wgpu;
 use crate::app::actions::{Action, ActionSink};
 use crate::gpu::camera::{Camera, CameraUniform};
 use crate::gpu::picking::PendingPick;
-use crate::graph::scene::{CsgOp, ModifierKind, NodeData, NodeId, Scene, SdfPrimitive, TransformKind};
+use crate::graph::scene::{
+    CsgOp, ModifierKind, NodeData, NodeId, Scene, SdfPrimitive,
+};
 use crate::sculpt::{ActiveTool, BrushMode, SculptState};
 use crate::settings::SnapConfig;
 use crate::ui::gizmo::{self, GizmoMode, GizmoSpace, GizmoState};
@@ -40,9 +42,7 @@ impl egui_wgpu::CallbackTrait for ViewportCallback {
         _encoder: &mut wgpu::CommandEncoder,
         callback_resources: &mut egui_wgpu::CallbackResources,
     ) -> Vec<wgpu::CommandBuffer> {
-        let resources = callback_resources
-            .get_mut::<ViewportResources>()
-            .unwrap();
+        let resources = callback_resources.get_mut::<ViewportResources>().unwrap();
 
         let display_w = self.display_viewport[2] as u32;
         let display_h = self.display_viewport[3] as u32;
@@ -61,11 +61,18 @@ impl egui_wgpu::CallbackTrait for ViewportCallback {
 
         // Write blit params (display viewport + outline settings + bloom for the blit shader)
         let blit_data: [f32; 12] = [
-            self.display_viewport[0], self.display_viewport[1],
-            self.display_viewport[2], self.display_viewport[3],
-            self.outline_color[0], self.outline_color[1], self.outline_color[2],
+            self.display_viewport[0],
+            self.display_viewport[1],
+            self.display_viewport[2],
+            self.display_viewport[3],
+            self.outline_color[0],
+            self.outline_color[1],
+            self.outline_color[2],
             self.outline_width,
-            self.bloom_params[0], self.bloom_params[1], self.bloom_params[2], self.bloom_params[3],
+            self.bloom_params[0],
+            self.bloom_params[1],
+            self.bloom_params[2],
+            self.bloom_params[3],
         ];
         queue.write_buffer(
             &resources.blit_params_buffer,
@@ -272,8 +279,7 @@ pub fn draw(
             || response.dragged_by(egui::PointerButton::Secondary)
             || response.dragged_by(egui::PointerButton::Middle)
     };
-    let sculpt_brushing = sculpt_active
-        && response.dragged_by(egui::PointerButton::Primary);
+    let sculpt_brushing = sculpt_active && response.dragged_by(egui::PointerButton::Primary);
     let multi_sculpt_reduce = render_config.auto_reduce_steps && sculpt_count >= 2;
     let is_interacting = camera_dragging || sculpt_brushing;
     // Stop turntable on any camera interaction
@@ -281,7 +287,8 @@ pub fn draw(
         actions.push(Action::ToggleTurntable);
     }
     // Fast quality mode: half steps + skip AO/shadows
-    let quality_mode = if (is_interacting && render_config.sculpt_fast_mode) || multi_sculpt_reduce {
+    let quality_mode = if (is_interacting && render_config.sculpt_fast_mode) || multi_sculpt_reduce
+    {
         1.0
     } else {
         0.0
@@ -308,7 +315,15 @@ pub fn draw(
         .map(|i| i as f32)
         .unwrap_or(-1.0);
     let shading_mode_val = render_config.shading_mode.gpu_value();
-    let render_uniform = camera.to_uniform(render_viewport, time, quality_mode, render_config.show_grid, scene_bounds, selected_idx, shading_mode_val);
+    let render_uniform = camera.to_uniform(
+        render_viewport,
+        time,
+        quality_mode,
+        render_config.show_grid,
+        scene_bounds,
+        selected_idx,
+        shading_mode_val,
+    );
 
     ui.painter().add(egui_wgpu::Callback::new_paint_callback(
         rect,
@@ -319,7 +334,12 @@ pub fn draw(
             outline_color: render_config.outline_color,
             outline_width: render_config.outline_thickness,
             bloom_params: if render_config.bloom_enabled {
-                [render_config.bloom_threshold, render_config.bloom_intensity, render_config.bloom_radius, 1.0]
+                [
+                    render_config.bloom_threshold,
+                    render_config.bloom_intensity,
+                    render_config.bloom_radius,
+                    1.0,
+                ]
             } else {
                 [0.0, 0.0, 0.0, 0.0]
             },
@@ -376,7 +396,15 @@ pub fn draw(
                     ];
                     output.pending_pick = Some(PendingPick {
                         mouse_pos: mouse_px,
-                        camera_uniform: camera.to_uniform(viewport, time, 0.0, false, scene_bounds, -1.0, 0.0),
+                        camera_uniform: camera.to_uniform(
+                            viewport,
+                            time,
+                            0.0,
+                            false,
+                            scene_bounds,
+                            -1.0,
+                            0.0,
+                        ),
                     });
                     // Capture modifier keys for Ctrl-invert / Shift-smooth
                     let modifiers = ui.input(|i| i.modifiers);
@@ -417,7 +445,8 @@ pub fn draw(
                 let screen_radius = brush_radius / camera.distance * rect.height() * 0.5;
                 // Reflect Ctrl/Shift modifier overrides in cursor color
                 let modifiers = ui.input(|i| i.modifiers);
-                let effective_mode = effective_brush_mode(brush_mode, modifiers.ctrl, modifiers.shift);
+                let effective_mode =
+                    effective_brush_mode(brush_mode, modifiers.ctrl, modifiers.shift);
                 let mode_color = brush_cursor_color(&effective_mode);
 
                 // Outer ring: brush extent (color-coded by mode)
@@ -433,7 +462,10 @@ pub fn draw(
                     hover_pos,
                     screen_radius * 0.6,
                     egui::Color32::from_rgba_premultiplied(
-                        mode_color.r(), mode_color.g(), mode_color.b(), strength_alpha,
+                        mode_color.r(),
+                        mode_color.g(),
+                        mode_color.b(),
+                        strength_alpha,
                     ),
                 );
 
@@ -461,24 +493,15 @@ pub fn draw(
                         let mirror_pos = match axis {
                             0 => {
                                 // X symmetry: mirror horizontally around origin.x
-                                egui::pos2(
-                                    2.0 * origin_screen.x - hover_pos.x,
-                                    hover_pos.y,
-                                )
+                                egui::pos2(2.0 * origin_screen.x - hover_pos.x, hover_pos.y)
                             }
                             1 => {
                                 // Y symmetry: mirror vertically around origin.y
-                                egui::pos2(
-                                    hover_pos.x,
-                                    2.0 * origin_screen.y - hover_pos.y,
-                                )
+                                egui::pos2(hover_pos.x, 2.0 * origin_screen.y - hover_pos.y)
                             }
                             _ => {
                                 // Z symmetry: approximate mirror horizontally
-                                egui::pos2(
-                                    2.0 * origin_screen.x - hover_pos.x,
-                                    hover_pos.y,
-                                )
+                                egui::pos2(2.0 * origin_screen.x - hover_pos.x, hover_pos.y)
                             }
                         };
                         if rect.contains(mirror_pos) {
@@ -487,11 +510,7 @@ pub fn draw(
                                 screen_radius,
                                 egui::Stroke::new(1.0, mirror_color),
                             );
-                            ui.painter().circle_filled(
-                                mirror_pos,
-                                2.0,
-                                mirror_color,
-                            );
+                            ui.painter().circle_filled(mirror_pos, 2.0, mirror_color);
                         }
                     }
                 }
@@ -505,7 +524,10 @@ pub fn draw(
                     BrushMode::Inflate => "Inflate",
                     BrushMode::Grab => "Grab",
                 };
-                let hud_text = format!("{} R:{:.2} S:{:.3}", mode_name, brush_radius, brush_strength);
+                let hud_text = format!(
+                    "{} R:{:.2} S:{:.3}",
+                    mode_name, brush_radius, brush_strength
+                );
                 let text_pos = hover_pos + egui::vec2(screen_radius + 8.0, screen_radius + 4.0);
                 let font = egui::FontId::monospace(10.0);
                 ui.painter().text(
@@ -551,7 +573,8 @@ pub fn draw(
                     (pos.x - rect.min.x) * pixels_per_point,
                     (pos.y - rect.min.y) * pixels_per_point,
                 ];
-                let pick_uniform = camera.to_uniform(viewport, time, 0.0, false, scene_bounds, -1.0, 0.0);
+                let pick_uniform =
+                    camera.to_uniform(viewport, time, 0.0, false, scene_bounds, -1.0, 0.0);
                 output.pending_pick = Some(PendingPick {
                     mouse_pos: mouse_px,
                     camera_uniform: pick_uniform,
@@ -593,8 +616,15 @@ pub fn draw(
             camera.zoom(zoom_amount);
         }
         if touch.translation_delta != egui::Vec2::ZERO {
-            let sign = if render_config.invert_touch_pan { -1.0 } else { 1.0 };
-            camera.pan(sign * touch.translation_delta.x, sign * touch.translation_delta.y);
+            let sign = if render_config.invert_touch_pan {
+                -1.0
+            } else {
+                1.0
+            };
+            camera.pan(
+                sign * touch.translation_delta.x,
+                sign * touch.translation_delta.y,
+            );
         }
         if touch.rotation_delta != 0.0 {
             let sign = if render_config.invert_roll { -1.0 } else { 1.0 };
@@ -622,13 +652,8 @@ pub fn draw(
         } else {
             egui::Color32::from_rgb(220, 100, 100) // red
         };
-        ui.painter().text(
-            pos,
-            egui::Align2::LEFT_TOP,
-            &text,
-            font,
-            color,
-        );
+        ui.painter()
+            .text(pos, egui::Align2::LEFT_TOP, &text, font, color);
     }
 
     // --- Isolation mode indicator ---
@@ -674,135 +699,104 @@ pub fn draw(
     }
 
     // --- Floating toolbar overlay ---
+    let overlay_frame = egui::Frame::window(&ui.ctx().style())
+        .fill(egui::Color32::from_rgba_premultiplied(30, 30, 38, 220));
+
     let toolbar_id = ui.id().with("viewport_toolbar");
-    egui::Area::new(toolbar_id)
-        .order(egui::Order::Foreground)
-        .fixed_pos(rect.min + egui::vec2(8.0, 28.0)) // Below FPS counter
+    egui::Window::new(egui::RichText::new("Tools").size(11.0))
+        .id(toolbar_id)
+        .default_pos(rect.min + egui::vec2(8.0, 28.0))
+        .resizable(true)
+        .collapsible(true)
+        .frame(overlay_frame)
         .show(ui.ctx(), |ui| {
-            egui::Frame::none()
-                .fill(egui::Color32::from_rgba_premultiplied(30, 30, 38, 200))
-                .rounding(6.0)
-                .inner_margin(6.0)
-                .show(ui, |ui| {
-                    ui.set_min_width(32.0);
+            ui.horizontal(|ui| {
+                let select_active = *active_tool == ActiveTool::Select;
+                let sculpt_tool_active = *active_tool == ActiveTool::Sculpt;
 
-                    // Tool strip
-                    ui.horizontal(|ui| {
-                        let sel_style = |active: bool| {
-                            if active {
-                                egui::RichText::new("").color(egui::Color32::from_rgb(255, 200, 60))
-                            } else {
-                                egui::RichText::new("").color(egui::Color32::from_gray(180))
-                            }
-                        };
-                        let _ = sel_style; // suppress unused
+                if ui.selectable_label(select_active, "Select").clicked() && !select_active {
+                    actions.push(Action::SetTool(ActiveTool::Select));
+                }
+                if ui.selectable_label(sculpt_tool_active, "Sculpt").clicked()
+                    && !sculpt_tool_active
+                {
+                    actions.push(Action::SetTool(ActiveTool::Sculpt));
+                }
+            });
 
-                        let select_active = *active_tool == ActiveTool::Select;
-                        let sculpt_tool_active = *active_tool == ActiveTool::Sculpt;
-
-                        if ui.selectable_label(select_active, "Select").clicked() && !select_active {
-                            actions.push(Action::SetTool(ActiveTool::Select));
-                        }
-                        if ui.selectable_label(sculpt_tool_active, "Sculpt").clicked() && !sculpt_tool_active {
-                            actions.push(Action::SetTool(ActiveTool::Sculpt));
-                        }
-                    });
-
-                    // Shape/Boolean/Modifier buttons (hidden when sculpt tool active)
-                    if *active_tool != ActiveTool::Sculpt {
-                        ui.separator();
-
-                        // + Shape menu
-                        ui.menu_button("+ Shape", |ui| {
-                            for prim in SdfPrimitive::ALL {
-                                if ui.button(prim.base_name()).clicked() {
-                                    actions.push(Action::CreatePrimitive(prim.clone()));
-                                    ui.close_menu();
-                                }
-                            }
-                        });
-
-                        // Boolean menu
-                        ui.menu_button("Boolean", |ui| {
-                            for op in CsgOp::ALL {
-                                if ui.button(op.base_name()).clicked() {
-                                    let tops = scene.top_level_nodes();
-                                    if tops.len() >= 2 {
-                                        let left = Some(tops[tops.len() - 2]);
-                                        let right = Some(tops[tops.len() - 1]);
-                                        actions.push(Action::CreateOperation { op: op.clone(), left, right });
-                                    }
-                                    ui.close_menu();
-                                }
-                            }
-                        });
-
-                        // + Modifier menu (needs selection)
-                        let has_selection = selected.is_some();
-                        ui.add_enabled_ui(has_selection, |ui| {
-                            ui.menu_button("+ Modifier", |ui| {
-                                if let Some(sel_id) = *selected {
-                                    ui.label("Deform");
-                                    for kind in &[ModifierKind::Twist, ModifierKind::Bend, ModifierKind::Taper] {
-                                        if ui.button(kind.base_name()).clicked() {
-                                            actions.push(Action::InsertModifierAbove { target: sel_id, kind: kind.clone() });
-                                            ui.close_menu();
-                                        }
-                                    }
-                                    ui.separator();
-                                    ui.label("Shape");
-                                    for kind in &[ModifierKind::Round, ModifierKind::Onion, ModifierKind::Elongate] {
-                                        if ui.button(kind.base_name()).clicked() {
-                                            actions.push(Action::InsertModifierAbove { target: sel_id, kind: kind.clone() });
-                                            ui.close_menu();
-                                        }
-                                    }
-                                    ui.separator();
-                                    ui.label("Repeat");
-                                    for kind in &[ModifierKind::Mirror, ModifierKind::Repeat, ModifierKind::FiniteRepeat] {
-                                        if ui.button(kind.base_name()).clicked() {
-                                            actions.push(Action::InsertModifierAbove { target: sel_id, kind: kind.clone() });
-                                            ui.close_menu();
-                                        }
-                                    }
-                                    ui.separator();
-                                    ui.label("Transform");
-                                    for kind in TransformKind::ALL {
-                                        if ui.button(kind.base_name()).clicked() {
-                                            actions.push(Action::InsertTransformAbove { target: sel_id, kind: kind.clone() });
-                                            ui.close_menu();
-                                        }
-                                    }
-                                }
-                            });
-                        });
-
-                        ui.separator();
-
-                        // Delete button (needs selection)
-                        ui.add_enabled_ui(has_selection, |ui| {
-                            if ui.button("Delete").clicked() {
-                                if let Some(sel_id) = *selected {
-                                    actions.push(Action::DeleteNode(sel_id));
-                                }
-                            }
-                        });
-                    }
-
-                    // Shading mode buttons
-                    ui.separator();
-                    ui.horizontal(|ui| {
-                        let mode = &render_config.shading_mode;
-                        let mode_label = mode.label();
-                        if ui.selectable_label(false, format!("Shading: {}", mode_label))
-                            .on_hover_text("Click to cycle (Z key)")
-                            .clicked()
-                        {
-                            actions.push(Action::CycleShadingMode);
-                        }
-                    });
-                });
+            ui.separator();
+            let mode = &render_config.shading_mode;
+            if ui
+                .selectable_label(false, format!("Shading: {}", mode.label()))
+                .on_hover_text("Click to cycle (Z key)")
+                .clicked()
+            {
+                actions.push(Action::CycleShadingMode);
+            }
         });
+
+    // --- Shapes panel (hidden in sculpt mode) ---
+    if *active_tool != ActiveTool::Sculpt {
+        let shapes_id = ui.id().with("viewport_shapes");
+        let overlay_frame = egui::Frame::window(&ui.ctx().style())
+            .fill(egui::Color32::from_rgba_premultiplied(30, 30, 38, 220));
+
+        egui::Window::new(egui::RichText::new("Shapes").size(11.0))
+            .id(shapes_id)
+            .default_pos(rect.min + egui::vec2(8.0, 130.0))
+            .resizable(true)
+            .collapsible(true)
+            .frame(overlay_frame)
+            .show(ui.ctx(), |ui| {
+                let btn_size = egui::vec2(72.0, 22.0);
+
+                // Primitives — flow layout wraps based on window width
+                ui.horizontal_wrapped(|ui| {
+                    for prim in SdfPrimitive::ALL {
+                        if ui.add(egui::Button::new(prim.base_name()).min_size(btn_size)).clicked() {
+                            actions.push(Action::CreatePrimitive(prim.clone()));
+                        }
+                    }
+                });
+
+                ui.separator();
+
+                // Boolean operations
+                ui.label(egui::RichText::new("Boolean").size(11.0).weak());
+                ui.horizontal_wrapped(|ui| {
+                    for op in CsgOp::ALL {
+                        if ui.add(egui::Button::new(op.base_name()).min_size(btn_size)).clicked() {
+                            let tops = scene.top_level_nodes();
+                            if tops.len() >= 2 {
+                                let left = Some(tops[tops.len() - 2]);
+                                let right = Some(tops[tops.len() - 1]);
+                                actions.push(Action::CreateOperation {
+                                    op: op.clone(),
+                                    left,
+                                    right,
+                                });
+                            }
+                        }
+                    }
+                });
+
+                // Modifiers (needs selection)
+                if let Some(sel_id) = *selected {
+                    ui.separator();
+                    ui.label(egui::RichText::new("Modify").size(11.0).weak());
+                    ui.horizontal_wrapped(|ui| {
+                        for kind in ModifierKind::ALL {
+                            if ui.add(egui::Button::new(kind.base_name()).min_size(btn_size)).clicked() {
+                                actions.push(Action::InsertModifierAbove {
+                                    target: sel_id,
+                                    kind: kind.clone(),
+                                });
+                            }
+                        }
+                    });
+                }
+            });
+    }
 
     // --- Orientation Gizmo (top-right corner, interactive) ---
     {
@@ -822,15 +816,36 @@ pub fn draw(
 
         // Axis definitions: positive and negative directions with their view actions
         let axes: [(glam::Vec3, egui::Color32, &str, Action, Action); 3] = [
-            (glam::Vec3::X, egui::Color32::from_rgb(220, 60, 60), "X", Action::CameraRight, Action::CameraLeft),
-            (glam::Vec3::Y, egui::Color32::from_rgb(60, 200, 60), "Y", Action::CameraTop, Action::CameraBottom),
-            (glam::Vec3::Z, egui::Color32::from_rgb(60, 100, 220), "Z", Action::CameraFront, Action::CameraBack),
+            (
+                glam::Vec3::X,
+                egui::Color32::from_rgb(220, 60, 60),
+                "X",
+                Action::CameraRight,
+                Action::CameraLeft,
+            ),
+            (
+                glam::Vec3::Y,
+                egui::Color32::from_rgb(60, 200, 60),
+                "Y",
+                Action::CameraTop,
+                Action::CameraBottom,
+            ),
+            (
+                glam::Vec3::Z,
+                egui::Color32::from_rgb(60, 100, 220),
+                "Z",
+                Action::CameraFront,
+                Action::CameraBack,
+            ),
         ];
 
-        let mut sorted_axes: Vec<_> = axes.iter().map(|(axis, color, label, pos_action, neg_action)| {
-            let v = view.transform_vector3(*axis);
-            (v.z, *axis, *color, *label, pos_action, neg_action)
-        }).collect();
+        let mut sorted_axes: Vec<_> = axes
+            .iter()
+            .map(|(axis, color, label, pos_action, neg_action)| {
+                let v = view.transform_vector3(*axis);
+                (v.z, *axis, *color, *label, pos_action, neg_action)
+            })
+            .collect();
         sorted_axes.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
 
         ui.painter().circle_filled(
@@ -869,7 +884,13 @@ pub fn draw(
                 egui::Color32::from_rgba_unmultiplied(color.r(), color.g(), color.b(), neg_alpha)
             };
 
-            let pos_thickness = if pos_hovered { 3.0 } else if *depth > 0.0 { 2.0 } else { 1.0 };
+            let pos_thickness = if pos_hovered {
+                3.0
+            } else if *depth > 0.0 {
+                2.0
+            } else {
+                1.0
+            };
 
             ui.painter().line_segment(
                 [gizmo_center, pos_end],
@@ -916,7 +937,11 @@ pub fn draw(
 
         // Ortho/Persp label below the gizmo
         let label_pos = egui::pos2(gizmo_center.x, gizmo_center.y + arm_len + 14.0);
-        let proj_label = if camera.orthographic { "Ortho" } else { "Persp" };
+        let proj_label = if camera.orthographic {
+            "Ortho"
+        } else {
+            "Persp"
+        };
         ui.painter().text(
             label_pos,
             egui::Align2::CENTER_CENTER,
@@ -958,7 +983,9 @@ fn draw_node_labels(
         let dist = (pos - cam_pos).length();
 
         // Project to screen
-        let Some(screen_pos) = gizmo::world_to_screen(pos, &vp, rect) else { continue };
+        let Some(screen_pos) = gizmo::world_to_screen(pos, &vp, rect) else {
+            continue;
+        };
 
         // Skip if outside viewport
         if !rect.contains(screen_pos) {
@@ -1044,12 +1071,24 @@ fn draw_bounding_box(
 
     // 12 edges of a box: indices into corners
     let edges: [(usize, usize); 12] = [
-        (0, 1), (1, 2), (2, 3), (3, 0), // front face
-        (4, 5), (5, 6), (6, 7), (7, 4), // back face
-        (0, 4), (1, 5), (2, 6), (3, 7), // connecting edges
+        (0, 1),
+        (1, 2),
+        (2, 3),
+        (3, 0), // front face
+        (4, 5),
+        (5, 6),
+        (6, 7),
+        (7, 4), // back face
+        (0, 4),
+        (1, 5),
+        (2, 6),
+        (3, 7), // connecting edges
     ];
 
-    let stroke = egui::Stroke::new(1.0, egui::Color32::from_rgba_premultiplied(255, 200, 60, 140));
+    let stroke = egui::Stroke::new(
+        1.0,
+        egui::Color32::from_rgba_premultiplied(255, 200, 60, 140),
+    );
     for (a, b) in &edges {
         if let (Some(pa), Some(pb)) = (screen[*a], screen[*b]) {
             painter.line_segment([pa, pb], stroke);
