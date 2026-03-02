@@ -31,7 +31,14 @@
       "Bash(xargs wc -l)",
       "Bash(cargo clippy)",
       "Bash(while read f)",
-      "Bash(do wc -l \"$f\")"
+      "Bash(do wc -l \"$f\")",
+      "WebFetch(domain:blog.maximeheckel.com)",
+      "WebFetch(domain:docs.swmansion.com)",
+      "WebFetch(domain:lib.rs)",
+      "WebFetch(domain:shader-slang.org)",
+      "Bash(python -c \"import sys,json; data=json.load\\(sys.stdin\\); [print\\(a[''browser_download_url'']\\) for a in data[''assets''] if a[''name''] == ''slang-2026.3.1-windows-x86_64.zip'']\")",
+      "Bash(python -c \"import zipfile; zipfile.ZipFile\\(''slang.zip''\\).extractall\\(''.''\\)\")",
+      "Bash(\"c:\\\\Users\\\\mimia\\\\Documents\\\\Code Projects\\\\sdf_modeler_rust\\\\tools\\\\slang\\\\bin\\\\slangc.exe\" \"c:\\\\Users\\\\mimia\\\\Documents\\\\Code Projects\\\\sdf_modeler_rust\\\\src\\\\shaders\\\\blit.slang\" -target wgsl -o \"c:\\\\Users\\\\mimia\\\\Documents\\\\Code Projects\\\\sdf_modeler_rust\\\\src\\\\shaders\\\\blit_slang_test.wgsl\")"
     ]
   }
 }

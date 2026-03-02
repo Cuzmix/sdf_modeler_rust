@@ -200,9 +200,10 @@ impl ViewportResources {
         blit_bgl: &wgpu::BindGroupLayout,
         target_format: wgpu::TextureFormat,
     ) -> wgpu::RenderPipeline {
+        let wgsl_src = Self::blit_shader_wgsl();
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Blit Shader"),
-            source: wgpu::ShaderSource::Wgsl(BLIT_SHADER_SRC.into()),
+            source: wgpu::ShaderSource::Wgsl(wgsl_src.into()),
         });
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Blit Pipeline Layout"),
@@ -237,5 +238,32 @@ impl ViewportResources {
             multiview: None,
             cache: None,
         })
+    }
+
+    /// Get WGSL source for the blit shader.
+    /// When the `slang` feature is enabled, compiles `blit.slang` → WGSL.
+    /// Falls back to the hand-written `blit.wgsl` on failure or when disabled.
+    fn blit_shader_wgsl() -> String {
+        #[cfg(feature = "slang")]
+        {
+            const BLIT_SLANG_SRC: &str = include_str!("../../shaders/blit.slang");
+            match crate::gpu::slang_compiler::SlangCompiler::new() {
+                Some(compiler) => {
+                    match compiler.compile_to_wgsl(BLIT_SLANG_SRC) {
+                        Ok(wgsl) => {
+                            println!("[Slang] Blit shader: Slang -> WGSL OK ({} bytes)", wgsl.len());
+                            return wgsl;
+                        }
+                        Err(e) => {
+                            println!("[Slang] Blit compilation FAILED, using WGSL fallback: {e}");
+                        }
+                    }
+                }
+                None => {
+                    println!("[Slang] slangc not found, using WGSL fallback");
+                }
+            }
+        }
+        BLIT_SHADER_SRC.to_string()
     }
 }

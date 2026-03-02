@@ -11,6 +11,10 @@ opt-level = 2
 [profile.release]
 debug = true  # include debug symbols for profiling (flamegraph, samply)
 
+[features]
+default = []
+slang = []
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 
