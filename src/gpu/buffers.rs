@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use bytemuck::{Pod, Zeroable};
 
-use crate::graph::scene::{NodeData, NodeId, Scene, TransformKind};
+use crate::graph::scene::{NodeData, NodeId, Scene};
 
 /// 128-byte GPU node (8 x vec4f).
 #[repr(C)]
@@ -141,24 +141,12 @@ pub fn build_node_buffer(
                     extra2: [voxel_grid.bounds_max.x, voxel_grid.bounds_max.y, voxel_grid.bounds_max.z, *fresnel],
                 });
             }
-            NodeData::Transform { kind, value, .. } => {
+            NodeData::Transform { translation, rotation, scale, .. } => {
                 buffer.push(SdfNodeGpu {
-                    type_op: [kind.gpu_type_id(), 0.0, 0.0, 0.0],
-                    position: if matches!(kind, TransformKind::Translate) {
-                        [value.x, value.y, value.z, 0.0]
-                    } else {
-                        [0.0; 4]
-                    },
-                    rotation: if matches!(kind, TransformKind::Rotate) {
-                        [value.x, value.y, value.z, 0.0]
-                    } else {
-                        [0.0; 4]
-                    },
-                    scale: if matches!(kind, TransformKind::Scale) {
-                        [value.x, value.y, value.z, 0.0]
-                    } else {
-                        [1.0, 1.0, 1.0, 0.0]
-                    },
+                    type_op: [21.0, 0.0, 0.0, 0.0],
+                    position: [translation.x, translation.y, translation.z, 0.0],
+                    rotation: [rotation.x, rotation.y, rotation.z, 0.0],
+                    scale: [scale.x, scale.y, scale.z, 0.0],
                     color: [0.0, 0.0, 0.0, is_sel],
                     extra0: [0.0; 4],
                     extra1: [0.0; 4],

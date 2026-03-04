@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::graph::scene::{ModifierKind, NodeData, NodeId, Scene, SceneNode, TransformKind};
+use crate::graph::scene::{ModifierKind, NodeData, NodeId, Scene, SceneNode};
 use crate::settings::RenderConfig;
 
 use super::buffers::collect_sculpt_tex_info;
@@ -178,7 +178,7 @@ fn scene_sdf(p: vec3f) -> vec2f {{
 /// Chain entry: either a Transform or a point-modifying Modifier.
 #[derive(Clone)]
 enum ChainEntry {
-    Transform(TransformKind),
+    Transform,
     Modifier(ModifierKind),
 }
 
@@ -196,8 +196,8 @@ fn get_transform_chain(
         if let Some(node) = scene.nodes.get(&parent_id) {
             if let Some(&idx) = idx_map.get(&parent_id) {
                 match &node.data {
-                    NodeData::Transform { kind, .. } => {
-                        chain.push((idx, ChainEntry::Transform(kind.clone())));
+                    NodeData::Transform { .. } => {
+                        chain.push((idx, ChainEntry::Transform));
                     }
                     NodeData::Modifier { kind, .. } if kind.is_point_modifier() => {
                         chain.push((idx, ChainEntry::Modifier(kind.clone())));
@@ -225,19 +225,18 @@ fn emit_transform_chain(
     for (step, (idx, entry)) in chain.iter().rev().enumerate() {
         let new_var = format!("tp{}_{}", node_idx, step);
         match entry {
-            ChainEntry::Transform(TransformKind::Translate) => {
+            ChainEntry::Transform => {
+                // Inverse TRS: subtract T, inverse-rotate R, divide S
+                let t_var = format!("tp{}_{}_t", node_idx, step);
+                let r_var = format!("tp{}_{}_r", node_idx, step);
                 lines.push(format!(
-                    "    let {new_var} = {current_var} - nodes[{idx}].position.xyz;"
+                    "    let {t_var} = {current_var} - nodes[{idx}].position.xyz;"
                 ));
-            }
-            ChainEntry::Transform(TransformKind::Rotate) => {
                 lines.push(format!(
-                    "    let {new_var} = rotate_euler({current_var}, nodes[{idx}].rotation.xyz);"
+                    "    let {r_var} = rotate_euler({t_var}, nodes[{idx}].rotation.xyz);"
                 ));
-            }
-            ChainEntry::Transform(TransformKind::Scale) => {
                 lines.push(format!(
-                    "    let {new_var} = {current_var} / nodes[{idx}].scale.xyz;"
+                    "    let {new_var} = {r_var} / nodes[{idx}].scale.xyz;"
                 ));
             }
             ChainEntry::Modifier(ModifierKind::Twist) => {
@@ -375,19 +374,13 @@ fn emit_node_wgsl(
                 ));
             }
         }
-        NodeData::Transform { kind, input, .. } => {
+        NodeData::Transform { input, .. } => {
             let child_idx = input.and_then(|id| idx_map.get(&id).copied());
             if let Some(ci) = child_idx {
-                match kind {
-                    TransformKind::Scale => {
-                        lines.push(format!(
-                            "    let n{i} = vec2f(n{ci}.x * min(nodes[{i}].scale.x, min(nodes[{i}].scale.y, nodes[{i}].scale.z)), n{ci}.y);"
-                        ));
-                    }
-                    _ => {
-                        lines.push(format!("    let n{i} = n{ci};"));
-                    }
-                }
+                // Always apply scale distance correction
+                lines.push(format!(
+                    "    let n{i} = vec2f(n{ci}.x * min(nodes[{i}].scale.x, min(nodes[{i}].scale.y, nodes[{i}].scale.z)), n{ci}.y);"
+                ));
             } else {
                 lines.push(format!("    let n{i} = vec2f(1e10, -1.0);"));
             }

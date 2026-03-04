@@ -5,7 +5,7 @@ use egui_node_graph2::*;
 
 use crate::app::actions::{Action, ActionSink};
 use crate::graph::scene::{
-    CsgOp, ModifierKind, NodeData, NodeId as SceneNodeId, Scene, SdfPrimitive, TransformKind,
+    CsgOp, ModifierKind, NodeData, NodeId as SceneNodeId, Scene, SdfPrimitive,
 };
 
 // ---------------------------------------------------------------------------
@@ -78,7 +78,7 @@ impl CategoryTrait for SdfCategory {
 pub enum SdfNodeTemplate {
     Primitive(SdfPrimitive),
     Operation(CsgOp),
-    Transform(TransformKind),
+    Transform,
     Modifier(ModifierKind),
 }
 
@@ -323,32 +323,14 @@ impl NodeDataTrait for SdfNodeData {
                 });
             }
             NodeData::Transform {
-                ref mut kind,
-                ref mut value,
+                ref mut translation,
+                ref mut rotation,
+                ref mut scale,
                 ..
             } => {
-                let mut new_kind = kind.clone();
-                egui::ComboBox::from_id_salt(egui::Id::new(("xform_type", sid)))
-                    .selected_text(new_kind.base_name())
-                    .width((NODE_WIDTH - 12.0) * zoom)
-                    .show_ui(ui, |ui| {
-                        for v in TransformKind::ALL {
-                            ui.selectable_value(&mut new_kind, v.clone(), v.base_name());
-                        }
-                    });
-                if new_kind != *kind {
-                    *value = new_kind.default_value();
-                    *kind = new_kind;
-                    changed = true;
-                }
-
-                changed |= match kind {
-                    TransformKind::Translate => compact_vec3(ui, "Offset", value, 0.05, None),
-                    TransformKind::Rotate => compact_rotation(ui, "Rot", value),
-                    TransformKind::Scale => {
-                        compact_vec3(ui, "Scale", value, 0.05, Some(0.01..=100.0))
-                    }
-                };
+                changed |= compact_vec3(ui, "Pos", translation, 0.05, None);
+                changed |= compact_rotation(ui, "Rot", rotation);
+                changed |= compact_vec3(ui, "Scl", scale, 0.05, Some(0.01..=100.0));
             }
             NodeData::Modifier {
                 ref mut kind,
@@ -481,7 +463,7 @@ impl NodeTemplateTrait for SdfNodeTemplate {
         match self {
             Self::Primitive(p) => std::borrow::Cow::Borrowed(p.base_name()),
             Self::Operation(o) => std::borrow::Cow::Borrowed(o.base_name()),
-            Self::Transform(t) => std::borrow::Cow::Borrowed(t.base_name()),
+            Self::Transform => std::borrow::Cow::Borrowed("Transform"),
             Self::Modifier(m) => std::borrow::Cow::Borrowed(m.base_name()),
         }
     }
@@ -493,7 +475,7 @@ impl NodeTemplateTrait for SdfNodeTemplate {
         match self {
             Self::Primitive(_) => vec![SdfCategory::Primitive],
             Self::Operation(_) => vec![SdfCategory::Operation],
-            Self::Transform(_) => vec![SdfCategory::Transform],
+            Self::Transform => vec![SdfCategory::Transform],
             Self::Modifier(_) => vec![SdfCategory::Modifier],
         }
     }
@@ -502,7 +484,7 @@ impl NodeTemplateTrait for SdfNodeTemplate {
         match self {
             Self::Primitive(p) => p.base_name().to_string(),
             Self::Operation(o) => o.base_name().to_string(),
-            Self::Transform(t) => t.base_name().to_string(),
+            Self::Transform => "Transform".to_string(),
             Self::Modifier(m) => m.base_name().to_string(),
         }
     }
@@ -543,7 +525,7 @@ impl NodeTemplateTrait for SdfNodeTemplate {
                 );
                 graph.add_output_param(node_id, "out".to_string(), SdfDataType::Sdf);
             }
-            Self::Transform(_) | Self::Modifier(_) => {
+            Self::Transform | Self::Modifier(_) => {
                 graph.add_input_param(
                     node_id,
                     "input".to_string(),
@@ -577,9 +559,7 @@ impl NodeTemplateIter for AllSdfTemplates {
         for o in CsgOp::ALL {
             templates.push(SdfNodeTemplate::Operation(o.clone()));
         }
-        for t in TransformKind::ALL {
-            templates.push(SdfNodeTemplate::Transform(t.clone()));
-        }
+        templates.push(SdfNodeTemplate::Transform);
         for m in ModifierKind::ALL {
             templates.push(SdfNodeTemplate::Modifier(m.clone()));
         }
@@ -1013,7 +993,7 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState, ac
         let scene_id = match template {
             SdfNodeTemplate::Primitive(kind) => scene.create_primitive(kind),
             SdfNodeTemplate::Operation(op) => scene.create_operation(op, None, None),
-            SdfNodeTemplate::Transform(kind) => scene.create_transform(kind, None),
+            SdfNodeTemplate::Transform => scene.create_transform(None),
             SdfNodeTemplate::Modifier(kind) => scene.create_modifier(kind, None),
         };
         // Update the graph node's user_data with the real scene id
@@ -1101,15 +1081,13 @@ fn draw_toolbar(ui: &mut egui::Ui, scene: &Scene, state: &mut NodeGraphState, gr
         });
 
         ui.menu_button("+ Transform", |ui| {
-            for kind in TransformKind::ALL {
-                if ui.button(kind.base_name()).clicked() {
-                    if let Some(sel) = state.selected {
-                        actions.push(Action::InsertTransformAbove { target: sel, kind: kind.clone() });
-                    } else {
-                        actions.push(Action::CreateTransform { kind: kind.clone(), input: None });
-                    }
-                    ui.close_menu();
+            if ui.button("Transform").clicked() {
+                if let Some(sel) = state.selected {
+                    actions.push(Action::InsertTransformAbove { target: sel });
+                } else {
+                    actions.push(Action::CreateTransform { input: None });
                 }
+                ui.close_menu();
             }
         });
 

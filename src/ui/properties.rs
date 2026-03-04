@@ -2,7 +2,7 @@ use eframe::egui;
 
 use crate::app::BakeRequest;
 use crate::app::actions::{Action, ActionSink};
-use crate::graph::scene::{CsgOp, ModifierKind, NodeData, NodeId, Scene, SdfPrimitive, TransformKind};
+use crate::graph::scene::{CsgOp, ModifierKind, NodeData, NodeId, Scene, SdfPrimitive};
 use crate::graph::voxel;
 use crate::sculpt::{BrushMode, BrushShape, FalloffMode, SculptState, DEFAULT_BRUSH_STRENGTH};
 
@@ -748,23 +748,12 @@ pub fn draw(
             }
         }
         NodeData::Transform {
-            mut kind,
             input,
-            mut value,
+            mut translation,
+            mut rotation,
+            mut scale,
         } => {
-            let mut new_kind = kind.clone();
-            egui::ComboBox::from_id_salt("prop_xform_type")
-                .selected_text(new_kind.base_name())
-                .show_ui(ui, |ui| {
-                    for v in TransformKind::ALL {
-                        ui.selectable_value(&mut new_kind, v.clone(), v.base_name());
-                    }
-                });
-            if new_kind != kind {
-                value = new_kind.default_value();
-                kind = new_kind;
-            }
-            ui.separator();
+            ui.label("Type: Transform");
 
             match input {
                 Some(iid) => {
@@ -775,27 +764,21 @@ pub fn draw(
             }
             ui.separator();
 
-            match kind {
-                TransformKind::Translate => {
-                    vec3_editor(ui, "Offset", &mut value, 0.05, None, "");
-                }
-                TransformKind::Rotate => {
-                    let mut rot_deg = glam::Vec3::new(
-                        value.x.to_degrees(),
-                        value.y.to_degrees(),
-                        value.z.to_degrees(),
-                    );
-                    vec3_editor(ui, "Rotation", &mut rot_deg, 1.0, None, "\u{00B0}");
-                    value = glam::Vec3::new(
-                        rot_deg.x.to_radians(),
-                        rot_deg.y.to_radians(),
-                        rot_deg.z.to_radians(),
-                    );
-                }
-                TransformKind::Scale => {
-                    vec3_editor(ui, "Scale", &mut value, 0.05, Some(SCALE_MIN..=SCALE_MAX), "");
-                }
-            }
+            vec3_editor(ui, "Translation", &mut translation, 0.05, None, "");
+
+            let mut rot_deg = glam::Vec3::new(
+                rotation.x.to_degrees(),
+                rotation.y.to_degrees(),
+                rotation.z.to_degrees(),
+            );
+            vec3_editor(ui, "Rotation", &mut rot_deg, 1.0, None, "\u{00B0}");
+            rotation = glam::Vec3::new(
+                rot_deg.x.to_radians(),
+                rot_deg.y.to_radians(),
+                rot_deg.z.to_radians(),
+            );
+
+            vec3_editor(ui, "Scale", &mut scale, 0.05, Some(SCALE_MIN..=SCALE_MAX), "");
 
             ui.separator();
             if ui.button("Delete Node").on_hover_text("Remove this node from the scene").clicked() {
@@ -805,9 +788,14 @@ pub fn draw(
 
             // Write back
             if let Some(node) = scene.nodes.get_mut(&id) {
-                if let NodeData::Transform { kind: ref mut k, value: ref mut v, .. } = node.data {
-                    *k = kind;
-                    *v = value;
+                if let NodeData::Transform {
+                    translation: ref mut t,
+                    rotation: ref mut r,
+                    scale: ref mut s, ..
+                } = node.data {
+                    *t = translation;
+                    *r = rotation;
+                    *s = scale;
                 }
             }
         }
@@ -945,7 +933,7 @@ pub fn draw(
                     for &mod_id in &chain {
                         if let Some(mod_node) = scene.nodes.get(&mod_id) {
                             let badge = match &mod_node.data {
-                                NodeData::Transform { kind, .. } => kind.badge(),
+                                NodeData::Transform { .. } => "[Xfm]",
                                 NodeData::Modifier { kind, .. } => kind.badge(),
                                 _ => "???",
                             };
@@ -991,14 +979,9 @@ pub fn draw(
                             }
                         }
                     });
-                    ui.menu_button("+ Transform", |ui| {
-                        for kind in TransformKind::ALL {
-                            if ui.button(kind.base_name()).clicked() {
-                                actions.push(Action::InsertTransformAbove { target: id, kind: kind.clone() });
-                                ui.close_menu();
-                            }
-                        }
-                    });
+                    if ui.button("+ Transform").clicked() {
+                        actions.push(Action::InsertTransformAbove { target: id });
+                    }
                 });
             });
     }

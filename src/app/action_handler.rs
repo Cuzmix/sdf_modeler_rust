@@ -218,8 +218,8 @@ impl SdfApp {
                     self.ui.node_graph_state.pending_center_node = Some(id);
                     self.gpu.buffer_dirty = true;
                 }
-                Action::CreateTransform { kind, input } => {
-                    let id = self.doc.scene.create_transform(kind, input);
+                Action::CreateTransform { input } => {
+                    let id = self.doc.scene.create_transform(input);
                     self.ui.node_graph_state.selected = Some(id);
                     self.ui.node_graph_state.needs_initial_rebuild = true;
                     self.ui.node_graph_state.pending_center_node = Some(id);
@@ -239,8 +239,8 @@ impl SdfApp {
                     self.ui.node_graph_state.pending_center_node = Some(new_id);
                     self.gpu.buffer_dirty = true;
                 }
-                Action::InsertTransformAbove { target, kind } => {
-                    let new_id = self.doc.scene.insert_transform_above(target, kind);
+                Action::InsertTransformAbove { target } => {
+                    let new_id = self.doc.scene.insert_transform_above(target);
                     self.ui.node_graph_state.selected = Some(new_id);
                     self.ui.node_graph_state.needs_initial_rebuild = true;
                     self.ui.node_graph_state.pending_center_node = Some(new_id);

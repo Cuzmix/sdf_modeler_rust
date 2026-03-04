@@ -7,7 +7,7 @@ use rayon::prelude::*;
 use crate::compat::maybe_par_iter;
 use serde::{Deserialize, Serialize};
 
-use crate::graph::scene::{CsgOp, NodeData, NodeId, Scene, SdfPrimitive, TransformKind};
+use crate::graph::scene::{CsgOp, NodeData, NodeId, Scene, SdfPrimitive};
 
 pub const DEFAULT_RESOLUTION: u32 = 96;
 const GRID_PADDING: f32 = 0.5;
@@ -401,20 +401,15 @@ pub fn evaluate_sdf_tree(scene: &Scene, node_id: NodeId, p: Vec3) -> f32 {
                 voxel_grid.sample(local_p)
             }
         }
-        NodeData::Transform { kind, input, value } => {
+        NodeData::Transform { input, translation, rotation, scale } => {
             let Some(child_id) = input else {
                 return FAR_DISTANCE;
             };
-            let tp = match kind {
-                TransformKind::Translate => p - *value,
-                TransformKind::Rotate => rotate_euler(p, *value),
-                TransformKind::Scale => p / *value,
-            };
+            // Inverse TRS: subtract T, inverse-rotate R, divide S
+            let tp = rotate_euler(p - *translation, *rotation) / *scale;
             let d = evaluate_sdf_tree(scene, *child_id, tp);
-            match kind {
-                TransformKind::Scale => d * value.min_element(),
-                _ => d,
-            }
+            // Scale distance correction
+            d * scale.min_element()
         }
         NodeData::Modifier { kind, input, value, extra } => {
             let Some(child_id) = input else {

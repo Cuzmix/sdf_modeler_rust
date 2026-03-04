@@ -136,49 +136,6 @@ impl SdfPrimitive {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub enum TransformKind {
-    Translate,
-    Rotate,
-    Scale,
-}
-
-impl TransformKind {
-    pub const ALL: &[Self] = &[Self::Translate, Self::Rotate, Self::Scale];
-
-    pub fn base_name(&self) -> &'static str {
-        match self {
-            Self::Translate => "Translate",
-            Self::Rotate => "Rotate",
-            Self::Scale => "Scale",
-        }
-    }
-
-    pub fn badge(&self) -> &'static str {
-        match self {
-            Self::Translate => "[Trl]",
-            Self::Rotate => "[Rot]",
-            Self::Scale => "[Scl]",
-        }
-    }
-
-    pub fn default_value(&self) -> Vec3 {
-        match self {
-            Self::Translate => Vec3::ZERO,
-            Self::Rotate => Vec3::ZERO,
-            Self::Scale => Vec3::ONE,
-        }
-    }
-
-    pub fn gpu_type_id(&self) -> f32 {
-        match self {
-            Self::Translate => 21.0,
-            Self::Rotate => 22.0,
-            Self::Scale => 23.0,
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum ModifierKind {
     // Domain deformations (modify point before child eval)
     Twist,
@@ -339,6 +296,7 @@ impl CsgOp {
 fn default_roughness() -> f32 { 0.5 }
 fn default_fresnel() -> f32 { 0.04 }
 fn default_layer_intensity() -> f32 { 1.0 }
+fn default_scale() -> Vec3 { Vec3::ONE }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum NodeData {
@@ -390,9 +348,13 @@ pub enum NodeData {
         desired_resolution: u32,
     },
     Transform {
-        kind: TransformKind,
         input: Option<NodeId>,
-        value: Vec3,
+        #[serde(default)]
+        translation: Vec3,
+        #[serde(default)]
+        rotation: Vec3,
+        #[serde(default = "default_scale")]
+        scale: Vec3,
     },
     Modifier {
         kind: ModifierKind,
@@ -620,10 +582,14 @@ impl Scene {
         )
     }
 
-    pub fn create_transform(&mut self, kind: TransformKind, input: Option<NodeId>) -> NodeId {
-        let name = self.next_name(kind.base_name());
-        let value = kind.default_value();
-        self.add_node(name, NodeData::Transform { kind, input, value })
+    pub fn create_transform(&mut self, input: Option<NodeId>) -> NodeId {
+        let name = self.next_name("Transform");
+        self.add_node(name, NodeData::Transform {
+            input,
+            translation: Vec3::ZERO,
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+        })
     }
 
     pub fn create_modifier(&mut self, kind: ModifierKind, input: Option<NodeId>) -> NodeId {
@@ -693,8 +659,8 @@ impl Scene {
 
     /// Insert a Transform modifier above `target_id`.
     /// Creates a Transform node with `input = target_id` and rewires all parents.
-    pub fn insert_transform_above(&mut self, target_id: NodeId, kind: TransformKind) -> NodeId {
-        let transform_id = self.create_transform(kind, Some(target_id));
+    pub fn insert_transform_above(&mut self, target_id: NodeId) -> NodeId {
+        let transform_id = self.create_transform(Some(target_id));
 
         // Rewire all parents that referenced target_id
         let parents: Vec<(NodeId, bool, bool)> = self
@@ -987,9 +953,8 @@ impl Scene {
                     input.hash(&mut hasher);
                     voxel_grid.resolution.hash(&mut hasher);
                 }
-                NodeData::Transform { kind, input, .. } => {
+                NodeData::Transform { input, .. } => {
                     3u8.hash(&mut hasher);
-                    std::mem::discriminant(kind).hash(&mut hasher);
                     input.hash(&mut hasher);
                 }
                 NodeData::Modifier { kind, input, .. } => {
@@ -1062,10 +1027,16 @@ impl Scene {
                     fresnel.to_bits().hash(&mut hasher);
                     desired_resolution.hash(&mut hasher);
                 }
-                NodeData::Transform { value, .. } => {
-                    value.x.to_bits().hash(&mut hasher);
-                    value.y.to_bits().hash(&mut hasher);
-                    value.z.to_bits().hash(&mut hasher);
+                NodeData::Transform { translation, rotation, scale, .. } => {
+                    translation.x.to_bits().hash(&mut hasher);
+                    translation.y.to_bits().hash(&mut hasher);
+                    translation.z.to_bits().hash(&mut hasher);
+                    rotation.x.to_bits().hash(&mut hasher);
+                    rotation.y.to_bits().hash(&mut hasher);
+                    rotation.z.to_bits().hash(&mut hasher);
+                    scale.x.to_bits().hash(&mut hasher);
+                    scale.y.to_bits().hash(&mut hasher);
+                    scale.z.to_bits().hash(&mut hasher);
                 }
                 NodeData::Modifier { value, extra, .. } => {
                     value.x.to_bits().hash(&mut hasher);
@@ -1146,22 +1117,23 @@ impl Scene {
         while let Some(&pid) = parent_map.get(&current) {
             if let Some(parent) = self.nodes.get(&pid) {
                 match &parent.data {
-                    NodeData::Transform { kind: TransformKind::Translate, value, .. } => {
-                        wc[0] += value.x;
-                        wc[1] += value.y;
-                        wc[2] += value.z;
-                    }
-                    NodeData::Transform { kind: TransformKind::Scale, value, .. } => {
-                        let s = value.x.abs().max(value.y.abs()).max(value.z.abs());
+                    NodeData::Transform { translation, rotation, scale, .. } => {
+                        // Scale: expand radius, scale center
+                        let s = scale.x.abs().max(scale.y.abs()).max(scale.z.abs());
                         wr *= s;
-                        wc[0] *= value.x;
-                        wc[1] *= value.y;
-                        wc[2] *= value.z;
-                    }
-                    NodeData::Transform { kind: TransformKind::Rotate, .. } => {
-                        let dist = (wc[0] * wc[0] + wc[1] * wc[1] + wc[2] * wc[2]).sqrt();
-                        wr += dist;
-                        wc = [0.0, 0.0, 0.0];
+                        wc[0] *= scale.x;
+                        wc[1] *= scale.y;
+                        wc[2] *= scale.z;
+                        // Rotate: conservative sphere expansion
+                        if rotation.length_squared() > 1e-12 {
+                            let dist = (wc[0] * wc[0] + wc[1] * wc[1] + wc[2] * wc[2]).sqrt();
+                            wr += dist;
+                            wc = [0.0, 0.0, 0.0];
+                        }
+                        // Translate: offset center
+                        wc[0] += translation.x;
+                        wc[1] += translation.y;
+                        wc[2] += translation.z;
                     }
                     _ => {}
                 }
@@ -1269,11 +1241,12 @@ impl Scene {
                         desired_resolution: *desired_resolution,
                     }
                 }
-                NodeData::Transform { kind, input, value } => {
+                NodeData::Transform { input, translation, rotation, scale } => {
                     NodeData::Transform {
-                        kind: kind.clone(),
                         input: remap(input),
-                        value: *value,
+                        translation: *translation,
+                        rotation: *rotation,
+                        scale: *scale,
                     }
                 }
                 NodeData::Modifier { kind, input, value, extra } => {
@@ -1602,19 +1575,22 @@ impl Scene {
                 }
                 (
                     NodeData::Transform {
-                        kind: k1,
                         input: i1,
-                        value: v1,
+                        translation: t1,
+                        rotation: r1,
+                        scale: s1,
                     },
                     NodeData::Transform {
-                        kind: k2,
                         input: i2,
-                        value: v2,
+                        translation: t2,
+                        rotation: r2,
+                        scale: s2,
                     },
                 ) => {
-                    if std::mem::discriminant(k1) != std::mem::discriminant(k2)
-                        || i1 != i2
-                        || v1 != v2
+                    if i1 != i2
+                        || t1 != t2
+                        || r1 != r2
+                        || s1 != s2
                     {
                         return false;
                     }

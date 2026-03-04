@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::gpu::camera::Camera;
 use crate::graph::scene::{NodeData, Scene};
 
-const CURRENT_VERSION: u32 = 4;
+const CURRENT_VERSION: u32 = 5;
 
 #[derive(Serialize, Deserialize)]
 pub struct ProjectFile {
@@ -34,14 +34,27 @@ pub fn project_to_json(scene: &Scene, camera: &Camera) -> Result<String, String>
 }
 
 pub fn json_to_project(json: &str) -> Result<ProjectFile, String> {
-    let mut project: ProjectFile = serde_json::from_str(json).map_err(|e| e.to_string())?;
+    // Parse as raw JSON first to check version and do pre-deserialization migrations
+    let mut raw: serde_json::Value = serde_json::from_str(json).map_err(|e| e.to_string())?;
 
-    if project.version > CURRENT_VERSION {
+    let version = raw.get("version")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(1) as u32;
+
+    if version > CURRENT_VERSION {
         return Err(format!(
             "Project file version {} is newer than supported version {}. Please update SDF Modeler.",
-            project.version, CURRENT_VERSION
+            version, CURRENT_VERSION
         ));
     }
+
+    // v4→v5: Transform nodes changed from {kind, value} to {translation, rotation, scale}
+    if version < 5 {
+        migrate_v4_to_v5_json(&mut raw);
+        raw["version"] = serde_json::Value::from(CURRENT_VERSION);
+    }
+
+    let mut project: ProjectFile = serde_json::from_value(raw).map_err(|e| e.to_string())?;
 
     if project.version < 3 {
         migrate_v2_to_v3(&mut project);
@@ -121,6 +134,54 @@ pub fn web_save_project(scene: &Scene, camera: &Camera) {
     match project_to_json(scene, camera) {
         Ok(json) => web_download("project.sdf", json.as_bytes(), "application/json"),
         Err(e) => log::error!("Failed to serialize project: {}", e),
+    }
+}
+
+/// Migrate v4→v5 at the raw JSON level (before deserialization).
+/// Transform nodes changed from `{kind, value}` to `{translation, rotation, scale}`.
+fn migrate_v4_to_v5_json(root: &mut serde_json::Value) {
+    let Some(nodes) = root
+        .get_mut("scene")
+        .and_then(|s| s.get_mut("nodes"))
+    else {
+        return;
+    };
+
+    // nodes is a JSON map of id → node object
+    let Some(nodes_map) = nodes.as_object_mut() else { return };
+
+    for (_id, node) in nodes_map.iter_mut() {
+        let Some(data) = node.get_mut("data") else { continue };
+        let Some(transform) = data.get_mut("Transform") else { continue };
+
+        // Read old fields
+        let kind = transform.get("kind")
+            .and_then(|k| k.as_str())
+            .unwrap_or("")
+            .to_string();
+        let value = transform.get("value").cloned()
+            .unwrap_or(serde_json::json!([0.0, 0.0, 0.0]));
+        let input = transform.get("input").cloned()
+            .unwrap_or(serde_json::Value::Null);
+
+        // Convert based on old kind
+        let zero = serde_json::json!([0.0, 0.0, 0.0]);
+        let one = serde_json::json!([1.0, 1.0, 1.0]);
+
+        let (translation, rotation, scale) = match kind.as_str() {
+            "Translate" => (value, zero, one),
+            "Rotate" => (zero, value, one),
+            "Scale" => (zero.clone(), zero, value),
+            _ => (zero.clone(), zero, one),
+        };
+
+        // Rewrite the Transform object with new fields
+        *transform = serde_json::json!({
+            "input": input,
+            "translation": translation,
+            "rotation": rotation,
+            "scale": scale,
+        });
     }
 }
 

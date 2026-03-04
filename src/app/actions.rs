@@ -1,4 +1,4 @@
-use crate::graph::scene::{ModifierKind, NodeId, SdfPrimitive, TransformKind, CsgOp};
+use crate::graph::scene::{ModifierKind, NodeId, SdfPrimitive, CsgOp};
 use crate::sculpt::ActiveTool;
 use crate::ui::gizmo::GizmoMode;
 
@@ -64,10 +64,10 @@ pub enum Action {
     // ── Scene mutations (structural) ─────────────────────────────────
     CreatePrimitive(SdfPrimitive),
     CreateOperation { op: CsgOp, left: Option<NodeId>, right: Option<NodeId> },
-    CreateTransform { kind: TransformKind, input: Option<NodeId> },
+    CreateTransform { input: Option<NodeId> },
     CreateModifier { kind: ModifierKind, input: Option<NodeId> },
     InsertModifierAbove { target: NodeId, kind: ModifierKind },
-    InsertTransformAbove { target: NodeId, kind: TransformKind },
+    InsertTransformAbove { target: NodeId },
     ReparentNode { dragged: NodeId, new_parent: NodeId },
     RenameNode { id: NodeId, name: String },
     ToggleVisibility(NodeId),

@@ -329,7 +329,7 @@ fn format_node_label(node: &SceneNode) -> String {
         NodeData::Primitive { kind, .. } => kind.badge(),
         NodeData::Operation { op, .. } => op.badge(),
         NodeData::Sculpt { .. } => "[Scl]",
-        NodeData::Transform { kind, .. } => kind.badge(),
+        NodeData::Transform { .. } => "[Xfm]",
         NodeData::Modifier { kind, .. } => kind.badge(),
     };
     if node.locked {
