@@ -114,7 +114,7 @@ impl SdfApp {
         }
 
         // Gizmo mode
-        if ctx.input(|i| i.key_pressed(egui::Key::W)) {
+        if ctx.input(|i| i.key_pressed(egui::Key::W) && !i.modifiers.ctrl) {
             actions.push(Action::SetGizmoMode(GizmoMode::Translate));
         }
         if ctx.input(|i| i.key_pressed(egui::Key::E) && !i.modifiers.ctrl) {
@@ -128,7 +128,7 @@ impl SdfApp {
         if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::R)) {
             actions.push(Action::EnterSculptMode);
         }
-        if ctx.input(|i| i.key_pressed(egui::Key::G)) {
+        if ctx.input(|i| i.key_pressed(egui::Key::G) && !i.modifiers.ctrl) {
             actions.push(Action::ToggleGizmoSpace);
         }
         if ctx.input(|i| i.modifiers.alt && i.key_pressed(egui::Key::C)) {
@@ -240,17 +240,17 @@ impl SdfApp {
                 }
             }
             // Symmetry toggles: X/Y/Z
-            if ctx.input(|i| i.key_pressed(egui::Key::X)) {
+            if ctx.input(|i| i.key_pressed(egui::Key::X) && !i.modifiers.ctrl) {
                 if let SculptState::Active { ref mut symmetry_axis, .. } = self.doc.sculpt_state {
                     *symmetry_axis = if *symmetry_axis == Some(0) { None } else { Some(0) };
                 }
             }
-            if ctx.input(|i| i.key_pressed(egui::Key::Y)) {
+            if ctx.input(|i| i.key_pressed(egui::Key::Y) && !i.modifiers.ctrl) {
                 if let SculptState::Active { ref mut symmetry_axis, .. } = self.doc.sculpt_state {
                     *symmetry_axis = if *symmetry_axis == Some(1) { None } else { Some(1) };
                 }
             }
-            if ctx.input(|i| i.key_pressed(egui::Key::Z)) {
+            if ctx.input(|i| i.key_pressed(egui::Key::Z) && !i.modifiers.ctrl) {
                 if let SculptState::Active { ref mut symmetry_axis, .. } = self.doc.sculpt_state {
                     *symmetry_axis = if *symmetry_axis == Some(2) { None } else { Some(2) };
                 }

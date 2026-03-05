@@ -20,7 +20,11 @@
       "WebFetch(domain:bgolus.medium.com)",
       "WebFetch(domain:forum.babylonjs.com)",
       "Read(//c/Users/Manny/Documents/Code/ Projects/Typscript/sdf_modeler_rust/src/ui/**)",
-      "Bash(cargo doc --document-private-items -p egui_dock)"
+      "Bash(cargo doc --document-private-items -p egui_dock)",
+      "WebFetch(domain:www.aihero.dev)",
+      "WebFetch(domain:ghuntley.com)",
+      "WebFetch(domain:www.anthropic.com)",
+      "WebFetch(domain:www.youtube.com)"
     ]
   }
 }
