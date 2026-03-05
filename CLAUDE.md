@@ -27,6 +27,29 @@
 - Only add dependencies when they provide substantial value beyond a focused implementation.
 - Keep export format writers dependency-free (pure Rust with std::io only).
 
+### Verification Loops (MANDATORY before every commit)
+Every commit MUST pass these checks. Do NOT commit if any fail — fix the issue first.
+1. `cargo check` — type checking (the most important feedback loop)
+2. `cargo clippy -- -D warnings` — lint errors are build failures
+3. `cargo test` — all tests must pass
+4. Manual verification — if the change is visual/behavioral, run the app and confirm
+
+### Search Before Implementing
+Before writing new code, **search the codebase first** to verify it doesn't already exist.
+Use ripgrep/grep to check for existing implementations. Duplicate code is a common failure
+mode — always look before you write.
+
+### No Placeholders or Stubs
+Do NOT write placeholder implementations, TODO stubs, or minimal mock code.
+Every function must be a **full, working implementation**. If a feature is too complex
+for a single pass, break it into smaller complete pieces — never leave half-finished code.
+
+### Git Discipline
+- **One logical change per commit.** Don't bundle unrelated changes.
+- Write descriptive commit messages that explain the "why", not just the "what".
+- Keep changes small and focused to minimize context rot and merge conflicts.
+- Commit the PRD and progress files alongside code changes when using Ralph workflow.
+
 ---
 
 ## Project Overview
@@ -216,3 +239,29 @@ cargo check
 - Branch: `Slint_migration`
 - Feature gates: `egui_ui` (default) | `flutter_ui`
 - flutter_rust_bridge v2.11.1
+
+---
+
+## Ralph Workflow (Autonomous Agent Loop)
+
+This project supports the Ralph technique for long-running autonomous coding sessions.
+
+### Files
+- `plans/prd.json` — Product requirements document. JSON array of tasks with `passes` flags.
+- `plans/progress.txt` — Append-only log of learnings, decisions, and completed work per sprint.
+- `plans/ralph.sh` — AFK loop: runs Claude Code headlessly for N iterations.
+- `plans/ralph-once.sh` — HITL mode: single interactive iteration for steering.
+
+### How It Works
+1. The PRD defines **what** needs to be done (not how). Each item has a `passes` boolean.
+2. Each loop iteration: pick highest-priority incomplete task, implement it, run verification
+   loops, update PRD (`passes: true`), append to progress.txt, git commit.
+3. Loop exits when all PRD items pass or max iterations reached.
+
+### Rules for Ralph Mode
+- Work on **exactly one task** per iteration — never batch multiple features.
+- Keep tasks small. If a PRD item is too large, split it before starting.
+- Always run verification loops (cargo check/clippy/test) before committing.
+- Append to progress.txt (don't overwrite) — this is memory for the next iteration.
+- Commit PRD + progress.txt + code together so git history reflects the sprint.
+- If you discover a bug while working, add it to the PRD — don't fix it in the same iteration.

@@ -1,0 +1,37 @@
+[
+  {
+    "id": 1,
+    "category": "testing",
+    "description": "Add unit tests for Scene graph operations (add/remove/reparent nodes, compute_bounds)",
+    "verification": "cargo test -- graph passes with meaningful coverage of scene tree mutations",
+    "passes": false
+  },
+  {
+    "id": 2,
+    "category": "testing",
+    "description": "Add unit tests for marching cubes mesh export (vertex generation, deduplication, format writers)",
+    "verification": "cargo test -- export passes, verifies correct triangle/vertex output for known SDF inputs",
+    "passes": false
+  },
+  {
+    "id": 3,
+    "category": "testing",
+    "description": "Add unit tests for WGSL codegen (expression builder, structure_key hashing, transform handling)",
+    "verification": "cargo test -- codegen passes, verifies generated WGSL matches expected output for known scene trees",
+    "passes": false
+  },
+  {
+    "id": 4,
+    "category": "testing",
+    "description": "Add unit tests for undo/redo history (push, undo, redo, capacity limits)",
+    "verification": "cargo test -- history passes with correct state restoration",
+    "passes": false
+  },
+  {
+    "id": 5,
+    "category": "testing",
+    "description": "Add unit tests for VoxelGrid (SDF evaluation, grid indexing, bounds computation)",
+    "verification": "cargo test -- voxel passes with correct distance field values for known primitives",
+    "passes": false
+  }
+]
