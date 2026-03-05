@@ -232,7 +232,12 @@ impl SdfApp {
                     }
                 }
                 Action::SetGizmoMode(mode) => {
-                    self.gizmo.mode = mode;
+                    if self.gizmo.mode == mode && self.gizmo.gizmo_visible {
+                        self.gizmo.gizmo_visible = false;
+                    } else {
+                        self.gizmo.mode = mode;
+                        self.gizmo.gizmo_visible = true;
+                    }
                 }
                 Action::ToggleGizmoSpace => {
                     self.gizmo.space = match self.gizmo.space {

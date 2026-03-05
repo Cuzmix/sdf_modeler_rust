@@ -638,7 +638,13 @@ pub fn draw_and_interact(
     pivot_offset: &mut Vec3,
     rect: Rect,
     snap_config: &SnapConfig,
+    gizmo_visible: bool,
 ) -> bool {
+    if !gizmo_visible {
+        *gizmo_state = GizmoState::Idle;
+        return false;
+    }
+
     let Some(node_id) = selected else {
         *gizmo_state = GizmoState::Idle;
         return false;

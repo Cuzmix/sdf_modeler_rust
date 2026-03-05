@@ -411,6 +411,7 @@ pub fn draw(
     gizmo_state: &mut GizmoState,
     gizmo_mode: &GizmoMode,
     gizmo_space: &GizmoSpace,
+    gizmo_visible: bool,
     pivot_offset: &mut glam::Vec3,
     sculpt_state: &SculptState,
     active_tool: &ActiveTool,
@@ -587,6 +588,7 @@ pub fn draw(
         pivot_offset,
         rect,
         snap_config,
+        gizmo_visible,
     );
 
     // --- Interaction priority: sculpt > gizmo > pick > orbit ---

@@ -234,6 +234,7 @@ impl SdfApp {
                 space: GizmoSpace::Local,
                 pivot_offset: Vec3::ZERO,
                 last_selection: None,
+                gizmo_visible: true,
             },
             gpu: GpuSyncState {
                 render_state,
@@ -450,6 +451,7 @@ impl eframe::App for SdfApp {
                 gizmo_state: &mut self.gizmo.state,
                 gizmo_mode: &self.gizmo.mode,
                 gizmo_space: &self.gizmo.space,
+                gizmo_visible: self.gizmo.gizmo_visible,
                 pivot_offset: &mut self.gizmo.pivot_offset,
                 pending_pick: &mut pending_pick,
                 sculpt_count,

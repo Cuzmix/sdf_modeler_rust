@@ -42,6 +42,7 @@ pub struct GizmoContext {
     pub space: GizmoSpace,
     pub pivot_offset: Vec3,
     pub last_selection: Option<NodeId>,
+    pub gizmo_visible: bool,
 }
 
 // ---------------------------------------------------------------------------
