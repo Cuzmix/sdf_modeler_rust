@@ -222,7 +222,7 @@ impl SdfApp {
                     return; // Dead zone — don't apply brush
                 }
                 let factor = 1.0 - lazy_radius / dist;
-                *lazy_pos = *lazy_pos + delta * factor;
+                *lazy_pos += delta * factor;
                 *lazy_pos
             } else {
                 self.async_state.lazy_brush_pos = Some(hit_world);
@@ -403,6 +403,7 @@ impl SdfApp {
     }
 
     /// Dispatch GPU compute brush to modify voxel_buffer directly on the GPU.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn dispatch_gpu_brush(
         &self,
         node_id: NodeId,
@@ -561,7 +562,7 @@ impl SdfApp {
                 if sel != active {
                     // Selection changed — try to activate on new node
                     if let Some(id) = sel {
-                        if self.doc.scene.nodes.get(&id).map_or(false, |n| matches!(n.data, NodeData::Sculpt { .. })) {
+                        if self.doc.scene.nodes.get(&id).is_some_and(|n| matches!(n.data, NodeData::Sculpt { .. })) {
                             self.doc.sculpt_state = SculptState::new_active(id);
                         } else {
                             self.doc.sculpt_state = SculptState::Inactive;

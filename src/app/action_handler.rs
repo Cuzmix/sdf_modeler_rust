@@ -81,13 +81,13 @@ impl SdfApp {
                 Action::DeleteSelected => {
                     let locked = self.ui.node_graph_state.selected
                         .and_then(|id| self.doc.scene.nodes.get(&id))
-                        .map_or(false, |n| n.locked);
+                        .is_some_and(|n| n.locked);
                     if !locked {
                         self.delete_selected();
                     }
                 }
                 Action::DeleteNode(id) => {
-                    let locked = self.doc.scene.nodes.get(&id).map_or(false, |n| n.locked);
+                    let locked = self.doc.scene.nodes.get(&id).is_some_and(|n| n.locked);
                     if !locked {
                         self.doc.scene.remove_node(id);
                         if self.ui.node_graph_state.selected == Some(id) {
@@ -220,7 +220,7 @@ impl SdfApp {
                         }
                         crate::sculpt::ActiveTool::Sculpt => {
                             if let Some(sel) = self.ui.node_graph_state.selected {
-                                if self.doc.scene.nodes.get(&sel).map_or(false, |n| {
+                                if self.doc.scene.nodes.get(&sel).is_some_and(|n| {
                                     matches!(n.data, NodeData::Sculpt { .. })
                                 }) {
                                     let extent = self.scene_avg_extent();
@@ -345,7 +345,7 @@ impl SdfApp {
                             // The bake created a sculpt node above subtree_root — find it
                             let parent_map = self.doc.scene.build_parent_map();
                             if let Some(&sculpt_id) = parent_map.get(&subtree_root) {
-                                if self.doc.scene.nodes.get(&sculpt_id).map_or(false, |n| {
+                                if self.doc.scene.nodes.get(&sculpt_id).is_some_and(|n| {
                                     matches!(n.data, NodeData::Sculpt { .. })
                                 }) {
                                     let extent = self.scene_avg_extent();

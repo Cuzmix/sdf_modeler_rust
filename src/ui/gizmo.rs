@@ -435,6 +435,7 @@ fn draw_rotation_ring(
 // Drag handlers
 // ---------------------------------------------------------------------------
 
+#[allow(clippy::too_many_arguments)]
 fn handle_translate_drag(
     response: &egui::Response,
     axis_dir: Vec3,
@@ -461,6 +462,7 @@ fn handle_translate_drag(
     apply_position_delta(scene, drag_node, world_delta);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn handle_scale_drag(
     response: &egui::Response,
     axis: &GizmoAxis,
@@ -504,6 +506,7 @@ fn handle_scale_drag(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn handle_rotate_drag(
     response: &egui::Response,
     axis: &GizmoAxis,
@@ -589,6 +592,7 @@ fn apply_position_delta(scene: &mut Scene, node_id: NodeId, delta: Vec3) {
 // Pivot drag (Alt + drag moves pivot instead of object)
 // ---------------------------------------------------------------------------
 
+#[allow(clippy::too_many_arguments)]
 fn handle_pivot_drag(
     response: &egui::Response,
     axis_dir: Vec3,
@@ -626,6 +630,7 @@ fn inverse_rotate_euler(p: Vec3, r: Vec3) -> Vec3 {
 // Main gizmo function
 // ---------------------------------------------------------------------------
 
+#[allow(clippy::too_many_arguments)]
 pub fn draw_and_interact(
     painter: &egui::Painter,
     response: &egui::Response,
@@ -732,84 +737,82 @@ pub fn draw_and_interact(
 
     // Start dragging
     if response.drag_started_by(egui::PointerButton::Primary) {
-        if let Some(ref axis) = hovered_axis {
-            *gizmo_state = GizmoState::Dragging {
-                axis: axis.clone(),
-                node_id,
-                _start_screen_pos: hover_pos.unwrap_or(origin_screen),
-                _start_world_pos: nt.position,
-                _start_rotation: nt.rotation,
-                _start_scale: nt.scale,
-            };
-            consumed = true;
-        }
+      if let Some(ref axis) = hovered_axis {
+        *gizmo_state = GizmoState::Dragging {
+            axis: axis.clone(),
+            node_id,
+            _start_screen_pos: hover_pos.unwrap_or(origin_screen),
+            _start_world_pos: nt.position,
+            _start_rotation: nt.rotation,
+            _start_scale: nt.scale,
+        };
+        consumed = true;
+      }
     }
 
     // During drag
     if response.dragged_by(egui::PointerButton::Primary) {
-        if let GizmoState::Dragging {
-            ref axis,
-            node_id: drag_node,
-            ..
-        } = gizmo_state
-        {
-            let drag_node = *drag_node;
-            let axis_idx = axis.euler_index();
-            let axis_dir = axes[axis_idx];
-            let axis_clone = axis.clone();
+      if let GizmoState::Dragging {
+        ref axis,
+        node_id: drag_node,
+        ..
+    } = gizmo_state
+    {
+        let drag_node = *drag_node;
+        let axis_idx = axis.euler_index();
+        let axis_dir = axes[axis_idx];
+        let axis_clone = axis.clone();
 
-            if alt_held {
-                // Alt+drag: move pivot
-                handle_pivot_drag(
-                    response, axis_dir, gizmo_center, origin_screen,
-                    camera, &vp, rect, pivot_offset, nt.rotation,
-                );
-            } else {
-                let ctrl_held = response.ctx.input(|i| i.modifiers.ctrl);
-                match gizmo_mode {
-                    GizmoMode::Translate => {
-                        handle_translate_drag(
-                            response, axis_dir, gizmo_center, origin_screen,
-                            camera, &vp, rect, scene, drag_node,
-                            pivot_offset, nt.rotation,
-                        );
-                        if ctrl_held {
-                            snap_position(scene, drag_node, axis_idx, snap_config.translate_snap);
-                        }
+        if alt_held {
+            // Alt+drag: move pivot
+            handle_pivot_drag(
+                response, axis_dir, gizmo_center, origin_screen,
+                camera, &vp, rect, pivot_offset, nt.rotation,
+            );
+        } else {
+            let ctrl_held = response.ctx.input(|i| i.modifiers.ctrl);
+            match gizmo_mode {
+                GizmoMode::Translate => {
+                    handle_translate_drag(
+                        response, axis_dir, gizmo_center, origin_screen,
+                        camera, &vp, rect, scene, drag_node,
+                        pivot_offset, nt.rotation,
+                    );
+                    if ctrl_held {
+                        snap_position(scene, drag_node, axis_idx, snap_config.translate_snap);
                     }
-                    GizmoMode::Scale => {
-                        handle_scale_drag(
-                            response, &axis_clone, axis_dir, gizmo_center, origin_screen,
-                            camera, &vp, rect, scene, drag_node,
-                            pivot_offset, nt.rotation,
-                        );
-                        if ctrl_held {
-                            snap_scale(scene, drag_node, axis_idx, snap_config.scale_snap);
-                        }
+                }
+                GizmoMode::Scale => {
+                    handle_scale_drag(
+                        response, &axis_clone, axis_dir, gizmo_center, origin_screen,
+                        camera, &vp, rect, scene, drag_node,
+                        pivot_offset, nt.rotation,
+                    );
+                    if ctrl_held {
+                        snap_scale(scene, drag_node, axis_idx, snap_config.scale_snap);
                     }
-                    GizmoMode::Rotate => {
-                        let view_dir = camera.eye() - gizmo_center;
-                        handle_rotate_drag(
-                            response, &axis_clone, axis_dir, origin_screen,
-                            scene, drag_node, pivot_offset, nt.rotation, gizmo_space,
-                            view_dir,
-                        );
-                        if ctrl_held {
-                            snap_rotation(scene, drag_node, axis_idx, snap_config.rotate_snap.to_radians());
-                        }
+                }
+                GizmoMode::Rotate => {
+                    let view_dir = camera.eye() - gizmo_center;
+                    handle_rotate_drag(
+                        response, &axis_clone, axis_dir, origin_screen,
+                        scene, drag_node, pivot_offset, nt.rotation, gizmo_space,
+                        view_dir,
+                    );
+                    if ctrl_held {
+                        snap_rotation(scene, drag_node, axis_idx, snap_config.rotate_snap.to_radians());
                     }
                 }
             }
-            consumed = true;
         }
+        consumed = true;
+      }
     }
 
     // End drag
-    if response.drag_stopped_by(egui::PointerButton::Primary) {
-        if matches!(gizmo_state, GizmoState::Dragging { .. }) {
-            *gizmo_state = GizmoState::Idle;
-            consumed = true;
-        }
+    if response.drag_stopped_by(egui::PointerButton::Primary) && matches!(gizmo_state, GizmoState::Dragging { .. }) {
+        *gizmo_state = GizmoState::Idle;
+        consumed = true;
     }
 
     consumed

@@ -45,6 +45,7 @@ pub fn draw(ui: &mut egui::Ui, sculpt_state: &mut SculptState) {
 }
 
 /// Draw all brush controls when sculpting is active.
+#[allow(clippy::too_many_arguments)]
 fn draw_active_brush_controls(
     ui: &mut egui::Ui,
     brush_mode: &mut BrushMode,

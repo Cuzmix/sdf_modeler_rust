@@ -316,7 +316,6 @@ pub fn draw(
                     }
                     if ui.button("Delete Node").on_hover_text("Remove this node from the scene").clicked() {
                         actions.push(Action::DeleteNode(id));
-                        return;
                     }
                 });
             }
@@ -390,10 +389,8 @@ pub fn draw(
                 }
                 None => { ui.label("Right: (empty)"); }
             }
-            if left.is_some() && right.is_some() {
-                if ui.button("Swap Inputs").clicked() {
-                    actions.push(Action::SwapChildren(id));
-                }
+            if left.is_some() && right.is_some() && ui.button("Swap Inputs").clicked() {
+                actions.push(Action::SwapChildren(id));
             }
 
             // Add Sculpt Modifier / Flatten buttons
@@ -424,7 +421,6 @@ pub fn draw(
                             existing_sculpt: None,
                             flatten: true,
                         }));
-                        return;
                     }
                 });
                 if ui.button("Delete Node").on_hover_text("Remove this node from the scene").clicked() {
@@ -601,36 +597,30 @@ pub fn draw(
                         }
                     });
                 }
+            } else if let Some((done, total)) = bake_progress {
+                let frac = done as f32 / total.max(1) as f32;
+                ui.add(egui::ProgressBar::new(frac).text(format!("Baking... {:.0}%", frac * 100.0)));
             } else {
-                if let Some((done, total)) = bake_progress {
-                    let frac = done as f32 / total.max(1) as f32;
-                    ui.add(egui::ProgressBar::new(frac).text(format!("Baking... {:.0}%", frac * 100.0)));
-                } else {
-                    ui.horizontal(|ui| {
-                        if ui.button("Resume Sculpting").clicked() {
-                            *sculpt_state = SculptState::new_active(id);
-                        }
-                        if ui.button("Remove Modifier").clicked() {
-                            actions.push(Action::DeleteNode(id));
-                            *sculpt_state = SculptState::Inactive;
-                            return;
-                        }
-                    });
-                    // Flatten: merge this sculpt + its input into a standalone Sculpt
-                    if input.is_some() {
-                        if ui.button("Flatten (merge input + sculpt)").clicked() {
-                            let resolution = voxel::max_subtree_resolution(scene, id);
-                            actions.push(Action::RequestBake(BakeRequest {
-                                subtree_root: id,
-                                resolution,
-                                color,
-                                existing_sculpt: None,
-                                flatten: true,
-                            }));
-                            *sculpt_state = SculptState::Inactive;
-                            return;
-                        }
+                ui.horizontal(|ui| {
+                    if ui.button("Resume Sculpting").clicked() {
+                        *sculpt_state = SculptState::new_active(id);
                     }
+                    if ui.button("Remove Modifier").clicked() {
+                        actions.push(Action::DeleteNode(id));
+                        *sculpt_state = SculptState::Inactive;
+                    }
+                });
+                // Flatten: merge this sculpt + its input into a standalone Sculpt
+                if input.is_some() && ui.button("Flatten (merge input + sculpt)").clicked() {
+                    let resolution = voxel::max_subtree_resolution(scene, id);
+                    actions.push(Action::RequestBake(BakeRequest {
+                        subtree_root: id,
+                        resolution,
+                        color,
+                        existing_sculpt: None,
+                        flatten: true,
+                    }));
+                    *sculpt_state = SculptState::Inactive;
                 }
             }
 
@@ -833,7 +823,7 @@ pub fn draw(
     }
 
     // --- Modifier Stack (for Primitive and Sculpt nodes) ---
-    let show_stack = scene.nodes.get(&id).map_or(false, |n| {
+    let show_stack = scene.nodes.get(&id).is_some_and(|n| {
         matches!(n.data, NodeData::Primitive { .. } | NodeData::Sculpt { .. })
     });
     if show_stack {

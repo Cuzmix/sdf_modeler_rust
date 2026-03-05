@@ -54,7 +54,7 @@ pub fn load_obj(path: &Path) -> Result<TriMesh, String> {
             // Triangulate polygon (fan from first vertex)
             if indices.len() >= 3 {
                 for i in 1..indices.len() - 1 {
-                    triangles.push([indices[0], indices[i as usize], indices[i as usize + 1]]);
+                    triangles.push([indices[0], indices[i], indices[i + 1]]);
                 }
             }
         }

@@ -532,6 +532,7 @@ pub fn marching_cubes(
     }
 
     // Phase 2: Process cells to extract triangles (parallelized by z-slice)
+    #[allow(clippy::type_complexity)]
     let cell_slices: Vec<(Vec<[f32; 3]>, Vec<[u32; 3]>)> = maybe_par_iter!(0..res)
         .map(|z| {
             let mut local_verts: Vec<[f32; 3]> = Vec::new();
@@ -551,8 +552,8 @@ pub fn marching_cubes(
 
                     // Compute cube index
                     let mut cube_index: u8 = 0;
-                    for i in 0..8 {
-                        if vals[i] < 0.0 {
+                    for (i, val) in vals.iter().enumerate() {
+                        if *val < 0.0 {
                             cube_index |= 1 << i;
                         }
                     }

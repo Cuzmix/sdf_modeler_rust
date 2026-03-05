@@ -403,6 +403,7 @@ pub struct ViewportOutput {
     pub is_hover_pick: bool,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn draw(
     ui: &mut egui::Ui,
     camera: &mut Camera,
@@ -1117,8 +1118,8 @@ pub fn draw(
             let neg_end = gizmo_center + project_axis(-*axis);
 
             // Check hover for highlighting
-            let pos_hovered = hover_pos.map_or(false, |p| p.distance(pos_end) < hit_radius);
-            let neg_hovered = hover_pos.map_or(false, |p| p.distance(neg_end) < hit_radius);
+            let pos_hovered = hover_pos.is_some_and(|p| p.distance(pos_end) < hit_radius);
+            let neg_hovered = hover_pos.is_some_and(|p| p.distance(neg_end) < hit_radius);
 
             let pos_alpha = if *depth > 0.0 { 255u8 } else { 80u8 };
             let neg_alpha = if *depth < 0.0 { 255u8 } else { 80u8 };

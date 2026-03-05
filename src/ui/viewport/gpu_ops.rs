@@ -161,9 +161,7 @@ impl ViewportResources {
         staging: &wgpu::Buffer,
         rx: std::sync::mpsc::Receiver<Result<(), wgpu::BufferAsyncError>>,
     ) -> Option<PickResult> {
-        if rx.recv().ok()?.ok().is_none() {
-            return None;
-        }
+        rx.recv().ok()?.ok()?;
         Self::read_pick_from_staging(staging)
     }
 
@@ -250,7 +248,7 @@ impl ViewportResources {
         let bytes_per_pixel = 4u32;
         let unpadded_row = width * bytes_per_pixel;
         let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
-        let padded_row = (unpadded_row + align - 1) / align * align;
+        let padded_row = unpadded_row.div_ceil(align) * align;
         let buffer_size = (padded_row * height) as u64;
 
         let staging = device.create_buffer(&wgpu::BufferDescriptor {

@@ -1,33 +1,25 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Default)]
 pub enum BackgroundMode {
+    #[default]
     SkyGradient,
     SolidColor,
-}
-
-impl Default for BackgroundMode {
-    fn default() -> Self {
-        Self::SkyGradient
-    }
 }
 
 // ---------------------------------------------------------------------------
 // Shading modes
 // ---------------------------------------------------------------------------
 
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug, Default)]
 pub enum ShadingMode {
+    #[default]
     Full,
     Solid,
     Clay,
     Normals,
     Matcap,
     StepHeatmap,
-}
-
-impl Default for ShadingMode {
-    fn default() -> Self { Self::Full }
 }
 
 impl ShadingMode {

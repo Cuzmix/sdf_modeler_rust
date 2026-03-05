@@ -393,17 +393,14 @@ impl eframe::App for SdfApp {
         );
 
         // Export dialog — acts on result
-        match crate::ui::export_dialog::draw(
+        if let crate::ui::export_dialog::ExportDialogResult::Export = crate::ui::export_dialog::draw(
             ctx,
             &mut self.ui.show_export_dialog,
             &mut self.settings,
             &self.async_state.export_status,
         ) {
-            crate::ui::export_dialog::ExportDialogResult::Export => {
-                self.settings.save();
-                self.start_export(ctx);
-            }
-            _ => {}
+            self.settings.save();
+            self.start_export(ctx);
         }
 
         // Unified settings window

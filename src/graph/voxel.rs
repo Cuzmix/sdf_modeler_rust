@@ -288,7 +288,7 @@ fn evaluate_sdf(kind: &SdfPrimitive, p: Vec3, s: Vec3) -> f32 {
             }
         }
         SdfPrimitive::HexPrism => {
-            let k = Vec3::new(-0.8660254038, 0.5, 0.57735026919);
+            let k = Vec3::new(-0.866_025_4, 0.5, 0.577_350_27);
             let pa = p.abs();
             let dot2 = 2.0 * (k.x * pa.x + k.y * pa.z).min(0.0);
             let rx = pa.x - dot2 * k.x;

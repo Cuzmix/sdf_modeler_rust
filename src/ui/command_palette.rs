@@ -154,15 +154,11 @@ pub fn draw(
                         });
 
                         // Keyboard nav
-                        if ctx.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
-                            if *selected_index + 1 < filtered.len() {
-                                *selected_index += 1;
-                            }
+                        if ctx.input(|i| i.key_pressed(egui::Key::ArrowDown)) && *selected_index + 1 < filtered.len() {
+                            *selected_index += 1;
                         }
-                        if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
-                            if *selected_index > 0 {
-                                *selected_index -= 1;
-                            }
+                        if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) && *selected_index > 0 {
+                            *selected_index -= 1;
                         }
                         if ctx.input(|i| i.key_pressed(egui::Key::Enter)) && !filtered.is_empty() {
                             if let Some((_, id)) = filtered.get(*selected_index) {
@@ -209,15 +205,11 @@ pub fn draw(
                         });
 
                         // Keyboard nav
-                        if ctx.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
-                            if *selected_index + 1 < filtered.len() {
-                                *selected_index += 1;
-                            }
+                        if ctx.input(|i| i.key_pressed(egui::Key::ArrowDown)) && *selected_index + 1 < filtered.len() {
+                            *selected_index += 1;
                         }
-                        if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
-                            if *selected_index > 0 {
-                                *selected_index -= 1;
-                            }
+                        if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) && *selected_index > 0 {
+                            *selected_index -= 1;
                         }
                         if ctx.input(|i| i.key_pressed(egui::Key::Enter)) && !filtered.is_empty() {
                             if let Some((_, entry)) = filtered.get(*selected_index) {

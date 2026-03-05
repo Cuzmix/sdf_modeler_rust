@@ -294,6 +294,7 @@ fn emit_transform_chain(
 /// Emit WGSL for a single node. Extracted so both cheap and expensive phases can use it.
 /// `sculpt_tex_map`: if Some, sculpt nodes use `sdf_voxel_tex_N` (texture path);
 ///                    if None, they use `sdf_voxel_grid` (storage buffer path).
+#[allow(clippy::too_many_arguments)]
 fn emit_node_wgsl(
     lines: &mut Vec<String>,
     i: usize,
@@ -343,9 +344,8 @@ fn emit_node_wgsl(
 
             let child_idx = input.and_then(|id| idx_map.get(&id).copied());
 
-            if child_idx.is_some() {
+            if let Some(ci) = child_idx {
                 // DIFFERENTIAL: analytical child SDF + displacement from grid * layer_intensity
-                let ci = child_idx.unwrap();
                 let disp_call = if let Some(tex_map) = sculpt_tex_map {
                     if let Some(&tex_idx) = tex_map.get(&node_id) {
                         format!("disp_voxel_tex_{tex_idx}(lp{i}, {i}u)")

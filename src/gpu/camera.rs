@@ -101,6 +101,7 @@ impl Camera {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn to_uniform(
         &self,
         viewport: [f32; 4],

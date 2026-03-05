@@ -1132,26 +1132,23 @@ impl Scene {
         let mut current = leaf_id;
         while let Some(&pid) = parent_map.get(&current) {
             if let Some(parent) = self.nodes.get(&pid) {
-                match &parent.data {
-                    NodeData::Transform { translation, rotation, scale, .. } => {
-                        // Scale: expand radius, scale center
-                        let s = scale.x.abs().max(scale.y.abs()).max(scale.z.abs());
-                        wr *= s;
-                        wc[0] *= scale.x;
-                        wc[1] *= scale.y;
-                        wc[2] *= scale.z;
-                        // Rotate: conservative sphere expansion
-                        if rotation.length_squared() > 1e-12 {
-                            let dist = (wc[0] * wc[0] + wc[1] * wc[1] + wc[2] * wc[2]).sqrt();
-                            wr += dist;
-                            wc = [0.0, 0.0, 0.0];
-                        }
-                        // Translate: offset center
-                        wc[0] += translation.x;
-                        wc[1] += translation.y;
-                        wc[2] += translation.z;
+                if let NodeData::Transform { translation, rotation, scale, .. } = &parent.data {
+                    // Scale: expand radius, scale center
+                    let s = scale.x.abs().max(scale.y.abs()).max(scale.z.abs());
+                    wr *= s;
+                    wc[0] *= scale.x;
+                    wc[1] *= scale.y;
+                    wc[2] *= scale.z;
+                    // Rotate: conservative sphere expansion
+                    if rotation.length_squared() > 1e-12 {
+                        let dist = (wc[0] * wc[0] + wc[1] * wc[1] + wc[2] * wc[2]).sqrt();
+                        wr += dist;
+                        wc = [0.0, 0.0, 0.0];
                     }
-                    _ => {}
+                    // Translate: offset center
+                    wc[0] += translation.x;
+                    wc[1] += translation.y;
+                    wc[2] += translation.z;
                 }
             }
             current = pid;

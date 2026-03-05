@@ -249,6 +249,7 @@ impl SculptState {
 
 /// Apply a spherical brush stroke at `hit_world` position.
 /// Returns the (z0, z1) inclusive dirty z-slab range for incremental GPU upload.
+#[allow(clippy::too_many_arguments)]
 pub fn apply_brush(
     scene: &mut Scene,
     node_id: NodeId,
@@ -273,9 +274,7 @@ pub fn apply_brush(
     let local_hit = inverse_rotate_euler(hit_world - position, rotation);
 
     // Get mutable reference to grid and apply brush
-    let Some(node) = scene.nodes.get_mut(&node_id) else {
-        return None;
-    };
+    let node = scene.nodes.get_mut(&node_id)?;
     if let NodeData::Sculpt {
         ref mut voxel_grid, ..
     } = node.data
@@ -319,6 +318,7 @@ fn surface_factor(voxel_val: f32, radius: f32, constraint: f32) -> f32 {
 }
 
 /// Returns (z0, z1) inclusive range of z-slabs that were modified.
+#[allow(clippy::too_many_arguments)]
 fn apply_brush_to_grid(
     grid: &mut VoxelGrid,
     center: Vec3,
@@ -366,7 +366,7 @@ fn apply_brush_to_grid(
                         BrushMode::Inflate => {
                             let threshold = radius * 0.5;
                             let sf = 1.0 - (grid.data[idx].abs() / threshold).clamp(0.0, 1.0);
-                            grid.data[idx] += -1.0 * strength * falloff * sf;
+                            grid.data[idx] += -strength * falloff * sf;
                         }
                         BrushMode::Smooth | BrushMode::Grab => unreachable!(),
                     }
@@ -379,6 +379,7 @@ fn apply_brush_to_grid(
 }
 
 /// Apply Laplacian smoothing within the brush sphere.
+#[allow(clippy::too_many_arguments)]
 fn apply_smooth_to_grid(
     grid: &mut VoxelGrid,
     center: Vec3,
@@ -528,6 +529,7 @@ pub fn apply_grab_to_grid(
 
 /// Apply grab brush for differential sculpts: snapshot is total SDF, write back as displacement.
 /// Subtracts the analytical child SDF at each voxel to convert total → displacement.
+#[allow(clippy::too_many_arguments)]
 pub fn apply_grab_to_grid_differential(
     grid: &mut VoxelGrid,
     snapshot: &[f32],
@@ -617,6 +619,7 @@ pub fn apply_grab_to_grid_differential(
 
 /// Wrapper that handles the borrow conflict: need &Scene for evaluate_sdf_tree and &mut VoxelGrid.
 /// Temporarily swaps the VoxelGrid out of the scene, applies grab, then swaps it back.
+#[allow(clippy::too_many_arguments)]
 pub fn apply_grab_to_grid_differential_scene(
     scene: &mut Scene,
     node_id: NodeId,

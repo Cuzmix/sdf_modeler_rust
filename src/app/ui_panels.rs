@@ -84,7 +84,7 @@ impl SdfApp {
                         actions.push(Action::Copy);
                         ui.close_menu();
                     }
-                    let has_clip = self.doc.clipboard_node.map_or(false, |id| self.doc.scene.nodes.contains_key(&id));
+                    let has_clip = self.doc.clipboard_node.is_some_and(|id| self.doc.scene.nodes.contains_key(&id));
                     if ui.add_enabled(has_clip, egui::Button::new("Paste").shortcut_text("Ctrl+V")).clicked() {
                         actions.push(Action::Paste);
                         ui.close_menu();

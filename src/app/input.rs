@@ -95,10 +95,10 @@ impl SdfApp {
         }
 
         // Export
-        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::E)) {
-            if matches!(self.async_state.export_status, ExportStatus::Idle) {
-                actions.push(Action::ShowExportDialog);
-            }
+        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::E))
+            && matches!(self.async_state.export_status, ExportStatus::Idle)
+        {
+            actions.push(Action::ShowExportDialog);
         }
 
         // Copy / Paste / Duplicate (consume_key prevents egui clipboard noise)

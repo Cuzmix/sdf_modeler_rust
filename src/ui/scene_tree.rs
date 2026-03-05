@@ -17,6 +17,7 @@ const DOT_SCULPT: egui::Color32 = egui::Color32::from_rgb(240, 160, 60);    // o
 const DOT_TRANSFORM: egui::Color32 = egui::Color32::from_rgb(180, 120, 240); // purple
 const DOT_MODIFIER: egui::Color32 = egui::Color32::from_rgb(230, 210, 60);   // yellow
 
+#[allow(clippy::too_many_arguments)]
 pub fn draw(
     ui: &mut egui::Ui,
     scene: &mut Scene,
@@ -137,6 +138,7 @@ fn extract_info(scene: &Scene, id: NodeId, selected: Option<NodeId>) -> Option<N
     Some(NodeInfo { label, is_selected, is_hidden, is_leaf, children })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn node_context_menu(
     response: &egui::Response,
     _ui_ctx: &egui::Ui,
@@ -153,7 +155,7 @@ fn node_context_menu(
             actions.push(Action::ToggleVisibility(id));
             ui.close_menu();
         }
-        let locked = scene.nodes.get(&id).map_or(false, |n| n.locked);
+        let locked = scene.nodes.get(&id).is_some_and(|n| n.locked);
         if ui.button(if locked { "Unlock" } else { "Lock" }).clicked() {
             actions.push(Action::ToggleLock(id));
             ui.close_menu();
@@ -188,8 +190,7 @@ fn handle_drag_drop(
 
     // Drop target: highlight and handle release
     if let Some(dragged_id) = *drag_state {
-        if dragged_id != id && response.hovered() {
-            if scene.is_valid_drop_target(id, dragged_id) {
+        if dragged_id != id && response.hovered() && scene.is_valid_drop_target(id, dragged_id) {
                 // Visual highlight
                 ui.painter().rect_stroke(
                     response.rect,
@@ -202,11 +203,11 @@ fn handle_drag_drop(
                     scene.reparent(dragged_id, id);
                     *drag_state = None;
                 }
-            }
         }
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw_node_recursive(
     ui: &mut egui::Ui,
     scene: &mut Scene,

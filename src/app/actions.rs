@@ -16,6 +16,7 @@ pub enum WorkspacePreset {
 
 /// How the user wants to bake the SDF into a sculpt voxel grid.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[allow(clippy::enum_variant_names)]
 pub enum SculptConvertMode {
     /// Bake the entire scene into a single sculpt object.
     BakeWholeScene,
