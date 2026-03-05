@@ -8,7 +8,7 @@ use crate::gpu::picking::PendingPick;
 use crate::graph::scene::{
     CsgOp, ModifierKind, NodeData, NodeId, Scene, SdfPrimitive,
 };
-use crate::sculpt::{ActiveTool, BrushMode, SculptState};
+use crate::sculpt::{self, ActiveTool, BrushMode, SculptState};
 use crate::settings::SnapConfig;
 use crate::ui::gizmo::{self, GizmoMode, GizmoSpace, GizmoState};
 
@@ -33,12 +33,30 @@ fn in_safety_border(pos: egui::Pos2, rect: egui::Rect, fraction: f32) -> bool {
 }
 
 // ---------------------------------------------------------------------------
-// CPU-side sculpt mesh hit test
+// CPU-side sculpt mesh hit test (voxel raycast)
 // ---------------------------------------------------------------------------
 
-/// Fast CPU-side test: project the active sculpt node's bounding sphere to
-/// screen space and check if `cursor` falls inside. This replaces the async
-/// GPU pick for the orbit-vs-sculpt decision, giving zero-latency response.
+/// Standard slab-method ray-AABB intersection. Returns (t_enter, t_exit).
+/// If t_enter >= t_exit, the ray misses the box.
+fn ray_aabb(origin: glam::Vec3, dir: glam::Vec3, box_min: glam::Vec3, box_max: glam::Vec3) -> (f32, f32) {
+    let inv_dir = glam::Vec3::new(1.0 / dir.x, 1.0 / dir.y, 1.0 / dir.z);
+    let t1 = (box_min - origin) * inv_dir;
+    let t2 = (box_max - origin) * inv_dir;
+    let t_min = t1.min(t2);
+    let t_max = t1.max(t2);
+    let t_enter = t_min.x.max(t_min.y).max(t_min.z);
+    let t_exit = t_max.x.min(t_max.y).min(t_max.z);
+    (t_enter, t_exit)
+}
+
+/// CPU-side voxel raycast: unproject cursor to a world ray, transform into
+/// local voxel space, and march through the SDF grid. Returns true if the ray
+/// hits actual solid geometry (SDF near zero), false if it passes through
+/// empty voxels. This gives instant orbit-vs-sculpt with zero GPU latency.
+///
+/// For displacement grids (differential sculpt), the total SDF is:
+///   analytical_sdf(input_child, world_pos) + displacement
+/// so we evaluate both and combine them.
 fn cursor_in_sculpt_bounds(
     cursor: egui::Pos2,
     sculpt_state: &SculptState,
@@ -46,6 +64,8 @@ fn cursor_in_sculpt_bounds(
     camera: &Camera,
     rect: egui::Rect,
 ) -> bool {
+    use crate::graph::voxel;
+
     let node_id = match sculpt_state {
         SculptState::Active { node_id, .. } => *node_id,
         _ => return false,
@@ -54,39 +74,65 @@ fn cursor_in_sculpt_bounds(
         Some(n) => n,
         None => return false,
     };
-    let (center, radius) = match &node.data {
-        NodeData::Sculpt { position, voxel_grid, .. } => {
-            let mid = *position + (voxel_grid.bounds_min + voxel_grid.bounds_max) * 0.5;
-            let half_extent = (voxel_grid.bounds_max - voxel_grid.bounds_min) * 0.5;
-            let r = half_extent.x.max(half_extent.y).max(half_extent.z);
-            (mid, r)
+    let (position, rotation, voxel_grid, input_child) = match &node.data {
+        NodeData::Sculpt { position, rotation, voxel_grid, input, .. } => {
+            (*position, *rotation, voxel_grid, *input)
         }
         _ => return false,
     };
 
-    // Project bounding sphere center to screen (NDC → viewport pixels)
+    // Unproject cursor to world-space ray
     let aspect = rect.width() / rect.height().max(1.0);
-    let vp = camera.projection_matrix(aspect) * camera.view_matrix();
-    let clip = vp * glam::Vec4::new(center.x, center.y, center.z, 1.0);
-    if clip.w <= 0.0 {
-        return false; // Behind camera
+    let ndc_x = ((cursor.x - rect.min.x) / rect.width()) * 2.0 - 1.0;
+    let ndc_y = 1.0 - ((cursor.y - rect.min.y) / rect.height()) * 2.0;
+    let inv_vp = (camera.projection_matrix(aspect) * camera.view_matrix()).inverse();
+    let near_h = inv_vp * glam::Vec4::new(ndc_x, ndc_y, 0.0, 1.0);
+    let far_h = inv_vp * glam::Vec4::new(ndc_x, ndc_y, 1.0, 1.0);
+    let near = near_h.truncate() / near_h.w;
+    let far = far_h.truncate() / far_h.w;
+    let ray_dir = (far - near).normalize();
+
+    // Transform ray into local voxel space (undo position + rotation)
+    let local_origin = sculpt::inverse_rotate_euler(near - position, rotation);
+    let local_dir = sculpt::inverse_rotate_euler(ray_dir, rotation).normalize();
+
+    // Ray-AABB intersection with voxel grid bounds
+    let (t_enter, t_exit) = ray_aabb(local_origin, local_dir, voxel_grid.bounds_min, voxel_grid.bounds_max);
+    if t_enter >= t_exit {
+        return false; // Ray misses the voxel grid entirely
     }
-    let ndc = clip.truncate() / clip.w;
-    let screen_x = rect.min.x + (ndc.x * 0.5 + 0.5) * rect.width();
-    let screen_y = rect.min.y + (-ndc.y * 0.5 + 0.5) * rect.height();
 
-    // Project sphere radius: use a point on the sphere edge to get screen-space radius
-    let eye = camera.eye();
-    let dist_to_center = (center - eye).length().max(0.001);
-    let angular_radius = (radius / dist_to_center).min(1.0).asin();
-    let fov_half = camera.fov * 0.5;
-    let screen_radius = (angular_radius / fov_half) * (rect.height() * 0.5);
+    // March through voxel grid, sphere-trace style with SDF sampling
+    let cell_size = (voxel_grid.bounds_max - voxel_grid.bounds_min) / voxel_grid.resolution as f32;
+    let min_step = cell_size.x.min(cell_size.y).min(cell_size.z);
+    let threshold = min_step * 0.5;
+    let mut t = t_enter.max(0.0);
+    while t < t_exit {
+        let local_pos = local_origin + local_dir * t;
+        let displacement = voxel_grid.sample(local_pos);
 
-    // Add a small margin so edges aren't clipped
-    let padded_radius = screen_radius + 10.0;
-    let dx = cursor.x - screen_x;
-    let dy = cursor.y - screen_y;
-    (dx * dx + dy * dy) <= padded_radius * padded_radius
+        // For displacement grids, combine with analytical SDF from input child.
+        // For total SDF grids, displacement IS the total SDF.
+        let sdf = if voxel_grid.is_displacement {
+            if let Some(child_id) = input_child {
+                // Transform back to world space for analytical evaluation
+                let world_pos = position + sculpt::inverse_rotate_euler(local_pos, rotation);
+                let analytical = voxel::evaluate_sdf_tree(scene, child_id, world_pos);
+                analytical + displacement
+            } else {
+                displacement // No input child — treat as total SDF
+            }
+        } else {
+            displacement // Total SDF grid — value is already the distance
+        };
+
+        if sdf <= threshold {
+            return true; // Near surface → sculpt
+        }
+        // Sphere-trace: jump by SDF distance (clamped to min step for safety)
+        t += min_step.max(sdf.abs() * 0.9);
+    }
+    false // Ray passed through empty voxels → orbit
 }
 
 // ---------------------------------------------------------------------------
