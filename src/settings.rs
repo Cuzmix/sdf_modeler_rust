@@ -396,6 +396,10 @@ pub struct RenderConfig {
     pub show_node_labels: bool,
     #[serde(default = "default_true")]
     pub show_bounding_box: bool,
+
+    // Sculpt safety border (fraction of viewport, 0.0 = disabled, default 5%)
+    #[serde(default = "default_safety_border")]
+    pub sculpt_safety_border: f32,
 }
 
 fn default_true() -> bool { true }
@@ -415,6 +419,7 @@ fn default_env_reflection_intensity() -> f32 { 0.3 }
 fn default_bloom_threshold() -> f32 { 0.8 }
 fn default_bloom_intensity() -> f32 { 0.3 }
 fn default_bloom_radius() -> f32 { 3.0 }
+fn default_safety_border() -> f32 { 0.05 }
 fn default_bookmarks() -> Vec<Option<CameraBookmark>> { vec![None; 9] }
 
 impl Default for RenderConfig {
@@ -491,6 +496,7 @@ impl Default for RenderConfig {
             shading_mode: ShadingMode::default(),
             show_node_labels: false,
             show_bounding_box: true,
+            sculpt_safety_border: 0.05,
         }
     }
 }

@@ -5,7 +5,8 @@ use crate::graph::history::History;
 use crate::graph::scene::{NodeData, Scene};
 use crate::sculpt::SculptState;
 
-use super::actions::Action;
+use super::actions::{Action, SculptConvertMode};
+use super::state::SculptConvertDialog;
 use super::SdfApp;
 
 impl SdfApp {
@@ -136,6 +137,44 @@ impl SdfApp {
                         self.gpu.buffer_dirty = true;
                     }
                 }
+                Action::SculptUndo => {
+                    if let SculptState::Active { node_id, .. } = self.doc.sculpt_state {
+                        let current_data = self.doc.scene.nodes.get(&node_id)
+                            .and_then(|n| match &n.data {
+                                NodeData::Sculpt { voxel_grid, .. } => Some(voxel_grid.data.clone()),
+                                _ => None,
+                            });
+                        if let Some(current) = current_data {
+                            if let Some(restored) = self.doc.sculpt_history.undo(&current) {
+                                if let Some(node) = self.doc.scene.nodes.get_mut(&node_id) {
+                                    if let NodeData::Sculpt { ref mut voxel_grid, .. } = node.data {
+                                        voxel_grid.data = restored;
+                                    }
+                                }
+                                self.gpu.buffer_dirty = true;
+                            }
+                        }
+                    }
+                }
+                Action::SculptRedo => {
+                    if let SculptState::Active { node_id, .. } = self.doc.sculpt_state {
+                        let current_data = self.doc.scene.nodes.get(&node_id)
+                            .and_then(|n| match &n.data {
+                                NodeData::Sculpt { voxel_grid, .. } => Some(voxel_grid.data.clone()),
+                                _ => None,
+                            });
+                        if let Some(current) = current_data {
+                            if let Some(restored) = self.doc.sculpt_history.redo(&current) {
+                                if let Some(node) = self.doc.scene.nodes.get_mut(&node_id) {
+                                    if let NodeData::Sculpt { ref mut voxel_grid, .. } = node.data {
+                                        voxel_grid.data = restored;
+                                    }
+                                }
+                                self.gpu.buffer_dirty = true;
+                            }
+                        }
+                    }
+                }
 
                 // ── Camera ───────────────────────────────────────────
                 Action::FocusSelected => {
@@ -184,7 +223,9 @@ impl SdfApp {
                                 if self.doc.scene.nodes.get(&sel).map_or(false, |n| {
                                     matches!(n.data, NodeData::Sculpt { .. })
                                 }) {
-                                    self.doc.sculpt_state = SculptState::new_active(sel);
+                                    let extent = self.scene_avg_extent();
+                                    self.doc.sculpt_state = SculptState::new_active_with_radius(sel, extent);
+                                    self.ensure_brush_settings_tab();
                                 }
                             }
                         }
@@ -201,6 +242,118 @@ impl SdfApp {
                 }
                 Action::ResetPivot => {
                     self.gizmo.pivot_offset = Vec3::ZERO;
+                }
+
+                // ── Sculpt entry ──────────────────────────────────────
+                Action::EnterSculptMode => {
+                    if let Some(sel) = self.ui.node_graph_state.selected {
+                        if let Some(node) = self.doc.scene.nodes.get(&sel) {
+                            if matches!(node.data, NodeData::Sculpt { .. }) {
+                                // Case 1: already a sculpt node — activate immediately
+                                let extent = self.scene_avg_extent();
+                                self.doc.active_tool = crate::sculpt::ActiveTool::Sculpt;
+                                self.doc.sculpt_state = SculptState::new_active_with_radius(sel, extent);
+                                self.ensure_brush_settings_tab();
+                            } else {
+                                // Case 2: check for sculpt parent
+                                let parent_map = self.doc.scene.build_parent_map();
+                                if let Some(sculpt_id) = self.doc.scene.find_sculpt_parent(sel, &parent_map) {
+                                    let extent = self.scene_avg_extent();
+                                    self.doc.active_tool = crate::sculpt::ActiveTool::Sculpt;
+                                    self.doc.sculpt_state = SculptState::new_active_with_radius(sculpt_id, extent);
+                                    self.ui.node_graph_state.selected = Some(sculpt_id);
+                                    self.ensure_brush_settings_tab();
+                                } else {
+                                    // Case 3: non-sculpt node — open convert dialog
+                                    self.ui.sculpt_convert_dialog = Some(SculptConvertDialog::new(sel));
+                                }
+                            }
+                        }
+                    } else {
+                        // Nothing selected
+                        self.ui.toasts.push(super::Toast {
+                            message: "Select a node to sculpt".into(),
+                            is_error: true,
+                            created: crate::compat::Instant::now(),
+                            duration: crate::compat::Duration::from_secs(4),
+                        });
+                    }
+                }
+                Action::ShowSculptConvertDialog { target } => {
+                    self.ui.sculpt_convert_dialog = Some(SculptConvertDialog::new(target));
+                }
+                Action::CommitSculptConvert { target, mode, resolution } => {
+                    self.ui.sculpt_convert_dialog = None;
+                    let baking = !matches!(self.async_state.bake_status, super::BakeStatus::Idle);
+                    if baking {
+                        self.ui.toasts.push(super::Toast {
+                            message: "A bake is already in progress".into(),
+                            is_error: true,
+                            created: crate::compat::Instant::now(),
+                            duration: crate::compat::Duration::from_secs(4),
+                        });
+                    } else {
+                        // Determine the subtree root and flatten flag based on convert mode
+                        let (subtree_root, flatten) = match mode {
+                            SculptConvertMode::BakeWholeScene => {
+                                // Walk up from target to the topmost ancestor
+                                let parent_map = self.doc.scene.build_parent_map();
+                                let mut root = target;
+                                while let Some(&pid) = parent_map.get(&root) {
+                                    root = pid;
+                                }
+                                (root, false)
+                            }
+                            SculptConvertMode::BakeWholeSceneFlatten => {
+                                let parent_map = self.doc.scene.build_parent_map();
+                                let mut root = target;
+                                while let Some(&pid) = parent_map.get(&root) {
+                                    root = pid;
+                                }
+                                (root, true)
+                            }
+                            SculptConvertMode::BakeActiveNode => {
+                                (target, false)
+                            }
+                        };
+                        // Get color from the target node (or default white)
+                        let color = self.doc.scene.nodes.get(&subtree_root)
+                            .map(|n| match &n.data {
+                                NodeData::Primitive { color, .. } => *color,
+                                _ => Vec3::new(0.8, 0.8, 0.8),
+                            })
+                            .unwrap_or(Vec3::new(0.8, 0.8, 0.8));
+
+                        let req = super::BakeRequest {
+                            subtree_root,
+                            resolution,
+                            color,
+                            existing_sculpt: None,
+                            flatten,
+                        };
+
+                        if flatten {
+                            self.start_async_bake(req, ctx);
+                        } else {
+                            self.apply_instant_displacement_bake(req);
+                            // Activate sculpt on the newly created sculpt node
+                            // The bake created a sculpt node above subtree_root — find it
+                            let parent_map = self.doc.scene.build_parent_map();
+                            if let Some(&sculpt_id) = parent_map.get(&subtree_root) {
+                                if self.doc.scene.nodes.get(&sculpt_id).map_or(false, |n| {
+                                    matches!(n.data, NodeData::Sculpt { .. })
+                                }) {
+                                    let extent = self.scene_avg_extent();
+                                    self.doc.active_tool = crate::sculpt::ActiveTool::Sculpt;
+                                    self.doc.sculpt_state = SculptState::new_active_with_radius(sculpt_id, extent);
+                                    self.ui.node_graph_state.selected = Some(sculpt_id);
+                                    self.ensure_brush_settings_tab();
+                                }
+                            }
+                        }
+                        self.ui.node_graph_state.needs_initial_rebuild = true;
+                        self.gpu.buffer_dirty = true;
+                    }
                 }
 
                 // ── Scene mutations (structural) ─────────────────────
@@ -531,6 +684,32 @@ impl SdfApp {
                 }
                 Action::MarkBufferDirty => {
                     self.gpu.buffer_dirty = true;
+                }
+            }
+        }
+    }
+
+    /// Ensure the Brush Settings tab is visible in the dock when sculpt mode activates.
+    /// Compute average half-extent of the scene bounding box for adaptive brush sizing.
+    fn scene_avg_extent(&self) -> f32 {
+        let (min, max) = self.doc.scene.compute_bounds();
+        ((max[0] - min[0]) + (max[1] - min[1]) + (max[2] - min[2])) / 6.0
+    }
+
+    fn ensure_brush_settings_tab(&mut self) {
+        use crate::ui::dock::Tab;
+        if self.ui.dock_state.find_tab(&Tab::BrushSettings).is_none() {
+            // Add BrushSettings as a sibling tab next to Properties (not into the viewport).
+            if let Some((surface_idx, node_idx, _tab_idx)) = self.ui.dock_state.find_tab(&Tab::Properties) {
+                self.ui.dock_state[surface_idx][node_idx]
+                    .append_tab(Tab::BrushSettings);
+            } else {
+                // Fallback: no Properties tab found, add next to SceneTree
+                if let Some((surface_idx, node_idx, _tab_idx)) = self.ui.dock_state.find_tab(&Tab::SceneTree) {
+                    self.ui.dock_state[surface_idx][node_idx]
+                        .append_tab(Tab::BrushSettings);
+                } else {
+                    self.ui.dock_state.push_to_focused_leaf(Tab::BrushSettings);
                 }
             }
         }

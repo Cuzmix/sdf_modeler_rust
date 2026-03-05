@@ -14,6 +14,17 @@ pub enum WorkspacePreset {
     Rendering,
 }
 
+/// How the user wants to bake the SDF into a sculpt voxel grid.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SculptConvertMode {
+    /// Bake the entire scene into a single sculpt object.
+    BakeWholeScene,
+    /// Bake the entire scene and flatten into a standalone sculpt (destructive).
+    BakeWholeSceneFlatten,
+    /// Bake only the selected node's subtree.
+    BakeActiveNode,
+}
+
 /// All possible state-mutating intents that UI components can express.
 /// Each variant contains exactly the data needed to execute the action.
 ///
@@ -43,6 +54,10 @@ pub enum Action {
     // ── History ──────────────────────────────────────────────────────
     Undo,
     Redo,
+    /// Undo one sculpt stroke (only while sculpt is active).
+    SculptUndo,
+    /// Redo one sculpt stroke (only while sculpt is active).
+    SculptRedo,
 
     // ── Camera ───────────────────────────────────────────────────────
     FocusSelected,
@@ -60,6 +75,19 @@ pub enum Action {
     SetGizmoMode(GizmoMode),
     ToggleGizmoSpace,
     ResetPivot,
+
+    // ── Sculpt entry ────────────────────────────────────────────────
+    /// Ctrl+R: enter sculpt mode. If target is already sculpt, activates directly.
+    /// Otherwise opens the convert dialog.
+    EnterSculptMode,
+    /// Open the convert-to-sculpt dialog for the given node.
+    ShowSculptConvertDialog { target: NodeId },
+    /// User confirmed the convert dialog — bake and enter sculpt.
+    CommitSculptConvert {
+        target: NodeId,
+        mode: SculptConvertMode,
+        resolution: u32,
+    },
 
     // ── Scene mutations (structural) ─────────────────────────────────
     CreatePrimitive(SdfPrimitive),

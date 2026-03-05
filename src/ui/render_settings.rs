@@ -260,6 +260,19 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
             }
         });
 
+    egui::CollapsingHeader::new("Sculpt")
+        .default_open(false)
+        .show(ui, |ui| {
+            labeled_slider(
+                ui,
+                "Safety Border",
+                &mut config.sculpt_safety_border,
+                0.0..=0.15,
+                false,
+                "Border zone that always triggers navigation (fraction of viewport, 0 = disabled)",
+            );
+        });
+
     if settings.render != before {
         actions.push(Action::SettingsChanged);
     }

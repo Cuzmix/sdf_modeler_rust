@@ -293,6 +293,15 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
         } // end Full shading
     }
 
+    // --- 3D brush preview: ring outline on surface ---
+    if camera.brush_pos.w > 0.0 && !sdf_miss {
+        let p = ro + rd * t;
+        let brush_dist = length(p - camera.brush_pos.xyz) - camera.brush_pos.w;
+        let ring_thickness = max(0.002 * t, 0.003);
+        let ring = 1.0 - smoothstep(0.0, ring_thickness * 2.0, abs(brush_dist));
+        color = mix(color, vec3f(0.3, 0.8, 0.3), ring * 0.6);
+    }
+
     // --- Grid overlay: transparent blend AFTER base color ---
     // Condition matches TypeGPU: grid enabled, ray not parallel, grid in front,
     // AND (SDF missed OR grid closer than SDF hit)

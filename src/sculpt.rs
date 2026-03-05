@@ -202,6 +202,28 @@ impl SculptState {
         }
     }
 
+    /// Create Active state with adaptive brush radius based on object bounds.
+    /// `extent` is the average half-extent of the bounding box (e.g. from `compute_bounds()`).
+    pub fn new_active_with_radius(node_id: NodeId, extent: f32) -> Self {
+        let radius = (extent * 0.15).clamp(0.05, 2.0);
+        Self::Active {
+            node_id,
+            brush_mode: BrushMode::Add,
+            brush_radius: radius,
+            brush_strength: DEFAULT_BRUSH_STRENGTH,
+            falloff_mode: FalloffMode::Sharp,
+            brush_shape: BrushShape::Sphere,
+            smooth_iterations: 3,
+            flatten_reference: None,
+            lazy_radius: 0.0,
+            surface_constraint: 0.0,
+            symmetry_axis: None,
+            grab_snapshot: None,
+            grab_start: None,
+            grab_child_input: None,
+        }
+    }
+
     pub fn is_active(&self) -> bool {
         matches!(self, Self::Active { .. })
     }

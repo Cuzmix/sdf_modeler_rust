@@ -43,7 +43,41 @@ impl SdfApp {
         self.async_state.pick_state = PickState::Idle;
 
         if let Some(result) = pick_result {
-            self.handle_sculpt_hit(result);
+            if self.async_state.sculpt_dragging {
+                if result.material_id >= 0 {
+                    // Drag on geometry: apply brush + update preview
+                    self.async_state.hover_world_pos = Some(Vec3::new(
+                        result.world_pos[0],
+                        result.world_pos[1],
+                        result.world_pos[2],
+                    ));
+                    self.async_state.cursor_over_geometry = true;
+                    self.handle_sculpt_hit(result);
+                } else {
+                    // Drag on empty space: allow orbit on next frame
+                    self.async_state.cursor_over_geometry = false;
+                    self.async_state.hover_world_pos = None;
+                }
+            } else {
+                // Hover pick: only update preview position
+                self.handle_hover_pick(result);
+            }
+        }
+    }
+
+    /// Handle a hover-only pick result: update 3D brush preview position
+    /// without applying any brush strokes.
+    pub(super) fn handle_hover_pick(&mut self, result: PickResult) {
+        if result.material_id >= 0 {
+            self.async_state.hover_world_pos = Some(Vec3::new(
+                result.world_pos[0],
+                result.world_pos[1],
+                result.world_pos[2],
+            ));
+            self.async_state.cursor_over_geometry = true;
+        } else {
+            self.async_state.hover_world_pos = None;
+            self.async_state.cursor_over_geometry = false;
         }
     }
 
@@ -55,6 +89,18 @@ impl SdfApp {
             return;
         }
         let hit_node_id = topo_order[idx];
+
+        // Per-stroke undo: snapshot grid data at the start of each stroke
+        if self.async_state.last_sculpt_hit.is_none() {
+            if let SculptState::Active { node_id: active_id, .. } = self.doc.sculpt_state {
+                self.doc.sculpt_history.set_node(active_id);
+                if let Some(node) = self.doc.scene.nodes.get(&active_id) {
+                    if let NodeData::Sculpt { ref voxel_grid, .. } = node.data {
+                        self.doc.sculpt_history.begin_stroke(&voxel_grid.data);
+                    }
+                }
+            }
+        }
 
         let SculptState::Active {
             node_id,
@@ -86,6 +132,32 @@ impl SdfApp {
         };
 
         if hit_node_id != node_id {
+            // Hit a different node while sculpting — handle navigation/conversion
+            if let Some(hit_node) = self.doc.scene.nodes.get(&hit_node_id) {
+                if matches!(hit_node.data, NodeData::Sculpt { .. }) {
+                    // Hit another sculpt node — switch to it directly
+                    self.doc.sculpt_state = SculptState::new_active(hit_node_id);
+                    self.doc.sculpt_history.set_node(hit_node_id);
+                    self.ui.node_graph_state.selected = Some(hit_node_id);
+                    self.async_state.last_sculpt_hit = None;
+                    self.async_state.lazy_brush_pos = None;
+                } else {
+                    // Check if the hit node has a sculpt parent
+                    let parent_map = self.doc.scene.build_parent_map();
+                    if let Some(sculpt_id) = self.doc.scene.find_sculpt_parent(hit_node_id, &parent_map) {
+                        // Switch to the sculpt parent
+                        self.doc.sculpt_state = SculptState::new_active(sculpt_id);
+                        self.doc.sculpt_history.set_node(sculpt_id);
+                        self.ui.node_graph_state.selected = Some(sculpt_id);
+                        self.async_state.last_sculpt_hit = None;
+                        self.async_state.lazy_brush_pos = None;
+                    } else {
+                        // Non-sculpt node with no sculpt parent — show convert dialog
+                        self.ui.sculpt_convert_dialog =
+                            Some(crate::app::state::SculptConvertDialog::new(hit_node_id));
+                    }
+                }
+            }
             return;
         }
 
@@ -440,8 +512,19 @@ impl SdfApp {
             && self.async_state.pending_pick.is_none()
             && matches!(self.async_state.pick_state, PickState::Idle)
         {
+            // End stroke only if a drag was in progress
+            if self.async_state.last_sculpt_hit.is_some() {
+                self.doc.sculpt_history.end_stroke();
+            }
+
             self.async_state.last_sculpt_hit = None;
             self.async_state.lazy_brush_pos = None;
+            self.async_state.sculpt_dragging = false;
+            // Clear cursor_over_geometry so the next LMB drag defaults to orbit
+            // until a hover pick re-confirms geometry. hover_world_pos is kept
+            // so the 3D brush ring stays visible during hover.
+            self.async_state.cursor_over_geometry = false;
+
             if let SculptState::Active {
                 ref mut flatten_reference,
                 ref mut grab_snapshot,
@@ -466,6 +549,9 @@ impl SdfApp {
                     self.doc.sculpt_state = SculptState::Inactive;
                     self.async_state.last_sculpt_hit = None;
                     self.async_state.lazy_brush_pos = None;
+                    self.async_state.hover_world_pos = None;
+                    self.async_state.cursor_over_geometry = false;
+                    self.async_state.sculpt_dragging = false;
                     self.cancel_pending_pick_state();
                 }
             }

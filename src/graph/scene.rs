@@ -1102,6 +1102,22 @@ impl Scene {
         map
     }
 
+    /// Walk upward from `start` through the parent map. Return the first
+    /// ancestor whose `NodeData` is `Sculpt` and that has `start` somewhere
+    /// in its input chain.
+    pub fn find_sculpt_parent(&self, start: NodeId, parent_map: &HashMap<NodeId, NodeId>) -> Option<NodeId> {
+        let mut current = start;
+        while let Some(&parent_id) = parent_map.get(&current) {
+            if let Some(parent_node) = self.nodes.get(&parent_id) {
+                if matches!(parent_node.data, NodeData::Sculpt { .. }) {
+                    return Some(parent_id);
+                }
+            }
+            current = parent_id;
+        }
+        None
+    }
+
     /// Walk up from a leaf through ancestor transforms and compute world-space
     /// bounding sphere (center, radius).
     pub fn walk_transforms_sphere(

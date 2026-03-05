@@ -6,6 +6,7 @@ mod graph;
 mod io;
 mod mesh_import;
 mod sculpt;
+mod sculpt_history;
 mod settings;
 mod ui;
 

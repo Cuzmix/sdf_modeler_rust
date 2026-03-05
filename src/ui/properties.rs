@@ -4,7 +4,7 @@ use crate::app::BakeRequest;
 use crate::app::actions::{Action, ActionSink};
 use crate::graph::scene::{CsgOp, ModifierKind, NodeData, NodeId, Scene, SdfPrimitive};
 use crate::graph::voxel;
-use crate::sculpt::{BrushMode, BrushShape, FalloffMode, SculptState, DEFAULT_BRUSH_STRENGTH};
+use crate::sculpt::SculptState;
 
 const SCALE_MIN: f32 = 0.01;
 const SCALE_MAX: f32 = 100.0;
@@ -578,90 +578,6 @@ pub fn draw(
                 });
 
             let sculpt_active = sculpt_state.active_node() == Some(id);
-
-            // Brush settings (only when actively sculpting)
-            if let SculptState::Active {
-                ref mut brush_mode,
-                ref mut brush_radius,
-                ref mut brush_strength,
-                ref mut falloff_mode,
-                ref mut brush_shape,
-                ref mut smooth_iterations,
-                ref mut lazy_radius,
-                ref mut surface_constraint,
-                ref mut symmetry_axis,
-                ..
-            } = sculpt_state
-            {
-                let prev_mode = brush_mode.clone();
-                ui.horizontal(|ui| {
-                    ui.label("Brush:");
-                    ui.selectable_value(brush_mode, BrushMode::Add, "Add");
-                    ui.selectable_value(brush_mode, BrushMode::Carve, "Carve");
-                    ui.selectable_value(brush_mode, BrushMode::Smooth, "Smooth");
-                    ui.selectable_value(brush_mode, BrushMode::Flatten, "Flatten");
-                    ui.selectable_value(brush_mode, BrushMode::Inflate, "Inflate");
-                    ui.selectable_value(brush_mode, BrushMode::Grab, "Grab");
-                });
-                if *brush_mode != prev_mode {
-                    if *brush_mode == BrushMode::Grab && *brush_strength < 0.5 {
-                        *brush_strength = 1.0;
-                    } else if prev_mode == BrushMode::Grab && *brush_strength > 0.5 {
-                        *brush_strength = DEFAULT_BRUSH_STRENGTH;
-                    }
-                }
-                ui.horizontal(|ui| {
-                    ui.label("Falloff:");
-                    ui.selectable_value(falloff_mode, FalloffMode::Smooth, "Smooth");
-                    ui.selectable_value(falloff_mode, FalloffMode::Linear, "Linear");
-                    ui.selectable_value(falloff_mode, FalloffMode::Sharp, "Sharp");
-                    ui.selectable_value(falloff_mode, FalloffMode::Flat, "Flat");
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Shape:");
-                    ui.selectable_value(brush_shape, BrushShape::Sphere, "Sphere");
-                    ui.selectable_value(brush_shape, BrushShape::Cube, "Cube");
-                    ui.selectable_value(brush_shape, BrushShape::Diamond, "Diamond");
-                    ui.selectable_value(brush_shape, BrushShape::Ring, "Ring");
-                    ui.selectable_value(brush_shape, BrushShape::Cylinder, "Cylinder");
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Radius:");
-                    ui.add(egui::Slider::new(brush_radius, 0.05..=2.0));
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Strength:");
-                    let range = if *brush_mode == BrushMode::Grab {
-                        0.1..=3.0
-                    } else {
-                        0.01..=0.5
-                    };
-                    ui.add(egui::Slider::new(brush_strength, range));
-                });
-                if *brush_mode == BrushMode::Smooth {
-                    ui.horizontal(|ui| {
-                        ui.label("Iterations:");
-                        let mut iters = *smooth_iterations as i32;
-                        ui.add(egui::Slider::new(&mut iters, 1..=10));
-                        *smooth_iterations = iters as u32;
-                    });
-                }
-                ui.horizontal(|ui| {
-                    ui.label("Stabilize:");
-                    ui.add(egui::Slider::new(lazy_radius, 0.0..=0.5));
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Surface:");
-                    ui.add(egui::Slider::new(surface_constraint, 0.0..=1.0));
-                });
-                ui.horizontal(|ui| {
-                    ui.label("Symmetry:");
-                    ui.selectable_value(symmetry_axis, None, "Off");
-                    ui.selectable_value(symmetry_axis, Some(0), "X");
-                    ui.selectable_value(symmetry_axis, Some(1), "Y");
-                    ui.selectable_value(symmetry_axis, Some(2), "Z");
-                });
-            }
 
             if sculpt_active {
                 if let Some((done, total)) = bake_progress {

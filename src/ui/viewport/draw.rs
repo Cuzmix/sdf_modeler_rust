@@ -15,6 +15,81 @@ use crate::ui::gizmo::{self, GizmoMode, GizmoSpace, GizmoState};
 use super::ViewportResources;
 
 // ---------------------------------------------------------------------------
+// Safety border helper
+// ---------------------------------------------------------------------------
+
+/// Returns true if the given position is within the safety border zone
+/// (a fraction of viewport size along each edge). Used in sculpt mode to
+/// guarantee navigation even when geometry fills the viewport.
+fn in_safety_border(pos: egui::Pos2, rect: egui::Rect, fraction: f32) -> bool {
+    if fraction <= 0.0 {
+        return false;
+    }
+    let border = rect.width().min(rect.height()) * fraction;
+    pos.x < rect.min.x + border
+        || pos.x > rect.max.x - border
+        || pos.y < rect.min.y + border
+        || pos.y > rect.max.y - border
+}
+
+// ---------------------------------------------------------------------------
+// CPU-side sculpt mesh hit test
+// ---------------------------------------------------------------------------
+
+/// Fast CPU-side test: project the active sculpt node's bounding sphere to
+/// screen space and check if `cursor` falls inside. This replaces the async
+/// GPU pick for the orbit-vs-sculpt decision, giving zero-latency response.
+fn cursor_in_sculpt_bounds(
+    cursor: egui::Pos2,
+    sculpt_state: &SculptState,
+    scene: &Scene,
+    camera: &Camera,
+    rect: egui::Rect,
+) -> bool {
+    let node_id = match sculpt_state {
+        SculptState::Active { node_id, .. } => *node_id,
+        _ => return false,
+    };
+    let node = match scene.nodes.get(&node_id) {
+        Some(n) => n,
+        None => return false,
+    };
+    let (center, radius) = match &node.data {
+        NodeData::Sculpt { position, voxel_grid, .. } => {
+            let mid = *position + (voxel_grid.bounds_min + voxel_grid.bounds_max) * 0.5;
+            let half_extent = (voxel_grid.bounds_max - voxel_grid.bounds_min) * 0.5;
+            let r = half_extent.x.max(half_extent.y).max(half_extent.z);
+            (mid, r)
+        }
+        _ => return false,
+    };
+
+    // Project bounding sphere center to screen (NDC → viewport pixels)
+    let aspect = rect.width() / rect.height().max(1.0);
+    let vp = camera.projection_matrix(aspect) * camera.view_matrix();
+    let clip = vp * glam::Vec4::new(center.x, center.y, center.z, 1.0);
+    if clip.w <= 0.0 {
+        return false; // Behind camera
+    }
+    let ndc = clip.truncate() / clip.w;
+    let screen_x = rect.min.x + (ndc.x * 0.5 + 0.5) * rect.width();
+    let screen_y = rect.min.y + (-ndc.y * 0.5 + 0.5) * rect.height();
+
+    // Project sphere radius: use a point on the sphere edge to get screen-space radius
+    let eye = camera.eye();
+    let dist_to_center = (center - eye).length().max(0.001);
+    let angular_radius = (radius / dist_to_center).min(1.0).asin();
+    let fov_half = camera.fov * 0.5;
+    let screen_radius = (angular_radius / fov_half) * (rect.height() * 0.5);
+
+    // Add a small margin so edges aren't clipped
+    let padded_radius = screen_radius + 10.0;
+    let dx = cursor.x - screen_x;
+    let dy = cursor.y - screen_y;
+    (dx * dx + dy * dy) <= padded_radius * padded_radius
+}
+
+// ---------------------------------------------------------------------------
 // Paint callback
 // ---------------------------------------------------------------------------
 
@@ -164,12 +239,27 @@ fn effective_brush_mode(base: &BrushMode, ctrl: bool, shift: bool) -> BrushMode 
     base.clone()
 }
 
-/// Draw a semi-transparent symmetry plane overlay at the mirror axis.
-fn draw_symmetry_plane(painter: &egui::Painter, camera: &Camera, rect: egui::Rect, axis: u8) {
+/// Draw a semi-transparent symmetry plane overlay at the mirror axis with axis label.
+/// `scene_bounds` is used to adaptively size the plane to the scene.
+fn draw_symmetry_plane(
+    painter: &egui::Painter,
+    camera: &Camera,
+    rect: egui::Rect,
+    axis: u8,
+    scene_bounds: ([f32; 3], [f32; 3]),
+) {
     let aspect = rect.width() / rect.height();
     let view_proj = camera.projection_matrix(aspect) * camera.view_matrix();
 
-    let extent = 5.0_f32;
+    // Adaptive extent: 1.5x the largest scene half-extent, minimum 2.0
+    let half_extents = [
+        (scene_bounds.1[0] - scene_bounds.0[0]) * 0.5,
+        (scene_bounds.1[1] - scene_bounds.0[1]) * 0.5,
+        (scene_bounds.1[2] - scene_bounds.0[2]) * 0.5,
+    ];
+    let max_half = half_extents[0].max(half_extents[1]).max(half_extents[2]);
+    let extent = (max_half * 1.5).max(2.0);
+
     let corners: [glam::Vec3; 4] = match axis {
         0 => [
             glam::Vec3::new(0.0, -extent, -extent),
@@ -200,26 +290,56 @@ fn draw_symmetry_plane(painter: &egui::Painter, camera: &Camera, rect: egui::Rec
         return;
     }
 
-    let (fill, border) = match axis {
+    let (fill, border, label, label_color) = match axis {
         0 => (
             egui::Color32::from_rgba_premultiplied(255, 50, 50, 20),
             egui::Color32::from_rgba_premultiplied(255, 80, 80, 80),
+            "X",
+            egui::Color32::from_rgb(255, 100, 100),
         ),
         1 => (
             egui::Color32::from_rgba_premultiplied(50, 255, 50, 20),
             egui::Color32::from_rgba_premultiplied(80, 255, 80, 80),
+            "Y",
+            egui::Color32::from_rgb(100, 255, 100),
         ),
         _ => (
             egui::Color32::from_rgba_premultiplied(50, 50, 255, 20),
             egui::Color32::from_rgba_premultiplied(80, 80, 255, 80),
+            "Z",
+            egui::Color32::from_rgb(100, 100, 255),
         ),
     };
 
     painter.add(egui::Shape::convex_polygon(
-        screen_pts,
+        screen_pts.clone(),
         fill,
         egui::Stroke::new(1.0, border),
     ));
+
+    // Draw axis label at the top edge of the plane
+    let label_world = match axis {
+        0 => glam::Vec3::new(0.0, extent * 0.9, 0.0),
+        1 => glam::Vec3::new(0.0, 0.0, extent * 0.9),
+        _ => glam::Vec3::new(0.0, extent * 0.9, 0.0),
+    };
+    if let Some(label_pos) = gizmo::world_to_screen(label_world, &view_proj, rect) {
+        let font = egui::FontId::proportional(13.0);
+        painter.text(
+            label_pos + egui::vec2(1.0, 1.0),
+            egui::Align2::CENTER_CENTER,
+            label,
+            font.clone(),
+            egui::Color32::from_black_alpha(180),
+        );
+        painter.text(
+            label_pos,
+            egui::Align2::CENTER_CENTER,
+            label,
+            font,
+            label_color,
+        );
+    }
 }
 
 pub struct ViewportOutput {
@@ -229,6 +349,12 @@ pub struct ViewportOutput {
     pub sculpt_shift_held: bool,
     /// Pen pressure (0.0 = no pressure data, 1.0 = max).
     pub sculpt_pressure: f32,
+    /// Brush radius delta from Ctrl+right-drag (horizontal movement).
+    pub brush_radius_delta: f32,
+    /// Brush strength delta from Ctrl+right-drag (vertical movement).
+    pub brush_strength_delta: f32,
+    /// True if this pick is a hover-only pick (no brush application).
+    pub is_hover_pick: bool,
 }
 
 pub fn draw(
@@ -250,12 +376,18 @@ pub fn draw(
     snap_config: &SnapConfig,
     isolation_label: Option<&str>,
     turntable_active: bool,
+    last_sculpt_hit: Option<glam::Vec3>,
+    hover_world_pos: Option<glam::Vec3>,
+    _cursor_over_geometry: bool,
 ) -> ViewportOutput {
     let mut output = ViewportOutput {
         pending_pick: None,
         sculpt_ctrl_held: false,
         sculpt_shift_held: false,
         sculpt_pressure: 0.0,
+        brush_radius_delta: 0.0,
+        brush_strength_delta: 0.0,
+        is_hover_pick: false,
     };
     let rect = ui.available_rect_before_wrap();
     let response = ui.allocate_rect(rect, egui::Sense::click_and_drag());
@@ -315,6 +447,37 @@ pub fn draw(
         .map(|i| i as f32)
         .unwrap_or(-1.0);
     let shading_mode_val = render_config.shading_mode.gpu_value();
+
+    // Compute brush_pos for 3D brush preview: [x, y, z, radius] or [0,0,0,0] when inactive.
+    // Zero-latency tracking: project cursor through camera at last known surface depth.
+    // GPU hover picks refine the depth each frame, but projection gives instant feedback.
+    let brush_pos = if let SculptState::Active { brush_radius, .. } = sculpt_state {
+        let reference_hit = hover_world_pos.or(last_sculpt_hit);
+        let cursor = response.hover_pos();
+
+        match (cursor, reference_hit) {
+            (Some(cp), Some(hit)) if rect.contains(cp) => {
+                // Cast ray through cursor at the depth of the last known hit
+                let aspect = rect.width() / rect.height().max(1.0);
+                let ndc_x = ((cp.x - rect.min.x) / rect.width()) * 2.0 - 1.0;
+                let ndc_y = 1.0 - ((cp.y - rect.min.y) / rect.height()) * 2.0;
+                let inv_vp = (camera.projection_matrix(aspect) * camera.view_matrix()).inverse();
+                let near_h = inv_vp * glam::Vec4::new(ndc_x, ndc_y, 0.0, 1.0);
+                let near = near_h.truncate() / near_h.w;
+                let far_h = inv_vp * glam::Vec4::new(ndc_x, ndc_y, 1.0, 1.0);
+                let far = far_h.truncate() / far_h.w;
+                let ray_dir = (far - near).normalize();
+                let depth = (hit - near).dot(ray_dir).max(0.001);
+                let approx = near + ray_dir * depth;
+                [approx.x, approx.y, approx.z, *brush_radius]
+            }
+            (_, Some(hit)) => [hit.x, hit.y, hit.z, *brush_radius],
+            _ => [0.0; 4],
+        }
+    } else {
+        [0.0; 4]
+    };
+
     let render_uniform = camera.to_uniform(
         render_viewport,
         time,
@@ -323,6 +486,7 @@ pub fn draw(
         scene_bounds,
         selected_idx,
         shading_mode_val,
+        brush_pos,
     );
 
     ui.painter().add(egui_wgpu::Callback::new_paint_callback(
@@ -348,7 +512,7 @@ pub fn draw(
 
     // --- Symmetry plane overlay ---
     if let Some(axis) = sculpt_state.symmetry_axis() {
-        draw_symmetry_plane(ui.painter(), camera, rect, axis);
+        draw_symmetry_plane(ui.painter(), camera, rect, axis, scene_bounds);
     }
 
     // --- Node labels overlay ---
@@ -365,29 +529,103 @@ pub fn draw(
 
     // --- Gizmo overlay (drawn on top of WGPU content) ---
 
-    let gizmo_consumed = if sculpt_active {
-        false // Gizmo is disabled during sculpt mode
-    } else {
-        gizmo::draw_and_interact(
-            ui.painter(),
-            &response,
-            camera,
-            scene,
-            *selected,
-            gizmo_state,
-            gizmo_mode,
-            gizmo_space,
-            pivot_offset,
-            rect,
-            snap_config,
-        )
-    };
+    let gizmo_consumed = gizmo::draw_and_interact(
+        ui.painter(),
+        &response,
+        camera,
+        scene,
+        *selected,
+        gizmo_state,
+        gizmo_mode,
+        gizmo_space,
+        pivot_offset,
+        rect,
+        snap_config,
+    );
 
     // --- Interaction priority: sculpt > gizmo > pick > orbit ---
 
     if sculpt_active {
-        // Sculpt mode: drag applies brush continuously via pick
-        if response.dragged_by(egui::PointerButton::Primary) && !multi_touch_active {
+        // Sculpt mode: same navigation as select mode, plus sculpt when over mesh.
+        // CPU-side bounding sphere test gives instant orbit-vs-sculpt — zero GPU latency.
+        if !gizmo_consumed && response.dragged_by(egui::PointerButton::Primary) && !multi_touch_active {
+            let drag_origin = ui.input(|i| i.pointer.press_origin());
+            let in_border = drag_origin
+                .map(|origin| in_safety_border(origin, rect, render_config.sculpt_safety_border))
+                .unwrap_or(false);
+
+            // CPU bounding sphere test: project sculpt node bounds to screen,
+            // check if drag origin is inside. Instant, no async pipeline needed.
+            let cursor_on_mesh = if !in_border {
+                drag_origin
+                    .map(|origin| cursor_in_sculpt_bounds(origin, sculpt_state, scene, camera, rect))
+                    .unwrap_or(false)
+            } else {
+                false
+            };
+
+            // Once a stroke is confirmed via GPU pick, keep sculpting even if
+            // the cursor drifts outside the bounding sphere mid-stroke.
+            let stroke_confirmed = last_sculpt_hit.is_some();
+
+            if !cursor_on_mesh && !stroke_confirmed {
+                // Outside mesh bounds and no active stroke: orbit (same as select mode)
+                let delta = response.drag_delta();
+                let modifiers = ui.input(|i| i.modifiers);
+                if modifiers.ctrl && modifiers.alt {
+                    let sign = if render_config.invert_roll { -1.0 } else { 1.0 };
+                    camera.roll_by(sign * delta.x, render_config.roll_sensitivity);
+                } else {
+                    camera.orbit(delta.x, delta.y);
+                    if render_config.clamp_orbit_pitch {
+                        camera.clamp_pitch();
+                    }
+                }
+            } else if let Some(pos) = ui.input(|i| i.pointer.hover_pos()) {
+                // Over mesh bounds or stroke already confirmed: sculpt
+                if rect.contains(pos) {
+                    let mouse_px = [
+                        (pos.x - rect.min.x) * pixels_per_point,
+                        (pos.y - rect.min.y) * pixels_per_point,
+                    ];
+                    output.pending_pick = Some(PendingPick {
+                        mouse_pos: mouse_px,
+                        camera_uniform: camera.to_uniform(
+                            viewport,
+                            time,
+                            0.0,
+                            false,
+                            scene_bounds,
+                            -1.0,
+                            0.0,
+                            [0.0; 4],
+                        ),
+                    });
+                    // Capture modifier keys for Ctrl-invert / Shift-smooth
+                    let modifiers = ui.input(|i| i.modifiers);
+                    output.sculpt_ctrl_held = modifiers.ctrl;
+                    output.sculpt_shift_held = modifiers.shift;
+                    // Capture pen pressure from touch/stylus events
+                    output.sculpt_pressure = ui.input(|i| {
+                        if let Some(touch) = i.multi_touch() {
+                            if touch.force > 0.0 {
+                                return touch.force;
+                            }
+                        }
+                        for event in &i.events {
+                            if let egui::Event::Touch { force: Some(f), .. } = event {
+                                if *f > 0.0 {
+                                    return *f;
+                                }
+                            }
+                        }
+                        0.0
+                    });
+                }
+            }
+        }
+        // Hover pick: when NOT dragging, submit pick for 3D brush preview position
+        else if !gizmo_consumed && response.hovered() && output.pending_pick.is_none() {
             if let Some(pos) = ui.input(|i| i.pointer.hover_pos()) {
                 if rect.contains(pos) {
                     let mouse_px = [
@@ -404,147 +642,84 @@ pub fn draw(
                             scene_bounds,
                             -1.0,
                             0.0,
+                            [0.0; 4],
                         ),
                     });
-                    // Capture modifier keys for Ctrl-invert / Shift-smooth
-                    let modifiers = ui.input(|i| i.modifiers);
-                    output.sculpt_ctrl_held = modifiers.ctrl;
-                    output.sculpt_shift_held = modifiers.shift;
-                    // Capture pen pressure from touch/stylus events
-                    output.sculpt_pressure = ui.input(|i| {
-                        // Check multi-touch info for force
-                        if let Some(touch) = i.multi_touch() {
-                            if touch.force > 0.0 {
-                                return touch.force;
-                            }
-                        }
-                        // Check raw touch events for force
-                        for event in &i.events {
-                            if let egui::Event::Touch { force: Some(f), .. } = event {
-                                if *f > 0.0 {
-                                    return *f;
-                                }
-                            }
-                        }
-                        0.0
-                    });
+                    output.is_hover_pick = true;
                 }
             }
         }
 
-        // Enhanced brush cursor preview
+        // Ctrl+right-drag: horizontal = resize brush, vertical = adjust strength
+        if response.dragged_by(egui::PointerButton::Secondary) && !multi_touch_active {
+            let modifiers = ui.input(|i| i.modifiers);
+            if modifiers.ctrl {
+                let delta = response.drag_delta();
+                // Horizontal → radius (scale by distance for consistent feel)
+                let radius_sensitivity = 0.005 * camera.distance;
+                output.brush_radius_delta = delta.x * radius_sensitivity;
+                // Vertical → strength (inverted: drag up = stronger)
+                let strength_sensitivity = 0.002;
+                output.brush_strength_delta = -delta.y * strength_sensitivity;
+            }
+        }
+
+        // Minimal 2D crosshair cursor (3D shader ring is the primary brush preview)
         if let SculptState::Active {
             ref brush_mode,
-            brush_radius,
-            brush_strength,
-            symmetry_axis,
             ..
         } = sculpt_state
         {
             if let Some(hover_pos) = response.hover_pos() {
-                let screen_radius = brush_radius / camera.distance * rect.height() * 0.5;
-                // Reflect Ctrl/Shift modifier overrides in cursor color
                 let modifiers = ui.input(|i| i.modifiers);
                 let effective_mode =
                     effective_brush_mode(brush_mode, modifiers.ctrl, modifiers.shift);
                 let mode_color = brush_cursor_color(&effective_mode);
 
-                // Outer ring: brush extent (color-coded by mode)
-                ui.painter().circle_stroke(
-                    hover_pos,
-                    screen_radius,
-                    egui::Stroke::new(1.5, mode_color),
-                );
-
-                // Inner fill: strength indicator with mode tint
-                let strength_alpha = (brush_strength / 0.5 * 60.0).clamp(8.0, 60.0) as u8;
+                // Small center dot
                 ui.painter().circle_filled(
                     hover_pos,
-                    screen_radius * 0.6,
-                    egui::Color32::from_rgba_premultiplied(
-                        mode_color.r(),
-                        mode_color.g(),
-                        mode_color.b(),
-                        strength_alpha,
-                    ),
+                    2.5,
+                    egui::Color32::from_white_alpha(180),
                 );
-
-                // Crosshair center dot
-                ui.painter().circle_filled(
-                    hover_pos,
-                    2.0,
-                    egui::Color32::from_rgba_premultiplied(255, 255, 255, 160),
+                // Thin crosshair lines (6px each direction)
+                let cross = 6.0;
+                let stroke = egui::Stroke::new(1.0, mode_color);
+                ui.painter().line_segment(
+                    [
+                        hover_pos - egui::vec2(cross, 0.0),
+                        hover_pos + egui::vec2(cross, 0.0),
+                    ],
+                    stroke,
                 );
-
-                // Symmetry mirror cursor
-                if let Some(axis) = symmetry_axis {
-                    let mirror_color = match axis {
-                        0 => egui::Color32::from_rgba_premultiplied(255, 100, 100, 100),
-                        1 => egui::Color32::from_rgba_premultiplied(100, 255, 100, 100),
-                        _ => egui::Color32::from_rgba_premultiplied(100, 100, 255, 100),
-                    };
-                    // Mirror the hover position through the symmetry plane in screen space
-                    // Project the origin and the mirrored point to get screen-space mirror
-                    let aspect = rect.width() / rect.height();
-                    let vp = camera.projection_matrix(aspect) * camera.view_matrix();
-                    let origin = gizmo::world_to_screen(glam::Vec3::ZERO, &vp, rect);
-                    if let Some(origin_screen) = origin {
-                        // Mirror hover_pos around the axis line through origin
-                        let mirror_pos = match axis {
-                            0 => {
-                                // X symmetry: mirror horizontally around origin.x
-                                egui::pos2(2.0 * origin_screen.x - hover_pos.x, hover_pos.y)
-                            }
-                            1 => {
-                                // Y symmetry: mirror vertically around origin.y
-                                egui::pos2(hover_pos.x, 2.0 * origin_screen.y - hover_pos.y)
-                            }
-                            _ => {
-                                // Z symmetry: approximate mirror horizontally
-                                egui::pos2(2.0 * origin_screen.x - hover_pos.x, hover_pos.y)
-                            }
-                        };
-                        if rect.contains(mirror_pos) {
-                            ui.painter().circle_stroke(
-                                mirror_pos,
-                                screen_radius,
-                                egui::Stroke::new(1.0, mirror_color),
-                            );
-                            ui.painter().circle_filled(mirror_pos, 2.0, mirror_color);
-                        }
-                    }
-                }
-
-                // Brush HUD text near cursor
-                let mode_name = match brush_mode {
-                    BrushMode::Add => "Add",
-                    BrushMode::Carve => "Carve",
-                    BrushMode::Smooth => "Smooth",
-                    BrushMode::Flatten => "Flatten",
-                    BrushMode::Inflate => "Inflate",
-                    BrushMode::Grab => "Grab",
-                };
-                let hud_text = format!(
-                    "{} R:{:.2} S:{:.3}",
-                    mode_name, brush_radius, brush_strength
-                );
-                let text_pos = hover_pos + egui::vec2(screen_radius + 8.0, screen_radius + 4.0);
-                let font = egui::FontId::monospace(10.0);
-                ui.painter().text(
-                    text_pos + egui::vec2(1.0, 1.0),
-                    egui::Align2::LEFT_TOP,
-                    &hud_text,
-                    font.clone(),
-                    egui::Color32::from_black_alpha(180),
-                );
-                ui.painter().text(
-                    text_pos,
-                    egui::Align2::LEFT_TOP,
-                    &hud_text,
-                    font,
-                    egui::Color32::from_white_alpha(200),
+                ui.painter().line_segment(
+                    [
+                        hover_pos - egui::vec2(0.0, cross),
+                        hover_pos + egui::vec2(0.0, cross),
+                    ],
+                    stroke,
                 );
             }
+        }
+
+        // Double-click in safety border → frame all
+        if response.double_clicked() {
+            if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
+                if in_safety_border(pos, rect, render_config.sculpt_safety_border) {
+                    actions.push(crate::app::actions::Action::FrameAll);
+                }
+            }
+        }
+
+        // Visual safety border indicator (subtle inner rect)
+        if render_config.sculpt_safety_border > 0.0 {
+            let border_px = rect.width().min(rect.height()) * render_config.sculpt_safety_border;
+            let inner_rect = rect.shrink(border_px);
+            ui.painter().rect_stroke(
+                inner_rect,
+                0.0,
+                egui::Stroke::new(1.0, egui::Color32::from_white_alpha(20)),
+            );
         }
 
         // Right-click still orbits in sculpt mode, secondary drag pans
@@ -574,7 +749,7 @@ pub fn draw(
                     (pos.y - rect.min.y) * pixels_per_point,
                 ];
                 let pick_uniform =
-                    camera.to_uniform(viewport, time, 0.0, false, scene_bounds, -1.0, 0.0);
+                    camera.to_uniform(viewport, time, 0.0, false, scene_bounds, -1.0, 0.0, [0.0; 4]);
                 output.pending_pick = Some(PendingPick {
                     mouse_pos: mouse_px,
                     camera_uniform: pick_uniform,
@@ -674,6 +849,33 @@ pub fn draw(
             &text,
             font,
             egui::Color32::from_rgb(255, 180, 60),
+        );
+    }
+
+    // --- Sculpt context indicator (warm accent bar below isolation indicator) ---
+    if let SculptState::Active { node_id, .. } = sculpt_state {
+        let node_name = scene
+            .nodes
+            .get(node_id)
+            .map(|n| n.name.as_str())
+            .unwrap_or("Unknown");
+        let text = format!("Sculpting: {}", node_name);
+        let font = egui::FontId::proportional(13.0);
+        let y_offset = if isolation_label.is_some() { 24.0 } else { 8.0 };
+        let pos = egui::pos2(rect.center().x, rect.min.y + y_offset);
+        ui.painter().text(
+            pos + egui::vec2(1.0, 1.0),
+            egui::Align2::CENTER_TOP,
+            &text,
+            font.clone(),
+            egui::Color32::from_black_alpha(180),
+        );
+        ui.painter().text(
+            pos,
+            egui::Align2::CENTER_TOP,
+            &text,
+            font,
+            egui::Color32::from_rgb(255, 160, 80),
         );
     }
 

@@ -67,11 +67,19 @@ impl SdfApp {
             actions.push(Action::DeleteSelected);
         }
 
-        // Undo / Redo
+        // Undo / Redo — route to sculpt undo when sculpt is active
         if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Z)) {
-            actions.push(Action::Undo);
+            if self.doc.sculpt_state.is_active() {
+                actions.push(Action::SculptUndo);
+            } else {
+                actions.push(Action::Undo);
+            }
         } else if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Y)) {
-            actions.push(Action::Redo);
+            if self.doc.sculpt_state.is_active() {
+                actions.push(Action::SculptRedo);
+            } else {
+                actions.push(Action::Redo);
+            }
         }
 
         // Save / Load
@@ -112,8 +120,13 @@ impl SdfApp {
         if ctx.input(|i| i.key_pressed(egui::Key::E) && !i.modifiers.ctrl) {
             actions.push(Action::SetGizmoMode(GizmoMode::Rotate));
         }
-        if ctx.input(|i| i.key_pressed(egui::Key::R)) {
+        if ctx.input(|i| i.key_pressed(egui::Key::R) && !i.modifiers.ctrl) {
             actions.push(Action::SetGizmoMode(GizmoMode::Scale));
+        }
+
+        // Ctrl+R: enter sculpt mode (with convert dialog if needed)
+        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::R)) {
+            actions.push(Action::EnterSculptMode);
         }
         if ctx.input(|i| i.key_pressed(egui::Key::G)) {
             actions.push(Action::ToggleGizmoSpace);
@@ -167,8 +180,10 @@ impl SdfApp {
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) && self.doc.active_tool == ActiveTool::Sculpt {
             actions.push(Action::SetTool(ActiveTool::Select));
         }
+        // S key: quick-activate sculpt on an existing sculpt node (no convert dialog).
+        // For non-sculpt nodes, use Ctrl+R which shows the convert dialog.
         if ctx.input(|i| i.key_pressed(egui::Key::S) && !i.modifiers.ctrl) && self.doc.active_tool == ActiveTool::Select {
-            actions.push(Action::SetTool(ActiveTool::Sculpt));
+            actions.push(Action::EnterSculptMode);
         }
 
         // Sculpt brush mode shortcuts (when sculpt is active)

@@ -225,6 +225,7 @@ impl SdfApp {
                 history: crate::graph::history::History::new(),
                 active_tool: ActiveTool::default(),
                 sculpt_state: SculptState::Inactive,
+                sculpt_history: crate::sculpt_history::SculptHistory::new(),
                 clipboard_node: None,
             },
             gizmo: GizmoContext {
@@ -253,11 +254,14 @@ impl SdfApp {
                 sculpt_ctrl_held: false,
                 sculpt_shift_held: false,
                 sculpt_pressure: 0.0,
+                hover_world_pos: None,
+                cursor_over_geometry: false,
+                sculpt_dragging: false,
             },
             ui: UiState {
                 dock_state: dock::create_dock_state(),
                 node_graph_state: NodeGraphState::new(),
-                show_debug: true,
+                show_debug: false,
                 show_help: false,
                 show_export_dialog: false,
                 show_settings: false,
@@ -272,6 +276,7 @@ impl SdfApp {
                 command_palette_open: false,
                 command_palette_query: String::new(),
                 command_palette_selected: 0,
+                sculpt_convert_dialog: None,
             },
             persistence: PersistenceState {
                 current_file_path: None,
@@ -319,6 +324,34 @@ impl eframe::App for SdfApp {
         self.poll_import();
         self.poll_sculpt_pick();
 
+        // Detect sculpt drag end: LMB released while sculpt_dragging was true.
+        // Must happen here (before draw) because hover picks immediately fill
+        // pending_pick, preventing reset_sculpt_stroke_if_idle from ever firing.
+        if self.async_state.sculpt_dragging
+            && !ctx.input(|i| i.pointer.primary_down())
+        {
+            if self.async_state.last_sculpt_hit.is_some() {
+                self.doc.sculpt_history.end_stroke();
+            }
+            self.async_state.last_sculpt_hit = None;
+            self.async_state.lazy_brush_pos = None;
+            self.async_state.sculpt_dragging = false;
+            self.async_state.cursor_over_geometry = false;
+            if let SculptState::Active {
+                ref mut flatten_reference,
+                ref mut grab_snapshot,
+                ref mut grab_start,
+                ref mut grab_child_input,
+                ..
+            } = self.doc.sculpt_state
+            {
+                *flatten_reference = None;
+                *grab_snapshot = None;
+                *grab_start = None;
+                *grab_child_input = None;
+            }
+        }
+
         // Reset pivot when selection changes
         let current_sel = self.ui.node_graph_state.selected;
         if current_sel != self.gizmo.last_selection {
@@ -350,6 +383,13 @@ impl eframe::App for SdfApp {
             &self.doc.camera,
         );
         crate::ui::toasts::draw(ctx, &mut self.ui.toasts);
+
+        // Sculpt convert dialog
+        crate::ui::sculpt_convert_dialog::draw(
+            ctx,
+            &mut self.ui.sculpt_convert_dialog,
+            &mut action_sink,
+        );
 
         // Export dialog — acts on result
         match crate::ui::export_dialog::draw(
@@ -387,6 +427,7 @@ impl eframe::App for SdfApp {
         let mut sculpt_ctrl_held = false;
         let mut sculpt_shift_held = false;
         let mut sculpt_pressure: f32 = 0.0;
+        let mut is_hover_pick = false;
         let sculpt_count = self.gpu.sculpt_tex_indices.len();
         let isolation_label: Option<String> = self.ui.isolation_state.as_ref().and_then(|iso| {
             self.doc.scene.nodes.get(&iso.isolated_node).map(|n| n.name.clone())
@@ -416,8 +457,12 @@ impl eframe::App for SdfApp {
                 sculpt_ctrl_held: &mut sculpt_ctrl_held,
                 sculpt_shift_held: &mut sculpt_shift_held,
                 sculpt_pressure: &mut sculpt_pressure,
+                last_sculpt_hit: self.async_state.last_sculpt_hit,
                 isolation_label: isolation_label.clone(),
                 turntable_active: self.ui.turntable_active,
+                is_hover_pick: &mut is_hover_pick,
+                hover_world_pos: self.async_state.hover_world_pos,
+                cursor_over_geometry: self.async_state.cursor_over_geometry,
             },
             scene_tree: SceneTreeContext {
                 renaming_node: &mut self.ui.renaming_node,
@@ -465,9 +510,13 @@ impl eframe::App for SdfApp {
 
         if pending_pick.is_some() {
             self.async_state.pending_pick = pending_pick;
-            self.async_state.sculpt_ctrl_held = sculpt_ctrl_held;
-            self.async_state.sculpt_shift_held = sculpt_shift_held;
-            self.async_state.sculpt_pressure = sculpt_pressure;
+            self.async_state.sculpt_dragging = !is_hover_pick;
+            if !is_hover_pick {
+                // Only copy modifier keys for sculpt drag picks
+                self.async_state.sculpt_ctrl_held = sculpt_ctrl_held;
+                self.async_state.sculpt_shift_held = sculpt_shift_held;
+                self.async_state.sculpt_pressure = sculpt_pressure;
+            }
         }
 
         // Sculpt mode: submit async pick for next frame's poll_sculpt_pick

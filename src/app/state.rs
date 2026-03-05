@@ -11,6 +11,7 @@ use crate::gpu::picking::PendingPick;
 use crate::graph::history::History;
 use crate::graph::scene::{NodeId, Scene};
 use crate::sculpt::{ActiveTool, SculptState};
+use crate::sculpt_history::SculptHistory;
 use crate::ui::dock::Tab;
 use crate::ui::gizmo::{GizmoMode, GizmoSpace, GizmoState};
 use crate::ui::node_graph::NodeGraphState;
@@ -27,6 +28,7 @@ pub struct DocumentState {
     pub history: History,
     pub active_tool: ActiveTool,
     pub sculpt_state: SculptState,
+    pub sculpt_history: SculptHistory,
     pub clipboard_node: Option<NodeId>,
 }
 
@@ -72,6 +74,14 @@ pub struct AsyncState {
     pub sculpt_shift_held: bool,
     /// Pen pressure (0.0-1.0) during sculpt drag. 0.0 = no pressure data.
     pub sculpt_pressure: f32,
+    /// World position from the latest hover pick (for 3D brush preview).
+    /// Independent of drag state — persists while hovering, cleared when cursor leaves.
+    pub hover_world_pos: Option<Vec3>,
+    /// Whether the cursor is currently over geometry (from last hover pick).
+    /// Used to decide: LMB on empty space → orbit instead of sculpt.
+    pub cursor_over_geometry: bool,
+    /// Whether a sculpt drag is actively in progress (LMB held on geometry).
+    pub sculpt_dragging: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -95,6 +105,23 @@ pub struct PropertyClipboard {
     pub fresnel: f32,
 }
 
+/// State for the "Convert to Sculpt" dialog shown by Ctrl+R.
+pub struct SculptConvertDialog {
+    pub target: NodeId,
+    pub mode: crate::app::actions::SculptConvertMode,
+    pub resolution: u32,
+}
+
+impl SculptConvertDialog {
+    pub fn new(target: NodeId) -> Self {
+        Self {
+            target,
+            mode: crate::app::actions::SculptConvertMode::BakeActiveNode,
+            resolution: 64,
+        }
+    }
+}
+
 pub struct UiState {
     pub dock_state: DockState<Tab>,
     pub node_graph_state: NodeGraphState,
@@ -113,6 +140,8 @@ pub struct UiState {
     pub command_palette_open: bool,
     pub command_palette_query: String,
     pub command_palette_selected: usize,
+    /// Open "Convert to Sculpt" dialog state (None = hidden).
+    pub sculpt_convert_dialog: Option<SculptConvertDialog>,
 }
 
 // ---------------------------------------------------------------------------

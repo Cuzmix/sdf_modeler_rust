@@ -1,3 +1,4 @@
+pub mod brush_settings;
 pub mod command_palette;
 pub mod dock;
 pub mod export_dialog;
@@ -9,6 +10,7 @@ pub mod profiler;
 pub mod properties;
 pub mod render_settings;
 pub mod scene_tree;
+pub mod sculpt_convert_dialog;
 pub mod settings_window;
 pub mod toasts;
 pub mod viewport;

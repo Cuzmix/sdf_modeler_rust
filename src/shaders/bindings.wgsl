@@ -12,6 +12,7 @@ struct Camera {
     selected_idx: f32,
     scene_min: vec4f,
     scene_max: vec4f,
+    brush_pos: vec4f,
 }
 
 struct SdfNode {
