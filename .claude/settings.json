@@ -31,7 +31,12 @@
       "Bash(cargo clippy -- -W clippy::all)",
       "Bash(cargo clippy -p sdf_modeler -- -W clippy::needless_return -W clippy::collapsible_if -W clippy::collapsible_else_if -W clippy::unnecessary_map_or)",
       "Bash(cargo test)",
-      "Bash(chmod +x plans/ralph.sh plans/ralph-once.sh)"
+      "Bash(chmod +x plans/ralph.sh plans/ralph-once.sh)",
+      "Bash(xargs grep -l \"chamfer\\\\|bevel\\\\|shell\\\\|hollow\" -i)",
+      "Bash(grep -E \"\\\\.wgsl$\")",
+      "WebFetch(domain:www.ronja-tutorials.com)",
+      "WebSearch",
+      "WebFetch(domain:docs.blender.org)"
     ]
   }
 }

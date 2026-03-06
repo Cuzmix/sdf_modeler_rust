@@ -34,6 +34,7 @@ Follow these steps:
    - cargo check
    - cargo clippy -- -D warnings
    - cargo test
+   - cargo build
    Fix any failures before proceeding.
 5. Update plans/prd.json — set "passes": true for completed items.
 6. APPEND your progress to plans/progress.txt (do NOT overwrite).

@@ -32,7 +32,8 @@ Every commit MUST pass these checks. Do NOT commit if any fail — fix the issue
 1. `cargo check` — type checking (the most important feedback loop)
 2. `cargo clippy -- -D warnings` — lint errors are build failures
 3. `cargo test` — all tests must pass
-4. Manual verification — if the change is visual/behavioral, run the app and confirm
+4. `cargo build` — full compilation must succeed
+5. Manual verification — if the change is visual/behavioral, run the app and confirm
 
 ### Search Before Implementing
 Before writing new code, **search the codebase first** to verify it doesn't already exist.
