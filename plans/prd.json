@@ -11,7 +11,7 @@
     "category": "rendering",
     "description": "Consume material blend info in the fragment shader for smooth color interpolation.\n\nSteps:\n1. In src/shaders/rendering.wgsl: add helper functions:\n   - get_blended_color(mat_a: i32, mat_b: i32, t: f32) -> vec3f\n   - get_blended_roughness(mat_a: i32, mat_b: i32, t: f32) -> f32\n   - get_blended_metallic(mat_a: i32, mat_b: i32, t: f32) -> f32\n   - get_blended_fresnel(mat_a: i32, mat_b: i32, t: f32) -> f32\n   Each mixes the two materials' properties by factor t. When mat_b < 0 or t <= 0, return mat_a's property unchanged.\n2. In the Full shading path: replace get_node_color(mat_id) with get_blended_color(mat_a, mat_b, blend). Same for roughness, metallic, fresnel.\n3. In Solid shading mode: blend colors similarly.\n4. Preserve Clay/Normals/Matcap modes unchanged (they don't use per-node materials).",
     "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: create red sphere + blue box, Smooth Union with k=0.5. Boundary should show smooth red-to-blue gradient. Verify with different metallic/roughness values.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 8,

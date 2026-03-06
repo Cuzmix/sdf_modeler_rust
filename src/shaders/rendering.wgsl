@@ -19,7 +19,7 @@ var<private> debug_step_count: f32;
 
 // PERFORMANCE CRITICAL: keep simple, avoid branches.
 // This is the inner loop of the renderer — runs per-pixel, up to MARCH_MAX_STEPS iterations.
-fn ray_march(ro: vec3f, rd: vec3f) -> vec2f {
+fn ray_march(ro: vec3f, rd: vec3f) -> vec4f {
     let fast = camera.quality_mode > 0.5;
     let eff_steps = select(/*MARCH_MAX_STEPS*/, /*MARCH_MAX_STEPS*/ / 2, fast);
     let eps = select(/*MARCH_EPSILON*/, /*MARCH_EPSILON*/ * 4.0, fast);
@@ -38,7 +38,9 @@ fn ray_march(ro: vec3f, rd: vec3f) -> vec2f {
     var omega = select(1.2, 1.0, fast);
     var prev_d = 1e10;
     var prev_step = 0.0;
-    var mat_id = -1.0;
+    var mat_a = -1.0;
+    var mat_b = -1.0;
+    var blend = 0.0;
     var steps_taken = 0;
     for (var i = 0; i < /*MARCH_MAX_STEPS*/; i++) {
         if i >= eff_steps { break; }
@@ -56,7 +58,9 @@ fn ray_march(ro: vec3f, rd: vec3f) -> vec2f {
             continue;
         }
         if d < eps {
-            mat_id = hit.y;
+            mat_a = hit.y;
+            mat_b = hit.z;
+            blend = hit.w;
             break;
         }
         t += step;
@@ -65,10 +69,10 @@ fn ray_march(ro: vec3f, rd: vec3f) -> vec2f {
         if t > max_dist { break; }
     }
     debug_step_count = f32(steps_taken) / f32(eff_steps);
-    if mat_id < 0.0 {
-        return vec2f(/*MARCH_MAX_DIST*/ + 1.0, -1.0);
+    if mat_a < 0.0 {
+        return vec4f(/*MARCH_MAX_DIST*/ + 1.0, -1.0, -1.0, 0.0);
     }
-    return vec2f(t, mat_id);
+    return vec4f(t, mat_a, mat_b, blend);
 }
 
 // PERFORMANCE CRITICAL: keep simple, avoid branches.
@@ -161,6 +165,44 @@ fn get_node_fresnel(mat_id: i32) -> f32 {
     return nodes[mat_id].extra2.x;
 }
 
+// Material blending helpers: interpolate properties between two materials at CSG boundaries.
+// When mat_b < 0 or blend_factor <= 0, returns mat_a's property unchanged (no blending).
+fn get_blended_color(mat_a: i32, mat_b: i32, blend_factor: f32) -> vec3f {
+    let color_a = get_node_color(mat_a);
+    if mat_b < 0 || blend_factor <= 0.0 {
+        return color_a;
+    }
+    let color_b = get_node_color(mat_b);
+    return mix(color_a, color_b, blend_factor);
+}
+
+fn get_blended_roughness(mat_a: i32, mat_b: i32, blend_factor: f32) -> f32 {
+    let rough_a = select(0.5, nodes[mat_a].type_op.w, mat_a >= 0);
+    if mat_b < 0 || blend_factor <= 0.0 {
+        return rough_a;
+    }
+    let rough_b = select(0.5, nodes[mat_b].type_op.w, mat_b >= 0);
+    return mix(rough_a, rough_b, blend_factor);
+}
+
+fn get_blended_metallic(mat_a: i32, mat_b: i32, blend_factor: f32) -> f32 {
+    let metal_a = select(0.0, nodes[mat_a].type_op.z, mat_a >= 0);
+    if mat_b < 0 || blend_factor <= 0.0 {
+        return metal_a;
+    }
+    let metal_b = select(0.0, nodes[mat_b].type_op.z, mat_b >= 0);
+    return mix(metal_a, metal_b, blend_factor);
+}
+
+fn get_blended_fresnel(mat_a: i32, mat_b: i32, blend_factor: f32) -> f32 {
+    let fresnel_a = get_node_fresnel(mat_a);
+    if mat_b < 0 || blend_factor <= 0.0 {
+        return fresnel_a;
+    }
+    let fresnel_b = get_node_fresnel(mat_b);
+    return mix(fresnel_a, fresnel_b, blend_factor);
+}
+
 @fragment
 fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
     let local = frag_coord.xy - camera.viewport.xy;
@@ -174,6 +216,8 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
     let hit = ray_march(ro, rd);
     let t = hit.x;
     let mat_id = i32(hit.y + 0.5);
+    let mat_b_id = i32(hit.z + 0.5);
+    let blend_factor = hit.w;
     let sdf_miss = t > /*SKY_CUTOFF*/;
 
     // Precompute grid plane hit in uniform control flow (fwidth requires this)
@@ -232,7 +276,7 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
             color = pow(color, vec3f(1.0 / /*GAMMA*/));
         } else if shading_mode > 0.5 {
             // Solid: per-node colors, flat diffuse, no shadows/AO
-            let albedo = get_node_color(mat_id);
+            let albedo = get_blended_color(mat_id, mat_b_id, blend_factor);
             let key_dir = normalize(vec3f(/*KEY_LIGHT_DIR*/));
             let key_diff = max(dot(n, key_dir), 0.0);
             let fill_dir = normalize(vec3f(/*FILL_LIGHT_DIR*/));
@@ -242,10 +286,10 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
         } else {
         // Full: existing PBR pipeline
 
-        // Material properties
-        let mat_metallic = select(0.0, nodes[mat_id].type_op.z, mat_id >= 0);
-        let mat_roughness = select(0.5, nodes[mat_id].type_op.w, mat_id >= 0);
-        let mat_fresnel = get_node_fresnel(mat_id);
+        // Material properties (blended at smooth CSG boundaries)
+        let mat_metallic = get_blended_metallic(mat_id, mat_b_id, blend_factor);
+        let mat_roughness = get_blended_roughness(mat_id, mat_b_id, blend_factor);
+        let mat_fresnel = get_blended_fresnel(mat_id, mat_b_id, blend_factor);
 
         // Key light
         let key_dir = normalize(vec3f(/*KEY_LIGHT_DIR*/));
@@ -266,7 +310,7 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
         // Ambient occlusion
         /*AO_LINE*/
 
-        let albedo = get_node_color(mat_id);
+        let albedo = get_blended_color(mat_id, mat_b_id, blend_factor);
         let diff_factor = 1.0 - mat_metallic * 0.8;
         let spec_tint = mix(vec3f(1.0), albedo, mat_metallic);
         // Hemispherical sky light (iq outdoor lighting)

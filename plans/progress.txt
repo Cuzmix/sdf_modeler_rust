@@ -34,3 +34,25 @@ Changes:
   which are unchanged in the vec4f layout. Zero visual regression.
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (249/249) ✓
+
+--- Iteration 2: PRD #7 — Consume material blend info in fragment shader ---
+COMPLETED. Material properties now interpolate smoothly at CSG boundaries.
+
+Changes (src/shaders/rendering.wgsl only):
+- ray_march() now returns vec4f(t, mat_a, mat_b, blend_factor) instead of vec2f(t, mat_id).
+  Captures all 4 components from scene_sdf: distance, primary material, secondary material,
+  and blend factor. Miss sentinel: vec4f(MAX_DIST+1, -1, -1, 0).
+- Added 4 blending helper functions:
+  - get_blended_color(mat_a, mat_b, blend_factor) -> vec3f
+  - get_blended_roughness(mat_a, mat_b, blend_factor) -> f32
+  - get_blended_metallic(mat_a, mat_b, blend_factor) -> f32
+  - get_blended_fresnel(mat_a, mat_b, blend_factor) -> f32
+  Each returns mat_a's property unchanged when mat_b < 0 or blend_factor <= 0.
+  Otherwise mixes both materials' properties using WGSL mix().
+- Full shading path: replaced direct nodes[mat_id] lookups for metallic, roughness,
+  fresnel, and albedo with blended versions using all 3 material components.
+- Solid shading path: replaced get_node_color(mat_id) with get_blended_color().
+- Clay/Normals/Matcap/Heatmap modes: unchanged (don't use per-node materials).
+- pick.wgsl: unchanged (pick only needs .x/.y, not material blending).
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (249/249) ✓
