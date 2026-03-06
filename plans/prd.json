@@ -88,7 +88,7 @@
     "category": "operations",
     "description": "Add Staircase and Columnar boolean operations for decorative CSG edges.\n\nSteps:\n1. In src/shaders/operations.wgsl: add functions based on hg_sdf:\n   - fn op_stairs_union(a: vec4f, b: vec4f, k: f32, n: f32) -> vec4f — step-like pattern at boundary. n = number of steps.\n   - fn op_stairs_subtract(a: vec4f, b: vec4f, k: f32, n: f32) -> vec4f\n   - fn op_columns_union(a: vec4f, b: vec4f, k: f32, n: f32) -> vec4f — repeating column pattern at boundary\n   - fn op_columns_subtract(a: vec4f, b: vec4f, k: f32, n: f32) -> vec4f\n   Use smooth_k for the radius parameter and encode n (step/column count) in an extra field.\n2. In src/graph/scene.rs: add CsgOp::StairsUnion, StairsSubtract, ColumnsUnion, ColumnsSubtract. Each has smooth_k (radius) + steps parameter (stored in node extra field). Add to CsgOp::ALL.\n3. In codegen.rs: map to WGSL functions. Pass extra parameter (n) from node storage.\n4. In properties.rs: show both k slider and n (count) slider for stairs/columns ops.\n5. Add unit tests for codegen.",
     "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: two overlapping boxes with Stairs Union — stepped pattern visible at boundary. Column Union — repeating column pattern. Step count adjustable.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 19,

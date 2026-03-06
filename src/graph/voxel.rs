@@ -437,6 +437,49 @@ fn csg_chamfer_intersect(a: f32, b: f32, k: f32) -> f32 {
     a.max(b).max((a - k + b) * std::f32::consts::FRAC_1_SQRT_2)
 }
 
+/// GLSL-style modulo (x - y * floor(x/y)).
+fn glsl_mod(x: f32, y: f32) -> f32 {
+    x - y * (x / y).floor()
+}
+
+fn csg_stairs_union(a: f32, b: f32, k: f32, n: f32) -> f32 {
+    let s = k / n.max(1.0);
+    let u = b - k;
+    let stair_d = 0.5 * (u + a + (glsl_mod(u - a + s, 2.0 * s) - s).abs());
+    a.min(b).min(stair_d)
+}
+
+fn csg_stairs_subtract(a: f32, b: f32, k: f32, n: f32) -> f32 {
+    -csg_stairs_union(-a, b, k, n)
+}
+
+fn p_mod1(p: f32, size: f32) -> f32 {
+    glsl_mod(p + size, 2.0 * size) - size
+}
+
+fn csg_columns_union(a: f32, b: f32, k: f32, n: f32) -> f32 {
+    if a < k && b < k {
+        let column_radius = k * std::f32::consts::SQRT_2 / ((n.max(1.0) - 1.0) * 2.0 + std::f32::consts::SQRT_2);
+        let c = std::f32::consts::FRAC_1_SQRT_2;
+        let mut px = a * c - b * c;
+        let mut py = a * c + b * c;
+        px -= std::f32::consts::SQRT_2 / 2.0 * k;
+        px += column_radius * std::f32::consts::SQRT_2;
+        if glsl_mod(n, 2.0) == 1.0 {
+            py += column_radius;
+        }
+        py = p_mod1(py, column_radius * 2.0);
+        let col_d = ((px * px + py * py).sqrt() - column_radius).min(px);
+        a.min(b).min(col_d)
+    } else {
+        a.min(b)
+    }
+}
+
+fn csg_columns_subtract(a: f32, b: f32, k: f32, n: f32) -> f32 {
+    -csg_columns_union(-a, b, k, n)
+}
+
 // ---------------------------------------------------------------------------
 // Recursive SDF tree evaluator
 // ---------------------------------------------------------------------------
@@ -460,6 +503,7 @@ pub fn evaluate_sdf_tree(scene: &Scene, node_id: NodeId, p: Vec3) -> f32 {
         NodeData::Operation {
             op,
             smooth_k,
+            steps,
             left,
             right,
         } => {
@@ -476,6 +520,10 @@ pub fn evaluate_sdf_tree(scene: &Scene, node_id: NodeId, p: Vec3) -> f32 {
                     CsgOp::ChamferUnion => csg_chamfer_union(a, b, *smooth_k),
                     CsgOp::ChamferSubtract => csg_chamfer_subtract(a, b, *smooth_k),
                     CsgOp::ChamferIntersect => csg_chamfer_intersect(a, b, *smooth_k),
+                    CsgOp::StairsUnion => csg_stairs_union(a, b, *smooth_k, *steps),
+                    CsgOp::StairsSubtract => csg_stairs_subtract(a, b, *smooth_k, *steps),
+                    CsgOp::ColumnsUnion => csg_columns_union(a, b, *smooth_k, *steps),
+                    CsgOp::ColumnsSubtract => csg_columns_subtract(a, b, *smooth_k, *steps),
                 },
                 (Some(v), None) | (None, Some(v)) => v,
                 (None, None) => f32::MAX,
@@ -1105,6 +1153,7 @@ mod tests {
         let union_id = scene.add_node("Union".into(), NodeData::Operation {
             op: CsgOp::Union,
             smooth_k: 0.0,
+            steps: 0.0,
             left: Some(sphere_a),
             right: Some(sphere_b),
         });
@@ -1145,6 +1194,7 @@ mod tests {
         let sub_id = scene.add_node("Sub".into(), NodeData::Operation {
             op: CsgOp::Subtract,
             smooth_k: 0.0,
+            steps: 0.0,
             left: Some(sphere_a),
             right: Some(sphere_b),
         });
@@ -1172,6 +1222,7 @@ mod tests {
         let op_id = scene.add_node("Op".into(), NodeData::Operation {
             op: CsgOp::Union,
             smooth_k: 0.0,
+            steps: 0.0,
             left: Some(sphere),
             right: None,
         });
@@ -1186,6 +1237,7 @@ mod tests {
         let op_id = scene.add_node("Op".into(), NodeData::Operation {
             op: CsgOp::Union,
             smooth_k: 0.0,
+            steps: 0.0,
             left: None,
             right: None,
         });
@@ -1347,6 +1399,7 @@ mod tests {
         let op = scene.add_node("U".into(), NodeData::Operation {
             op: CsgOp::Union,
             smooth_k: 0.0,
+            steps: 0.0,
             left: Some(left),
             right: Some(right),
         });

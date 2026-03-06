@@ -1148,6 +1148,7 @@ mod tests {
             left: None,
             right: None,
             smooth_k: 0.0,
+            steps: 0.0,
         });
         let leaves = collect_leaf_colors(&scene);
         assert!(leaves.is_empty());
@@ -1840,6 +1841,7 @@ mod tests {
             left: Some(s1),
             right: Some(s2),
             smooth_k: 0.0,
+            steps: 0.0,
         });
 
         let progress = AtomicU32::new(0);

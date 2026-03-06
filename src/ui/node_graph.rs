@@ -290,6 +290,7 @@ impl NodeDataTrait for SdfNodeData {
             NodeData::Operation {
                 ref mut op,
                 ref mut smooth_k,
+                ref mut steps,
                 ..
             } => {
                 let mut new_op = op.clone();
@@ -303,6 +304,7 @@ impl NodeDataTrait for SdfNodeData {
                     });
                 if new_op != *op {
                     *smooth_k = new_op.default_smooth_k();
+                    *steps = new_op.default_steps();
                     *op = new_op;
                     changed = true;
                 }
@@ -321,6 +323,23 @@ impl NodeDataTrait for SdfNodeData {
                         changed = true;
                     }
                 });
+
+                if op.has_steps_param() {
+                    ui.horizontal(|ui| {
+                        ui.label(egui::RichText::new("Count").small());
+                        if ui
+                            .add(
+                                egui::DragValue::new(steps)
+                                    .speed(0.1)
+                                    .range(2.0..=16.0)
+                                    .max_decimals(0),
+                            )
+                            .changed()
+                        {
+                            changed = true;
+                        }
+                    });
+                }
             }
             NodeData::Transform {
                 ref mut translation,

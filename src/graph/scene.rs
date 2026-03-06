@@ -262,6 +262,10 @@ pub enum CsgOp {
     ChamferUnion,
     ChamferSubtract,
     ChamferIntersect,
+    StairsUnion,
+    StairsSubtract,
+    ColumnsUnion,
+    ColumnsSubtract,
 }
 
 impl CsgOp {
@@ -275,6 +279,10 @@ impl CsgOp {
         Self::ChamferUnion,
         Self::ChamferSubtract,
         Self::ChamferIntersect,
+        Self::StairsUnion,
+        Self::StairsSubtract,
+        Self::ColumnsUnion,
+        Self::ColumnsSubtract,
     ];
 
     pub fn base_name(&self) -> &'static str {
@@ -288,6 +296,10 @@ impl CsgOp {
             Self::ChamferUnion => "Chamfer Union",
             Self::ChamferSubtract => "Chamfer Subtract",
             Self::ChamferIntersect => "Chamfer Intersect",
+            Self::StairsUnion => "Stairs Union",
+            Self::StairsSubtract => "Stairs Subtract",
+            Self::ColumnsUnion => "Columns Union",
+            Self::ColumnsSubtract => "Columns Subtract",
         }
     }
 
@@ -296,6 +308,8 @@ impl CsgOp {
             Self::SmoothUnion => 0.5,
             Self::SmoothSubtract | Self::SmoothIntersect => 0.3,
             Self::ChamferUnion | Self::ChamferSubtract | Self::ChamferIntersect => 0.2,
+            Self::StairsUnion | Self::StairsSubtract => 0.2,
+            Self::ColumnsUnion | Self::ColumnsSubtract => 0.2,
             _ => 0.0,
         }
     }
@@ -311,6 +325,10 @@ impl CsgOp {
             Self::ChamferUnion => 16.0,
             Self::ChamferSubtract => 17.0,
             Self::ChamferIntersect => 18.0,
+            Self::StairsUnion => 19.0,
+            Self::StairsSubtract => 20.0,
+            Self::ColumnsUnion => 21.0,
+            Self::ColumnsSubtract => 22.0,
         }
     }
 
@@ -323,6 +341,10 @@ impl CsgOp {
             Self::ChamferUnion => "op_chamfer_union",
             Self::ChamferSubtract => "op_chamfer_subtract",
             Self::ChamferIntersect => "op_chamfer_intersect",
+            Self::StairsUnion => "op_stairs_union",
+            Self::StairsSubtract => "op_stairs_subtract",
+            Self::ColumnsUnion => "op_columns_union",
+            Self::ColumnsSubtract => "op_columns_subtract",
         }
     }
 
@@ -337,6 +359,27 @@ impl CsgOp {
             Self::ChamferUnion => "[C∪]",
             Self::ChamferSubtract => "[C-]",
             Self::ChamferIntersect => "[C∩]",
+            Self::StairsUnion => "[St∪]",
+            Self::StairsSubtract => "[St-]",
+            Self::ColumnsUnion => "[Co∪]",
+            Self::ColumnsSubtract => "[Co-]",
+        }
+    }
+
+    /// Whether this operation requires an extra step/column count parameter.
+    pub fn has_steps_param(&self) -> bool {
+        matches!(
+            self,
+            Self::StairsUnion | Self::StairsSubtract | Self::ColumnsUnion | Self::ColumnsSubtract
+        )
+    }
+
+    /// Default step/column count for operations that support it.
+    pub fn default_steps(&self) -> f32 {
+        match self {
+            Self::StairsUnion | Self::StairsSubtract => 4.0,
+            Self::ColumnsUnion | Self::ColumnsSubtract => 4.0,
+            _ => 0.0,
         }
     }
 }
@@ -371,6 +414,8 @@ pub enum NodeData {
     Operation {
         op: CsgOp,
         smooth_k: f32,
+        #[serde(default)]
+        steps: f32,
         left: Option<NodeId>,
         right: Option<NodeId>,
     },
@@ -590,10 +635,12 @@ impl Scene {
         right: Option<NodeId>,
     ) -> NodeId {
         let name = self.next_name(op.base_name());
+        let steps = op.default_steps();
         self.add_node(
             name,
             NodeData::Operation {
                 smooth_k: op.default_smooth_k(),
+                steps,
                 op,
                 left,
                 right,
@@ -1051,8 +1098,9 @@ impl Scene {
                     emissive_intensity.to_bits().hash(&mut hasher);
                     fresnel.to_bits().hash(&mut hasher);
                 }
-                NodeData::Operation { smooth_k, .. } => {
+                NodeData::Operation { smooth_k, steps, .. } => {
                     smooth_k.to_bits().hash(&mut hasher);
+                    steps.to_bits().hash(&mut hasher);
                 }
                 NodeData::Sculpt {
                     position, rotation, color, metallic, roughness, emissive, emissive_intensity, fresnel, desired_resolution, ..
@@ -1278,10 +1326,11 @@ impl Scene {
                         voxel_grid: None,
                     }
                 }
-                NodeData::Operation { op, smooth_k, left, right } => {
+                NodeData::Operation { op, smooth_k, steps, left, right } => {
                     NodeData::Operation {
                         op: op.clone(),
                         smooth_k: *smooth_k,
+                        steps: *steps,
                         left: remap(left),
                         right: remap(right),
                     }
@@ -1570,18 +1619,21 @@ impl Scene {
                     NodeData::Operation {
                         op: o1,
                         smooth_k: k1,
+                        steps: s1,
                         left: l1,
                         right: r1,
                     },
                     NodeData::Operation {
                         op: o2,
                         smooth_k: k2,
+                        steps: s2,
                         left: l2,
                         right: r2,
                     },
                 ) => {
                     if std::mem::discriminant(o1) != std::mem::discriminant(o2)
                         || k1 != k2
+                        || s1 != s2
                         || l1 != l2
                         || r1 != r2
                     {
@@ -2285,6 +2337,7 @@ mod tests {
         let data = NodeData::Operation {
             op: CsgOp::Union,
             smooth_k: 0.0,
+            steps: 0.0,
             left: Some(1),
             right: Some(2),
         };
@@ -2297,6 +2350,7 @@ mod tests {
         let data = NodeData::Operation {
             op: CsgOp::Union,
             smooth_k: 0.0,
+            steps: 0.0,
             left: Some(1),
             right: None,
         };

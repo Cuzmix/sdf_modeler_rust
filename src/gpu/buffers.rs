@@ -104,9 +104,9 @@ pub fn build_node_buffer(
                     extra2: [*fresnel, 0.0, 0.0, 0.0],
                 });
             }
-            NodeData::Operation { op, smooth_k, .. } => {
+            NodeData::Operation { op, smooth_k, steps, .. } => {
                 buffer.push(SdfNodeGpu {
-                    type_op: [op.gpu_op_id(), *smooth_k, 0.0, 0.0],
+                    type_op: [op.gpu_op_id(), *smooth_k, *steps, 0.0],
                     position: [0.0; 4],
                     rotation: [0.0; 4],
                     scale: [1.0, 1.0, 1.0, 0.0],

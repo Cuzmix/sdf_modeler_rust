@@ -180,3 +180,36 @@ Changes:
 - UI: No changes needed — properties.rs and node_graph.rs iterate CsgOp::ALL.
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (259/259) ✓
+
+--- Iteration 9: PRD #18 — Staircase and Columnar boolean operations ---
+COMPLETED. Added StairsUnion, StairsSubtract, ColumnsUnion, ColumnsSubtract CSG operations.
+
+Changes:
+- src/shaders/operations.wgsl: Added 4 new WGSL functions + 3 helpers:
+  - glsl_mod(f32, f32) -> f32: GLSL-style modulo for correct negative value handling.
+  - op_stairs_union: stepped pattern at union boundary using modular repeat.
+    Based on Mercury hg_sdf fOpUnionStairs formula.
+  - op_stairs_subtract: staircase subtraction via negation of stairs union.
+  - rotate_45(vec2f) -> vec2f, p_mod1(f32, f32) -> f32: helpers for column ops.
+  - op_columns_union: repeating cylindrical columns at union boundary.
+    Based on Mercury hg_sdf fOpUnionColumns. Uses 45° rotation + modular repeat.
+  - op_columns_subtract: column subtraction via negation of columns union.
+  All carry material IDs and blend factor in vec4f (same pattern as other ops).
+  All take extra `n: f32` parameter for step/column count.
+- src/graph/scene.rs: Added CsgOp::StairsUnion, StairsSubtract, ColumnsUnion,
+  ColumnsSubtract. default_smooth_k=0.2, default steps=4.0. gpu_op_id: 19-22.
+  Badges: "[St∪]", "[St-]", "[Co∪]", "[Co-]". Added has_steps_param() and
+  default_steps() methods. Added `steps: f32` field to NodeData::Operation
+  (#[serde(default)] for backwards compat with existing save files).
+  CsgOp::ALL now has 13 variants. Updated deep_eq, data_fingerprint, duplicate.
+- src/gpu/codegen.rs: Operations with has_steps_param() emit 4-parameter WGSL call
+  passing nodes[i].type_op.z as the step count. Added 4 unit tests.
+- src/gpu/buffers.rs: Stores `steps` in type_op[2] for operation nodes.
+- src/graph/voxel.rs: Added CPU-side csg_stairs_union, csg_stairs_subtract,
+  csg_columns_union, csg_columns_subtract functions matching WGSL formulas.
+  evaluate_sdf_tree dispatches all 4 new variants with steps parameter.
+- src/ui/properties.rs: Shows "Count" slider (2-16, integer) for stairs/columns ops.
+  Writes back steps value. Resets steps on op type change.
+- src/ui/node_graph.rs: Shows "Count" drag value for stairs/columns ops in node graph.
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (263/263) ✓

@@ -328,9 +328,15 @@ fn emit_node_wgsl(
             match (li, ri) {
                 (Some(li), Some(ri)) => {
                     let op_fn = op.wgsl_function_name();
-                    lines.push(format!(
-                        "    let n{i} = {op_fn}(n{li}, n{ri}, nodes[{i}].type_op.y);"
-                    ));
+                    if op.has_steps_param() {
+                        lines.push(format!(
+                            "    let n{i} = {op_fn}(n{li}, n{ri}, nodes[{i}].type_op.y, nodes[{i}].type_op.z);"
+                        ));
+                    } else {
+                        lines.push(format!(
+                            "    let n{i} = {op_fn}(n{li}, n{ri}, nodes[{i}].type_op.y);"
+                        ));
+                    }
                 }
                 (Some(ci), None) | (None, Some(ci)) => {
                     lines.push(format!("    let n{i} = n{ci};"));
@@ -816,6 +822,50 @@ mod tests {
         scene.create_operation(CsgOp::ChamferIntersect, Some(left), Some(right));
         let wgsl = generate_scene_sdf(&scene, None);
         assert!(wgsl.contains("op_chamfer_intersect(n"));
+    }
+
+    #[test]
+    fn stairs_union_generates_op_stairs_union_with_steps() {
+        let mut scene = empty_scene();
+        let left = scene.create_primitive(SdfPrimitive::Sphere);
+        let right = scene.create_primitive(SdfPrimitive::Box);
+        scene.create_operation(CsgOp::StairsUnion, Some(left), Some(right));
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("op_stairs_union(n"), "should emit op_stairs_union call");
+        assert!(wgsl.contains("type_op.z"), "should pass steps via type_op.z");
+    }
+
+    #[test]
+    fn stairs_subtract_generates_op_stairs_subtract_with_steps() {
+        let mut scene = empty_scene();
+        let left = scene.create_primitive(SdfPrimitive::Sphere);
+        let right = scene.create_primitive(SdfPrimitive::Box);
+        scene.create_operation(CsgOp::StairsSubtract, Some(left), Some(right));
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("op_stairs_subtract(n"), "should emit op_stairs_subtract call");
+        assert!(wgsl.contains("type_op.z"), "should pass steps via type_op.z");
+    }
+
+    #[test]
+    fn columns_union_generates_op_columns_union_with_steps() {
+        let mut scene = empty_scene();
+        let left = scene.create_primitive(SdfPrimitive::Sphere);
+        let right = scene.create_primitive(SdfPrimitive::Box);
+        scene.create_operation(CsgOp::ColumnsUnion, Some(left), Some(right));
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("op_columns_union(n"), "should emit op_columns_union call");
+        assert!(wgsl.contains("type_op.z"), "should pass steps via type_op.z");
+    }
+
+    #[test]
+    fn columns_subtract_generates_op_columns_subtract_with_steps() {
+        let mut scene = empty_scene();
+        let left = scene.create_primitive(SdfPrimitive::Sphere);
+        let right = scene.create_primitive(SdfPrimitive::Box);
+        scene.create_operation(CsgOp::ColumnsSubtract, Some(left), Some(right));
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("op_columns_subtract(n"), "should emit op_columns_subtract call");
+        assert!(wgsl.contains("type_op.z"), "should pass steps via type_op.z");
     }
 
     // ═══════════════════════════════════════════════════════════════

@@ -352,6 +352,7 @@ pub fn draw(
         NodeData::Operation {
             mut op,
             mut smooth_k,
+            mut steps,
             left,
             right,
         } => {
@@ -365,6 +366,7 @@ pub fn draw(
                 });
             if new_op != op {
                 smooth_k = new_op.default_smooth_k();
+                steps = new_op.default_steps();
                 op = new_op;
             }
             ui.separator();
@@ -373,6 +375,13 @@ pub fn draw(
                 ui.label("Smooth K:");
                 ui.add(egui::Slider::new(&mut smooth_k, 0.0..=2.0));
             });
+
+            if op.has_steps_param() {
+                ui.horizontal(|ui| {
+                    ui.label("Count:");
+                    ui.add(egui::Slider::new(&mut steps, 2.0..=16.0).step_by(1.0));
+                });
+            }
 
             ui.separator();
             match left {
@@ -434,11 +443,13 @@ pub fn draw(
                 if let NodeData::Operation {
                     op: ref mut o,
                     smooth_k: ref mut k,
+                    steps: ref mut s,
                     ..
                 } = node.data
                 {
                     *o = op;
                     *k = smooth_k;
+                    *s = steps;
                 }
             }
         }
