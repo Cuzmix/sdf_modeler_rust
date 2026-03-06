@@ -32,7 +32,7 @@
     "category": "modifier",
     "description": "Add WGSL noise functions for procedural effects.\n\nSteps:\n1. Create src/shaders/noise.wgsl with these functions:\n   - fn hash33(p: vec3f) -> vec3f — hash-based pseudo-random, maps vec3 to vec3\n   - fn noise3d(p: vec3f) -> f32 — 3D gradient noise using trilinear interpolation of hashed gradients. Smooth with quintic interpolation (6t^5-15t^4+10t^3).\n   - fn fbm_noise(p: vec3f, frequency: f32, amplitude: f32, octaves: i32) -> vec3f — fractal Brownian motion returning 3D displacement. Lacunarity=2.0, persistence=0.5. Max 8 octaves. Returns vec3f so it can displace a point in all 3 axes.\n2. In src/gpu/shader_templates.rs: include noise.wgsl in the shader concatenation for render shaders (after modifiers.wgsl, before rendering.wgsl). Also include for pick shader.\n3. All functions must be pure, deterministic, and GPU-friendly (no divergent branching).",
     "verification": "cargo check && cargo clippy -- -D warnings && cargo test. WGSL compiles without errors. Noise functions are available in the shader.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 11,

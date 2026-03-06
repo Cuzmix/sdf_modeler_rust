@@ -90,3 +90,22 @@ Changes:
   (evaluate_sdf_tree_modifier_offset) verifying distance is increased by offset amount.
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (251/251) ✓
+
+--- Iteration 5: PRD #10 — Add WGSL noise functions for procedural effects ---
+COMPLETED. Added noise shader functions for use by future domain warp modifier.
+
+Changes:
+- Created src/shaders/noise.wgsl with 4 pure GPU functions:
+  - hash33(vec3f) -> vec3f: hash-based pseudo-random using sin/fract with large primes
+  - quintic(vec3f) -> vec3f: C2-continuous interpolation curve (6t^5 - 15t^4 + 10t^3)
+  - noise3d(vec3f) -> f32: 3D gradient noise with trilinear interpolation of hashed
+    gradients at 8 cube corners, smoothed with quintic fade
+  - fbm_noise(vec3f, f32, f32, i32) -> vec3f: fractal Brownian motion returning 3D
+    displacement. Lacunarity=2.0, persistence=0.5, max 8 octaves. Three axes use
+    different hash offsets to decorrelate displacement components.
+- src/gpu/shader_templates.rs: Added NOISE constant (include_str noise.wgsl). Included
+  in both render_prelude() and compute_prelude() arrays, positioned after MODIFIERS
+  and before OPERATIONS. This makes noise functions available in render, pick, and
+  composite shaders.
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (251/251) ✓

@@ -11,6 +11,7 @@ const VERTEX: &str = include_str!("../shaders/vertex.wgsl");
 const TRANSFORMS: &str = include_str!("../shaders/transforms.wgsl");
 const PRIMITIVES: &str = include_str!("../shaders/primitives.wgsl");
 const MODIFIERS: &str = include_str!("../shaders/modifiers.wgsl");
+const NOISE: &str = include_str!("../shaders/noise.wgsl");
 const OPERATIONS: &str = include_str!("../shaders/operations.wgsl");
 const RENDERING: &str = include_str!("../shaders/rendering.wgsl");
 pub(crate) const PICK: &str = include_str!("../shaders/pick.wgsl");
@@ -22,14 +23,14 @@ pub(crate) const PICK: &str = include_str!("../shaders/pick.wgsl");
 /// Prelude for render (vertex+fragment) shader: all SDF library + vertex shader.
 /// Vertex shader is included here but NOT in compute_prelude().
 pub(crate) fn render_prelude() -> String {
-    [BINDINGS, VOXEL_SAMPLING, VERTEX, TRANSFORMS, PRIMITIVES, MODIFIERS, OPERATIONS]
+    [BINDINGS, VOXEL_SAMPLING, VERTEX, TRANSFORMS, PRIMITIVES, MODIFIERS, NOISE, OPERATIONS]
         .join("\n")
 }
 
 /// Prelude for compute shaders (pick, composite): SDF library without vertex shader.
 /// Compute shaders would error with an orphan @vertex entry point.
 pub(crate) fn compute_prelude() -> String {
-    [BINDINGS, VOXEL_SAMPLING, TRANSFORMS, PRIMITIVES, MODIFIERS, OPERATIONS]
+    [BINDINGS, VOXEL_SAMPLING, TRANSFORMS, PRIMITIVES, MODIFIERS, NOISE, OPERATIONS]
         .join("\n")
 }
 
