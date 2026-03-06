@@ -171,6 +171,11 @@ impl SdfApp {
             }
         }
 
+        // Quick Primitives toolbar (Shift+A)
+        if ctx.input(|i| i.modifiers.shift && !i.modifiers.ctrl && i.key_pressed(egui::Key::A)) {
+            self.ui.show_quick_toolbar = !self.ui.show_quick_toolbar;
+        }
+
         // Command palette (Ctrl+K)
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::K)) {
             actions.push(Action::ToggleCommandPalette);

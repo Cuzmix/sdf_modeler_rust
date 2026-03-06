@@ -287,3 +287,26 @@ Changes:
     verifies correct undo ordering with position verification
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (267/267) ✓
+
+--- Iteration 13: PRD #12 — Quick Primitives floating toolbar ---
+COMPLETED. Added floating toolbar for rapid primitive creation via Shift+A shortcut.
+
+Changes:
+- Created src/ui/quick_toolbar.rs: floating egui::Window anchored to left-center of screen.
+  Semi-transparent background (0.9 alpha). Compact vertical layout with one button per
+  SdfPrimitive (10 primitives: Sphere, Box, Cylinder, Torus, Plane, Cone, Capsule,
+  Ellipsoid, HexPrism, Pyramid). Each button pushes Action::CreatePrimitive and closes
+  the toolbar. Window has close button (X) for dismissal.
+- src/ui/mod.rs: registered quick_toolbar module.
+- src/app/state.rs: added show_quick_toolbar: bool to UiState (runtime toggle, not
+  persisted in Settings since it's transient UI state like command palette).
+- src/app/mod.rs: initialized show_quick_toolbar = false. Added draw call after toasts,
+  before sculpt convert dialog.
+- src/app/input.rs: added Shift+A shortcut (shift && !ctrl && Key::A) to toggle
+  show_quick_toolbar. Direct mutation on UiState (same pattern as command palette toggle).
+
+Design decision: stored in UiState instead of Settings (PRD step 4 said Settings, but
+this is transient UI state — toolbar visibility shouldn't persist across sessions, same
+as command_palette_open). Follows existing patterns.
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (267/267) ✓

@@ -278,6 +278,7 @@ impl SdfApp {
                 command_palette_query: String::new(),
                 command_palette_selected: 0,
                 sculpt_convert_dialog: None,
+                show_quick_toolbar: false,
             },
             persistence: PersistenceState {
                 current_file_path: None,
@@ -384,6 +385,7 @@ impl eframe::App for SdfApp {
             &self.doc.camera,
         );
         crate::ui::toasts::draw(ctx, &mut self.ui.toasts);
+        crate::ui::quick_toolbar::draw(ctx, &mut self.ui.show_quick_toolbar, &mut action_sink);
 
         // Sculpt convert dialog
         crate::ui::sculpt_convert_dialog::draw(

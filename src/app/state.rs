@@ -143,6 +143,8 @@ pub struct UiState {
     pub command_palette_selected: usize,
     /// Open "Convert to Sculpt" dialog state (None = hidden).
     pub sculpt_convert_dialog: Option<SculptConvertDialog>,
+    /// Quick Primitives floating toolbar (Shift+A).
+    pub show_quick_toolbar: bool,
 }
 
 // ---------------------------------------------------------------------------

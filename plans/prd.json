@@ -46,7 +46,7 @@
     "category": "ui",
     "description": "Add Quick Primitives floating toolbar for rapid shape creation.\n\nSteps:\n1. Create src/ui/quick_toolbar.rs with a pub fn draw() that renders a floating egui::Window anchored to the viewport's left edge.\n2. For each SdfPrimitive variant in SdfPrimitive::ALL: render a compact button with the primitive's base_name() text.\n3. On button click: push Action::CreatePrimitive(kind) to the action sink. This creates the primitive at world origin and selects it.\n4. In src/settings.rs: add show_quick_toolbar: bool (default false) to Settings.\n5. In src/app/input.rs: add Shift+A shortcut to toggle show_quick_toolbar.\n6. In src/app/mod.rs or src/ui/dock.rs: call quick_toolbar::draw() when the setting is enabled.\n7. Style: semi-transparent background, compact vertical layout, doesn't block viewport interaction when not hovered.\n8. Register module in src/ui/mod.rs.",
     "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: Shift+A shows toolbar. Click any primitive button — it appears at origin and is selected. Toolbar toggles off with Shift+A.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 13,
