@@ -4,6 +4,7 @@ mod export;
 mod gpu;
 mod graph;
 mod io;
+pub mod keymap;
 mod mesh_import;
 mod sculpt;
 mod sculpt_history;

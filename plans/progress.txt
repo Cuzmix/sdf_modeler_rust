@@ -583,3 +583,37 @@ Design decisions:
 - Spot inner cone at 80% of outer: provides natural smooth falloff without extra parameters.
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (285/285) ✓
+
+--- Iteration 21: PRD #24 — Configurable keymap system (data model and config) ---
+COMPLETED. Added keymap data model with serializable key combos, action bindings, and config.
+
+Changes:
+- Created src/keymap.rs with full keymap system:
+  - SerializableKey enum: wraps egui::Key with serde support (26 letters, 10 digits,
+    12 function keys, plus special keys like Space, Delete, Home, brackets, slash).
+    Each variant has to_egui() and label() methods.
+  - KeyCombo struct: key + ctrl/shift/alt modifiers. Constructors: new(), ctrl(), shift(),
+    alt(), ctrl_shift(). Methods: matches_egui(), egui_key(), egui_modifiers().
+    Implements Display for human-readable format ("Ctrl+Shift+C").
+  - ActionBinding enum: ~48 keyboard-triggerable actions covering General (save, undo,
+    copy, paste, etc.), Camera (presets, ortho, focus), Tools (gizmo modes, sculpt entry),
+    Viewport (isolation, shading, turntable, quick toolbar), and Sculpt (brush modes 1-6,
+    brush resize [ ], symmetry X/Y/Z, escape). Each has label(), category(), is_sculpt_only().
+    ALL constant for iteration.
+  - KeymapConfig struct: HashMap<ActionBinding, KeyCombo> with Default that matches ALL
+    current hardcoded shortcuts in input.rs. Methods: get_binding(), set_binding(),
+    remove_binding(), reset_to_defaults(), format_shortcut(), find_action_for_combo(),
+    find_conflict(), bindings().
+  - 10 unit tests: default bindings match expected keys, set_binding updates, reset
+    restores defaults, format_shortcut produces readable strings, conflict detection,
+    serialization roundtrip, remove_binding, all actions have defaults (except NewScene),
+    labels are non-empty, Display format verification.
+- src/lib.rs: registered pub mod keymap.
+- src/settings.rs: added keymap: KeymapConfig field to Settings with #[serde(default)]
+  for backwards compatibility with existing settings files.
+
+Note: This is the data model only. The keymap is not yet consumed by input.rs — that's
+PRD #25 (input refactor to use keymap). The command palette and help window still use
+hardcoded shortcut strings — that's also part of #25.
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (295/295) ✓

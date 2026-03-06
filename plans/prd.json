@@ -130,7 +130,7 @@
     "category": "workflow",
     "description": "Add configurable keymap system (phase 1: data model and config).\n\nSteps:\n1. Create src/keymap.rs with:\n   - KeyCombo struct: { key: egui::Key, modifiers: egui::Modifiers } with Serialize/Deserialize.\n   - ActionBinding enum mapping to Action variants that can be keyboard-triggered (about 40 actions).\n   - KeymapConfig struct: HashMap<ActionBinding, KeyCombo> with default() that returns current hardcoded keybindings.\n   - Methods: get_binding(action) -> Option<KeyCombo>, set_binding(action, combo), reset_to_defaults(), format_shortcut(action) -> String.\n2. In src/settings.rs: add keymap: KeymapConfig field to Settings. Serialize/deserialize with the rest of settings.\n3. In src/lib.rs: add pub mod keymap.\n4. Add unit tests: default keymap contains expected bindings, set_binding updates, reset restores defaults, format_shortcut produces human-readable strings like 'Ctrl+S'.",
     "verification": "cargo check && cargo clippy -- -D warnings && cargo test. KeymapConfig loads/saves with settings. Default bindings match all current hardcoded shortcuts.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 25,

@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::keymap::KeymapConfig;
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, Default)]
 pub enum BackgroundMode {
     #[default]
@@ -138,6 +140,8 @@ pub struct Settings {
     pub bookmarks: Vec<Option<CameraBookmark>>,
     #[serde(default = "default_export_presets")]
     pub export_presets: Vec<ExportPreset>,
+    #[serde(default)]
+    pub keymap: KeymapConfig,
 }
 
 impl Default for Settings {
@@ -155,6 +159,7 @@ impl Default for Settings {
             snap: SnapConfig::default(),
             bookmarks: default_bookmarks(),
             export_presets: default_export_presets(),
+            keymap: KeymapConfig::default(),
         }
     }
 }
