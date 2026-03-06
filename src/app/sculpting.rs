@@ -580,7 +580,7 @@ impl SdfApp {
 
     /// Cancel any in-flight async pick, unmapping the staging buffer so
     /// subsequent `queue.submit` calls don't panic.
-    fn cancel_pending_pick_state(&mut self) {
+    pub(super) fn cancel_pending_pick_state(&mut self) {
         if matches!(self.async_state.pick_state, PickState::Pending { .. }) {
             // Wait for the pending map_async to complete before unmapping —
             // wgpu 22 panics if you unmap a buffer that's still in "mapping" state.

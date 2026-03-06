@@ -911,7 +911,13 @@ fn process_graph_responses(
                 *layout_dirty = true;
             }
             NodeResponse::DisconnectEvent { input, .. } => {
-                let input_graph_node = graph_state.graph.get_input(*input).node;
+                // The InputId may already be removed from the graph if this
+                // disconnect was caused by a node deletion (the library removes
+                // the node's inputs before returning DisconnectEvent responses).
+                let Some(input_param) = graph_state.graph.try_get_input(*input) else {
+                    continue;
+                };
+                let input_graph_node = input_param.node;
                 let Some(&target_scene_id) = id_map.graph_to_scene.get(&input_graph_node) else {
                     continue;
                 };

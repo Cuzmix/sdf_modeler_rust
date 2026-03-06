@@ -234,6 +234,9 @@ impl SdfApp {
         let Some(pending) = self.async_state.pending_pick.take() else {
             return;
         };
+        // Cancel any in-flight async pick (hover pick) so the staging buffer
+        // is unmapped before execute_pick calls queue.submit().
+        self.cancel_pending_pick_state();
         let topo_order = self.doc.scene.visible_topo_order();
         let renderer = self.gpu.render_state.renderer.read();
         let Some(res) = renderer.callback_resources.get::<ViewportResources>() else {
