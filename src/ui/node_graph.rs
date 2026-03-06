@@ -292,6 +292,7 @@ impl NodeDataTrait for SdfNodeData {
                 ref mut op,
                 ref mut smooth_k,
                 ref mut steps,
+                ref mut color_blend,
                 ..
             } => {
                 let mut new_op = op.clone();
@@ -306,6 +307,7 @@ impl NodeDataTrait for SdfNodeData {
                 if new_op != *op {
                     *smooth_k = new_op.default_smooth_k();
                     *steps = new_op.default_steps();
+                    *color_blend = -1.0;
                     *op = new_op;
                     changed = true;
                 }
@@ -340,6 +342,34 @@ impl NodeDataTrait for SdfNodeData {
                             changed = true;
                         }
                     });
+                }
+
+                if op.has_color_blend_param() {
+                    let mut independent = *color_blend >= 0.0;
+                    if ui.checkbox(&mut independent, egui::RichText::new("Color Blend").small()).changed() {
+                        if independent {
+                            *color_blend = *smooth_k;
+                        } else {
+                            *color_blend = -1.0;
+                        }
+                        changed = true;
+                    }
+                    if independent {
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new("Color K").small());
+                            if ui
+                                .add(
+                                    egui::DragValue::new(color_blend)
+                                        .speed(0.01)
+                                        .range(0.0..=2.0)
+                                        .max_decimals(2),
+                                )
+                                .changed()
+                            {
+                                changed = true;
+                            }
+                        });
+                    }
                 }
             }
             NodeData::Transform {
