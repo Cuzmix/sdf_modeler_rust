@@ -158,7 +158,7 @@
     "category": "workflow",
     "description": "Add configurable export resolution (currently hardcoded to 128).\n\nProblem: Export resolution is hardcoded at 128 in src/export.rs. This is far too low for production meshes — a 128^3 grid produces very coarse geometry. Industry standard: user-configurable resolution with preview.\n\nSteps:\n1. In src/settings.rs: add export_resolution: u32 to ExportConfig (or create if it doesn't exist). Default 128, range 32–512. Add export_show_vertex_estimate: bool (default true).\n2. In src/export.rs: replace hardcoded 128 with the configurable value from settings. Pass resolution through start_export().\n3. In src/ui/export_dialog.rs: add a resolution slider (32–512, step 16). Show estimated vertex count: roughly (resolution^3 * 0.01) as a rough heuristic, or compute from grid dimensions. Show warning label when resolution > 256 ('High resolution — export may take longer').\n4. Add presets: Low (64), Medium (128), High (256), Ultra (512) as quick-select buttons.\n5. Ensure the export progress bar still works at all resolutions.",
     "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: open export dialog — resolution slider visible with presets. Export at 64 = fast + coarse mesh. Export at 256 = slower + smooth mesh. Vertex estimate updates as slider moves.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 29,

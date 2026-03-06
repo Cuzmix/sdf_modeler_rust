@@ -51,16 +51,33 @@ pub fn draw(
                 ui.add_space(4.0);
             }
 
-            // Resolution slider
+            // Resolution slider (step 16 for clean grid sizes)
             let mut res_i32 = settings.export_resolution as i32;
             ui.horizontal(|ui| {
                 ui.label("Resolution:");
-                ui.add(egui::Slider::new(&mut res_i32, 32..=512).suffix("^3"));
+                ui.add(
+                    egui::Slider::new(&mut res_i32, 32..=512)
+                        .step_by(16.0)
+                        .suffix("^3"),
+                );
             });
             settings.export_resolution = res_i32 as u32;
 
+            // Estimated vertex count (rough heuristic: ~1% of voxels become vertices)
             let voxels = (settings.export_resolution as u64).pow(3);
-            ui.weak(format!("{} voxels", voxels));
+            let estimated_vertices = voxels / 100;
+            ui.weak(format!(
+                "{} voxels — ~{} estimated vertices",
+                voxels, estimated_vertices
+            ));
+
+            // High resolution warning
+            if settings.export_resolution > 256 {
+                ui.colored_label(
+                    egui::Color32::YELLOW,
+                    "High resolution — export may take longer",
+                );
+            }
             ui.add_space(4.0);
 
             // Adaptive toggle

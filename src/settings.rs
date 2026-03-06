@@ -88,7 +88,7 @@ pub struct ExportPreset {
 
 fn default_export_presets() -> Vec<ExportPreset> {
     vec![
-        ExportPreset { name: "Draft".into(), resolution: 64 },
+        ExportPreset { name: "Low".into(), resolution: 64 },
         ExportPreset { name: "Medium".into(), resolution: 128 },
         ExportPreset { name: "High".into(), resolution: 256 },
         ExportPreset { name: "Ultra".into(), resolution: 512 },

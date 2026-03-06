@@ -242,3 +242,19 @@ Changes:
 - Clay/Solid/Normals/Matcap/Heatmap modes: unchanged.
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (263/263) ✓
+
+--- Iteration 11: PRD #28 — Configurable export resolution ---
+COMPLETED. Polished the existing export dialog with missing PRD requirements.
+
+Note: Most of the infrastructure was already in place (export_resolution in Settings,
+presets, slider, adaptive toggle, start_export reading from settings). This iteration
+added the remaining PRD-specified features.
+
+Changes:
+- src/ui/export_dialog.rs: Added step_by(16.0) to resolution slider for clean grid sizes.
+  Added estimated vertex count display (voxels / 100 heuristic) alongside voxel count.
+  Added yellow warning label when resolution > 256: "High resolution — export may take longer".
+- src/settings.rs: Renamed "Draft" preset to "Low" to match PRD naming convention
+  (Low/Medium/High/Ultra).
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (263/263) ✓
