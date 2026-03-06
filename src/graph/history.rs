@@ -161,7 +161,7 @@ impl History {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graph::scene::{Scene, SdfPrimitive};
+    use crate::graph::scene::{NodeData, Scene, SdfPrimitive};
 
     /// Create an empty scene (no default sphere) for predictable testing.
     fn empty_scene() -> Scene {
@@ -439,5 +439,196 @@ mod tests {
         assert_eq!(r1.nodes.len(), 1);
         let (r2, _) = history.redo(&r1, sel1).unwrap();
         assert_eq!(r2.nodes.len(), 2);
+    }
+
+    // ── Property edit undo coalescing ────────────────────────────────
+
+    /// Simulate a multi-frame slider drag editing a primitive's position.
+    /// The entire drag should produce exactly ONE undo entry.
+    #[test]
+    fn property_slider_drag_coalesced_to_single_undo() {
+        let mut history = History::new();
+        let original_scene = Scene::new();
+        let node_id = *original_scene.nodes.keys().next().unwrap();
+
+        // Frame 0: no changes yet
+        history.begin_frame(&original_scene, Some(node_id));
+        history.end_frame(&original_scene, Some(node_id), false);
+        assert_eq!(history.undo_count(), 0);
+
+        // Frame 1: drag starts — slider changes position to 1.0
+        history.begin_frame(&original_scene, Some(node_id));
+        let mut scene_mid_drag = original_scene.clone();
+        if let Some(n) = scene_mid_drag.nodes.get_mut(&node_id) {
+            if let NodeData::Primitive { ref mut position, .. } = n.data {
+                position.x = 1.0;
+            }
+        }
+        // is_anything_dragged=true (slider widget being dragged)
+        history.end_frame(&scene_mid_drag, Some(node_id), true);
+        assert_eq!(history.undo_count(), 0, "should not commit during drag");
+
+        // Frame 2: drag continues — position moves to 3.0
+        history.begin_frame(&scene_mid_drag, Some(node_id));
+        let mut scene_drag_2 = scene_mid_drag.clone();
+        if let Some(n) = scene_drag_2.nodes.get_mut(&node_id) {
+            if let NodeData::Primitive { ref mut position, .. } = n.data {
+                position.x = 3.0;
+            }
+        }
+        history.end_frame(&scene_drag_2, Some(node_id), true);
+        assert_eq!(history.undo_count(), 0, "should not commit during drag");
+
+        // Frame 3: drag ends — mouse released, position stays at 3.0
+        history.begin_frame(&scene_drag_2, Some(node_id));
+        history.end_frame(&scene_drag_2, Some(node_id), false);
+        assert_eq!(history.undo_count(), 1, "should commit exactly one entry on drag end");
+
+        // Undo should restore to original position (0.0)
+        let (restored, _) = history.undo(&scene_drag_2, Some(node_id)).unwrap();
+        let restored_pos = match &restored.nodes.get(&node_id).unwrap().data {
+            NodeData::Primitive { position, .. } => *position,
+            _ => panic!("expected primitive"),
+        };
+        assert!(
+            (restored_pos.x - 0.0).abs() < 0.001,
+            "undo should restore position to original (0.0), got {}",
+            restored_pos.x
+        );
+    }
+
+    /// Verify that a gizmo drag (modifying transform) over multiple frames
+    /// produces exactly one undo entry when the drag ends.
+    #[test]
+    fn gizmo_drag_coalesced_to_single_undo() {
+        let mut history = History::new();
+        let original_scene = Scene::new();
+        let node_id = *original_scene.nodes.keys().next().unwrap();
+
+        // Frame 0: idle
+        history.begin_frame(&original_scene, Some(node_id));
+        history.end_frame(&original_scene, Some(node_id), false);
+
+        // Frames 1-5: gizmo drag moves position incrementally
+        let mut scene = original_scene.clone();
+        for frame in 1..=5 {
+            history.begin_frame(&scene, Some(node_id));
+            if let Some(n) = scene.nodes.get_mut(&node_id) {
+                if let NodeData::Primitive { ref mut position, .. } = n.data {
+                    position.y = frame as f32 * 0.5;
+                }
+            }
+            // Viewport response is being dragged → is_anything_dragged=true
+            history.end_frame(&scene, Some(node_id), true);
+        }
+        assert_eq!(history.undo_count(), 0, "no commits during gizmo drag");
+
+        // Frame 6: drag ends
+        history.begin_frame(&scene, Some(node_id));
+        history.end_frame(&scene, Some(node_id), false);
+        assert_eq!(history.undo_count(), 1, "exactly one entry after gizmo drag");
+
+        // Undo restores to original
+        let (restored, _) = history.undo(&scene, Some(node_id)).unwrap();
+        let restored_pos = match &restored.nodes.get(&node_id).unwrap().data {
+            NodeData::Primitive { position, .. } => *position,
+            _ => panic!("expected primitive"),
+        };
+        assert!(
+            restored_pos.y.abs() < 0.001,
+            "undo should restore y to 0.0, got {}",
+            restored_pos.y
+        );
+    }
+
+    /// Verify that a color edit (no drag, instant click) creates one undo entry.
+    #[test]
+    fn color_preset_click_creates_one_undo_entry() {
+        let mut history = History::new();
+        let original_scene = Scene::new();
+        let node_id = *original_scene.nodes.keys().next().unwrap();
+
+        // Frame 0: idle
+        history.begin_frame(&original_scene, Some(node_id));
+        history.end_frame(&original_scene, Some(node_id), false);
+
+        // Frame 1: user clicks a color preset (no drag, instant change)
+        history.begin_frame(&original_scene, Some(node_id));
+        let mut scene = original_scene.clone();
+        if let Some(n) = scene.nodes.get_mut(&node_id) {
+            if let NodeData::Primitive { ref mut color, .. } = n.data {
+                *color = glam::Vec3::new(1.0, 0.0, 0.0); // red preset
+            }
+        }
+        history.end_frame(&scene, Some(node_id), false);
+        assert_eq!(history.undo_count(), 1, "instant edit = one undo entry");
+
+        // Undo restores original color
+        let (restored, _) = history.undo(&scene, Some(node_id)).unwrap();
+        let restored_color = match &restored.nodes.get(&node_id).unwrap().data {
+            NodeData::Primitive { color, .. } => *color,
+            _ => panic!("expected primitive"),
+        };
+        assert_ne!(
+            restored_color,
+            glam::Vec3::new(1.0, 0.0, 0.0),
+            "undo should restore to non-red color"
+        );
+    }
+
+    /// Verify that two consecutive drags create two separate undo entries.
+    #[test]
+    fn consecutive_drags_create_separate_undo_entries() {
+        let mut history = History::new();
+        let original_scene = Scene::new();
+        let node_id = *original_scene.nodes.keys().next().unwrap();
+
+        // Frame 0: idle
+        history.begin_frame(&original_scene, Some(node_id));
+        history.end_frame(&original_scene, Some(node_id), false);
+
+        // Drag 1: move X to 2.0
+        history.begin_frame(&original_scene, Some(node_id));
+        let mut scene_after_drag1 = original_scene.clone();
+        if let Some(n) = scene_after_drag1.nodes.get_mut(&node_id) {
+            if let NodeData::Primitive { ref mut position, .. } = n.data {
+                position.x = 2.0;
+            }
+        }
+        history.end_frame(&scene_after_drag1, Some(node_id), true);
+        // Drag 1 ends
+        history.begin_frame(&scene_after_drag1, Some(node_id));
+        history.end_frame(&scene_after_drag1, Some(node_id), false);
+        assert_eq!(history.undo_count(), 1, "first drag = one undo entry");
+
+        // Drag 2: move Y to 5.0
+        history.begin_frame(&scene_after_drag1, Some(node_id));
+        let mut scene_after_drag2 = scene_after_drag1.clone();
+        if let Some(n) = scene_after_drag2.nodes.get_mut(&node_id) {
+            if let NodeData::Primitive { ref mut position, .. } = n.data {
+                position.y = 5.0;
+            }
+        }
+        history.end_frame(&scene_after_drag2, Some(node_id), true);
+        // Drag 2 ends
+        history.begin_frame(&scene_after_drag2, Some(node_id));
+        history.end_frame(&scene_after_drag2, Some(node_id), false);
+        assert_eq!(history.undo_count(), 2, "two drags = two undo entries");
+
+        // Undo twice restores original
+        let (s1, _) = history.undo(&scene_after_drag2, Some(node_id)).unwrap();
+        let pos1 = match &s1.nodes.get(&node_id).unwrap().data {
+            NodeData::Primitive { position, .. } => *position,
+            _ => panic!("expected primitive"),
+        };
+        assert!((pos1.x - 2.0).abs() < 0.001, "first undo restores drag1 state");
+        assert!(pos1.y.abs() < 0.001, "first undo restores drag1 state");
+
+        let (s0, _) = history.undo(&s1, Some(node_id)).unwrap();
+        let pos0 = match &s0.nodes.get(&node_id).unwrap().data {
+            NodeData::Primitive { position, .. } => *position,
+            _ => panic!("expected primitive"),
+        };
+        assert!(pos0.x.abs() < 0.001, "second undo restores original");
     }
 }

@@ -258,3 +258,32 @@ Changes:
   (Low/Medium/High/Ultra).
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (263/263) ✓
+
+--- Iteration 12: PRD #29 — Undo snapshots for property edits on mouse release ---
+COMPLETED. Verified that the existing History system already handles property edit
+undo coalescing correctly. Added 4 comprehensive tests to prove the behavior.
+
+Analysis: The PRD described this as a missing feature, but the frame-based History
+system (begin_frame/end_frame with was_dragging tracking) already implements the
+industry-standard approach. Here's how it works:
+- begin_frame() captures scene state at frame start (pending snapshot)
+- Property panels and gizmo modify scene directly via &mut Scene during the frame
+- end_frame() receives is_anything_dragged from ctx.dragged_id().is_some()
+- During drag: pending snapshot is preserved (no commit)
+- When drag ends: drag_just_ended=true triggers commit of the pre-drag snapshot
+- Result: entire drag coalesced into one undo entry, Ctrl+Z reverts full drag
+
+This covers: property slider drags, gizmo transforms, color picker drags,
+and instant click edits (which get immediate single-entry commits).
+
+Changes:
+- src/graph/history.rs: Added 4 unit tests + NodeData import:
+  - property_slider_drag_coalesced_to_single_undo: simulates 3-frame slider drag,
+    verifies exactly 1 undo entry, verifies undo restores original position
+  - gizmo_drag_coalesced_to_single_undo: simulates 5-frame gizmo drag,
+    verifies 1 undo entry, verifies undo restores original position
+  - color_preset_click_creates_one_undo_entry: instant click → 1 undo entry
+  - consecutive_drags_create_separate_undo_entries: 2 drags → 2 entries,
+    verifies correct undo ordering with position verification
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (267/267) ✓
