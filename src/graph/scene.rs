@@ -152,6 +152,8 @@ pub enum ModifierKind {
     RadialRepeat,
     // Distance offset (modify distance after child eval)
     Offset,
+    // Domain warp (modify point before child eval via noise displacement)
+    Noise,
 }
 
 impl ModifierKind {
@@ -159,7 +161,7 @@ impl ModifierKind {
         Self::Twist, Self::Bend, Self::Taper,
         Self::Round, Self::Onion, Self::Elongate,
         Self::Mirror, Self::Repeat, Self::FiniteRepeat, Self::RadialRepeat,
-        Self::Offset,
+        Self::Offset, Self::Noise,
     ];
 
     pub fn base_name(&self) -> &'static str {
@@ -175,6 +177,7 @@ impl ModifierKind {
             Self::FiniteRepeat => "Finite Repeat",
             Self::RadialRepeat => "Radial Repeat",
             Self::Offset => "Offset",
+            Self::Noise => "Noise",
         }
     }
 
@@ -191,6 +194,7 @@ impl ModifierKind {
             Self::FiniteRepeat => "[FRp]",
             Self::RadialRepeat => "[Rad]",
             Self::Offset => "[Ofs]",
+            Self::Noise => "[Nse]",
         }
     }
 
@@ -207,6 +211,7 @@ impl ModifierKind {
             Self::FiniteRepeat => Vec3::new(2.0, 0.0, 0.0),
             Self::RadialRepeat => Vec3::new(6.0, 1.0, 0.0), // 6 copies, Y axis
             Self::Offset => Vec3::new(0.1, 0.0, 0.0),
+            Self::Noise => Vec3::new(2.0, 0.1, 3.0), // (frequency, amplitude, octaves)
         }
     }
 
@@ -230,6 +235,7 @@ impl ModifierKind {
             Self::FiniteRepeat => 38.0,
             Self::RadialRepeat => 39.0,
             Self::Offset => 40.0,
+            Self::Noise => 41.0,
         }
     }
 
@@ -239,7 +245,7 @@ impl ModifierKind {
         match self {
             Self::Twist | Self::Bend | Self::Taper
             | Self::Elongate | Self::Mirror | Self::Repeat | Self::FiniteRepeat
-            | Self::RadialRepeat => true,
+            | Self::RadialRepeat | Self::Noise => true,
             Self::Round | Self::Onion | Self::Offset => false,
         }
     }

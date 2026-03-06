@@ -809,6 +809,22 @@ pub fn draw(
                         ui.add(egui::DragValue::new(&mut value.x).speed(0.01).range(-1.0..=1.0));
                     });
                 }
+                ModifierKind::Noise => {
+                    ui.horizontal(|ui| {
+                        ui.label("Frequency");
+                        ui.add(egui::DragValue::new(&mut value.x).speed(0.1).range(0.1..=20.0));
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Amplitude");
+                        ui.add(egui::DragValue::new(&mut value.y).speed(0.01).range(0.0..=2.0));
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Octaves");
+                        let mut octaves_i32 = value.z as i32;
+                        ui.add(egui::Slider::new(&mut octaves_i32, 1..=8));
+                        value.z = octaves_i32 as f32;
+                    });
+                }
             }
 
             ui.separator();
@@ -868,7 +884,7 @@ pub fn draw(
                 ui.horizontal(|ui| {
                     ui.menu_button("+ Modifier", |ui| {
                         ui.label("Deform");
-                        for kind in &[ModifierKind::Twist, ModifierKind::Bend, ModifierKind::Taper] {
+                        for kind in &[ModifierKind::Twist, ModifierKind::Bend, ModifierKind::Taper, ModifierKind::Noise] {
                             if ui.button(kind.base_name()).clicked() {
                                 actions.push(Action::InsertModifierAbove { target: id, kind: kind.clone() });
                                 ui.close_menu();

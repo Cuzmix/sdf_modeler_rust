@@ -279,6 +279,11 @@ fn emit_transform_chain(
                     "    let {new_var} = radial_repeat_point({current_var}, nodes[{idx}].position.x, nodes[{idx}].position.y);"
                 ));
             }
+            ChainEntry::Modifier(ModifierKind::Noise) => {
+                lines.push(format!(
+                    "    let {new_var} = {current_var} + fbm_noise({current_var}, nodes[{idx}].position.x, nodes[{idx}].position.y, i32(nodes[{idx}].position.z));"
+                ));
+            }
             // Round/Onion/Offset are distance modifiers, not in chain
             ChainEntry::Modifier(ModifierKind::Round | ModifierKind::Onion | ModifierKind::Offset) => unreachable!(),
         }
@@ -993,6 +998,15 @@ mod tests {
         scene.create_modifier(ModifierKind::RadialRepeat, Some(sphere));
         let wgsl = generate_scene_sdf(&scene, None);
         assert!(wgsl.contains("radial_repeat_point("));
+    }
+
+    #[test]
+    fn noise_modifier_emits_fbm_noise() {
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        scene.create_modifier(ModifierKind::Noise, Some(sphere));
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("fbm_noise("));
     }
 
     #[test]

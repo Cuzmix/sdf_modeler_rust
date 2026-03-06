@@ -17,6 +17,82 @@ pub fn default_resolution() -> u32 {
 }
 const FAR_DISTANCE: f32 = 999.0;
 
+// ---------------------------------------------------------------------------
+// CPU-side noise functions matching the WGSL noise.wgsl implementation
+// ---------------------------------------------------------------------------
+
+/// Hash-based pseudo-random: maps Vec3 to Vec3 (matches WGSL hash33).
+/// The magic constant matches the WGSL version exactly for GPU/CPU consistency.
+#[allow(clippy::excessive_precision)]
+fn hash33(p: Vec3) -> Vec3 {
+    let q = Vec3::new(
+        p.dot(Vec3::new(127.1, 311.7, 74.7)),
+        p.dot(Vec3::new(269.5, 183.3, 246.1)),
+        p.dot(Vec3::new(113.5, 271.9, 124.6)),
+    );
+    Vec3::new(
+        (q.x.sin() * 43758.5453123).fract() * 2.0 - 1.0,
+        (q.y.sin() * 43758.5453123).fract() * 2.0 - 1.0,
+        (q.z.sin() * 43758.5453123).fract() * 2.0 - 1.0,
+    )
+}
+
+/// Quintic interpolation curve: 6t^5 - 15t^4 + 10t^3 (C2 continuous).
+fn quintic(t: Vec3) -> Vec3 {
+    t * t * t * (t * (t * 6.0 - 15.0) + 10.0)
+}
+
+/// 3D gradient noise with trilinear interpolation (matches WGSL noise3d).
+fn noise3d(p: Vec3) -> f32 {
+    let cell = p.floor();
+    let local = p - cell;
+    let fade = quintic(local);
+
+    let g000 = hash33(cell + Vec3::new(0.0, 0.0, 0.0)).dot(local - Vec3::new(0.0, 0.0, 0.0));
+    let g100 = hash33(cell + Vec3::new(1.0, 0.0, 0.0)).dot(local - Vec3::new(1.0, 0.0, 0.0));
+    let g010 = hash33(cell + Vec3::new(0.0, 1.0, 0.0)).dot(local - Vec3::new(0.0, 1.0, 0.0));
+    let g110 = hash33(cell + Vec3::new(1.0, 1.0, 0.0)).dot(local - Vec3::new(1.0, 1.0, 0.0));
+    let g001 = hash33(cell + Vec3::new(0.0, 0.0, 1.0)).dot(local - Vec3::new(0.0, 0.0, 1.0));
+    let g101 = hash33(cell + Vec3::new(1.0, 0.0, 1.0)).dot(local - Vec3::new(1.0, 0.0, 1.0));
+    let g011 = hash33(cell + Vec3::new(0.0, 1.0, 1.0)).dot(local - Vec3::new(0.0, 1.0, 1.0));
+    let g111 = hash33(cell + Vec3::new(1.0, 1.0, 1.0)).dot(local - Vec3::new(1.0, 1.0, 1.0));
+
+    fn lerp(a: f32, b: f32, t: f32) -> f32 { a + (b - a) * t }
+
+    let mix_x0 = lerp(g000, g100, fade.x);
+    let mix_x1 = lerp(g010, g110, fade.x);
+    let mix_x2 = lerp(g001, g101, fade.x);
+    let mix_x3 = lerp(g011, g111, fade.x);
+
+    let mix_y0 = lerp(mix_x0, mix_x1, fade.y);
+    let mix_y1 = lerp(mix_x2, mix_x3, fade.y);
+
+    lerp(mix_y0, mix_y1, fade.z)
+}
+
+/// Fractal Brownian Motion returning 3D displacement (matches WGSL fbm_noise).
+fn fbm_noise(p: Vec3, frequency: f32, amplitude: f32, octaves: i32) -> Vec3 {
+    let max_octaves = octaves.min(8);
+    let mut result = Vec3::ZERO;
+    let mut freq = frequency;
+    let mut amp = amplitude;
+
+    let offset_y = Vec3::new(31.416, 67.281, 11.513);
+    let offset_z = Vec3::new(73.156, 19.874, 53.129);
+
+    for _ in 0..max_octaves {
+        let sample_pos = p * freq;
+        result.x += noise3d(sample_pos) * amp;
+        result.y += noise3d(sample_pos + offset_y) * amp;
+        result.z += noise3d(sample_pos + offset_z) * amp;
+
+        freq *= 2.0;
+        amp *= 0.5;
+    }
+
+    result
+}
+
 /// Return the max voxel resolution of any Sculpt node in a subtree.
 /// Falls back to DEFAULT_RESOLUTION if no Sculpt nodes exist.
 pub fn max_subtree_resolution(scene: &Scene, root: NodeId) -> u32 {
@@ -491,6 +567,13 @@ pub fn evaluate_sdf_tree(scene: &Scene, node_id: NodeId, p: Vec3) -> f32 {
                     };
                     let _ = (a, r); // suppress unused warnings
                     evaluate_sdf_tree(scene, *child_id, tp)
+                }
+                ModifierKind::Noise => {
+                    let frequency = value.x;
+                    let amplitude = value.y;
+                    let octaves = value.z as i32;
+                    let displacement = fbm_noise(p, frequency, amplitude, octaves);
+                    evaluate_sdf_tree(scene, *child_id, p + displacement)
                 }
                 // Distance modifiers: recurse first, then modify result
                 ModifierKind::Round => {
@@ -1527,6 +1610,70 @@ mod tests {
         let dist_pos = evaluate_sdf_tree(&scene, mirror_id, Vec3::new(3.0, 0.0, 0.0));
         assert!(dist.abs() < 1e-4, "mirrored point should be on surface: {dist}");
         assert!((dist - dist_pos).abs() < 1e-4, "mirrored should match positive: {dist} vs {dist_pos}");
+    }
+
+    #[test]
+    fn evaluate_sdf_tree_modifier_noise_displaces_point() {
+        let mut scene = empty_scene();
+        let sphere = scene.add_node("S".into(), NodeData::Primitive {
+            kind: SdfPrimitive::Sphere,
+            position: Vec3::ZERO,
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+            color: Vec3::ONE,
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        });
+        use crate::graph::scene::ModifierKind;
+        let noise_id = scene.add_node("Noise".into(), NodeData::Modifier {
+            kind: ModifierKind::Noise,
+            input: Some(sphere),
+            value: Vec3::new(2.0, 0.5, 3.0), // frequency=2, amplitude=0.5, octaves=3
+            extra: Vec3::ZERO,
+        });
+        // With non-zero amplitude, the noise modifier should change the SDF distance
+        // compared to evaluating without it
+        let dist_plain = evaluate_sdf_tree(&scene, sphere, Vec3::new(1.5, 0.3, 0.7));
+        let dist_noise = evaluate_sdf_tree(&scene, noise_id, Vec3::new(1.5, 0.3, 0.7));
+        assert!(
+            (dist_plain - dist_noise).abs() > 1e-6,
+            "noise modifier should displace point: plain={dist_plain}, noise={dist_noise}"
+        );
+    }
+
+    #[test]
+    fn noise_modifier_zero_amplitude_is_identity() {
+        let mut scene = empty_scene();
+        let sphere = scene.add_node("S".into(), NodeData::Primitive {
+            kind: SdfPrimitive::Sphere,
+            position: Vec3::ZERO,
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+            color: Vec3::ONE,
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        });
+        use crate::graph::scene::ModifierKind;
+        let noise_id = scene.add_node("Noise".into(), NodeData::Modifier {
+            kind: ModifierKind::Noise,
+            input: Some(sphere),
+            value: Vec3::new(2.0, 0.0, 3.0), // amplitude=0 → no displacement
+            extra: Vec3::ZERO,
+        });
+        let dist_plain = evaluate_sdf_tree(&scene, sphere, Vec3::new(1.5, 0.3, 0.7));
+        let dist_noise = evaluate_sdf_tree(&scene, noise_id, Vec3::new(1.5, 0.3, 0.7));
+        assert!(
+            (dist_plain - dist_noise).abs() < 1e-6,
+            "zero amplitude should not displace: plain={dist_plain}, noise={dist_noise}"
+        );
     }
 
     #[test]

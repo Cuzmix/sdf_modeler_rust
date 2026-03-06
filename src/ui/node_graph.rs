@@ -396,6 +396,12 @@ impl NodeDataTrait for SdfNodeData {
                     ModifierKind::Offset => {
                         scalar_drag(ui, "Offset", &mut value.x, 0.01, Some(-1.0..=1.0))
                     }
+                    ModifierKind::Noise => {
+                        let c1 = scalar_drag(ui, "Freq", &mut value.x, 0.1, Some(0.1..=20.0));
+                        let c2 = scalar_drag(ui, "Amp", &mut value.y, 0.01, Some(0.0..=2.0));
+                        let c3 = scalar_drag(ui, "Oct", &mut value.z, 1.0, Some(1.0..=8.0));
+                        c1 || c2 || c3
+                    }
                 };
             }
             NodeData::Sculpt {
@@ -1096,7 +1102,7 @@ fn draw_toolbar(ui: &mut egui::Ui, scene: &Scene, state: &mut NodeGraphState, gr
 
         ui.menu_button("+ Modifier", |ui| {
             ui.label("Deform");
-            for kind in [ModifierKind::Twist, ModifierKind::Bend, ModifierKind::Taper] {
+            for kind in [ModifierKind::Twist, ModifierKind::Bend, ModifierKind::Taper, ModifierKind::Noise] {
                 if ui.button(kind.base_name()).clicked() {
                     toolbar_add_modifier(state.selected, kind, actions);
                     ui.close_menu();
