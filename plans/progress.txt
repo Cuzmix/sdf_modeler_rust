@@ -499,3 +499,46 @@ and node graph. They don't affect rendering yet — that's PRD #23 (after #22 ad
 viewport visualization).
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (285/285) ✓
+
+--- Iteration 19: PRD #22 — Viewport light visualization (billboard + wireframe gizmo) ---
+COMPLETED. Added industry-standard hybrid light visualization (Unreal/Unity style).
+
+Changes:
+- Created src/ui/light_gizmo.rs: Full light visualization module with:
+  - Billboard icon rendering for all 3 light types:
+    - Point light: filled circle with 8 radiating ray lines
+    - Spot light: triangle/cone icon with small source circle
+    - Directional light: sun icon (circle with 12 radiating rays)
+  - Icons use the light's color (with fallback to gray for very dark colors).
+  - Icon size scales inversely with camera distance (clamp 12–48px).
+  - Alpha fades beyond 50 units for clean far-distance appearance.
+  - All icons are 2D screen-space (billboard behavior — always face camera).
+  - Wireframe gizmos drawn only when light is selected:
+    - Point light: 3 orthogonal wireframe circles showing attenuation range.
+    - Spot light: wireframe cone (8 lines from tip to base edge + base circle).
+      Cone angle and range match the light's spot_angle and range properties.
+    - Directional light: 5 parallel arrow lines showing light direction (center
+      + 4 offset arrows for clear direction readability).
+  - Selection highlight: golden ring around selected light's billboard icon.
+  - Billboard click selection: screen-space hit test (distance from click to
+    projected icon center < hit_radius). Selects the Transform parent (industry
+    standard — select the positionable node).
+  - collect_lights() extracts all visible Light nodes with world position from
+    parent Transform, direction from Transform rotation (default -Y), and all
+    light properties.
+- src/ui/mod.rs: Registered light_gizmo module.
+- src/settings.rs: Added show_light_gizmos: bool (default true) to RenderConfig.
+  Added serde default for backwards compatibility.
+- src/ui/settings_window.rs: Added "Show Light Gizmos" checkbox in Settings >
+  Viewport section with tooltip.
+- src/ui/viewport/draw.rs: Integrated light_gizmo::draw_and_interact() call
+  between node labels and bounding box overlays. Passes mouse position and click
+  state. When a billboard is clicked, pushes Action::Select(Some(transform_id))
+  directly — bypasses GPU pick (billboards are screen-space only). Light gizmo
+  only drawn when show_light_gizmos setting is enabled.
+
+Note: Light property panel (type dropdown, color picker, intensity/range/cone angle
+sliders) and scene tree yellow dot icon already existed from PRD #21. This iteration
+added the viewport visualization and click selection that were missing.
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (285/285) ✓

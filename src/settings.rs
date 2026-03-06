@@ -404,6 +404,8 @@ pub struct RenderConfig {
     pub show_node_labels: bool,
     #[serde(default = "default_true")]
     pub show_bounding_box: bool,
+    #[serde(default = "default_true")]
+    pub show_light_gizmos: bool,
 
     // Sculpt safety border (fraction of viewport, 0.0 = disabled, default 5%)
     #[serde(default = "default_safety_border")]
@@ -510,6 +512,7 @@ impl Default for RenderConfig {
             cross_section_position: 0.0,
             show_node_labels: false,
             show_bounding_box: true,
+            show_light_gizmos: true,
             sculpt_safety_border: 0.05,
         }
     }

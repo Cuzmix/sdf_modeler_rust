@@ -70,6 +70,8 @@ pub fn draw(
                             .on_hover_text("Display node names at their 3D positions in the viewport");
                         ui.checkbox(&mut settings.render.show_bounding_box, "Show Bounding Box")
                             .on_hover_text("Display wireframe bounding box around the selected node");
+                        ui.checkbox(&mut settings.render.show_light_gizmos, "Show Light Gizmos")
+                            .on_hover_text("Display billboard icons and wireframe gizmos for light nodes");
                         ui.checkbox(&mut settings.render.clamp_orbit_pitch, "Clamp Orbit Pitch")
                             .on_hover_text("Limit vertical orbit to ±89°. When off, allows full 360° gimbal rotation.");
                         ui.separator();

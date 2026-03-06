@@ -576,6 +576,25 @@ pub fn draw(
         draw_node_labels(ui.painter(), camera, scene, *selected, rect);
     }
 
+    // --- Light gizmo overlay ---
+    let light_gizmo_result = if render_config.show_light_gizmos {
+        let mouse_pos = ui.input(|i| i.pointer.hover_pos());
+        let mouse_clicked = response.clicked();
+        crate::ui::light_gizmo::draw_and_interact(
+            ui.painter(),
+            camera,
+            scene,
+            *selected,
+            rect,
+            mouse_pos,
+            mouse_clicked,
+        )
+    } else {
+        crate::ui::light_gizmo::LightGizmoResult {
+            clicked_transform_id: None,
+        }
+    };
+
     // --- Bounding box overlay ---
     if render_config.show_bounding_box {
         if let Some(sel_id) = *selected {
@@ -806,7 +825,10 @@ pub fn draw(
     } else if !gizmo_consumed {
         // Normal mode: click to pick
         if response.clicked() {
-            if let Some(pos) = response.interact_pointer_pos() {
+            // Light billboard click takes priority over GPU pick
+            if let Some(transform_id) = light_gizmo_result.clicked_transform_id {
+                actions.push(Action::Select(Some(transform_id)));
+            } else if let Some(pos) = response.interact_pointer_pos() {
                 let mouse_px = [
                     (pos.x - rect.min.x) * pixels_per_point,
                     (pos.y - rect.min.y) * pixels_per_point,
