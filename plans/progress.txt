@@ -50,3 +50,26 @@ Sprint initialized. No iterations completed yet.
 - Helper: `empty_scene()` creates a Scene with no nodes for predictable testing
 - All 62 tests pass (16 history + 46 scene). cargo check, clippy clean.
 - Files changed: `src/graph/scene.rs`, `plans/prd.json`, `plans/progress.txt`
+
+## Iteration 3 — PRD #5: VoxelGrid unit tests
+- Added 57 unit tests to `src/graph/voxel.rs` covering:
+  - VoxelGrid construction: new_displacement creates zero-filled grid
+  - Index layout: z-major ordering (z*res*res + y*res + x)
+  - world_to_grid: maps bounds to grid edges, center maps to half-resolution
+  - grid_to_world: maps edges to bounds, roundtrip consistency
+  - Trilinear sampling: exact at grid corners, interpolates between values, clamps outside bounds, uniform grid returns constant
+  - content_eq: identical grids, detects data/resolution/bounds changes
+  - SDF primitives: sphere (center/surface/outside), box (center/face/outside), plane (above/below), cylinder, torus, capsule
+  - CSG operations: union (min), subtract (max neg), intersect (max), smooth union (blends, zero-k equals hard)
+  - evaluate_sdf_tree: sphere at origin/outside, missing node returns FAR, translated primitive, CSG union/subtract, single/no children operations
+  - Transform nodes: translation, uniform scale, empty returns FAR
+  - rotate_euler: identity, 90° Y rotation
+  - Bounds estimation: single sphere, translated sphere, operation encloses both children
+  - create_displacement_grid_for_subtree: centered on subtree, zero-filled
+  - bake_subtree_with_progress: sphere negative inside/positive outside, progress counter, box negative at center
+  - max_subtree_resolution: default without sculpt, finds sculpt node resolution
+  - Sculpt evaluation: standalone samples grid, child+displacement adds correctly
+  - Modifier evaluation: round, onion, mirror-X, empty returns FAR
+- Helpers: `empty_scene()`, `scene_with_sphere()`, `scene_with_box()`
+- All 119 tests pass (16 history + 46 scene + 57 voxel). cargo check, clippy clean.
+- Files changed: `src/graph/voxel.rs`, `plans/prd.json`, `plans/progress.txt`

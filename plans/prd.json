@@ -32,6 +32,6 @@
     "category": "testing",
     "description": "Add unit tests for VoxelGrid (SDF evaluation, grid indexing, bounds computation)",
     "verification": "cargo test -- voxel passes with correct distance field values for known primitives",
-    "passes": false
+    "passes": true
   }
 ]

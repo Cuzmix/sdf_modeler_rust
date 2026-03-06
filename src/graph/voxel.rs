@@ -604,3 +604,909 @@ pub fn bake_subtree_with_progress(
     let grid = VoxelGrid { resolution, bounds_min: local_min, bounds_max: local_max, is_displacement: false, data };
     (grid, center)
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use glam::Vec3;
+    use std::collections::{HashMap, HashSet};
+    use std::sync::atomic::AtomicU32;
+    use std::sync::Arc;
+
+    fn empty_scene() -> Scene {
+        Scene {
+            nodes: HashMap::new(),
+            next_id: 0,
+            name_counters: HashMap::new(),
+            hidden_nodes: HashSet::new(),
+        }
+    }
+
+    /// Helper: create a scene with a single unit sphere at the origin.
+    fn scene_with_sphere() -> (Scene, NodeId) {
+        let mut scene = empty_scene();
+        let name = scene.next_name("Sphere");
+        let id = scene.add_node(name, NodeData::Primitive {
+            kind: SdfPrimitive::Sphere,
+            position: Vec3::ZERO,
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+            color: Vec3::ONE,
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        });
+        (scene, id)
+    }
+
+    /// Helper: create a scene with a unit box at the origin.
+    fn scene_with_box() -> (Scene, NodeId) {
+        let mut scene = empty_scene();
+        let name = scene.next_name("Box");
+        let id = scene.add_node(name, NodeData::Primitive {
+            kind: SdfPrimitive::Box,
+            position: Vec3::ZERO,
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+            color: Vec3::ONE,
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        });
+        (scene, id)
+    }
+
+    // -----------------------------------------------------------------------
+    // VoxelGrid construction and indexing
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn new_displacement_creates_zero_filled_grid() {
+        let grid = VoxelGrid::new_displacement(4, Vec3::splat(-1.0), Vec3::splat(1.0));
+        assert_eq!(grid.resolution, 4);
+        assert_eq!(grid.data.len(), 64); // 4^3
+        assert!(grid.is_displacement);
+        assert!(grid.data.iter().all(|&v| v == 0.0));
+    }
+
+    #[test]
+    fn index_layout_z_major() {
+        // data[z * res * res + y * res + x]
+        assert_eq!(VoxelGrid::index(0, 0, 0, 4), 0);
+        assert_eq!(VoxelGrid::index(1, 0, 0, 4), 1);
+        assert_eq!(VoxelGrid::index(0, 1, 0, 4), 4);
+        assert_eq!(VoxelGrid::index(0, 0, 1, 4), 16);
+        assert_eq!(VoxelGrid::index(3, 3, 3, 4), 63);
+    }
+
+    #[test]
+    fn world_to_grid_maps_bounds_to_grid_edges() {
+        let grid = VoxelGrid::new_displacement(4, Vec3::splat(-2.0), Vec3::splat(2.0));
+        let gc_min = grid.world_to_grid(Vec3::splat(-2.0));
+        let gc_max = grid.world_to_grid(Vec3::splat(2.0));
+        assert!((gc_min - Vec3::ZERO).length() < 1e-5);
+        assert!((gc_max - Vec3::splat(3.0)).length() < 1e-5);
+    }
+
+    #[test]
+    fn world_to_grid_center_maps_to_half_resolution() {
+        let grid = VoxelGrid::new_displacement(5, Vec3::splat(-1.0), Vec3::splat(1.0));
+        let gc = grid.world_to_grid(Vec3::ZERO);
+        assert!((gc - Vec3::splat(2.0)).length() < 1e-5);
+    }
+
+    #[test]
+    fn grid_to_world_roundtrip() {
+        let grid = VoxelGrid::new_displacement(8, Vec3::new(-1.0, -2.0, -3.0), Vec3::new(1.0, 2.0, 3.0));
+        let original = Vec3::new(0.5, -1.0, 2.0);
+        let gc = grid.world_to_grid(original);
+        let back = grid.grid_to_world(gc.x, gc.y, gc.z);
+        assert!((back - original).length() < 1e-4, "roundtrip failed: {back} != {original}");
+    }
+
+    #[test]
+    fn grid_to_world_maps_edges_to_bounds() {
+        let grid = VoxelGrid::new_displacement(4, Vec3::new(-1.0, -2.0, -3.0), Vec3::new(1.0, 2.0, 3.0));
+        let min = grid.grid_to_world(0.0, 0.0, 0.0);
+        let max = grid.grid_to_world(3.0, 3.0, 3.0);
+        assert!((min - grid.bounds_min).length() < 1e-5);
+        assert!((max - grid.bounds_max).length() < 1e-5);
+    }
+
+    // -----------------------------------------------------------------------
+    // VoxelGrid sampling (trilinear interpolation)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn sample_returns_exact_value_at_grid_corner() {
+        let mut grid = VoxelGrid::new_displacement(4, Vec3::splat(-1.0), Vec3::splat(1.0));
+        // Set value at corner (0,0,0)
+        grid.data[VoxelGrid::index(0, 0, 0, 4)] = 5.0;
+        let sampled = grid.sample(Vec3::splat(-1.0));
+        assert!((sampled - 5.0).abs() < 1e-5, "expected 5.0, got {sampled}");
+    }
+
+    #[test]
+    fn sample_interpolates_between_two_values() {
+        let mut grid = VoxelGrid::new_displacement(2, Vec3::ZERO, Vec3::ONE);
+        // Two adjacent voxels along X
+        grid.data[VoxelGrid::index(0, 0, 0, 2)] = 0.0;
+        grid.data[VoxelGrid::index(1, 0, 0, 2)] = 10.0;
+        let mid_x = grid.sample(Vec3::new(0.5, 0.0, 0.0));
+        assert!((mid_x - 5.0).abs() < 1e-4, "expected ~5.0, got {mid_x}");
+    }
+
+    #[test]
+    fn sample_clamps_outside_bounds() {
+        let mut grid = VoxelGrid::new_displacement(2, Vec3::ZERO, Vec3::ONE);
+        grid.data[VoxelGrid::index(0, 0, 0, 2)] = 3.0;
+        grid.data[VoxelGrid::index(1, 0, 0, 2)] = 7.0;
+        // Sample well outside bounds — should clamp to edge
+        let outside_low = grid.sample(Vec3::new(-10.0, 0.0, 0.0));
+        assert!((outside_low - 3.0).abs() < 1e-4, "expected clamped to 3.0, got {outside_low}");
+    }
+
+    #[test]
+    fn sample_uniform_grid_returns_constant() {
+        let mut grid = VoxelGrid::new_displacement(4, Vec3::splat(-1.0), Vec3::splat(1.0));
+        for v in grid.data.iter_mut() {
+            *v = 42.0;
+        }
+        let sampled = grid.sample(Vec3::new(0.3, -0.5, 0.7));
+        assert!((sampled - 42.0).abs() < 1e-5);
+    }
+
+    // -----------------------------------------------------------------------
+    // content_eq
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn content_eq_identical_grids() {
+        let grid_a = VoxelGrid::new_displacement(4, Vec3::splat(-1.0), Vec3::splat(1.0));
+        let grid_b = grid_a.clone();
+        assert!(grid_a.content_eq(&grid_b));
+    }
+
+    #[test]
+    fn content_eq_detects_data_change() {
+        let grid_a = VoxelGrid::new_displacement(4, Vec3::splat(-1.0), Vec3::splat(1.0));
+        let mut grid_b = grid_a.clone();
+        grid_b.data[10] = 1.0;
+        assert!(!grid_a.content_eq(&grid_b));
+    }
+
+    #[test]
+    fn content_eq_detects_resolution_change() {
+        let grid_a = VoxelGrid::new_displacement(4, Vec3::splat(-1.0), Vec3::splat(1.0));
+        let grid_b = VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0));
+        assert!(!grid_a.content_eq(&grid_b));
+    }
+
+    #[test]
+    fn content_eq_detects_bounds_change() {
+        let grid_a = VoxelGrid::new_displacement(4, Vec3::splat(-1.0), Vec3::splat(1.0));
+        let grid_b = VoxelGrid::new_displacement(4, Vec3::splat(-2.0), Vec3::splat(1.0));
+        assert!(!grid_a.content_eq(&grid_b));
+    }
+
+    // -----------------------------------------------------------------------
+    // SDF primitive evaluation
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn evaluate_sdf_sphere_at_origin() {
+        let dist = evaluate_sdf(&SdfPrimitive::Sphere, Vec3::ZERO, Vec3::ONE);
+        assert!((dist - (-1.0)).abs() < 1e-5, "inside sphere center: {dist}");
+    }
+
+    #[test]
+    fn evaluate_sdf_sphere_on_surface() {
+        let dist = evaluate_sdf(&SdfPrimitive::Sphere, Vec3::X, Vec3::ONE);
+        assert!(dist.abs() < 1e-5, "on sphere surface: {dist}");
+    }
+
+    #[test]
+    fn evaluate_sdf_sphere_outside() {
+        let dist = evaluate_sdf(&SdfPrimitive::Sphere, Vec3::new(3.0, 0.0, 0.0), Vec3::ONE);
+        assert!((dist - 2.0).abs() < 1e-5, "outside sphere: {dist}");
+    }
+
+    #[test]
+    fn evaluate_sdf_box_at_origin() {
+        let dist = evaluate_sdf(&SdfPrimitive::Box, Vec3::ZERO, Vec3::ONE);
+        assert!((dist - (-1.0)).abs() < 1e-5, "inside box center: {dist}");
+    }
+
+    #[test]
+    fn evaluate_sdf_box_on_face() {
+        let dist = evaluate_sdf(&SdfPrimitive::Box, Vec3::X, Vec3::ONE);
+        assert!(dist.abs() < 1e-5, "on box face: {dist}");
+    }
+
+    #[test]
+    fn evaluate_sdf_box_outside() {
+        let dist = evaluate_sdf(&SdfPrimitive::Box, Vec3::new(2.0, 0.0, 0.0), Vec3::ONE);
+        assert!((dist - 1.0).abs() < 1e-5, "outside box: {dist}");
+    }
+
+    #[test]
+    fn evaluate_sdf_plane_above() {
+        let dist = evaluate_sdf(&SdfPrimitive::Plane, Vec3::new(0.0, 2.0, 0.0), Vec3::ONE);
+        assert!((dist - 2.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn evaluate_sdf_plane_below() {
+        let dist = evaluate_sdf(&SdfPrimitive::Plane, Vec3::new(0.0, -1.0, 0.0), Vec3::ONE);
+        assert!((dist - (-1.0)).abs() < 1e-5);
+    }
+
+    #[test]
+    fn evaluate_sdf_cylinder_on_surface() {
+        // Cylinder with radius=1, half-height=1
+        let dist = evaluate_sdf(&SdfPrimitive::Cylinder, Vec3::new(1.0, 0.0, 0.0), Vec3::ONE);
+        assert!(dist.abs() < 1e-5, "on cylinder surface: {dist}");
+    }
+
+    #[test]
+    fn evaluate_sdf_torus_on_surface() {
+        // Torus with major_r=1, minor_r=0.25 (scale.x=major, scale.y=minor)
+        let on_surface = Vec3::new(1.25, 0.0, 0.0);
+        let dist = evaluate_sdf(&SdfPrimitive::Torus, on_surface, Vec3::new(1.0, 0.25, 0.0));
+        assert!(dist.abs() < 1e-4, "on torus surface: {dist}");
+    }
+
+    #[test]
+    fn evaluate_sdf_capsule_on_surface() {
+        // Capsule: radius=0.5, half-height=1.0
+        let on_tip = Vec3::new(0.0, 1.5, 0.0); // y=h+r = 1.0+0.5
+        let dist = evaluate_sdf(&SdfPrimitive::Capsule, on_tip, Vec3::new(0.5, 1.0, 0.0));
+        assert!(dist.abs() < 1e-4, "on capsule tip: {dist}");
+    }
+
+    // -----------------------------------------------------------------------
+    // CSG operations
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn csg_union_returns_min() {
+        assert_eq!(csg_union(1.0, 2.0), 1.0);
+        assert_eq!(csg_union(-1.0, 0.5), -1.0);
+    }
+
+    #[test]
+    fn csg_subtract_returns_max_neg() {
+        assert_eq!(csg_subtract(1.0, 2.0), 1.0); // max(1, -2) = 1
+        assert_eq!(csg_subtract(0.5, -1.0), 1.0); // max(0.5, 1) = 1
+    }
+
+    #[test]
+    fn csg_intersect_returns_max() {
+        assert_eq!(csg_intersect(1.0, 2.0), 2.0);
+        assert_eq!(csg_intersect(-1.0, 0.5), 0.5);
+    }
+
+    #[test]
+    fn csg_smooth_union_blends() {
+        let hard = csg_union(-0.1, 0.1);
+        let smooth = csg_smooth_union(-0.1, 0.1, 0.5);
+        // Smooth union should be <= hard union (it rounds inward)
+        assert!(smooth <= hard, "smooth {smooth} should be <= hard {hard}");
+    }
+
+    #[test]
+    fn csg_smooth_union_zero_k_equals_hard() {
+        let a = 0.5_f32;
+        let b = 1.5_f32;
+        let smooth = csg_smooth_union(a, b, 0.0);
+        let hard = csg_union(a, b);
+        assert!((smooth - hard).abs() < 1e-3, "smooth={smooth}, hard={hard}");
+    }
+
+    // -----------------------------------------------------------------------
+    // evaluate_sdf_tree — recursive tree evaluator
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn evaluate_sdf_tree_sphere_at_origin() {
+        let (scene, id) = scene_with_sphere();
+        let dist = evaluate_sdf_tree(&scene, id, Vec3::ZERO);
+        assert!((dist - (-1.0)).abs() < 1e-5, "sphere center: {dist}");
+    }
+
+    #[test]
+    fn evaluate_sdf_tree_sphere_outside() {
+        let (scene, id) = scene_with_sphere();
+        let dist = evaluate_sdf_tree(&scene, id, Vec3::new(3.0, 0.0, 0.0));
+        assert!((dist - 2.0).abs() < 1e-5, "outside sphere: {dist}");
+    }
+
+    #[test]
+    fn evaluate_sdf_tree_missing_node_returns_far() {
+        let scene = empty_scene();
+        let dist = evaluate_sdf_tree(&scene, 999, Vec3::ZERO);
+        assert_eq!(dist, FAR_DISTANCE);
+    }
+
+    #[test]
+    fn evaluate_sdf_tree_translated_primitive() {
+        let mut scene = empty_scene();
+        let id = scene.add_node("Sphere".into(), NodeData::Primitive {
+            kind: SdfPrimitive::Sphere,
+            position: Vec3::new(5.0, 0.0, 0.0),
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+            color: Vec3::ONE,
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        });
+        // At (5,0,0) should be on surface
+        let dist = evaluate_sdf_tree(&scene, id, Vec3::new(6.0, 0.0, 0.0));
+        assert!(dist.abs() < 1e-4, "on translated sphere surface: {dist}");
+    }
+
+    #[test]
+    fn evaluate_sdf_tree_csg_union() {
+        let mut scene = empty_scene();
+        let sphere_a = scene.add_node("A".into(), NodeData::Primitive {
+            kind: SdfPrimitive::Sphere,
+            position: Vec3::new(-1.0, 0.0, 0.0),
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+            color: Vec3::ONE,
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        });
+        let sphere_b = scene.add_node("B".into(), NodeData::Primitive {
+            kind: SdfPrimitive::Sphere,
+            position: Vec3::new(1.0, 0.0, 0.0),
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+            color: Vec3::ONE,
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        });
+        let union_id = scene.add_node("Union".into(), NodeData::Operation {
+            op: CsgOp::Union,
+            smooth_k: 0.0,
+            left: Some(sphere_a),
+            right: Some(sphere_b),
+        });
+        // At origin, both unit spheres at ±1 just touch (dist=0). Should be <= 0.
+        let dist = evaluate_sdf_tree(&scene, union_id, Vec3::ZERO);
+        assert!(dist <= 0.0, "at union boundary: {dist}");
+    }
+
+    #[test]
+    fn evaluate_sdf_tree_csg_subtract() {
+        let mut scene = empty_scene();
+        let sphere_a = scene.add_node("A".into(), NodeData::Primitive {
+            kind: SdfPrimitive::Sphere,
+            position: Vec3::ZERO,
+            rotation: Vec3::ZERO,
+            scale: Vec3::splat(2.0),
+            color: Vec3::ONE,
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        });
+        let sphere_b = scene.add_node("B".into(), NodeData::Primitive {
+            kind: SdfPrimitive::Sphere,
+            position: Vec3::ZERO,
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+            color: Vec3::ONE,
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        });
+        let sub_id = scene.add_node("Sub".into(), NodeData::Operation {
+            op: CsgOp::Subtract,
+            smooth_k: 0.0,
+            left: Some(sphere_a),
+            right: Some(sphere_b),
+        });
+        // At origin: A dist=-2, B dist=-1. Subtract = max(-2, -(-1)) = max(-2, 1) = 1 (outside)
+        let dist = evaluate_sdf_tree(&scene, sub_id, Vec3::ZERO);
+        assert!((dist - 1.0).abs() < 1e-5, "subtracted region at origin: {dist}");
+    }
+
+    #[test]
+    fn evaluate_sdf_tree_operation_single_child() {
+        let mut scene = empty_scene();
+        let sphere = scene.add_node("S".into(), NodeData::Primitive {
+            kind: SdfPrimitive::Sphere,
+            position: Vec3::ZERO,
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+            color: Vec3::ONE,
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        });
+        let op_id = scene.add_node("Op".into(), NodeData::Operation {
+            op: CsgOp::Union,
+            smooth_k: 0.0,
+            left: Some(sphere),
+            right: None,
+        });
+        // With one child, result should be same as child
+        let dist = evaluate_sdf_tree(&scene, op_id, Vec3::ZERO);
+        assert!((dist - (-1.0)).abs() < 1e-5);
+    }
+
+    #[test]
+    fn evaluate_sdf_tree_operation_no_children() {
+        let mut scene = empty_scene();
+        let op_id = scene.add_node("Op".into(), NodeData::Operation {
+            op: CsgOp::Union,
+            smooth_k: 0.0,
+            left: None,
+            right: None,
+        });
+        let dist = evaluate_sdf_tree(&scene, op_id, Vec3::ZERO);
+        assert_eq!(dist, f32::MAX);
+    }
+
+    #[test]
+    fn evaluate_sdf_tree_transform_translation() {
+        let mut scene = empty_scene();
+        let sphere = scene.add_node("S".into(), NodeData::Primitive {
+            kind: SdfPrimitive::Sphere,
+            position: Vec3::ZERO,
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+            color: Vec3::ONE,
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        });
+        let transform_id = scene.add_node("T".into(), NodeData::Transform {
+            input: Some(sphere),
+            translation: Vec3::new(3.0, 0.0, 0.0),
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+        });
+        // Sphere should be centered at (3,0,0) after transform
+        let dist_at_center = evaluate_sdf_tree(&scene, transform_id, Vec3::new(3.0, 0.0, 0.0));
+        assert!((dist_at_center - (-1.0)).abs() < 1e-4, "sphere center via transform: {dist_at_center}");
+    }
+
+    #[test]
+    fn evaluate_sdf_tree_transform_uniform_scale() {
+        let mut scene = empty_scene();
+        let sphere = scene.add_node("S".into(), NodeData::Primitive {
+            kind: SdfPrimitive::Sphere,
+            position: Vec3::ZERO,
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+            color: Vec3::ONE,
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        });
+        let transform_id = scene.add_node("T".into(), NodeData::Transform {
+            input: Some(sphere),
+            translation: Vec3::ZERO,
+            rotation: Vec3::ZERO,
+            scale: Vec3::splat(2.0),
+        });
+        // At distance 2.0 from origin should be on surface of scaled sphere
+        let dist = evaluate_sdf_tree(&scene, transform_id, Vec3::new(2.0, 0.0, 0.0));
+        assert!(dist.abs() < 1e-4, "on scaled sphere surface: {dist}");
+    }
+
+    #[test]
+    fn evaluate_sdf_tree_transform_empty_returns_far() {
+        let mut scene = empty_scene();
+        let transform_id = scene.add_node("T".into(), NodeData::Transform {
+            input: None,
+            translation: Vec3::ZERO,
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+        });
+        let dist = evaluate_sdf_tree(&scene, transform_id, Vec3::ZERO);
+        assert_eq!(dist, FAR_DISTANCE);
+    }
+
+    // -----------------------------------------------------------------------
+    // rotate_euler
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn rotate_euler_identity() {
+        let p = Vec3::new(1.0, 2.0, 3.0);
+        let rotated = rotate_euler(p, Vec3::ZERO);
+        assert!((rotated - p).length() < 1e-5);
+    }
+
+    #[test]
+    fn rotate_euler_90_deg_y() {
+        let p = Vec3::X; // (1,0,0)
+        let rotated = rotate_euler(p, Vec3::new(0.0, std::f32::consts::FRAC_PI_2, 0.0));
+        // 90° around Y should send X → -Z
+        let expected = Vec3::new(0.0, 0.0, -1.0);
+        assert!((rotated - expected).length() < 1e-5, "got {rotated}, expected {expected}");
+    }
+
+    // -----------------------------------------------------------------------
+    // Bounds estimation
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn bounds_for_subtree_single_sphere() {
+        let (scene, id) = scene_with_sphere();
+        let (bmin, bmax) = bounds_for_subtree(&scene, id);
+        // Sphere at origin with scale=1 → extent = 1*1.5 = 1.5, padded by 0.5
+        assert!((bmin - Vec3::splat(-2.0)).length() < 1e-5, "bmin: {bmin}");
+        assert!((bmax - Vec3::splat(2.0)).length() < 1e-5, "bmax: {bmax}");
+    }
+
+    #[test]
+    fn bounds_for_subtree_translated_sphere() {
+        let mut scene = empty_scene();
+        let id = scene.add_node("S".into(), NodeData::Primitive {
+            kind: SdfPrimitive::Sphere,
+            position: Vec3::new(5.0, 0.0, 0.0),
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+            color: Vec3::ONE,
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        });
+        let (bmin, bmax) = bounds_for_subtree(&scene, id);
+        // center=5, extent=1.5, pad=0.5 → min=3.0, max=7.0 on x
+        assert!((bmin.x - 3.0).abs() < 1e-5, "bmin.x: {}", bmin.x);
+        assert!((bmax.x - 7.0).abs() < 1e-5, "bmax.x: {}", bmax.x);
+    }
+
+    #[test]
+    fn bounds_for_subtree_operation_encloses_both_children() {
+        let mut scene = empty_scene();
+        let left = scene.add_node("L".into(), NodeData::Primitive {
+            kind: SdfPrimitive::Sphere,
+            position: Vec3::new(-5.0, 0.0, 0.0),
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+            color: Vec3::ONE,
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        });
+        let right = scene.add_node("R".into(), NodeData::Primitive {
+            kind: SdfPrimitive::Sphere,
+            position: Vec3::new(5.0, 0.0, 0.0),
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+            color: Vec3::ONE,
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        });
+        let op = scene.add_node("U".into(), NodeData::Operation {
+            op: CsgOp::Union,
+            smooth_k: 0.0,
+            left: Some(left),
+            right: Some(right),
+        });
+        let (bmin, bmax) = bounds_for_subtree(&scene, op);
+        // Left: -5-1.5-0.5=-7, Right: 5+1.5+0.5=7
+        assert!(bmin.x <= -7.0 + 1e-5, "bmin.x should cover left sphere: {}", bmin.x);
+        assert!(bmax.x >= 7.0 - 1e-5, "bmax.x should cover right sphere: {}", bmax.x);
+    }
+
+    // -----------------------------------------------------------------------
+    // create_displacement_grid_for_subtree
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn create_displacement_grid_centered_on_subtree() {
+        let (scene, id) = scene_with_sphere();
+        let (grid, center) = create_displacement_grid_for_subtree(&scene, id, 8);
+        assert_eq!(grid.resolution, 8);
+        assert!(grid.is_displacement);
+        assert!(grid.data.iter().all(|&v| v == 0.0));
+        // Sphere at origin → center should be near origin
+        assert!(center.length() < 1e-5, "center: {center}");
+        // Bounds should be symmetric around origin
+        assert!((grid.bounds_min + grid.bounds_max).length() < 1e-5);
+    }
+
+    // -----------------------------------------------------------------------
+    // bake_subtree_with_progress
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn bake_sphere_produces_negative_inside_positive_outside() {
+        let (scene, id) = scene_with_sphere();
+        let progress = Arc::new(AtomicU32::new(0));
+        let (grid, center) = bake_subtree_with_progress(&scene, id, 16, progress.clone());
+
+        assert_eq!(grid.resolution, 16);
+        assert!(!grid.is_displacement);
+        assert!(center.length() < 1e-5);
+
+        // Sample at center of grid (origin in world space) — should be inside sphere
+        let center_val = grid.sample(Vec3::ZERO);
+        assert!(center_val < 0.0, "center of sphere should be negative: {center_val}");
+
+        // Sample at a corner of the grid — should be outside sphere
+        let corner_val = grid.sample(grid.bounds_max);
+        assert!(corner_val > 0.0, "corner of grid should be positive: {corner_val}");
+
+        // Progress should have been incremented once per z-slice
+        assert_eq!(progress.load(Ordering::Relaxed), 16);
+    }
+
+    #[test]
+    fn bake_box_negative_at_center() {
+        let (scene, id) = scene_with_box();
+        let progress = Arc::new(AtomicU32::new(0));
+        let (grid, _center) = bake_subtree_with_progress(&scene, id, 8, progress);
+        let center_val = grid.sample(Vec3::ZERO);
+        assert!(center_val < 0.0, "center of box should be negative: {center_val}");
+    }
+
+    // -----------------------------------------------------------------------
+    // max_subtree_resolution
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn max_subtree_resolution_no_sculpt_returns_default() {
+        let (scene, id) = scene_with_sphere();
+        let res = max_subtree_resolution(&scene, id);
+        assert_eq!(res, DEFAULT_RESOLUTION);
+    }
+
+    #[test]
+    fn max_subtree_resolution_finds_sculpt_node() {
+        let mut scene = empty_scene();
+        let grid = VoxelGrid::new_displacement(64, Vec3::splat(-1.0), Vec3::splat(1.0));
+        let sculpt_id = scene.add_node("Sculpt".into(), NodeData::Sculpt {
+            input: None,
+            position: Vec3::ZERO,
+            rotation: Vec3::ZERO,
+            color: Vec3::ONE,
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            layer_intensity: 1.0,
+            voxel_grid: grid,
+            desired_resolution: 64,
+        });
+        let res = max_subtree_resolution(&scene, sculpt_id);
+        assert_eq!(res, 64);
+    }
+
+    // -----------------------------------------------------------------------
+    // Sculpt node evaluation
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn evaluate_sdf_tree_sculpt_standalone_samples_grid() {
+        let mut grid = VoxelGrid::new_displacement(32, Vec3::splat(-2.0), Vec3::splat(2.0));
+        // Mark grid as total SDF (not displacement)
+        grid.is_displacement = false;
+        // Fill with a simple distance: negative inside, positive outside
+        for z in 0..32 {
+            for y in 0..32 {
+                for x in 0..32 {
+                    let pos = grid.grid_to_world(x as f32, y as f32, z as f32);
+                    grid.data[VoxelGrid::index(x, y, z, 32)] = pos.length() - 1.0; // unit sphere SDF
+                }
+            }
+        }
+        let mut scene = empty_scene();
+        let sculpt_id = scene.add_node("Sculpt".into(), NodeData::Sculpt {
+            input: None,
+            position: Vec3::ZERO,
+            rotation: Vec3::ZERO,
+            color: Vec3::ONE,
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            layer_intensity: 1.0,
+            voxel_grid: grid,
+            desired_resolution: 32,
+        });
+        let dist = evaluate_sdf_tree(&scene, sculpt_id, Vec3::ZERO);
+        assert!(dist < 0.0, "inside sculpt sphere: {dist}");
+    }
+
+    #[test]
+    fn evaluate_sdf_tree_sculpt_with_child_adds_displacement() {
+        let mut scene = empty_scene();
+        let sphere = scene.add_node("S".into(), NodeData::Primitive {
+            kind: SdfPrimitive::Sphere,
+            position: Vec3::ZERO,
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+            color: Vec3::ONE,
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        });
+        // Displacement grid with uniform +0.5 displacement
+        let mut grid = VoxelGrid::new_displacement(4, Vec3::splat(-2.0), Vec3::splat(2.0));
+        for v in grid.data.iter_mut() {
+            *v = 0.5;
+        }
+        let sculpt_id = scene.add_node("Sculpt".into(), NodeData::Sculpt {
+            input: Some(sphere),
+            position: Vec3::ZERO,
+            rotation: Vec3::ZERO,
+            color: Vec3::ONE,
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            layer_intensity: 1.0,
+            voxel_grid: grid,
+            desired_resolution: 4,
+        });
+        // At origin, sphere SDF = -1.0, displacement = 0.5*1.0 → total = -0.5
+        let dist = evaluate_sdf_tree(&scene, sculpt_id, Vec3::ZERO);
+        assert!((dist - (-0.5)).abs() < 1e-4, "sculpt with displacement: {dist}");
+    }
+
+    // -----------------------------------------------------------------------
+    // Modifier evaluation
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn evaluate_sdf_tree_modifier_round() {
+        let mut scene = empty_scene();
+        let box_id = scene.add_node("B".into(), NodeData::Primitive {
+            kind: SdfPrimitive::Box,
+            position: Vec3::ZERO,
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+            color: Vec3::ONE,
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        });
+        use crate::graph::scene::ModifierKind;
+        let round_id = scene.add_node("Round".into(), NodeData::Modifier {
+            kind: ModifierKind::Round,
+            input: Some(box_id),
+            value: Vec3::new(0.1, 0.0, 0.0),
+            extra: Vec3::ZERO,
+        });
+        // Round subtracts the radius from the SDF
+        let dist_box = evaluate_sdf_tree(&scene, box_id, Vec3::new(1.0, 0.0, 0.0));
+        let dist_round = evaluate_sdf_tree(&scene, round_id, Vec3::new(1.0, 0.0, 0.0));
+        assert!((dist_round - (dist_box - 0.1)).abs() < 1e-5, "round modifier: {dist_round}");
+    }
+
+    #[test]
+    fn evaluate_sdf_tree_modifier_onion() {
+        let mut scene = empty_scene();
+        let sphere = scene.add_node("S".into(), NodeData::Primitive {
+            kind: SdfPrimitive::Sphere,
+            position: Vec3::ZERO,
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+            color: Vec3::ONE,
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        });
+        use crate::graph::scene::ModifierKind;
+        let onion_id = scene.add_node("Onion".into(), NodeData::Modifier {
+            kind: ModifierKind::Onion,
+            input: Some(sphere),
+            value: Vec3::new(0.1, 0.0, 0.0),
+            extra: Vec3::ZERO,
+        });
+        // At origin, sphere = -1.0, onion = |−1.0| − 0.1 = 0.9 (outside the shell)
+        let dist = evaluate_sdf_tree(&scene, onion_id, Vec3::ZERO);
+        assert!((dist - 0.9).abs() < 1e-5, "onion at center: {dist}");
+    }
+
+    #[test]
+    fn evaluate_sdf_tree_modifier_mirror_x() {
+        let mut scene = empty_scene();
+        let sphere = scene.add_node("S".into(), NodeData::Primitive {
+            kind: SdfPrimitive::Sphere,
+            position: Vec3::new(2.0, 0.0, 0.0),
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+            color: Vec3::ONE,
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        });
+        use crate::graph::scene::ModifierKind;
+        let mirror_id = scene.add_node("Mirror".into(), NodeData::Modifier {
+            kind: ModifierKind::Mirror,
+            input: Some(sphere),
+            value: Vec3::new(1.0, 0.0, 0.0), // mirror X
+            extra: Vec3::ZERO,
+        });
+        // Sphere at (2,0,0). Mirror X: p.x = |p.x|
+        // At (-3,0,0): mirrored to (3,0,0) → dist to sphere center = 1 → on surface
+        let dist = evaluate_sdf_tree(&scene, mirror_id, Vec3::new(-3.0, 0.0, 0.0));
+        let dist_pos = evaluate_sdf_tree(&scene, mirror_id, Vec3::new(3.0, 0.0, 0.0));
+        assert!(dist.abs() < 1e-4, "mirrored point should be on surface: {dist}");
+        assert!((dist - dist_pos).abs() < 1e-4, "mirrored should match positive: {dist} vs {dist_pos}");
+    }
+
+    #[test]
+    fn evaluate_sdf_tree_modifier_empty_returns_far() {
+        let mut scene = empty_scene();
+        use crate::graph::scene::ModifierKind;
+        let mod_id = scene.add_node("M".into(), NodeData::Modifier {
+            kind: ModifierKind::Round,
+            input: None,
+            value: Vec3::new(0.1, 0.0, 0.0),
+            extra: Vec3::ZERO,
+        });
+        let dist = evaluate_sdf_tree(&scene, mod_id, Vec3::ZERO);
+        assert_eq!(dist, FAR_DISTANCE);
+    }
+}
