@@ -1698,4 +1698,177 @@ mod tests {
         let wgsl = generate_scene_sdf(&scene, None);
         assert!(wgsl.contains("op_intersect("), "smooth intersect uses op_intersect WGSL function");
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // WGSL shader validation via naga — catches compile errors at
+    // cargo test time (no GPU required)
+    // ═══════════════════════════════════════════════════════════════
+
+    /// Parse WGSL with naga and return a descriptive error on failure.
+    /// Prints the generated WGSL source on error for debugging.
+    fn validate_wgsl(wgsl: &str, label: &str) {
+        match naga::front::wgsl::parse_str(wgsl) {
+            Ok(module) => {
+                // Also run naga's full validation pass (type checking, etc.)
+                let mut validator = naga::valid::Validator::new(
+                    naga::valid::ValidationFlags::all(),
+                    naga::valid::Capabilities::all(),
+                );
+                if let Err(err) = validator.validate(&module) {
+                    // Print shader source with line numbers for debugging
+                    eprintln!("=== WGSL validation error in {label} ===");
+                    for (i, line) in wgsl.lines().enumerate() {
+                        eprintln!("{:4}: {}", i + 1, line);
+                    }
+                    panic!("naga validation failed for {label}: {err}");
+                }
+            }
+            Err(err) => {
+                eprintln!("=== WGSL parse error in {label} ===");
+                for (i, line) in wgsl.lines().enumerate() {
+                    eprintln!("{:4}: {}", i + 1, line);
+                }
+                panic!("naga parse failed for {label}: {err}");
+            }
+        }
+    }
+
+    #[test]
+    fn naga_validates_empty_scene_render_shader() {
+        let scene = empty_scene();
+        let config = RenderConfig::default();
+        let shader = generate_shader(&scene, &config);
+        validate_wgsl(&shader, "empty scene render shader");
+    }
+
+    #[test]
+    fn naga_validates_single_primitive_render_shader() {
+        let mut scene = empty_scene();
+        scene.create_primitive(SdfPrimitive::Sphere);
+        let config = RenderConfig::default();
+        let shader = generate_shader(&scene, &config);
+        validate_wgsl(&shader, "single sphere render shader");
+    }
+
+    #[test]
+    fn naga_validates_operation_with_children_render_shader() {
+        let mut scene = empty_scene();
+        let a = scene.create_primitive(SdfPrimitive::Sphere);
+        let b = scene.create_primitive(SdfPrimitive::Box);
+        scene.create_operation(CsgOp::SmoothUnion, Some(a), Some(b));
+        let config = RenderConfig::default();
+        let shader = generate_shader(&scene, &config);
+        validate_wgsl(&shader, "smooth union render shader");
+    }
+
+    #[test]
+    fn naga_validates_all_modifier_types_render_shader() {
+        // Test each modifier type individually
+        for kind in ModifierKind::ALL {
+            let mut scene = empty_scene();
+            let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+            scene.create_modifier(kind.clone(), Some(sphere));
+            let config = RenderConfig::default();
+            let shader = generate_shader(&scene, &config);
+            validate_wgsl(&shader, &format!("modifier {:?} render shader", kind));
+        }
+    }
+
+    #[test]
+    fn naga_validates_all_csg_op_types_render_shader() {
+        for op in CsgOp::ALL {
+            let mut scene = empty_scene();
+            let a = scene.create_primitive(SdfPrimitive::Sphere);
+            let b = scene.create_primitive(SdfPrimitive::Box);
+            scene.create_operation(op.clone(), Some(a), Some(b));
+            let config = RenderConfig::default();
+            let shader = generate_shader(&scene, &config);
+            validate_wgsl(&shader, &format!("CsgOp {:?} render shader", op));
+        }
+    }
+
+    #[test]
+    fn naga_validates_all_primitive_types_render_shader() {
+        for prim in crate::graph::scene::SdfPrimitive::ALL {
+            let mut scene = empty_scene();
+            scene.create_primitive(prim.clone());
+            let config = RenderConfig::default();
+            let shader = generate_shader(&scene, &config);
+            validate_wgsl(&shader, &format!("primitive {:?} render shader", prim));
+        }
+    }
+
+    #[test]
+    fn naga_validates_light_node_render_shader() {
+        let mut scene = empty_scene();
+        scene.create_light(LightType::Point);
+        scene.create_primitive(SdfPrimitive::Sphere);
+        let config = RenderConfig::default();
+        let shader = generate_shader(&scene, &config);
+        validate_wgsl(&shader, "light + primitive render shader");
+    }
+
+    #[test]
+    fn naga_validates_empty_scene_pick_shader() {
+        let scene = empty_scene();
+        let config = RenderConfig::default();
+        let shader = generate_pick_shader(&scene, &config);
+        validate_wgsl(&shader, "empty scene pick shader");
+    }
+
+    #[test]
+    fn naga_validates_single_primitive_pick_shader() {
+        let mut scene = empty_scene();
+        scene.create_primitive(SdfPrimitive::Sphere);
+        let config = RenderConfig::default();
+        let shader = generate_pick_shader(&scene, &config);
+        validate_wgsl(&shader, "single sphere pick shader");
+    }
+
+    #[test]
+    fn naga_validates_operation_pick_shader() {
+        let mut scene = empty_scene();
+        let a = scene.create_primitive(SdfPrimitive::Sphere);
+        let b = scene.create_primitive(SdfPrimitive::Box);
+        scene.create_operation(CsgOp::Union, Some(a), Some(b));
+        let config = RenderConfig::default();
+        let shader = generate_pick_shader(&scene, &config);
+        validate_wgsl(&shader, "union operation pick shader");
+    }
+
+    #[test]
+    fn naga_validates_brush_compute_shader() {
+        use crate::gpu::shader_templates::BRUSH_COMPUTE_SHADER;
+        validate_wgsl(BRUSH_COMPUTE_SHADER, "brush compute shader");
+    }
+
+    #[test]
+    fn naga_validates_complex_scene_render_shader() {
+        // Complex scene: transform > operation(smooth_union) > [modifier(twist) > sphere, box]
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        let twisted = scene.create_modifier(ModifierKind::Twist, Some(sphere));
+        let box_prim = scene.create_primitive(SdfPrimitive::Box);
+        let op = scene.create_operation(CsgOp::SmoothUnion, Some(twisted), Some(box_prim));
+        scene.create_transform(Some(op));
+        let config = RenderConfig::default();
+        let shader = generate_shader(&scene, &config);
+        validate_wgsl(&shader, "complex scene (transform > smooth_union > [twist>sphere, box])");
+    }
+
+    #[test]
+    fn naga_validates_render_shader_with_all_postlude_features() {
+        let mut scene = empty_scene();
+        scene.create_primitive(SdfPrimitive::Sphere);
+        let mut config = RenderConfig::default();
+        // Enable all optional rendering features
+        config.shadows_enabled = true;
+        config.ao_enabled = true;
+        config.env_reflection_enabled = true;
+        config.sss_enabled = true;
+        config.fog_enabled = true;
+        config.tonemapping_aces = true;
+        let shader = generate_shader(&scene, &config);
+        validate_wgsl(&shader, "render shader with all postlude features enabled");
+    }
 }

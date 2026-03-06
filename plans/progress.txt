@@ -782,3 +782,52 @@ Coverage notes:
 - KeymapConfig: Already 10 tests from iteration 21. No additions needed.
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (346/346) ✓
+
+--- Iteration 26: PRD #31 — WGSL shader validation tests using naga ---
+COMPLETED. Added naga as dev-dependency for compile-time WGSL validation.
+
+Test count: 346 → 359 (13 new naga validation tests, zero regressions).
+
+Changes:
+- Cargo.toml: Added naga v22.1 (same version as wgpu) as dev-dependency with
+  wgsl-in feature. Zero new runtime dependencies — naga is already in the
+  dependency tree via wgpu, so this just makes it available in test code.
+- src/gpu/codegen.rs: Added 13 naga validation tests in the existing test module:
+  - validate_wgsl() helper: parses WGSL with naga::front::wgsl::parse_str(),
+    then runs full validation via naga::valid::Validator with all flags and
+    capabilities. On failure, prints the generated WGSL source with line numbers
+    for easy debugging.
+  - naga_validates_empty_scene_render_shader: empty scene → valid render shader
+  - naga_validates_single_primitive_render_shader: one sphere
+  - naga_validates_operation_with_children_render_shader: smooth union(sphere, box)
+  - naga_validates_all_modifier_types_render_shader: iterates ALL modifier kinds
+    (Round, Onion, Offset, Twist, Bend, Taper, Elongate, Mirror, Repeat,
+    FiniteRepeat, RadialRepeat, Noise) — each generates and validates a full shader
+  - naga_validates_all_csg_op_types_render_shader: iterates ALL 13 CsgOp variants
+    (Union, SmoothUnion, Subtract, Intersect, SmoothSubtract, SmoothIntersect,
+    Chamfer×3, Stairs×2, Columns×2)
+  - naga_validates_all_primitive_types_render_shader: iterates ALL 10 SdfPrimitive
+    variants (Sphere, Box, Cylinder, Torus, Plane, Cone, Capsule, Ellipsoid,
+    HexPrism, Pyramid)
+  - naga_validates_light_node_render_shader: light + primitive scene
+  - naga_validates_empty_scene_pick_shader: pick shader for empty scene
+  - naga_validates_single_primitive_pick_shader: pick shader for one sphere
+  - naga_validates_operation_pick_shader: pick shader for union operation
+  - naga_validates_brush_compute_shader: standalone brush.wgsl
+  - naga_validates_complex_scene_render_shader: nested scene
+    (transform > smooth_union > [twist>sphere, box])
+  - naga_validates_render_shader_with_all_postlude_features: enables shadows,
+    AO, env reflection, SSS, fog, ACES tonemapping — validates full postlude
+
+Coverage: These tests catch any codegen bug that produces invalid WGSL (like the
+vec2f/vec4f mismatch from PRD #6) at cargo test time without needing a GPU.
+The tests exercise every scene topology variant: empty, single primitive, all 10
+primitive types, all 13 CSG operations, all 12 modifier types, light nodes,
+transforms, nested scenes, and all optional rendering features.
+
+Note: Sculpt node shaders (with voxel texture declarations) are NOT tested here
+because they require @group(2) texture bindings that naga can parse but will fail
+validation without matching bind group layout. The non-sculpt shader paths cover
+all the codegen logic that's been a source of bugs.
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (359/359) ✓, cargo build ✓

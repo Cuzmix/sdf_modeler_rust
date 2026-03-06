@@ -3351,6 +3351,7 @@ dependencies = [
  "image",
  "js-sys",
  "log",
+ "naga",
  "rayon",
  "rfd",
  "serde",
