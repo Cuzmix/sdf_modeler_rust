@@ -260,6 +260,44 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
     var color = bg_sky;
     let shading_mode = camera.scene_min.w;
 
+    // Cross-Section mode: 2D slice heatmap, no raymarching needed
+    if shading_mode > 5.5 {
+        let axis = i32(camera.cross_section.x + 0.5);
+        let slice_pos = camera.cross_section.y;
+
+        // Compute world position on the slice plane for this pixel.
+        // Cast a ray and find where it intersects the axis-aligned slice plane.
+        let plane_normal = select(select(vec3f(1.0, 0.0, 0.0), vec3f(0.0, 1.0, 0.0), axis == 1), vec3f(0.0, 0.0, 1.0), axis == 2);
+        let denom = dot(rd, plane_normal);
+
+        if abs(denom) > 0.0001 {
+            let plane_t = (slice_pos - dot(ro, plane_normal)) / denom;
+            if plane_t > 0.0 {
+                let world_pos = ro + rd * plane_t;
+                let d = scene_sdf(world_pos).x;
+
+                // Color by distance: blue (inside, d<0), red (outside, d>0), white (surface, d≈0)
+                let surface_band = smoothstep(0.0, 0.02, abs(d));
+                let inside_color = vec3f(0.1, 0.2, 0.8);  // blue
+                let outside_color = vec3f(0.8, 0.15, 0.1); // red
+                let surface_color = vec3f(1.0, 1.0, 1.0);  // white
+
+                // Smooth gradient with distance-based intensity
+                let intensity = exp(-abs(d) * 2.0);
+                let base = select(inside_color, outside_color, d > 0.0);
+                // Blend toward darker as distance increases, white at surface
+                let dist_color = mix(base * 0.3, base, intensity);
+                color = mix(surface_color, dist_color, surface_band);
+
+                // Contour lines at regular intervals for readability
+                let contour_spacing = 0.5;
+                let contour = 1.0 - smoothstep(0.0, 0.015, abs(fract(d / contour_spacing + 0.5) - 0.5) * contour_spacing);
+                color = mix(color, vec3f(0.0), contour * 0.3);
+            }
+        }
+        return vec4f(color, 1.0);
+    }
+
     // Step Heatmap applies to ALL pixels (including misses) to show full cost
     if shading_mode > 4.5 {
         let ratio = debug_step_count;

@@ -13,6 +13,7 @@ struct Camera {
     scene_min: vec4f,
     scene_max: vec4f,
     brush_pos: vec4f,
+    cross_section: vec4f,
 }
 
 struct SdfNode {

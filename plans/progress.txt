@@ -310,3 +310,30 @@ this is transient UI state — toolbar visibility shouldn't persist across sessi
 as command_palette_open). Follows existing patterns.
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (267/267) ✓
+
+--- Iteration 14: PRD #13 — SDF Cross-Section visualization ---
+COMPLETED. Added Cross-Section as a new shading mode (index 6) for 2D slice visualization.
+
+Changes:
+- src/settings.rs: Added ShadingMode::CrossSection variant (gpu_value 6.0). Updated
+  cycle(), label(), gpu_value() methods. Added cross_section_axis: u8 (default 1=Y,
+  range 0-2 for X/Y/Z) and cross_section_position: f32 (default 0.0, range -5.0 to 5.0)
+  to RenderConfig. Added serde defaults for backwards compatibility.
+- src/gpu/camera.rs: Added cross_section: [f32; 4] field to CameraUniform (16 bytes,
+  proper alignment). Format: [axis, position, 0, 0]. Updated to_uniform() to accept
+  and pass cross_section parameter.
+- src/shaders/bindings.wgsl: Added cross_section: vec4f field to Camera struct.
+- src/shaders/rendering.wgsl: Added cross-section rendering before step heatmap check.
+  When shading_mode > 5.5 (CrossSection): casts ray to axis-aligned slice plane,
+  evaluates scene_sdf at intersection point, colors by distance:
+  - Blue (inside, d < 0), Red (outside, d > 0), White (surface, d ≈ 0)
+  - Exponential intensity falloff with distance for depth visualization
+  - Contour lines at 0.5-unit intervals for distance readability
+  Early returns vec4f to skip normal raymarching entirely.
+- src/ui/render_settings.rs: Added "Cross-Section" collapsing header (auto-opens when
+  CrossSection mode active) with axis radio buttons (X/Y/Z) and position slider (-5 to 5).
+- src/ui/viewport/draw.rs: Updated all 5 to_uniform() call sites to pass cross_section
+  params. Render call passes actual settings values; pick calls pass [0.0; 4].
+- src/app/async_tasks.rs: Updated screenshot to_uniform() call with cross_section param.
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (267/267) ✓

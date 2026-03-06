@@ -53,7 +53,7 @@
     "category": "rendering",
     "description": "Add SDF Cross-Section visualization as a new shading mode.\n\nSteps:\n1. In src/settings.rs: add ShadingMode::CrossSection variant (index 6). Update cycle(), label(), gpu_value().\n2. In src/settings.rs RenderConfig: add cross_section_axis: u8 (0=X, 1=Y, 2=Z, default 1) and cross_section_position: f32 (default 0.0, range -5.0 to 5.0).\n3. In src/gpu/camera.rs: pack cross_section_axis and cross_section_position into CameraUniform spare fields (brush_pos.z and brush_pos.w when not sculpting, or a new field).\n4. In src/shaders/rendering.wgsl: when shading_mode == 6.0, implement cross-section rendering:\n   - For each pixel, compute world position on the slice plane (discard pixels far from the plane along the selected axis, within ±0.01 epsilon).\n   - Evaluate scene_sdf at the slice position.\n   - Color by distance: blue (d < 0, inside), red (d > 0, outside), white (d ≈ 0, surface). Use smooth gradient.\n5. In src/ui/render_settings.rs: add controls for axis selector (3 radio buttons) and position slider.",
     "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: cycle to Cross-Section mode. 2D heatmap slice appears. Slider moves cutting plane. Axis buttons change slice orientation.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 14,

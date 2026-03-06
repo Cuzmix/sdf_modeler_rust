@@ -20,6 +20,7 @@ pub enum ShadingMode {
     Normals,
     Matcap,
     StepHeatmap,
+    CrossSection,
 }
 
 impl ShadingMode {
@@ -31,6 +32,7 @@ impl ShadingMode {
             Self::Normals => 3.0,
             Self::Matcap => 4.0,
             Self::StepHeatmap => 5.0,
+            Self::CrossSection => 6.0,
         }
     }
     pub fn label(&self) -> &'static str {
@@ -41,6 +43,7 @@ impl ShadingMode {
             Self::Normals => "Normals",
             Self::Matcap => "Matcap",
             Self::StepHeatmap => "Step Heatmap",
+            Self::CrossSection => "Cross-Section",
         }
     }
     pub fn cycle(&self) -> Self {
@@ -50,7 +53,8 @@ impl ShadingMode {
             Self::Clay => Self::Normals,
             Self::Normals => Self::Matcap,
             Self::Matcap => Self::StepHeatmap,
-            Self::StepHeatmap => Self::Full,
+            Self::StepHeatmap => Self::CrossSection,
+            Self::CrossSection => Self::Full,
         }
     }
 }
@@ -383,6 +387,14 @@ pub struct RenderConfig {
     #[serde(default)]
     pub shading_mode: ShadingMode,
 
+    // Cross-section visualization
+    /// Slice axis: 0=X, 1=Y, 2=Z
+    #[serde(default = "default_cross_section_axis")]
+    pub cross_section_axis: u8,
+    /// Slice plane position along the selected axis
+    #[serde(default)]
+    pub cross_section_position: f32,
+
     // Viewport overlays
     #[serde(default)]
     pub show_node_labels: bool,
@@ -412,6 +424,7 @@ fn default_bloom_threshold() -> f32 { 0.8 }
 fn default_bloom_intensity() -> f32 { 0.3 }
 fn default_bloom_radius() -> f32 { 3.0 }
 fn default_safety_border() -> f32 { 0.05 }
+fn default_cross_section_axis() -> u8 { 1 }
 fn default_bookmarks() -> Vec<Option<CameraBookmark>> { vec![None; 9] }
 
 impl Default for RenderConfig {
@@ -486,6 +499,8 @@ impl Default for RenderConfig {
             pressure_sensitivity: false,
             clamp_orbit_pitch: false,
             shading_mode: ShadingMode::default(),
+            cross_section_axis: 1,
+            cross_section_position: 0.0,
             show_node_labels: false,
             show_bounding_box: true,
             sculpt_safety_border: 0.05,

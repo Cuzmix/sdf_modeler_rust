@@ -112,6 +112,7 @@ impl Camera {
         selected_idx: f32,
         shading_mode: f32,
         brush_pos: [f32; 4],
+        cross_section: [f32; 4],
     ) -> CameraUniform {
         let aspect = viewport[2] / viewport[3].max(1.0);
         let view = self.view_matrix();
@@ -129,6 +130,7 @@ impl Camera {
             scene_min: [scene_bounds.0[0], scene_bounds.0[1], scene_bounds.0[2], shading_mode],
             scene_max: [scene_bounds.1[0], scene_bounds.1[1], scene_bounds.1[2], 0.0],
             brush_pos,
+            cross_section,
         }
     }
 
@@ -216,4 +218,6 @@ pub struct CameraUniform {
     pub scene_max: [f32; 4],
     /// Sculpt brush position and radius: [x, y, z, radius]. [0,0,0,0] = inactive.
     pub brush_pos: [f32; 4],
+    /// Cross-section visualization params: [axis (0=X,1=Y,2=Z), position, 0, 0].
+    pub cross_section: [f32; 4],
 }

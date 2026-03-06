@@ -1,7 +1,7 @@
 use eframe::egui;
 
 use crate::app::actions::{Action, ActionSink};
-use crate::settings::{BackgroundMode, Settings};
+use crate::settings::{BackgroundMode, ShadingMode, Settings};
 
 /// Draw the Render Settings panel. Pushes `Action::SettingsChanged` if a shader-affecting
 /// setting changed.
@@ -259,6 +259,22 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
                 config.reset_outline();
             }
         });
+
+    // --- Cross-Section ---
+    if config.shading_mode == ShadingMode::CrossSection {
+        egui::CollapsingHeader::new("Cross-Section")
+            .default_open(true)
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("Axis:");
+                    ui.selectable_value(&mut config.cross_section_axis, 0, "X");
+                    ui.selectable_value(&mut config.cross_section_axis, 1, "Y");
+                    ui.selectable_value(&mut config.cross_section_axis, 2, "Z");
+                });
+                labeled_slider(ui, "Position", &mut config.cross_section_position, -5.0..=5.0, false,
+                    "Slice plane position along the selected axis");
+            });
+    }
 
     egui::CollapsingHeader::new("Sculpt")
         .default_open(false)

@@ -526,6 +526,12 @@ pub fn draw(
         [0.0; 4]
     };
 
+    let cross_section = [
+        render_config.cross_section_axis as f32,
+        render_config.cross_section_position,
+        0.0,
+        0.0,
+    ];
     let render_uniform = camera.to_uniform(
         render_viewport,
         time,
@@ -535,6 +541,7 @@ pub fn draw(
         selected_idx,
         shading_mode_val,
         brush_pos,
+        cross_section,
     );
 
     ui.painter().add(egui_wgpu::Callback::new_paint_callback(
@@ -648,6 +655,7 @@ pub fn draw(
                             -1.0,
                             0.0,
                             [0.0; 4],
+                            [0.0; 4],
                         ),
                     });
                     // Capture modifier keys for Ctrl-invert / Shift-smooth
@@ -691,6 +699,7 @@ pub fn draw(
                             scene_bounds,
                             -1.0,
                             0.0,
+                            [0.0; 4],
                             [0.0; 4],
                         ),
                     });
@@ -798,7 +807,7 @@ pub fn draw(
                     (pos.y - rect.min.y) * pixels_per_point,
                 ];
                 let pick_uniform =
-                    camera.to_uniform(viewport, time, 0.0, false, scene_bounds, -1.0, 0.0, [0.0; 4]);
+                    camera.to_uniform(viewport, time, 0.0, false, scene_bounds, -1.0, 0.0, [0.0; 4], [0.0; 4]);
                 output.pending_pick = Some(PendingPick {
                     mouse_pos: mouse_px,
                     camera_uniform: pick_uniform,
