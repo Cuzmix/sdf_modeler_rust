@@ -378,6 +378,12 @@ impl CsgOp {
         )
     }
 
+    /// Whether this operation supports an independent color blend parameter.
+    /// Hard union has no blending, so color_blend is irrelevant.
+    pub fn has_color_blend_param(&self) -> bool {
+        !matches!(self, Self::Union)
+    }
+
     /// Default step/column count for operations that support it.
     pub fn default_steps(&self) -> f32 {
         match self {
@@ -420,6 +426,7 @@ fn default_roughness() -> f32 { 0.5 }
 fn default_fresnel() -> f32 { 0.04 }
 fn default_layer_intensity() -> f32 { 1.0 }
 fn default_scale() -> Vec3 { Vec3::ONE }
+fn default_color_blend() -> f32 { -1.0 }
 fn default_light_intensity() -> f32 { 1.0 }
 fn default_light_range() -> f32 { 10.0 }
 fn default_spot_angle() -> f32 { 45.0 }
@@ -452,6 +459,9 @@ pub enum NodeData {
         smooth_k: f32,
         #[serde(default)]
         steps: f32,
+        /// Independent color blend radius. -1.0 means "follow smooth_k".
+        #[serde(default = "default_color_blend")]
+        color_blend: f32,
         left: Option<NodeId>,
         right: Option<NodeId>,
     },
@@ -688,6 +698,7 @@ impl Scene {
             NodeData::Operation {
                 smooth_k: op.default_smooth_k(),
                 steps,
+                color_blend: -1.0,
                 op,
                 left,
                 right,
@@ -1166,9 +1177,10 @@ impl Scene {
                     emissive_intensity.to_bits().hash(&mut hasher);
                     fresnel.to_bits().hash(&mut hasher);
                 }
-                NodeData::Operation { smooth_k, steps, .. } => {
+                NodeData::Operation { smooth_k, steps, color_blend, .. } => {
                     smooth_k.to_bits().hash(&mut hasher);
                     steps.to_bits().hash(&mut hasher);
+                    color_blend.to_bits().hash(&mut hasher);
                 }
                 NodeData::Sculpt {
                     position, rotation, color, metallic, roughness, emissive, emissive_intensity, fresnel, desired_resolution, ..
@@ -1402,11 +1414,12 @@ impl Scene {
                         voxel_grid: None,
                     }
                 }
-                NodeData::Operation { op, smooth_k, steps, left, right } => {
+                NodeData::Operation { op, smooth_k, steps, color_blend, left, right } => {
                     NodeData::Operation {
                         op: op.clone(),
                         smooth_k: *smooth_k,
                         steps: *steps,
+                        color_blend: *color_blend,
                         left: remap(left),
                         right: remap(right),
                     }
@@ -1705,6 +1718,7 @@ impl Scene {
                         op: o1,
                         smooth_k: k1,
                         steps: s1,
+                        color_blend: cb1,
                         left: l1,
                         right: r1,
                     },
@@ -1712,6 +1726,7 @@ impl Scene {
                         op: o2,
                         smooth_k: k2,
                         steps: s2,
+                        color_blend: cb2,
                         left: l2,
                         right: r2,
                     },
@@ -1719,6 +1734,7 @@ impl Scene {
                     if std::mem::discriminant(o1) != std::mem::discriminant(o2)
                         || k1 != k2
                         || s1 != s2
+                        || cb1 != cb2
                         || l1 != l2
                         || r1 != r2
                     {
@@ -2448,6 +2464,7 @@ mod tests {
             op: CsgOp::Union,
             smooth_k: 0.0,
             steps: 0.0,
+            color_blend: -1.0,
             left: Some(1),
             right: Some(2),
         };
@@ -2461,6 +2478,7 @@ mod tests {
             op: CsgOp::Union,
             smooth_k: 0.0,
             steps: 0.0,
+            color_blend: -1.0,
             left: Some(1),
             right: None,
         };

@@ -24,27 +24,31 @@ fn op_union(a: vec4f, b: vec4f, k: f32) -> vec4f {
 }
 
 // Smooth union: blends two surfaces with smoothness radius k.
-// Stores both material IDs and the blend factor h for material interpolation.
-fn op_smooth_union(a: vec4f, b: vec4f, k: f32) -> vec4f {
+// color_k controls material blend independently (-1 = follow k).
+fn op_smooth_union(a: vec4f, b: vec4f, k: f32, color_k: f32) -> vec4f {
+    let ck = select(k, color_k, color_k >= 0.0);
     let h = clamp(0.5 + 0.5 * (b.x - a.x) / max(k, 0.0001), 0.0, 1.0);
     let d = mix(b.x, a.x, h) - k * h * (1.0 - h);
-    return vec4f(d, a.y, b.y, 1.0 - h);
+    let ch = clamp(0.5 + 0.5 * (b.x - a.x) / max(ck, 0.0001), 0.0, 1.0);
+    return vec4f(d, a.y, b.y, 1.0 - ch);
 }
 
 // Subtraction: carves shape b out of shape a. Supports smooth blending when k > 0.
-// When smooth (k > 0), the carved boundary blends toward the subtractor's material.
-fn op_subtract(a: vec4f, b: vec4f, k: f32) -> vec4f {
+// color_k controls material blend independently (-1 = follow k).
+fn op_subtract(a: vec4f, b: vec4f, k: f32, color_k: f32) -> vec4f {
     if k < 0.0001 {
         return vec4f(max(a.x, -b.x), a.y, -1.0, 0.0);
     }
+    let ck = select(k, color_k, color_k >= 0.0);
     let h = clamp(0.5 - 0.5 * (a.x + b.x) / k, 0.0, 1.0);
     let d = mix(a.x, -b.x, h) + k * h * (1.0 - h);
-    return vec4f(d, a.y, b.y, h);
+    let ch = clamp(0.5 - 0.5 * (a.x + b.x) / ck, 0.0, 1.0);
+    return vec4f(d, a.y, b.y, ch);
 }
 
 // Intersection: keeps only the overlapping region. Supports smooth blending when k > 0.
-// When smooth (k > 0), the intersection boundary blends both materials.
-fn op_intersect(a: vec4f, b: vec4f, k: f32) -> vec4f {
+// color_k controls material blend independently (-1 = follow k).
+fn op_intersect(a: vec4f, b: vec4f, k: f32, color_k: f32) -> vec4f {
     if k < 0.0001 {
         if a.x > b.x {
             return vec4f(a.x, a.y, -1.0, 0.0);
@@ -52,33 +56,38 @@ fn op_intersect(a: vec4f, b: vec4f, k: f32) -> vec4f {
             return vec4f(b.x, b.y, -1.0, 0.0);
         }
     }
+    let ck = select(k, color_k, color_k >= 0.0);
     let h = clamp(0.5 - 0.5 * (b.x - a.x) / k, 0.0, 1.0);
     let d = mix(b.x, a.x, h) + k * h * (1.0 - h);
-    return vec4f(d, a.y, b.y, h);
+    let ch = clamp(0.5 - 0.5 * (b.x - a.x) / ck, 0.0, 1.0);
+    return vec4f(d, a.y, b.y, ch);
 }
 
 // Chamfer union: creates a 45° beveled edge at the union boundary.
 // The bevel width is controlled by k.
-fn op_chamfer_union(a: vec4f, b: vec4f, k: f32) -> vec4f {
+fn op_chamfer_union(a: vec4f, b: vec4f, k: f32, color_k: f32) -> vec4f {
+    let ck = select(k, color_k, color_k >= 0.0);
     let d = min(min(a.x, b.x), (a.x - k + b.x) * sqrt(0.5));
     // Same blend convention as smooth union: 0 = pure a, 1 = pure b
-    let h = clamp(0.5 + 0.5 * (b.x - a.x) / max(k, 0.0001), 0.0, 1.0);
+    let h = clamp(0.5 + 0.5 * (b.x - a.x) / max(ck, 0.0001), 0.0, 1.0);
     return vec4f(d, a.y, b.y, 1.0 - h);
 }
 
 // Chamfer subtraction: carves shape b from shape a with a beveled edge.
-fn op_chamfer_subtract(a: vec4f, b: vec4f, k: f32) -> vec4f {
+fn op_chamfer_subtract(a: vec4f, b: vec4f, k: f32, color_k: f32) -> vec4f {
+    let ck = select(k, color_k, color_k >= 0.0);
     let d = max(max(a.x, -b.x), (a.x + k - b.x) * sqrt(0.5));
     // Same blend convention as smooth subtract: 0 = pure a, increasing = toward b
-    let h = clamp(0.5 - 0.5 * (a.x + b.x) / max(k, 0.0001), 0.0, 1.0);
+    let h = clamp(0.5 - 0.5 * (a.x + b.x) / max(ck, 0.0001), 0.0, 1.0);
     return vec4f(d, a.y, b.y, h);
 }
 
 // Chamfer intersection: keeps only the overlap with a beveled edge.
-fn op_chamfer_intersect(a: vec4f, b: vec4f, k: f32) -> vec4f {
+fn op_chamfer_intersect(a: vec4f, b: vec4f, k: f32, color_k: f32) -> vec4f {
+    let ck = select(k, color_k, color_k >= 0.0);
     let d = max(max(a.x, b.x), (a.x - k + b.x) * sqrt(0.5));
     // Same blend convention as smooth intersect: 0 = pure a, increasing = toward b
-    let h = clamp(0.5 - 0.5 * (b.x - a.x) / max(k, 0.0001), 0.0, 1.0);
+    let h = clamp(0.5 - 0.5 * (b.x - a.x) / max(ck, 0.0001), 0.0, 1.0);
     return vec4f(d, a.y, b.y, h);
 }
 
@@ -89,20 +98,21 @@ fn glsl_mod(x: f32, y: f32) -> f32 {
 
 // Staircase union: creates a step-like pattern at the union boundary.
 // k = staircase radius, n = number of steps. Based on Mercury hg_sdf.
-fn op_stairs_union(a: vec4f, b: vec4f, k: f32, n: f32) -> vec4f {
+fn op_stairs_union(a: vec4f, b: vec4f, k: f32, n: f32, color_k: f32) -> vec4f {
+    let ck = select(k, color_k, color_k >= 0.0);
     let s = k / max(n, 1.0);
     let u = b.x - k;
     let stair_d = 0.5 * (u + a.x + abs(glsl_mod(u - a.x + s, 2.0 * s) - s));
     let d = min(min(a.x, b.x), stair_d);
     // Same blend convention as smooth union: 0 = pure a, 1 = pure b
-    let h = clamp(0.5 + 0.5 * (b.x - a.x) / max(k, 0.0001), 0.0, 1.0);
+    let h = clamp(0.5 + 0.5 * (b.x - a.x) / max(ck, 0.0001), 0.0, 1.0);
     return vec4f(d, a.y, b.y, 1.0 - h);
 }
 
 // Staircase subtraction: carves shape b from shape a with a stepped edge.
-fn op_stairs_subtract(a: vec4f, b: vec4f, k: f32, n: f32) -> vec4f {
+fn op_stairs_subtract(a: vec4f, b: vec4f, k: f32, n: f32, color_k: f32) -> vec4f {
     let neg_a = vec4f(-a.x, a.y, a.z, a.w);
-    let result = op_stairs_union(neg_a, b, k, n);
+    let result = op_stairs_union(neg_a, b, k, n, color_k);
     return vec4f(-result.x, result.y, result.z, result.w);
 }
 
@@ -119,7 +129,8 @@ fn p_mod1(p: f32, size: f32) -> f32 {
 
 // Columns union: creates repeating cylindrical columns at the union boundary.
 // k = column region radius, n = number of columns. Based on Mercury hg_sdf.
-fn op_columns_union(a: vec4f, b: vec4f, k: f32, n: f32) -> vec4f {
+fn op_columns_union(a: vec4f, b: vec4f, k: f32, n: f32, color_k: f32) -> vec4f {
+    let ck = select(k, color_k, color_k >= 0.0);
     if a.x < k && b.x < k {
         var p = vec2f(a.x, b.x);
         let column_radius = k * sqrt(2.0) / ((max(n, 1.0) - 1.0) * 2.0 + sqrt(2.0));
@@ -133,19 +144,19 @@ fn op_columns_union(a: vec4f, b: vec4f, k: f32, n: f32) -> vec4f {
         let col_d = min(length(p) - column_radius, p.x);
         let d = min(min(a.x, b.x), col_d);
         // Same blend convention as smooth union: 0 = pure a, 1 = pure b
-        let h = clamp(0.5 + 0.5 * (b.x - a.x) / max(k, 0.0001), 0.0, 1.0);
+        let h = clamp(0.5 + 0.5 * (b.x - a.x) / max(ck, 0.0001), 0.0, 1.0);
         return vec4f(d, a.y, b.y, 1.0 - h);
     } else {
         // Outside column region — hard union fallback
-        let h = clamp(0.5 + 0.5 * (b.x - a.x) / max(k, 0.0001), 0.0, 1.0);
+        let h = clamp(0.5 + 0.5 * (b.x - a.x) / max(ck, 0.0001), 0.0, 1.0);
         let d = min(a.x, b.x);
         return vec4f(d, a.y, b.y, 1.0 - h);
     }
 }
 
 // Columns subtraction: carves shape b from shape a with columnar edge detail.
-fn op_columns_subtract(a: vec4f, b: vec4f, k: f32, n: f32) -> vec4f {
+fn op_columns_subtract(a: vec4f, b: vec4f, k: f32, n: f32, color_k: f32) -> vec4f {
     let neg_a = vec4f(-a.x, a.y, a.z, a.w);
-    let result = op_columns_union(neg_a, b, k, n);
+    let result = op_columns_union(neg_a, b, k, n, color_k);
     return vec4f(-result.x, result.y, result.z, result.w);
 }

@@ -620,6 +620,7 @@ pub fn draw(
             mut op,
             mut smooth_k,
             mut steps,
+            mut color_blend,
             left,
             right,
         } => {
@@ -634,6 +635,7 @@ pub fn draw(
             if new_op != op {
                 smooth_k = new_op.default_smooth_k();
                 steps = new_op.default_steps();
+                color_blend = -1.0;
                 op = new_op;
             }
             ui.separator();
@@ -648,6 +650,22 @@ pub fn draw(
                     ui.label("Count:");
                     ui.add(egui::Slider::new(&mut steps, 2.0..=16.0).step_by(1.0));
                 });
+            }
+
+            if op.has_color_blend_param() {
+                let mut independent = color_blend >= 0.0;
+                ui.checkbox(&mut independent, "Independent Color Blend");
+                if independent {
+                    if color_blend < 0.0 {
+                        color_blend = smooth_k;
+                    }
+                    ui.horizontal(|ui| {
+                        ui.label("Color K:");
+                        ui.add(egui::Slider::new(&mut color_blend, 0.0..=2.0));
+                    });
+                } else {
+                    color_blend = -1.0;
+                }
             }
 
             ui.separator();
@@ -711,12 +729,14 @@ pub fn draw(
                     op: ref mut o,
                     smooth_k: ref mut k,
                     steps: ref mut s,
+                    color_blend: ref mut cb,
                     ..
                 } = node.data
                 {
                     *o = op;
                     *k = smooth_k;
                     *s = steps;
+                    *cb = color_blend;
                 }
             }
         }

@@ -506,6 +506,7 @@ pub fn evaluate_sdf_tree(scene: &Scene, node_id: NodeId, p: Vec3) -> f32 {
             steps,
             left,
             right,
+            ..
         } => {
             let a = left.map(|l| evaluate_sdf_tree(scene, l, p));
             let b = right.map(|r| evaluate_sdf_tree(scene, r, p));
@@ -1161,6 +1162,7 @@ mod tests {
             op: CsgOp::Union,
             smooth_k: 0.0,
             steps: 0.0,
+            color_blend: -1.0,
             left: Some(sphere_a),
             right: Some(sphere_b),
         });
@@ -1202,6 +1204,7 @@ mod tests {
             op: CsgOp::Subtract,
             smooth_k: 0.0,
             steps: 0.0,
+            color_blend: -1.0,
             left: Some(sphere_a),
             right: Some(sphere_b),
         });
@@ -1230,6 +1233,7 @@ mod tests {
             op: CsgOp::Union,
             smooth_k: 0.0,
             steps: 0.0,
+            color_blend: -1.0,
             left: Some(sphere),
             right: None,
         });
@@ -1245,6 +1249,7 @@ mod tests {
             op: CsgOp::Union,
             smooth_k: 0.0,
             steps: 0.0,
+            color_blend: -1.0,
             left: None,
             right: None,
         });
@@ -1407,6 +1412,7 @@ mod tests {
             op: CsgOp::Union,
             smooth_k: 0.0,
             steps: 0.0,
+            color_blend: -1.0,
             left: Some(left),
             right: Some(right),
         });
@@ -1924,6 +1930,7 @@ mod tests {
             op: CsgOp::SmoothSubtract,
             smooth_k: 0.3,
             steps: 0.0,
+            color_blend: -1.0,
             left: Some(sphere_a),
             right: Some(sphere_b),
         });
@@ -1965,6 +1972,7 @@ mod tests {
             op: CsgOp::ChamferUnion,
             smooth_k: 0.2,
             steps: 0.0,
+            color_blend: -1.0,
             left: Some(sphere_a),
             right: Some(sphere_b),
         });
@@ -2006,6 +2014,7 @@ mod tests {
             op: CsgOp::StairsUnion,
             smooth_k: 0.2,
             steps: 4.0,
+            color_blend: -1.0,
             left: Some(sphere_a),
             right: Some(sphere_b),
         });

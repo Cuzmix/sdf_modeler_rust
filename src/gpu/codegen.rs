@@ -330,7 +330,11 @@ fn emit_node_wgsl(
                     let op_fn = op.wgsl_function_name();
                     if op.has_steps_param() {
                         lines.push(format!(
-                            "    let n{i} = {op_fn}(n{li}, n{ri}, nodes[{i}].type_op.y, nodes[{i}].type_op.z);"
+                            "    let n{i} = {op_fn}(n{li}, n{ri}, nodes[{i}].type_op.y, nodes[{i}].type_op.z, nodes[{i}].type_op.w);"
+                        ));
+                    } else if op.has_color_blend_param() {
+                        lines.push(format!(
+                            "    let n{i} = {op_fn}(n{li}, n{ri}, nodes[{i}].type_op.y, nodes[{i}].type_op.w);"
                         ));
                     } else {
                         lines.push(format!(
@@ -775,7 +779,8 @@ mod tests {
         let right = scene.create_primitive(SdfPrimitive::Box);
         scene.create_operation(CsgOp::SmoothUnion, Some(left), Some(right));
         let wgsl = generate_scene_sdf(&scene, None);
-        assert!(wgsl.contains("type_op.y)"));
+        assert!(wgsl.contains("type_op.y,"), "should use smooth_k from type_op.y");
+        assert!(wgsl.contains("type_op.w)"), "should use color_blend from type_op.w");
     }
 
     #[test]
@@ -1648,6 +1653,7 @@ mod tests {
             op: CsgOp::SmoothUnion,
             smooth_k: 0.5,
             steps: 0.0,
+            color_blend: -1.0,
             left: Some(a),
             right: Some(b),
         });
@@ -1682,6 +1688,7 @@ mod tests {
             op: CsgOp::SmoothSubtract,
             smooth_k: 0.3,
             steps: 0.0,
+            color_blend: -1.0,
             left: Some(a),
             right: Some(b),
         });
@@ -1698,6 +1705,7 @@ mod tests {
             op: CsgOp::SmoothIntersect,
             smooth_k: 0.3,
             steps: 0.0,
+            color_blend: -1.0,
             left: Some(a),
             right: Some(b),
         });
