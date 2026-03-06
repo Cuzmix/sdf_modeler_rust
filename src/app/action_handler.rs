@@ -717,12 +717,12 @@ impl SdfApp {
 
     /// Ensure the Brush Settings tab is visible in the dock when sculpt mode activates.
     /// Compute average half-extent of the scene bounding box for adaptive brush sizing.
-    fn scene_avg_extent(&self) -> f32 {
+    pub(super) fn scene_avg_extent(&self) -> f32 {
         let (min, max) = self.doc.scene.compute_bounds();
         ((max[0] - min[0]) + (max[1] - min[1]) + (max[2] - min[2])) / 6.0
     }
 
-    fn ensure_brush_settings_tab(&mut self) {
+    pub(super) fn ensure_brush_settings_tab(&mut self) {
         use crate::ui::dock::Tab;
         if self.ui.dock_state.find_tab(&Tab::BrushSettings).is_none() {
             // Add BrushSettings as a sibling tab next to Properties (not into the viewport).

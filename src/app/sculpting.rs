@@ -132,33 +132,40 @@ impl SdfApp {
         };
 
         if hit_node_id != node_id {
-            // Hit a different node while sculpting — handle navigation/conversion
-            if let Some(hit_node) = self.doc.scene.nodes.get(&hit_node_id) {
-                if matches!(hit_node.data, NodeData::Sculpt { .. }) {
-                    // Hit another sculpt node — switch to it directly
-                    self.doc.sculpt_state = SculptState::new_active(hit_node_id);
-                    self.doc.sculpt_history.set_node(hit_node_id);
-                    self.ui.node_graph_state.select_single(hit_node_id);
-                    self.async_state.last_sculpt_hit = None;
-                    self.async_state.lazy_brush_pos = None;
-                } else {
-                    // Check if the hit node has a sculpt parent
-                    let parent_map = self.doc.scene.build_parent_map();
-                    if let Some(sculpt_id) = self.doc.scene.find_sculpt_parent(hit_node_id, &parent_map) {
-                        // Switch to the sculpt parent
-                        self.doc.sculpt_state = SculptState::new_active(sculpt_id);
-                        self.doc.sculpt_history.set_node(sculpt_id);
-                        self.ui.node_graph_state.select_single(sculpt_id);
+            // Differential sculpt: material ID is the child primitive's, not the sculpt's.
+            // If the hit node is a descendant of the active sculpt, treat it as a hit
+            // on the sculpt itself and fall through to apply the brush.
+            let is_child_of_active_sculpt = self.doc.scene.is_descendant(hit_node_id, node_id);
+            if !is_child_of_active_sculpt {
+                // Hit a truly different node — handle navigation/conversion
+                if let Some(hit_node) = self.doc.scene.nodes.get(&hit_node_id) {
+                    if matches!(hit_node.data, NodeData::Sculpt { .. }) {
+                        // Hit another sculpt node — switch to it directly
+                        self.doc.sculpt_state = SculptState::new_active(hit_node_id);
+                        self.doc.sculpt_history.set_node(hit_node_id);
+                        self.ui.node_graph_state.select_single(hit_node_id);
                         self.async_state.last_sculpt_hit = None;
                         self.async_state.lazy_brush_pos = None;
                     } else {
-                        // Non-sculpt node with no sculpt parent — show convert dialog
-                        self.ui.sculpt_convert_dialog =
-                            Some(crate::app::state::SculptConvertDialog::new(hit_node_id));
+                        // Check if the hit node has a sculpt parent
+                        let parent_map = self.doc.scene.build_parent_map();
+                        if let Some(sculpt_id) = self.doc.scene.find_sculpt_parent(hit_node_id, &parent_map) {
+                            // Switch to the sculpt parent
+                            self.doc.sculpt_state = SculptState::new_active(sculpt_id);
+                            self.doc.sculpt_history.set_node(sculpt_id);
+                            self.ui.node_graph_state.select_single(sculpt_id);
+                            self.async_state.last_sculpt_hit = None;
+                            self.async_state.lazy_brush_pos = None;
+                        } else {
+                            // Non-sculpt node with no sculpt parent — show convert dialog
+                            self.ui.sculpt_convert_dialog =
+                                Some(crate::app::state::SculptConvertDialog::new(hit_node_id));
+                        }
                     }
                 }
+                return;
             }
-            return;
+            // Fall through: hit_node_id is a child of the active sculpt — apply brush normally
         }
 
         let hit_world = Vec3::new(result.world_pos[0], result.world_pos[1], result.world_pos[2]);

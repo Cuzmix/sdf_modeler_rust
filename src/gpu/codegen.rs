@@ -1310,6 +1310,39 @@ mod tests {
     }
 
     #[test]
+    fn differential_sculpt_material_id_is_child_not_sculpt() {
+        // This test verifies why is_descendant is needed in handle_sculpt_hit:
+        // the pick shader returns the child primitive's material ID (not the sculpt's),
+        // so the sculpt brush code must recognize the child as belonging to the
+        // active sculpt via is_descendant to apply strokes correctly.
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        let grid = VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0));
+        let sculpt_id = scene.create_sculpt(
+            sphere,
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::new(0.5, 0.5, 0.5),
+            grid,
+        );
+        let wgsl = generate_scene_sdf(&scene, None);
+        let order = scene.visible_topo_order();
+        let sphere_idx = order.iter().position(|&id| id == sphere).unwrap();
+        let sculpt_idx = order.iter().position(|&id| id == sculpt_id).unwrap();
+
+        // The sculpt's output material ID (n{sculpt_idx}.y) should be the child's
+        // material ID (n{sphere_idx}.y), NOT f32({sculpt_idx})
+        assert!(
+            wgsl.contains(&format!("n{sculpt_idx} = vec4f(n{sphere_idx}.x")),
+            "Differential sculpt should derive distance from child, got:\n{wgsl}"
+        );
+        assert!(
+            !wgsl.contains(&format!("f32({sculpt_idx})")),
+            "Differential sculpt should NOT use its own index as material ID, got:\n{wgsl}"
+        );
+    }
+
+    #[test]
     fn sculpt_with_tex_map_uses_texture_path() {
         let mut scene = empty_scene();
         let grid = VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0));

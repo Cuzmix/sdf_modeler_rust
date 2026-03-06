@@ -2499,6 +2499,106 @@ mod tests {
         assert_eq!(scene.find_sculpt_parent(prim, &parent_map), None);
     }
 
+    // ── differential sculpt (insert_sculpt_above) ────────────────────
+
+    #[test]
+    fn insert_sculpt_above_creates_parent_child_hierarchy() {
+        let mut scene = empty_scene();
+        let prim = scene.create_primitive(SdfPrimitive::Sphere);
+        let grid = VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0));
+        let sculpt_id = scene.insert_sculpt_above(
+            prim, Vec3::ZERO, Vec3::ZERO, Vec3::new(0.5, 0.5, 0.5), grid,
+        );
+
+        // Sculpt's input should be the original primitive
+        match &scene.nodes[&sculpt_id].data {
+            NodeData::Sculpt { input, .. } => assert_eq!(*input, Some(prim)),
+            _ => panic!("expected Sculpt node"),
+        }
+
+        // Primitive should be a descendant of sculpt
+        assert!(scene.is_descendant(prim, sculpt_id));
+    }
+
+    #[test]
+    fn insert_sculpt_above_rewires_operation_parent() {
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        let cube = scene.create_primitive(SdfPrimitive::Box);
+        let union = scene.create_operation(CsgOp::Union, Some(sphere), Some(cube));
+
+        let grid = VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0));
+        let sculpt_id = scene.insert_sculpt_above(
+            sphere, Vec3::ZERO, Vec3::ZERO, Vec3::new(0.5, 0.5, 0.5), grid,
+        );
+
+        // Operation's left child should now be the sculpt, not the original sphere
+        match &scene.nodes[&union].data {
+            NodeData::Operation { left, right, .. } => {
+                assert_eq!(*left, Some(sculpt_id));
+                assert_eq!(*right, Some(cube));
+            }
+            _ => panic!("expected Operation node"),
+        }
+
+        // Sculpt wraps the sphere
+        match &scene.nodes[&sculpt_id].data {
+            NodeData::Sculpt { input, .. } => assert_eq!(*input, Some(sphere)),
+            _ => panic!("expected Sculpt node"),
+        }
+    }
+
+    #[test]
+    fn find_sculpt_parent_finds_differential_sculpt() {
+        let mut scene = empty_scene();
+        let prim = scene.create_primitive(SdfPrimitive::Sphere);
+        let grid = VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0));
+        let sculpt_id = scene.insert_sculpt_above(
+            prim, Vec3::ZERO, Vec3::ZERO, Vec3::new(0.5, 0.5, 0.5), grid,
+        );
+
+        let parent_map = scene.build_parent_map();
+        // Starting from the child primitive, should find the sculpt parent
+        assert_eq!(scene.find_sculpt_parent(prim, &parent_map), Some(sculpt_id));
+    }
+
+    #[test]
+    fn is_descendant_detects_child_of_differential_sculpt() {
+        let mut scene = empty_scene();
+        let prim = scene.create_primitive(SdfPrimitive::Sphere);
+        let grid = VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0));
+        let sculpt_id = scene.insert_sculpt_above(
+            prim, Vec3::ZERO, Vec3::ZERO, Vec3::new(0.5, 0.5, 0.5), grid,
+        );
+
+        // This is the critical check for the differential sculpt brush fix:
+        // when the pick shader returns the child primitive's material ID,
+        // is_descendant confirms it belongs to the active sculpt node.
+        assert!(scene.is_descendant(prim, sculpt_id));
+        assert!(!scene.is_descendant(sculpt_id, prim));
+    }
+
+    #[test]
+    fn is_descendant_through_sculpt_in_operation() {
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        let cube = scene.create_primitive(SdfPrimitive::Box);
+        let union = scene.create_operation(CsgOp::Union, Some(sphere), Some(cube));
+
+        let grid = VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0));
+        let sculpt_id = scene.insert_sculpt_above(
+            sphere, Vec3::ZERO, Vec3::ZERO, Vec3::new(0.5, 0.5, 0.5), grid,
+        );
+
+        // Sphere is a child of sculpt, sculpt is a child of union
+        assert!(scene.is_descendant(sphere, sculpt_id));
+        assert!(scene.is_descendant(sculpt_id, union));
+        assert!(scene.is_descendant(sphere, union));
+
+        // Cube is NOT a child of sculpt (it's a sibling in the union)
+        assert!(!scene.is_descendant(cube, sculpt_id));
+    }
+
     // ── subtree_has_sculpt ──────────────────────────────────────────
 
     #[test]

@@ -1363,6 +1363,14 @@ fn draw_toolbar(ui: &mut egui::Ui, scene: &Scene, state: &mut NodeGraphState, gr
             }
         });
 
+        if ui
+            .add_enabled(state.selected.is_some(), egui::Button::new("+ Sculpt"))
+            .on_hover_text("Add sculpt modifier to selected node (Ctrl+R)")
+            .clicked()
+        {
+            actions.push(Action::EnterSculptMode);
+        }
+
         ui.separator();
 
         let has_selection = state.selected.is_some();
