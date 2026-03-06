@@ -15,11 +15,12 @@ fn ray_aabb(ro: vec3f, inv_rd: vec3f, bmin: vec3f, bmax: vec3f) -> vec2f {
 }
 
 // Hard union: picks the closer surface. No blending.
+// Preserves the winner's full material info (mat_a, mat_b, blend_factor).
 fn op_union(a: vec4f, b: vec4f, k: f32) -> vec4f {
     if a.x < b.x {
-        return vec4f(a.x, a.y, -1.0, 0.0);
+        return a;
     } else {
-        return vec4f(b.x, b.y, -1.0, 0.0);
+        return b;
     }
 }
 
