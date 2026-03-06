@@ -32,16 +32,18 @@ fn op_smooth_union(a: vec4f, b: vec4f, k: f32) -> vec4f {
 }
 
 // Subtraction: carves shape b out of shape a. Supports smooth blending when k > 0.
+// When smooth (k > 0), the carved boundary blends toward the subtractor's material.
 fn op_subtract(a: vec4f, b: vec4f, k: f32) -> vec4f {
     if k < 0.0001 {
         return vec4f(max(a.x, -b.x), a.y, -1.0, 0.0);
     }
     let h = clamp(0.5 - 0.5 * (a.x + b.x) / k, 0.0, 1.0);
     let d = mix(a.x, -b.x, h) + k * h * (1.0 - h);
-    return vec4f(d, a.y, -1.0, 0.0);
+    return vec4f(d, a.y, b.y, h);
 }
 
 // Intersection: keeps only the overlapping region. Supports smooth blending when k > 0.
+// When smooth (k > 0), the intersection boundary blends both materials.
 fn op_intersect(a: vec4f, b: vec4f, k: f32) -> vec4f {
     if k < 0.0001 {
         if a.x > b.x {
@@ -52,6 +54,5 @@ fn op_intersect(a: vec4f, b: vec4f, k: f32) -> vec4f {
     }
     let h = clamp(0.5 - 0.5 * (b.x - a.x) / k, 0.0, 1.0);
     let d = mix(b.x, a.x, h) + k * h * (1.0 - h);
-    let mat = select(b.y, a.y, a.x > b.x);
-    return vec4f(d, mat, -1.0, 0.0);
+    return vec4f(d, a.y, b.y, h);
 }

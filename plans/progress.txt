@@ -56,3 +56,18 @@ Changes (src/shaders/rendering.wgsl only):
 - pick.wgsl: unchanged (pick only needs .x/.y, not material blending).
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (249/249) ✓
+
+--- Iteration 3: PRD #8 — Material blending for smooth subtract and smooth intersect ---
+COMPLETED. Smooth subtract and smooth intersect now carry material blend info.
+
+Changes (src/shaders/operations.wgsl only):
+- op_subtract: smooth path (k > 0) now returns vec4f(d, a.y, b.y, h) instead of
+  vec4f(d, a.y, -1.0, 0.0). The carved boundary blends toward the subtractor's material.
+  Hard path (k < 0.0001) unchanged — still returns mat_b=-1.0, blend=0.0.
+- op_intersect: smooth path (k > 0) now returns vec4f(d, a.y, b.y, h) instead of
+  vec4f(d, mat, -1.0, 0.0). The intersection boundary blends both materials.
+  Hard path (k < 0.0001) unchanged — still returns mat_b=-1.0, blend=0.0.
+- No changes needed in rendering.wgsl — the blending helpers from iteration 2
+  already consume mat_b and blend_factor from the vec4f result.
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (249/249) ✓

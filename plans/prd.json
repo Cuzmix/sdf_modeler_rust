@@ -18,7 +18,7 @@
     "category": "rendering",
     "description": "Extend material blending to smooth subtract and smooth intersect.\n\nSteps:\n1. In src/shaders/operations.wgsl: update op_subtract to carry both material IDs and blend factor h in the vec4f return when k > 0. The subtracted boundary should blend toward the subtractor's material.\n2. Same for op_intersect: carry both mat IDs and h.\n3. Verify that hard subtract/intersect (k=0) still return blend=0, mat_b=-1.\n4. No changes needed in rendering.wgsl (already consumes blend from task 7).",
     "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: smooth subtract (k=0.3) between differently-colored primitives — carved boundary shows color blending. Same for smooth intersect.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 9,
