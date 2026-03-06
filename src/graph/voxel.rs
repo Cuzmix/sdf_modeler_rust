@@ -411,8 +411,18 @@ fn csg_subtract(a: f32, b: f32) -> f32 {
     a.max(-b)
 }
 
+fn csg_smooth_subtract(a: f32, b: f32, k: f32) -> f32 {
+    let h = (0.5 - 0.5 * (a + b) / k.max(0.0001)).clamp(0.0, 1.0);
+    a + (-b - a) * h + k * h * (1.0 - h)
+}
+
 fn csg_intersect(a: f32, b: f32) -> f32 {
     a.max(b)
+}
+
+fn csg_smooth_intersect(a: f32, b: f32, k: f32) -> f32 {
+    let h = (0.5 - 0.5 * (b - a) / k.max(0.0001)).clamp(0.0, 1.0);
+    b + (a - b) * h + k * h * (1.0 - h)
 }
 
 // ---------------------------------------------------------------------------
@@ -449,6 +459,8 @@ pub fn evaluate_sdf_tree(scene: &Scene, node_id: NodeId, p: Vec3) -> f32 {
                     CsgOp::SmoothUnion => csg_smooth_union(a, b, *smooth_k),
                     CsgOp::Subtract => csg_subtract(a, b),
                     CsgOp::Intersect => csg_intersect(a, b),
+                    CsgOp::SmoothSubtract => csg_smooth_subtract(a, b, *smooth_k),
+                    CsgOp::SmoothIntersect => csg_smooth_intersect(a, b, *smooth_k),
                 },
                 (Some(v), None) | (None, Some(v)) => v,
                 (None, None) => f32::MAX,

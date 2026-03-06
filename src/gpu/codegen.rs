@@ -768,6 +768,26 @@ mod tests {
         assert!(wgsl.contains("type_op.y)"));
     }
 
+    #[test]
+    fn smooth_subtract_generates_op_subtract() {
+        let mut scene = empty_scene();
+        let left = scene.create_primitive(SdfPrimitive::Sphere);
+        let right = scene.create_primitive(SdfPrimitive::Box);
+        scene.create_operation(CsgOp::SmoothSubtract, Some(left), Some(right));
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("op_subtract(n"));
+    }
+
+    #[test]
+    fn smooth_intersect_generates_op_intersect() {
+        let mut scene = empty_scene();
+        let left = scene.create_primitive(SdfPrimitive::Sphere);
+        let right = scene.create_primitive(SdfPrimitive::Box);
+        scene.create_operation(CsgOp::SmoothIntersect, Some(left), Some(right));
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("op_intersect(n"));
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // generate_scene_sdf — multiple top-level nodes
     // ═══════════════════════════════════════════════════════════════

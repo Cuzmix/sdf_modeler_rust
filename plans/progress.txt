@@ -136,3 +136,24 @@ Changes:
   Added to node graph toolbar "Deform" section.
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (254/254) ✓
+
+--- Iteration 7: PRD #16 — SmoothSubtract and SmoothIntersect as first-class CsgOp variants ---
+COMPLETED. Added Smooth Subtract and Smooth Intersect as explicit operation types.
+
+Changes:
+- src/graph/scene.rs: Added CsgOp::SmoothSubtract and CsgOp::SmoothIntersect variants.
+  default_smooth_k=0.3 for both. gpu_op_id: 14.0 and 15.0. Badges: "[S-]" and "[S∩]".
+  wgsl_function_name maps to existing op_subtract/op_intersect (already handle k>0).
+  Added to CsgOp::ALL (now 6 variants). base_name: "Smooth Subtract"/"Smooth Intersect".
+- src/graph/voxel.rs: Added CPU-side csg_smooth_subtract() and csg_smooth_intersect()
+  functions matching the WGSL smooth formulas. evaluate_sdf_tree now dispatches both
+  new variants to their respective smooth CPU functions.
+- src/gpu/codegen.rs: No codegen changes needed — op.wgsl_function_name() already drives
+  the emitted WGSL function call, and smooth_k is read from nodes[i].type_op.y.
+  Added 2 unit tests: smooth_subtract_generates_op_subtract and
+  smooth_intersect_generates_op_intersect.
+- src/ui/properties.rs: No changes needed — dropdown iterates CsgOp::ALL, so new
+  variants appear automatically.
+- src/ui/node_graph.rs: No changes needed — also iterates CsgOp::ALL.
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (256/256) ✓

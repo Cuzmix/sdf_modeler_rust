@@ -74,7 +74,7 @@
     "category": "workflow",
     "description": "Add SmoothSubtract and SmoothIntersect as first-class CsgOp variants.\n\nSteps:\n1. In src/graph/scene.rs: add CsgOp::SmoothSubtract and CsgOp::SmoothIntersect to the enum.\n2. Set their properties: default smooth_k=0.3, base_name 'Smooth Subtract'/'Smooth Intersect', badge '[S-]'/'[S∩]'.\n3. Map wgsl_function_name to existing op_subtract/op_intersect (they already handle k>0).\n4. Assign unique gpu_op_id values.\n5. Add to CsgOp::ALL array.\n6. In src/ui/properties.rs: operation dropdown now shows all 6 ops.\n7. In src/gpu/codegen.rs: ensure codegen handles the new variants (map to same WGSL functions as regular subtract/intersect but with smooth_k from the node).\n8. Add unit test: SmoothSubtract generates correct WGSL with k parameter.",
     "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: 'Smooth Subtract' and 'Smooth Intersect' appear in operation dropdown. Both create visible smooth blending at boundaries.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 17,

@@ -257,10 +257,19 @@ pub enum CsgOp {
     SmoothUnion,
     Subtract,
     Intersect,
+    SmoothSubtract,
+    SmoothIntersect,
 }
 
 impl CsgOp {
-    pub const ALL: &[Self] = &[Self::Union, Self::SmoothUnion, Self::Subtract, Self::Intersect];
+    pub const ALL: &[Self] = &[
+        Self::Union,
+        Self::SmoothUnion,
+        Self::Subtract,
+        Self::Intersect,
+        Self::SmoothSubtract,
+        Self::SmoothIntersect,
+    ];
 
     pub fn base_name(&self) -> &'static str {
         match self {
@@ -268,12 +277,15 @@ impl CsgOp {
             Self::SmoothUnion => "Smooth Union",
             Self::Subtract => "Subtract",
             Self::Intersect => "Intersect",
+            Self::SmoothSubtract => "Smooth Subtract",
+            Self::SmoothIntersect => "Smooth Intersect",
         }
     }
 
     pub fn default_smooth_k(&self) -> f32 {
         match self {
             Self::SmoothUnion => 0.5,
+            Self::SmoothSubtract | Self::SmoothIntersect => 0.3,
             _ => 0.0,
         }
     }
@@ -284,6 +296,8 @@ impl CsgOp {
             Self::SmoothUnion => 11.0,
             Self::Subtract => 12.0,
             Self::Intersect => 13.0,
+            Self::SmoothSubtract => 14.0,
+            Self::SmoothIntersect => 15.0,
         }
     }
 
@@ -291,8 +305,8 @@ impl CsgOp {
         match self {
             Self::Union => "op_union",
             Self::SmoothUnion => "op_smooth_union",
-            Self::Subtract => "op_subtract",
-            Self::Intersect => "op_intersect",
+            Self::Subtract | Self::SmoothSubtract => "op_subtract",
+            Self::Intersect | Self::SmoothIntersect => "op_intersect",
         }
     }
 
@@ -302,6 +316,8 @@ impl CsgOp {
             Self::SmoothUnion => "[SmU]",
             Self::Subtract => "[Sub]",
             Self::Intersect => "[Int]",
+            Self::SmoothSubtract => "[S-]",
+            Self::SmoothIntersect => "[S∩]",
         }
     }
 }
