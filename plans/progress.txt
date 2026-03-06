@@ -337,3 +337,40 @@ Changes:
 - src/app/async_tasks.rs: Updated screenshot to_uniform() call with cross_section param.
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (267/267) ✓
+
+--- Iteration 15: PRD #14 — Multi-select infrastructure ---
+COMPLETED. Added multi-select infrastructure for selecting multiple nodes at once.
+
+Changes:
+- src/ui/node_graph.rs: Added `selected_set: HashSet<SceneNodeId>` to NodeGraphState
+  alongside existing `selected: Option<SceneNodeId>` (which serves as primary_selected).
+  Added 6 helper methods: select_single(), toggle_select(), add_to_selection(),
+  clear_selection(), is_selected(), selected_count(). select_single clears set and adds
+  one node. toggle_select adds/removes from set and updates primary. clear_selection
+  empties both. Added 9 unit tests covering all helper methods.
+- src/gpu/picking.rs: Added `ctrl_held: bool` field to PendingPick struct for carrying
+  Ctrl modifier state from click time to pick result processing.
+- src/gpu/buffers.rs: Changed build_node_buffer() to accept `&HashSet<NodeId>` instead
+  of `Option<NodeId>`. All nodes in the selected_set get is_sel=1.0 (outline highlight).
+- src/app/gpu_sync.rs: process_pending_pick() now checks pending.ctrl_held — Ctrl+click
+  calls toggle_select() (adds/removes from set), plain click calls select_single().
+  upload_scene_buffer() passes selected_set instead of Option.
+- src/app/action_handler.rs: Updated ~20 write sites to use select_single() and
+  clear_selection() helpers instead of direct field assignment. Undo/redo restore
+  primary selection via select_single(). DeleteNode also removes from selected_set.
+- src/app/async_tasks.rs: Updated 4 sites to use select_single().
+- src/app/sculpting.rs: Updated 2 sites to use select_single().
+- src/app/input.rs: Updated delete_selected() to use clear_selection().
+- src/app/mod.rs: Updated defensive cleanup and initial buffer build.
+- src/ui/dock.rs: Updated scene_tree::draw() call to pass selected_set. Updated
+  defensive clears to use clear_selection().
+- src/ui/scene_tree.rs: Added selected_set parameter to draw(), draw_node_recursive(),
+  draw_flat_node(), extract_info(). Click handlers check ui.input(|i| i.modifiers.ctrl)
+  — Ctrl+click toggles selection, plain click selects single. Both leaf nodes and
+  collapsing headers support Ctrl+click multi-select.
+- src/ui/viewport/draw.rs: Normal mode pick carries ctrl_held from ui.input modifiers.
+  Sculpt mode picks set ctrl_held=false (Ctrl used for brush inversion, not multi-select).
+- Gizmo operates on primary_selected only (no changes needed — already reads
+  node_graph_state.selected which is the primary).
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (276/276) ✓

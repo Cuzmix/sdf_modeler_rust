@@ -60,7 +60,7 @@
     "category": "workflow",
     "description": "Add multi-select infrastructure for selecting multiple nodes at once.\n\nSteps:\n1. In src/app/state.rs: change DocumentState.selected from Option<NodeId> to selected: std::collections::HashSet<NodeId> and primary_selected: Option<NodeId>.\n2. Add helper methods on DocumentState: select_single(id), toggle_select(id), add_to_selection(id), clear_selection(), is_selected(id) -> bool, selected_count() -> usize.\n3. Search all files for self.doc.selected or doc.selected. Update every reference:\n   - Where it reads Option<NodeId>: use primary_selected or check is_selected(id).\n   - Where it sets selected = Some(id): use select_single(id).\n   - Where it sets selected = None: use clear_selection().\n4. In src/ui/viewport/draw.rs: plain click = select_single, Ctrl+click = toggle_select.\n5. In src/ui/scene_tree.rs: same Ctrl+click behavior.\n6. In src/gpu/buffers.rs: mark ALL nodes in the selected set as selected (color.w = 1.0), not just one.\n7. Gizmo operates on primary_selected only.",
     "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: click node = single select. Ctrl+click another = both outlined. Ctrl+click selected = deselects. Click empty = clear all. Gizmo on primary.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 15,

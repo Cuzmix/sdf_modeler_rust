@@ -929,7 +929,10 @@ pub struct NodeGraphState {
     pub graph_state: SdfGraphState,
     pub id_map: NodeIdMap,
     pub user_state: SdfGraphUserState,
+    /// Primary selected node (receives gizmo, properties panel).
     pub selected: Option<SceneNodeId>,
+    /// Full set of selected nodes (for multi-select). Always contains `selected` when non-empty.
+    pub selected_set: std::collections::HashSet<SceneNodeId>,
     pub layout_dirty: bool,
     pub last_structure_key: u64,
     pub needs_initial_rebuild: bool,
@@ -944,11 +947,154 @@ impl NodeGraphState {
             id_map: NodeIdMap::new(),
             user_state: SdfGraphUserState::new(),
             selected: None,
+            selected_set: std::collections::HashSet::new(),
             layout_dirty: true,
             last_structure_key: 0,
             needs_initial_rebuild: true,
             pending_center_node: None,
         }
+    }
+
+    /// Select a single node, clearing any previous multi-selection.
+    pub fn select_single(&mut self, id: SceneNodeId) {
+        self.selected = Some(id);
+        self.selected_set.clear();
+        self.selected_set.insert(id);
+    }
+
+    /// Toggle a node in/out of the selection set (Ctrl+click).
+    pub fn toggle_select(&mut self, id: SceneNodeId) {
+        if self.selected_set.remove(&id) {
+            // Was selected — deselected. Update primary if needed.
+            if self.selected == Some(id) {
+                self.selected = self.selected_set.iter().next().copied();
+            }
+        } else {
+            // Wasn't selected — add it and make it primary.
+            self.selected_set.insert(id);
+            self.selected = Some(id);
+        }
+    }
+
+    /// Add a node to the selection set without removing others.
+    #[allow(dead_code)]
+    pub fn add_to_selection(&mut self, id: SceneNodeId) {
+        self.selected_set.insert(id);
+        self.selected = Some(id);
+    }
+
+    /// Clear all selection.
+    pub fn clear_selection(&mut self) {
+        self.selected = None;
+        self.selected_set.clear();
+    }
+
+    /// Check if a specific node is in the selection set.
+    #[allow(dead_code)]
+    pub fn is_selected(&self, id: SceneNodeId) -> bool {
+        self.selected_set.contains(&id)
+    }
+
+    /// Number of nodes currently selected.
+    #[allow(dead_code)]
+    pub fn selected_count(&self) -> usize {
+        self.selected_set.len()
+    }
+}
+
+#[cfg(test)]
+mod multi_select_tests {
+    use super::NodeGraphState;
+
+    #[test]
+    fn select_single_sets_primary_and_set() {
+        let mut state = NodeGraphState::new();
+        state.select_single(5);
+        assert_eq!(state.selected, Some(5));
+        assert_eq!(state.selected_count(), 1);
+        assert!(state.is_selected(5));
+    }
+
+    #[test]
+    fn select_single_replaces_previous() {
+        let mut state = NodeGraphState::new();
+        state.select_single(1);
+        state.select_single(2);
+        assert_eq!(state.selected, Some(2));
+        assert_eq!(state.selected_count(), 1);
+        assert!(!state.is_selected(1));
+        assert!(state.is_selected(2));
+    }
+
+    #[test]
+    fn toggle_select_adds_new_node() {
+        let mut state = NodeGraphState::new();
+        state.select_single(1);
+        state.toggle_select(2);
+        assert_eq!(state.selected, Some(2));
+        assert_eq!(state.selected_count(), 2);
+        assert!(state.is_selected(1));
+        assert!(state.is_selected(2));
+    }
+
+    #[test]
+    fn toggle_select_removes_existing_node() {
+        let mut state = NodeGraphState::new();
+        state.select_single(1);
+        state.toggle_select(2);
+        state.toggle_select(1); // remove node 1
+        assert_eq!(state.selected_count(), 1);
+        assert!(!state.is_selected(1));
+        assert!(state.is_selected(2));
+    }
+
+    #[test]
+    fn toggle_select_updates_primary_when_removing_primary() {
+        let mut state = NodeGraphState::new();
+        state.select_single(1);
+        state.toggle_select(2); // primary = 2
+        state.toggle_select(2); // remove primary
+        assert_eq!(state.selected_count(), 1);
+        // Primary should fall back to remaining node
+        assert_eq!(state.selected, Some(1));
+    }
+
+    #[test]
+    fn add_to_selection_keeps_existing() {
+        let mut state = NodeGraphState::new();
+        state.select_single(1);
+        state.add_to_selection(2);
+        state.add_to_selection(3);
+        assert_eq!(state.selected, Some(3)); // most recently added
+        assert_eq!(state.selected_count(), 3);
+        assert!(state.is_selected(1));
+        assert!(state.is_selected(2));
+        assert!(state.is_selected(3));
+    }
+
+    #[test]
+    fn clear_selection_empties_everything() {
+        let mut state = NodeGraphState::new();
+        state.select_single(1);
+        state.toggle_select(2);
+        state.clear_selection();
+        assert_eq!(state.selected, None);
+        assert_eq!(state.selected_count(), 0);
+        assert!(!state.is_selected(1));
+        assert!(!state.is_selected(2));
+    }
+
+    #[test]
+    fn is_selected_returns_false_for_empty() {
+        let state = NodeGraphState::new();
+        assert!(!state.is_selected(0));
+        assert!(!state.is_selected(42));
+    }
+
+    #[test]
+    fn selected_count_zero_initially() {
+        let state = NodeGraphState::new();
+        assert_eq!(state.selected_count(), 0);
     }
 }
 
@@ -1031,7 +1177,7 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState, ac
             state.graph_state.graph[graph_id].label = node.name.clone();
         }
         state.id_map.insert(scene_id, graph_id);
-        state.selected = Some(scene_id);
+        state.select_single(scene_id);
         state.last_structure_key = scene.structure_key();
     }
 
@@ -1067,13 +1213,13 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState, ac
     // Sync selection from graph to our state
     if let Some(first_selected) = state.graph_state.selected_nodes.first() {
         if let Some(&scene_id) = state.id_map.graph_to_scene.get(first_selected) {
-            state.selected = Some(scene_id);
+            state.select_single(scene_id);
         }
     } else if responses.cursor_in_editor && !responses.cursor_in_finder {
         // User clicked empty space in the graph
         // Only deselect if no nodes are selected and cursor is in editor
         if state.graph_state.selected_nodes.is_empty() {
-            state.selected = None;
+            state.clear_selection();
         }
     }
 

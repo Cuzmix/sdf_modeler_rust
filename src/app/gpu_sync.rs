@@ -86,7 +86,7 @@ impl SdfApp {
     pub(super) fn upload_scene_buffer(&mut self) {
         let (voxel_data, voxel_offsets) = buffers::build_voxel_buffer(&self.doc.scene);
         let node_data =
-            buffers::build_node_buffer(&self.doc.scene, self.ui.node_graph_state.selected, &voxel_offsets);
+            buffers::build_node_buffer(&self.doc.scene, &self.ui.node_graph_state.selected_set, &voxel_offsets);
         let sculpt_infos = buffers::collect_sculpt_tex_info(&self.doc.scene);
         self.gpu.voxel_gpu_offsets = voxel_offsets;
         self.gpu.sculpt_tex_indices = sculpt_infos.iter().map(|i| (i.node_id, i.tex_idx)).collect();
@@ -247,12 +247,17 @@ impl SdfApp {
             let idx = result.material_id as usize;
             if idx < topo_order.len() {
                 let hit_node_id = topo_order[idx];
-                self.ui.node_graph_state.selected = Some(hit_node_id);
+                // Check if Ctrl was held during click for multi-select
+                if pending.ctrl_held {
+                    self.ui.node_graph_state.toggle_select(hit_node_id);
+                } else {
+                    self.ui.node_graph_state.select_single(hit_node_id);
+                }
                 self.gpu.buffer_dirty = true;
             }
         } else {
             // Clicked empty space — deselect
-            self.ui.node_graph_state.selected = None;
+            self.ui.node_graph_state.clear_selection();
             self.gpu.buffer_dirty = true;
         }
     }

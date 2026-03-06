@@ -138,7 +138,7 @@ impl SdfApp {
                     // Hit another sculpt node — switch to it directly
                     self.doc.sculpt_state = SculptState::new_active(hit_node_id);
                     self.doc.sculpt_history.set_node(hit_node_id);
-                    self.ui.node_graph_state.selected = Some(hit_node_id);
+                    self.ui.node_graph_state.select_single(hit_node_id);
                     self.async_state.last_sculpt_hit = None;
                     self.async_state.lazy_brush_pos = None;
                 } else {
@@ -148,7 +148,7 @@ impl SdfApp {
                         // Switch to the sculpt parent
                         self.doc.sculpt_state = SculptState::new_active(sculpt_id);
                         self.doc.sculpt_history.set_node(sculpt_id);
-                        self.ui.node_graph_state.selected = Some(sculpt_id);
+                        self.ui.node_graph_state.select_single(sculpt_id);
                         self.async_state.last_sculpt_hit = None;
                         self.async_state.lazy_brush_pos = None;
                     } else {

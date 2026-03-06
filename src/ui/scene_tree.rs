@@ -22,6 +22,7 @@ pub fn draw(
     ui: &mut egui::Ui,
     scene: &mut Scene,
     selected: &mut Option<NodeId>,
+    selected_set: &mut std::collections::HashSet<NodeId>,
     renaming: &mut Option<NodeId>,
     rename_buf: &mut String,
     drag_state: &mut Option<NodeId>,
@@ -73,14 +74,14 @@ pub fn draw(
         }
 
         for id in matching {
-            draw_flat_node(ui, scene, id, selected, renaming, rename_buf, actions);
+            draw_flat_node(ui, scene, id, selected, selected_set, renaming, rename_buf, actions);
         }
         return;
     }
 
     let mut visited = HashSet::new();
     for id in tops {
-        draw_node_recursive(ui, scene, id, selected, renaming, rename_buf, &mut visited, drag_state, actions);
+        draw_node_recursive(ui, scene, id, selected, selected_set, renaming, rename_buf, &mut visited, drag_state, actions);
     }
 
     // "Drop here to make top-level" area when dragging
@@ -125,10 +126,10 @@ struct NodeInfo {
     children: Vec<Option<NodeId>>,
 }
 
-fn extract_info(scene: &Scene, id: NodeId, selected: Option<NodeId>) -> Option<NodeInfo> {
+fn extract_info(scene: &Scene, id: NodeId, selected_set: &std::collections::HashSet<NodeId>) -> Option<NodeInfo> {
     let node = scene.nodes.get(&id)?;
     let label = format_node_label(node);
-    let is_selected = selected == Some(id);
+    let is_selected = selected_set.contains(&id);
     let is_hidden = scene.is_hidden(id);
     let (is_leaf, children) = match &node.data {
         NodeData::Primitive { .. } => (true, vec![]),
@@ -213,6 +214,7 @@ fn draw_node_recursive(
     scene: &mut Scene,
     id: NodeId,
     selected: &mut Option<NodeId>,
+    selected_set: &mut std::collections::HashSet<NodeId>,
     renaming: &mut Option<NodeId>,
     rename_buf: &mut String,
     visited: &mut HashSet<NodeId>,
@@ -224,7 +226,7 @@ fn draw_node_recursive(
         return;
     }
 
-    let Some(info) = extract_info(scene, id, *selected) else {
+    let Some(info) = extract_info(scene, id, selected_set) else {
         ui.label(format!("  (missing: #{})", id));
         return;
     };
@@ -273,7 +275,22 @@ fn draw_node_recursive(
                 .sense(egui::Sense::click_and_drag());
             let response = ui.add(label);
             if response.clicked() {
-                *selected = Some(id);
+                let ctrl = ui.input(|i| i.modifiers.ctrl);
+                if ctrl {
+                    // Ctrl+click: toggle in/out of selection
+                    if selected_set.remove(&id) {
+                        if *selected == Some(id) {
+                            *selected = selected_set.iter().next().copied();
+                        }
+                    } else {
+                        selected_set.insert(id);
+                        *selected = Some(id);
+                    }
+                } else {
+                    *selected = Some(id);
+                    selected_set.clear();
+                    selected_set.insert(id);
+                }
             }
             if response.double_clicked() {
                 if let Some(node) = scene.nodes.get(&id) {
@@ -303,7 +320,7 @@ fn draw_node_recursive(
             .show(ui, |ui| {
                 for child_opt in &info.children {
                     if let Some(child_id) = child_opt {
-                        draw_node_recursive(ui, scene, *child_id, selected, renaming, rename_buf, visited, drag_state, actions);
+                        draw_node_recursive(ui, scene, *child_id, selected, selected_set, renaming, rename_buf, visited, drag_state, actions);
                     } else {
                         ui.label("  (empty)");
                     }
@@ -311,7 +328,21 @@ fn draw_node_recursive(
             });
 
             if header.header_response.clicked() {
-                *selected = Some(id);
+                let ctrl = ui.input(|i| i.modifiers.ctrl);
+                if ctrl {
+                    if selected_set.remove(&id) {
+                        if *selected == Some(id) {
+                            *selected = selected_set.iter().next().copied();
+                        }
+                    } else {
+                        selected_set.insert(id);
+                        *selected = Some(id);
+                    }
+                } else {
+                    *selected = Some(id);
+                    selected_set.clear();
+                    selected_set.insert(id);
+                }
             }
             if header.header_response.double_clicked() {
                 if let Some(node) = scene.nodes.get(&id) {
@@ -351,16 +382,18 @@ fn node_type_color(data: &NodeData) -> egui::Color32 {
 }
 
 /// Flat node row (used in search results).
+#[allow(clippy::too_many_arguments)]
 fn draw_flat_node(
     ui: &mut egui::Ui,
     scene: &mut Scene,
     id: NodeId,
     selected: &mut Option<NodeId>,
+    selected_set: &mut std::collections::HashSet<NodeId>,
     renaming: &mut Option<NodeId>,
     rename_buf: &mut String,
     actions: &mut ActionSink,
 ) {
-    let Some(info) = extract_info(scene, id, *selected) else { return };
+    let Some(info) = extract_info(scene, id, selected_set) else { return };
     let dot_color = scene.nodes.get(&id).map(|n| node_type_color(&n.data)).unwrap_or(COLOR_NORMAL);
 
     // Inline rename editor
@@ -392,7 +425,21 @@ fn draw_flat_node(
             .sense(egui::Sense::click());
         let response = ui.add(label);
         if response.clicked() {
-            *selected = Some(id);
+            let ctrl = ui.input(|i| i.modifiers.ctrl);
+            if ctrl {
+                if selected_set.remove(&id) {
+                    if *selected == Some(id) {
+                        *selected = selected_set.iter().next().copied();
+                    }
+                } else {
+                    selected_set.insert(id);
+                    *selected = Some(id);
+                }
+            } else {
+                *selected = Some(id);
+                selected_set.clear();
+                selected_set.insert(id);
+            }
         }
         if response.double_clicked() {
             if let Some(node) = scene.nodes.get(&id) {

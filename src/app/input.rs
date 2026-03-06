@@ -10,7 +10,7 @@ impl SdfApp {
     pub(super) fn delete_selected(&mut self) {
         if let Some(sel) = self.ui.node_graph_state.selected {
             self.doc.scene.remove_node(sel);
-            self.ui.node_graph_state.selected = None;
+            self.ui.node_graph_state.clear_selection();
             self.ui.node_graph_state.needs_initial_rebuild = true;
             self.doc.sculpt_state = SculptState::Inactive;
             self.gpu.buffer_dirty = true;

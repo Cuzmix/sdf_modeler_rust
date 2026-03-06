@@ -250,7 +250,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                 // Defensive: clear selection if the node was deleted by properties panel
                 if let Some(sel) = self.node_graph_state.selected {
                     if !self.scene.nodes.contains_key(&sel) {
-                        self.node_graph_state.selected = None;
+                        self.node_graph_state.clear_selection();
                         self.node_graph_state.needs_initial_rebuild = true;
                     }
                 }
@@ -261,6 +261,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     ui,
                     self.scene,
                     &mut self.node_graph_state.selected,
+                    &mut self.node_graph_state.selected_set,
                     self.scene_tree.renaming_node,
                     self.scene_tree.rename_buf,
                     self.scene_tree.drag_state,
@@ -276,7 +277,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                 // Defensive: mark layout dirty if a node was deleted via context menu
                 if let Some(sel) = self.node_graph_state.selected {
                     if !self.scene.nodes.contains_key(&sel) {
-                        self.node_graph_state.selected = None;
+                        self.node_graph_state.clear_selection();
                         self.node_graph_state.needs_initial_rebuild = true;
                     }
                 }

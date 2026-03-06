@@ -66,7 +66,7 @@ pub fn build_voxel_buffer(scene: &Scene) -> (Vec<f32>, HashMap<NodeId, u32>) {
 
 pub fn build_node_buffer(
     scene: &Scene,
-    selected: Option<NodeId>,
+    selected_set: &std::collections::HashSet<NodeId>,
     voxel_offsets: &HashMap<NodeId, u32>,
 ) -> Vec<SdfNodeGpu> {
     let order = scene.visible_topo_order();
@@ -77,7 +77,7 @@ pub fn build_node_buffer(
             buffer.push(SdfNodeGpu::zeroed());
             continue;
         };
-        let is_sel = if selected == Some(node_id) { 1.0 } else { 0.0 };
+        let is_sel = if selected_set.contains(&node_id) { 1.0 } else { 0.0 };
 
         match &node.data {
             NodeData::Primitive {

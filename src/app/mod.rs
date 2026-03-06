@@ -201,7 +201,8 @@ impl SdfApp {
 
         // Upload initial scene buffer
         let (voxel_data, voxel_offsets) = buffers::build_voxel_buffer(&scene);
-        let node_data = buffers::build_node_buffer(&scene, None, &voxel_offsets);
+        let empty_selection = std::collections::HashSet::new();
+        let node_data = buffers::build_node_buffer(&scene, &empty_selection, &voxel_offsets);
         {
             let mut renderer = render_state.renderer.write();
             renderer.callback_resources.insert(resources);
@@ -502,7 +503,7 @@ impl eframe::App for SdfApp {
         // Defensive: if a node was deleted via any UI panel, clean up state
         if let Some(sel) = self.ui.node_graph_state.selected {
             if !self.doc.scene.nodes.contains_key(&sel) {
-                self.ui.node_graph_state.selected = None;
+                self.ui.node_graph_state.clear_selection();
                 self.ui.node_graph_state.needs_initial_rebuild = true;
                 self.doc.sculpt_state = SculptState::Inactive;
                 self.gpu.buffer_dirty = true;

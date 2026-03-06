@@ -82,7 +82,7 @@ impl SdfApp {
             let sculpt_id = self.doc.scene.insert_sculpt_above(
                 req.subtree_root, center, Vec3::ZERO, req.color, grid,
             );
-            self.ui.node_graph_state.selected = Some(sculpt_id);
+            self.ui.node_graph_state.select_single(sculpt_id);
             self.doc.sculpt_state = SculptState::new_active(sculpt_id);
         }
         self.gpu.buffer_dirty = true;
@@ -125,7 +125,7 @@ impl SdfApp {
     ) {
         if flatten {
             let new_id = self.doc.scene.flatten_subtree(subtree_root, grid, center, color);
-            self.ui.node_graph_state.selected = Some(new_id);
+            self.ui.node_graph_state.select_single(new_id);
             self.ui.node_graph_state.needs_initial_rebuild = true;
             self.doc.sculpt_state = SculptState::new_active(new_id);
         } else if let Some(sculpt_id) = existing_sculpt {
@@ -144,7 +144,7 @@ impl SdfApp {
             let sculpt_id = self.doc.scene.insert_sculpt_above(
                 subtree_root, center, Vec3::ZERO, color, grid,
             );
-            self.ui.node_graph_state.selected = Some(sculpt_id);
+            self.ui.node_graph_state.select_single(sculpt_id);
             self.doc.sculpt_state = SculptState::new_active(sculpt_id);
         }
         self.gpu.buffer_dirty = true;
@@ -419,7 +419,7 @@ impl SdfApp {
                     desired_resolution,
                 },
             );
-            self.ui.node_graph_state.selected = Some(sculpt_id);
+            self.ui.node_graph_state.select_single(sculpt_id);
             self.ui.node_graph_state.needs_initial_rebuild = true;
             self.doc.sculpt_state = SculptState::new_active(sculpt_id);
             self.gpu.buffer_dirty = true;

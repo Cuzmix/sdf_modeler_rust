@@ -657,6 +657,7 @@ pub fn draw(
                             [0.0; 4],
                             [0.0; 4],
                         ),
+                        ctrl_held: false, // Ctrl used for sculpt inversion, not multi-select
                     });
                     // Capture modifier keys for Ctrl-invert / Shift-smooth
                     let modifiers = ui.input(|i| i.modifiers);
@@ -702,6 +703,7 @@ pub fn draw(
                             [0.0; 4],
                             [0.0; 4],
                         ),
+                        ctrl_held: false,
                     });
                     output.is_hover_pick = true;
                 }
@@ -808,9 +810,11 @@ pub fn draw(
                 ];
                 let pick_uniform =
                     camera.to_uniform(viewport, time, 0.0, false, scene_bounds, -1.0, 0.0, [0.0; 4], [0.0; 4]);
+                let ctrl_held = ui.input(|i| i.modifiers.ctrl);
                 output.pending_pick = Some(PendingPick {
                     mouse_pos: mouse_px,
                     camera_uniform: pick_uniform,
+                    ctrl_held,
                 });
             }
         }

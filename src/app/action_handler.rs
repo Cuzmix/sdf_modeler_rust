@@ -20,7 +20,7 @@ impl SdfApp {
                 Action::NewScene => {
                     self.doc.scene = Scene::new();
                     self.doc.history = History::new();
-                    self.ui.node_graph_state.selected = None;
+                    self.ui.node_graph_state.clear_selection();
                     self.ui.node_graph_state.needs_initial_rebuild = true;
                     self.doc.sculpt_state = SculptState::Inactive;
                     self.ui.isolation_state = None;
@@ -75,7 +75,11 @@ impl SdfApp {
 
                 // ── Selection ────────────────────────────────────────
                 Action::Select(id) => {
-                    self.ui.node_graph_state.selected = id;
+                    if let Some(node_id) = id {
+                        self.ui.node_graph_state.select_single(node_id);
+                    } else {
+                        self.ui.node_graph_state.clear_selection();
+                    }
                     self.gpu.buffer_dirty = true;
                 }
                 Action::DeleteSelected => {
@@ -91,7 +95,9 @@ impl SdfApp {
                     if !locked {
                         self.doc.scene.remove_node(id);
                         if self.ui.node_graph_state.selected == Some(id) {
-                            self.ui.node_graph_state.selected = None;
+                            self.ui.node_graph_state.clear_selection();
+                        } else {
+                            self.ui.node_graph_state.selected_set.remove(&id);
                         }
                         self.ui.node_graph_state.needs_initial_rebuild = true;
                         self.doc.sculpt_state = SculptState::Inactive;
@@ -120,7 +126,11 @@ impl SdfApp {
                         self.doc.history.undo(&self.doc.scene, self.ui.node_graph_state.selected)
                     {
                         self.doc.scene = restored_scene;
-                        self.ui.node_graph_state.selected = restored_sel;
+                        if let Some(id) = restored_sel {
+                            self.ui.node_graph_state.select_single(id);
+                        } else {
+                            self.ui.node_graph_state.clear_selection();
+                        }
                         self.ui.node_graph_state.needs_initial_rebuild = true;
                         self.ui.isolation_state = None;
                         self.gpu.buffer_dirty = true;
@@ -131,7 +141,11 @@ impl SdfApp {
                         self.doc.history.redo(&self.doc.scene, self.ui.node_graph_state.selected)
                     {
                         self.doc.scene = restored_scene;
-                        self.ui.node_graph_state.selected = restored_sel;
+                        if let Some(id) = restored_sel {
+                            self.ui.node_graph_state.select_single(id);
+                        } else {
+                            self.ui.node_graph_state.clear_selection();
+                        }
                         self.ui.node_graph_state.needs_initial_rebuild = true;
                         self.ui.isolation_state = None;
                         self.gpu.buffer_dirty = true;
@@ -266,7 +280,7 @@ impl SdfApp {
                                     let extent = self.scene_avg_extent();
                                     self.doc.active_tool = crate::sculpt::ActiveTool::Sculpt;
                                     self.doc.sculpt_state = SculptState::new_active_with_radius(sculpt_id, extent);
-                                    self.ui.node_graph_state.selected = Some(sculpt_id);
+                                    self.ui.node_graph_state.select_single(sculpt_id);
                                     self.ensure_brush_settings_tab();
                                 } else {
                                     // Case 3: non-sculpt node — open convert dialog
@@ -351,7 +365,7 @@ impl SdfApp {
                                     let extent = self.scene_avg_extent();
                                     self.doc.active_tool = crate::sculpt::ActiveTool::Sculpt;
                                     self.doc.sculpt_state = SculptState::new_active_with_radius(sculpt_id, extent);
-                                    self.ui.node_graph_state.selected = Some(sculpt_id);
+                                    self.ui.node_graph_state.select_single(sculpt_id);
                                     self.ensure_brush_settings_tab();
                                 }
                             }
@@ -364,42 +378,42 @@ impl SdfApp {
                 // ── Scene mutations (structural) ─────────────────────
                 Action::CreatePrimitive(prim) => {
                     let id = self.doc.scene.create_primitive(prim);
-                    self.ui.node_graph_state.selected = Some(id);
+                    self.ui.node_graph_state.select_single(id);
                     self.ui.node_graph_state.needs_initial_rebuild = true;
                     self.ui.node_graph_state.pending_center_node = Some(id);
                     self.gpu.buffer_dirty = true;
                 }
                 Action::CreateOperation { op, left, right } => {
                     let id = self.doc.scene.create_operation(op.clone(), left, right);
-                    self.ui.node_graph_state.selected = Some(id);
+                    self.ui.node_graph_state.select_single(id);
                     self.ui.node_graph_state.needs_initial_rebuild = true;
                     self.ui.node_graph_state.pending_center_node = Some(id);
                     self.gpu.buffer_dirty = true;
                 }
                 Action::CreateTransform { input } => {
                     let id = self.doc.scene.create_transform(input);
-                    self.ui.node_graph_state.selected = Some(id);
+                    self.ui.node_graph_state.select_single(id);
                     self.ui.node_graph_state.needs_initial_rebuild = true;
                     self.ui.node_graph_state.pending_center_node = Some(id);
                     self.gpu.buffer_dirty = true;
                 }
                 Action::CreateModifier { kind, input } => {
                     let id = self.doc.scene.create_modifier(kind, input);
-                    self.ui.node_graph_state.selected = Some(id);
+                    self.ui.node_graph_state.select_single(id);
                     self.ui.node_graph_state.needs_initial_rebuild = true;
                     self.ui.node_graph_state.pending_center_node = Some(id);
                     self.gpu.buffer_dirty = true;
                 }
                 Action::InsertModifierAbove { target, kind } => {
                     let new_id = self.doc.scene.insert_modifier_above(target, kind);
-                    self.ui.node_graph_state.selected = Some(new_id);
+                    self.ui.node_graph_state.select_single(new_id);
                     self.ui.node_graph_state.needs_initial_rebuild = true;
                     self.ui.node_graph_state.pending_center_node = Some(new_id);
                     self.gpu.buffer_dirty = true;
                 }
                 Action::InsertTransformAbove { target } => {
                     let new_id = self.doc.scene.insert_transform_above(target);
-                    self.ui.node_graph_state.selected = Some(new_id);
+                    self.ui.node_graph_state.select_single(new_id);
                     self.ui.node_graph_state.needs_initial_rebuild = true;
                     self.ui.node_graph_state.pending_center_node = Some(new_id);
                     self.gpu.buffer_dirty = true;
@@ -727,7 +741,7 @@ impl SdfApp {
                 self.doc.scene = project.scene;
                 self.doc.camera = project.camera;
                 self.doc.history = History::new();
-                self.ui.node_graph_state.selected = None;
+                self.ui.node_graph_state.clear_selection();
                 self.ui.node_graph_state.needs_initial_rebuild = true;
                 self.doc.sculpt_state = SculptState::Inactive;
                 self.gpu.current_structure_key = 0;
@@ -760,7 +774,7 @@ impl SdfApp {
                     _ => {}
                 }
             }
-            self.ui.node_graph_state.selected = Some(new_id);
+            self.ui.node_graph_state.select_single(new_id);
             self.ui.node_graph_state.needs_initial_rebuild = true;
             self.gpu.buffer_dirty = true;
         }
