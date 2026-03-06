@@ -13,6 +13,28 @@ pub enum ExportDialogResult {
     Closed,
 }
 
+/// Format large voxel counts with K/M suffixes for readability.
+fn format_voxel_count(voxels: u64) -> String {
+    if voxels >= 1_000_000 {
+        format!("{:.1}M", voxels as f64 / 1_000_000.0)
+    } else if voxels >= 1_000 {
+        format!("{:.0}K", voxels as f64 / 1_000.0)
+    } else {
+        format!("{}", voxels)
+    }
+}
+
+/// Format vertex counts with K/M suffixes.
+fn format_vertex_count(verts: u64) -> String {
+    if verts >= 1_000_000 {
+        format!("{:.1}M", verts as f64 / 1_000_000.0)
+    } else if verts >= 1_000 {
+        format!("{:.0}K", verts as f64 / 1_000.0)
+    } else {
+        format!("{}", verts)
+    }
+}
+
 /// Draw the export mesh dialog. Returns the user's action.
 pub fn draw(
     ctx: &egui::Context,
@@ -51,28 +73,42 @@ pub fn draw(
                 ui.add_space(4.0);
             }
 
-            // Resolution slider (step 16 for clean grid sizes)
+            // Resolution input
             let mut res_i32 = settings.export_resolution as i32;
             ui.horizontal(|ui| {
                 ui.label("Resolution:");
                 ui.add(
-                    egui::Slider::new(&mut res_i32, 32..=512)
-                        .step_by(16.0)
+                    egui::DragValue::new(&mut res_i32)
+                        .speed(1)
+                        .range(16..=2048)
                         .suffix("^3"),
                 );
             });
-            settings.export_resolution = res_i32 as u32;
+            settings.export_resolution = (res_i32 as u32).clamp(16, 2048);
 
-            // Estimated vertex count (rough heuristic: ~1% of voxels become vertices)
-            let voxels = (settings.export_resolution as u64).pow(3);
-            let estimated_vertices = voxels / 100;
+            // Marching cubes estimate: surface-crossing cells ≈ 6*N^2 (sphere-like),
+            // each generates ~2 triangles and ~3 unique vertices on average.
+            let res = settings.export_resolution as u64;
+            let voxels = res.pow(3);
+            let mem_mb = (voxels as f64 * 4.0) / (1024.0 * 1024.0);
+            let estimated_tris = 6 * res * res * 2;
+            let estimated_verts = estimated_tris * 3 / 2; // ~1.5 verts per tri after dedup
             ui.weak(format!(
-                "{} voxels — ~{} estimated vertices",
-                voxels, estimated_vertices
+                "{} voxels ({:.1} MB)",
+                format_voxel_count(voxels), mem_mb
+            ));
+            ui.weak(format!(
+                "~{} triangles, ~{} vertices (estimate for typical geometry)",
+                format_vertex_count(estimated_tris), format_vertex_count(estimated_verts)
             ));
 
-            // High resolution warning
-            if settings.export_resolution > 256 {
+            // Warnings
+            if settings.export_resolution > 512 {
+                ui.colored_label(
+                    egui::Color32::from_rgb(255, 100, 100),
+                    format!("Warning: {:.0} MB — export may take very long or run out of memory", mem_mb),
+                );
+            } else if settings.export_resolution > 256 {
                 ui.colored_label(
                     egui::Color32::YELLOW,
                     "High resolution — export may take longer",

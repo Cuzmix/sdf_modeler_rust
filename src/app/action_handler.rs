@@ -9,6 +9,13 @@ use super::actions::{Action, SculptConvertMode};
 use super::state::SculptConvertDialog;
 use super::SdfApp;
 
+/// Maximum storage buffer binding size configured for wgpu (128MB).
+const MAX_STORAGE_BUFFER_BYTES: u64 = 1 << 27;
+
+/// Maximum safe sculpt resolution per node (cube root of max voxels at 4 bytes each).
+/// 320^3 * 4 = 131,072,000 bytes < 128MB limit. 322 is the true max but 320 is a clean value.
+pub const MAX_SCULPT_RESOLUTION: u32 = 320;
+
 impl SdfApp {
     /// Process all collected actions. This is the single mutation point — the
     /// equivalent of a Redux reducer. All structural state changes flow through
@@ -311,6 +318,8 @@ impl SdfApp {
                             created: crate::compat::Instant::now(),
                             duration: crate::compat::Duration::from_secs(4),
                         });
+                    } else if !self.validate_sculpt_resolution(resolution) {
+                        // Resolution too high — toast already shown by validate fn
                     } else {
                         // Determine the subtree root and flatten flag based on convert mode
                         let (subtree_root, flatten) = match mode {
@@ -469,12 +478,14 @@ impl SdfApp {
                 // ── Bake / Export ────────────────────────────────────
                 Action::RequestBake(req) => {
                     let baking = !matches!(self.async_state.bake_status, super::BakeStatus::Idle);
-                    if !baking {
-                        if req.flatten {
-                            self.start_async_bake(req, ctx);
-                        } else {
-                            self.apply_instant_displacement_bake(req);
-                        }
+                    if baking {
+                        // Already baking — skip
+                    } else if !self.validate_sculpt_resolution(req.resolution) {
+                        // Resolution too high — toast already shown by validate fn
+                    } else if req.flatten {
+                        self.start_async_bake(req, ctx);
+                    } else {
+                        self.apply_instant_displacement_bake(req);
                     }
                 }
                 Action::ShowExportDialog => {
@@ -716,6 +727,26 @@ impl SdfApp {
     }
 
     /// Ensure the Brush Settings tab is visible in the dock when sculpt mode activates.
+    /// Check if the requested sculpt resolution fits within the GPU storage buffer limit.
+    /// Returns true if valid, false (with toast error) if too large.
+    fn validate_sculpt_resolution(&mut self, resolution: u32) -> bool {
+        let voxel_bytes = (resolution as u64).pow(3) * 4;
+        if voxel_bytes > MAX_STORAGE_BUFFER_BYTES {
+            let mem_mb = voxel_bytes as f64 / (1024.0 * 1024.0);
+            self.ui.toasts.push(super::Toast {
+                message: format!(
+                    "Resolution {}^3 requires {:.0} MB — exceeds GPU buffer limit of {} MB. Max safe resolution is {}.",
+                    resolution, mem_mb, MAX_STORAGE_BUFFER_BYTES / (1024 * 1024), MAX_SCULPT_RESOLUTION
+                ),
+                is_error: true,
+                created: crate::compat::Instant::now(),
+                duration: crate::compat::Duration::from_secs(6),
+            });
+            return false;
+        }
+        true
+    }
+
     /// Compute average half-extent of the scene bounding box for adaptive brush sizing.
     pub(super) fn scene_avg_extent(&self) -> f32 {
         let (min, max) = self.doc.scene.compute_bounds();

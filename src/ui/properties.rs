@@ -377,6 +377,17 @@ fn draw_multi_properties(
     }
 }
 
+/// Format large voxel counts with K/M suffixes for readability.
+fn format_voxel_count(voxels: u64) -> String {
+    if voxels >= 1_000_000 {
+        format!("{:.1}M", voxels as f64 / 1_000_000.0)
+    } else if voxels >= 1_000 {
+        format!("{:.0}K", voxels as f64 / 1_000.0)
+    } else {
+        format!("{}", voxels)
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn draw(
     ui: &mut egui::Ui,
@@ -860,15 +871,39 @@ pub fn draw(
             egui::CollapsingHeader::new("Sculpting")
                 .default_open(true)
                 .show(ui, |ui| {
-                    let mut res_i32 = desired_resolution as i32;
+                    // Resolution presets
                     ui.horizontal(|ui| {
                         ui.label("Resolution:");
-                        ui.add(egui::Slider::new(&mut res_i32, 32..=256).suffix("^3"));
+                        for &(label, res) in &[("Low", 32u32), ("Med", 64), ("High", 96), ("Ultra", 128), ("Max", 256)] {
+                            if ui.selectable_label(desired_resolution == res, label).clicked() {
+                                desired_resolution = res;
+                            }
+                        }
                     });
-                    desired_resolution = res_i32 as u32;
+                    // Custom input (max 320 — GPU storage buffer limit)
+                    ui.horizontal(|ui| {
+                        ui.label("Custom:");
+                        let mut res_i32 = desired_resolution as i32;
+                        if ui.add(
+                            egui::DragValue::new(&mut res_i32)
+                                .speed(1)
+                                .range(16..=320)
+                                .suffix("^3"),
+                        ).changed() {
+                            desired_resolution = (res_i32 as u32).clamp(16, 320);
+                        }
+                    });
                     let voxels = (desired_resolution as u64).pow(3);
-                    let mem_mb = (voxels * 4) as f64 / (1024.0 * 1024.0);
-                    ui.weak(format!("{} voxels ({:.1} MB)", voxels, mem_mb));
+                    let mem_mb = (voxels as f64 * 4.0) / (1024.0 * 1024.0);
+                    ui.weak(format!("{} voxels ({:.1} MB)", format_voxel_count(voxels), mem_mb));
+                    if desired_resolution > 256 {
+                        ui.colored_label(
+                            egui::Color32::from_rgb(255, 100, 100),
+                            format!("Warning: {:.0} MB RAM — may cause slowdowns or crashes", mem_mb),
+                        );
+                    } else if desired_resolution > 128 {
+                        ui.colored_label(egui::Color32::YELLOW, "High resolution — sculpting may be slower");
+                    }
                 });
 
             let sculpt_active = sculpt_state.active_node() == Some(id);

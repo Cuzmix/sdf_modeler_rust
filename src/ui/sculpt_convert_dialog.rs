@@ -47,24 +47,50 @@ pub fn draw(
 
             ui.add_space(12.0);
 
-            // Resolution picker — discrete steps
+            // Resolution presets
             ui.horizontal(|ui| {
                 ui.label("Resolution:");
-                let resolutions: &[u32] = &[32, 48, 64, 96, 128];
-                for &res in resolutions {
-                    let label = format!("{}", res);
-                    if ui.selectable_label(state.resolution == res, &label).clicked() {
+                for &(label, res) in &[("Low", 32u32), ("Medium", 64), ("High", 96), ("Ultra", 128), ("Extreme", 256)] {
+                    if ui.selectable_label(state.resolution == res, label).clicked() {
                         state.resolution = res;
                     }
                 }
             });
 
+            // Custom resolution input
+            ui.horizontal(|ui| {
+                ui.label("Custom:");
+                let mut res_i32 = state.resolution as i32;
+                let response = ui.add(
+                    egui::DragValue::new(&mut res_i32)
+                        .speed(1)
+                        .range(16..=320)
+                        .suffix("^3"),
+                );
+                if response.changed() {
+                    state.resolution = (res_i32 as u32).clamp(16, 320);
+                }
+            });
+
+            // Stats and warnings
             let voxels = (state.resolution as u64).pow(3);
+            let mem_mb = (voxels as f64 * 4.0) / (1024.0 * 1024.0);
             ui.weak(format!(
-                "{} voxels (~{:.1} MB)",
-                voxels,
-                (voxels as f64 * 4.0) / (1024.0 * 1024.0)
+                "{} voxels ({:.1} MB)",
+                format_voxel_count(voxels), mem_mb
             ));
+
+            if state.resolution > 256 {
+                ui.colored_label(
+                    egui::Color32::from_rgb(255, 100, 100),
+                    format!("Warning: {:.0} MB RAM — may cause slowdowns or crashes", mem_mb),
+                );
+            } else if state.resolution > 128 {
+                ui.colored_label(
+                    egui::Color32::YELLOW,
+                    "High resolution — sculpting may be slower",
+                );
+            }
 
             if state.mode == SculptConvertMode::BakeWholeSceneFlatten {
                 ui.add_space(4.0);
@@ -98,5 +124,16 @@ pub fn draw(
         *dialog = None;
     } else if do_cancel {
         *dialog = None;
+    }
+}
+
+/// Format large voxel counts with K/M suffixes for readability.
+fn format_voxel_count(voxels: u64) -> String {
+    if voxels >= 1_000_000 {
+        format!("{:.1}M", voxels as f64 / 1_000_000.0)
+    } else if voxels >= 1_000 {
+        format!("{:.0}K", voxels as f64 / 1_000.0)
+    } else {
+        format!("{}", voxels)
     }
 }
