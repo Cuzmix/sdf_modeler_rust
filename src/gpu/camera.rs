@@ -114,6 +114,8 @@ impl Camera {
         brush_pos: [f32; 4],
         cross_section: [f32; 4],
         light_data: [[f32; 4]; 4],
+        scene_light_info: [f32; 4],
+        scene_lights: [[f32; 4]; 32],
     ) -> CameraUniform {
         let aspect = viewport[2] / viewport[3].max(1.0);
         let view = self.view_matrix();
@@ -136,6 +138,8 @@ impl Camera {
             key_color_spec: light_data[1],
             fill_light: light_data[2],
             fill_color_ambient: light_data[3],
+            scene_light_info,
+            scene_lights,
         }
     }
 
@@ -233,4 +237,9 @@ pub struct CameraUniform {
     pub fill_light: [f32; 4],
     /// Fill light color and ambient: [color.r, color.g, color.b, ambient_intensity].
     pub fill_color_ambient: [f32; 4],
+    /// Scene light info: [count, 0, 0, 0].
+    pub scene_light_info: [f32; 4],
+    /// Scene lights: up to 8 lights × 4 vec4f = 32 vec4f.
+    /// Each light: [position.xyz, type], [direction.xyz, intensity], [color.rgb, range], [cos_half_spot, 0, 0, 0].
+    pub scene_lights: [[f32; 4]; 32],
 }

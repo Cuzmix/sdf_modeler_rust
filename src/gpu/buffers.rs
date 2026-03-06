@@ -2,7 +2,10 @@ use std::collections::HashMap;
 
 use bytemuck::{Pod, Zeroable};
 
-use crate::graph::scene::{NodeData, NodeId, Scene};
+use crate::graph::scene::{LightType, NodeData, NodeId, Scene};
+
+/// Maximum number of scene lights passed to the GPU.
+pub const MAX_SCENE_LIGHTS: usize = 8;
 
 /// 128-byte GPU node (8 x vec4f).
 #[repr(C)]
@@ -191,4 +194,105 @@ pub fn build_node_buffer(
     }
 
     buffer
+}
+
+/// GPU representation of a scene light (4 × vec4f = 64 bytes).
+/// Packed into the camera uniform buffer as a flat array of vec4f.
+#[repr(C)]
+#[derive(Copy, Clone, Pod, Zeroable)]
+pub struct SceneLightGpu {
+    /// xyz = world position, w = light_type (0=point, 1=spot, 2=directional)
+    pub position_type: [f32; 4],
+    /// xyz = direction (normalized), w = intensity
+    pub direction_intensity: [f32; 4],
+    /// rgb = color, w = range
+    pub color_range: [f32; 4],
+    /// x = cos(half_spot_angle), y = 0, z = 0, w = 0
+    pub params: [f32; 4],
+}
+
+/// Collect visible Light nodes from the scene, sorted by distance to camera (nearest first).
+/// Returns up to MAX_SCENE_LIGHTS lights packed as SceneLightGpu.
+pub fn collect_scene_lights(scene: &Scene, camera_pos: glam::Vec3) -> (u32, Vec<SceneLightGpu>) {
+    let parent_map = scene.build_parent_map();
+    let mut lights: Vec<(f32, SceneLightGpu)> = Vec::new();
+
+    for (&id, node) in &scene.nodes {
+        if let NodeData::Light {
+            light_type,
+            color,
+            intensity,
+            range,
+            spot_angle,
+        } = &node.data
+        {
+            if scene.is_hidden(id) {
+                continue;
+            }
+
+            // Find the parent Transform to get world position and rotation
+            let Some(&transform_id) = parent_map.get(&id) else {
+                continue;
+            };
+            let Some(transform_node) = scene.nodes.get(&transform_id) else {
+                continue;
+            };
+            let NodeData::Transform {
+                translation,
+                rotation,
+                ..
+            } = &transform_node.data
+            else {
+                continue;
+            };
+
+            // Compute direction from rotation (default light direction is -Y)
+            let direction = rotate_euler_light(glam::Vec3::NEG_Y, *rotation);
+            let direction = if direction.length_squared() > 0.001 {
+                direction.normalize()
+            } else {
+                glam::Vec3::NEG_Y
+            };
+
+            let type_val = match light_type {
+                LightType::Point => 0.0,
+                LightType::Spot => 1.0,
+                LightType::Directional => 2.0,
+            };
+
+            let half_angle_rad = (spot_angle * 0.5).to_radians();
+            let cos_half_angle = half_angle_rad.cos();
+
+            let dist_to_camera = (*translation - camera_pos).length();
+
+            lights.push((
+                dist_to_camera,
+                SceneLightGpu {
+                    position_type: [translation.x, translation.y, translation.z, type_val],
+                    direction_intensity: [direction.x, direction.y, direction.z, *intensity],
+                    color_range: [color.x, color.y, color.z, *range],
+                    params: [cos_half_angle, 0.0, 0.0, 0.0],
+                },
+            ));
+        }
+    }
+
+    // Sort by distance to camera (nearest first)
+    lights.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+
+    let count = lights.len().min(MAX_SCENE_LIGHTS) as u32;
+    let gpu_lights: Vec<SceneLightGpu> = lights.into_iter().take(MAX_SCENE_LIGHTS).map(|(_, l)| l).collect();
+
+    (count, gpu_lights)
+}
+
+/// Euler XYZ rotation (matches light_gizmo.rs / gizmo.rs convention).
+fn rotate_euler_light(p: glam::Vec3, r: glam::Vec3) -> glam::Vec3 {
+    let mut q = p;
+    let (sx, cx) = r.x.sin_cos();
+    q = glam::Vec3::new(q.x, cx * q.y - sx * q.z, sx * q.y + cx * q.z);
+    let (sy, cy) = r.y.sin_cos();
+    q = glam::Vec3::new(cy * q.x + sy * q.z, q.y, -sy * q.x + cy * q.z);
+    let (sz, cz) = r.z.sin_cos();
+    glam::Vec3::new(cz * q.x - sz * q.y, sz * q.x + cz * q.y, q.z)
 }

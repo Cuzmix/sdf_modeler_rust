@@ -542,3 +542,44 @@ sliders) and scene tree yellow dot icon already existed from PRD #21. This itera
 added the viewport visualization and click selection that were missing.
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (285/285) ✓
+
+--- Iteration 20: PRD #23 — Integrate scene light nodes into PBR rendering pipeline ---
+COMPLETED. Scene Light nodes now contribute to PBR lighting in real-time.
+
+Changes:
+- src/gpu/buffers.rs: Added MAX_SCENE_LIGHTS constant (8), SceneLightGpu struct (4 × vec4f
+  per light: position+type, direction+intensity, color+range, params), and
+  collect_scene_lights() function. Collects visible Light nodes from the scene, extracts
+  world position/direction from parent Transform, sorts by distance to camera (nearest
+  first), returns up to 8 lights. Added rotate_euler_light() helper matching the convention
+  in light_gizmo.rs.
+- src/gpu/camera.rs: Extended CameraUniform with scene_light_info ([f32;4] for count) and
+  scene_lights ([[f32;4]; 32] — 8 lights × 4 vec4f flat). Updated to_uniform() signature
+  to accept scene_light_info and scene_lights parameters.
+- src/shaders/bindings.wgsl: Extended Camera struct with scene_light_info (vec4f) and
+  scene_lights (array<vec4f, 32>) fields.
+- src/shaders/rendering.wgsl: Added scene light loop in Full PBR shading path (after
+  global key/fill lights, before environment reflection). For each scene light:
+  - Point lights: direction from surface to light position, inverse-square falloff with
+    range-based windowing (smooth window = (1 - (d/r)^2)^2 / d^2).
+  - Spot lights: same as point + cone falloff using cos(half_angle) with smooth inner/outer
+    transition (inner cone at 80% of outer angle).
+  - Directional lights: constant direction (negated), no attenuation.
+  - Full Cook-Torrance GGX BRDF (D_GGX, G_SmithGGX, F_Schlick) evaluated per scene light,
+    same quality as global lights.
+  - Scene lights ADD to global lighting (key/fill/ambient preserved as defaults).
+  - Shadows computed for key light only (too expensive for all scene lights in real-time).
+- src/ui/viewport/draw.rs: Computes scene light data once per frame via
+  collect_scene_lights(), packs into flat arrays, passes to render uniform. Pick uniforms
+  pass zeroed light data (pick doesn't need lighting).
+- src/app/async_tasks.rs: Screenshot uniform now includes scene light data.
+
+Design decisions:
+- Packed lights into camera uniform buffer instead of separate storage buffer. 8 lights ×
+  4 vec4f = 512 bytes is well within uniform limits and avoids new bind group complexity.
+- Distance-sorted culling: when >8 lights exist, the 8 nearest to camera are active.
+  This is the industry-standard forward rendering approach.
+- Range-based windowing: smooth quadratic falloff avoids hard light cutoff at range boundary.
+- Spot inner cone at 80% of outer: provides natural smooth falloff without extra parameters.
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (285/285) ✓

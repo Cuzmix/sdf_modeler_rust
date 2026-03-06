@@ -174,7 +174,17 @@ impl SdfApp {
         let height = 1080u32;
         let scene_bounds = self.doc.scene.compute_bounds();
         let viewport = [0.0, 0.0, width as f32, height as f32];
-        let uniform = self.doc.camera.to_uniform(viewport, 0.0, 0.0, false, scene_bounds, -1.0, 0.0, [0.0; 4], [0.0; 4], self.settings.render.light_uniform_data());
+        let (scene_light_count, scene_light_list) =
+            crate::gpu::buffers::collect_scene_lights(&self.doc.scene, self.doc.camera.eye());
+        let scene_light_info = [scene_light_count as f32, 0.0, 0.0, 0.0];
+        let mut scene_lights_flat = [[0.0_f32; 4]; 32];
+        for (i, light) in scene_light_list.iter().enumerate() {
+            scene_lights_flat[i * 4] = light.position_type;
+            scene_lights_flat[i * 4 + 1] = light.direction_intensity;
+            scene_lights_flat[i * 4 + 2] = light.color_range;
+            scene_lights_flat[i * 4 + 3] = light.params;
+        }
+        let uniform = self.doc.camera.to_uniform(viewport, 0.0, 0.0, false, scene_bounds, -1.0, 0.0, [0.0; 4], [0.0; 4], self.settings.render.light_uniform_data(), scene_light_info, scene_lights_flat);
 
         let pixels = resources.screenshot(
             &self.gpu.render_state.device,

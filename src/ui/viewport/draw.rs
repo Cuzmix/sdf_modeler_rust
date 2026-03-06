@@ -532,6 +532,18 @@ pub fn draw(
         0.0,
         0.0,
     ];
+    // Collect scene lights for the GPU (up to 8, sorted by distance to camera)
+    let (scene_light_count, scene_light_list) =
+        crate::gpu::buffers::collect_scene_lights(scene, camera.eye());
+    let scene_light_info = [scene_light_count as f32, 0.0, 0.0, 0.0];
+    let mut scene_lights_flat = [[0.0_f32; 4]; 32];
+    for (i, light) in scene_light_list.iter().enumerate() {
+        scene_lights_flat[i * 4] = light.position_type;
+        scene_lights_flat[i * 4 + 1] = light.direction_intensity;
+        scene_lights_flat[i * 4 + 2] = light.color_range;
+        scene_lights_flat[i * 4 + 3] = light.params;
+    }
+
     let render_uniform = camera.to_uniform(
         render_viewport,
         time,
@@ -543,6 +555,8 @@ pub fn draw(
         brush_pos,
         cross_section,
         render_config.light_uniform_data(),
+        scene_light_info,
+        scene_lights_flat,
     );
 
     ui.painter().add(egui_wgpu::Callback::new_paint_callback(
@@ -677,6 +691,8 @@ pub fn draw(
                             [0.0; 4],
                             [0.0; 4],
                             [[0.0; 4]; 4],
+                            [0.0; 4],
+                            [[0.0; 4]; 32],
                         ),
                         ctrl_held: false, // Ctrl used for sculpt inversion, not multi-select
                     });
@@ -724,6 +740,8 @@ pub fn draw(
                             [0.0; 4],
                             [0.0; 4],
                             [[0.0; 4]; 4],
+                            [0.0; 4],
+                            [[0.0; 4]; 32],
                         ),
                         ctrl_held: false,
                     });
@@ -834,7 +852,7 @@ pub fn draw(
                     (pos.y - rect.min.y) * pixels_per_point,
                 ];
                 let pick_uniform =
-                    camera.to_uniform(viewport, time, 0.0, false, scene_bounds, -1.0, 0.0, [0.0; 4], [0.0; 4], [[0.0; 4]; 4]);
+                    camera.to_uniform(viewport, time, 0.0, false, scene_bounds, -1.0, 0.0, [0.0; 4], [0.0; 4], [[0.0; 4]; 4], [0.0; 4], [[0.0; 4]; 32]);
                 let ctrl_held = ui.input(|i| i.modifiers.ctrl);
                 output.pending_pick = Some(PendingPick {
                     mouse_pos: mouse_px,

@@ -19,6 +19,9 @@ struct Camera {
     key_color_spec: vec4f,  // color.rgb, spec_intensity
     fill_light: vec4f,      // dir.xyz, fill_intensity
     fill_color_ambient: vec4f, // color.rgb, ambient_intensity
+    // Scene lights (up to 8, packed as 4 vec4f per light)
+    scene_light_info: vec4f,   // x = count, yzw = unused
+    scene_lights: array<vec4f, 32>, // 8 lights × 4 vec4f
 }
 
 struct SdfNode {

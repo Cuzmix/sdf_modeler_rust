@@ -123,7 +123,7 @@
     "category": "rendering",
     "description": "Integrate scene light nodes into the PBR rendering pipeline.\n\nSteps:\n1. In src/gpu/buffers.rs: upload LightGpu array to a storage buffer. Each light: position [f32;4], direction [f32;4], color [f32;4] (rgb+intensity), params [f32;4] (range, spot_angle, light_type, 0).\n2. In src/gpu/codegen.rs or shader_templates.rs: add a light count uniform and light storage buffer binding.\n3. In src/shaders/rendering.wgsl: add a loop over scene lights (max 8). For each light:\n   - Compute light direction and attenuation (inverse square falloff for point/spot, none for directional).\n   - For spot lights: apply cone falloff based on angle.\n   - Evaluate Cook-Torrance BRDF (from task 19) for each light.\n   - Accumulate diffuse + specular contribution.\n4. Keep the existing global key/fill lights as defaults. Scene lights ADD to global lighting.\n5. Compute shadows for the key light only (shadowing all lights would be too expensive for real-time SDF).",
     "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: place a red point light near a white sphere — sphere shows red illumination on the near side. Move light — illumination follows. Multiple lights accumulate. Spot light creates cone of light.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 24,
