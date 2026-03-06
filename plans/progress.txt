@@ -17,3 +17,36 @@ Sprint initialized. No iterations completed yet.
 - Helper: `empty_scene()` creates a Scene with no nodes for predictable testing
 - All 16 tests pass. cargo check, clippy, and full test suite clean.
 - Files changed: `src/graph/history.rs`, `plans/prd.json`, `plans/progress.txt`
+
+## Iteration 2 — PRD #1: Scene graph operations unit tests
+- Added 46 unit tests to `src/graph/scene.rs` covering:
+  - Scene::new creates default sphere
+  - add_node returns incrementing IDs
+  - create_primitive/operation/transform/modifier factory methods
+  - next_name counter incrementing
+  - remove_node patches parent references (Operation, Transform)
+  - remove nonexistent returns None
+  - toggle_visibility hides/unhides
+  - top_level_nodes excludes children, includes orphans
+  - is_descendant direct children and grandchildren
+  - is_valid_drop_target: rejects same node, cycle, primitive, full operation; accepts free slot
+  - reparent moves node between parents
+  - detach_from_parent nulls reference
+  - swap_children swaps left/right
+  - set_left_child / set_right_child / set_sculpt_input
+  - insert_modifier_above rewires parent chain
+  - insert_transform_above rewires parent chain
+  - build_parent_map maps children→parents
+  - collect_subtree gathers all descendants
+  - visible_topo_order: post-order, skips hidden subtrees
+  - duplicate_subtree: independent copy with remapped IDs, " Copy" names
+  - structure_key: changes on topology, stable on parameter change
+  - data_fingerprint: changes on parameter change
+  - compute_bounds: default for empty, encloses sphere, accounts for translation
+  - content_eq: identical scenes, detects position change, detects hidden difference
+  - NodeData::children: primitive=0, operation=2, partial operation=1
+  - find_sculpt_parent returns None without sculpt ancestor
+  - subtree_has_sculpt false without sculpt nodes
+- Helper: `empty_scene()` creates a Scene with no nodes for predictable testing
+- All 62 tests pass (16 history + 46 scene). cargo check, clippy clean.
+- Files changed: `src/graph/scene.rs`, `plans/prd.json`, `plans/progress.txt`

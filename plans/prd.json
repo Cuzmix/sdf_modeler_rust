@@ -4,7 +4,7 @@
     "category": "testing",
     "description": "Add unit tests for Scene graph operations (add/remove/reparent nodes, compute_bounds)",
     "verification": "cargo test -- graph passes with meaningful coverage of scene tree mutations",
-    "passes": false
+    "passes": true
   },
   {
     "id": 2,

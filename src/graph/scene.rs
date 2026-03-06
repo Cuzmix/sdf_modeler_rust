@@ -1636,3 +1636,646 @@ impl Scene {
         true
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Create an empty scene (no default sphere) for predictable testing.
+    fn empty_scene() -> Scene {
+        Scene {
+            nodes: HashMap::new(),
+            next_id: 0,
+            name_counters: HashMap::new(),
+            hidden_nodes: HashSet::new(),
+        }
+    }
+
+    // ── Scene::new ──────────────────────────────────────────────────
+
+    #[test]
+    fn new_scene_has_one_sphere() {
+        let scene = Scene::new();
+        assert_eq!(scene.nodes.len(), 1);
+        let node = scene.nodes.values().next().unwrap();
+        assert!(matches!(node.data, NodeData::Primitive { kind: SdfPrimitive::Sphere, .. }));
+    }
+
+    // ── add_node / create factories ─────────────────────────────────
+
+    #[test]
+    fn add_node_returns_incrementing_ids() {
+        let mut scene = empty_scene();
+        let id_a = scene.create_primitive(SdfPrimitive::Sphere);
+        let id_b = scene.create_primitive(SdfPrimitive::Box);
+        assert_eq!(id_b, id_a + 1);
+        assert_eq!(scene.nodes.len(), 2);
+    }
+
+    #[test]
+    fn create_operation_links_children() {
+        let mut scene = empty_scene();
+        let left = scene.create_primitive(SdfPrimitive::Sphere);
+        let right = scene.create_primitive(SdfPrimitive::Box);
+        let op = scene.create_operation(CsgOp::Union, Some(left), Some(right));
+        match &scene.nodes[&op].data {
+            NodeData::Operation { left: l, right: r, .. } => {
+                assert_eq!(*l, Some(left));
+                assert_eq!(*r, Some(right));
+            }
+            _ => panic!("expected Operation"),
+        }
+    }
+
+    #[test]
+    fn create_transform_links_input() {
+        let mut scene = empty_scene();
+        let prim = scene.create_primitive(SdfPrimitive::Cylinder);
+        let xform = scene.create_transform(Some(prim));
+        match &scene.nodes[&xform].data {
+            NodeData::Transform { input, .. } => assert_eq!(*input, Some(prim)),
+            _ => panic!("expected Transform"),
+        }
+    }
+
+    #[test]
+    fn create_modifier_links_input() {
+        let mut scene = empty_scene();
+        let prim = scene.create_primitive(SdfPrimitive::Sphere);
+        let modifier = scene.create_modifier(ModifierKind::Round, Some(prim));
+        match &scene.nodes[&modifier].data {
+            NodeData::Modifier { input, kind, .. } => {
+                assert_eq!(*input, Some(prim));
+                assert_eq!(*kind, ModifierKind::Round);
+            }
+            _ => panic!("expected Modifier"),
+        }
+    }
+
+    // ── next_name ───────────────────────────────────────────────────
+
+    #[test]
+    fn next_name_increments_counter() {
+        let mut scene = empty_scene();
+        assert_eq!(scene.next_name("Sphere"), "Sphere");
+        assert_eq!(scene.next_name("Sphere"), "Sphere 2");
+        assert_eq!(scene.next_name("Sphere"), "Sphere 3");
+        assert_eq!(scene.next_name("Box"), "Box"); // independent counter
+    }
+
+    // ── remove_node ─────────────────────────────────────────────────
+
+    #[test]
+    fn remove_node_patches_operation_parent() {
+        let mut scene = empty_scene();
+        let child = scene.create_primitive(SdfPrimitive::Sphere);
+        let op = scene.create_operation(CsgOp::Union, Some(child), None);
+
+        let removed = scene.remove_node(child);
+        assert!(removed.is_some());
+        assert!(!scene.nodes.contains_key(&child));
+
+        // Parent's left slot should be nulled
+        match &scene.nodes[&op].data {
+            NodeData::Operation { left, .. } => assert_eq!(*left, None),
+            _ => panic!("expected Operation"),
+        }
+    }
+
+    #[test]
+    fn remove_node_patches_transform_parent() {
+        let mut scene = empty_scene();
+        let child = scene.create_primitive(SdfPrimitive::Box);
+        let xform = scene.create_transform(Some(child));
+
+        scene.remove_node(child);
+        match &scene.nodes[&xform].data {
+            NodeData::Transform { input, .. } => assert_eq!(*input, None),
+            _ => panic!("expected Transform"),
+        }
+    }
+
+    #[test]
+    fn remove_nonexistent_node_returns_none() {
+        let mut scene = empty_scene();
+        assert!(scene.remove_node(999).is_none());
+    }
+
+    // ── visibility ──────────────────────────────────────────────────
+
+    #[test]
+    fn toggle_visibility_hides_and_unhides() {
+        let mut scene = empty_scene();
+        let id = scene.create_primitive(SdfPrimitive::Sphere);
+        assert!(!scene.is_hidden(id));
+        scene.toggle_visibility(id);
+        assert!(scene.is_hidden(id));
+        scene.toggle_visibility(id);
+        assert!(!scene.is_hidden(id));
+    }
+
+    // ── top_level_nodes ─────────────────────────────────────────────
+
+    #[test]
+    fn top_level_nodes_excludes_children() {
+        let mut scene = empty_scene();
+        let child_a = scene.create_primitive(SdfPrimitive::Sphere);
+        let child_b = scene.create_primitive(SdfPrimitive::Box);
+        let op = scene.create_operation(CsgOp::Union, Some(child_a), Some(child_b));
+
+        let tops = scene.top_level_nodes();
+        assert_eq!(tops, vec![op]);
+    }
+
+    #[test]
+    fn top_level_nodes_includes_orphans() {
+        let mut scene = empty_scene();
+        let a = scene.create_primitive(SdfPrimitive::Sphere);
+        let b = scene.create_primitive(SdfPrimitive::Box);
+
+        let mut tops = scene.top_level_nodes();
+        tops.sort();
+        assert_eq!(tops, vec![a, b]);
+    }
+
+    // ── is_descendant ───────────────────────────────────────────────
+
+    #[test]
+    fn is_descendant_detects_children() {
+        let mut scene = empty_scene();
+        let child = scene.create_primitive(SdfPrimitive::Sphere);
+        let parent = scene.create_operation(CsgOp::Union, Some(child), None);
+        assert!(scene.is_descendant(child, parent));
+        assert!(!scene.is_descendant(parent, child));
+    }
+
+    #[test]
+    fn is_descendant_detects_grandchildren() {
+        let mut scene = empty_scene();
+        let grandchild = scene.create_primitive(SdfPrimitive::Sphere);
+        let child = scene.create_transform(Some(grandchild));
+        let root = scene.create_operation(CsgOp::Union, Some(child), None);
+        assert!(scene.is_descendant(grandchild, root));
+        assert!(!scene.is_descendant(root, grandchild));
+    }
+
+    // ── is_valid_drop_target ────────────────────────────────────────
+
+    #[test]
+    fn drop_target_rejects_same_node() {
+        let mut scene = empty_scene();
+        let id = scene.create_primitive(SdfPrimitive::Sphere);
+        assert!(!scene.is_valid_drop_target(id, id));
+    }
+
+    #[test]
+    fn drop_target_rejects_descendant_cycle() {
+        let mut scene = empty_scene();
+        let child = scene.create_primitive(SdfPrimitive::Sphere);
+        let parent = scene.create_operation(CsgOp::Union, Some(child), None);
+        // Dropping parent onto child would create a cycle
+        assert!(!scene.is_valid_drop_target(child, parent));
+    }
+
+    #[test]
+    fn drop_target_rejects_primitive() {
+        let mut scene = empty_scene();
+        let prim = scene.create_primitive(SdfPrimitive::Sphere);
+        let dragged = scene.create_primitive(SdfPrimitive::Box);
+        assert!(!scene.is_valid_drop_target(prim, dragged));
+    }
+
+    #[test]
+    fn drop_target_accepts_operation_with_free_slot() {
+        let mut scene = empty_scene();
+        let op = scene.create_operation(CsgOp::Union, None, None);
+        let dragged = scene.create_primitive(SdfPrimitive::Sphere);
+        assert!(scene.is_valid_drop_target(op, dragged));
+    }
+
+    #[test]
+    fn drop_target_rejects_full_operation() {
+        let mut scene = empty_scene();
+        let left = scene.create_primitive(SdfPrimitive::Sphere);
+        let right = scene.create_primitive(SdfPrimitive::Box);
+        let op = scene.create_operation(CsgOp::Union, Some(left), Some(right));
+        let dragged = scene.create_primitive(SdfPrimitive::Cylinder);
+        assert!(!scene.is_valid_drop_target(op, dragged));
+    }
+
+    // ── reparent / detach ───────────────────────────────────────────
+
+    #[test]
+    fn reparent_moves_node_to_new_parent() {
+        let mut scene = empty_scene();
+        let child = scene.create_primitive(SdfPrimitive::Sphere);
+        let old_parent = scene.create_operation(CsgOp::Union, Some(child), None);
+        let new_parent = scene.create_operation(CsgOp::Subtract, None, None);
+
+        scene.reparent(child, new_parent);
+
+        // Old parent's slot should be empty
+        match &scene.nodes[&old_parent].data {
+            NodeData::Operation { left, .. } => assert_eq!(*left, None),
+            _ => panic!(),
+        }
+        // New parent's left slot should have child
+        match &scene.nodes[&new_parent].data {
+            NodeData::Operation { left, .. } => assert_eq!(*left, Some(child)),
+            _ => panic!(),
+        }
+    }
+
+    #[test]
+    fn detach_from_parent_nulls_reference() {
+        let mut scene = empty_scene();
+        let child = scene.create_primitive(SdfPrimitive::Sphere);
+        let parent = scene.create_transform(Some(child));
+
+        scene.detach_from_parent(child);
+        match &scene.nodes[&parent].data {
+            NodeData::Transform { input, .. } => assert_eq!(*input, None),
+            _ => panic!(),
+        }
+    }
+
+    // ── swap_children ───────────────────────────────────────────────
+
+    #[test]
+    fn swap_children_swaps_left_and_right() {
+        let mut scene = empty_scene();
+        let left = scene.create_primitive(SdfPrimitive::Sphere);
+        let right = scene.create_primitive(SdfPrimitive::Box);
+        let op = scene.create_operation(CsgOp::Subtract, Some(left), Some(right));
+
+        scene.swap_children(op);
+        match &scene.nodes[&op].data {
+            NodeData::Operation { left: l, right: r, .. } => {
+                assert_eq!(*l, Some(right));
+                assert_eq!(*r, Some(left));
+            }
+            _ => panic!(),
+        }
+    }
+
+    // ── set_left_child / set_right_child / set_sculpt_input ─────────
+
+    #[test]
+    fn set_left_right_child() {
+        let mut scene = empty_scene();
+        let op = scene.create_operation(CsgOp::Union, None, None);
+        let prim = scene.create_primitive(SdfPrimitive::Sphere);
+
+        scene.set_left_child(op, Some(prim));
+        match &scene.nodes[&op].data {
+            NodeData::Operation { left, right, .. } => {
+                assert_eq!(*left, Some(prim));
+                assert_eq!(*right, None);
+            }
+            _ => panic!(),
+        }
+
+        let prim2 = scene.create_primitive(SdfPrimitive::Box);
+        scene.set_right_child(op, Some(prim2));
+        match &scene.nodes[&op].data {
+            NodeData::Operation { right, .. } => assert_eq!(*right, Some(prim2)),
+            _ => panic!(),
+        }
+    }
+
+    #[test]
+    fn set_sculpt_input_updates_transform() {
+        let mut scene = empty_scene();
+        let xform = scene.create_transform(None);
+        let prim = scene.create_primitive(SdfPrimitive::Sphere);
+
+        scene.set_sculpt_input(xform, Some(prim));
+        match &scene.nodes[&xform].data {
+            NodeData::Transform { input, .. } => assert_eq!(*input, Some(prim)),
+            _ => panic!(),
+        }
+    }
+
+    // ── insert_modifier_above ───────────────────────────────────────
+
+    #[test]
+    fn insert_modifier_above_rewires_parent() {
+        let mut scene = empty_scene();
+        let prim = scene.create_primitive(SdfPrimitive::Sphere);
+        let op = scene.create_operation(CsgOp::Union, Some(prim), None);
+
+        let mod_id = scene.insert_modifier_above(prim, ModifierKind::Round);
+
+        // Operation's left should now point to modifier
+        match &scene.nodes[&op].data {
+            NodeData::Operation { left, .. } => assert_eq!(*left, Some(mod_id)),
+            _ => panic!(),
+        }
+        // Modifier's input should point to prim
+        match &scene.nodes[&mod_id].data {
+            NodeData::Modifier { input, .. } => assert_eq!(*input, Some(prim)),
+            _ => panic!(),
+        }
+    }
+
+    // ── insert_transform_above ──────────────────────────────────────
+
+    #[test]
+    fn insert_transform_above_rewires_parent() {
+        let mut scene = empty_scene();
+        let prim = scene.create_primitive(SdfPrimitive::Sphere);
+        let op = scene.create_operation(CsgOp::Union, Some(prim), None);
+
+        let xform_id = scene.insert_transform_above(prim);
+
+        match &scene.nodes[&op].data {
+            NodeData::Operation { left, .. } => assert_eq!(*left, Some(xform_id)),
+            _ => panic!(),
+        }
+        match &scene.nodes[&xform_id].data {
+            NodeData::Transform { input, .. } => assert_eq!(*input, Some(prim)),
+            _ => panic!(),
+        }
+    }
+
+    // ── build_parent_map ────────────────────────────────────────────
+
+    #[test]
+    fn build_parent_map_maps_children_to_parents() {
+        let mut scene = empty_scene();
+        let child = scene.create_primitive(SdfPrimitive::Sphere);
+        let parent = scene.create_transform(Some(child));
+        let root = scene.create_operation(CsgOp::Union, Some(parent), None);
+
+        let parent_map = scene.build_parent_map();
+        assert_eq!(parent_map.get(&child), Some(&parent));
+        assert_eq!(parent_map.get(&parent), Some(&root));
+        assert_eq!(parent_map.get(&root), None);
+    }
+
+    // ── collect_subtree ─────────────────────────────────────────────
+
+    #[test]
+    fn collect_subtree_gathers_all_descendants() {
+        let mut scene = empty_scene();
+        let leaf_a = scene.create_primitive(SdfPrimitive::Sphere);
+        let leaf_b = scene.create_primitive(SdfPrimitive::Box);
+        let root = scene.create_operation(CsgOp::Union, Some(leaf_a), Some(leaf_b));
+
+        let subtree = scene.collect_subtree(root);
+        assert_eq!(subtree.len(), 3);
+        assert!(subtree.contains(&root));
+        assert!(subtree.contains(&leaf_a));
+        assert!(subtree.contains(&leaf_b));
+    }
+
+    // ── visible_topo_order ──────────────────────────────────────────
+
+    #[test]
+    fn visible_topo_order_is_post_order() {
+        let mut scene = empty_scene();
+        let left = scene.create_primitive(SdfPrimitive::Sphere);
+        let right = scene.create_primitive(SdfPrimitive::Box);
+        let root = scene.create_operation(CsgOp::Union, Some(left), Some(right));
+
+        let order = scene.visible_topo_order();
+        // Post-order: children before parent
+        let root_pos = order.iter().position(|&id| id == root).unwrap();
+        let left_pos = order.iter().position(|&id| id == left).unwrap();
+        let right_pos = order.iter().position(|&id| id == right).unwrap();
+        assert!(left_pos < root_pos);
+        assert!(right_pos < root_pos);
+    }
+
+    #[test]
+    fn visible_topo_order_skips_hidden_subtrees() {
+        let mut scene = empty_scene();
+        let left = scene.create_primitive(SdfPrimitive::Sphere);
+        let right = scene.create_primitive(SdfPrimitive::Box);
+        let root = scene.create_operation(CsgOp::Union, Some(left), Some(right));
+
+        scene.toggle_visibility(left);
+        let order = scene.visible_topo_order();
+        assert!(order.contains(&root));
+        assert!(order.contains(&right));
+        assert!(!order.contains(&left));
+    }
+
+    // ── duplicate_subtree ───────────────────────────────────────────
+
+    #[test]
+    fn duplicate_subtree_creates_independent_copy() {
+        let mut scene = empty_scene();
+        let leaf = scene.create_primitive(SdfPrimitive::Sphere);
+        let root = scene.create_operation(CsgOp::Union, Some(leaf), None);
+
+        let new_root = scene.duplicate_subtree(root).unwrap();
+        assert_ne!(new_root, root);
+
+        // New root should have a remapped child, not the original leaf
+        match &scene.nodes[&new_root].data {
+            NodeData::Operation { left, .. } => {
+                let new_leaf = left.unwrap();
+                assert_ne!(new_leaf, leaf);
+                assert!(scene.nodes.contains_key(&new_leaf));
+            }
+            _ => panic!(),
+        }
+
+        // Original tree is unchanged
+        match &scene.nodes[&root].data {
+            NodeData::Operation { left, .. } => assert_eq!(*left, Some(leaf)),
+            _ => panic!(),
+        }
+
+        // Names have " Copy" appended
+        assert!(scene.nodes[&new_root].name.ends_with(" Copy"));
+    }
+
+    #[test]
+    fn duplicate_nonexistent_returns_none() {
+        let mut scene = empty_scene();
+        assert!(scene.duplicate_subtree(999).is_none());
+    }
+
+    // ── structure_key ───────────────────────────────────────────────
+
+    #[test]
+    fn structure_key_changes_on_topology_change() {
+        let mut scene = empty_scene();
+        let prim = scene.create_primitive(SdfPrimitive::Sphere);
+        let key_before = scene.structure_key();
+
+        scene.create_operation(CsgOp::Union, Some(prim), None);
+        let key_after = scene.structure_key();
+        assert_ne!(key_before, key_after);
+    }
+
+    #[test]
+    fn structure_key_stable_on_parameter_change() {
+        let mut scene = empty_scene();
+        let prim = scene.create_primitive(SdfPrimitive::Sphere);
+        let key_before = scene.structure_key();
+
+        // Change position (parameter, not topology)
+        if let Some(node) = scene.nodes.get_mut(&prim) {
+            if let NodeData::Primitive { position, .. } = &mut node.data {
+                *position = Vec3::new(5.0, 5.0, 5.0);
+            }
+        }
+        let key_after = scene.structure_key();
+        assert_eq!(key_before, key_after);
+    }
+
+    // ── data_fingerprint ────────────────────────────────────────────
+
+    #[test]
+    fn data_fingerprint_changes_on_parameter_change() {
+        let mut scene = empty_scene();
+        let prim = scene.create_primitive(SdfPrimitive::Sphere);
+        let fp_before = scene.data_fingerprint();
+
+        if let Some(node) = scene.nodes.get_mut(&prim) {
+            if let NodeData::Primitive { position, .. } = &mut node.data {
+                *position = Vec3::new(5.0, 5.0, 5.0);
+            }
+        }
+        let fp_after = scene.data_fingerprint();
+        assert_ne!(fp_before, fp_after);
+    }
+
+    // ── compute_bounds ──────────────────────────────────────────────
+
+    #[test]
+    fn compute_bounds_default_for_empty_scene() {
+        let scene = empty_scene();
+        let (bmin, bmax) = scene.compute_bounds();
+        assert_eq!(bmin, [-5.0; 3]);
+        assert_eq!(bmax, [5.0; 3]);
+    }
+
+    #[test]
+    fn compute_bounds_encloses_sphere_at_origin() {
+        let scene = Scene::new(); // has a unit sphere at origin
+        let (bmin, bmax) = scene.compute_bounds();
+        // Sphere radius=1 at origin, padding=1.5 → bounds should be at least [-2.5, 2.5]
+        for i in 0..3 {
+            assert!(bmin[i] <= -2.5, "bmin[{}] = {} should be <= -2.5", i, bmin[i]);
+            assert!(bmax[i] >= 2.5, "bmax[{}] = {} should be >= 2.5", i, bmax[i]);
+        }
+    }
+
+    #[test]
+    fn compute_bounds_accounts_for_translation() {
+        let mut scene = empty_scene();
+        let prim = scene.create_primitive(SdfPrimitive::Sphere);
+        let xform = scene.create_transform(Some(prim));
+        if let Some(node) = scene.nodes.get_mut(&xform) {
+            if let NodeData::Transform { translation, .. } = &mut node.data {
+                *translation = Vec3::new(10.0, 0.0, 0.0);
+            }
+        }
+
+        let (_bmin, bmax) = scene.compute_bounds();
+        // Sphere at x=10, radius=1, padding=1.5 → bmax.x >= 10+1+1.5=12.5
+        assert!(bmax[0] >= 12.5, "bmax[0] = {} should be >= 12.5", bmax[0]);
+    }
+
+    // ── content_eq ──────────────────────────────────────────────────
+
+    #[test]
+    fn content_eq_identical_scenes() {
+        let scene = Scene::new();
+        let clone = scene.clone();
+        assert!(scene.content_eq(&clone));
+    }
+
+    #[test]
+    fn content_eq_detects_position_change() {
+        let scene = Scene::new();
+        let mut modified = scene.clone();
+        let id = *modified.nodes.keys().next().unwrap();
+        if let Some(node) = modified.nodes.get_mut(&id) {
+            if let NodeData::Primitive { position, .. } = &mut node.data {
+                *position = Vec3::new(99.0, 0.0, 0.0);
+            }
+        }
+        assert!(!scene.content_eq(&modified));
+    }
+
+    #[test]
+    fn content_eq_detects_hidden_node_difference() {
+        let scene = Scene::new();
+        let mut modified = scene.clone();
+        let id = *modified.nodes.keys().next().unwrap();
+        modified.hidden_nodes.insert(id);
+        assert!(!scene.content_eq(&modified));
+    }
+
+    // ── NodeData::children ──────────────────────────────────────────
+
+    #[test]
+    fn node_data_children_primitive_has_none() {
+        let data = NodeData::Primitive {
+            kind: SdfPrimitive::Sphere,
+            position: Vec3::ZERO,
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+            color: Vec3::ONE,
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        };
+        assert_eq!(data.children().count(), 0);
+    }
+
+    #[test]
+    fn node_data_children_operation_has_two() {
+        let data = NodeData::Operation {
+            op: CsgOp::Union,
+            smooth_k: 0.0,
+            left: Some(1),
+            right: Some(2),
+        };
+        let children: Vec<_> = data.children().collect();
+        assert_eq!(children, vec![1, 2]);
+    }
+
+    #[test]
+    fn node_data_children_operation_partial() {
+        let data = NodeData::Operation {
+            op: CsgOp::Union,
+            smooth_k: 0.0,
+            left: Some(1),
+            right: None,
+        };
+        let children: Vec<_> = data.children().collect();
+        assert_eq!(children, vec![1]);
+    }
+
+    // ── find_sculpt_parent ──────────────────────────────────────────
+
+    #[test]
+    fn find_sculpt_parent_returns_none_without_sculpt() {
+        let mut scene = empty_scene();
+        let prim = scene.create_primitive(SdfPrimitive::Sphere);
+        let xform = scene.create_transform(Some(prim));
+        let _root = scene.create_operation(CsgOp::Union, Some(xform), None);
+
+        let parent_map = scene.build_parent_map();
+        assert_eq!(scene.find_sculpt_parent(prim, &parent_map), None);
+    }
+
+    // ── subtree_has_sculpt ──────────────────────────────────────────
+
+    #[test]
+    fn subtree_has_sculpt_false_without_sculpt() {
+        let mut scene = empty_scene();
+        let prim = scene.create_primitive(SdfPrimitive::Sphere);
+        let root = scene.create_operation(CsgOp::Union, Some(prim), None);
+        assert!(!scene.subtree_has_sculpt(root));
+    }
+}
