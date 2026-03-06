@@ -388,8 +388,9 @@ impl SdfApp {
 
     // ── Import Mesh ──────────────────────────────────────────────────────
 
+    /// Open a file picker, load the mesh, and show the import settings dialog.
     #[cfg(not(target_arch = "wasm32"))]
-    pub(super) fn start_import(&mut self, ctx: &egui::Context) {
+    pub(super) fn open_import_dialog(&mut self) {
         let Some(path) = rfd::FileDialog::new()
             .set_title("Import Mesh")
             .add_filter("Wavefront OBJ", &["obj"])
@@ -418,7 +419,28 @@ impl SdfApp {
             .and_then(|n| n.to_str())
             .unwrap_or("mesh")
             .to_string();
-        let resolution = 64u32;
+
+        let max_res = self.settings.max_sculpt_resolution;
+        self.ui.import_dialog = Some(
+            super::state::ImportDialog::new(mesh, filename, max_res)
+        );
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(super) fn open_import_dialog(&mut self) {
+        log::warn!("Mesh import is not supported on web");
+    }
+
+    /// Start the voxelization thread with the user-chosen resolution.
+    /// Called after the user confirms the import dialog.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn start_import_voxelize(&mut self, resolution: u32, ctx: &egui::Context) {
+        let Some(dialog) = self.ui.import_dialog.take() else {
+            return;
+        };
+
+        let mesh = dialog.mesh;
+        let filename = dialog.filename;
         let progress = Arc::new(AtomicU32::new(0));
         let progress_clone = Arc::clone(&progress);
         let cancelled = Arc::new(AtomicBool::new(false));
@@ -429,7 +451,7 @@ impl SdfApp {
         std::thread::spawn(move || {
             let result = crate::mesh_import::mesh_to_sdf(&mesh, resolution, &progress_clone);
             if cancelled_clone.load(std::sync::atomic::Ordering::Relaxed) {
-                return; // Drop the result, don't send
+                return;
             }
             let _ = tx.send(result);
             ctx_clone.request_repaint();
@@ -445,7 +467,7 @@ impl SdfApp {
     }
 
     #[cfg(target_arch = "wasm32")]
-    pub(super) fn start_import(&mut self, _ctx: &egui::Context) {
+    pub(super) fn start_import_voxelize(&mut self, _resolution: u32, _ctx: &egui::Context) {
         log::warn!("Mesh import is not supported on web");
     }
 

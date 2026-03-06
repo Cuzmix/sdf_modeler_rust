@@ -283,6 +283,7 @@ impl SdfApp {
                 command_palette_query: String::new(),
                 command_palette_selected: 0,
                 sculpt_convert_dialog: None,
+                import_dialog: None,
                 show_quick_toolbar: false,
                 rebinding_action: None,
                 active_light_ids: std::collections::HashSet::new(),
@@ -400,6 +401,14 @@ impl eframe::App for SdfApp {
         crate::ui::sculpt_convert_dialog::draw(
             ctx,
             &mut self.ui.sculpt_convert_dialog,
+            &mut action_sink,
+            self.settings.max_sculpt_resolution,
+        );
+
+        // Import mesh settings dialog
+        crate::ui::import_dialog::draw(
+            ctx,
+            &mut self.ui.import_dialog,
             &mut action_sink,
             self.settings.max_sculpt_resolution,
         );

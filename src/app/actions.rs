@@ -113,6 +113,8 @@ pub enum Action {
     RequestBake(BakeRequest),
     ShowExportDialog,
     ImportMesh,
+    /// User confirmed the import dialog — start voxelization with chosen resolution.
+    CommitImport { resolution: u32 },
     TakeScreenshot,
 
     // ── Viewport ────────────────────────────────────────────────────

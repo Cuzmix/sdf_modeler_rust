@@ -493,8 +493,20 @@ impl SdfApp {
                 }
                 Action::ImportMesh => {
                     let importing = !matches!(self.async_state.import_status, super::ImportStatus::Idle);
+                    if !importing && self.ui.import_dialog.is_none() {
+                        self.open_import_dialog();
+                    }
+                }
+                Action::CommitImport { resolution } => {
+                    let importing = !matches!(self.async_state.import_status, super::ImportStatus::Idle);
                     if !importing {
-                        self.start_import(ctx);
+                        if !self.validate_sculpt_resolution(resolution) {
+                            // Resolution too high — toast already shown, clear dialog
+                            self.ui.import_dialog = None;
+                        } else {
+                            // start_import_voxelize takes dialog via .take()
+                            self.start_import_voxelize(resolution, ctx);
+                        }
                     }
                 }
                 Action::TakeScreenshot => {

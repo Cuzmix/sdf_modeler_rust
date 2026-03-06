@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use eframe::egui_wgpu::RenderState;
 use egui_dock::DockState;
@@ -10,6 +11,7 @@ use crate::gpu::camera::Camera;
 use crate::gpu::picking::PendingPick;
 use crate::graph::history::History;
 use crate::graph::scene::{NodeId, Scene};
+use crate::mesh_import::TriMesh;
 use crate::sculpt::{ActiveTool, SculptState};
 use crate::sculpt_history::SculptHistory;
 use crate::ui::dock::Tab;
@@ -123,6 +125,63 @@ impl SculptConvertDialog {
     }
 }
 
+/// State for the import mesh dialog shown after picking a file.
+pub struct ImportDialog {
+    /// The loaded triangle mesh (shared with the voxelize thread when committed).
+    pub mesh: Arc<TriMesh>,
+    /// Display filename (e.g. "bunny.obj").
+    pub filename: String,
+    /// User-chosen voxel resolution.
+    pub resolution: u32,
+    /// Auto-calculated resolution suggestion based on mesh stats.
+    pub auto_resolution: u32,
+    /// Whether the user is using the auto-calculated resolution.
+    pub use_auto: bool,
+    /// Mesh vertex count (cached for display).
+    pub vertex_count: usize,
+    /// Mesh triangle count (cached for display).
+    pub triangle_count: usize,
+    /// Mesh bounding box dimensions (cached for display).
+    pub bounds_size: Vec3,
+}
+
+impl ImportDialog {
+    pub fn new(mesh: TriMesh, filename: String, max_resolution: u32) -> Self {
+        let vertex_count = mesh.vertices.len();
+        let triangle_count = mesh.triangles.len();
+
+        // Compute mesh bounds for display
+        let mut mesh_min = Vec3::splat(f32::MAX);
+        let mut mesh_max = Vec3::splat(f32::MIN);
+        for v in &mesh.vertices {
+            mesh_min = mesh_min.min(*v);
+            mesh_max = mesh_max.max(*v);
+        }
+        let bounds_size = mesh_max - mesh_min;
+
+        // Auto-calculate resolution: scale with cube root of triangle count.
+        // ~2.5x multiplier gives reasonable results:
+        //   1K tris → 25 → clamped to 32
+        //   8K tris → 50
+        //  64K tris → 100
+        // 500K tris → 198
+        let auto_resolution = ((triangle_count as f32).cbrt() * 2.5)
+            .round()
+            .clamp(32.0, max_resolution as f32) as u32;
+
+        Self {
+            mesh: Arc::new(mesh),
+            filename,
+            resolution: auto_resolution,
+            auto_resolution,
+            use_auto: true,
+            vertex_count,
+            triangle_count,
+            bounds_size,
+        }
+    }
+}
+
 pub struct UiState {
     pub dock_state: DockState<Tab>,
     pub node_graph_state: NodeGraphState,
@@ -143,6 +202,8 @@ pub struct UiState {
     pub command_palette_selected: usize,
     /// Open "Convert to Sculpt" dialog state (None = hidden).
     pub sculpt_convert_dialog: Option<SculptConvertDialog>,
+    /// Open "Import Mesh" settings dialog state (None = hidden).
+    pub import_dialog: Option<ImportDialog>,
     /// Quick Primitives floating toolbar (Shift+A).
     pub show_quick_toolbar: bool,
     /// Keybinding editor: which action is currently waiting for a key press (None = not rebinding).
@@ -175,4 +236,104 @@ pub struct PerfState {
     pub timings: FrameTimings,
     pub resolution_upgrade_pending: bool,
     pub composite_full_update_needed: bool,
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::mesh_import::TriMesh;
+
+    /// Create a simple test mesh (two triangles forming a 2x2x0 quad).
+    fn test_quad_mesh(num_triangles: usize) -> TriMesh {
+        let mut vertices = vec![
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(2.0, 0.0, 0.0),
+            Vec3::new(2.0, 2.0, 0.0),
+            Vec3::new(0.0, 2.0, 0.0),
+            Vec3::new(0.0, 0.0, 1.0),
+        ];
+        let mut triangles = vec![[0, 1, 2], [0, 2, 3]];
+        // Pad with duplicate triangles to reach desired count
+        while triangles.len() < num_triangles {
+            let base = vertices.len() as u32;
+            vertices.push(Vec3::new(0.0, 0.0, 0.0));
+            vertices.push(Vec3::new(1.0, 0.0, 0.0));
+            vertices.push(Vec3::new(0.0, 1.0, 0.0));
+            triangles.push([base, base + 1, base + 2]);
+        }
+        TriMesh { vertices, triangles }
+    }
+
+    #[test]
+    fn import_dialog_auto_resolution_small_mesh() {
+        let mesh = test_quad_mesh(100);
+        let dialog = ImportDialog::new(mesh, "test.obj".into(), 320);
+        // cbrt(100) * 2.5 = 4.64 * 2.5 = 11.6 → clamped to 32
+        assert_eq!(dialog.auto_resolution, 32);
+        assert_eq!(dialog.resolution, 32);
+        assert!(dialog.use_auto);
+    }
+
+    #[test]
+    fn import_dialog_auto_resolution_medium_mesh() {
+        let mesh = test_quad_mesh(8000);
+        let dialog = ImportDialog::new(mesh, "test.obj".into(), 320);
+        // cbrt(8000) = 20, * 2.5 = 50
+        assert_eq!(dialog.auto_resolution, 50);
+    }
+
+    #[test]
+    fn import_dialog_auto_resolution_large_mesh() {
+        let mesh = test_quad_mesh(64000);
+        let dialog = ImportDialog::new(mesh, "test.obj".into(), 320);
+        // cbrt(64000) = 40, * 2.5 = 100
+        assert_eq!(dialog.auto_resolution, 100);
+    }
+
+    #[test]
+    fn import_dialog_auto_resolution_clamped_to_max() {
+        let mesh = test_quad_mesh(500_000);
+        let dialog = ImportDialog::new(mesh, "test.obj".into(), 128);
+        // cbrt(500000) * 2.5 ≈ 198, but max is 128
+        assert_eq!(dialog.auto_resolution, 128);
+    }
+
+    #[test]
+    fn import_dialog_preserves_mesh_stats() {
+        let mesh = test_quad_mesh(2);
+        let vert_count = mesh.vertices.len();
+        let tri_count = mesh.triangles.len();
+        let dialog = ImportDialog::new(mesh, "monkey.obj".into(), 320);
+        assert_eq!(dialog.vertex_count, vert_count);
+        assert_eq!(dialog.triangle_count, tri_count);
+        assert_eq!(dialog.filename, "monkey.obj");
+    }
+
+    #[test]
+    fn import_dialog_bounds_size_computed() {
+        let mesh = TriMesh {
+            vertices: vec![
+                Vec3::new(-1.0, -2.0, -3.0),
+                Vec3::new(4.0, 5.0, 6.0),
+                Vec3::new(0.0, 0.0, 0.0),
+            ],
+            triangles: vec![[0, 1, 2]],
+        };
+        let dialog = ImportDialog::new(mesh, "test.obj".into(), 320);
+        assert!((dialog.bounds_size.x - 5.0).abs() < f32::EPSILON);
+        assert!((dialog.bounds_size.y - 7.0).abs() < f32::EPSILON);
+        assert!((dialog.bounds_size.z - 9.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn import_dialog_defaults_to_auto() {
+        let mesh = test_quad_mesh(1000);
+        let dialog = ImportDialog::new(mesh, "test.obj".into(), 320);
+        assert!(dialog.use_auto);
+        assert_eq!(dialog.resolution, dialog.auto_resolution);
+    }
 }

@@ -3,6 +3,7 @@ pub mod command_palette;
 pub mod dock;
 pub mod export_dialog;
 pub mod export_progress;
+pub mod import_dialog;
 pub mod gizmo;
 pub mod help;
 pub mod light_gizmo;
