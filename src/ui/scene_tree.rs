@@ -29,6 +29,7 @@ pub fn draw(
     drag_state: &mut Option<NodeId>,
     actions: &mut ActionSink,
     search_filter: &mut String,
+    active_light_ids: &std::collections::HashSet<NodeId>,
 ) {
     ui.heading("Scene Tree");
 
@@ -75,14 +76,14 @@ pub fn draw(
         }
 
         for id in matching {
-            draw_flat_node(ui, scene, id, selected, selected_set, renaming, rename_buf, actions);
+            draw_flat_node(ui, scene, id, selected, selected_set, renaming, rename_buf, actions, active_light_ids);
         }
         return;
     }
 
     let mut visited = HashSet::new();
     for id in tops {
-        draw_node_recursive(ui, scene, id, selected, selected_set, renaming, rename_buf, &mut visited, drag_state, actions);
+        draw_node_recursive(ui, scene, id, selected, selected_set, renaming, rename_buf, &mut visited, drag_state, actions, active_light_ids);
     }
 
     // "Drop here to make top-level" area when dragging
@@ -221,6 +222,7 @@ fn draw_node_recursive(
     visited: &mut HashSet<NodeId>,
     drag_state: &mut Option<NodeId>,
     actions: &mut ActionSink,
+    active_light_ids: &std::collections::HashSet<NodeId>,
 ) {
     if !visited.insert(id) {
         ui.label(format!("  (cycle: #{})", id));
@@ -260,7 +262,15 @@ fn draw_node_recursive(
     };
 
     // Pre-fetch type color before mutable borrows
-    let type_dot_color = scene.nodes.get(&id).map(|n| node_type_color(&n.data)).unwrap_or(COLOR_NORMAL);
+    // Dim inactive light nodes (lights beyond the MAX_SCENE_LIGHTS nearest to camera)
+    let is_inactive_light = scene.nodes.get(&id).is_some_and(|n| {
+        matches!(n.data, NodeData::Light { .. }) && !active_light_ids.contains(&id)
+    });
+    let type_dot_color = if is_inactive_light {
+        egui::Color32::from_gray(100) // dimmed gray for inactive lights
+    } else {
+        scene.nodes.get(&id).map(|n| node_type_color(&n.data)).unwrap_or(COLOR_NORMAL)
+    };
 
     if info.is_leaf {
         ui.horizontal(|ui| {
@@ -321,7 +331,7 @@ fn draw_node_recursive(
             .show(ui, |ui| {
                 for child_opt in &info.children {
                     if let Some(child_id) = child_opt {
-                        draw_node_recursive(ui, scene, *child_id, selected, selected_set, renaming, rename_buf, visited, drag_state, actions);
+                        draw_node_recursive(ui, scene, *child_id, selected, selected_set, renaming, rename_buf, visited, drag_state, actions, active_light_ids);
                     } else {
                         ui.label("  (empty)");
                     }
@@ -395,9 +405,17 @@ fn draw_flat_node(
     renaming: &mut Option<NodeId>,
     rename_buf: &mut String,
     actions: &mut ActionSink,
+    active_light_ids: &std::collections::HashSet<NodeId>,
 ) {
     let Some(info) = extract_info(scene, id, selected_set) else { return };
-    let dot_color = scene.nodes.get(&id).map(|n| node_type_color(&n.data)).unwrap_or(COLOR_NORMAL);
+    let is_inactive_light = scene.nodes.get(&id).is_some_and(|n| {
+        matches!(n.data, NodeData::Light { .. }) && !active_light_ids.contains(&id)
+    });
+    let dot_color = if is_inactive_light {
+        egui::Color32::from_gray(100)
+    } else {
+        scene.nodes.get(&id).map(|n| node_type_color(&n.data)).unwrap_or(COLOR_NORMAL)
+    };
 
     // Inline rename editor
     if *renaming == Some(id) {

@@ -2,10 +2,7 @@ use std::collections::HashMap;
 
 use bytemuck::{Pod, Zeroable};
 
-use crate::graph::scene::{LightType, NodeData, NodeId, Scene};
-
-/// Maximum number of scene lights passed to the GPU.
-pub const MAX_SCENE_LIGHTS: usize = 8;
+use crate::graph::scene::{LightType, NodeData, NodeId, Scene, MAX_SCENE_LIGHTS};
 
 /// 128-byte GPU node (8 x vec4f).
 #[repr(C)]
@@ -284,6 +281,47 @@ pub fn collect_scene_lights(scene: &Scene, camera_pos: glam::Vec3) -> (u32, Vec<
     let gpu_lights: Vec<SceneLightGpu> = lights.into_iter().take(MAX_SCENE_LIGHTS).map(|(_, l)| l).collect();
 
     (count, gpu_lights)
+}
+
+/// Identify which Light nodes are active (nearest to camera, up to MAX_SCENE_LIGHTS).
+/// Returns (active_light_node_ids, total_light_count).
+pub fn identify_active_lights(
+    scene: &Scene,
+    camera_pos: glam::Vec3,
+) -> (std::collections::HashSet<NodeId>, usize) {
+    let parent_map = scene.build_parent_map();
+    let mut light_distances: Vec<(f32, NodeId)> = Vec::new();
+
+    for (&id, node) in &scene.nodes {
+        if !matches!(node.data, NodeData::Light { .. }) {
+            continue;
+        }
+        if scene.is_hidden(id) {
+            continue;
+        }
+        let Some(&transform_id) = parent_map.get(&id) else {
+            continue;
+        };
+        let Some(transform_node) = scene.nodes.get(&transform_id) else {
+            continue;
+        };
+        let NodeData::Transform { translation, .. } = &transform_node.data else {
+            continue;
+        };
+        let dist = (*translation - camera_pos).length();
+        light_distances.push((dist, id));
+    }
+
+    let total_count = light_distances.len();
+    light_distances.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+
+    let active_ids: std::collections::HashSet<NodeId> = light_distances
+        .iter()
+        .take(MAX_SCENE_LIGHTS)
+        .map(|(_, id)| *id)
+        .collect();
+
+    (active_ids, total_count)
 }
 
 /// Euler XYZ rotation (matches light_gizmo.rs / gizmo.rs convention).

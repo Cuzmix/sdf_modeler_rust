@@ -147,6 +147,13 @@ pub struct UiState {
     pub show_quick_toolbar: bool,
     /// Keybinding editor: which action is currently waiting for a key press (None = not rebinding).
     pub rebinding_action: Option<crate::keymap::ActionBinding>,
+    /// Set of Light NodeIds currently active on GPU (nearest MAX_SCENE_LIGHTS to camera).
+    pub active_light_ids: HashSet<NodeId>,
+    /// Total number of visible lights in the scene (for >8 warning).
+    pub total_light_count: usize,
+    /// The last total light count that triggered a toast warning.
+    /// Used to avoid spamming the same warning repeatedly.
+    pub last_light_warning_count: Option<usize>,
 }
 
 // ---------------------------------------------------------------------------

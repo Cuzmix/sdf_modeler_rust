@@ -377,6 +377,7 @@ fn draw_multi_properties(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn draw(
     ui: &mut egui::Ui,
     scene: &mut Scene,
@@ -385,6 +386,7 @@ pub fn draw(
     sculpt_state: &mut SculptState,
     bake_progress: Option<(u32, u32)>,
     actions: &mut ActionSink,
+    active_light_ids: &HashSet<NodeId>,
 ) {
     // Multi-select: show batch properties when more than 1 node is selected
     if selected_set.len() > 1 {
@@ -1126,6 +1128,18 @@ pub fn draw(
             mut spot_angle,
         } => {
             ui.label("Type: Light");
+            if !active_light_ids.contains(&id) {
+                ui.add_space(4.0);
+                ui.label(
+                    egui::RichText::new(format!(
+                        "This light is inactive (max {} active lights). Move it closer to the camera or remove other lights.",
+                        crate::graph::scene::MAX_SCENE_LIGHTS,
+                    ))
+                    .color(egui::Color32::from_rgb(200, 160, 60))
+                    .small()
+                );
+                ui.add_space(4.0);
+            }
             ui.separator();
 
             let mut new_lt = light_type.clone();

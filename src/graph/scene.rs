@@ -7,6 +7,10 @@ use super::voxel::VoxelGrid;
 
 pub type NodeId = u64;
 
+/// Maximum number of scene lights the GPU can handle simultaneously.
+/// When a scene has more lights than this, the nearest ones to the camera are active.
+pub const MAX_SCENE_LIGHTS: usize = 8;
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum SdfPrimitive {
     Sphere,

@@ -171,6 +171,8 @@ pub struct SdfTabViewer<'a> {
     pub actions: &'a mut ActionSink,
     /// History reference for the history panel tab.
     pub history: &'a History,
+    /// Set of Light NodeIds currently active on GPU (nearest to camera).
+    pub active_light_ids: &'a std::collections::HashSet<NodeId>,
 }
 
 impl<'a> TabViewer for SdfTabViewer<'a> {
@@ -247,6 +249,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.sculpt_state,
                     self.bake_progress,
                     self.actions,
+                    self.active_light_ids,
                 );
                 // Defensive: clear selection if the node was deleted by properties panel
                 if let Some(sel) = self.node_graph_state.selected {
@@ -268,6 +271,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.scene_tree.drag_state,
                     self.actions,
                     self.scene_tree.search_filter,
+                    self.active_light_ids,
                 );
                 // If scene tree changed selection, scroll graph to it
                 if self.node_graph_state.selected != prev_selected {

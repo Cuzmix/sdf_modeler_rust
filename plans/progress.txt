@@ -697,3 +697,43 @@ Design decisions:
   command_palette_open. Only one action can be rebound at a time.
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (295/295) ✓
+
+--- Iteration 24: PRD #30 — Max 8 lights graceful handling ---
+COMPLETED. Added distance culling, toast warnings, and inactive light indicators.
+
+Changes:
+- src/graph/scene.rs: Added MAX_SCENE_LIGHTS constant (8) in the shared scene module,
+  accessible from all crates. Previously was a local constant in buffers.rs.
+- src/gpu/buffers.rs: Removed local MAX_SCENE_LIGHTS constant, now imports from
+  graph::scene. Added identify_active_lights() function that returns (active NodeId set,
+  total light count) by collecting visible Light nodes, computing distance to camera via
+  parent Transform position, sorting by distance, and taking the nearest MAX_SCENE_LIGHTS.
+  collect_scene_lights() already had distance-based sorting (from PRD #23).
+- src/app/state.rs: Added 3 fields to UiState:
+  - active_light_ids: HashSet<NodeId> — which lights are currently active on GPU
+  - total_light_count: usize — total visible lights in scene
+  - last_light_warning_count: Option<usize> — tracks when toast was last shown
+- src/app/mod.rs: Computes active_light_ids each frame before tab viewer creation.
+  Shows toast warning when total lights > MAX_SCENE_LIGHTS, triggered once per count
+  change (not every frame). Warning resets when count drops below limit.
+  Passes active_light_ids to SdfTabViewer for UI consumption.
+- src/ui/dock.rs: Added active_light_ids field to SdfTabViewer. Passes it to
+  scene_tree::draw() and properties::draw() calls.
+- src/ui/scene_tree.rs: Updated draw(), draw_node_recursive(), draw_flat_node() to
+  accept active_light_ids parameter. Inactive Light nodes (not in active set) get
+  dimmed gray dot color (Color32::from_gray(100)) instead of warm yellow, making them
+  visually distinct from active lights.
+- src/ui/properties.rs: Updated draw() to accept active_light_ids. When a Light node
+  is selected and not in the active set, shows a yellow info label: "This light is
+  inactive (max 8 active lights). Move it closer to the camera or remove other lights."
+
+Design decisions:
+- Distance-sorted culling was already in place from PRD #23's collect_scene_lights().
+  This iteration adds the user-facing indicators and warnings.
+- Toast shows once per count change, not continuously. If the user adds a 9th light,
+  they see one toast. Adding a 10th shows another (different count). Removing lights
+  below 8 resets the warning state.
+- identify_active_lights() is separate from collect_scene_lights() to avoid changing
+  the GPU data path. It's lightweight — just distances + NodeIds, no GPU structs.
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (295/295) ✓

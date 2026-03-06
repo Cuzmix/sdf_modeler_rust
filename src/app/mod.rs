@@ -281,6 +281,9 @@ impl SdfApp {
                 sculpt_convert_dialog: None,
                 show_quick_toolbar: false,
                 rebinding_action: None,
+                active_light_ids: std::collections::HashSet::new(),
+                total_light_count: 0,
+                last_light_warning_count: None,
             },
             persistence: PersistenceState {
                 current_file_path: None,
@@ -440,6 +443,36 @@ impl eframe::App for SdfApp {
         } else {
             None
         };
+        // Compute active light set for this frame (used by scene tree + properties)
+        {
+            let (active_ids, total_count) = crate::gpu::buffers::identify_active_lights(
+                &self.doc.scene,
+                self.doc.camera.eye(),
+            );
+            self.ui.active_light_ids = active_ids;
+            self.ui.total_light_count = total_count;
+
+            // Toast warning when scene exceeds the light limit
+            if total_count > crate::graph::scene::MAX_SCENE_LIGHTS {
+                if self.ui.last_light_warning_count != Some(total_count) {
+                    self.ui.last_light_warning_count = Some(total_count);
+                    self.ui.toasts.push(Toast {
+                        message: format!(
+                            "Scene has {} lights — only the {} nearest to camera are active.",
+                            total_count,
+                            crate::graph::scene::MAX_SCENE_LIGHTS,
+                        ),
+                        is_error: false,
+                        created: crate::compat::Instant::now(),
+                        duration: std::time::Duration::from_secs(5),
+                    });
+                }
+            } else {
+                // Reset warning state when count drops below limit
+                self.ui.last_light_warning_count = None;
+            }
+        }
+
         let mut tab_viewer = SdfTabViewer {
             camera: &mut self.doc.camera,
             scene: &mut self.doc.scene,
@@ -476,6 +509,7 @@ impl eframe::App for SdfApp {
             },
             actions: &mut action_sink,
             history: &self.doc.history,
+            active_light_ids: &self.ui.active_light_ids,
         };
 
         egui::CentralPanel::default()
