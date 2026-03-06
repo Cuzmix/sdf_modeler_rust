@@ -1,124 +1,36 @@
-Sprint initialized. No iterations completed yet.
+Sprint 2: UX/UI, Operations, PBR, Lights & Keymap Improvements. No iterations completed yet.
 
-## Iteration 1 — PRD #4: Undo/redo history unit tests
-- Added 16 unit tests to `src/graph/history.rs` covering:
-  - New history is empty (counts and labels)
-  - Push + undo restores previous state
-  - Redo restores undone state
-  - Undo/redo on empty stacks returns None
-  - New changes clear redo stack
-  - Capacity limit (MAX_UNDO_DEPTH=50) evicts oldest entries
-  - No snapshot committed during drag
-  - Snapshot committed when drag ends
-  - Selection changes are tracked
-  - Undo/redo label ordering
-  - detect_change_label: add, delete, select, edit fallback
-  - Multiple undo/redo roundtrip
-- Helper: `empty_scene()` creates a Scene with no nodes for predictable testing
-- All 16 tests pass. cargo check, clippy, and full test suite clean.
-- Files changed: `src/graph/history.rs`, `plans/prd.json`, `plans/progress.txt`
+25 PRD items (IDs 6-30):
+- #6-8: Material blending at CSG boundaries (vec4f pipeline + rendering + smooth sub/int)
+- #9: Offset modifier (erode/dilate)
+- #10-11: Noise WGSL functions + domain warp modifier
+- #12: Quick Primitives toolbar
+- #13: SDF Cross-Section visualization
+- #14-15: Multi-select + batch property editing
+- #16: SmoothSubtract/SmoothIntersect as explicit ops
+- #17-18: Chamfer + Staircase/Columnar boolean operations
+- #19: Cook-Torrance GGX PBR upgrade (Filament reference)
+- #20: Dynamic light uniforms (remove shader constant placeholders)
+- #21-23: Light nodes (data model, viewport icons/gizmos, rendering integration)
+- #24-26: Configurable keymap (data model, input refactor, UI editor + export/import)
+- #27: Comprehensive tests for all new features
+- #28: Configurable export resolution (was hardcoded 128)
+- #29: Undo snapshots for property edits on mouse release (industry-standard)
+- #30: Max 8 lights graceful handling (distance culling, warnings, inactive indicators)
 
-## Iteration 2 — PRD #1: Scene graph operations unit tests
-- Added 46 unit tests to `src/graph/scene.rs` covering:
-  - Scene::new creates default sphere
-  - add_node returns incrementing IDs
-  - create_primitive/operation/transform/modifier factory methods
-  - next_name counter incrementing
-  - remove_node patches parent references (Operation, Transform)
-  - remove nonexistent returns None
-  - toggle_visibility hides/unhides
-  - top_level_nodes excludes children, includes orphans
-  - is_descendant direct children and grandchildren
-  - is_valid_drop_target: rejects same node, cycle, primitive, full operation; accepts free slot
-  - reparent moves node between parents
-  - detach_from_parent nulls reference
-  - swap_children swaps left/right
-  - set_left_child / set_right_child / set_sculpt_input
-  - insert_modifier_above rewires parent chain
-  - insert_transform_above rewires parent chain
-  - build_parent_map maps children→parents
-  - collect_subtree gathers all descendants
-  - visible_topo_order: post-order, skips hidden subtrees
-  - duplicate_subtree: independent copy with remapped IDs, " Copy" names
-  - structure_key: changes on topology, stable on parameter change
-  - data_fingerprint: changes on parameter change
-  - compute_bounds: default for empty, encloses sphere, accounts for translation
-  - content_eq: identical scenes, detects position change, detects hidden difference
-  - NodeData::children: primitive=0, operation=2, partial operation=1
-  - find_sculpt_parent returns None without sculpt ancestor
-  - subtree_has_sculpt false without sculpt nodes
-- Helper: `empty_scene()` creates a Scene with no nodes for predictable testing
-- All 62 tests pass (16 history + 46 scene). cargo check, clippy clean.
-- Files changed: `src/graph/scene.rs`, `plans/prd.json`, `plans/progress.txt`
+--- Iteration 1: PRD #6 — vec2f → vec4f pipeline (material blending infrastructure) ---
+COMPLETED. Expanded scene_sdf return type from vec2f to vec4f across the entire pipeline.
 
-## Iteration 3 — PRD #5: VoxelGrid unit tests
-- Added 57 unit tests to `src/graph/voxel.rs` covering:
-  - VoxelGrid construction: new_displacement creates zero-filled grid
-  - Index layout: z-major ordering (z*res*res + y*res + x)
-  - world_to_grid: maps bounds to grid edges, center maps to half-resolution
-  - grid_to_world: maps edges to bounds, roundtrip consistency
-  - Trilinear sampling: exact at grid corners, interpolates between values, clamps outside bounds, uniform grid returns constant
-  - content_eq: identical grids, detects data/resolution/bounds changes
-  - SDF primitives: sphere (center/surface/outside), box (center/face/outside), plane (above/below), cylinder, torus, capsule
-  - CSG operations: union (min), subtract (max neg), intersect (max), smooth union (blends, zero-k equals hard)
-  - evaluate_sdf_tree: sphere at origin/outside, missing node returns FAR, translated primitive, CSG union/subtract, single/no children operations
-  - Transform nodes: translation, uniform scale, empty returns FAR
-  - rotate_euler: identity, 90° Y rotation
-  - Bounds estimation: single sphere, translated sphere, operation encloses both children
-  - create_displacement_grid_for_subtree: centered on subtree, zero-filled
-  - bake_subtree_with_progress: sphere negative inside/positive outside, progress counter, box negative at center
-  - max_subtree_resolution: default without sculpt, finds sculpt node resolution
-  - Sculpt evaluation: standalone samples grid, child+displacement adds correctly
-  - Modifier evaluation: round, onion, mirror-X, empty returns FAR
-- Helpers: `empty_scene()`, `scene_with_sphere()`, `scene_with_box()`
-- All 119 tests pass (16 history + 46 scene + 57 voxel). cargo check, clippy clean.
-- Files changed: `src/graph/voxel.rs`, `plans/prd.json`, `plans/progress.txt`
+Changes:
+- src/shaders/operations.wgsl: All 4 CSG ops (op_union, op_smooth_union, op_subtract, op_intersect)
+  now take/return vec4f(distance, mat_a, mat_b, blend_factor). Hard ops set mat_b=-1.0, blend=0.0.
+  Smooth union stores both material IDs and blend factor h for future material interpolation.
+- src/gpu/codegen.rs: emit_node_wgsl emits vec4f for all node types (Primitive, Operation, Sculpt,
+  Transform, Modifier). Primitives: vec4f(dist, mat_id, -1.0, 0.0). Transforms/modifiers propagate
+  all 4 components (.y, .z, .w). Empty/fallback: vec4f(1e10, -1.0, -1.0, 0.0).
+  generate_scene_sdf signature: -> vec4f. Composite render shader scene_sdf also returns vec4f.
+- Updated 6 codegen unit tests to assert on vec4f instead of vec2f.
+- rendering.wgsl and pick.wgsl: NO changes needed — they access .x (distance) and .y (mat_id)
+  which are unchanged in the vec4f layout. Zero visual regression.
 
-## Iteration 4 — PRD #2: Marching cubes mesh export unit tests
-- Added 61 unit tests to `src/export.rs` covering:
-  - interp_vertex: midpoint symmetric, at p0 when v0=0, at p1 when v1=0, quarter-way, equal values returns p0, 3D interpolation
-  - quantize: zero, positive, negative, precision boundary, different values differ
-  - collect_leaf_colors: empty scene, single primitive, skips operations
-  - sample_color_at: returns closest leaf color, picks closer of two primitives, default gray when no leaves
-  - marching_cubes: empty scene → no triangles, sphere produces triangles, sphere vertices near unit sphere surface, box produces triangles, vertex colors populated, progress counter advances, triangle indices valid, deduplicates shared vertices, adaptive produces similar result, higher resolution → more triangles, bounds outside geometry → no mesh, CSG union produces mesh
-  - Edge/tri table sanity: all-inside/all-outside are zero, single corner has one triangle
-  - OBJ writer: header + vertices, 1-indexed faces, multiple triangles, empty mesh
-  - STL writer: header + triangle count, correct total size, multiple triangles
-  - PLY writer: header structure, with colors, without colors, face format
-  - GLB writer: magic + version, total length matches file, JSON chunk type, contains asset version, no colors omits COLOR_0, with colors has COLOR_0
-  - USDA writer: header, points, face vertex counts, vertex colors, no colors omits displayColor
-  - write_mesh dispatch: STL, PLY, GLB, USDA, defaults to OBJ
-- Helpers: `empty_scene()`, `scene_with_sphere()`, `scene_with_box()`, `sample_mesh()`, `sample_mesh_no_colors()`
-- All 180 tests pass (16 history + 46 scene + 57 voxel + 61 export). cargo check, clippy clean.
-- Files changed: `src/export.rs`, `plans/prd.json`, `plans/progress.txt`
-
-## Iteration 5 — PRD #3: WGSL codegen unit tests
-- Added 69 unit tests to `src/gpu/codegen.rs` covering:
-  - Empty scene returns far sentinel (1e10, -1.0)
-  - Single primitive codegen for all 10 SDF types (Sphere, Box, Cylinder, Torus, Plane, Cone, Capsule, Ellipsoid, HexPrism, Pyramid)
-  - Primitive uses rotate_euler, local point (lp), material ID as f32(index)
-  - Single primitive returns directly (no var result)
-  - CSG operations: Union, SmoothUnion, Subtract, Intersect → correct WGSL function names
-  - Operation with one child passes through, no children returns far
-  - Operation smooth_k reads from type_op.y
-  - Multiple top-level primitives: var result + chained op_union calls
-  - Hidden nodes excluded from codegen, all hidden returns far
-  - Transform: inverse TRS chain (position/rotation/scale), scale distance correction
-  - Transform with no child returns far
-  - Nested transforms chain correctly (tp0_0, tp0_1)
-  - Distance modifiers: Round subtracts value, Onion uses abs()
-  - Modifier with no child returns far
-  - Point modifiers: Twist, Bend, Taper, Elongate, Mirror, Repeat, FiniteRepeat, RadialRepeat → emit correct *_point() calls
-  - Point modifier passes through distance unchanged
-  - get_transform_chain: empty for top-level, includes Transform ancestor, includes point modifier, skips distance modifier, innermost-first order
-  - emit_transform_chain: empty returns "p", single transform generates 3 lets, twist generates twist_point, two entries chain variables correctly
-  - Sculpt: standalone uses sdf_voxel_grid, differential uses disp_voxel_grid, with tex_map uses texture path
-  - Sculpt generates rotate_euler for local point
-  - generate_voxel_texture_decls: no sculpt → empty, standalone → sdf sampling fn, differential → disp sampling fn, bindings at @group(2)
-  - Two-phase codegen: expensive subtree wrapped in bounding check, single expensive no cheap uses flat codegen
-  - Complex scenes: operation with transform children, modifier chain on primitive
-  - Structure key stability: same topology → same codegen, different topology → different codegen
-  - format_f32: integer adds decimal, decimal unchanged
-  - format_vec3: formats all three components
-- All 249 tests pass (16 history + 46 scene + 57 voxel + 61 export + 69 codegen). cargo check, clippy clean.
-- Files changed: `src/gpu/codegen.rs`, `plans/prd.json`, `plans/progress.txt`
+Verification: cargo check ✓, cargo clippy ✓, cargo test (249/249) ✓

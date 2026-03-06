@@ -120,13 +120,13 @@ fn comp_to_uv(p: vec3f) -> vec3f {{
     return clamp((p - COMP_BMIN) / (COMP_BMAX - COMP_BMIN), vec3f(0.0), vec3f(1.0));
 }}
 
-fn scene_sdf(p: vec3f) -> vec2f {{
+fn scene_sdf(p: vec3f) -> vec4f {{
     let size = COMP_BMAX - COMP_BMIN;
     let norm = (p - COMP_BMIN) / size;
 
     // Outside bounds: return distance to AABB
     if any(norm < vec3f(-0.01)) || any(norm > vec3f(1.01)) {{
-        return vec2f(length(max(p - COMP_BMAX, COMP_BMIN - p)), -1.0);
+        return vec4f(length(max(p - COMP_BMAX, COMP_BMIN - p)), -1.0, -1.0, 0.0);
     }}
 
     let uv = clamp(norm, vec3f(0.0), vec3f(1.0));
@@ -136,7 +136,7 @@ fn scene_sdf(p: vec3f) -> vec2f {{
     let ic = vec3u(fc);
     let mat_raw = textureLoad(comp_mat_tex, ic, 0).x;
     let mat_id = f32(mat_raw) - 1.0;
-    return vec2f(d, mat_id);
+    return vec4f(d, mat_id, -1.0, 0.0);
 }}
 "#,
         bmin = format_vec3(bounds_min),
@@ -314,7 +314,7 @@ fn emit_node_wgsl(
             ));
             let sdf_fn = kind.sdf_function_name();
             lines.push(format!(
-                "    let n{i} = vec2f({sdf_fn}(lp{i}, nodes[{i}].scale.xyz), f32({i}));"
+                "    let n{i} = vec4f({sdf_fn}(lp{i}, nodes[{i}].scale.xyz), f32({i}), -1.0, 0.0);"
             ));
         }
         NodeData::Operation { op, left, right, .. } => {
@@ -331,7 +331,7 @@ fn emit_node_wgsl(
                     lines.push(format!("    let n{i} = n{ci};"));
                 }
                 (None, None) => {
-                    lines.push(format!("    let n{i} = vec2f(1e10, -1.0);"));
+                    lines.push(format!("    let n{i} = vec4f(1e10, -1.0, -1.0, 0.0);"));
                 }
             }
         }
@@ -356,7 +356,7 @@ fn emit_node_wgsl(
                     format!("disp_voxel_grid(lp{i}, {i}u)")
                 };
                 lines.push(format!(
-                    "    let n{i} = vec2f(n{ci}.x + {disp_call} * nodes[{i}].position.w, f32({i}));"
+                    "    let n{i} = vec4f(n{ci}.x + {disp_call} * nodes[{i}].position.w, f32({i}), -1.0, 0.0);"
                 ));
             } else {
                 // STANDALONE: total SDF from grid (unchanged behavior)
@@ -370,19 +370,19 @@ fn emit_node_wgsl(
                     format!("sdf_voxel_grid(lp{i}, {i}u)")
                 };
                 lines.push(format!(
-                    "    let n{i} = vec2f({sdf_call}, f32({i}));"
+                    "    let n{i} = vec4f({sdf_call}, f32({i}), -1.0, 0.0);"
                 ));
             }
         }
         NodeData::Transform { input, .. } => {
             let child_idx = input.and_then(|id| idx_map.get(&id).copied());
             if let Some(ci) = child_idx {
-                // Always apply scale distance correction
+                // Always apply scale distance correction, propagate material blend info
                 lines.push(format!(
-                    "    let n{i} = vec2f(n{ci}.x * min(nodes[{i}].scale.x, min(nodes[{i}].scale.y, nodes[{i}].scale.z)), n{ci}.y);"
+                    "    let n{i} = vec4f(n{ci}.x * min(nodes[{i}].scale.x, min(nodes[{i}].scale.y, nodes[{i}].scale.z)), n{ci}.y, n{ci}.z, n{ci}.w);"
                 ));
             } else {
-                lines.push(format!("    let n{i} = vec2f(1e10, -1.0);"));
+                lines.push(format!("    let n{i} = vec4f(1e10, -1.0, -1.0, 0.0);"));
             }
         }
         NodeData::Modifier { kind, input, .. } => {
@@ -390,13 +390,15 @@ fn emit_node_wgsl(
             if let Some(ci) = child_idx {
                 match kind {
                     ModifierKind::Round => {
+                        // Modify distance, propagate material blend info
                         lines.push(format!(
-                            "    let n{i} = vec2f(n{ci}.x - nodes[{i}].position.x, n{ci}.y);"
+                            "    let n{i} = vec4f(n{ci}.x - nodes[{i}].position.x, n{ci}.y, n{ci}.z, n{ci}.w);"
                         ));
                     }
                     ModifierKind::Onion => {
+                        // Modify distance, propagate material blend info
                         lines.push(format!(
-                            "    let n{i} = vec2f(abs(n{ci}.x) - nodes[{i}].position.x, n{ci}.y);"
+                            "    let n{i} = vec4f(abs(n{ci}.x) - nodes[{i}].position.x, n{ci}.y, n{ci}.z, n{ci}.w);"
                         ));
                     }
                     // Point modifiers just pass through (transform chain handles the point)
@@ -405,7 +407,7 @@ fn emit_node_wgsl(
                     }
                 }
             } else {
-                lines.push(format!("    let n{i} = vec2f(1e10, -1.0);"));
+                lines.push(format!("    let n{i} = vec4f(1e10, -1.0, -1.0, 0.0);"));
             }
         }
     }
@@ -421,7 +423,7 @@ fn generate_scene_sdf(
 ) -> String {
     let order = scene.visible_topo_order();
     if order.is_empty() {
-        return "fn scene_sdf(p: vec3f) -> vec2f {\n    return vec2f(1e10, -1.0);\n}"
+        return "fn scene_sdf(p: vec3f) -> vec4f {\n    return vec4f(1e10, -1.0, -1.0, 0.0);\n}"
             .to_string();
     }
 
@@ -452,7 +454,7 @@ fn generate_scene_sdf(
 
     // Two-phase codegen with bounding skip for expensive subtrees
     let mut lines = Vec::new();
-    lines.push("fn scene_sdf(p: vec3f) -> vec2f {".to_string());
+    lines.push("fn scene_sdf(p: vec3f) -> vec4f {".to_string());
 
     // Phase 1: Emit all cheap subtree nodes unconditionally
     let cheap_node_set: HashSet<NodeId> = cheap_tops.iter()
@@ -470,7 +472,7 @@ fn generate_scene_sdf(
         .filter_map(|id| idx_map.get(id).copied())
         .collect();
     if cheap_indices.is_empty() {
-        lines.push("    var result = vec2f(1e10, -1.0);".to_string());
+        lines.push("    var result = vec4f(1e10, -1.0, -1.0, 0.0);".to_string());
     } else {
         lines.push(format!("    var result = n{};", cheap_indices[0]));
         for &idx in &cheap_indices[1..] {
@@ -520,7 +522,7 @@ fn generate_scene_sdf_flat(
     sculpt_tex_map: Option<&HashMap<NodeId, usize>>,
 ) -> String {
     let mut lines = Vec::new();
-    lines.push("fn scene_sdf(p: vec3f) -> vec2f {".to_string());
+    lines.push("fn scene_sdf(p: vec3f) -> vec4f {".to_string());
 
     for (i, &node_id) in order.iter().enumerate() {
         let Some(node) = scene.nodes.get(&node_id) else { continue; };
@@ -532,7 +534,7 @@ fn generate_scene_sdf_flat(
         .filter_map(|id| idx_map.get(id).copied())
         .collect();
     match top_indices.len() {
-        0 => lines.push("    return vec2f(1e10, -1.0);".to_string()),
+        0 => lines.push("    return vec4f(1e10, -1.0, -1.0, 0.0);".to_string()),
         1 => lines.push(format!("    return n{};", top_indices[0])),
         _ => {
             lines.push(format!("    var result = n{};", top_indices[0]));
@@ -573,7 +575,7 @@ mod tests {
     fn empty_scene_returns_far_sentinel() {
         let scene = empty_scene();
         let wgsl = generate_scene_sdf(&scene, None);
-        assert!(wgsl.contains("fn scene_sdf(p: vec3f) -> vec2f"));
+        assert!(wgsl.contains("fn scene_sdf(p: vec3f) -> vec4f"));
         assert!(wgsl.contains("1e10"));
         assert!(wgsl.contains("-1.0"));
     }
@@ -742,7 +744,7 @@ mod tests {
         let op = scene.create_operation(CsgOp::Union, None, None);
         let wgsl = generate_scene_sdf(&scene, None);
         let op_idx = scene.visible_topo_order().iter().position(|&id| id == op).unwrap();
-        assert!(wgsl.contains(&format!("let n{op_idx} = vec2f(1e10, -1.0);")));
+        assert!(wgsl.contains(&format!("let n{op_idx} = vec4f(1e10, -1.0, -1.0, 0.0);")));
     }
 
     #[test]
@@ -831,7 +833,7 @@ mod tests {
         let wgsl = generate_scene_sdf(&scene, None);
         let order = scene.visible_topo_order();
         let xform_idx = order.iter().position(|&id| id == xform).unwrap();
-        assert!(wgsl.contains(&format!("let n{xform_idx} = vec2f(1e10, -1.0);")));
+        assert!(wgsl.contains(&format!("let n{xform_idx} = vec4f(1e10, -1.0, -1.0, 0.0);")));
     }
 
     #[test]
@@ -843,7 +845,7 @@ mod tests {
         let order = scene.visible_topo_order();
         let xform_idx = order.iter().position(|&id| id == xform).unwrap();
         // Scale correction: min(scale.x, min(scale.y, scale.z))
-        assert!(wgsl.contains(&format!("let n{xform_idx} = vec2f(n")));
+        assert!(wgsl.contains(&format!("let n{xform_idx} = vec4f(n")));
         assert!(wgsl.contains("min(nodes["));
     }
 
@@ -874,7 +876,7 @@ mod tests {
         let mod_idx = order.iter().position(|&id| id == modifier).unwrap();
         let sph_idx = order.iter().position(|&id| id == sphere).unwrap();
         // Round: n<mod> = vec2f(n<child>.x - nodes[<mod>].position.x, n<child>.y)
-        assert!(wgsl.contains(&format!("let n{mod_idx} = vec2f(n{sph_idx}.x - nodes[{mod_idx}].position.x")));
+        assert!(wgsl.contains(&format!("let n{mod_idx} = vec4f(n{sph_idx}.x - nodes[{mod_idx}].position.x")));
     }
 
     #[test]
@@ -896,7 +898,7 @@ mod tests {
         let wgsl = generate_scene_sdf(&scene, None);
         let order = scene.visible_topo_order();
         let mod_idx = order.iter().position(|&id| id == modifier).unwrap();
-        assert!(wgsl.contains(&format!("let n{mod_idx} = vec2f(1e10, -1.0);")));
+        assert!(wgsl.contains(&format!("let n{mod_idx} = vec4f(1e10, -1.0, -1.0, 0.0);")));
     }
 
     // ═══════════════════════════════════════════════════════════════

@@ -1,37 +1,177 @@
 [
   {
-    "id": 1,
-    "category": "testing",
-    "description": "Add unit tests for Scene graph operations (add/remove/reparent nodes, compute_bounds)",
-    "verification": "cargo test -- graph passes with meaningful coverage of scene tree mutations",
+    "id": 6,
+    "category": "rendering",
+    "description": "Expand scene_sdf return type from vec2f to vec4f to carry material blending info.\n\nSteps:\n1. In src/shaders/operations.wgsl: change all 4 op function signatures (op_union, op_smooth_union, op_subtract, op_intersect) from returning vec2f to vec4f. Format: vec4f(distance, mat_a, mat_b, blend_factor). Hard ops set mat_b=-1.0, blend=0.0. Smooth union computes h blend factor and stores both mat IDs.\n2. In src/gpu/codegen.rs: update emit_node_wgsl to emit vec4f for all node types. Primitive returns vec4f(dist, mat_id, -1.0, 0.0). Operations compose child vec4f results. Update all variable declarations from vec2f to vec4f.\n3. In src/shaders/rendering.wgsl: update ray_march to use vec4f. Update calc_normal calls. The .x component is still distance, .y is primary material. Do NOT consume .z/.w yet (no visual change).\n4. In src/shaders/pick.wgsl: update pick_ray_march similarly.\n5. Run cargo check, clippy, test. Verify the app renders identically to before.",
+    "verification": "cargo check && cargo clippy -- -D warnings && cargo test. Run app — all existing scenes must render identically with zero visual regression.",
     "passes": true
   },
   {
-    "id": 2,
-    "category": "testing",
-    "description": "Add unit tests for marching cubes mesh export (vertex generation, deduplication, format writers)",
-    "verification": "cargo test -- export passes, verifies correct triangle/vertex output for known SDF inputs",
-    "passes": true
+    "id": 7,
+    "category": "rendering",
+    "description": "Consume material blend info in the fragment shader for smooth color interpolation.\n\nSteps:\n1. In src/shaders/rendering.wgsl: add helper functions:\n   - get_blended_color(mat_a: i32, mat_b: i32, t: f32) -> vec3f\n   - get_blended_roughness(mat_a: i32, mat_b: i32, t: f32) -> f32\n   - get_blended_metallic(mat_a: i32, mat_b: i32, t: f32) -> f32\n   - get_blended_fresnel(mat_a: i32, mat_b: i32, t: f32) -> f32\n   Each mixes the two materials' properties by factor t. When mat_b < 0 or t <= 0, return mat_a's property unchanged.\n2. In the Full shading path: replace get_node_color(mat_id) with get_blended_color(mat_a, mat_b, blend). Same for roughness, metallic, fresnel.\n3. In Solid shading mode: blend colors similarly.\n4. Preserve Clay/Normals/Matcap modes unchanged (they don't use per-node materials).",
+    "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: create red sphere + blue box, Smooth Union with k=0.5. Boundary should show smooth red-to-blue gradient. Verify with different metallic/roughness values.",
+    "passes": false
   },
   {
-    "id": 3,
-    "category": "testing",
-    "description": "Add unit tests for WGSL codegen (expression builder, structure_key hashing, transform handling)",
-    "verification": "cargo test -- codegen passes, verifies generated WGSL matches expected output for known scene trees",
-    "passes": true
+    "id": 8,
+    "category": "rendering",
+    "description": "Extend material blending to smooth subtract and smooth intersect.\n\nSteps:\n1. In src/shaders/operations.wgsl: update op_subtract to carry both material IDs and blend factor h in the vec4f return when k > 0. The subtracted boundary should blend toward the subtractor's material.\n2. Same for op_intersect: carry both mat IDs and h.\n3. Verify that hard subtract/intersect (k=0) still return blend=0, mat_b=-1.\n4. No changes needed in rendering.wgsl (already consumes blend from task 7).",
+    "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: smooth subtract (k=0.3) between differently-colored primitives — carved boundary shows color blending. Same for smooth intersect.",
+    "passes": false
   },
   {
-    "id": 4,
-    "category": "testing",
-    "description": "Add unit tests for undo/redo history (push, undo, redo, capacity limits)",
-    "verification": "cargo test -- history passes with correct state restoration",
-    "passes": true
+    "id": 9,
+    "category": "modifier",
+    "description": "Add Offset modifier (erode/dilate) — expands or shrinks any SDF shape.\n\nSteps:\n1. In src/graph/scene.rs: add ModifierKind::Offset variant. Set is_point_modifier=false (distance modifier). Default value: Vec3(0.1, 0, 0) where .x is the offset amount. Add to ModifierKind::ALL.\n2. In src/gpu/codegen.rs emit_node_wgsl Modifier match: emit distance offset code — add the offset value (read from nodes[idx].position.x) to the child's distance result.\n3. In src/graph/voxel.rs evaluate_sdf_at: handle Offset modifier — add offset value to child SDF result.\n4. In src/ui/properties.rs: add slider for offset value in the modifier properties section. Range: -1.0 to 1.0, label 'Offset'. Negative = expand (dilate), positive = shrink (erode).\n5. Add unit test: sphere with offset +0.5 should have distance increased by 0.5 at any point.",
+    "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: sphere + Offset modifier. Drag slider negative — sphere grows. Drag positive — sphere shrinks. Works with all primitive types.",
+    "passes": false
   },
   {
-    "id": 5,
+    "id": 10,
+    "category": "modifier",
+    "description": "Add WGSL noise functions for procedural effects.\n\nSteps:\n1. Create src/shaders/noise.wgsl with these functions:\n   - fn hash33(p: vec3f) -> vec3f — hash-based pseudo-random, maps vec3 to vec3\n   - fn noise3d(p: vec3f) -> f32 — 3D gradient noise using trilinear interpolation of hashed gradients. Smooth with quintic interpolation (6t^5-15t^4+10t^3).\n   - fn fbm_noise(p: vec3f, frequency: f32, amplitude: f32, octaves: i32) -> vec3f — fractal Brownian motion returning 3D displacement. Lacunarity=2.0, persistence=0.5. Max 8 octaves. Returns vec3f so it can displace a point in all 3 axes.\n2. In src/gpu/shader_templates.rs: include noise.wgsl in the shader concatenation for render shaders (after modifiers.wgsl, before rendering.wgsl). Also include for pick shader.\n3. All functions must be pure, deterministic, and GPU-friendly (no divergent branching).",
+    "verification": "cargo check && cargo clippy -- -D warnings && cargo test. WGSL compiles without errors. Noise functions are available in the shader.",
+    "passes": false
+  },
+  {
+    "id": 11,
+    "category": "modifier",
+    "description": "Add Noise domain warp modifier for organic shape deformation.\n\nSteps:\n1. In src/graph/scene.rs: add ModifierKind::Noise variant. is_point_modifier=true. Default value: Vec3(2.0, 0.1, 3.0) encoding (frequency, amplitude, octaves). Add to ModifierKind::ALL.\n2. In src/gpu/codegen.rs: for Noise point modifier, emit: 'let {var} = {parent_var} + fbm_noise({parent_var}, freq, amp, octaves)' where freq/amp/octaves are read from node storage buffer (position.x, position.y, position.z cast to i32 for octaves).\n3. In src/graph/voxel.rs: implement CPU-side Perlin noise matching the WGSL version. Apply fbm displacement to sampling point before evaluating child SDF. Use the same hash/interpolation math as the WGSL version for consistency.\n4. In src/ui/properties.rs: add 3 sliders — Frequency (0.1–20.0), Amplitude (0.0–2.0), Octaves (1–8 integer).\n5. Add unit test: noise modifier should displace point by non-zero amount for non-zero amplitude.",
+    "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: sphere + Noise modifier. Sphere deforms into organic/rocky shape. Frequency changes detail scale, amplitude changes displacement strength, octaves adds finer detail.",
+    "passes": false
+  },
+  {
+    "id": 12,
+    "category": "ui",
+    "description": "Add Quick Primitives floating toolbar for rapid shape creation.\n\nSteps:\n1. Create src/ui/quick_toolbar.rs with a pub fn draw() that renders a floating egui::Window anchored to the viewport's left edge.\n2. For each SdfPrimitive variant in SdfPrimitive::ALL: render a compact button with the primitive's base_name() text.\n3. On button click: push Action::CreatePrimitive(kind) to the action sink. This creates the primitive at world origin and selects it.\n4. In src/settings.rs: add show_quick_toolbar: bool (default false) to Settings.\n5. In src/app/input.rs: add Shift+A shortcut to toggle show_quick_toolbar.\n6. In src/app/mod.rs or src/ui/dock.rs: call quick_toolbar::draw() when the setting is enabled.\n7. Style: semi-transparent background, compact vertical layout, doesn't block viewport interaction when not hovered.\n8. Register module in src/ui/mod.rs.",
+    "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: Shift+A shows toolbar. Click any primitive button — it appears at origin and is selected. Toolbar toggles off with Shift+A.",
+    "passes": false
+  },
+  {
+    "id": 13,
+    "category": "rendering",
+    "description": "Add SDF Cross-Section visualization as a new shading mode.\n\nSteps:\n1. In src/settings.rs: add ShadingMode::CrossSection variant (index 6). Update cycle(), label(), gpu_value().\n2. In src/settings.rs RenderConfig: add cross_section_axis: u8 (0=X, 1=Y, 2=Z, default 1) and cross_section_position: f32 (default 0.0, range -5.0 to 5.0).\n3. In src/gpu/camera.rs: pack cross_section_axis and cross_section_position into CameraUniform spare fields (brush_pos.z and brush_pos.w when not sculpting, or a new field).\n4. In src/shaders/rendering.wgsl: when shading_mode == 6.0, implement cross-section rendering:\n   - For each pixel, compute world position on the slice plane (discard pixels far from the plane along the selected axis, within ±0.01 epsilon).\n   - Evaluate scene_sdf at the slice position.\n   - Color by distance: blue (d < 0, inside), red (d > 0, outside), white (d ≈ 0, surface). Use smooth gradient.\n5. In src/ui/render_settings.rs: add controls for axis selector (3 radio buttons) and position slider.",
+    "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: cycle to Cross-Section mode. 2D heatmap slice appears. Slider moves cutting plane. Axis buttons change slice orientation.",
+    "passes": false
+  },
+  {
+    "id": 14,
+    "category": "workflow",
+    "description": "Add multi-select infrastructure for selecting multiple nodes at once.\n\nSteps:\n1. In src/app/state.rs: change DocumentState.selected from Option<NodeId> to selected: std::collections::HashSet<NodeId> and primary_selected: Option<NodeId>.\n2. Add helper methods on DocumentState: select_single(id), toggle_select(id), add_to_selection(id), clear_selection(), is_selected(id) -> bool, selected_count() -> usize.\n3. Search all files for self.doc.selected or doc.selected. Update every reference:\n   - Where it reads Option<NodeId>: use primary_selected or check is_selected(id).\n   - Where it sets selected = Some(id): use select_single(id).\n   - Where it sets selected = None: use clear_selection().\n4. In src/ui/viewport/draw.rs: plain click = select_single, Ctrl+click = toggle_select.\n5. In src/ui/scene_tree.rs: same Ctrl+click behavior.\n6. In src/gpu/buffers.rs: mark ALL nodes in the selected set as selected (color.w = 1.0), not just one.\n7. Gizmo operates on primary_selected only.",
+    "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: click node = single select. Ctrl+click another = both outlined. Ctrl+click selected = deselects. Click empty = clear all. Gizmo on primary.",
+    "passes": false
+  },
+  {
+    "id": 15,
+    "category": "workflow",
+    "description": "Add batch property editing when multiple nodes are selected.\n\nSteps:\n1. In src/ui/properties.rs: detect when selected_count() > 1. If so, call new fn draw_multi_properties() instead of single-node properties.\n2. draw_multi_properties(): collect all selected nodes. Determine shared node type (if all primitives, show primitive properties; if mixed types, show only transform properties).\n3. For shared properties (position, rotation, scale): show sliders. Editing applies DELTA (not absolute value) to all selected nodes. Track the previous slider value to compute delta.\n4. For color: set absolute value on all selected nodes.\n5. For roughness/metallic: set absolute value on all.\n6. Show '-- mixed --' placeholder for properties that differ across selection.\n7. Show count label at top: 'N nodes selected'.",
+    "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: Ctrl+click 3 spheres. Properties shows shared fields. Change color — all 3 change. Move position — all 3 move by same delta.",
+    "passes": false
+  },
+  {
+    "id": 16,
+    "category": "workflow",
+    "description": "Add SmoothSubtract and SmoothIntersect as first-class CsgOp variants.\n\nSteps:\n1. In src/graph/scene.rs: add CsgOp::SmoothSubtract and CsgOp::SmoothIntersect to the enum.\n2. Set their properties: default smooth_k=0.3, base_name 'Smooth Subtract'/'Smooth Intersect', badge '[S-]'/'[S∩]'.\n3. Map wgsl_function_name to existing op_subtract/op_intersect (they already handle k>0).\n4. Assign unique gpu_op_id values.\n5. Add to CsgOp::ALL array.\n6. In src/ui/properties.rs: operation dropdown now shows all 6 ops.\n7. In src/gpu/codegen.rs: ensure codegen handles the new variants (map to same WGSL functions as regular subtract/intersect but with smooth_k from the node).\n8. Add unit test: SmoothSubtract generates correct WGSL with k parameter.",
+    "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: 'Smooth Subtract' and 'Smooth Intersect' appear in operation dropdown. Both create visible smooth blending at boundaries.",
+    "passes": false
+  },
+  {
+    "id": 17,
+    "category": "operations",
+    "description": "Add Chamfer boolean operations (ChamferUnion, ChamferSubtract, ChamferIntersect).\n\nSteps:\n1. In src/shaders/operations.wgsl: add three new functions based on hg_sdf/iq chamfer formulas:\n   - fn op_chamfer_union(a: vec4f, b: vec4f, k: f32) -> vec4f — creates 45° beveled edge at union boundary. Formula: min(min(a.x, b.x), (a.x - k + b.x) * sqrt(0.5))\n   - fn op_chamfer_subtract(a: vec4f, b: vec4f, k: f32) -> vec4f — chamfered subtraction\n   - fn op_chamfer_intersect(a: vec4f, b: vec4f, k: f32) -> vec4f — chamfered intersection\n   All must carry material IDs and blend factor in vec4f (same pattern as smooth ops).\n2. In src/graph/scene.rs: add CsgOp::ChamferUnion, CsgOp::ChamferSubtract, CsgOp::ChamferIntersect. Default k=0.2. Add to CsgOp::ALL.\n3. In src/gpu/codegen.rs: map new CsgOp variants to their WGSL function names.\n4. In src/ui/properties.rs: show chamfer ops in dropdown.\n5. Add unit test: chamfer union codegen emits op_chamfer_union call.",
+    "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: create two overlapping boxes. Select Chamfer Union — edges show 45° bevel instead of smooth blend. Chamfer size adjustable via k slider.",
+    "passes": false
+  },
+  {
+    "id": 18,
+    "category": "operations",
+    "description": "Add Staircase and Columnar boolean operations for decorative CSG edges.\n\nSteps:\n1. In src/shaders/operations.wgsl: add functions based on hg_sdf:\n   - fn op_stairs_union(a: vec4f, b: vec4f, k: f32, n: f32) -> vec4f — step-like pattern at boundary. n = number of steps.\n   - fn op_stairs_subtract(a: vec4f, b: vec4f, k: f32, n: f32) -> vec4f\n   - fn op_columns_union(a: vec4f, b: vec4f, k: f32, n: f32) -> vec4f — repeating column pattern at boundary\n   - fn op_columns_subtract(a: vec4f, b: vec4f, k: f32, n: f32) -> vec4f\n   Use smooth_k for the radius parameter and encode n (step/column count) in an extra field.\n2. In src/graph/scene.rs: add CsgOp::StairsUnion, StairsSubtract, ColumnsUnion, ColumnsSubtract. Each has smooth_k (radius) + steps parameter (stored in node extra field). Add to CsgOp::ALL.\n3. In codegen.rs: map to WGSL functions. Pass extra parameter (n) from node storage.\n4. In properties.rs: show both k slider and n (count) slider for stairs/columns ops.\n5. Add unit tests for codegen.",
+    "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: two overlapping boxes with Stairs Union — stepped pattern visible at boundary. Column Union — repeating column pattern. Step count adjustable.",
+    "passes": false
+  },
+  {
+    "id": 19,
+    "category": "rendering",
+    "description": "Upgrade PBR to Cook-Torrance GGX BRDF (phase 1: specular model).\n\nReference: Google Filament documentation (https://google.github.io/filament/Filament.html).\n\nSteps:\n1. In src/shaders/rendering.wgsl: replace the current Blinn-Phong specular with Cook-Torrance microfacet BRDF:\n   - fn D_GGX(NoH: f32, roughness: f32) -> f32 — GGX normal distribution function. Formula: a^2 / (pi * (NoH^2 * (a^2 - 1) + 1)^2) where a = roughness^2.\n   - fn G_SmithGGX(NoV: f32, NoL: f32, roughness: f32) -> f32 — Smith geometric attenuation with GGX. Use the correlated form: 0.5 / (NoL * sqrt(a^2 + NoV^2 * (1-a^2)) + NoV * sqrt(a^2 + NoL^2 * (1-a^2))).\n   - fn F_Schlick(VoH: f32, f0: vec3f) -> vec3f — Fresnel (already exists, but update to return vec3f for metallic F0 = albedo).\n2. Compute specular = D * G * F (no explicit / (4*NoV*NoL) — it's cancelled in the correlated Smith G form).\n3. Compute diffuse using Lambertian: albedo / PI * (1 - metallic).\n4. Final color = (diffuse + specular) * NoL * light_color * shadow + ambient.\n5. Preserve all existing render settings (key/fill/ambient intensities, shadow parameters).\n6. Do NOT change the number of lights or light data — just upgrade the BRDF math.",
+    "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: metallic sphere should show sharp, physically-accurate reflections. Rough sphere should show wide, dim highlights. Energy conservation: rough surfaces should not be brighter than smooth ones. Compare with Filament reference renders.",
+    "passes": false
+  },
+  {
+    "id": 20,
+    "category": "rendering",
+    "description": "Move lights from shader constants to dynamic uniform buffer (phase 2: dynamic lighting).\n\nSteps:\n1. In src/gpu/camera.rs: extend CameraUniform (or create a new LightUniform) to include:\n   - key_light_dir: [f32; 4]\n   - key_light_color: [f32; 4] (rgb + diffuse_intensity)\n   - key_spec_intensity: f32\n   - fill_light_dir: [f32; 4]\n   - fill_light_color: [f32; 4] (rgb + intensity)\n   - ambient_intensity: f32\n   This replaces the current shader constant placeholder approach.\n2. In src/gpu/shader_templates.rs: remove the /*KEY_LIGHT_DIR*/, /*KEY_DIFFUSE*/, etc. placeholder system. Instead, read values from the uniform buffer in WGSL.\n3. In src/shaders/rendering.wgsl: read light parameters from the uniform buffer instead of hardcoded constants.\n4. In src/ui/render_settings.rs: add key_light_color (color picker) alongside existing direction/intensity controls. Add fill_light_color.\n5. Update the uniform upload in src/ui/viewport/gpu_ops.rs to write light values every frame.\n6. Benefit: changing lighting no longer requires shader recompilation.",
+    "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: changing light direction/color/intensity in render settings should update in real-time without shader recompilation (no 'Rebuilding pipeline...' message).",
+    "passes": false
+  },
+  {
+    "id": 21,
+    "category": "scene",
+    "description": "Add Light node type to the scene graph for positioned lights.\n\nSteps:\n1. In src/graph/scene.rs: add NodeData::Light variant with fields:\n   - light_type: LightType enum (Point, Spot, Directional)\n   - color: Vec3 (default white)\n   - intensity: f32 (default 1.0)\n   - range: f32 (default 10.0, for point/spot attenuation)\n   - spot_angle: f32 (default 45°, for spot lights only)\n   Add LightType enum: Point, Spot, Directional.\n2. Light nodes use the existing Transform parent for position/rotation.\n3. In src/app/actions.rs: add Action::CreateLight(LightType).\n4. In src/app/action_handler.rs: handle CreateLight — create a Light node + Transform parent.\n5. In src/gpu/buffers.rs: add a small LightGpu buffer (max 8 lights). Collect all visible Light nodes, flatten to world-space position/direction.\n6. In src/gpu/codegen.rs: skip Light nodes during SDF codegen (lights don't contribute to SDF).\n7. Do NOT integrate lights into shading yet (separate task). This task is data model only.",
+    "verification": "cargo check && cargo clippy -- -D warnings && cargo test. Light nodes can be created, positioned via transform parent, saved/loaded, and appear in scene tree. They don't affect rendering yet.",
+    "passes": false
+  },
+  {
+    "id": 22,
+    "category": "scene",
+    "description": "Add viewport light visualization (hybrid billboard + wireframe gizmo) and light property editing UI.\n\nApproach: Industry-standard hybrid (Unreal/Unity style). Billboard icons always visible for identification/selection. Wireframe gizmos shown when selected for editing area-of-effect.\n\nSteps:\n1. Create src/ui/light_gizmo.rs with:\n   - Billboard icon rendering: for each Light node, project world position to screen. Draw icon via egui Painter:\n     - Point light: filled circle with 4-8 short ray lines radiating outward\n     - Spot light: small cone/triangle icon pointing in light direction\n     - Directional: sun icon (circle with longer parallel ray lines)\n   - Use the light's color for the icon. Scale icon size inversely with distance (clamp 12–48px). Fade alpha beyond 50 units.\n   - Icons always face camera (billboard behavior — just 2D screen-space drawing).\n2. Wireframe gizmos (drawn only when light is selected):\n   - Point light: wireframe sphere (circle outlines in 3 planes) showing attenuation range. Use dashed or semi-transparent lines.\n   - Spot light: wireframe cone from light position along direction, with inner cone angle and outer cone angle as separate wireframes. Cone length = range. Add a circle at the cone base showing the illuminated area diameter.\n   - Directional light: parallel arrow lines showing light direction, extending from the light icon.\n   Project 3D wireframe vertices to screen space and draw with egui Painter (same technique as transform gizmo).\n3. Make billboard icons clickable for selection: screen-space hit test (distance from click to projected icon center < icon_radius). Integrate with existing pick system.\n4. In src/ui/properties.rs: when a Light node is selected, show light-specific properties:\n   - Light type dropdown (Point/Spot/Directional)\n   - Color picker (egui color_edit_button)\n   - Intensity slider (0.0–10.0)\n   - Range slider (0.1–50.0, for Point/Spot only — hide for Directional)\n   - Outer Cone Angle slider (1°–179°, Spot only)\n   - Inner Cone Angle slider (1° to outer_angle, Spot only)\n5. In src/ui/scene_tree.rs: show light nodes with yellow dot icon (same pattern as existing type-colored dots).\n6. Register light_gizmo module in src/ui/mod.rs. Call draw function from viewport draw pass.\n7. Visibility toggle: add 'Show Light Gizmos' checkbox in Settings > Viewport (default on).",
+    "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: create a point light — yellow billboard icon visible in viewport from all angles. Select it — wireframe sphere appears showing range. Create spot light — cone wireframe shows inner/outer angles when selected. Move transform — icon and gizmo follow. Change color — icon updates. Change range — wireframe sphere/cone resizes.",
+    "passes": false
+  },
+  {
+    "id": 23,
+    "category": "rendering",
+    "description": "Integrate scene light nodes into the PBR rendering pipeline.\n\nSteps:\n1. In src/gpu/buffers.rs: upload LightGpu array to a storage buffer. Each light: position [f32;4], direction [f32;4], color [f32;4] (rgb+intensity), params [f32;4] (range, spot_angle, light_type, 0).\n2. In src/gpu/codegen.rs or shader_templates.rs: add a light count uniform and light storage buffer binding.\n3. In src/shaders/rendering.wgsl: add a loop over scene lights (max 8). For each light:\n   - Compute light direction and attenuation (inverse square falloff for point/spot, none for directional).\n   - For spot lights: apply cone falloff based on angle.\n   - Evaluate Cook-Torrance BRDF (from task 19) for each light.\n   - Accumulate diffuse + specular contribution.\n4. Keep the existing global key/fill lights as defaults. Scene lights ADD to global lighting.\n5. Compute shadows for the key light only (shadowing all lights would be too expensive for real-time SDF).",
+    "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: place a red point light near a white sphere — sphere shows red illumination on the near side. Move light — illumination follows. Multiple lights accumulate. Spot light creates cone of light.",
+    "passes": false
+  },
+  {
+    "id": 24,
+    "category": "workflow",
+    "description": "Add configurable keymap system (phase 1: data model and config).\n\nSteps:\n1. Create src/keymap.rs with:\n   - KeyCombo struct: { key: egui::Key, modifiers: egui::Modifiers } with Serialize/Deserialize.\n   - ActionBinding enum mapping to Action variants that can be keyboard-triggered (about 40 actions).\n   - KeymapConfig struct: HashMap<ActionBinding, KeyCombo> with default() that returns current hardcoded keybindings.\n   - Methods: get_binding(action) -> Option<KeyCombo>, set_binding(action, combo), reset_to_defaults(), format_shortcut(action) -> String.\n2. In src/settings.rs: add keymap: KeymapConfig field to Settings. Serialize/deserialize with the rest of settings.\n3. In src/lib.rs: add pub mod keymap.\n4. Add unit tests: default keymap contains expected bindings, set_binding updates, reset restores defaults, format_shortcut produces human-readable strings like 'Ctrl+S'.",
+    "verification": "cargo check && cargo clippy -- -D warnings && cargo test. KeymapConfig loads/saves with settings. Default bindings match all current hardcoded shortcuts.",
+    "passes": false
+  },
+  {
+    "id": 25,
+    "category": "workflow",
+    "description": "Refactor input handling to use configurable keymap (phase 2: integration).\n\nSteps:\n1. In src/app/input.rs: refactor collect_keyboard_actions() to iterate over keymap bindings instead of hardcoded if-chains. For each (ActionBinding, KeyCombo) in keymap: check if that key combo is pressed, push the corresponding Action.\n2. Handle context-sensitive bindings: sculpt-only shortcuts (1-6 brush modes, [ ] resize) should only activate when in sculpt mode. Add a 'context' field to ActionBinding or check ActiveTool.\n3. In src/ui/command_palette.rs: query KeymapConfig to get shortcut display strings instead of hardcoded strings. Remove all hardcoded shortcut strings.\n4. In src/ui/help.rs: query KeymapConfig for shortcut display. Remove hardcoded shortcut lists.\n5. Single source of truth: keybindings defined ONLY in KeymapConfig, displayed everywhere from there.",
+    "verification": "cargo check && cargo clippy -- -D warnings && cargo test. All existing keyboard shortcuts still work. Command palette shows correct shortcuts. Help window shows correct shortcuts. No hardcoded shortcut strings remain in command_palette.rs or help.rs.",
+    "passes": false
+  },
+  {
+    "id": 26,
+    "category": "ui",
+    "description": "Add keybinding editor UI with save/export/import.\n\nSteps:\n1. In src/ui/settings_window.rs (or new src/ui/keymap_editor.rs): add a 'Keybindings' tab/section to the settings window.\n2. Display a scrollable table: Action Name | Current Shortcut | [Rebind] button.\n3. Rebind flow: click [Rebind] → button changes to 'Press key...' → capture next keypress → store new KeyCombo. Show conflict warning if the combo is already used by another action.\n4. [Reset to Defaults] button: calls keymap.reset_to_defaults().\n5. [Export] button: serialize KeymapConfig to JSON, save via file dialog (rfd).\n6. [Import] button: load JSON via file dialog, deserialize into KeymapConfig, validate.\n7. Changes apply immediately (no restart needed). Settings auto-save.",
+    "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: open Settings > Keybindings. See all actions with current shortcuts. Click Rebind on 'Save Project', press Ctrl+Shift+S — shortcut updates. Export to JSON file. Import a different keymap JSON. Reset to defaults restores original bindings.",
+    "passes": false
+  },
+  {
+    "id": 27,
     "category": "testing",
-    "description": "Add unit tests for VoxelGrid (SDF evaluation, grid indexing, bounds computation)",
-    "verification": "cargo test -- voxel passes with correct distance field values for known primitives",
-    "passes": true
+    "description": "Add comprehensive unit tests for all new features in this sprint.\n\nSteps:\n1. Material blending: test vec4f codegen output, blend factor encoding for smooth/hard ops, rendering shader material interpolation helpers.\n2. Offset modifier: test distance shift in CPU eval, codegen output string.\n3. Noise modifier: test point displacement is non-zero for non-zero amplitude, codegen emits fbm_noise call.\n4. Chamfer/stairs/columns operations: test codegen emits correct WGSL function names, parameters passed correctly.\n5. Multi-select API: test select_single, toggle_select, add_to_selection, clear_selection, is_selected, selected_count.\n6. SmoothSubtract/SmoothIntersect: test codegen output, default smooth_k values.\n7. KeymapConfig: test default bindings, set/get binding, reset, format_shortcut, serialization roundtrip.\n8. Light nodes: test creation, world-space position computation, LightGpu buffer population.\n9. Cook-Torrance BRDF: test D_GGX, G_SmithGGX at known values (roughness=0.5, NoH=1 should give known result).",
+    "verification": "cargo test — all new tests pass alongside existing 249+ tests. Zero regressions.",
+    "passes": false
+  },
+  {
+    "id": 28,
+    "category": "workflow",
+    "description": "Add configurable export resolution (currently hardcoded to 128).\n\nProblem: Export resolution is hardcoded at 128 in src/export.rs. This is far too low for production meshes — a 128^3 grid produces very coarse geometry. Industry standard: user-configurable resolution with preview.\n\nSteps:\n1. In src/settings.rs: add export_resolution: u32 to ExportConfig (or create if it doesn't exist). Default 128, range 32–512. Add export_show_vertex_estimate: bool (default true).\n2. In src/export.rs: replace hardcoded 128 with the configurable value from settings. Pass resolution through start_export().\n3. In src/ui/export_dialog.rs: add a resolution slider (32–512, step 16). Show estimated vertex count: roughly (resolution^3 * 0.01) as a rough heuristic, or compute from grid dimensions. Show warning label when resolution > 256 ('High resolution — export may take longer').\n4. Add presets: Low (64), Medium (128), High (256), Ultra (512) as quick-select buttons.\n5. Ensure the export progress bar still works at all resolutions.",
+    "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: open export dialog — resolution slider visible with presets. Export at 64 = fast + coarse mesh. Export at 256 = slower + smooth mesh. Vertex estimate updates as slider moves.",
+    "passes": false
+  },
+  {
+    "id": 29,
+    "category": "workflow",
+    "description": "Add undo snapshots for property edits (slider drags) on mouse release.\n\nProblem: Currently, slider drags (position, rotation, scale, color, roughness, metallic) bypass the Action system for zero-latency and write directly to &mut Scene. This means property changes have NO undo/redo support. Every shipping 3D app (Blender, Maya, Houdini, Unreal) coalesces continuous edits into a single undo snapshot on mouse release.\n\nSteps:\n1. In src/app/state.rs: add a flag `property_edit_in_progress: bool` to DocumentState (default false).\n2. In src/ui/properties.rs: detect when a slider/color picker drag STARTS (egui Response.drag_started() or Response.changed() when !property_edit_in_progress). Set property_edit_in_progress = true and snapshot the scene into a pre-edit clone.\n3. Detect when the drag ENDS (Response.drag_stopped() or lost_focus, or click elsewhere). Set property_edit_in_progress = false and push the pre-edit snapshot onto the undo history. This gives one undo entry for the entire drag.\n4. Same pattern for gizmo transforms in src/ui/gizmo.rs: snapshot on drag start, commit on drag end.\n5. Same for color picker in properties panel.\n6. Verify: Ctrl+Z after dragging a slider restores the value from before the drag started. Multiple rapid slider changes = multiple undo entries (one per drag).\n7. Do NOT snapshot during the drag (would flood undo history with hundreds of entries).",
+    "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: drag a position slider. Ctrl+Z reverts the entire drag. Drag color picker — Ctrl+Z reverts to pre-drag color. Gizmo drag — Ctrl+Z reverts full transform. Undo history doesn't explode with entries.",
+    "passes": false
+  },
+  {
+    "id": 30,
+    "category": "rendering",
+    "description": "Document max 8 scene lights limitation and add graceful handling.\n\nProblem: The light system caps at 8 lights but the user can create unlimited Light nodes. Without guard rails, lights beyond the 8th silently do nothing — confusing for users.\n\nSteps:\n1. In src/gpu/buffers.rs: when collecting lights, sort by distance to camera (closest first) so the 8 most relevant lights are always active. This is the industry-standard approach (forward rendering light culling).\n2. If the scene has > 8 lights, show a toast warning: 'Scene has N lights — only the 8 nearest to camera are active.' Show this once per session or when the count changes.\n3. In src/ui/scene_tree.rs: visually indicate inactive lights (dim/gray the icon for lights beyond the 8-light limit).\n4. In src/ui/properties.rs: when a Light node is selected but inactive, show an info label: 'This light is inactive (max 8 active lights). Move it closer to the camera or remove other lights.'\n5. Add a constant MAX_SCENE_LIGHTS = 8 in a shared location (src/gpu/mod.rs or src/graph/scene.rs).",
+    "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: create 10 lights — toast appears warning about the limit. The 8 nearest to camera are active. Moving the camera may change which lights are active. Inactive lights show dimmed in scene tree.",
+    "passes": false
   }
 ]
