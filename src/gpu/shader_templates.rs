@@ -134,12 +134,6 @@ pub(crate) fn build_postlude(config: &RenderConfig) -> String {
         .replace("/*AO_STEP*/", &format_f32(config.ao_step))
         .replace("/*AO_DECAY*/", &format_f32(config.ao_decay))
         .replace("/*AO_INTENSITY*/", &format_f32(config.ao_intensity))
-        .replace("/*KEY_LIGHT_DIR*/", &format_vec3(config.key_light_dir))
-        .replace("/*KEY_DIFFUSE*/", &format_f32(config.key_diffuse))
-        .replace("/*KEY_SPEC_INTENSITY*/", &format_f32(config.key_spec_intensity))
-        .replace("/*FILL_LIGHT_DIR*/", &format_vec3(config.fill_light_dir))
-        .replace("/*FILL_INTENSITY*/", &format_f32(config.fill_intensity))
-        .replace("/*AMBIENT*/", &format_f32(config.ambient))
         .replace("/*SKY_HORIZON*/", &format_vec3(match config.background_mode {
             crate::settings::BackgroundMode::SkyGradient => config.sky_horizon,
             crate::settings::BackgroundMode::SolidColor => config.bg_solid_color,

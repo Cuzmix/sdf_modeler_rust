@@ -334,17 +334,17 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
             // Clay: uniform gray, hemisphere + key diffuse only
             let clay = vec3f(0.7, 0.7, 0.72);
             let sky_l = clamp(0.5 + 0.5 * n.y, 0.0, 1.0);
-            let key_dir = normalize(vec3f(/*KEY_LIGHT_DIR*/));
+            let key_dir = normalize(camera.key_light.xyz);
             let key_diff = max(dot(n, key_dir), 0.0);
             color = clay * (sky_l * 0.4 + key_diff * 0.6 + 0.15);
             color = pow(color, vec3f(1.0 / /*GAMMA*/));
         } else if shading_mode > 0.5 {
             // Solid: per-node colors, flat diffuse, no shadows/AO
             let albedo = get_blended_color(mat_id, mat_b_id, blend_factor);
-            let key_dir = normalize(vec3f(/*KEY_LIGHT_DIR*/));
+            let key_dir = normalize(camera.key_light.xyz);
             let key_diff = max(dot(n, key_dir), 0.0);
-            let fill_dir = normalize(vec3f(/*FILL_LIGHT_DIR*/));
-            let fill_diff = max(dot(n, fill_dir), 0.0) * /*FILL_INTENSITY*/;
+            let fill_dir = normalize(camera.fill_light.xyz);
+            let fill_diff = max(dot(n, fill_dir), 0.0) * camera.fill_light.w;
             color = albedo * (key_diff * 0.7 + fill_diff + 0.2);
             color = pow(color, vec3f(1.0 / /*GAMMA*/));
         } else {
@@ -368,7 +368,7 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
         let diffuse_color = albedo * (1.0 - mat_metallic) / PI;
 
         // Key light — Cook-Torrance GGX BRDF
-        let key_dir = normalize(vec3f(/*KEY_LIGHT_DIR*/));
+        let key_dir = normalize(camera.key_light.xyz);
         let key_h = normalize(key_dir + view_dir);
         let NoL_key = max(dot(n, key_dir), 0.0);
         let NoH_key = max(dot(n, key_h), 0.0);
@@ -382,7 +382,7 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
         /*SHADOW_LINE*/
 
         // Fill light — same BRDF
-        let fill_dir = normalize(vec3f(/*FILL_LIGHT_DIR*/));
+        let fill_dir = normalize(camera.fill_light.xyz);
         let fill_h = normalize(fill_dir + view_dir);
         let NoL_fill = max(dot(n, fill_dir), 0.0);
         let NoH_fill = max(dot(n, fill_h), 0.0);
@@ -400,12 +400,19 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
         let sky = clamp(0.5 + 0.5 * n.y, 0.0, 1.0);
         let shadow_col = pow(vec3f(shadow), vec3f(1.0, 1.2, 1.5));
 
-        // Accumulate lighting
-        let key_light = (diffuse_color + specular_key * /*KEY_SPEC_INTENSITY*/) * NoL_key * /*KEY_DIFFUSE*/;
-        let fill_light = (diffuse_color + specular_fill * /*KEY_SPEC_INTENSITY*/) * NoL_fill * /*FILL_INTENSITY*/;
-        color = key_light * shadow_col
-              + fill_light * ao
-              + diffuse_color * sky * /*AMBIENT*/ * ao;
+        // Accumulate lighting — parameters from uniform buffer (no shader rebuild needed)
+        let key_diffuse_i = camera.key_light.w;
+        let key_spec_i = camera.key_color_spec.w;
+        let key_col = camera.key_color_spec.xyz;
+        let fill_i = camera.fill_light.w;
+        let fill_col = camera.fill_color_ambient.xyz;
+        let ambient_i = camera.fill_color_ambient.w;
+
+        let key_contribution = (diffuse_color + specular_key * key_spec_i) * NoL_key * key_diffuse_i * key_col;
+        let fill_contribution = (diffuse_color + specular_fill * key_spec_i) * NoL_fill * fill_i * fill_col;
+        color = key_contribution * shadow_col
+              + fill_contribution * ao
+              + diffuse_color * sky * ambient_i * ao;
 
         // Environment reflection (sky gradient sampled along reflected ray)
         /*ENV_REFL_LINE*/

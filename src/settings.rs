@@ -287,8 +287,12 @@ pub struct RenderConfig {
     pub key_diffuse: f32,
     pub key_spec_power: f32,
     pub key_spec_intensity: f32,
+    #[serde(default = "default_white")]
+    pub key_light_color: [f32; 3],
     pub fill_light_dir: [f32; 3],
     pub fill_intensity: f32,
+    #[serde(default = "default_white")]
+    pub fill_light_color: [f32; 3],
     pub ambient: f32,
 
     // Environment Reflection
@@ -417,6 +421,7 @@ fn default_outline_color() -> [f32; 3] { [1.0, 0.8, 0.2] }
 fn default_outline_thickness() -> f32 { 2.5 }
 fn default_touch_zoom_sensitivity() -> f32 { 500.0 }
 fn default_roll_sensitivity() -> f32 { 0.005 }
+fn default_white() -> [f32; 3] { [1.0, 1.0, 1.0] }
 fn default_sss_strength() -> f32 { 5.0 }
 fn default_sss_color() -> [f32; 3] { [1.0, 0.4, 0.2] }
 fn default_env_reflection_intensity() -> f32 { 0.3 }
@@ -452,8 +457,10 @@ impl Default for RenderConfig {
             key_diffuse: 0.85,
             key_spec_power: 32.0,
             key_spec_intensity: 0.4,
+            key_light_color: [1.0, 1.0, 1.0],
             fill_light_dir: [-1.0, 0.5, -1.0],
             fill_intensity: 0.25,
+            fill_light_color: [1.0, 1.0, 1.0],
             ambient: 0.06,
 
             env_reflection_enabled: false,
@@ -542,8 +549,10 @@ impl RenderConfig {
         self.key_diffuse = d.key_diffuse;
         self.key_spec_power = d.key_spec_power;
         self.key_spec_intensity = d.key_spec_intensity;
+        self.key_light_color = d.key_light_color;
         self.fill_light_dir = d.fill_light_dir;
         self.fill_intensity = d.fill_intensity;
+        self.fill_light_color = d.fill_light_color;
         self.ambient = d.ambient;
     }
 
@@ -583,5 +592,58 @@ impl RenderConfig {
 
     pub fn reset_all(&mut self) {
         *self = Self::default();
+    }
+
+    /// Pack light parameters into 4 vec4f arrays for the CameraUniform.
+    /// Layout:
+    ///   [0]: key_dir.xyz, key_diffuse
+    ///   [1]: key_color.rgb, key_spec_intensity
+    ///   [2]: fill_dir.xyz, fill_intensity
+    ///   [3]: fill_color.rgb, ambient
+    pub fn light_uniform_data(&self) -> [[f32; 4]; 4] {
+        [
+            [self.key_light_dir[0], self.key_light_dir[1], self.key_light_dir[2], self.key_diffuse],
+            [self.key_light_color[0], self.key_light_color[1], self.key_light_color[2], self.key_spec_intensity],
+            [self.fill_light_dir[0], self.fill_light_dir[1], self.fill_light_dir[2], self.fill_intensity],
+            [self.fill_light_color[0], self.fill_light_color[1], self.fill_light_color[2], self.ambient],
+        ]
+    }
+
+    /// Returns true if the change between self and other requires a shader
+    /// recompilation (i.e., a placeholder-affecting field changed). Light
+    /// parameters are now in the uniform buffer and don't need rebuild.
+    pub fn needs_shader_rebuild(&self, other: &Self) -> bool {
+        // Compare all fields EXCEPT lighting (those are in uniform now)
+        self.shadows_enabled != other.shadows_enabled
+            || self.shadow_steps != other.shadow_steps
+            || self.shadow_penumbra_k != other.shadow_penumbra_k
+            || self.shadow_bias != other.shadow_bias
+            || self.shadow_mint != other.shadow_mint
+            || self.shadow_maxt != other.shadow_maxt
+            || self.ao_enabled != other.ao_enabled
+            || self.ao_samples != other.ao_samples
+            || self.ao_step != other.ao_step
+            || self.ao_decay != other.ao_decay
+            || self.ao_intensity != other.ao_intensity
+            || self.march_max_steps != other.march_max_steps
+            || self.march_epsilon != other.march_epsilon
+            || self.march_step_multiplier != other.march_step_multiplier
+            || self.march_max_distance != other.march_max_distance
+            || self.env_reflection_enabled != other.env_reflection_enabled
+            || self.env_reflection_intensity != other.env_reflection_intensity
+            || self.sky_horizon != other.sky_horizon
+            || self.sky_zenith != other.sky_zenith
+            || self.background_mode != other.background_mode
+            || self.bg_solid_color != other.bg_solid_color
+            || self.sss_enabled != other.sss_enabled
+            || self.sss_strength != other.sss_strength
+            || self.sss_color != other.sss_color
+            || self.fog_enabled != other.fog_enabled
+            || self.fog_density != other.fog_density
+            || self.fog_color != other.fog_color
+            || self.gamma != other.gamma
+            || self.tonemapping_aces != other.tonemapping_aces
+            || self.outline_color != other.outline_color
+            || self.outline_thickness != other.outline_thickness
     }
 }

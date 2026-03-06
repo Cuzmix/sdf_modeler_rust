@@ -410,3 +410,52 @@ Design decisions:
   starting point. Changing the slider applies the new value to all selected nodes.
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (276/276) ✓
+
+--- Iteration 17: PRD #20 — Dynamic light uniforms (remove shader constant placeholders) ---
+COMPLETED. Moved light parameters from shader placeholder constants to dynamic uniform buffer.
+
+Changes:
+- src/settings.rs: Added key_light_color: [f32; 3] and fill_light_color: [f32; 3] to
+  RenderConfig (default white [1.0, 1.0, 1.0], serde defaults for backwards compat).
+  Added light_uniform_data() method that packs 6 light parameters into 4 vec4f arrays:
+    [0]: key_dir.xyz, key_diffuse_intensity
+    [1]: key_color.rgb, key_spec_intensity
+    [2]: fill_dir.xyz, fill_intensity
+    [3]: fill_color.rgb, ambient_intensity
+  Added needs_shader_rebuild() method that compares only placeholder-affecting fields,
+  excluding light parameters (which are now in the uniform buffer).
+  Updated reset_lighting() to include new color fields.
+- src/gpu/camera.rs: Extended CameraUniform with 4 new vec4f fields: key_light,
+  key_color_spec, fill_light, fill_color_ambient (64 bytes). Updated to_uniform()
+  signature to accept light_data: [[f32; 4]; 4].
+- src/shaders/bindings.wgsl: Extended Camera struct with matching 4 vec4f fields.
+- src/shaders/rendering.wgsl: Replaced all 6 light placeholder references with
+  camera uniform reads:
+    - /*KEY_LIGHT_DIR*/ → camera.key_light.xyz (in Clay, Solid, Full modes)
+    - /*KEY_DIFFUSE*/ → camera.key_light.w
+    - /*KEY_SPEC_INTENSITY*/ → camera.key_color_spec.w
+    - /*FILL_LIGHT_DIR*/ → camera.fill_light.xyz
+    - /*FILL_INTENSITY*/ → camera.fill_light.w
+    - /*AMBIENT*/ → camera.fill_color_ambient.w
+  Added light color multiplication in Full PBR shading: key_col and fill_col from
+  camera.key_color_spec.xyz and camera.fill_color_ambient.xyz respectively.
+- src/gpu/shader_templates.rs: Removed 6 placeholder replacements from build_postlude():
+  KEY_LIGHT_DIR, KEY_DIFFUSE, KEY_SPEC_INTENSITY, FILL_LIGHT_DIR, FILL_INTENSITY, AMBIENT.
+  Shadow/SSS/fog templates continue using the WGSL variable `key_dir` which is now
+  defined from the uniform in the Full shading block.
+- src/ui/render_settings.rs: Added color pickers for key_light_color and fill_light_color.
+  Smart rebuild detection: only pushes Action::SettingsChanged (shader rebuild) when
+  shader-affecting fields change; light-only changes just save settings (no rebuild).
+  Updated 4 lighting presets (Studio/Outdoor/Dramatic/Flat) to set light colors.
+  Outdoor preset uses warm sunlight [1.0, 0.95, 0.85] + cool fill [0.7, 0.8, 1.0];
+  Dramatic uses warm [1.0, 0.9, 0.7] + blue fill [0.5, 0.6, 0.9].
+- src/ui/viewport/draw.rs: Updated 5 to_uniform() call sites — render call passes
+  render_config.light_uniform_data(), pick calls pass [[0.0; 4]; 4].
+- src/app/async_tasks.rs: Updated screenshot to_uniform() call with light data.
+
+Benefit: Changing light direction, color, intensity, or ambient in render settings now
+updates in real-time without shader recompilation. Previously every light tweak triggered
+a full pipeline rebuild (structure_key=0). Now only shadow/AO/march/sky/fog/gamma changes
+trigger rebuild.
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (276/276) ✓

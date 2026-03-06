@@ -542,6 +542,7 @@ pub fn draw(
         shading_mode_val,
         brush_pos,
         cross_section,
+        render_config.light_uniform_data(),
     );
 
     ui.painter().add(egui_wgpu::Callback::new_paint_callback(
@@ -656,6 +657,7 @@ pub fn draw(
                             0.0,
                             [0.0; 4],
                             [0.0; 4],
+                            [[0.0; 4]; 4],
                         ),
                         ctrl_held: false, // Ctrl used for sculpt inversion, not multi-select
                     });
@@ -702,6 +704,7 @@ pub fn draw(
                             0.0,
                             [0.0; 4],
                             [0.0; 4],
+                            [[0.0; 4]; 4],
                         ),
                         ctrl_held: false,
                     });
@@ -809,7 +812,7 @@ pub fn draw(
                     (pos.y - rect.min.y) * pixels_per_point,
                 ];
                 let pick_uniform =
-                    camera.to_uniform(viewport, time, 0.0, false, scene_bounds, -1.0, 0.0, [0.0; 4], [0.0; 4]);
+                    camera.to_uniform(viewport, time, 0.0, false, scene_bounds, -1.0, 0.0, [0.0; 4], [0.0; 4], [[0.0; 4]; 4]);
                 let ctrl_held = ui.input(|i| i.modifiers.ctrl);
                 output.pending_pick = Some(PendingPick {
                     mouse_pos: mouse_px,

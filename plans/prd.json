@@ -102,7 +102,7 @@
     "category": "rendering",
     "description": "Move lights from shader constants to dynamic uniform buffer (phase 2: dynamic lighting).\n\nSteps:\n1. In src/gpu/camera.rs: extend CameraUniform (or create a new LightUniform) to include:\n   - key_light_dir: [f32; 4]\n   - key_light_color: [f32; 4] (rgb + diffuse_intensity)\n   - key_spec_intensity: f32\n   - fill_light_dir: [f32; 4]\n   - fill_light_color: [f32; 4] (rgb + intensity)\n   - ambient_intensity: f32\n   This replaces the current shader constant placeholder approach.\n2. In src/gpu/shader_templates.rs: remove the /*KEY_LIGHT_DIR*/, /*KEY_DIFFUSE*/, etc. placeholder system. Instead, read values from the uniform buffer in WGSL.\n3. In src/shaders/rendering.wgsl: read light parameters from the uniform buffer instead of hardcoded constants.\n4. In src/ui/render_settings.rs: add key_light_color (color picker) alongside existing direction/intensity controls. Add fill_light_color.\n5. Update the uniform upload in src/ui/viewport/gpu_ops.rs to write light values every frame.\n6. Benefit: changing lighting no longer requires shader recompilation.",
     "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: changing light direction/color/intensity in render settings should update in real-time without shader recompilation (no 'Rebuilding pipeline...' message).",
-    "passes": false
+    "passes": true
   },
   {
     "id": 21,

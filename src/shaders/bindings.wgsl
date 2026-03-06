@@ -14,6 +14,11 @@ struct Camera {
     scene_max: vec4f,
     brush_pos: vec4f,
     cross_section: vec4f,
+    // Dynamic lighting (no shader rebuild needed for changes)
+    key_light: vec4f,       // dir.xyz, diffuse_intensity
+    key_color_spec: vec4f,  // color.rgb, spec_intensity
+    fill_light: vec4f,      // dir.xyz, fill_intensity
+    fill_color_ambient: vec4f, // color.rgb, ambient_intensity
 }
 
 struct SdfNode {
