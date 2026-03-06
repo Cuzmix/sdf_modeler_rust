@@ -400,16 +400,20 @@ pub enum LightType {
     Point,
     Spot,
     Directional,
+    /// Global ambient light — uniform illumination from all directions.
+    /// Has color and intensity but no position, direction, or falloff.
+    Ambient,
 }
 
 impl LightType {
-    pub const ALL: &[Self] = &[Self::Point, Self::Spot, Self::Directional];
+    pub const ALL: &[Self] = &[Self::Point, Self::Spot, Self::Directional, Self::Ambient];
 
     pub fn label(&self) -> &'static str {
         match self {
             Self::Point => "Point",
             Self::Spot => "Spot",
             Self::Directional => "Directional",
+            Self::Ambient => "Ambient",
         }
     }
 
@@ -418,6 +422,7 @@ impl LightType {
             Self::Point => "[Pt]",
             Self::Spot => "[Sp]",
             Self::Directional => "[Dir]",
+            Self::Ambient => "[Amb]",
         }
     }
 }
@@ -799,9 +804,10 @@ impl Scene {
         (light_id, transform_id)
     }
 
-    /// Create default Key and Fill directional lights for a new scene.
-    /// Key Light: warm white, intensity 1.5, direction (-0.5, -1.0, -0.3).
-    /// Fill Light: cool blue-white, intensity 0.4, direction (0.3, -0.5, 0.6).
+    /// Create default Key, Fill, and Ambient lights for a new scene.
+    /// Key Light: warm white directional, intensity 1.5, direction (-0.5, -1.0, -0.3).
+    /// Fill Light: cool blue-white directional, intensity 0.4, direction (0.3, -0.5, 0.6).
+    /// Ambient Light: neutral white, intensity 0.05 (minimum base illumination).
     pub fn create_default_lights(&mut self) {
         // Key Light
         let key_light_id = self.add_node(
@@ -841,6 +847,27 @@ impl Scene {
                 input: Some(fill_light_id),
                 translation: Vec3::new(-2.0, 2.0, -3.0),
                 rotation: Vec3::new(0.3, -0.5, 0.6),
+                scale: Vec3::ONE,
+            },
+        );
+
+        // Ambient Light
+        let ambient_light_id = self.add_node(
+            "Ambient Light".to_string(),
+            NodeData::Light {
+                light_type: LightType::Ambient,
+                color: Vec3::ONE,
+                intensity: 0.05,
+                range: 10.0,
+                spot_angle: 45.0,
+            },
+        );
+        let _ambient_transform_id = self.add_node(
+            "Ambient Light Transform".to_string(),
+            NodeData::Transform {
+                input: Some(ambient_light_id),
+                translation: Vec3::ZERO,
+                rotation: Vec3::ZERO,
                 scale: Vec3::ONE,
             },
         );
@@ -1973,8 +2000,8 @@ mod tests {
     #[test]
     fn new_scene_has_sphere_and_default_lights() {
         let scene = Scene::new();
-        // 1 sphere + 2 lights + 2 light transforms = 5 nodes
-        assert_eq!(scene.nodes.len(), 5);
+        // 1 sphere + 3 lights (Key, Fill, Ambient) + 3 light transforms = 7 nodes
+        assert_eq!(scene.nodes.len(), 7);
         let has_sphere = scene.nodes.values().any(|n| {
             matches!(n.data, NodeData::Primitive { kind: SdfPrimitive::Sphere, .. })
         });
@@ -1982,7 +2009,7 @@ mod tests {
         let light_count = scene.nodes.values().filter(|n| {
             matches!(n.data, NodeData::Light { .. })
         }).count();
-        assert_eq!(light_count, 2);
+        assert_eq!(light_count, 3);
     }
 
     // ── add_node / create factories ─────────────────────────────────
@@ -2887,8 +2914,8 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
-    fn light_type_all_has_3_variants() {
-        assert_eq!(LightType::ALL.len(), 3);
+    fn light_type_all_has_4_variants() {
+        assert_eq!(LightType::ALL.len(), 4);
     }
 
     #[test]
@@ -2896,6 +2923,7 @@ mod tests {
         assert_eq!(LightType::Point.label(), "Point");
         assert_eq!(LightType::Spot.label(), "Spot");
         assert_eq!(LightType::Directional.label(), "Directional");
+        assert_eq!(LightType::Ambient.label(), "Ambient");
     }
 
     #[test]
@@ -2903,6 +2931,7 @@ mod tests {
         assert_eq!(LightType::Point.badge(), "[Pt]");
         assert_eq!(LightType::Spot.badge(), "[Sp]");
         assert_eq!(LightType::Directional.badge(), "[Dir]");
+        assert_eq!(LightType::Ambient.badge(), "[Amb]");
     }
 
     #[test]

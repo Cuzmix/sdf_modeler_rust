@@ -916,12 +916,11 @@ fn apply_lighting_preset_to_scene(
             ),
         };
 
-    // Update ambient and sky
-    render_config.ambient = ambient;
+    // Update sky colors (ambient is now controlled by scene Ambient Light node)
     render_config.sky_horizon = sky_horizon;
     render_config.sky_zenith = sky_zenith;
 
-    // Find and update Key Light and Fill Light nodes
+    // Find and update Key Light, Fill Light, and Ambient Light nodes
     let node_ids: Vec<_> = scene.nodes.keys().copied().collect();
     for id in node_ids {
         let name = scene.nodes.get(&id).map(|n| n.name.as_str()).unwrap_or("");
@@ -952,6 +951,12 @@ fn apply_lighting_preset_to_scene(
                     if let NodeData::Transform { ref mut rotation, .. } = &mut t_node.data {
                         *rotation = fill_dir;
                     }
+                }
+            }
+        } else if name == "Ambient Light" {
+            if let Some(node) = scene.nodes.get_mut(&id) {
+                if let NodeData::Light { ref mut intensity, .. } = &mut node.data {
+                    *intensity = ambient;
                 }
             }
         }

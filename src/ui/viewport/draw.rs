@@ -534,7 +534,7 @@ pub fn draw(
         0.0,
     ];
     // Collect scene lights for the GPU (up to 8, sorted by distance to camera)
-    let (scene_light_count, scene_light_list) =
+    let (scene_light_count, scene_light_list, scene_ambient) =
         crate::gpu::buffers::collect_scene_lights(scene, camera.eye());
     let scene_light_info = [scene_light_count as f32, 0.0, 0.0, 0.0];
     let mut scene_lights_flat = [[0.0_f32; 4]; 32];
@@ -544,6 +544,15 @@ pub fn draw(
         scene_lights_flat[i * 4 + 2] = light.color_range;
         scene_lights_flat[i * 4 + 3] = light.params;
     }
+
+    // Combine scene Ambient lights with render config fallback
+    // Scene ambient color's luminance overrides config if any Ambient nodes exist
+    let ambient_luminance = scene_ambient.color.dot(glam::Vec3::new(0.2126, 0.7152, 0.0722));
+    let effective_ambient = if ambient_luminance > 0.0 {
+        ambient_luminance
+    } else {
+        render_config.ambient
+    };
 
     let render_uniform = camera.to_uniform(
         render_viewport,
@@ -555,7 +564,7 @@ pub fn draw(
         shading_mode_val,
         brush_pos,
         cross_section,
-        render_config.ambient,
+        effective_ambient,
         scene_light_info,
         scene_lights_flat,
     );

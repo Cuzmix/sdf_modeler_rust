@@ -1229,7 +1229,7 @@ pub fn draw(
             });
 
             // Range: only relevant for Point and Spot
-            if !matches!(light_type, crate::graph::scene::LightType::Directional) {
+            if matches!(light_type, crate::graph::scene::LightType::Point | crate::graph::scene::LightType::Spot) {
                 ui.horizontal(|ui| {
                     ui.label("Range:");
                     ui.add(egui::Slider::new(&mut range, 0.1..=50.0));

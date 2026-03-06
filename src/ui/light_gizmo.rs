@@ -205,6 +205,17 @@ fn draw_directional_light_icon(
     }
 }
 
+/// Draw an ambient light billboard: concentric rings (represents omnidirectional illumination).
+fn draw_ambient_light_icon(painter: &egui::Painter, center: Pos2, size: f32, color: Color32) {
+    let ring_stroke = Stroke::new(1.2, color);
+    // Three concentric rings
+    painter.circle_stroke(center, size * 0.2, ring_stroke);
+    painter.circle_stroke(center, size * 0.4, ring_stroke);
+    painter.circle_stroke(center, size * 0.6, ring_stroke);
+    // Small filled center dot
+    painter.circle_filled(center, size * 0.08, color);
+}
+
 // ---------------------------------------------------------------------------
 // Wireframe gizmo drawing (selected lights only)
 // ---------------------------------------------------------------------------
@@ -452,6 +463,7 @@ pub fn draw_and_interact(
             LightType::Directional => {
                 draw_directional_light_icon(painter, screen_pos, size, draw_color);
             }
+            LightType::Ambient => draw_ambient_light_icon(painter, screen_pos, size, draw_color),
         }
 
         // Draw small "X" over inactive light icons
@@ -502,6 +514,15 @@ pub fn draw_and_interact(
                         &vp,
                         rect,
                         wireframe_color,
+                    );
+                }
+                LightType::Ambient => {
+                    // Ambient has no spatial extent — no wireframe gizmo needed.
+                    // Just show a highlight ring around the billboard icon.
+                    painter.circle_stroke(
+                        screen_pos,
+                        size * 0.8,
+                        Stroke::new(WIREFRAME_STROKE, wireframe_color),
                     );
                 }
             }

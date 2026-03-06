@@ -171,6 +171,7 @@ pub fn build_node_buffer(
                     crate::graph::scene::LightType::Point => 50.0,
                     crate::graph::scene::LightType::Spot => 51.0,
                     crate::graph::scene::LightType::Directional => 52.0,
+                    crate::graph::scene::LightType::Ambient => 53.0,
                 };
                 buffer.push(SdfNodeGpu {
                     type_op: [type_val, *intensity, *range, *spot_angle],
@@ -209,11 +210,23 @@ pub struct SceneLightGpu {
     pub params: [f32; 4],
 }
 
+/// Collected ambient contribution from scene Ambient light nodes.
+#[derive(Default)]
+pub struct SceneAmbient {
+    /// Total ambient color (sum of all visible Ambient lights: color * intensity).
+    pub color: glam::Vec3,
+}
+
 /// Collect visible Light nodes from the scene, sorted by distance to camera (nearest first).
-/// Returns up to MAX_SCENE_LIGHTS lights packed as SceneLightGpu.
-pub fn collect_scene_lights(scene: &Scene, camera_pos: glam::Vec3) -> (u32, Vec<SceneLightGpu>) {
+/// Returns (directional/point/spot count, gpu lights, accumulated ambient).
+/// Ambient-type lights contribute to the returned `SceneAmbient` instead of the light array.
+pub fn collect_scene_lights(
+    scene: &Scene,
+    camera_pos: glam::Vec3,
+) -> (u32, Vec<SceneLightGpu>, SceneAmbient) {
     let parent_map = scene.build_parent_map();
     let mut lights: Vec<(f32, SceneLightGpu)> = Vec::new();
+    let mut ambient = SceneAmbient::default();
 
     for (&id, node) in &scene.nodes {
         if let NodeData::Light {
@@ -225,6 +238,12 @@ pub fn collect_scene_lights(scene: &Scene, camera_pos: glam::Vec3) -> (u32, Vec<
         } = &node.data
         {
             if scene.is_hidden(id) {
+                continue;
+            }
+
+            // Ambient lights accumulate into scene ambient — no position/direction needed
+            if *light_type == LightType::Ambient {
+                ambient.color += *color * *intensity;
                 continue;
             }
 
@@ -256,6 +275,7 @@ pub fn collect_scene_lights(scene: &Scene, camera_pos: glam::Vec3) -> (u32, Vec<
                 LightType::Point => 0.0,
                 LightType::Spot => 1.0,
                 LightType::Directional => 2.0,
+                LightType::Ambient => unreachable!(), // handled above
             };
 
             let half_angle_rad = (spot_angle * 0.5).to_radians();
@@ -279,9 +299,13 @@ pub fn collect_scene_lights(scene: &Scene, camera_pos: glam::Vec3) -> (u32, Vec<
     lights.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
 
     let count = lights.len().min(MAX_SCENE_LIGHTS) as u32;
-    let gpu_lights: Vec<SceneLightGpu> = lights.into_iter().take(MAX_SCENE_LIGHTS).map(|(_, l)| l).collect();
+    let gpu_lights: Vec<SceneLightGpu> = lights
+        .into_iter()
+        .take(MAX_SCENE_LIGHTS)
+        .map(|(_, l)| l)
+        .collect();
 
-    (count, gpu_lights)
+    (count, gpu_lights, ambient)
 }
 
 /// Identify which Light nodes are active (nearest to camera, up to MAX_SCENE_LIGHTS).
@@ -360,7 +384,7 @@ mod tests {
     #[test]
     fn collect_scene_lights_empty_scene_returns_zero() {
         let scene = empty_scene();
-        let (count, lights) = collect_scene_lights(&scene, Vec3::ZERO);
+        let (count, lights, _ambient) = collect_scene_lights(&scene, Vec3::ZERO);
         assert_eq!(count, 0);
         assert!(lights.is_empty());
     }
@@ -369,7 +393,7 @@ mod tests {
     fn collect_scene_lights_single_point_light() {
         let mut scene = empty_scene();
         let (_light_id, _transform_id) = scene.create_light(LightType::Point);
-        let (count, lights) = collect_scene_lights(&scene, Vec3::ZERO);
+        let (count, lights, _ambient) = collect_scene_lights(&scene, Vec3::ZERO);
         assert_eq!(count, 1);
         assert_eq!(lights.len(), 1);
         // Point light type = 0.0
@@ -388,7 +412,7 @@ mod tests {
     fn collect_scene_lights_spot_light_type() {
         let mut scene = empty_scene();
         scene.create_light(LightType::Spot);
-        let (count, lights) = collect_scene_lights(&scene, Vec3::ZERO);
+        let (count, lights, _ambient) = collect_scene_lights(&scene, Vec3::ZERO);
         assert_eq!(count, 1);
         // Spot light type = 1.0
         assert!((lights[0].position_type[3] - 1.0).abs() < 1e-5);
@@ -398,7 +422,7 @@ mod tests {
     fn collect_scene_lights_directional_type() {
         let mut scene = empty_scene();
         scene.create_light(LightType::Directional);
-        let (count, lights) = collect_scene_lights(&scene, Vec3::ZERO);
+        let (count, lights, _ambient) = collect_scene_lights(&scene, Vec3::ZERO);
         assert_eq!(count, 1);
         // Directional light type = 2.0
         assert!((lights[0].position_type[3] - 2.0).abs() < 1e-5);
@@ -411,7 +435,7 @@ mod tests {
         for _ in 0..10 {
             scene.create_light(LightType::Point);
         }
-        let (count, lights) = collect_scene_lights(&scene, Vec3::ZERO);
+        let (count, lights, _ambient) = collect_scene_lights(&scene, Vec3::ZERO);
         assert_eq!(count, MAX_SCENE_LIGHTS as u32);
         assert_eq!(lights.len(), MAX_SCENE_LIGHTS);
     }
@@ -434,7 +458,7 @@ mod tests {
             }
         }
         let camera_pos = Vec3::ZERO;
-        let (count, lights) = collect_scene_lights(&scene, camera_pos);
+        let (count, lights, _ambient) = collect_scene_lights(&scene, camera_pos);
         assert_eq!(count, 2);
         // First light should be the nearest one (at x=1)
         assert!((lights[0].position_type[0] - 1.0).abs() < 1e-5,
@@ -449,9 +473,31 @@ mod tests {
         let mut scene = empty_scene();
         let (light_id, _) = scene.create_light(LightType::Point);
         scene.hidden_nodes.insert(light_id);
-        let (count, lights) = collect_scene_lights(&scene, Vec3::ZERO);
+        let (count, lights, _ambient) = collect_scene_lights(&scene, Vec3::ZERO);
         assert_eq!(count, 0);
         assert!(lights.is_empty());
+    }
+
+    #[test]
+    fn collect_scene_lights_ambient_contributes_to_scene_ambient() {
+        let mut scene = empty_scene();
+        scene.create_light(LightType::Ambient);
+        // Set intensity on the ambient light
+        for node in scene.nodes.values_mut() {
+            if let NodeData::Light { light_type, intensity, .. } = &mut node.data {
+                if *light_type == LightType::Ambient {
+                    *intensity = 0.1;
+                }
+            }
+        }
+        let (count, lights, ambient) = collect_scene_lights(&scene, Vec3::ZERO);
+        // Ambient lights don't go into the light array
+        assert_eq!(count, 0);
+        assert!(lights.is_empty());
+        // Ambient contribution should be non-zero (white * 0.1 = (0.1, 0.1, 0.1))
+        assert!(ambient.color.x > 0.0);
+        assert!(ambient.color.y > 0.0);
+        assert!(ambient.color.z > 0.0);
     }
 
     // -----------------------------------------------------------------------
@@ -507,7 +553,7 @@ mod tests {
                 *spot_angle = 90.0;
             }
         }
-        let (_, lights) = collect_scene_lights(&scene, Vec3::ZERO);
+        let (_, lights, _) = collect_scene_lights(&scene, Vec3::ZERO);
         // cos(90/2 degrees) = cos(45 degrees) = sqrt(2)/2 ≈ 0.7071
         let expected_cos = (45.0_f32.to_radians()).cos();
         assert!((lights[0].params[0] - expected_cos).abs() < 1e-3,

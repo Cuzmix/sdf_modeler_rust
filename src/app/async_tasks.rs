@@ -183,7 +183,7 @@ impl SdfApp {
         let height = 1080u32;
         let scene_bounds = self.doc.scene.compute_bounds();
         let viewport = [0.0, 0.0, width as f32, height as f32];
-        let (scene_light_count, scene_light_list) =
+        let (scene_light_count, scene_light_list, scene_ambient) =
             crate::gpu::buffers::collect_scene_lights(&self.doc.scene, self.doc.camera.eye());
         let scene_light_info = [scene_light_count as f32, 0.0, 0.0, 0.0];
         let mut scene_lights_flat = [[0.0_f32; 4]; 32];
@@ -193,7 +193,9 @@ impl SdfApp {
             scene_lights_flat[i * 4 + 2] = light.color_range;
             scene_lights_flat[i * 4 + 3] = light.params;
         }
-        let uniform = self.doc.camera.to_uniform(viewport, 0.0, 0.0, false, scene_bounds, -1.0, 0.0, [0.0; 4], [0.0; 4], self.settings.render.ambient, scene_light_info, scene_lights_flat);
+        let ambient_luminance = scene_ambient.color.dot(glam::Vec3::new(0.2126, 0.7152, 0.0722));
+        let effective_ambient = if ambient_luminance > 0.0 { ambient_luminance } else { self.settings.render.ambient };
+        let uniform = self.doc.camera.to_uniform(viewport, 0.0, 0.0, false, scene_bounds, -1.0, 0.0, [0.0; 4], [0.0; 4], effective_ambient, scene_light_info, scene_lights_flat);
 
         let pixels = resources.screenshot(
             &self.gpu.render_state.device,
