@@ -73,3 +73,21 @@ Sprint initialized. No iterations completed yet.
 - Helpers: `empty_scene()`, `scene_with_sphere()`, `scene_with_box()`
 - All 119 tests pass (16 history + 46 scene + 57 voxel). cargo check, clippy clean.
 - Files changed: `src/graph/voxel.rs`, `plans/prd.json`, `plans/progress.txt`
+
+## Iteration 4 — PRD #2: Marching cubes mesh export unit tests
+- Added 61 unit tests to `src/export.rs` covering:
+  - interp_vertex: midpoint symmetric, at p0 when v0=0, at p1 when v1=0, quarter-way, equal values returns p0, 3D interpolation
+  - quantize: zero, positive, negative, precision boundary, different values differ
+  - collect_leaf_colors: empty scene, single primitive, skips operations
+  - sample_color_at: returns closest leaf color, picks closer of two primitives, default gray when no leaves
+  - marching_cubes: empty scene → no triangles, sphere produces triangles, sphere vertices near unit sphere surface, box produces triangles, vertex colors populated, progress counter advances, triangle indices valid, deduplicates shared vertices, adaptive produces similar result, higher resolution → more triangles, bounds outside geometry → no mesh, CSG union produces mesh
+  - Edge/tri table sanity: all-inside/all-outside are zero, single corner has one triangle
+  - OBJ writer: header + vertices, 1-indexed faces, multiple triangles, empty mesh
+  - STL writer: header + triangle count, correct total size, multiple triangles
+  - PLY writer: header structure, with colors, without colors, face format
+  - GLB writer: magic + version, total length matches file, JSON chunk type, contains asset version, no colors omits COLOR_0, with colors has COLOR_0
+  - USDA writer: header, points, face vertex counts, vertex colors, no colors omits displayColor
+  - write_mesh dispatch: STL, PLY, GLB, USDA, defaults to OBJ
+- Helpers: `empty_scene()`, `scene_with_sphere()`, `scene_with_box()`, `sample_mesh()`, `sample_mesh_no_colors()`
+- All 180 tests pass (16 history + 46 scene + 57 voxel + 61 export). cargo check, clippy clean.
+- Files changed: `src/export.rs`, `plans/prd.json`, `plans/progress.txt`

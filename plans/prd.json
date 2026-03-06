@@ -11,7 +11,7 @@
     "category": "testing",
     "description": "Add unit tests for marching cubes mesh export (vertex generation, deduplication, format writers)",
     "verification": "cargo test -- export passes, verifies correct triangle/vertex output for known SDF inputs",
-    "passes": false
+    "passes": true
   },
   {
     "id": 3,

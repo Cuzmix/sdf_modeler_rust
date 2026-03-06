@@ -925,3 +925,929 @@ pub fn write_mesh(mesh: &ExportMesh, path: &Path) -> Result<(), String> {
         _ => write_obj(mesh, path),
     }
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+    use std::collections::HashSet;
+    use std::sync::atomic::AtomicU32;
+
+    use glam::Vec3;
+
+    use crate::graph::scene::{NodeData, NodeId, Scene, SdfPrimitive, CsgOp};
+
+    // -----------------------------------------------------------------------
+    // Helpers
+    // -----------------------------------------------------------------------
+
+    fn empty_scene() -> Scene {
+        Scene {
+            nodes: HashMap::new(),
+            next_id: 0,
+            name_counters: HashMap::new(),
+            hidden_nodes: HashSet::new(),
+        }
+    }
+
+    fn scene_with_sphere() -> (Scene, NodeId) {
+        let mut scene = empty_scene();
+        let name = scene.next_name("Sphere");
+        let id = scene.add_node(name, NodeData::Primitive {
+            kind: SdfPrimitive::Sphere,
+            position: Vec3::ZERO,
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+            color: Vec3::new(1.0, 0.0, 0.0),
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        });
+        (scene, id)
+    }
+
+    fn scene_with_box() -> (Scene, NodeId) {
+        let mut scene = empty_scene();
+        let name = scene.next_name("Box");
+        let id = scene.add_node(name, NodeData::Primitive {
+            kind: SdfPrimitive::Box,
+            position: Vec3::ZERO,
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+            color: Vec3::new(0.0, 1.0, 0.0),
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        });
+        (scene, id)
+    }
+
+    /// Build a simple mesh for format writer tests.
+    fn sample_mesh() -> ExportMesh {
+        ExportMesh {
+            vertices: vec![
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0],
+            ],
+            triangles: vec![[0, 1, 2]],
+            vertex_colors: vec![
+                [1.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0],
+                [0.0, 0.0, 1.0],
+            ],
+        }
+    }
+
+    /// Build a mesh with no vertex colors.
+    fn sample_mesh_no_colors() -> ExportMesh {
+        ExportMesh {
+            vertices: vec![
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0],
+            ],
+            triangles: vec![[0, 1, 2]],
+            vertex_colors: vec![],
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // interp_vertex tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn interp_vertex_midpoint_when_symmetric() {
+        let result = interp_vertex(
+            Vec3::new(0.0, 0.0, 0.0), -1.0,
+            Vec3::new(2.0, 0.0, 0.0), 1.0,
+        );
+        assert!((result.x - 1.0).abs() < 1e-6);
+        assert!(result.y.abs() < 1e-6);
+        assert!(result.z.abs() < 1e-6);
+    }
+
+    #[test]
+    fn interp_vertex_at_p0_when_v0_is_zero() {
+        let result = interp_vertex(
+            Vec3::new(0.0, 0.0, 0.0), 0.0,
+            Vec3::new(1.0, 0.0, 0.0), 1.0,
+        );
+        assert!((result.x - 0.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn interp_vertex_at_p1_when_v1_is_zero() {
+        let result = interp_vertex(
+            Vec3::new(0.0, 0.0, 0.0), -1.0,
+            Vec3::new(1.0, 0.0, 0.0), 0.0,
+        );
+        assert!((result.x - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn interp_vertex_quarter_way() {
+        // v0=-1, v1=3 → t = 1/4
+        let result = interp_vertex(
+            Vec3::new(0.0, 0.0, 0.0), -1.0,
+            Vec3::new(4.0, 0.0, 0.0), 3.0,
+        );
+        assert!((result.x - 1.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn interp_vertex_equal_values_returns_p0() {
+        let result = interp_vertex(
+            Vec3::new(0.0, 0.0, 0.0), 1.0,
+            Vec3::new(1.0, 0.0, 0.0), 1.0,
+        );
+        assert!((result.x - 0.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn interp_vertex_3d_interpolation() {
+        let result = interp_vertex(
+            Vec3::new(0.0, 0.0, 0.0), -1.0,
+            Vec3::new(1.0, 2.0, 3.0), 1.0,
+        );
+        assert!((result.x - 0.5).abs() < 1e-5);
+        assert!((result.y - 1.0).abs() < 1e-5);
+        assert!((result.z - 1.5).abs() < 1e-5);
+    }
+
+    // -----------------------------------------------------------------------
+    // quantize tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn quantize_zero() {
+        assert_eq!(quantize(&[0.0, 0.0, 0.0]), (0, 0, 0));
+    }
+
+    #[test]
+    fn quantize_positive_values() {
+        assert_eq!(quantize(&[1.0, 2.0, 3.0]), (10000, 20000, 30000));
+    }
+
+    #[test]
+    fn quantize_negative_values() {
+        assert_eq!(quantize(&[-0.5, -1.0, -2.0]), (-5000, -10000, -20000));
+    }
+
+    #[test]
+    fn quantize_precision_boundary() {
+        // Values within 0.0001 should map to the same quantized value
+        let a = quantize(&[1.00004, 0.0, 0.0]);
+        let b = quantize(&[1.00006, 0.0, 0.0]);
+        // Both round to 10000 or 10001 — they should be close
+        assert!((a.0 - b.0).abs() <= 1);
+    }
+
+    #[test]
+    fn quantize_different_values_differ() {
+        let a = quantize(&[0.0, 0.0, 0.0]);
+        let b = quantize(&[0.01, 0.0, 0.0]);
+        assert_ne!(a, b);
+    }
+
+    // -----------------------------------------------------------------------
+    // collect_leaf_colors tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn collect_leaf_colors_empty_scene() {
+        let scene = empty_scene();
+        let leaves = collect_leaf_colors(&scene);
+        assert!(leaves.is_empty());
+    }
+
+    #[test]
+    fn collect_leaf_colors_single_primitive() {
+        let (scene, _id) = scene_with_sphere();
+        let leaves = collect_leaf_colors(&scene);
+        assert_eq!(leaves.len(), 1);
+        assert!((leaves[0].1[0] - 1.0).abs() < 1e-6); // red channel
+    }
+
+    #[test]
+    fn collect_leaf_colors_skips_operations() {
+        let mut scene = empty_scene();
+        let name = scene.next_name("Union");
+        scene.add_node(name, NodeData::Operation {
+            op: CsgOp::Union,
+            left: None,
+            right: None,
+            smooth_k: 0.0,
+        });
+        let leaves = collect_leaf_colors(&scene);
+        assert!(leaves.is_empty());
+    }
+
+    // -----------------------------------------------------------------------
+    // sample_color_at tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn sample_color_at_returns_closest_leaf_color() {
+        let (scene, _id) = scene_with_sphere();
+        let leaves = collect_leaf_colors(&scene);
+        let color = sample_color_at(&scene, Vec3::ZERO, &leaves);
+        // Sphere color is (1, 0, 0)
+        assert!((color[0] - 1.0).abs() < 1e-6);
+        assert!(color[1].abs() < 1e-6);
+        assert!(color[2].abs() < 1e-6);
+    }
+
+    #[test]
+    fn sample_color_at_picks_closer_of_two() {
+        let mut scene = empty_scene();
+        // Sphere at origin — red
+        let name1 = scene.next_name("Sphere");
+        scene.add_node(name1, NodeData::Primitive {
+            kind: SdfPrimitive::Sphere,
+            position: Vec3::ZERO,
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+            color: Vec3::new(1.0, 0.0, 0.0),
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        });
+        // Sphere at (5,0,0) — blue
+        let name2 = scene.next_name("Sphere");
+        scene.add_node(name2, NodeData::Primitive {
+            kind: SdfPrimitive::Sphere,
+            position: Vec3::new(5.0, 0.0, 0.0),
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+            color: Vec3::new(0.0, 0.0, 1.0),
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        });
+        let leaves = collect_leaf_colors(&scene);
+        // Point at origin should be closest to red sphere
+        let color = sample_color_at(&scene, Vec3::ZERO, &leaves);
+        assert!((color[0] - 1.0).abs() < 1e-6);
+        // Point at (5,0,0) should be closest to blue sphere
+        let color2 = sample_color_at(&scene, Vec3::new(5.0, 0.0, 0.0), &leaves);
+        assert!((color2[2] - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn sample_color_at_default_when_no_leaves() {
+        let scene = empty_scene();
+        let leaves: Vec<(NodeId, [f32; 3])> = vec![];
+        let color = sample_color_at(&scene, Vec3::ZERO, &leaves);
+        // Default gray
+        assert!((color[0] - 0.5).abs() < 1e-6);
+        assert!((color[1] - 0.5).abs() < 1e-6);
+        assert!((color[2] - 0.5).abs() < 1e-6);
+    }
+
+    // -----------------------------------------------------------------------
+    // marching_cubes tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn marching_cubes_empty_scene_produces_no_triangles() {
+        let scene = empty_scene();
+        let progress = AtomicU32::new(0);
+        let mesh = marching_cubes(
+            &scene, 8,
+            Vec3::splat(-2.0), Vec3::splat(2.0),
+            &progress, false,
+        );
+        assert!(mesh.triangles.is_empty());
+        assert!(mesh.vertices.is_empty());
+    }
+
+    #[test]
+    fn marching_cubes_sphere_produces_triangles() {
+        let (scene, _id) = scene_with_sphere();
+        let progress = AtomicU32::new(0);
+        let mesh = marching_cubes(
+            &scene, 16,
+            Vec3::splat(-2.0), Vec3::splat(2.0),
+            &progress, false,
+        );
+        assert!(!mesh.triangles.is_empty(), "sphere should produce triangles");
+        assert!(!mesh.vertices.is_empty(), "sphere should produce vertices");
+    }
+
+    #[test]
+    fn marching_cubes_sphere_vertices_near_unit_sphere() {
+        let (scene, _id) = scene_with_sphere();
+        let progress = AtomicU32::new(0);
+        let mesh = marching_cubes(
+            &scene, 32,
+            Vec3::splat(-2.0), Vec3::splat(2.0),
+            &progress, false,
+        );
+        // All vertices should be approximately on the unit sphere surface
+        for v in &mesh.vertices {
+            let dist = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+            assert!(
+                (dist - 1.0).abs() < 0.15,
+                "vertex at [{}, {}, {}] has radius {}, expected ~1.0",
+                v[0], v[1], v[2], dist
+            );
+        }
+    }
+
+    #[test]
+    fn marching_cubes_box_produces_triangles() {
+        let (scene, _id) = scene_with_box();
+        let progress = AtomicU32::new(0);
+        let mesh = marching_cubes(
+            &scene, 16,
+            Vec3::splat(-2.0), Vec3::splat(2.0),
+            &progress, false,
+        );
+        assert!(!mesh.triangles.is_empty(), "box should produce triangles");
+    }
+
+    #[test]
+    fn marching_cubes_vertex_colors_populated() {
+        let (scene, _id) = scene_with_sphere();
+        let progress = AtomicU32::new(0);
+        let mesh = marching_cubes(
+            &scene, 16,
+            Vec3::splat(-2.0), Vec3::splat(2.0),
+            &progress, false,
+        );
+        assert_eq!(mesh.vertex_colors.len(), mesh.vertices.len());
+        // Sphere color is red (1,0,0)
+        for c in &mesh.vertex_colors {
+            assert!((c[0] - 1.0).abs() < 1e-6, "expected red vertex color");
+        }
+    }
+
+    #[test]
+    fn marching_cubes_progress_counter_advances() {
+        let (scene, _id) = scene_with_sphere();
+        let progress = AtomicU32::new(0);
+        let _mesh = marching_cubes(
+            &scene, 8,
+            Vec3::splat(-2.0), Vec3::splat(2.0),
+            &progress, false,
+        );
+        // Progress should have been incremented (grid_size + res times)
+        assert!(progress.load(Ordering::Relaxed) > 0);
+    }
+
+    #[test]
+    fn marching_cubes_triangle_indices_valid() {
+        let (scene, _id) = scene_with_sphere();
+        let progress = AtomicU32::new(0);
+        let mesh = marching_cubes(
+            &scene, 16,
+            Vec3::splat(-2.0), Vec3::splat(2.0),
+            &progress, false,
+        );
+        let vertex_count = mesh.vertices.len() as u32;
+        for tri in &mesh.triangles {
+            for &idx in tri {
+                assert!(idx < vertex_count, "triangle index {} out of bounds ({})", idx, vertex_count);
+            }
+        }
+    }
+
+    #[test]
+    fn marching_cubes_deduplicates_shared_vertices() {
+        let (scene, _id) = scene_with_sphere();
+        let progress = AtomicU32::new(0);
+        let mesh = marching_cubes(
+            &scene, 16,
+            Vec3::splat(-2.0), Vec3::splat(2.0),
+            &progress, false,
+        );
+        // For a closed surface, vertices should be shared — # vertices << # triangle*3
+        let total_vertex_refs = mesh.triangles.len() * 3;
+        assert!(
+            mesh.vertices.len() < total_vertex_refs,
+            "expected deduplication: {} vertices vs {} references",
+            mesh.vertices.len(), total_vertex_refs
+        );
+    }
+
+    #[test]
+    fn marching_cubes_adaptive_produces_similar_result() {
+        let (scene, _id) = scene_with_sphere();
+        let progress1 = AtomicU32::new(0);
+        let mesh_normal = marching_cubes(
+            &scene, 32,
+            Vec3::splat(-2.0), Vec3::splat(2.0),
+            &progress1, false,
+        );
+        let progress2 = AtomicU32::new(0);
+        let mesh_adaptive = marching_cubes(
+            &scene, 32,
+            Vec3::splat(-2.0), Vec3::splat(2.0),
+            &progress2, true,
+        );
+        // Adaptive should still produce triangles
+        assert!(!mesh_adaptive.triangles.is_empty());
+        // Should produce roughly similar triangle counts (within 2x)
+        let ratio = mesh_adaptive.triangles.len() as f64 / mesh_normal.triangles.len() as f64;
+        assert!(ratio > 0.5 && ratio < 2.0,
+            "adaptive ratio {} seems wrong (normal={}, adaptive={})",
+            ratio, mesh_normal.triangles.len(), mesh_adaptive.triangles.len());
+    }
+
+    #[test]
+    fn marching_cubes_higher_resolution_more_triangles() {
+        let (scene, _id) = scene_with_sphere();
+        let p1 = AtomicU32::new(0);
+        let mesh_low = marching_cubes(&scene, 8, Vec3::splat(-2.0), Vec3::splat(2.0), &p1, false);
+        let p2 = AtomicU32::new(0);
+        let mesh_high = marching_cubes(&scene, 16, Vec3::splat(-2.0), Vec3::splat(2.0), &p2, false);
+        assert!(
+            mesh_high.triangles.len() > mesh_low.triangles.len(),
+            "higher resolution should produce more triangles: {} vs {}",
+            mesh_high.triangles.len(), mesh_low.triangles.len()
+        );
+    }
+
+    #[test]
+    fn marching_cubes_bounds_outside_geometry_no_mesh() {
+        let (scene, _id) = scene_with_sphere();
+        let progress = AtomicU32::new(0);
+        // Bounds far from origin (sphere is at origin with radius 1)
+        let mesh = marching_cubes(
+            &scene, 8,
+            Vec3::new(10.0, 10.0, 10.0), Vec3::new(12.0, 12.0, 12.0),
+            &progress, false,
+        );
+        assert!(mesh.triangles.is_empty(), "no geometry in bounds → no triangles");
+    }
+
+    // -----------------------------------------------------------------------
+    // OBJ writer tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn write_obj_to_header_and_vertices() {
+        let mesh = sample_mesh();
+        let mut buf = Vec::new();
+        write_obj_to(&mesh, &mut buf).unwrap();
+        let output = String::from_utf8(buf).unwrap();
+        assert!(output.contains("# SDF Modeler Export"));
+        assert!(output.contains("# Vertices: 3, Triangles: 1"));
+        assert!(output.contains("v 0 0 0"));
+        assert!(output.contains("v 1 0 0"));
+        assert!(output.contains("v 0 1 0"));
+    }
+
+    #[test]
+    fn write_obj_to_faces_are_1_indexed() {
+        let mesh = sample_mesh();
+        let mut buf = Vec::new();
+        write_obj_to(&mesh, &mut buf).unwrap();
+        let output = String::from_utf8(buf).unwrap();
+        // OBJ face indices are 1-based
+        assert!(output.contains("f 1 2 3"));
+    }
+
+    #[test]
+    fn write_obj_to_multiple_triangles() {
+        let mesh = ExportMesh {
+            vertices: vec![[0.0,0.0,0.0],[1.0,0.0,0.0],[0.0,1.0,0.0],[1.0,1.0,0.0]],
+            triangles: vec![[0,1,2],[1,3,2]],
+            vertex_colors: vec![],
+        };
+        let mut buf = Vec::new();
+        write_obj_to(&mesh, &mut buf).unwrap();
+        let output = String::from_utf8(buf).unwrap();
+        assert!(output.contains("f 1 2 3"));
+        assert!(output.contains("f 2 4 3"));
+    }
+
+    #[test]
+    fn write_obj_to_empty_mesh() {
+        let mesh = ExportMesh { vertices: vec![], triangles: vec![], vertex_colors: vec![] };
+        let mut buf = Vec::new();
+        write_obj_to(&mesh, &mut buf).unwrap();
+        let output = String::from_utf8(buf).unwrap();
+        assert!(output.contains("# Vertices: 0, Triangles: 0"));
+    }
+
+    // -----------------------------------------------------------------------
+    // STL writer tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn write_stl_header_and_triangle_count() {
+        let mesh = sample_mesh();
+        let tmp = std::env::temp_dir().join("test_export.stl");
+        write_stl(&mesh, &tmp).unwrap();
+        let data = std::fs::read(&tmp).unwrap();
+        std::fs::remove_file(&tmp).ok();
+
+        // 80-byte header starts with "SDF Modeler Export"
+        assert!(data.len() >= 84);
+        assert!(data[..18] == *b"SDF Modeler Export");
+        // Triangle count at offset 80
+        let tri_count = u32::from_le_bytes([data[80], data[81], data[82], data[83]]);
+        assert_eq!(tri_count, 1);
+    }
+
+    #[test]
+    fn write_stl_correct_total_size() {
+        let mesh = sample_mesh();
+        let tmp = std::env::temp_dir().join("test_export_size.stl");
+        write_stl(&mesh, &tmp).unwrap();
+        let data = std::fs::read(&tmp).unwrap();
+        std::fs::remove_file(&tmp).ok();
+
+        // STL binary: 80 header + 4 count + 50*num_tris
+        let expected = 80 + 4 + 50 * mesh.triangles.len();
+        assert_eq!(data.len(), expected);
+    }
+
+    #[test]
+    fn write_stl_multiple_triangles() {
+        let mesh = ExportMesh {
+            vertices: vec![[0.0,0.0,0.0],[1.0,0.0,0.0],[0.0,1.0,0.0],[1.0,1.0,0.0]],
+            triangles: vec![[0,1,2],[1,3,2]],
+            vertex_colors: vec![],
+        };
+        let tmp = std::env::temp_dir().join("test_export_multi.stl");
+        write_stl(&mesh, &tmp).unwrap();
+        let data = std::fs::read(&tmp).unwrap();
+        std::fs::remove_file(&tmp).ok();
+
+        let tri_count = u32::from_le_bytes([data[80], data[81], data[82], data[83]]);
+        assert_eq!(tri_count, 2);
+        assert_eq!(data.len(), 80 + 4 + 50 * 2);
+    }
+
+    // -----------------------------------------------------------------------
+    // PLY writer tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn write_ply_header_structure() {
+        let mesh = sample_mesh();
+        let tmp = std::env::temp_dir().join("test_export.ply");
+        write_ply(&mesh, &tmp).unwrap();
+        let output = std::fs::read_to_string(&tmp).unwrap();
+        std::fs::remove_file(&tmp).ok();
+
+        assert!(output.starts_with("ply\n"));
+        assert!(output.contains("format ascii 1.0"));
+        assert!(output.contains("element vertex 3"));
+        assert!(output.contains("element face 1"));
+        assert!(output.contains("end_header"));
+    }
+
+    #[test]
+    fn write_ply_with_colors() {
+        let mesh = sample_mesh();
+        let tmp = std::env::temp_dir().join("test_export_color.ply");
+        write_ply(&mesh, &tmp).unwrap();
+        let output = std::fs::read_to_string(&tmp).unwrap();
+        std::fs::remove_file(&tmp).ok();
+
+        assert!(output.contains("property uchar red"));
+        assert!(output.contains("property uchar green"));
+        assert!(output.contains("property uchar blue"));
+        // First vertex (0,0,0) with color (1,0,0) → 255 0 0
+        assert!(output.contains("0 0 0 255 0 0"));
+    }
+
+    #[test]
+    fn write_ply_without_colors() {
+        let mesh = sample_mesh_no_colors();
+        let tmp = std::env::temp_dir().join("test_export_nocolor.ply");
+        write_ply(&mesh, &tmp).unwrap();
+        let output = std::fs::read_to_string(&tmp).unwrap();
+        std::fs::remove_file(&tmp).ok();
+
+        assert!(!output.contains("property uchar red"));
+    }
+
+    #[test]
+    fn write_ply_face_format() {
+        let mesh = sample_mesh();
+        let tmp = std::env::temp_dir().join("test_export_face.ply");
+        write_ply(&mesh, &tmp).unwrap();
+        let output = std::fs::read_to_string(&tmp).unwrap();
+        std::fs::remove_file(&tmp).ok();
+
+        // PLY uses 0-indexed and prefixes face with vertex count
+        assert!(output.contains("3 0 1 2"));
+    }
+
+    // -----------------------------------------------------------------------
+    // GLB writer tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn write_glb_magic_and_version() {
+        let mesh = sample_mesh();
+        let tmp = std::env::temp_dir().join("test_export.glb");
+        write_glb(&mesh, &tmp).unwrap();
+        let data = std::fs::read(&tmp).unwrap();
+        std::fs::remove_file(&tmp).ok();
+
+        // GLB magic: "glTF"
+        assert_eq!(&data[0..4], b"glTF");
+        // Version 2
+        let version = u32::from_le_bytes([data[4], data[5], data[6], data[7]]);
+        assert_eq!(version, 2);
+    }
+
+    #[test]
+    fn write_glb_total_length_matches_file() {
+        let mesh = sample_mesh();
+        let tmp = std::env::temp_dir().join("test_export_len.glb");
+        write_glb(&mesh, &tmp).unwrap();
+        let data = std::fs::read(&tmp).unwrap();
+        std::fs::remove_file(&tmp).ok();
+
+        let total_length = u32::from_le_bytes([data[8], data[9], data[10], data[11]]) as usize;
+        assert_eq!(total_length, data.len());
+    }
+
+    #[test]
+    fn write_glb_json_chunk_type() {
+        let mesh = sample_mesh();
+        let tmp = std::env::temp_dir().join("test_export_json.glb");
+        write_glb(&mesh, &tmp).unwrap();
+        let data = std::fs::read(&tmp).unwrap();
+        std::fs::remove_file(&tmp).ok();
+
+        // Chunk type at offset 16 should be 0x4E4F534A ("JSON")
+        let chunk_type = u32::from_le_bytes([data[16], data[17], data[18], data[19]]);
+        assert_eq!(chunk_type, 0x4E4F534A);
+    }
+
+    #[test]
+    fn write_glb_contains_asset_version() {
+        let mesh = sample_mesh();
+        let tmp = std::env::temp_dir().join("test_export_asset.glb");
+        write_glb(&mesh, &tmp).unwrap();
+        let data = std::fs::read(&tmp).unwrap();
+        std::fs::remove_file(&tmp).ok();
+
+        // The JSON content should contain asset version 2.0
+        let json_str = String::from_utf8_lossy(&data);
+        assert!(json_str.contains("\"version\":\"2.0\""));
+        assert!(json_str.contains("\"generator\":\"SDF Modeler\""));
+    }
+
+    #[test]
+    fn write_glb_no_colors_fewer_accessors() {
+        let mesh = sample_mesh_no_colors();
+        let tmp = std::env::temp_dir().join("test_export_noc.glb");
+        write_glb(&mesh, &tmp).unwrap();
+        let data = std::fs::read(&tmp).unwrap();
+        std::fs::remove_file(&tmp).ok();
+
+        let json_str = String::from_utf8_lossy(&data);
+        // Without colors, should NOT have COLOR_0
+        assert!(!json_str.contains("COLOR_0"));
+    }
+
+    #[test]
+    fn write_glb_with_colors_has_color_accessor() {
+        let mesh = sample_mesh();
+        let tmp = std::env::temp_dir().join("test_export_wc.glb");
+        write_glb(&mesh, &tmp).unwrap();
+        let data = std::fs::read(&tmp).unwrap();
+        std::fs::remove_file(&tmp).ok();
+
+        let json_str = String::from_utf8_lossy(&data);
+        assert!(json_str.contains("COLOR_0"));
+    }
+
+    // -----------------------------------------------------------------------
+    // USDA writer tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn write_usda_header() {
+        let mesh = sample_mesh();
+        let tmp = std::env::temp_dir().join("test_export.usda");
+        write_usda(&mesh, &tmp).unwrap();
+        let output = std::fs::read_to_string(&tmp).unwrap();
+        std::fs::remove_file(&tmp).ok();
+
+        assert!(output.starts_with("#usda 1.0"));
+        assert!(output.contains("defaultPrim = \"SdfExport\""));
+        assert!(output.contains("upAxis = \"Y\""));
+    }
+
+    #[test]
+    fn write_usda_points() {
+        let mesh = sample_mesh();
+        let tmp = std::env::temp_dir().join("test_export_pts.usda");
+        write_usda(&mesh, &tmp).unwrap();
+        let output = std::fs::read_to_string(&tmp).unwrap();
+        std::fs::remove_file(&tmp).ok();
+
+        assert!(output.contains("point3f[] points = ["));
+        assert!(output.contains("(0, 0, 0)"));
+        assert!(output.contains("(1, 0, 0)"));
+        assert!(output.contains("(0, 1, 0)"));
+    }
+
+    #[test]
+    fn write_usda_face_vertex_counts_all_3() {
+        let mesh = ExportMesh {
+            vertices: vec![[0.0,0.0,0.0],[1.0,0.0,0.0],[0.0,1.0,0.0],[1.0,1.0,0.0]],
+            triangles: vec![[0,1,2],[1,3,2]],
+            vertex_colors: vec![],
+        };
+        let tmp = std::env::temp_dir().join("test_export_fvc.usda");
+        write_usda(&mesh, &tmp).unwrap();
+        let output = std::fs::read_to_string(&tmp).unwrap();
+        std::fs::remove_file(&tmp).ok();
+
+        assert!(output.contains("int[] faceVertexCounts = [3, 3]"));
+    }
+
+    #[test]
+    fn write_usda_vertex_colors() {
+        let mesh = sample_mesh();
+        let tmp = std::env::temp_dir().join("test_export_vc.usda");
+        write_usda(&mesh, &tmp).unwrap();
+        let output = std::fs::read_to_string(&tmp).unwrap();
+        std::fs::remove_file(&tmp).ok();
+
+        assert!(output.contains("color3f[] primvars:displayColor = ["));
+        assert!(output.contains("interpolation = \"vertex\""));
+    }
+
+    #[test]
+    fn write_usda_no_colors_omits_display_color() {
+        let mesh = sample_mesh_no_colors();
+        let tmp = std::env::temp_dir().join("test_export_nc.usda");
+        write_usda(&mesh, &tmp).unwrap();
+        let output = std::fs::read_to_string(&tmp).unwrap();
+        std::fs::remove_file(&tmp).ok();
+
+        assert!(!output.contains("primvars:displayColor"));
+    }
+
+    // -----------------------------------------------------------------------
+    // write_mesh dispatch tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn write_mesh_dispatches_stl() {
+        let mesh = sample_mesh();
+        let tmp = std::env::temp_dir().join("test_dispatch.stl");
+        write_mesh(&mesh, &tmp).unwrap();
+        let data = std::fs::read(&tmp).unwrap();
+        std::fs::remove_file(&tmp).ok();
+        // STL starts with 80-byte header
+        assert!(data.len() >= 84);
+    }
+
+    #[test]
+    fn write_mesh_dispatches_ply() {
+        let mesh = sample_mesh();
+        let tmp = std::env::temp_dir().join("test_dispatch.ply");
+        write_mesh(&mesh, &tmp).unwrap();
+        let output = std::fs::read_to_string(&tmp).unwrap();
+        std::fs::remove_file(&tmp).ok();
+        assert!(output.starts_with("ply\n"));
+    }
+
+    #[test]
+    fn write_mesh_dispatches_glb() {
+        let mesh = sample_mesh();
+        let tmp = std::env::temp_dir().join("test_dispatch.glb");
+        write_mesh(&mesh, &tmp).unwrap();
+        let data = std::fs::read(&tmp).unwrap();
+        std::fs::remove_file(&tmp).ok();
+        assert_eq!(&data[0..4], b"glTF");
+    }
+
+    #[test]
+    fn write_mesh_dispatches_usda() {
+        let mesh = sample_mesh();
+        let tmp = std::env::temp_dir().join("test_dispatch.usda");
+        write_mesh(&mesh, &tmp).unwrap();
+        let output = std::fs::read_to_string(&tmp).unwrap();
+        std::fs::remove_file(&tmp).ok();
+        assert!(output.starts_with("#usda 1.0"));
+    }
+
+    #[test]
+    fn write_mesh_defaults_to_obj() {
+        let mesh = sample_mesh();
+        let tmp = std::env::temp_dir().join("test_dispatch.xyz");
+        write_mesh(&mesh, &tmp).unwrap();
+        let output = std::fs::read_to_string(&tmp).unwrap();
+        std::fs::remove_file(&tmp).ok();
+        assert!(output.contains("# SDF Modeler Export"));
+    }
+
+    // -----------------------------------------------------------------------
+    // Edge table / tri table sanity checks
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn edge_table_all_inside_is_zero() {
+        // cube_index 0xFF = all corners inside → EDGE_TABLE should be 0
+        // Actually, 0xFF means all 8 corners are inside the surface.
+        // The Paul Bourke table for index 0xFF is 0x000.
+        assert_eq!(EDGE_TABLE[0xFF], 0x000);
+    }
+
+    #[test]
+    fn edge_table_all_outside_is_zero() {
+        assert_eq!(EDGE_TABLE[0x00], 0x000);
+    }
+
+    #[test]
+    fn tri_table_all_inside_empty() {
+        assert_eq!(TRI_TABLE[0xFF][0], -1);
+    }
+
+    #[test]
+    fn tri_table_all_outside_empty() {
+        assert_eq!(TRI_TABLE[0x00][0], -1);
+    }
+
+    #[test]
+    fn tri_table_single_corner_has_one_triangle() {
+        // cube_index 1 = only corner 0 inside → one triangle (3 edges)
+        let row = &TRI_TABLE[1];
+        assert!(row[0] >= 0);
+        assert!(row[1] >= 0);
+        assert!(row[2] >= 0);
+        assert_eq!(row[3], -1); // only one triangle
+    }
+
+    // -----------------------------------------------------------------------
+    // Marching cubes with CSG
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn marching_cubes_csg_union_produces_mesh() {
+        let mut scene = empty_scene();
+        let name1 = scene.next_name("Sphere");
+        let s1 = scene.add_node(name1, NodeData::Primitive {
+            kind: SdfPrimitive::Sphere,
+            position: Vec3::new(-0.5, 0.0, 0.0),
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+            color: Vec3::ONE,
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        });
+        let name2 = scene.next_name("Sphere");
+        let s2 = scene.add_node(name2, NodeData::Primitive {
+            kind: SdfPrimitive::Sphere,
+            position: Vec3::new(0.5, 0.0, 0.0),
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+            color: Vec3::ONE,
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        });
+        let name_op = scene.next_name("Union");
+        scene.add_node(name_op, NodeData::Operation {
+            op: CsgOp::Union,
+            left: Some(s1),
+            right: Some(s2),
+            smooth_k: 0.0,
+        });
+
+        let progress = AtomicU32::new(0);
+        let mesh = marching_cubes(
+            &scene, 16,
+            Vec3::splat(-3.0), Vec3::splat(3.0),
+            &progress, false,
+        );
+        assert!(!mesh.triangles.is_empty(), "CSG union should produce mesh");
+    }
+}
