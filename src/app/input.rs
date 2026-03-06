@@ -1,10 +1,21 @@
 use eframe::egui;
 
+use crate::keymap::ActionBinding;
 use crate::sculpt::{ActiveTool, BrushMode, SculptState, DEFAULT_BRUSH_STRENGTH};
 use crate::ui::gizmo::GizmoMode;
 
 use super::actions::{Action, ActionSink};
 use super::{ExportStatus, SdfApp};
+
+/// Switch brush mode, resetting grab-specific strength if leaving Grab mode.
+fn set_brush_mode(sculpt_state: &mut SculptState, target: BrushMode) {
+    if let SculptState::Active { brush_mode, brush_strength, .. } = sculpt_state {
+        if *brush_mode == BrushMode::Grab && *brush_strength > 0.5 {
+            *brush_strength = DEFAULT_BRUSH_STRENGTH;
+        }
+        *brush_mode = target;
+    }
+}
 
 impl SdfApp {
     pub(super) fn delete_selected(&mut self) {
@@ -18,245 +29,235 @@ impl SdfApp {
     }
 
     /// Collect keyboard-triggered actions into the action sink.
-    /// Reads state immutably to decide what actions to emit; does not
-    /// mutate app state directly (except for egui input consumption).
+    /// Iterates over the configurable keymap instead of hardcoded if-chains.
     pub(super) fn collect_keyboard_actions(&mut self, ctx: &egui::Context, actions: &mut ActionSink) {
-        // Help
-        if ctx.input(|i| i.key_pressed(egui::Key::F1)) {
-            actions.push(Action::ToggleHelp);
-        }
-        // Camera presets
-        if ctx.input(|i| i.key_pressed(egui::Key::F5)) {
-            actions.push(Action::CameraFront);
-        }
-        if ctx.input(|i| i.key_pressed(egui::Key::F6)) {
-            actions.push(Action::CameraTop);
-        }
-        if ctx.input(|i| i.key_pressed(egui::Key::F7)) {
-            actions.push(Action::CameraRight);
-        }
-        if ctx.input(|i| i.key_pressed(egui::Key::F8)) {
-            actions.push(Action::CameraBack);
-        }
-        if ctx.input(|i| i.key_pressed(egui::Key::F9)) {
-            actions.push(Action::CameraLeft);
-        }
-        if ctx.input(|i| i.key_pressed(egui::Key::F10)) {
-            actions.push(Action::CameraBottom);
-        }
-        // Orthographic toggle
-        if ctx.input(|i| i.key_pressed(egui::Key::O) && !i.modifiers.ctrl) {
-            actions.push(Action::ToggleOrtho);
-        }
+        let is_sculpt = self.doc.sculpt_state.is_active();
 
-        // Focus on selected node / Frame all
-        if ctx.input(|i| i.key_pressed(egui::Key::F) && !i.modifiers.ctrl) {
-            actions.push(Action::FocusSelected);
-        }
-        if ctx.input(|i| i.key_pressed(egui::Key::Home)) {
-            actions.push(Action::FrameAll);
-        }
+        // Phase 1: detect which bindings were pressed (immutable self access).
+        // We collect into a Vec so that the dispatch phase can mutate self freely.
+        let mut triggered: Vec<ActionBinding> = Vec::new();
 
-        // Debug toggle
-        if ctx.input(|i| i.key_pressed(egui::Key::F4)) {
-            actions.push(Action::ToggleDebug);
-        }
+        for (&binding, combo) in self.settings.keymap.bindings() {
+            // --- Context filtering ---
 
-        // Delete selected node
-        if ctx.input(|i| i.key_pressed(egui::Key::Delete)) {
-            actions.push(Action::DeleteSelected);
-        }
-
-        // Undo / Redo — route to sculpt undo when sculpt is active
-        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Z)) {
-            if self.doc.sculpt_state.is_active() {
-                actions.push(Action::SculptUndo);
-            } else {
-                actions.push(Action::Undo);
+            // Sculpt-only bindings require active sculpt mode
+            if binding.is_sculpt_only() && !is_sculpt {
+                continue;
             }
-        } else if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::Y)) {
-            if self.doc.sculpt_state.is_active() {
-                actions.push(Action::SculptRedo);
-            } else {
-                actions.push(Action::Redo);
+            // CycleShadingMode (Z) conflicts with SculptSymmetryZ in sculpt mode
+            if is_sculpt && matches!(binding, ActionBinding::CycleShadingMode) {
+                continue;
+            }
+            // Turntable toggle should not fire when a text field is focused
+            if matches!(binding, ActionBinding::ToggleTurntable) && ctx.wants_keyboard_input() {
+                continue;
+            }
+            // Export requires idle status
+            if matches!(binding, ActionBinding::ShowExportDialog)
+                && !matches!(self.async_state.export_status, ExportStatus::Idle)
+            {
+                continue;
+            }
+            // Quick sculpt only from select tool
+            if matches!(binding, ActionBinding::QuickSculptMode)
+                && self.doc.active_tool != ActiveTool::Select
+            {
+                continue;
+            }
+            // Exit sculpt only when in sculpt tool
+            if matches!(binding, ActionBinding::ExitSculptMode)
+                && self.doc.active_tool != ActiveTool::Sculpt
+            {
+                continue;
+            }
+
+            // --- Key press detection ---
+
+            let pressed = match binding {
+                // Clipboard and command palette use consume_key to prevent egui interference
+                ActionBinding::Copy
+                | ActionBinding::Paste
+                | ActionBinding::Duplicate
+                | ActionBinding::ToggleCommandPalette => {
+                    ctx.input_mut(|i| i.consume_key(combo.egui_modifiers(), combo.egui_key()))
+                }
+                _ => ctx.input(|i| {
+                    i.key_pressed(combo.egui_key()) && combo.matches_egui(&i.modifiers)
+                }),
+            };
+
+            if pressed {
+                triggered.push(binding);
             }
         }
 
-        // Save / Load
-        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::S)) {
-            actions.push(Action::SaveProject);
-        } else if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::O)) {
-            actions.push(Action::OpenProject);
+        // Phase 2: dispatch triggered bindings (mutable self access)
+        for binding in triggered {
+            self.dispatch_binding(binding, actions);
         }
 
-        // Screenshot
-        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::P)) {
-            actions.push(Action::TakeScreenshot);
-        }
-
-        // Export
-        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::E))
-            && matches!(self.async_state.export_status, ExportStatus::Idle)
-        {
-            actions.push(Action::ShowExportDialog);
-        }
-
-        // Copy / Paste / Duplicate (consume_key prevents egui clipboard noise)
-        let ctrl = egui::Modifiers::CTRL;
-        if ctx.input_mut(|i| i.consume_key(ctrl, egui::Key::C)) {
-            actions.push(Action::Copy);
-        }
-        if ctx.input_mut(|i| i.consume_key(ctrl, egui::Key::V)) {
-            actions.push(Action::Paste);
-        }
-        if ctx.input_mut(|i| i.consume_key(ctrl, egui::Key::D)) {
-            actions.push(Action::Duplicate);
-        }
-
-        // Gizmo mode
-        if ctx.input(|i| i.key_pressed(egui::Key::W) && !i.modifiers.ctrl) {
-            actions.push(Action::SetGizmoMode(GizmoMode::Translate));
-        }
-        if ctx.input(|i| i.key_pressed(egui::Key::E) && !i.modifiers.ctrl) {
-            actions.push(Action::SetGizmoMode(GizmoMode::Rotate));
-        }
-        if ctx.input(|i| i.key_pressed(egui::Key::R) && !i.modifiers.ctrl) {
-            actions.push(Action::SetGizmoMode(GizmoMode::Scale));
-        }
-
-        // Ctrl+R: enter sculpt mode (with convert dialog if needed)
-        if ctx.input(|i| i.modifiers.ctrl && i.key_pressed(egui::Key::R)) {
-            actions.push(Action::EnterSculptMode);
-        }
-        if ctx.input(|i| i.key_pressed(egui::Key::G) && !i.modifiers.ctrl) {
-            actions.push(Action::ToggleGizmoSpace);
-        }
-        if ctx.input(|i| i.modifiers.alt && i.key_pressed(egui::Key::C)) {
-            actions.push(Action::ResetPivot);
-        }
-
-        // Isolation mode
-        if ctx.input(|i| i.key_pressed(egui::Key::Slash)) {
-            actions.push(Action::ToggleIsolation);
-        }
-
-        // Shading mode cycle (Z key, but not in sculpt mode — Z is symmetry toggle there)
-        if ctx.input(|i| i.key_pressed(egui::Key::Z) && !i.modifiers.ctrl) && !self.doc.sculpt_state.is_active() {
-            actions.push(Action::CycleShadingMode);
-        }
-
-        // Turntable toggle (Space, only when no text field focused)
-        if ctx.input(|i| i.key_pressed(egui::Key::Space)) && !ctx.wants_keyboard_input() {
-            actions.push(Action::ToggleTurntable);
-        }
-
-        // Property copy/paste (Ctrl+Shift+C/V)
-        if ctx.input(|i| i.modifiers.ctrl && i.modifiers.shift && i.key_pressed(egui::Key::C)) {
-            actions.push(Action::CopyProperties);
-        }
-        if ctx.input(|i| i.modifiers.ctrl && i.modifiers.shift && i.key_pressed(egui::Key::V)) {
-            actions.push(Action::PasteProperties);
-        }
-
-        // Camera bookmarks: Ctrl+1-9 to save
-        if !self.doc.sculpt_state.is_active() {
+        // Camera bookmarks (Ctrl+1-9) — not in the keymap, kept inline
+        if !is_sculpt {
             for (idx, key) in [
                 egui::Key::Num1, egui::Key::Num2, egui::Key::Num3,
                 egui::Key::Num4, egui::Key::Num5, egui::Key::Num6,
                 egui::Key::Num7, egui::Key::Num8, egui::Key::Num9,
-            ].iter().enumerate() {
+            ]
+            .iter()
+            .enumerate()
+            {
                 if ctx.input(|i| i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(*key)) {
                     actions.push(Action::SaveBookmark(idx));
                 }
             }
         }
+    }
 
-        // Quick Primitives toolbar (Shift+A)
-        if ctx.input(|i| i.modifiers.shift && !i.modifiers.ctrl && i.key_pressed(egui::Key::A)) {
-            self.ui.show_quick_toolbar = !self.ui.show_quick_toolbar;
-        }
+    /// Map an ActionBinding to the corresponding app action or direct state mutation.
+    fn dispatch_binding(&mut self, binding: ActionBinding, actions: &mut ActionSink) {
+        let is_sculpt = self.doc.sculpt_state.is_active();
 
-        // Command palette (Ctrl+K)
-        if ctx.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::K)) {
-            actions.push(Action::ToggleCommandPalette);
-        }
+        match binding {
+            // --- Direct action mappings ---
+            ActionBinding::ToggleHelp => actions.push(Action::ToggleHelp),
+            ActionBinding::ToggleDebug => actions.push(Action::ToggleDebug),
+            ActionBinding::NewScene => actions.push(Action::NewScene),
+            ActionBinding::OpenProject => actions.push(Action::OpenProject),
+            ActionBinding::SaveProject => actions.push(Action::SaveProject),
+            ActionBinding::DeleteSelected => actions.push(Action::DeleteSelected),
+            ActionBinding::TakeScreenshot => actions.push(Action::TakeScreenshot),
+            ActionBinding::Copy => actions.push(Action::Copy),
+            ActionBinding::Paste => actions.push(Action::Paste),
+            ActionBinding::Duplicate => actions.push(Action::Duplicate),
+            ActionBinding::CopyProperties => actions.push(Action::CopyProperties),
+            ActionBinding::PasteProperties => actions.push(Action::PasteProperties),
+            ActionBinding::ToggleCommandPalette => actions.push(Action::ToggleCommandPalette),
+            ActionBinding::CameraFront => actions.push(Action::CameraFront),
+            ActionBinding::CameraTop => actions.push(Action::CameraTop),
+            ActionBinding::CameraRight => actions.push(Action::CameraRight),
+            ActionBinding::CameraBack => actions.push(Action::CameraBack),
+            ActionBinding::CameraLeft => actions.push(Action::CameraLeft),
+            ActionBinding::CameraBottom => actions.push(Action::CameraBottom),
+            ActionBinding::ToggleOrtho => actions.push(Action::ToggleOrtho),
+            ActionBinding::FocusSelected => actions.push(Action::FocusSelected),
+            ActionBinding::FrameAll => actions.push(Action::FrameAll),
+            ActionBinding::GizmoTranslate => {
+                actions.push(Action::SetGizmoMode(GizmoMode::Translate));
+            }
+            ActionBinding::GizmoRotate => {
+                actions.push(Action::SetGizmoMode(GizmoMode::Rotate));
+            }
+            ActionBinding::GizmoScale => {
+                actions.push(Action::SetGizmoMode(GizmoMode::Scale));
+            }
+            ActionBinding::ToggleGizmoSpace => actions.push(Action::ToggleGizmoSpace),
+            ActionBinding::ResetPivot => actions.push(Action::ResetPivot),
+            ActionBinding::EnterSculptMode => actions.push(Action::EnterSculptMode),
+            ActionBinding::ToggleIsolation => actions.push(Action::ToggleIsolation),
+            ActionBinding::CycleShadingMode => actions.push(Action::CycleShadingMode),
+            ActionBinding::ToggleTurntable => actions.push(Action::ToggleTurntable),
+            ActionBinding::ShowExportDialog => actions.push(Action::ShowExportDialog),
 
-        // Tool switching shortcuts
-        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) && self.doc.active_tool == ActiveTool::Sculpt {
-            actions.push(Action::SetTool(ActiveTool::Select));
-        }
-        // S key: quick-activate sculpt on an existing sculpt node (no convert dialog).
-        // For non-sculpt nodes, use Ctrl+R which shows the convert dialog.
-        if ctx.input(|i| i.key_pressed(egui::Key::S) && !i.modifiers.ctrl) && self.doc.active_tool == ActiveTool::Select {
-            actions.push(Action::EnterSculptMode);
-        }
+            // --- Context-sensitive actions ---
+            ActionBinding::Undo => {
+                if is_sculpt {
+                    actions.push(Action::SculptUndo);
+                } else {
+                    actions.push(Action::Undo);
+                }
+            }
+            ActionBinding::Redo => {
+                if is_sculpt {
+                    actions.push(Action::SculptRedo);
+                } else {
+                    actions.push(Action::Redo);
+                }
+            }
+            ActionBinding::ShowQuickToolbar => {
+                self.ui.show_quick_toolbar = !self.ui.show_quick_toolbar;
+            }
+            ActionBinding::QuickSculptMode => {
+                // Context already checked in phase 1
+                actions.push(Action::EnterSculptMode);
+            }
+            ActionBinding::ExitSculptMode => {
+                // Context already checked in phase 1
+                actions.push(Action::SetTool(ActiveTool::Select));
+            }
 
-        // Sculpt brush mode shortcuts (when sculpt is active)
-        // These are direct mutations on sculpt_state fields — kept inline
-        // because they are data-level edits (like slider drags), not structural.
-        if self.doc.sculpt_state.is_active() {
-            if ctx.input(|i| i.key_pressed(egui::Key::Num1)) {
-                if let SculptState::Active { ref mut brush_mode, ref mut brush_strength, .. } = self.doc.sculpt_state {
-                    if *brush_mode == BrushMode::Grab && *brush_strength > 0.5 { *brush_strength = DEFAULT_BRUSH_STRENGTH; }
-                    *brush_mode = BrushMode::Add;
-                }
+            // --- Sculpt brush modes (direct state mutation for zero-latency) ---
+            ActionBinding::SculptBrushAdd => {
+                set_brush_mode(&mut self.doc.sculpt_state, BrushMode::Add);
             }
-            if ctx.input(|i| i.key_pressed(egui::Key::Num2)) {
-                if let SculptState::Active { ref mut brush_mode, ref mut brush_strength, .. } = self.doc.sculpt_state {
-                    if *brush_mode == BrushMode::Grab && *brush_strength > 0.5 { *brush_strength = DEFAULT_BRUSH_STRENGTH; }
-                    *brush_mode = BrushMode::Carve;
-                }
+            ActionBinding::SculptBrushCarve => {
+                set_brush_mode(&mut self.doc.sculpt_state, BrushMode::Carve);
             }
-            if ctx.input(|i| i.key_pressed(egui::Key::Num3)) {
-                if let SculptState::Active { ref mut brush_mode, ref mut brush_strength, .. } = self.doc.sculpt_state {
-                    if *brush_mode == BrushMode::Grab && *brush_strength > 0.5 { *brush_strength = DEFAULT_BRUSH_STRENGTH; }
-                    *brush_mode = BrushMode::Smooth;
-                }
+            ActionBinding::SculptBrushSmooth => {
+                set_brush_mode(&mut self.doc.sculpt_state, BrushMode::Smooth);
             }
-            if ctx.input(|i| i.key_pressed(egui::Key::Num4)) {
-                if let SculptState::Active { ref mut brush_mode, ref mut brush_strength, .. } = self.doc.sculpt_state {
-                    if *brush_mode == BrushMode::Grab && *brush_strength > 0.5 { *brush_strength = DEFAULT_BRUSH_STRENGTH; }
-                    *brush_mode = BrushMode::Flatten;
-                }
+            ActionBinding::SculptBrushFlatten => {
+                set_brush_mode(&mut self.doc.sculpt_state, BrushMode::Flatten);
             }
-            if ctx.input(|i| i.key_pressed(egui::Key::Num5)) {
-                if let SculptState::Active { ref mut brush_mode, ref mut brush_strength, .. } = self.doc.sculpt_state {
-                    if *brush_mode == BrushMode::Grab && *brush_strength > 0.5 { *brush_strength = DEFAULT_BRUSH_STRENGTH; }
-                    *brush_mode = BrushMode::Inflate;
-                }
+            ActionBinding::SculptBrushInflate => {
+                set_brush_mode(&mut self.doc.sculpt_state, BrushMode::Inflate);
             }
-            if ctx.input(|i| i.key_pressed(egui::Key::Num6)) {
-                if let SculptState::Active { ref mut brush_mode, ref mut brush_strength, .. } = self.doc.sculpt_state {
+            ActionBinding::SculptBrushGrab => {
+                if let SculptState::Active {
+                    ref mut brush_mode,
+                    ref mut brush_strength,
+                    ..
+                } = self.doc.sculpt_state
+                {
                     *brush_mode = BrushMode::Grab;
                     if *brush_strength < 0.5 {
                         *brush_strength = 1.0;
                     }
                 }
             }
-            // Bracket keys: resize brush
-            if ctx.input(|i| i.key_pressed(egui::Key::OpenBracket)) {
-                if let SculptState::Active { ref mut brush_radius, .. } = self.doc.sculpt_state {
+            ActionBinding::SculptBrushShrink => {
+                if let SculptState::Active {
+                    ref mut brush_radius,
+                    ..
+                } = self.doc.sculpt_state
+                {
                     *brush_radius = (*brush_radius - 0.05).max(0.05);
                 }
             }
-            if ctx.input(|i| i.key_pressed(egui::Key::CloseBracket)) {
-                if let SculptState::Active { ref mut brush_radius, .. } = self.doc.sculpt_state {
+            ActionBinding::SculptBrushGrow => {
+                if let SculptState::Active {
+                    ref mut brush_radius,
+                    ..
+                } = self.doc.sculpt_state
+                {
                     *brush_radius = (*brush_radius + 0.05).min(2.0);
                 }
             }
-            // Symmetry toggles: X/Y/Z
-            if ctx.input(|i| i.key_pressed(egui::Key::X) && !i.modifiers.ctrl) {
-                if let SculptState::Active { ref mut symmetry_axis, .. } = self.doc.sculpt_state {
+
+            // --- Sculpt symmetry toggles ---
+            ActionBinding::SculptSymmetryX => {
+                if let SculptState::Active {
+                    ref mut symmetry_axis,
+                    ..
+                } = self.doc.sculpt_state
+                {
                     *symmetry_axis = if *symmetry_axis == Some(0) { None } else { Some(0) };
                 }
             }
-            if ctx.input(|i| i.key_pressed(egui::Key::Y) && !i.modifiers.ctrl) {
-                if let SculptState::Active { ref mut symmetry_axis, .. } = self.doc.sculpt_state {
+            ActionBinding::SculptSymmetryY => {
+                if let SculptState::Active {
+                    ref mut symmetry_axis,
+                    ..
+                } = self.doc.sculpt_state
+                {
                     *symmetry_axis = if *symmetry_axis == Some(1) { None } else { Some(1) };
                 }
             }
-            if ctx.input(|i| i.key_pressed(egui::Key::Z) && !i.modifiers.ctrl) {
-                if let SculptState::Active { ref mut symmetry_axis, .. } = self.doc.sculpt_state {
+            ActionBinding::SculptSymmetryZ => {
+                if let SculptState::Active {
+                    ref mut symmetry_axis,
+                    ..
+                } = self.doc.sculpt_state
+                {
                     *symmetry_axis = if *symmetry_axis == Some(2) { None } else { Some(2) };
                 }
             }

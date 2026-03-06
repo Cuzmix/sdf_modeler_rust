@@ -137,7 +137,7 @@
     "category": "workflow",
     "description": "Refactor input handling to use configurable keymap (phase 2: integration).\n\nSteps:\n1. In src/app/input.rs: refactor collect_keyboard_actions() to iterate over keymap bindings instead of hardcoded if-chains. For each (ActionBinding, KeyCombo) in keymap: check if that key combo is pressed, push the corresponding Action.\n2. Handle context-sensitive bindings: sculpt-only shortcuts (1-6 brush modes, [ ] resize) should only activate when in sculpt mode. Add a 'context' field to ActionBinding or check ActiveTool.\n3. In src/ui/command_palette.rs: query KeymapConfig to get shortcut display strings instead of hardcoded strings. Remove all hardcoded shortcut strings.\n4. In src/ui/help.rs: query KeymapConfig for shortcut display. Remove hardcoded shortcut lists.\n5. Single source of truth: keybindings defined ONLY in KeymapConfig, displayed everywhere from there.",
     "verification": "cargo check && cargo clippy -- -D warnings && cargo test. All existing keyboard shortcuts still work. Command palette shows correct shortcuts. Help window shows correct shortcuts. No hardcoded shortcut strings remain in command_palette.rs or help.rs.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 26,

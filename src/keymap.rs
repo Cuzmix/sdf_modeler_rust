@@ -530,7 +530,7 @@ mod tests {
 
     #[test]
     fn find_conflict_detects_duplicate_bindings() {
-        let mut keymap = KeymapConfig::default();
+        let keymap = KeymapConfig::default();
         // Ctrl+S is bound to SaveProject by default
         let conflict = keymap.find_conflict(
             &KeyCombo::ctrl(SerializableKey::S),

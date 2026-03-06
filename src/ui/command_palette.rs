@@ -2,13 +2,15 @@ use eframe::egui;
 
 use crate::app::actions::{Action, ActionSink};
 use crate::graph::scene::{NodeId, Scene};
+use crate::keymap::{ActionBinding, KeymapConfig};
 use crate::sculpt::ActiveTool;
 use crate::ui::gizmo::GizmoMode;
 
 /// A single entry in the command palette.
 struct CommandEntry {
     label: String,
-    shortcut: Option<&'static str>,
+    /// Optional keymap binding for dynamic shortcut display.
+    binding: Option<ActionBinding>,
     action: Action,
 }
 
@@ -16,49 +18,49 @@ struct CommandEntry {
 fn build_entries() -> Vec<CommandEntry> {
     vec![
         // Scene
-        CommandEntry { label: "New Scene".into(), shortcut: None, action: Action::NewScene },
-        CommandEntry { label: "Open Project".into(), shortcut: Some("Ctrl+O"), action: Action::OpenProject },
-        CommandEntry { label: "Save Project".into(), shortcut: Some("Ctrl+S"), action: Action::SaveProject },
+        CommandEntry { label: "New Scene".into(), binding: Some(ActionBinding::NewScene), action: Action::NewScene },
+        CommandEntry { label: "Open Project".into(), binding: Some(ActionBinding::OpenProject), action: Action::OpenProject },
+        CommandEntry { label: "Save Project".into(), binding: Some(ActionBinding::SaveProject), action: Action::SaveProject },
         // History
-        CommandEntry { label: "Undo".into(), shortcut: Some("Ctrl+Z"), action: Action::Undo },
-        CommandEntry { label: "Redo".into(), shortcut: Some("Ctrl+Y"), action: Action::Redo },
+        CommandEntry { label: "Undo".into(), binding: Some(ActionBinding::Undo), action: Action::Undo },
+        CommandEntry { label: "Redo".into(), binding: Some(ActionBinding::Redo), action: Action::Redo },
         // Clipboard
-        CommandEntry { label: "Copy".into(), shortcut: Some("Ctrl+C"), action: Action::Copy },
-        CommandEntry { label: "Paste".into(), shortcut: Some("Ctrl+V"), action: Action::Paste },
-        CommandEntry { label: "Duplicate".into(), shortcut: Some("Ctrl+D"), action: Action::Duplicate },
-        CommandEntry { label: "Delete Selected".into(), shortcut: Some("Del"), action: Action::DeleteSelected },
+        CommandEntry { label: "Copy".into(), binding: Some(ActionBinding::Copy), action: Action::Copy },
+        CommandEntry { label: "Paste".into(), binding: Some(ActionBinding::Paste), action: Action::Paste },
+        CommandEntry { label: "Duplicate".into(), binding: Some(ActionBinding::Duplicate), action: Action::Duplicate },
+        CommandEntry { label: "Delete Selected".into(), binding: Some(ActionBinding::DeleteSelected), action: Action::DeleteSelected },
         // Camera
-        CommandEntry { label: "Focus Selected".into(), shortcut: Some("F"), action: Action::FocusSelected },
-        CommandEntry { label: "Frame All".into(), shortcut: Some("Home"), action: Action::FrameAll },
-        CommandEntry { label: "Camera: Front".into(), shortcut: Some("F5"), action: Action::CameraFront },
-        CommandEntry { label: "Camera: Top".into(), shortcut: Some("F6"), action: Action::CameraTop },
-        CommandEntry { label: "Camera: Right".into(), shortcut: Some("F7"), action: Action::CameraRight },
-        CommandEntry { label: "Camera: Back".into(), shortcut: Some("F8"), action: Action::CameraBack },
-        CommandEntry { label: "Camera: Left".into(), shortcut: Some("F9"), action: Action::CameraLeft },
-        CommandEntry { label: "Camera: Bottom".into(), shortcut: Some("F10"), action: Action::CameraBottom },
-        CommandEntry { label: "Toggle Orthographic".into(), shortcut: Some("O"), action: Action::ToggleOrtho },
+        CommandEntry { label: "Focus Selected".into(), binding: Some(ActionBinding::FocusSelected), action: Action::FocusSelected },
+        CommandEntry { label: "Frame All".into(), binding: Some(ActionBinding::FrameAll), action: Action::FrameAll },
+        CommandEntry { label: "Camera: Front".into(), binding: Some(ActionBinding::CameraFront), action: Action::CameraFront },
+        CommandEntry { label: "Camera: Top".into(), binding: Some(ActionBinding::CameraTop), action: Action::CameraTop },
+        CommandEntry { label: "Camera: Right".into(), binding: Some(ActionBinding::CameraRight), action: Action::CameraRight },
+        CommandEntry { label: "Camera: Back".into(), binding: Some(ActionBinding::CameraBack), action: Action::CameraBack },
+        CommandEntry { label: "Camera: Left".into(), binding: Some(ActionBinding::CameraLeft), action: Action::CameraLeft },
+        CommandEntry { label: "Camera: Bottom".into(), binding: Some(ActionBinding::CameraBottom), action: Action::CameraBottom },
+        CommandEntry { label: "Toggle Orthographic".into(), binding: Some(ActionBinding::ToggleOrtho), action: Action::ToggleOrtho },
         // Tools
-        CommandEntry { label: "Tool: Select".into(), shortcut: None, action: Action::SetTool(ActiveTool::Select) },
-        CommandEntry { label: "Tool: Sculpt".into(), shortcut: None, action: Action::SetTool(ActiveTool::Sculpt) },
-        CommandEntry { label: "Gizmo: Translate".into(), shortcut: Some("W"), action: Action::SetGizmoMode(GizmoMode::Translate) },
-        CommandEntry { label: "Gizmo: Rotate".into(), shortcut: Some("E"), action: Action::SetGizmoMode(GizmoMode::Rotate) },
-        CommandEntry { label: "Gizmo: Scale".into(), shortcut: Some("R"), action: Action::SetGizmoMode(GizmoMode::Scale) },
-        CommandEntry { label: "Toggle Gizmo Space".into(), shortcut: Some("G"), action: Action::ToggleGizmoSpace },
-        CommandEntry { label: "Reset Pivot".into(), shortcut: Some("Alt+C"), action: Action::ResetPivot },
+        CommandEntry { label: "Tool: Select".into(), binding: None, action: Action::SetTool(ActiveTool::Select) },
+        CommandEntry { label: "Tool: Sculpt".into(), binding: None, action: Action::SetTool(ActiveTool::Sculpt) },
+        CommandEntry { label: "Gizmo: Translate".into(), binding: Some(ActionBinding::GizmoTranslate), action: Action::SetGizmoMode(GizmoMode::Translate) },
+        CommandEntry { label: "Gizmo: Rotate".into(), binding: Some(ActionBinding::GizmoRotate), action: Action::SetGizmoMode(GizmoMode::Rotate) },
+        CommandEntry { label: "Gizmo: Scale".into(), binding: Some(ActionBinding::GizmoScale), action: Action::SetGizmoMode(GizmoMode::Scale) },
+        CommandEntry { label: "Toggle Gizmo Space".into(), binding: Some(ActionBinding::ToggleGizmoSpace), action: Action::ToggleGizmoSpace },
+        CommandEntry { label: "Reset Pivot".into(), binding: Some(ActionBinding::ResetPivot), action: Action::ResetPivot },
         // Viewport
-        CommandEntry { label: "Toggle Isolation Mode".into(), shortcut: Some("/"), action: Action::ToggleIsolation },
-        CommandEntry { label: "Cycle Shading Mode".into(), shortcut: Some("Z"), action: Action::CycleShadingMode },
-        CommandEntry { label: "Toggle Turntable".into(), shortcut: Some("Space"), action: Action::ToggleTurntable },
+        CommandEntry { label: "Toggle Isolation Mode".into(), binding: Some(ActionBinding::ToggleIsolation), action: Action::ToggleIsolation },
+        CommandEntry { label: "Cycle Shading Mode".into(), binding: Some(ActionBinding::CycleShadingMode), action: Action::CycleShadingMode },
+        CommandEntry { label: "Toggle Turntable".into(), binding: Some(ActionBinding::ToggleTurntable), action: Action::ToggleTurntable },
         // Properties
-        CommandEntry { label: "Copy Properties".into(), shortcut: Some("Ctrl+Shift+C"), action: Action::CopyProperties },
-        CommandEntry { label: "Paste Properties".into(), shortcut: Some("Ctrl+Shift+V"), action: Action::PasteProperties },
+        CommandEntry { label: "Copy Properties".into(), binding: Some(ActionBinding::CopyProperties), action: Action::CopyProperties },
+        CommandEntry { label: "Paste Properties".into(), binding: Some(ActionBinding::PasteProperties), action: Action::PasteProperties },
         // Export
-        CommandEntry { label: "Export Mesh".into(), shortcut: Some("Ctrl+E"), action: Action::ShowExportDialog },
-        CommandEntry { label: "Take Screenshot".into(), shortcut: Some("Ctrl+P"), action: Action::TakeScreenshot },
+        CommandEntry { label: "Export Mesh".into(), binding: Some(ActionBinding::ShowExportDialog), action: Action::ShowExportDialog },
+        CommandEntry { label: "Take Screenshot".into(), binding: Some(ActionBinding::TakeScreenshot), action: Action::TakeScreenshot },
         // UI
-        CommandEntry { label: "Toggle Help".into(), shortcut: Some("F1"), action: Action::ToggleHelp },
-        CommandEntry { label: "Toggle Profiler".into(), shortcut: Some("F4"), action: Action::ToggleDebug },
-        CommandEntry { label: "Toggle Settings".into(), shortcut: None, action: Action::ToggleSettings },
+        CommandEntry { label: "Toggle Help".into(), binding: Some(ActionBinding::ToggleHelp), action: Action::ToggleHelp },
+        CommandEntry { label: "Toggle Profiler".into(), binding: Some(ActionBinding::ToggleDebug), action: Action::ToggleDebug },
+        CommandEntry { label: "Toggle Settings".into(), binding: None, action: Action::ToggleSettings },
     ]
 }
 
@@ -78,6 +80,7 @@ pub fn draw(
     query: &mut String,
     selected_index: &mut usize,
     scene: &Scene,
+    keymap: &KeymapConfig,
     actions: &mut ActionSink,
 ) {
     if !*open {
@@ -188,10 +191,13 @@ pub fn draw(
                                 }
                                 let resp = ui.horizontal(|ui| {
                                     let r = ui.selectable_label(is_selected, text);
-                                    if let Some(shortcut) = entry.shortcut {
-                                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                            ui.weak(shortcut);
-                                        });
+                                    // Look up shortcut from keymap (single source of truth)
+                                    if let Some(binding) = entry.binding {
+                                        if let Some(shortcut) = keymap.format_shortcut(binding) {
+                                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                                ui.weak(&shortcut);
+                                            });
+                                        }
                                     }
                                     r
                                 });

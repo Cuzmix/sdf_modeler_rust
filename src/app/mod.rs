@@ -375,7 +375,7 @@ impl eframe::App for SdfApp {
 
         self.show_menu_bar(ctx, &mut action_sink);
         self.show_status_bar(ctx);
-        crate::ui::help::draw(ctx, &mut self.ui.show_help);
+        crate::ui::help::draw(ctx, &mut self.ui.show_help, &self.settings.keymap);
         crate::ui::profiler::draw(
             ctx,
             self.ui.show_debug,
@@ -490,6 +490,7 @@ impl eframe::App for SdfApp {
             &mut self.ui.command_palette_query,
             &mut self.ui.command_palette_selected,
             &self.doc.scene,
+            &self.settings.keymap,
             &mut action_sink,
         );
 

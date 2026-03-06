@@ -617,3 +617,45 @@ PRD #25 (input refactor to use keymap). The command palette and help window stil
 hardcoded shortcut strings — that's also part of #25.
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (295/295) ✓
+
+--- Iteration 22: PRD #25 — Refactor input handling to use configurable keymap ---
+COMPLETED. All keyboard shortcuts now driven by KeymapConfig (single source of truth).
+
+Changes:
+- src/app/input.rs: Completely rewritten collect_keyboard_actions() to use a two-phase
+  approach. Phase 1 (detection): iterates over self.settings.keymap.bindings(), checks
+  context filters (is_sculpt_only, sculpt mode conflicts, export idle, etc.), detects
+  key presses using either consume_key (for clipboard/command palette actions) or
+  key_pressed + matches_egui (for all others). Collects triggered ActionBindings into
+  a Vec. Phase 2 (dispatch): new dispatch_binding() method maps each ActionBinding to
+  its corresponding Action or direct state mutation. Two-phase design cleanly separates
+  immutable keymap iteration from mutable state access.
+  Added set_brush_mode() helper to deduplicate brush mode switching logic (5 modes
+  share the same grab-strength-reset pattern).
+  Camera bookmarks (Ctrl+1-9) remain inline since they're not in the keymap system.
+- src/ui/command_palette.rs: Replaced hardcoded shortcut: Option<&'static str> with
+  binding: Option<ActionBinding>. Shortcut display now queries KeymapConfig via
+  format_shortcut(). Updated draw() signature to accept &KeymapConfig parameter.
+  All 35 command entries mapped to their ActionBinding (or None for entries without
+  keyboard shortcuts like "Tool: Select", "Toggle Settings").
+- src/ui/help.rs: Updated draw() to accept &KeymapConfig parameter. All keyboard
+  shortcut strings now looked up from the keymap via format_shortcut(). Mouse-based
+  shortcuts (LMB drag, RMB drag, Ctrl+drag, etc.) remain hardcoded as they're not
+  configurable. Combined shortcut rows ([ / ], X / Y / Z) format both bindings.
+- src/app/mod.rs: Updated call sites for help::draw() and command_palette::draw()
+  to pass &self.settings.keymap.
+- src/keymap.rs: Fixed unused mut warning in find_conflict test.
+
+Design decisions:
+- Two-phase detection/dispatch: Required because phase 1 iterates over self.settings
+  (immutable borrow) while phase 2 mutates self.doc/self.ui. Collecting triggered
+  bindings into a Vec is a clean separation pattern.
+- Context filtering in phase 1: All context guards (sculpt mode, export status,
+  active tool, text field focus) checked before key detection. This prevents
+  consume_key from consuming events that shouldn't trigger actions.
+- Strict modifier matching: KeyCombo.matches_egui() checks all three modifiers
+  (ctrl, shift, alt) match exactly. This is stricter than the original code which
+  only checked !ctrl for some shortcuts. The stricter check is more correct — e.g.,
+  Shift+O no longer triggers ToggleOrtho (only plain O does).
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (295/295) ✓

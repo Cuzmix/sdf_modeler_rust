@@ -1,8 +1,17 @@
 use eframe::egui;
 
+use crate::keymap::{ActionBinding, KeymapConfig};
+
 /// Draw the keyboard shortcuts help window.
-pub fn draw(ctx: &egui::Context, open: &mut bool) {
+/// Shortcut strings are read from the configurable keymap (single source of truth).
+pub fn draw(ctx: &egui::Context, open: &mut bool, keymap: &KeymapConfig) {
     if !*open { return; }
+
+    // Helper: look up a shortcut string from the keymap, falling back to "—" if unbound.
+    let sk = |binding: ActionBinding| -> String {
+        keymap.format_shortcut(binding).unwrap_or_else(|| "\u{2014}".to_string())
+    };
+
     egui::Window::new("Keyboard Shortcuts")
         .open(open)
         .resizable(false)
@@ -24,21 +33,21 @@ pub fn draw(ctx: &egui::Context, open: &mut bool) {
                     };
 
                     section(ui, "General");
-                    row(ui, "Ctrl+O", "Open project");
-                    row(ui, "Ctrl+S", "Save project");
-                    row(ui, "Ctrl+Z", "Undo");
-                    row(ui, "Ctrl+Y", "Redo");
-                    row(ui, "Ctrl+C", "Copy node");
-                    row(ui, "Ctrl+V", "Paste node");
-                    row(ui, "Ctrl+D", "Duplicate node");
-                    row(ui, "Delete", "Delete selected node");
-                    row(ui, "Ctrl+Shift+C", "Copy properties");
-                    row(ui, "Ctrl+Shift+V", "Paste properties");
-                    row(ui, "Ctrl+P", "Screenshot");
-                    row(ui, "Ctrl+E", "Export OBJ");
-                    row(ui, "Ctrl+K", "Command palette");
-                    row(ui, "F1", "Toggle this help");
-                    row(ui, "F4", "Toggle profiler");
+                    row(ui, &sk(ActionBinding::OpenProject), "Open project");
+                    row(ui, &sk(ActionBinding::SaveProject), "Save project");
+                    row(ui, &sk(ActionBinding::Undo), "Undo");
+                    row(ui, &sk(ActionBinding::Redo), "Redo");
+                    row(ui, &sk(ActionBinding::Copy), "Copy node");
+                    row(ui, &sk(ActionBinding::Paste), "Paste node");
+                    row(ui, &sk(ActionBinding::Duplicate), "Duplicate node");
+                    row(ui, &sk(ActionBinding::DeleteSelected), "Delete selected node");
+                    row(ui, &sk(ActionBinding::CopyProperties), "Copy properties");
+                    row(ui, &sk(ActionBinding::PasteProperties), "Paste properties");
+                    row(ui, &sk(ActionBinding::TakeScreenshot), "Screenshot");
+                    row(ui, &sk(ActionBinding::ShowExportDialog), "Export OBJ");
+                    row(ui, &sk(ActionBinding::ToggleCommandPalette), "Command palette");
+                    row(ui, &sk(ActionBinding::ToggleHelp), "Toggle this help");
+                    row(ui, &sk(ActionBinding::ToggleDebug), "Toggle profiler");
 
                     ui.separator(); ui.end_row();
                     section(ui, "Camera");
@@ -46,30 +55,30 @@ pub fn draw(ctx: &egui::Context, open: &mut bool) {
                     row(ui, "RMB drag", "Pan");
                     row(ui, "Scroll", "Zoom");
                     row(ui, "Ctrl+Alt+Drag", "Roll camera");
-                    row(ui, "F", "Focus selected");
-                    row(ui, "Home", "Frame all");
-                    row(ui, "O", "Toggle Ortho / Perspective");
-                    row(ui, "F5", "Front view");
-                    row(ui, "F6", "Top view");
-                    row(ui, "F7", "Right view");
-                    row(ui, "F8", "Back view");
-                    row(ui, "F9", "Left view");
-                    row(ui, "F10", "Bottom view");
+                    row(ui, &sk(ActionBinding::FocusSelected), "Focus selected");
+                    row(ui, &sk(ActionBinding::FrameAll), "Frame all");
+                    row(ui, &sk(ActionBinding::ToggleOrtho), "Toggle Ortho / Perspective");
+                    row(ui, &sk(ActionBinding::CameraFront), "Front view");
+                    row(ui, &sk(ActionBinding::CameraTop), "Top view");
+                    row(ui, &sk(ActionBinding::CameraRight), "Right view");
+                    row(ui, &sk(ActionBinding::CameraBack), "Back view");
+                    row(ui, &sk(ActionBinding::CameraLeft), "Left view");
+                    row(ui, &sk(ActionBinding::CameraBottom), "Bottom view");
                     row(ui, "Gizmo click", "Snap to axis view");
-                    row(ui, "/", "Toggle isolation mode");
-                    row(ui, "Z", "Cycle shading mode");
-                    row(ui, "Space", "Toggle turntable");
+                    row(ui, &sk(ActionBinding::ToggleIsolation), "Toggle isolation mode");
+                    row(ui, &sk(ActionBinding::CycleShadingMode), "Cycle shading mode");
+                    row(ui, &sk(ActionBinding::ToggleTurntable), "Toggle turntable");
                     row(ui, "Ctrl+1-9", "Save camera bookmark");
 
                     ui.separator(); ui.end_row();
                     section(ui, "Gizmo");
-                    row(ui, "W", "Move tool");
-                    row(ui, "E", "Rotate tool");
-                    row(ui, "R", "Scale tool");
-                    row(ui, "G", "Toggle Local / World");
+                    row(ui, &sk(ActionBinding::GizmoTranslate), "Move tool");
+                    row(ui, &sk(ActionBinding::GizmoRotate), "Rotate tool");
+                    row(ui, &sk(ActionBinding::GizmoScale), "Scale tool");
+                    row(ui, &sk(ActionBinding::ToggleGizmoSpace), "Toggle Local / World");
                     row(ui, "Ctrl+Drag", "Snap to grid");
                     row(ui, "Alt+Drag", "Move pivot");
-                    row(ui, "Alt+C", "Reset pivot");
+                    row(ui, &sk(ActionBinding::ResetPivot), "Reset pivot");
 
                     ui.separator(); ui.end_row();
                     section(ui, "Sculpt Mode");
@@ -78,14 +87,23 @@ pub fn draw(ctx: &egui::Context, open: &mut bool) {
                     row(ui, "Shift+drag", "Smooth override");
                     row(ui, "RMB drag", "Pan camera");
                     row(ui, "MMB drag", "Orbit camera");
-                    row(ui, "[ / ]", "Decrease / increase brush size");
-                    row(ui, "1", "Add brush");
-                    row(ui, "2", "Carve brush");
-                    row(ui, "3", "Smooth brush");
-                    row(ui, "4", "Flatten brush");
-                    row(ui, "5", "Inflate brush");
-                    row(ui, "6", "Grab brush");
-                    row(ui, "X / Y / Z", "Toggle symmetry axis");
+                    row(ui, &format!(
+                        "{} / {}",
+                        sk(ActionBinding::SculptBrushShrink),
+                        sk(ActionBinding::SculptBrushGrow)
+                    ), "Decrease / increase brush size");
+                    row(ui, &sk(ActionBinding::SculptBrushAdd), "Add brush");
+                    row(ui, &sk(ActionBinding::SculptBrushCarve), "Carve brush");
+                    row(ui, &sk(ActionBinding::SculptBrushSmooth), "Smooth brush");
+                    row(ui, &sk(ActionBinding::SculptBrushFlatten), "Flatten brush");
+                    row(ui, &sk(ActionBinding::SculptBrushInflate), "Inflate brush");
+                    row(ui, &sk(ActionBinding::SculptBrushGrab), "Grab brush");
+                    row(ui, &format!(
+                        "{} / {} / {}",
+                        sk(ActionBinding::SculptSymmetryX),
+                        sk(ActionBinding::SculptSymmetryY),
+                        sk(ActionBinding::SculptSymmetryZ)
+                    ), "Toggle symmetry axis");
 
                     ui.separator(); ui.end_row();
                     section(ui, "Scene Tree");
