@@ -19,19 +19,7 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 cd "$PROJECT_DIR"
 
-echo "Starting Ralph AFK — max $MAX_ITERATIONS iterations"
-echo "Project: $PROJECT_DIR"
-echo "=========================================="
-
-for ((i=1; i<=MAX_ITERATIONS; i++)); do
-  echo ""
-  echo "========== Ralph iteration $i / $MAX_ITERATIONS =========="
-  echo ""
-
-  result=$(claude -p \
-    --allowedTools "Edit,Write,Read,Glob,Grep,Bash,TodoWrite" \
-    "$(cat <<'PROMPT'
-You are working through a product requirements document (PRD) for this project.
+PROMPT='You are working through a product requirements document (PRD) for this project.
 
 @plans/prd.json contains the task list. Each item has a "passes" flag.
 @plans/progress.txt contains notes from previous iterations.
@@ -55,9 +43,18 @@ Follow these steps:
 8. Only work on a SINGLE feature per iteration.
 
 If while implementing you notice the PRD is complete (all items pass),
-output exactly: <promise>COMPLETE</promise>
-PROMPT
-  )")
+output exactly: <promise>COMPLETE</promise>'
+
+echo "Starting Ralph AFK — max $MAX_ITERATIONS iterations"
+echo "Project: $PROJECT_DIR"
+echo "=========================================="
+
+for ((i=1; i<=MAX_ITERATIONS; i++)); do
+  echo ""
+  echo "========== Ralph iteration $i / $MAX_ITERATIONS =========="
+  echo ""
+
+  result=$(echo "$PROMPT" | claude -p --allowedTools "Edit,Write,Read,Glob,Grep,Bash,TodoWrite")
 
   echo "$result"
 

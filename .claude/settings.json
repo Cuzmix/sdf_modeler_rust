@@ -24,7 +24,14 @@
       "WebFetch(domain:www.aihero.dev)",
       "WebFetch(domain:ghuntley.com)",
       "WebFetch(domain:www.anthropic.com)",
-      "WebFetch(domain:www.youtube.com)"
+      "WebFetch(domain:www.youtube.com)",
+      "Bash(chmod +x \"c:/Users/Manny/Documents/Code Projects/Typscript/sdf_modeler_rust/plans/ralph.sh\" \"c:/Users/Manny/Documents/Code Projects/Typscript/sdf_modeler_rust/plans/ralph-once.sh\")",
+      "Bash(cargo clippy -- -D warnings)",
+      "Bash(chmod +x \"c:/Users/Manny/Documents/Code Projects/Typscript/sdf_modeler_rust/.git/hooks/pre-commit\")",
+      "Bash(cargo clippy -- -W clippy::all)",
+      "Bash(cargo clippy -p sdf_modeler -- -W clippy::needless_return -W clippy::collapsible_if -W clippy::collapsible_else_if -W clippy::unnecessary_map_or)",
+      "Bash(cargo test)",
+      "Bash(chmod +x plans/ralph.sh plans/ralph-once.sh)"
     ]
   }
 }

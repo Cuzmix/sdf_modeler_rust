@@ -14,9 +14,7 @@ cd "$PROJECT_DIR"
 echo "Starting Ralph HITL — single interactive iteration"
 echo "=========================================="
 
-claude \
-  "$(cat <<'PROMPT'
-You are working through a product requirements document (PRD) for this project.
+claude 'You are working through a product requirements document (PRD) for this project.
 
 @plans/prd.json contains the task list. Each item has a "passes" flag.
 @plans/progress.txt contains notes from previous iterations.
@@ -40,6 +38,4 @@ Follow these steps:
 8. Only work on a SINGLE feature per iteration.
 
 If while implementing you notice the PRD is complete (all items pass),
-output exactly: <promise>COMPLETE</promise>
-PROMPT
-  )"
+output exactly: <promise>COMPLETE</promise>'
