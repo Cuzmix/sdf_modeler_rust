@@ -393,6 +393,9 @@ impl NodeDataTrait for SdfNodeData {
                     ModifierKind::RadialRepeat => {
                         scalar_drag(ui, "Count", &mut value.x, 1.0, Some(1.0..=64.0))
                     }
+                    ModifierKind::Offset => {
+                        scalar_drag(ui, "Offset", &mut value.x, 0.01, Some(-1.0..=1.0))
+                    }
                 };
             }
             NodeData::Sculpt {

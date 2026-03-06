@@ -71,3 +71,22 @@ Changes (src/shaders/operations.wgsl only):
   already consume mat_b and blend_factor from the vec4f result.
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (249/249) ✓
+
+--- Iteration 4: PRD #9 — Offset modifier (erode/dilate) ---
+COMPLETED. Added Offset modifier that expands or shrinks any SDF shape.
+
+Changes:
+- src/graph/scene.rs: Added ModifierKind::Offset variant. is_point_modifier=false
+  (distance modifier). Default value Vec3(0.1, 0, 0). gpu_type_id=40.0. Badge "[Ofs]".
+  Added to ModifierKind::ALL.
+- src/gpu/codegen.rs: Offset emits `n{i}.x + nodes[{i}].position.x` — adds offset
+  to child distance, propagating material blend info (.y, .z, .w). Added to
+  unreachable pattern for distance modifiers in transform chain.
+- src/graph/voxel.rs: CPU eval adds value.x to child SDF result (d + value.x).
+- src/ui/properties.rs: Added Offset slider (range -1.0 to 1.0, speed 0.01).
+  Added Offset to "Shape" category in "+ Modifier" menu.
+- src/ui/node_graph.rs: Added Offset to node graph modifier match (scalar drag).
+- Added 2 unit tests: codegen test (offset_modifier_adds_value) and CPU eval test
+  (evaluate_sdf_tree_modifier_offset) verifying distance is increased by offset amount.
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (251/251) ✓

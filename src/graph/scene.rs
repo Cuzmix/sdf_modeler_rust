@@ -150,6 +150,8 @@ pub enum ModifierKind {
     Repeat,
     FiniteRepeat,
     RadialRepeat,
+    // Distance offset (modify distance after child eval)
+    Offset,
 }
 
 impl ModifierKind {
@@ -157,6 +159,7 @@ impl ModifierKind {
         Self::Twist, Self::Bend, Self::Taper,
         Self::Round, Self::Onion, Self::Elongate,
         Self::Mirror, Self::Repeat, Self::FiniteRepeat, Self::RadialRepeat,
+        Self::Offset,
     ];
 
     pub fn base_name(&self) -> &'static str {
@@ -171,6 +174,7 @@ impl ModifierKind {
             Self::Repeat => "Repeat",
             Self::FiniteRepeat => "Finite Repeat",
             Self::RadialRepeat => "Radial Repeat",
+            Self::Offset => "Offset",
         }
     }
 
@@ -186,6 +190,7 @@ impl ModifierKind {
             Self::Repeat => "[Rep]",
             Self::FiniteRepeat => "[FRp]",
             Self::RadialRepeat => "[Rad]",
+            Self::Offset => "[Ofs]",
         }
     }
 
@@ -201,6 +206,7 @@ impl ModifierKind {
             Self::Repeat => Vec3::new(2.0, 0.0, 0.0),
             Self::FiniteRepeat => Vec3::new(2.0, 0.0, 0.0),
             Self::RadialRepeat => Vec3::new(6.0, 1.0, 0.0), // 6 copies, Y axis
+            Self::Offset => Vec3::new(0.1, 0.0, 0.0),
         }
     }
 
@@ -223,6 +229,7 @@ impl ModifierKind {
             Self::Repeat => 37.0,
             Self::FiniteRepeat => 38.0,
             Self::RadialRepeat => 39.0,
+            Self::Offset => 40.0,
         }
     }
 
@@ -233,7 +240,7 @@ impl ModifierKind {
             Self::Twist | Self::Bend | Self::Taper
             | Self::Elongate | Self::Mirror | Self::Repeat | Self::FiniteRepeat
             | Self::RadialRepeat => true,
-            Self::Round | Self::Onion => false,
+            Self::Round | Self::Onion | Self::Offset => false,
         }
     }
 }

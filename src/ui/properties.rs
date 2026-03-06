@@ -803,6 +803,12 @@ pub fn draw(
                         value.y = ax as f32;
                     });
                 }
+                ModifierKind::Offset => {
+                    ui.horizontal(|ui| {
+                        ui.label("Offset");
+                        ui.add(egui::DragValue::new(&mut value.x).speed(0.01).range(-1.0..=1.0));
+                    });
+                }
             }
 
             ui.separator();
@@ -870,7 +876,7 @@ pub fn draw(
                         }
                         ui.separator();
                         ui.label("Shape");
-                        for kind in &[ModifierKind::Round, ModifierKind::Onion, ModifierKind::Elongate] {
+                        for kind in &[ModifierKind::Round, ModifierKind::Onion, ModifierKind::Elongate, ModifierKind::Offset] {
                             if ui.button(kind.base_name()).clicked() {
                                 actions.push(Action::InsertModifierAbove { target: id, kind: kind.clone() });
                                 ui.close_menu();

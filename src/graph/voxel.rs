@@ -501,6 +501,10 @@ pub fn evaluate_sdf_tree(scene: &Scene, node_id: NodeId, p: Vec3) -> f32 {
                     let d = evaluate_sdf_tree(scene, *child_id, p);
                     d.abs() - value.x
                 }
+                ModifierKind::Offset => {
+                    let d = evaluate_sdf_tree(scene, *child_id, p);
+                    d + value.x
+                }
             }
         }
     }
@@ -1463,6 +1467,35 @@ mod tests {
         // At origin, sphere = -1.0, onion = |−1.0| − 0.1 = 0.9 (outside the shell)
         let dist = evaluate_sdf_tree(&scene, onion_id, Vec3::ZERO);
         assert!((dist - 0.9).abs() < 1e-5, "onion at center: {dist}");
+    }
+
+    #[test]
+    fn evaluate_sdf_tree_modifier_offset() {
+        let mut scene = empty_scene();
+        let sphere = scene.add_node("S".into(), NodeData::Primitive {
+            kind: SdfPrimitive::Sphere,
+            position: Vec3::ZERO,
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+            color: Vec3::ONE,
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        });
+        use crate::graph::scene::ModifierKind;
+        let offset_id = scene.add_node("Offset".into(), NodeData::Modifier {
+            kind: ModifierKind::Offset,
+            input: Some(sphere),
+            value: Vec3::new(0.5, 0.0, 0.0),
+            extra: Vec3::ZERO,
+        });
+        // Offset adds the value to the distance
+        let dist_sphere = evaluate_sdf_tree(&scene, sphere, Vec3::new(2.0, 0.0, 0.0));
+        let dist_offset = evaluate_sdf_tree(&scene, offset_id, Vec3::new(2.0, 0.0, 0.0));
+        assert!((dist_offset - (dist_sphere + 0.5)).abs() < 1e-5, "offset modifier: {dist_offset}");
     }
 
     #[test]

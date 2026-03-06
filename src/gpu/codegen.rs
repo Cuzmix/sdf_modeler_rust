@@ -279,8 +279,8 @@ fn emit_transform_chain(
                     "    let {new_var} = radial_repeat_point({current_var}, nodes[{idx}].position.x, nodes[{idx}].position.y);"
                 ));
             }
-            // Round/Onion are distance modifiers, not in chain
-            ChainEntry::Modifier(ModifierKind::Round | ModifierKind::Onion) => unreachable!(),
+            // Round/Onion/Offset are distance modifiers, not in chain
+            ChainEntry::Modifier(ModifierKind::Round | ModifierKind::Onion | ModifierKind::Offset) => unreachable!(),
         }
         current_var = new_var;
     }
@@ -399,6 +399,12 @@ fn emit_node_wgsl(
                         // Modify distance, propagate material blend info
                         lines.push(format!(
                             "    let n{i} = vec4f(abs(n{ci}.x) - nodes[{i}].position.x, n{ci}.y, n{ci}.z, n{ci}.w);"
+                        ));
+                    }
+                    ModifierKind::Offset => {
+                        // Add offset to distance, propagate material blend info
+                        lines.push(format!(
+                            "    let n{i} = vec4f(n{ci}.x + nodes[{i}].position.x, n{ci}.y, n{ci}.z, n{ci}.w);"
                         ));
                     }
                     // Point modifiers just pass through (transform chain handles the point)
@@ -889,6 +895,18 @@ mod tests {
         let mod_idx = order.iter().position(|&id| id == modifier).unwrap();
         let sph_idx = order.iter().position(|&id| id == sphere).unwrap();
         assert!(wgsl.contains(&format!("abs(n{sph_idx}.x) - nodes[{mod_idx}].position.x")));
+    }
+
+    #[test]
+    fn offset_modifier_adds_value() {
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        let modifier = scene.create_modifier(ModifierKind::Offset, Some(sphere));
+        let wgsl = generate_scene_sdf(&scene, None);
+        let order = scene.visible_topo_order();
+        let mod_idx = order.iter().position(|&id| id == modifier).unwrap();
+        let sph_idx = order.iter().position(|&id| id == sphere).unwrap();
+        assert!(wgsl.contains(&format!("let n{mod_idx} = vec4f(n{sph_idx}.x + nodes[{mod_idx}].position.x")));
     }
 
     #[test]

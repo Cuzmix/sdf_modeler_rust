@@ -25,7 +25,7 @@
     "category": "modifier",
     "description": "Add Offset modifier (erode/dilate) — expands or shrinks any SDF shape.\n\nSteps:\n1. In src/graph/scene.rs: add ModifierKind::Offset variant. Set is_point_modifier=false (distance modifier). Default value: Vec3(0.1, 0, 0) where .x is the offset amount. Add to ModifierKind::ALL.\n2. In src/gpu/codegen.rs emit_node_wgsl Modifier match: emit distance offset code — add the offset value (read from nodes[idx].position.x) to the child's distance result.\n3. In src/graph/voxel.rs evaluate_sdf_at: handle Offset modifier — add offset value to child SDF result.\n4. In src/ui/properties.rs: add slider for offset value in the modifier properties section. Range: -1.0 to 1.0, label 'Offset'. Negative = expand (dilate), positive = shrink (erode).\n5. Add unit test: sphere with offset +0.5 should have distance increased by 0.5 at any point.",
     "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: sphere + Offset modifier. Drag slider negative — sphere grows. Drag positive — sphere shrinks. Works with all primitive types.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 10,
