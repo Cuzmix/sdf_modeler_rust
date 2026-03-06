@@ -56,3 +56,37 @@ fn op_intersect(a: vec4f, b: vec4f, k: f32) -> vec4f {
     let d = mix(b.x, a.x, h) + k * h * (1.0 - h);
     return vec4f(d, a.y, b.y, h);
 }
+
+// Chamfer union: creates a 45° beveled edge at the union boundary.
+// The bevel width is controlled by k.
+fn op_chamfer_union(a: vec4f, b: vec4f, k: f32) -> vec4f {
+    let d = min(min(a.x, b.x), (a.x - k + b.x) * sqrt(0.5));
+    // Blend factor: how close we are to the chamfer surface vs the original surfaces
+    let chamfer_d = (a.x - k + b.x) * sqrt(0.5);
+    let h = clamp(1.0 - (d - chamfer_d) / max(k, 0.0001), 0.0, 1.0) * 0.5;
+    if a.x < b.x {
+        return vec4f(d, a.y, b.y, h);
+    } else {
+        return vec4f(d, b.y, a.y, h);
+    }
+}
+
+// Chamfer subtraction: carves shape b from shape a with a beveled edge.
+fn op_chamfer_subtract(a: vec4f, b: vec4f, k: f32) -> vec4f {
+    let d = max(max(a.x, -b.x), (a.x + k - b.x) * sqrt(0.5));
+    let chamfer_d = (a.x + k - b.x) * sqrt(0.5);
+    let h = clamp(1.0 - (chamfer_d - d) / max(k, 0.0001), 0.0, 1.0) * 0.5;
+    return vec4f(d, a.y, b.y, h);
+}
+
+// Chamfer intersection: keeps only the overlap with a beveled edge.
+fn op_chamfer_intersect(a: vec4f, b: vec4f, k: f32) -> vec4f {
+    let d = max(max(a.x, b.x), (a.x - k + b.x) * sqrt(0.5));
+    let chamfer_d = (a.x - k + b.x) * sqrt(0.5);
+    let h = clamp(1.0 - (chamfer_d - d) / max(k, 0.0001), 0.0, 1.0) * 0.5;
+    if a.x > b.x {
+        return vec4f(d, a.y, b.y, h);
+    } else {
+        return vec4f(d, b.y, a.y, h);
+    }
+}

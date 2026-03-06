@@ -157,3 +157,26 @@ Changes:
 - src/ui/node_graph.rs: No changes needed — also iterates CsgOp::ALL.
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (256/256) ✓
+
+--- Iteration 8: PRD #17 — Chamfer boolean operations ---
+COMPLETED. Added ChamferUnion, ChamferSubtract, and ChamferIntersect CSG operations.
+
+Changes:
+- src/shaders/operations.wgsl: Added 3 new WGSL functions:
+  - op_chamfer_union: min(min(a, b), (a-k+b)*sqrt(0.5)). Creates 45° bevel at union.
+  - op_chamfer_subtract: max(max(a, -b), (a+k-b)*sqrt(0.5)). Beveled subtraction.
+  - op_chamfer_intersect: max(max(a, b), (a-k+b)*sqrt(0.5)). Beveled intersection.
+  All carry material IDs and blend factor in vec4f (same pattern as smooth ops).
+- src/graph/scene.rs: Added CsgOp::ChamferUnion, ChamferSubtract, ChamferIntersect.
+  default_smooth_k=0.2. gpu_op_id: 16.0, 17.0, 18.0. Badges: "[C∪]", "[C-]", "[C∩]".
+  wgsl_function_name maps to op_chamfer_union/subtract/intersect respectively.
+  Added to CsgOp::ALL (now 9 variants).
+- src/graph/voxel.rs: Added CPU-side csg_chamfer_union(), csg_chamfer_subtract(),
+  csg_chamfer_intersect() functions matching WGSL formulas. Uses FRAC_1_SQRT_2 constant.
+  evaluate_sdf_tree dispatches all 3 new variants.
+- src/gpu/codegen.rs: No codegen changes needed — op.wgsl_function_name() drives the
+  emitted WGSL function call. Added 3 unit tests: chamfer_union/subtract/intersect
+  each verify correct WGSL function name in generated code.
+- UI: No changes needed — properties.rs and node_graph.rs iterate CsgOp::ALL.
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (259/259) ✓

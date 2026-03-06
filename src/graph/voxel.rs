@@ -425,6 +425,18 @@ fn csg_smooth_intersect(a: f32, b: f32, k: f32) -> f32 {
     b + (a - b) * h + k * h * (1.0 - h)
 }
 
+fn csg_chamfer_union(a: f32, b: f32, k: f32) -> f32 {
+    a.min(b).min((a - k + b) * std::f32::consts::FRAC_1_SQRT_2)
+}
+
+fn csg_chamfer_subtract(a: f32, b: f32, k: f32) -> f32 {
+    a.max(-b).max((a + k - b) * std::f32::consts::FRAC_1_SQRT_2)
+}
+
+fn csg_chamfer_intersect(a: f32, b: f32, k: f32) -> f32 {
+    a.max(b).max((a - k + b) * std::f32::consts::FRAC_1_SQRT_2)
+}
+
 // ---------------------------------------------------------------------------
 // Recursive SDF tree evaluator
 // ---------------------------------------------------------------------------
@@ -461,6 +473,9 @@ pub fn evaluate_sdf_tree(scene: &Scene, node_id: NodeId, p: Vec3) -> f32 {
                     CsgOp::Intersect => csg_intersect(a, b),
                     CsgOp::SmoothSubtract => csg_smooth_subtract(a, b, *smooth_k),
                     CsgOp::SmoothIntersect => csg_smooth_intersect(a, b, *smooth_k),
+                    CsgOp::ChamferUnion => csg_chamfer_union(a, b, *smooth_k),
+                    CsgOp::ChamferSubtract => csg_chamfer_subtract(a, b, *smooth_k),
+                    CsgOp::ChamferIntersect => csg_chamfer_intersect(a, b, *smooth_k),
                 },
                 (Some(v), None) | (None, Some(v)) => v,
                 (None, None) => f32::MAX,

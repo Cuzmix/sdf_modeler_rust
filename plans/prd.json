@@ -81,7 +81,7 @@
     "category": "operations",
     "description": "Add Chamfer boolean operations (ChamferUnion, ChamferSubtract, ChamferIntersect).\n\nSteps:\n1. In src/shaders/operations.wgsl: add three new functions based on hg_sdf/iq chamfer formulas:\n   - fn op_chamfer_union(a: vec4f, b: vec4f, k: f32) -> vec4f — creates 45° beveled edge at union boundary. Formula: min(min(a.x, b.x), (a.x - k + b.x) * sqrt(0.5))\n   - fn op_chamfer_subtract(a: vec4f, b: vec4f, k: f32) -> vec4f — chamfered subtraction\n   - fn op_chamfer_intersect(a: vec4f, b: vec4f, k: f32) -> vec4f — chamfered intersection\n   All must carry material IDs and blend factor in vec4f (same pattern as smooth ops).\n2. In src/graph/scene.rs: add CsgOp::ChamferUnion, CsgOp::ChamferSubtract, CsgOp::ChamferIntersect. Default k=0.2. Add to CsgOp::ALL.\n3. In src/gpu/codegen.rs: map new CsgOp variants to their WGSL function names.\n4. In src/ui/properties.rs: show chamfer ops in dropdown.\n5. Add unit test: chamfer union codegen emits op_chamfer_union call.",
     "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: create two overlapping boxes. Select Chamfer Union — edges show 45° bevel instead of smooth blend. Chamfer size adjustable via k slider.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 18,

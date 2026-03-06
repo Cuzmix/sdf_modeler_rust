@@ -788,6 +788,36 @@ mod tests {
         assert!(wgsl.contains("op_intersect(n"));
     }
 
+    #[test]
+    fn chamfer_union_generates_op_chamfer_union() {
+        let mut scene = empty_scene();
+        let left = scene.create_primitive(SdfPrimitive::Sphere);
+        let right = scene.create_primitive(SdfPrimitive::Box);
+        scene.create_operation(CsgOp::ChamferUnion, Some(left), Some(right));
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("op_chamfer_union(n"));
+    }
+
+    #[test]
+    fn chamfer_subtract_generates_op_chamfer_subtract() {
+        let mut scene = empty_scene();
+        let left = scene.create_primitive(SdfPrimitive::Sphere);
+        let right = scene.create_primitive(SdfPrimitive::Box);
+        scene.create_operation(CsgOp::ChamferSubtract, Some(left), Some(right));
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("op_chamfer_subtract(n"));
+    }
+
+    #[test]
+    fn chamfer_intersect_generates_op_chamfer_intersect() {
+        let mut scene = empty_scene();
+        let left = scene.create_primitive(SdfPrimitive::Sphere);
+        let right = scene.create_primitive(SdfPrimitive::Box);
+        scene.create_operation(CsgOp::ChamferIntersect, Some(left), Some(right));
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("op_chamfer_intersect(n"));
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // generate_scene_sdf — multiple top-level nodes
     // ═══════════════════════════════════════════════════════════════

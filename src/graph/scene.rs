@@ -259,6 +259,9 @@ pub enum CsgOp {
     Intersect,
     SmoothSubtract,
     SmoothIntersect,
+    ChamferUnion,
+    ChamferSubtract,
+    ChamferIntersect,
 }
 
 impl CsgOp {
@@ -269,6 +272,9 @@ impl CsgOp {
         Self::Intersect,
         Self::SmoothSubtract,
         Self::SmoothIntersect,
+        Self::ChamferUnion,
+        Self::ChamferSubtract,
+        Self::ChamferIntersect,
     ];
 
     pub fn base_name(&self) -> &'static str {
@@ -279,6 +285,9 @@ impl CsgOp {
             Self::Intersect => "Intersect",
             Self::SmoothSubtract => "Smooth Subtract",
             Self::SmoothIntersect => "Smooth Intersect",
+            Self::ChamferUnion => "Chamfer Union",
+            Self::ChamferSubtract => "Chamfer Subtract",
+            Self::ChamferIntersect => "Chamfer Intersect",
         }
     }
 
@@ -286,6 +295,7 @@ impl CsgOp {
         match self {
             Self::SmoothUnion => 0.5,
             Self::SmoothSubtract | Self::SmoothIntersect => 0.3,
+            Self::ChamferUnion | Self::ChamferSubtract | Self::ChamferIntersect => 0.2,
             _ => 0.0,
         }
     }
@@ -298,6 +308,9 @@ impl CsgOp {
             Self::Intersect => 13.0,
             Self::SmoothSubtract => 14.0,
             Self::SmoothIntersect => 15.0,
+            Self::ChamferUnion => 16.0,
+            Self::ChamferSubtract => 17.0,
+            Self::ChamferIntersect => 18.0,
         }
     }
 
@@ -307,6 +320,9 @@ impl CsgOp {
             Self::SmoothUnion => "op_smooth_union",
             Self::Subtract | Self::SmoothSubtract => "op_subtract",
             Self::Intersect | Self::SmoothIntersect => "op_intersect",
+            Self::ChamferUnion => "op_chamfer_union",
+            Self::ChamferSubtract => "op_chamfer_subtract",
+            Self::ChamferIntersect => "op_chamfer_intersect",
         }
     }
 
@@ -318,6 +334,9 @@ impl CsgOp {
             Self::Intersect => "[Int]",
             Self::SmoothSubtract => "[S-]",
             Self::SmoothIntersect => "[S∩]",
+            Self::ChamferUnion => "[C∪]",
+            Self::ChamferSubtract => "[C-]",
+            Self::ChamferIntersect => "[C∩]",
         }
     }
 }
