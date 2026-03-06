@@ -25,7 +25,7 @@
     "category": "testing",
     "description": "Add unit tests for undo/redo history (push, undo, redo, capacity limits)",
     "verification": "cargo test -- history passes with correct state restoration",
-    "passes": false
+    "passes": true
   },
   {
     "id": 5,

@@ -1,1 +1,19 @@
 Sprint initialized. No iterations completed yet.
+
+## Iteration 1 — PRD #4: Undo/redo history unit tests
+- Added 16 unit tests to `src/graph/history.rs` covering:
+  - New history is empty (counts and labels)
+  - Push + undo restores previous state
+  - Redo restores undone state
+  - Undo/redo on empty stacks returns None
+  - New changes clear redo stack
+  - Capacity limit (MAX_UNDO_DEPTH=50) evicts oldest entries
+  - No snapshot committed during drag
+  - Snapshot committed when drag ends
+  - Selection changes are tracked
+  - Undo/redo label ordering
+  - detect_change_label: add, delete, select, edit fallback
+  - Multiple undo/redo roundtrip
+- Helper: `empty_scene()` creates a Scene with no nodes for predictable testing
+- All 16 tests pass. cargo check, clippy, and full test suite clean.
+- Files changed: `src/graph/history.rs`, `plans/prd.json`, `plans/progress.txt`
