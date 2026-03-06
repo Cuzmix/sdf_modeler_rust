@@ -374,3 +374,39 @@ Changes:
   node_graph_state.selected which is the primary).
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (276/276) ✓
+
+--- Iteration 16: PRD #15 — Batch property editing for multi-select ---
+COMPLETED. Added batch property editing when multiple nodes are selected.
+
+Changes:
+- src/ui/properties.rs: Updated draw() signature to accept &HashSet<NodeId> (selected_set).
+  When selected_set.len() > 1, routes to new draw_multi_properties() function instead of
+  single-node properties.
+- Added draw_multi_properties() function:
+  - Shows "N nodes selected" heading at top.
+  - Determines shared capabilities across all selected nodes:
+    - Transform section (shown when all nodes have position): delta-based position and
+      rotation editing. DragValue starts at 0, applies delta to all selected nodes.
+      Rotation displayed in degrees, applied in radians.
+    - Material section (shown when all nodes have color): absolute-value editing for
+      color (with color picker + presets), roughness, metallic, and fresnel sliders.
+      Uses first selected node's values as initial display values.
+  - "Delete Selected Nodes" button deletes all selected nodes via Action::DeleteNode.
+- Added helper functions for type-agnostic property access across Primitive/Sculpt/Transform:
+  - get_node_position(), get_node_color(), get_node_roughness/metallic/fresnel()
+  - apply_position_delta(), apply_rotation_delta()
+  - set_node_color(), set_node_roughness/metallic/fresnel()
+  These handle Primitive (position/rotation + material), Sculpt (position/rotation + material),
+  and Transform (translation/rotation) variants uniformly.
+- src/ui/dock.rs: Updated properties::draw() call to pass &selected_set from node_graph_state.
+
+Design decisions:
+- Delta-based transforms: position/rotation use drag values starting at zero. Each frame's
+  non-zero delta is applied to all selected nodes. This is the industry-standard approach
+  (Blender, Maya) — avoids overwriting different positions with one absolute value.
+- Absolute material values: color/roughness/metallic/fresnel set the same value on all
+  selected nodes. This matches industry convention — material is typically set uniformly.
+- First-node display: material sliders show the first selected node's current value as the
+  starting point. Changing the slider applies the new value to all selected nodes.
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (276/276) ✓

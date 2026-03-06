@@ -243,6 +243,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     ui,
                     self.scene,
                     self.node_graph_state.selected,
+                    &self.node_graph_state.selected_set,
                     self.sculpt_state,
                     self.bake_progress,
                     self.actions,

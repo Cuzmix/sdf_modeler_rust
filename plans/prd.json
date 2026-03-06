@@ -67,7 +67,7 @@
     "category": "workflow",
     "description": "Add batch property editing when multiple nodes are selected.\n\nSteps:\n1. In src/ui/properties.rs: detect when selected_count() > 1. If so, call new fn draw_multi_properties() instead of single-node properties.\n2. draw_multi_properties(): collect all selected nodes. Determine shared node type (if all primitives, show primitive properties; if mixed types, show only transform properties).\n3. For shared properties (position, rotation, scale): show sliders. Editing applies DELTA (not absolute value) to all selected nodes. Track the previous slider value to compute delta.\n4. For color: set absolute value on all selected nodes.\n5. For roughness/metallic: set absolute value on all.\n6. Show '-- mixed --' placeholder for properties that differ across selection.\n7. Show count label at top: 'N nodes selected'.",
     "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: Ctrl+click 3 spheres. Properties shows shared fields. Change color — all 3 change. Move position — all 3 move by same delta.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 16,

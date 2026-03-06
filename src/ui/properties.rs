@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use eframe::egui;
 
 use crate::app::BakeRequest;
@@ -119,14 +121,277 @@ fn collect_modifier_chain(scene: &Scene, leaf_id: NodeId) -> Vec<NodeId> {
     chain
 }
 
+/// Helper: extract position/rotation from a node (Primitive or Sculpt have position/rotation,
+/// Transform has translation/rotation).
+fn get_node_position(data: &NodeData) -> Option<glam::Vec3> {
+    match data {
+        NodeData::Primitive { position, .. } => Some(*position),
+        NodeData::Sculpt { position, .. } => Some(*position),
+        NodeData::Transform { translation, .. } => Some(*translation),
+        _ => None,
+    }
+}
+
+fn get_node_color(data: &NodeData) -> Option<glam::Vec3> {
+    match data {
+        NodeData::Primitive { color, .. } => Some(*color),
+        NodeData::Sculpt { color, .. } => Some(*color),
+        _ => None,
+    }
+}
+
+fn get_node_roughness(data: &NodeData) -> Option<f32> {
+    match data {
+        NodeData::Primitive { roughness, .. } => Some(*roughness),
+        NodeData::Sculpt { roughness, .. } => Some(*roughness),
+        _ => None,
+    }
+}
+
+fn get_node_metallic(data: &NodeData) -> Option<f32> {
+    match data {
+        NodeData::Primitive { metallic, .. } => Some(*metallic),
+        NodeData::Sculpt { metallic, .. } => Some(*metallic),
+        _ => None,
+    }
+}
+
+fn get_node_fresnel(data: &NodeData) -> Option<f32> {
+    match data {
+        NodeData::Primitive { fresnel, .. } => Some(*fresnel),
+        NodeData::Sculpt { fresnel, .. } => Some(*fresnel),
+        _ => None,
+    }
+}
+
+/// Apply a position delta to a node (Primitive, Sculpt, or Transform).
+fn apply_position_delta(data: &mut NodeData, delta: glam::Vec3) {
+    match data {
+        NodeData::Primitive { position, .. } => *position += delta,
+        NodeData::Sculpt { position, .. } => *position += delta,
+        NodeData::Transform { translation, .. } => *translation += delta,
+        _ => {}
+    }
+}
+
+/// Apply a rotation delta to a node.
+fn apply_rotation_delta(data: &mut NodeData, delta: glam::Vec3) {
+    match data {
+        NodeData::Primitive { rotation, .. } => *rotation += delta,
+        NodeData::Sculpt { rotation, .. } => *rotation += delta,
+        NodeData::Transform { rotation, .. } => *rotation += delta,
+        _ => {}
+    }
+}
+
+/// Set color on a node (Primitive or Sculpt).
+fn set_node_color(data: &mut NodeData, new_color: glam::Vec3) {
+    match data {
+        NodeData::Primitive { color, .. } => *color = new_color,
+        NodeData::Sculpt { color, .. } => *color = new_color,
+        _ => {}
+    }
+}
+
+/// Set roughness on a node (Primitive or Sculpt).
+fn set_node_roughness(data: &mut NodeData, val: f32) {
+    match data {
+        NodeData::Primitive { roughness, .. } => *roughness = val,
+        NodeData::Sculpt { roughness, .. } => *roughness = val,
+        _ => {}
+    }
+}
+
+/// Set metallic on a node (Primitive or Sculpt).
+fn set_node_metallic(data: &mut NodeData, val: f32) {
+    match data {
+        NodeData::Primitive { metallic, .. } => *metallic = val,
+        NodeData::Sculpt { metallic, .. } => *metallic = val,
+        _ => {}
+    }
+}
+
+/// Set fresnel on a node (Primitive or Sculpt).
+fn set_node_fresnel(data: &mut NodeData, val: f32) {
+    match data {
+        NodeData::Primitive { fresnel, .. } => *fresnel = val,
+        NodeData::Sculpt { fresnel, .. } => *fresnel = val,
+        _ => {}
+    }
+}
+
+/// Draw properties panel for multiple selected nodes (batch editing).
+fn draw_multi_properties(
+    ui: &mut egui::Ui,
+    scene: &mut Scene,
+    selected_set: &HashSet<NodeId>,
+    actions: &mut ActionSink,
+) {
+    let count = selected_set.len();
+    ui.heading(format!("{} nodes selected", count));
+    ui.separator();
+
+    // Determine which property groups are available across all selected nodes
+    let ids: Vec<NodeId> = selected_set.iter().copied().collect();
+    let all_have_position = ids.iter().all(|id| {
+        scene.nodes.get(id).is_some_and(|n| get_node_position(&n.data).is_some())
+    });
+    let all_have_color = ids.iter().all(|id| {
+        scene.nodes.get(id).is_some_and(|n| get_node_color(&n.data).is_some())
+    });
+
+    // --- Transform (delta-based) ---
+    if all_have_position {
+        egui::CollapsingHeader::new("Transform")
+            .default_open(true)
+            .show(ui, |ui| {
+                // Position — delta mode: start at zero, apply delta to all
+                let mut pos_delta = glam::Vec3::ZERO;
+                ui.label("Position (delta)");
+                ui.horizontal(|ui| {
+                    for (axis_label, component) in
+                        [("X:", &mut pos_delta.x), ("Y:", &mut pos_delta.y), ("Z:", &mut pos_delta.z)]
+                    {
+                        ui.label(axis_label);
+                        ui.add(egui::DragValue::new(component).speed(0.05));
+                    }
+                });
+                if pos_delta != glam::Vec3::ZERO {
+                    for &id in &ids {
+                        if let Some(node) = scene.nodes.get_mut(&id) {
+                            apply_position_delta(&mut node.data, pos_delta);
+                        }
+                    }
+                }
+
+                // Rotation — delta mode (display in degrees)
+                let mut rot_delta_deg = glam::Vec3::ZERO;
+                ui.label("Rotation (delta)");
+                ui.horizontal(|ui| {
+                    for (axis_label, component) in
+                        [("X:", &mut rot_delta_deg.x), ("Y:", &mut rot_delta_deg.y), ("Z:", &mut rot_delta_deg.z)]
+                    {
+                        ui.label(axis_label);
+                        ui.add(egui::DragValue::new(component).speed(1.0).suffix("\u{00B0}"));
+                    }
+                });
+                if rot_delta_deg != glam::Vec3::ZERO {
+                    let rot_delta_rad = glam::Vec3::new(
+                        rot_delta_deg.x.to_radians(),
+                        rot_delta_deg.y.to_radians(),
+                        rot_delta_deg.z.to_radians(),
+                    );
+                    for &id in &ids {
+                        if let Some(node) = scene.nodes.get_mut(&id) {
+                            apply_rotation_delta(&mut node.data, rot_delta_rad);
+                        }
+                    }
+                }
+            });
+    }
+
+    // --- Material (absolute-value) ---
+    if all_have_color {
+        egui::CollapsingHeader::new("Material")
+            .default_open(true)
+            .show(ui, |ui| {
+                // Color — use first selected node's color as starting value
+                let first_color = ids.iter()
+                    .find_map(|id| scene.nodes.get(id).and_then(|n| get_node_color(&n.data)))
+                    .unwrap_or(glam::Vec3::new(0.5, 0.5, 0.5));
+                let mut color_arr = [first_color.x, first_color.y, first_color.z];
+
+                ui.label("Color");
+                ui.horizontal(|ui| {
+                    ui.color_edit_button_rgb(&mut color_arr);
+                    color_presets_row(ui, &mut color_arr);
+                });
+                let new_color = glam::Vec3::new(color_arr[0], color_arr[1], color_arr[2]);
+                if new_color != first_color {
+                    for &id in &ids {
+                        if let Some(node) = scene.nodes.get_mut(&id) {
+                            set_node_color(&mut node.data, new_color);
+                        }
+                    }
+                }
+
+                // Roughness — use first node's value
+                let first_roughness = ids.iter()
+                    .find_map(|id| scene.nodes.get(id).and_then(|n| get_node_roughness(&n.data)))
+                    .unwrap_or(0.5);
+                let mut roughness = first_roughness;
+                ui.horizontal(|ui| {
+                    ui.label("Roughness:");
+                    ui.add(egui::Slider::new(&mut roughness, 0.0..=1.0));
+                });
+                if (roughness - first_roughness).abs() > f32::EPSILON {
+                    for &id in &ids {
+                        if let Some(node) = scene.nodes.get_mut(&id) {
+                            set_node_roughness(&mut node.data, roughness);
+                        }
+                    }
+                }
+
+                // Metallic — use first node's value
+                let first_metallic = ids.iter()
+                    .find_map(|id| scene.nodes.get(id).and_then(|n| get_node_metallic(&n.data)))
+                    .unwrap_or(0.0);
+                let mut metallic = first_metallic;
+                ui.horizontal(|ui| {
+                    ui.label("Metallic:");
+                    ui.add(egui::Slider::new(&mut metallic, 0.0..=1.0));
+                });
+                if (metallic - first_metallic).abs() > f32::EPSILON {
+                    for &id in &ids {
+                        if let Some(node) = scene.nodes.get_mut(&id) {
+                            set_node_metallic(&mut node.data, metallic);
+                        }
+                    }
+                }
+
+                // Fresnel — use first node's value
+                let first_fresnel = ids.iter()
+                    .find_map(|id| scene.nodes.get(id).and_then(|n| get_node_fresnel(&n.data)))
+                    .unwrap_or(0.04);
+                let mut fresnel = first_fresnel;
+                ui.horizontal(|ui| {
+                    ui.label("Fresnel:");
+                    ui.add(egui::Slider::new(&mut fresnel, 0.0..=1.0));
+                });
+                if (fresnel - first_fresnel).abs() > f32::EPSILON {
+                    for &id in &ids {
+                        if let Some(node) = scene.nodes.get_mut(&id) {
+                            set_node_fresnel(&mut node.data, fresnel);
+                        }
+                    }
+                }
+            });
+    }
+
+    // --- Batch actions ---
+    ui.separator();
+    if ui.button("Delete Selected Nodes").clicked() {
+        for &id in &ids {
+            actions.push(Action::DeleteNode(id));
+        }
+    }
+}
+
 pub fn draw(
     ui: &mut egui::Ui,
     scene: &mut Scene,
     selected: Option<NodeId>,
+    selected_set: &HashSet<NodeId>,
     sculpt_state: &mut SculptState,
     bake_progress: Option<(u32, u32)>,
     actions: &mut ActionSink,
 ) {
+    // Multi-select: show batch properties when more than 1 node is selected
+    if selected_set.len() > 1 {
+        draw_multi_properties(ui, scene, selected_set, actions);
+        return;
+    }
+
     let Some(id) = selected else {
         ui.vertical_centered(|ui| {
             ui.add_space(40.0);
