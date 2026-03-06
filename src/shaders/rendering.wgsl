@@ -30,7 +30,7 @@ fn ray_march(ro: vec3f, rd: vec3f) -> vec4f {
     let aabb = ray_aabb(ro, inv_rd, camera.scene_min.xyz, camera.scene_max.xyz);
     let max_dist = min(aabb.y + 1.0, /*MARCH_MAX_DIST*/);
     if aabb.x > aabb.y || aabb.y < 0.0 {
-        return vec2f(/*MARCH_MAX_DIST*/ + 1.0, -1.0);
+        return vec4f(/*MARCH_MAX_DIST*/ + 1.0, -1.0, -1.0, 0.0);
     }
     var t = max(aabb.x - 0.01, 0.0);
 
