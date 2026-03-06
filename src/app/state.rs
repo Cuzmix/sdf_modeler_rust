@@ -145,6 +145,8 @@ pub struct UiState {
     pub sculpt_convert_dialog: Option<SculptConvertDialog>,
     /// Quick Primitives floating toolbar (Shift+A).
     pub show_quick_toolbar: bool,
+    /// Keybinding editor: which action is currently waiting for a key press (None = not rebinding).
+    pub rebinding_action: Option<crate::keymap::ActionBinding>,
 }
 
 // ---------------------------------------------------------------------------

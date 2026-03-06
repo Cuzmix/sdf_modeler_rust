@@ -84,6 +84,46 @@ pub enum SerializableKey {
 }
 
 impl SerializableKey {
+    /// Try to convert an egui::Key back to a SerializableKey. Returns None for unsupported keys.
+    pub fn from_egui(key: egui::Key) -> Option<Self> {
+        match key {
+            egui::Key::A => Some(Self::A), egui::Key::B => Some(Self::B),
+            egui::Key::C => Some(Self::C), egui::Key::D => Some(Self::D),
+            egui::Key::E => Some(Self::E), egui::Key::F => Some(Self::F),
+            egui::Key::G => Some(Self::G), egui::Key::H => Some(Self::H),
+            egui::Key::I => Some(Self::I), egui::Key::J => Some(Self::J),
+            egui::Key::K => Some(Self::K), egui::Key::L => Some(Self::L),
+            egui::Key::M => Some(Self::M), egui::Key::N => Some(Self::N),
+            egui::Key::O => Some(Self::O), egui::Key::P => Some(Self::P),
+            egui::Key::Q => Some(Self::Q), egui::Key::R => Some(Self::R),
+            egui::Key::S => Some(Self::S), egui::Key::T => Some(Self::T),
+            egui::Key::U => Some(Self::U), egui::Key::V => Some(Self::V),
+            egui::Key::W => Some(Self::W), egui::Key::X => Some(Self::X),
+            egui::Key::Y => Some(Self::Y), egui::Key::Z => Some(Self::Z),
+            egui::Key::Num0 => Some(Self::Num0), egui::Key::Num1 => Some(Self::Num1),
+            egui::Key::Num2 => Some(Self::Num2), egui::Key::Num3 => Some(Self::Num3),
+            egui::Key::Num4 => Some(Self::Num4), egui::Key::Num5 => Some(Self::Num5),
+            egui::Key::Num6 => Some(Self::Num6), egui::Key::Num7 => Some(Self::Num7),
+            egui::Key::Num8 => Some(Self::Num8), egui::Key::Num9 => Some(Self::Num9),
+            egui::Key::F1 => Some(Self::F1), egui::Key::F2 => Some(Self::F2),
+            egui::Key::F3 => Some(Self::F3), egui::Key::F4 => Some(Self::F4),
+            egui::Key::F5 => Some(Self::F5), egui::Key::F6 => Some(Self::F6),
+            egui::Key::F7 => Some(Self::F7), egui::Key::F8 => Some(Self::F8),
+            egui::Key::F9 => Some(Self::F9), egui::Key::F10 => Some(Self::F10),
+            egui::Key::F11 => Some(Self::F11), egui::Key::F12 => Some(Self::F12),
+            egui::Key::Space => Some(Self::Space), egui::Key::Enter => Some(Self::Enter),
+            egui::Key::Escape => Some(Self::Escape), egui::Key::Tab => Some(Self::Tab),
+            egui::Key::Delete => Some(Self::Delete), egui::Key::Home => Some(Self::Home),
+            egui::Key::End => Some(Self::End),
+            egui::Key::ArrowUp => Some(Self::ArrowUp), egui::Key::ArrowDown => Some(Self::ArrowDown),
+            egui::Key::ArrowLeft => Some(Self::ArrowLeft), egui::Key::ArrowRight => Some(Self::ArrowRight),
+            egui::Key::OpenBracket => Some(Self::OpenBracket),
+            egui::Key::CloseBracket => Some(Self::CloseBracket),
+            egui::Key::Slash => Some(Self::Slash),
+            _ => None,
+        }
+    }
+
     pub fn to_egui(self) -> egui::Key {
         match self {
             Self::A => egui::Key::A, Self::B => egui::Key::B, Self::C => egui::Key::C,

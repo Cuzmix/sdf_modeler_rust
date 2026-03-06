@@ -1,6 +1,7 @@
 use eframe::egui;
 
 use crate::app::actions::{Action, ActionSink};
+use crate::keymap::{ActionBinding, KeyCombo, KeymapConfig, SerializableKey};
 use crate::settings::Settings;
 
 /// Draw the System Settings window. Pushes `Action::SettingsChanged` if a
@@ -12,13 +13,14 @@ pub fn draw(
     show_debug: &mut bool,
     initial_vsync: bool,
     actions: &mut ActionSink,
+    rebinding_action: &mut Option<ActionBinding>,
 ) {
     let before = settings.render.clone();
     let mut imported = false;
 
     egui::Window::new("Settings")
         .open(open)
-        .default_width(300.0)
+        .default_width(340.0)
         .resizable(true)
         .show(ctx, |ui| {
             // --- Top toolbar: Reset / Export / Import ---
@@ -175,11 +177,193 @@ pub fn draw(
                             });
                         });
                     });
+
+                // --- Keybindings ---
+                draw_keybindings_section(ui, &mut settings.keymap, rebinding_action);
             });
         });
 
     if imported || settings.render != before {
         actions.push(Action::SettingsChanged);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Keybindings section
+// ---------------------------------------------------------------------------
+
+fn draw_keybindings_section(
+    ui: &mut egui::Ui,
+    keymap: &mut KeymapConfig,
+    rebinding_action: &mut Option<ActionBinding>,
+) {
+    egui::CollapsingHeader::new("Keybindings")
+        .default_open(false)
+        .show(ui, |ui| {
+            // Toolbar: Reset / Export / Import
+            ui.horizontal(|ui| {
+                if ui.button("Reset to Defaults").on_hover_text("Restore all keybindings to defaults").clicked() {
+                    keymap.reset_to_defaults();
+                    *rebinding_action = None;
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    ui.separator();
+                    if ui.button("Export...").on_hover_text("Save keybindings to a JSON file").clicked() {
+                        export_keymap_dialog(keymap);
+                    }
+                    if ui.button("Import...").on_hover_text("Load keybindings from a JSON file").clicked() {
+                        import_keymap_dialog(keymap);
+                        *rebinding_action = None;
+                    }
+                }
+            });
+            ui.separator();
+
+            // If currently rebinding, capture key presses
+            if let Some(action) = *rebinding_action {
+                capture_rebind_key(ui, keymap, action, rebinding_action);
+            }
+
+            // Group actions by category and render as a table
+            let categories = ["General", "Camera", "Tools", "Viewport", "Sculpt"];
+            for category in categories {
+                egui::CollapsingHeader::new(category)
+                    .default_open(category == "General")
+                    .show(ui, |ui| {
+                        egui::Grid::new(format!("keymap_grid_{}", category))
+                            .num_columns(3)
+                            .spacing([8.0, 4.0])
+                            .striped(true)
+                            .show(ui, |ui| {
+                                for &action in ActionBinding::ALL {
+                                    if action.category() != category {
+                                        continue;
+                                    }
+                                    draw_binding_row(ui, keymap, action, rebinding_action);
+                                }
+                            });
+                    });
+            }
+        });
+}
+
+fn draw_binding_row(
+    ui: &mut egui::Ui,
+    keymap: &mut KeymapConfig,
+    action: ActionBinding,
+    rebinding_action: &mut Option<ActionBinding>,
+) {
+    // Column 1: Action label
+    ui.label(action.label());
+
+    // Column 2: Current shortcut
+    let is_rebinding_this = *rebinding_action == Some(action);
+    if is_rebinding_this {
+        ui.colored_label(egui::Color32::YELLOW, "Press key...");
+    } else {
+        let shortcut_text = keymap.format_shortcut(action)
+            .unwrap_or_else(|| "—".to_string());
+        ui.monospace(&shortcut_text);
+    }
+
+    // Column 3: Rebind / Cancel button
+    if is_rebinding_this {
+        if ui.small_button("Cancel").clicked() {
+            *rebinding_action = None;
+        }
+    } else if ui.small_button("Rebind").clicked() {
+        *rebinding_action = Some(action);
+    }
+
+    ui.end_row();
+}
+
+fn capture_rebind_key(
+    ui: &mut egui::Ui,
+    keymap: &mut KeymapConfig,
+    action: ActionBinding,
+    rebinding_action: &mut Option<ActionBinding>,
+) {
+    // Check for any key press events this frame
+    let events = ui.input(|input| input.events.clone());
+    for event in &events {
+        if let egui::Event::Key { key, pressed: true, modifiers, .. } = event {
+            // Skip bare modifier keys (Ctrl/Shift/Alt alone)
+            if matches!(key,
+                egui::Key::Backspace | egui::Key::Insert | egui::Key::PageUp | egui::Key::PageDown
+            ) {
+                continue;
+            }
+
+            // Escape cancels the rebind
+            if *key == egui::Key::Escape && !modifiers.ctrl && !modifiers.shift && !modifiers.alt {
+                *rebinding_action = None;
+                return;
+            }
+
+            // Try to convert to our SerializableKey
+            if let Some(ser_key) = SerializableKey::from_egui(*key) {
+                let new_combo = KeyCombo {
+                    key: ser_key,
+                    ctrl: modifiers.ctrl,
+                    shift: modifiers.shift,
+                    alt: modifiers.alt,
+                };
+
+                // Check for conflicts
+                if let Some(conflicting) = keymap.find_conflict(&new_combo, action) {
+                    // Remove the conflicting binding to resolve the conflict
+                    log::warn!(
+                        "Keybinding conflict: {} was bound to {}. Unbound {}.",
+                        new_combo, conflicting.label(), conflicting.label()
+                    );
+                    keymap.remove_binding(conflicting);
+                }
+
+                keymap.set_binding(action, new_combo);
+                *rebinding_action = None;
+                return;
+            }
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn export_keymap_dialog(keymap: &KeymapConfig) {
+    if let Some(path) = rfd::FileDialog::new()
+        .set_title("Export Keybindings")
+        .add_filter("JSON", &["json"])
+        .set_file_name("keybindings.json")
+        .save_file()
+    {
+        match serde_json::to_string_pretty(keymap) {
+            Ok(json) => {
+                if let Err(err) = std::fs::write(&path, json) {
+                    log::error!("Failed to export keybindings: {}", err);
+                }
+            }
+            Err(err) => log::error!("Failed to serialize keybindings: {}", err),
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn import_keymap_dialog(keymap: &mut KeymapConfig) {
+    if let Some(path) = rfd::FileDialog::new()
+        .set_title("Import Keybindings")
+        .add_filter("JSON", &["json"])
+        .pick_file()
+    {
+        match std::fs::read_to_string(&path) {
+            Ok(json) => match serde_json::from_str::<KeymapConfig>(&json) {
+                Ok(imported) => {
+                    *keymap = imported;
+                }
+                Err(err) => log::error!("Failed to parse keybindings file: {}", err),
+            },
+            Err(err) => log::error!("Failed to read keybindings file: {}", err),
+        }
     }
 }
 

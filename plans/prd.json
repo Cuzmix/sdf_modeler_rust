@@ -144,7 +144,7 @@
     "category": "ui",
     "description": "Add keybinding editor UI with save/export/import.\n\nSteps:\n1. In src/ui/settings_window.rs (or new src/ui/keymap_editor.rs): add a 'Keybindings' tab/section to the settings window.\n2. Display a scrollable table: Action Name | Current Shortcut | [Rebind] button.\n3. Rebind flow: click [Rebind] → button changes to 'Press key...' → capture next keypress → store new KeyCombo. Show conflict warning if the combo is already used by another action.\n4. [Reset to Defaults] button: calls keymap.reset_to_defaults().\n5. [Export] button: serialize KeymapConfig to JSON, save via file dialog (rfd).\n6. [Import] button: load JSON via file dialog, deserialize into KeymapConfig, validate.\n7. Changes apply immediately (no restart needed). Settings auto-save.",
     "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: open Settings > Keybindings. See all actions with current shortcuts. Click Rebind on 'Save Project', press Ctrl+Shift+S — shortcut updates. Export to JSON file. Import a different keymap JSON. Reset to defaults restores original bindings.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 27,

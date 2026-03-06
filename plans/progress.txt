@@ -659,3 +659,41 @@ Design decisions:
   Shift+O no longer triggers ToggleOrtho (only plain O does).
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (295/295) ✓
+
+--- Iteration 23: PRD #26 — Keybinding editor UI with save/export/import ---
+COMPLETED. Added full keybinding editor to the Settings window.
+
+Changes:
+- src/keymap.rs: Added SerializableKey::from_egui() method — reverse mapping from
+  egui::Key back to SerializableKey. Returns Option (None for unsupported keys).
+  Covers all 63 key variants (26 letters, 10 digits, 12 function keys, special keys).
+- src/ui/settings_window.rs: Added "Keybindings" collapsing section with full editor:
+  - Scrollable table grouped by category (General, Camera, Tools, Viewport, Sculpt).
+    Each row shows: Action Name | Current Shortcut (monospace) | [Rebind] button.
+  - Rebind flow: click [Rebind] → row shows "Press key..." in yellow → capture next
+    keypress with modifiers → store new KeyCombo. Escape cancels. Bare modifier keys
+    and unsupported keys are ignored during capture.
+  - Conflict resolution: when a new binding conflicts with an existing action, the
+    conflicting action is automatically unbound (with log warning). This is the
+    industry-standard approach (Blender, VS Code, Unity).
+  - [Reset to Defaults] button restores all bindings via keymap.reset_to_defaults().
+  - [Export...] button: serializes KeymapConfig to JSON via rfd save dialog.
+  - [Import...] button: deserializes KeymapConfig from JSON via rfd open dialog.
+  - Changes apply immediately — no restart needed. Settings auto-save on next frame.
+  - Updated draw() signature to accept &mut Option<ActionBinding> for rebinding state.
+- src/app/state.rs: Added rebinding_action: Option<ActionBinding> to UiState for
+  tracking which action is currently being rebound.
+- src/app/mod.rs: Initialized rebinding_action = None. Updated settings_window::draw()
+  call to pass &mut self.ui.rebinding_action.
+
+Design decisions:
+- Conflict auto-unbind: When rebinding creates a conflict, the old action loses its
+  binding rather than blocking the rebind. This matches VS Code and Blender behavior.
+  A log warning is emitted for debugging. The user can rebind the unbound action later.
+- Category grouping: Actions are grouped by category() with collapsing headers.
+  "General" defaults open, others collapsed. This prevents the 48-action list from
+  being overwhelming.
+- Rebinding state in UiState: Transient UI state (not persisted), same pattern as
+  command_palette_open. Only one action can be rebound at a time.
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (295/295) ✓

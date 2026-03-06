@@ -280,6 +280,7 @@ impl SdfApp {
                 command_palette_selected: 0,
                 sculpt_convert_dialog: None,
                 show_quick_toolbar: false,
+                rebinding_action: None,
             },
             persistence: PersistenceState {
                 current_file_path: None,
@@ -414,6 +415,7 @@ impl eframe::App for SdfApp {
             &mut self.ui.show_debug,
             self.initial_vsync,
             &mut action_sink,
+            &mut self.ui.rebinding_action,
         );
 
         let t_ui = Instant::now();
