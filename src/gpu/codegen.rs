@@ -367,7 +367,7 @@ fn emit_node_wgsl(
                     format!("disp_voxel_grid(lp{i}, {i}u)")
                 };
                 lines.push(format!(
-                    "    let n{i} = vec4f(n{ci}.x + {disp_call} * nodes[{i}].position.w, f32({i}), -1.0, 0.0);"
+                    "    let n{i} = vec4f(n{ci}.x + {disp_call} * nodes[{i}].position.w, n{ci}.y, n{ci}.z, n{ci}.w);"
                 ));
             } else {
                 // STANDALONE: total SDF from grid (unchanged behavior)
@@ -1296,6 +1296,12 @@ mod tests {
         assert!(wgsl.contains(&format!("disp_voxel_grid(lp{sculpt_idx}")));
         // Should include layer_intensity via position.w
         assert!(wgsl.contains("position.w"));
+        // Differential sculpt should propagate child's material, not override with its own
+        let sphere_idx = order.iter().position(|&id| id == sphere).unwrap();
+        assert!(
+            wgsl.contains(&format!("n{sphere_idx}.y, n{sphere_idx}.z, n{sphere_idx}.w")),
+            "Differential sculpt should propagate child material (n{sphere_idx}.y/z/w), got:\n{wgsl}"
+        );
     }
 
     #[test]
