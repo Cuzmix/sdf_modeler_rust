@@ -90,7 +90,7 @@ pub(crate) fn build_postlude(config: &RenderConfig) -> String {
 
     let env_refl_line = if config.env_reflection_enabled {
         format!(
-            "    {{ let refl_dir = reflect(rd, n); let env_t = refl_dir.y * 0.5 + 0.5; let env_col = mix(vec3f({}), vec3f({}), env_t); let env_f = mat_fresnel + (1.0 - mat_fresnel) * pow(1.0 - max(dot(-rd, n), 0.0), 5.0); color += spec_tint * env_col * env_f * {} * ao; }}",
+            "    {{ let refl_dir = reflect(rd, n); let env_t = refl_dir.y * 0.5 + 0.5; let env_col = mix(vec3f({}), vec3f({}), env_t); let env_f = F_Schlick_vec3(max(dot(view_dir, n), 0.0), f0); color += env_col * env_f * {} * ao; }}",
             format_vec3(match config.background_mode {
                 crate::settings::BackgroundMode::SkyGradient => config.sky_horizon,
                 crate::settings::BackgroundMode::SolidColor => config.bg_solid_color,
@@ -136,7 +136,6 @@ pub(crate) fn build_postlude(config: &RenderConfig) -> String {
         .replace("/*AO_INTENSITY*/", &format_f32(config.ao_intensity))
         .replace("/*KEY_LIGHT_DIR*/", &format_vec3(config.key_light_dir))
         .replace("/*KEY_DIFFUSE*/", &format_f32(config.key_diffuse))
-        .replace("/*KEY_SPEC_POWER*/", &format_f32(config.key_spec_power))
         .replace("/*KEY_SPEC_INTENSITY*/", &format_f32(config.key_spec_intensity))
         .replace("/*FILL_LIGHT_DIR*/", &format_vec3(config.fill_light_dir))
         .replace("/*FILL_INTENSITY*/", &format_f32(config.fill_intensity))

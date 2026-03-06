@@ -121,6 +121,32 @@ fn calc_ao(p: vec3f, n: vec3f) -> f32 {
     return clamp(1.0 - /*AO_INTENSITY*/ * occ, 0.0, 1.0);
 }
 
+// --- Cook-Torrance GGX BRDF functions (Filament reference) ---
+const PI: f32 = 3.14159265359;
+
+// GGX (Trowbridge-Reitz) normal distribution function
+fn D_GGX(NoH: f32, roughness: f32) -> f32 {
+    let a = roughness * roughness;
+    let a2 = a * a;
+    let denom = NoH * NoH * (a2 - 1.0) + 1.0;
+    return a2 / (PI * denom * denom);
+}
+
+// Smith GGX correlated geometric attenuation (height-correlated form)
+// The (4 * NoV * NoL) denominator is cancelled in this form.
+fn G_SmithGGX(NoV: f32, NoL: f32, roughness: f32) -> f32 {
+    let a = roughness * roughness;
+    let a2 = a * a;
+    let ggx_v = NoL * sqrt(a2 + NoV * NoV * (1.0 - a2));
+    let ggx_l = NoV * sqrt(a2 + NoL * NoL * (1.0 - a2));
+    return 0.5 / max(ggx_v + ggx_l, 0.0001);
+}
+
+// Schlick Fresnel approximation (vec3f for metallic F0 = albedo)
+fn F_Schlick_vec3(VoH: f32, f0: vec3f) -> vec3f {
+    return f0 + (vec3f(1.0) - f0) * pow(1.0 - VoH, 5.0);
+}
+
 fn get_node_color(mat_id: i32) -> vec3f {
     if mat_id < 0 { return vec3f(0.5); }
     return nodes[mat_id].color.xyz;
@@ -291,33 +317,57 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
         let mat_roughness = get_blended_roughness(mat_id, mat_b_id, blend_factor);
         let mat_fresnel = get_blended_fresnel(mat_id, mat_b_id, blend_factor);
 
-        // Key light
+        let albedo = get_blended_color(mat_id, mat_b_id, blend_factor);
+        let view_dir = -rd;
+        let NoV = max(dot(n, view_dir), 0.0001);
+
+        // Dielectric F0 from fresnel parameter; metallic F0 = albedo
+        let f0 = mix(vec3f(mat_fresnel), albedo, mat_metallic);
+        // Clamp roughness to avoid division artifacts at perfectly smooth
+        let roughness = clamp(mat_roughness, 0.045, 1.0);
+
+        // Lambertian diffuse (energy-conserving: metals have no diffuse)
+        let diffuse_color = albedo * (1.0 - mat_metallic) / PI;
+
+        // Key light — Cook-Torrance GGX BRDF
         let key_dir = normalize(vec3f(/*KEY_LIGHT_DIR*/));
-        let key_h = normalize(key_dir - rd);
-        let key_diff = max(dot(n, key_dir), 0.0);
-        let spec_power = max(4.0, /*KEY_SPEC_POWER*/ * (1.0 - mat_roughness) * (1.0 - mat_roughness));
-        let key_spec_raw = pow(max(dot(n, key_h), 0.0), spec_power);
-        // Schlick Fresnel approximation
-        let VdotH = max(dot(-rd, key_h), 0.0);
-        let F = mat_fresnel + (1.0 - mat_fresnel) * pow(1.0 - VdotH, 5.0);
-        let key_spec = key_spec_raw * F;
+        let key_h = normalize(key_dir + view_dir);
+        let NoL_key = max(dot(n, key_dir), 0.0);
+        let NoH_key = max(dot(n, key_h), 0.0);
+        let VoH_key = max(dot(view_dir, key_h), 0.0);
+
+        let D_key = D_GGX(NoH_key, roughness);
+        let G_key = G_SmithGGX(NoV, NoL_key, roughness);
+        let F_key = F_Schlick_vec3(VoH_key, f0);
+        let specular_key = D_key * G_key * F_key;
+
         /*SHADOW_LINE*/
 
-        // Fill light
+        // Fill light — same BRDF
         let fill_dir = normalize(vec3f(/*FILL_LIGHT_DIR*/));
-        let fill_diff = max(dot(n, fill_dir), 0.0) * /*FILL_INTENSITY*/;
+        let fill_h = normalize(fill_dir + view_dir);
+        let NoL_fill = max(dot(n, fill_dir), 0.0);
+        let NoH_fill = max(dot(n, fill_h), 0.0);
+        let VoH_fill = max(dot(view_dir, fill_h), 0.0);
+
+        let D_fill = D_GGX(NoH_fill, roughness);
+        let G_fill = G_SmithGGX(NoV, NoL_fill, roughness);
+        let F_fill = F_Schlick_vec3(VoH_fill, f0);
+        let specular_fill = D_fill * G_fill * F_fill;
 
         // Ambient occlusion
         /*AO_LINE*/
 
-        let albedo = get_blended_color(mat_id, mat_b_id, blend_factor);
-        let diff_factor = 1.0 - mat_metallic * 0.8;
-        let spec_tint = mix(vec3f(1.0), albedo, mat_metallic);
         // Hemispherical sky light (iq outdoor lighting)
         let sky = clamp(0.5 + 0.5 * n.y, 0.0, 1.0);
         let shadow_col = pow(vec3f(shadow), vec3f(1.0, 1.2, 1.5));
-        color = albedo * diff_factor * (sky * /*AMBIENT*/ * ao + key_diff * shadow_col * /*KEY_DIFFUSE*/ + fill_diff * ao)
-                  + spec_tint * key_spec * shadow * /*KEY_SPEC_INTENSITY*/;
+
+        // Accumulate lighting
+        let key_light = (diffuse_color + specular_key * /*KEY_SPEC_INTENSITY*/) * NoL_key * /*KEY_DIFFUSE*/;
+        let fill_light = (diffuse_color + specular_fill * /*KEY_SPEC_INTENSITY*/) * NoL_fill * /*FILL_INTENSITY*/;
+        color = key_light * shadow_col
+              + fill_light * ao
+              + diffuse_color * sky * /*AMBIENT*/ * ao;
 
         // Environment reflection (sky gradient sampled along reflected ray)
         /*ENV_REFL_LINE*/

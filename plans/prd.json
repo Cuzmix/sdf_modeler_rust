@@ -95,7 +95,7 @@
     "category": "rendering",
     "description": "Upgrade PBR to Cook-Torrance GGX BRDF (phase 1: specular model).\n\nReference: Google Filament documentation (https://google.github.io/filament/Filament.html).\n\nSteps:\n1. In src/shaders/rendering.wgsl: replace the current Blinn-Phong specular with Cook-Torrance microfacet BRDF:\n   - fn D_GGX(NoH: f32, roughness: f32) -> f32 — GGX normal distribution function. Formula: a^2 / (pi * (NoH^2 * (a^2 - 1) + 1)^2) where a = roughness^2.\n   - fn G_SmithGGX(NoV: f32, NoL: f32, roughness: f32) -> f32 — Smith geometric attenuation with GGX. Use the correlated form: 0.5 / (NoL * sqrt(a^2 + NoV^2 * (1-a^2)) + NoV * sqrt(a^2 + NoL^2 * (1-a^2))).\n   - fn F_Schlick(VoH: f32, f0: vec3f) -> vec3f — Fresnel (already exists, but update to return vec3f for metallic F0 = albedo).\n2. Compute specular = D * G * F (no explicit / (4*NoV*NoL) — it's cancelled in the correlated Smith G form).\n3. Compute diffuse using Lambertian: albedo / PI * (1 - metallic).\n4. Final color = (diffuse + specular) * NoL * light_color * shadow + ambient.\n5. Preserve all existing render settings (key/fill/ambient intensities, shadow parameters).\n6. Do NOT change the number of lights or light data — just upgrade the BRDF math.",
     "verification": "cargo check && cargo clippy -- -D warnings && cargo test. In app: metallic sphere should show sharp, physically-accurate reflections. Rough sphere should show wide, dim highlights. Energy conservation: rough surfaces should not be brighter than smooth ones. Compare with Filament reference renders.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 20,

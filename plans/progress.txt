@@ -213,3 +213,32 @@ Changes:
 - src/ui/node_graph.rs: Shows "Count" drag value for stairs/columns ops in node graph.
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (263/263) ✓
+
+--- Iteration 10: PRD #19 — Cook-Torrance GGX BRDF upgrade ---
+COMPLETED. Replaced Blinn-Phong specular with physically-based Cook-Torrance microfacet BRDF.
+
+Changes:
+- src/shaders/rendering.wgsl: Added 3 Cook-Torrance BRDF functions (Filament reference):
+  - D_GGX(NoH, roughness): GGX normal distribution. Formula: a^2 / (PI * (NoH^2*(a^2-1)+1)^2)
+    where a = roughness^2. Controls highlight shape — tight for smooth, wide for rough.
+  - G_SmithGGX(NoV, NoL, roughness): Height-correlated Smith geometric attenuation.
+    Correlated form cancels the 4*NoV*NoL denominator: 0.5 / (NoL*sqrt(...) + NoV*sqrt(...)).
+  - F_Schlick_vec3(VoH, f0): Schlick Fresnel returning vec3f for metallic F0 = albedo.
+    Dielectric F0 = mat_fresnel, metallic F0 = albedo color. Mixed via metallic parameter.
+  Added PI constant for diffuse normalization.
+- Full shading path rewritten:
+  - Diffuse: Lambertian (albedo / PI * (1 - metallic)). Metals have zero diffuse.
+  - Specular: D * G * F (Cook-Torrance). No explicit / (4*NoV*NoL) — cancelled in G form.
+  - Both key light AND fill light now use full Cook-Torrance BRDF (previously fill was
+    diffuse-only). KEY_SPEC_INTENSITY preserved as artistic multiplier on specular terms.
+  - Roughness clamped to [0.045, 1.0] minimum to avoid division artifacts at perfectly smooth.
+  - F0 computed as mix(vec3f(mat_fresnel), albedo, mat_metallic) — industry standard.
+  - Final accumulation: (diffuse + specular * spec_intensity) * NoL * light_intensity * shadow.
+- src/gpu/shader_templates.rs: Removed KEY_SPEC_POWER placeholder replacement (Blinn-Phong
+  concept, no longer needed — roughness drives highlight shape directly). Updated env_refl_line
+  to use F_Schlick_vec3 and f0 instead of old mat_fresnel/spec_tint variables.
+- Settings field key_spec_power retained for backwards compatibility (serialization), but
+  no longer consumed by the shader. All other render settings preserved unchanged.
+- Clay/Solid/Normals/Matcap/Heatmap modes: unchanged.
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (263/263) ✓
