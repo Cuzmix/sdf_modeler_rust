@@ -1,4 +1,4 @@
-use crate::graph::scene::{ModifierKind, NodeId, SdfPrimitive, CsgOp};
+use crate::graph::scene::{LightType, ModifierKind, NodeId, SdfPrimitive, CsgOp};
 use crate::sculpt::ActiveTool;
 use crate::ui::gizmo::GizmoMode;
 
@@ -95,6 +95,7 @@ pub enum Action {
     CreateOperation { op: CsgOp, left: Option<NodeId>, right: Option<NodeId> },
     CreateTransform { input: Option<NodeId> },
     CreateModifier { kind: ModifierKind, input: Option<NodeId> },
+    CreateLight(LightType),
     InsertModifierAbove { target: NodeId, kind: ModifierKind },
     InsertTransformAbove { target: NodeId },
     ReparentNode { dragged: NodeId, new_parent: NodeId },

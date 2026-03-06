@@ -396,6 +396,10 @@ fn emit_node_wgsl(
                 lines.push(format!("    let n{i} = vec4f(1e10, -1.0, -1.0, 0.0);"));
             }
         }
+        NodeData::Light { .. } => {
+            // Light nodes don't contribute to SDF — skip entirely
+            lines.push(format!("    let n{i} = vec4f(1e10, -1.0, -1.0, 0.0);"));
+        }
         NodeData::Modifier { kind, input, .. } => {
             let child_idx = input.and_then(|id| idx_map.get(&id).copied());
             if let Some(ci) = child_idx {

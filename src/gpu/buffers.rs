@@ -165,6 +165,23 @@ pub fn build_node_buffer(
                     extra2: [0.0; 4],
                 });
             }
+            NodeData::Light { color, intensity, range, spot_angle, light_type } => {
+                let type_val = match light_type {
+                    crate::graph::scene::LightType::Point => 50.0,
+                    crate::graph::scene::LightType::Spot => 51.0,
+                    crate::graph::scene::LightType::Directional => 52.0,
+                };
+                buffer.push(SdfNodeGpu {
+                    type_op: [type_val, *intensity, *range, *spot_angle],
+                    position: [0.0; 4],
+                    rotation: [0.0; 4],
+                    scale: [1.0, 1.0, 1.0, 0.0],
+                    color: [color.x, color.y, color.z, is_sel],
+                    extra0: [0.0; 4],
+                    extra1: [0.0; 4],
+                    extra2: [0.0; 4],
+                });
+            }
         }
     }
 

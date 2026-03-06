@@ -173,6 +173,7 @@ impl NodeDataTrait for SdfNodeData {
                 NodeData::Sculpt { .. } => COLOR_SCULPT_BADGE,
                 NodeData::Transform { .. } => COLOR_TRANSFORM_BADGE,
                 NodeData::Modifier { .. } => COLOR_MODIFIER_BADGE,
+                NodeData::Light { .. } => COLOR_MODIFIER_BADGE, // warm yellow, same family
             })
     }
 
@@ -470,6 +471,41 @@ impl NodeDataTrait for SdfNodeData {
                     }
                 });
             }
+            NodeData::Light {
+                ref mut light_type,
+                ref mut color,
+                ref mut intensity,
+                ref mut range,
+                ref mut spot_angle,
+            } => {
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("Type").small());
+                    egui::ComboBox::from_id_salt(format!("lt_{sid}"))
+                        .width(80.0 * zoom)
+                        .selected_text(light_type.label())
+                        .show_ui(ui, |ui| {
+                            for lt in crate::graph::scene::LightType::ALL {
+                                if ui.selectable_label(std::mem::discriminant(light_type) == std::mem::discriminant(lt), lt.label()).clicked() {
+                                    *light_type = lt.clone();
+                                    changed = true;
+                                }
+                            }
+                        });
+                });
+                let mut c = [color.x, color.y, color.z];
+                ui.horizontal(|ui| {
+                    ui.label(egui::RichText::new("Col").small());
+                    if ui.color_edit_button_rgb(&mut c).changed() {
+                        changed = true;
+                    }
+                });
+                *color = glam::Vec3::new(c[0], c[1], c[2]);
+                changed |= scalar_drag(ui, "Int", intensity, 0.05, Some(0.0..=10.0));
+                changed |= scalar_drag(ui, "Rng", range, 0.1, Some(0.1..=50.0));
+                if matches!(light_type, crate::graph::scene::LightType::Spot) {
+                    changed |= scalar_drag(ui, "Ang", spot_angle, 1.0, Some(1.0..=179.0));
+                }
+            }
         }
 
         if changed {
@@ -671,7 +707,7 @@ pub fn rebuild_graph_from_scene(
         let graph_node_id = graph_state.graph.add_node(label, user_data, |graph, node_id| {
             // Add ports based on node type
             match &node.data {
-                NodeData::Primitive { .. } => {
+                NodeData::Primitive { .. } | NodeData::Light { .. } => {
                     graph.add_output_param(node_id, "out".to_string(), SdfDataType::Sdf);
                 }
                 NodeData::Operation { .. } => {
@@ -1380,6 +1416,7 @@ fn draw_minimap(
                             NodeData::Sculpt { .. } => COLOR_SCULPT_BADGE,
                             NodeData::Transform { .. } => COLOR_TRANSFORM_BADGE,
                             NodeData::Modifier { .. } => COLOR_MODIFIER_BADGE,
+                            NodeData::Light { .. } => COLOR_MODIFIER_BADGE,
                         })
                 })
                 .unwrap_or(Color32::GRAY);

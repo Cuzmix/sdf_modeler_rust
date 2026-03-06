@@ -384,10 +384,42 @@ impl CsgOp {
     }
 }
 
+/// Type of light source in the scene.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum LightType {
+    Point,
+    Spot,
+    Directional,
+}
+
+impl LightType {
+    pub const ALL: &[Self] = &[Self::Point, Self::Spot, Self::Directional];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Point => "Point",
+            Self::Spot => "Spot",
+            Self::Directional => "Directional",
+        }
+    }
+
+    pub fn badge(&self) -> &'static str {
+        match self {
+            Self::Point => "[Pt]",
+            Self::Spot => "[Sp]",
+            Self::Directional => "[Dir]",
+        }
+    }
+}
+
 fn default_roughness() -> f32 { 0.5 }
 fn default_fresnel() -> f32 { 0.04 }
 fn default_layer_intensity() -> f32 { 1.0 }
 fn default_scale() -> Vec3 { Vec3::ONE }
+fn default_light_intensity() -> f32 { 1.0 }
+fn default_light_range() -> f32 { 10.0 }
+fn default_spot_angle() -> f32 { 45.0 }
+fn default_light_color() -> Vec3 { Vec3::ONE }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum NodeData {
@@ -456,6 +488,17 @@ pub enum NodeData {
         #[serde(default)]
         extra: Vec3,
     },
+    Light {
+        light_type: LightType,
+        #[serde(default = "default_light_color")]
+        color: Vec3,
+        #[serde(default = "default_light_intensity")]
+        intensity: f32,
+        #[serde(default = "default_light_range")]
+        range: f32,
+        #[serde(default = "default_spot_angle")]
+        spot_angle: f32,
+    },
 }
 
 impl NodeData {
@@ -466,7 +509,7 @@ impl NodeData {
             NodeData::Sculpt { input, .. }
             | NodeData::Transform { input, .. }
             | NodeData::Modifier { input, .. } => (*input, None),
-            NodeData::Primitive { .. } => (None, None),
+            NodeData::Primitive { .. } | NodeData::Light { .. } => (None, None),
         };
         a.into_iter().chain(b)
     }
@@ -692,6 +735,23 @@ impl Scene {
         let value = kind.default_value();
         let extra = kind.default_extra();
         self.add_node(name, NodeData::Modifier { kind, input, value, extra })
+    }
+
+    pub fn create_light(&mut self, light_type: LightType) -> (NodeId, NodeId) {
+        let light_name = self.next_name(light_type.label());
+        let light_id = self.add_node(
+            light_name,
+            NodeData::Light {
+                light_type,
+                color: Vec3::ONE,
+                intensity: 1.0,
+                range: 10.0,
+                spot_angle: 45.0,
+            },
+        );
+        // Create a Transform parent so the light can be positioned
+        let transform_id = self.create_transform(Some(light_id));
+        (light_id, transform_id)
     }
 
     /// Insert a Modifier above `target_id`.
@@ -949,7 +1009,7 @@ impl Scene {
             return false;
         };
         match &target_node.data {
-            NodeData::Primitive { .. } => false,
+            NodeData::Primitive { .. } | NodeData::Light { .. } => false,
             NodeData::Operation { left, right, .. } => left.is_none() || right.is_none(),
             NodeData::Sculpt { input, .. }
             | NodeData::Transform { input, .. }
@@ -1057,6 +1117,10 @@ impl Scene {
                     std::mem::discriminant(kind).hash(&mut hasher);
                     input.hash(&mut hasher);
                 }
+                NodeData::Light { light_type, .. } => {
+                    5u8.hash(&mut hasher);
+                    std::mem::discriminant(light_type).hash(&mut hasher);
+                }
             }
         }
         hasher.finish()
@@ -1141,6 +1205,14 @@ impl Scene {
                     extra.x.to_bits().hash(&mut hasher);
                     extra.y.to_bits().hash(&mut hasher);
                     extra.z.to_bits().hash(&mut hasher);
+                }
+                NodeData::Light { color, intensity, range, spot_angle, .. } => {
+                    color.x.to_bits().hash(&mut hasher);
+                    color.y.to_bits().hash(&mut hasher);
+                    color.z.to_bits().hash(&mut hasher);
+                    intensity.to_bits().hash(&mut hasher);
+                    range.to_bits().hash(&mut hasher);
+                    spot_angle.to_bits().hash(&mut hasher);
                 }
             }
         }
@@ -1365,6 +1437,15 @@ impl Scene {
                         input: remap(input),
                         value: *value,
                         extra: *extra,
+                    }
+                }
+                NodeData::Light { light_type, color, intensity, range, spot_angle } => {
+                    NodeData::Light {
+                        light_type: light_type.clone(),
+                        color: *color,
+                        intensity: *intensity,
+                        range: *range,
+                        spot_angle: *spot_angle,
                     }
                 }
             };
@@ -1726,6 +1807,31 @@ impl Scene {
                         || i1 != i2
                         || v1 != v2
                         || e1 != e2
+                    {
+                        return false;
+                    }
+                }
+                (
+                    NodeData::Light {
+                        light_type: lt1,
+                        color: c1,
+                        intensity: int1,
+                        range: r1,
+                        spot_angle: sa1,
+                    },
+                    NodeData::Light {
+                        light_type: lt2,
+                        color: c2,
+                        intensity: int2,
+                        range: r2,
+                        spot_angle: sa2,
+                    },
+                ) => {
+                    if std::mem::discriminant(lt1) != std::mem::discriminant(lt2)
+                        || c1 != c2
+                        || int1 != int2
+                        || r1 != r2
+                        || sa1 != sa2
                     {
                         return false;
                     }
@@ -2379,5 +2485,117 @@ mod tests {
         let prim = scene.create_primitive(SdfPrimitive::Sphere);
         let root = scene.create_operation(CsgOp::Union, Some(prim), None);
         assert!(!scene.subtree_has_sculpt(root));
+    }
+
+    // ── Light nodes ─────────────────────────────────────────────────
+
+    #[test]
+    fn create_light_returns_light_and_transform_ids() {
+        let mut scene = empty_scene();
+        let (light_id, transform_id) = scene.create_light(LightType::Point);
+        assert!(scene.nodes.contains_key(&light_id));
+        assert!(scene.nodes.contains_key(&transform_id));
+        assert!(matches!(scene.nodes[&light_id].data, NodeData::Light { .. }));
+        match &scene.nodes[&transform_id].data {
+            NodeData::Transform { input, .. } => assert_eq!(*input, Some(light_id)),
+            _ => panic!("expected Transform parent"),
+        }
+    }
+
+    #[test]
+    fn light_node_has_no_children() {
+        let data = NodeData::Light {
+            light_type: LightType::Point,
+            color: Vec3::ONE,
+            intensity: 1.0,
+            range: 10.0,
+            spot_angle: 45.0,
+        };
+        assert_eq!(data.children().count(), 0);
+    }
+
+    #[test]
+    fn light_node_has_no_geometry_sphere() {
+        let data = NodeData::Light {
+            light_type: LightType::Spot,
+            color: Vec3::ONE,
+            intensity: 2.0,
+            range: 5.0,
+            spot_angle: 30.0,
+        };
+        assert!(data.geometry_local_sphere().is_none());
+    }
+
+    #[test]
+    fn light_node_not_valid_drop_target() {
+        let mut scene = empty_scene();
+        let (light_id, _) = scene.create_light(LightType::Directional);
+        let prim = scene.create_primitive(SdfPrimitive::Sphere);
+        assert!(!scene.is_valid_drop_target(light_id, prim));
+    }
+
+    #[test]
+    fn light_node_appears_in_topo_order() {
+        let mut scene = empty_scene();
+        let (light_id, transform_id) = scene.create_light(LightType::Point);
+        let order = scene.visible_topo_order();
+        assert!(order.contains(&light_id));
+        assert!(order.contains(&transform_id));
+    }
+
+    #[test]
+    fn light_node_content_eq_detects_intensity_change() {
+        let mut scene = empty_scene();
+        let (light_id, _) = scene.create_light(LightType::Point);
+        let clone = scene.clone();
+        if let Some(node) = scene.nodes.get_mut(&light_id) {
+            if let NodeData::Light { intensity, .. } = &mut node.data {
+                *intensity = 5.0;
+            }
+        }
+        assert!(!scene.content_eq(&clone));
+    }
+
+    #[test]
+    fn light_node_data_fingerprint_changes_on_color_change() {
+        let mut scene = empty_scene();
+        let (light_id, _) = scene.create_light(LightType::Point);
+        let fp_before = scene.data_fingerprint();
+        if let Some(node) = scene.nodes.get_mut(&light_id) {
+            if let NodeData::Light { color, .. } = &mut node.data {
+                *color = Vec3::new(1.0, 0.0, 0.0);
+            }
+        }
+        let fp_after = scene.data_fingerprint();
+        assert_ne!(fp_before, fp_after);
+    }
+
+    #[test]
+    fn light_node_structure_key_changes_on_type_change() {
+        let mut scene = empty_scene();
+        let (light_id, _) = scene.create_light(LightType::Point);
+        let key_before = scene.structure_key();
+        if let Some(node) = scene.nodes.get_mut(&light_id) {
+            if let NodeData::Light { light_type, .. } = &mut node.data {
+                *light_type = LightType::Spot;
+            }
+        }
+        let key_after = scene.structure_key();
+        assert_ne!(key_before, key_after);
+    }
+
+    #[test]
+    fn duplicate_light_subtree() {
+        let mut scene = empty_scene();
+        let (_light_id, transform_id) = scene.create_light(LightType::Point);
+        let new_root = scene.duplicate_subtree(transform_id).unwrap();
+        assert_ne!(new_root, transform_id);
+        // The duplicated tree should have a Transform containing a Light
+        match &scene.nodes[&new_root].data {
+            NodeData::Transform { input: Some(child_id), .. } => {
+                assert!(matches!(scene.nodes[child_id].data, NodeData::Light { .. }));
+            }
+            _ => panic!("expected Transform with Light child"),
+        }
     }
 }

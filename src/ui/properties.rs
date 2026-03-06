@@ -1118,6 +1118,78 @@ pub fn draw(
                 }
             }
         }
+        NodeData::Light {
+            mut light_type,
+            mut color,
+            mut intensity,
+            mut range,
+            mut spot_angle,
+        } => {
+            ui.label("Type: Light");
+            ui.separator();
+
+            let mut new_lt = light_type.clone();
+            egui::ComboBox::from_id_salt("prop_light_type")
+                .selected_text(new_lt.label())
+                .show_ui(ui, |ui| {
+                    for lt in crate::graph::scene::LightType::ALL {
+                        ui.selectable_value(&mut new_lt, lt.clone(), lt.label());
+                    }
+                });
+            if std::mem::discriminant(&new_lt) != std::mem::discriminant(&light_type) {
+                light_type = new_lt;
+            }
+            ui.separator();
+
+            ui.label("Color");
+            let mut color_arr = [color.x, color.y, color.z];
+            ui.color_edit_button_rgb(&mut color_arr);
+            color = glam::Vec3::new(color_arr[0], color_arr[1], color_arr[2]);
+
+            ui.horizontal(|ui| {
+                ui.label("Intensity:");
+                ui.add(egui::Slider::new(&mut intensity, 0.0..=10.0));
+            });
+
+            // Range: only relevant for Point and Spot
+            if !matches!(light_type, crate::graph::scene::LightType::Directional) {
+                ui.horizontal(|ui| {
+                    ui.label("Range:");
+                    ui.add(egui::Slider::new(&mut range, 0.1..=50.0));
+                });
+            }
+
+            // Spot angle: only relevant for Spot
+            if matches!(light_type, crate::graph::scene::LightType::Spot) {
+                ui.horizontal(|ui| {
+                    ui.label("Cone Angle:");
+                    ui.add(egui::Slider::new(&mut spot_angle, 1.0..=179.0).suffix("\u{00B0}"));
+                });
+            }
+
+            ui.separator();
+            if ui.button("Delete Node").on_hover_text("Remove this light from the scene").clicked() {
+                actions.push(Action::DeleteNode(id));
+                return;
+            }
+
+            // Write back
+            if let Some(node) = scene.nodes.get_mut(&id) {
+                if let NodeData::Light {
+                    light_type: ref mut lt,
+                    color: ref mut c,
+                    intensity: ref mut int,
+                    range: ref mut r,
+                    spot_angle: ref mut sa,
+                } = node.data {
+                    *lt = light_type;
+                    *c = color;
+                    *int = intensity;
+                    *r = range;
+                    *sa = spot_angle;
+                }
+            }
+        }
     }
 
     // --- Modifier Stack (for Primitive and Sculpt nodes) ---

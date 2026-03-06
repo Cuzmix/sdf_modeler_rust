@@ -665,6 +665,10 @@ pub fn evaluate_sdf_tree(scene: &Scene, node_id: NodeId, p: Vec3) -> f32 {
                 }
             }
         }
+        NodeData::Light { .. } => {
+            // Light nodes don't contribute to SDF
+            FAR_DISTANCE
+        }
     }
 }
 
@@ -699,6 +703,9 @@ fn collect_bounds(scene: &Scene, id: NodeId, all_min: &mut Vec3, all_max: &mut V
         }
         NodeData::Transform { input, .. } | NodeData::Modifier { input, .. } => {
             if let Some(i) = input { collect_bounds(scene, *i, all_min, all_max); }
+        }
+        NodeData::Light { .. } => {
+            // Light nodes have no geometric bounds
         }
     }
 }

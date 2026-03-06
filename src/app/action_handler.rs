@@ -404,6 +404,13 @@ impl SdfApp {
                     self.ui.node_graph_state.pending_center_node = Some(id);
                     self.gpu.buffer_dirty = true;
                 }
+                Action::CreateLight(light_type) => {
+                    let (_light_id, transform_id) = self.doc.scene.create_light(light_type);
+                    self.ui.node_graph_state.select_single(transform_id);
+                    self.ui.node_graph_state.needs_initial_rebuild = true;
+                    self.ui.node_graph_state.pending_center_node = Some(transform_id);
+                    self.gpu.buffer_dirty = true;
+                }
                 Action::InsertModifierAbove { target, kind } => {
                     let new_id = self.doc.scene.insert_modifier_above(target, kind);
                     self.ui.node_graph_state.select_single(new_id);

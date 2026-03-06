@@ -109,7 +109,7 @@
     "category": "scene",
     "description": "Add Light node type to the scene graph for positioned lights.\n\nSteps:\n1. In src/graph/scene.rs: add NodeData::Light variant with fields:\n   - light_type: LightType enum (Point, Spot, Directional)\n   - color: Vec3 (default white)\n   - intensity: f32 (default 1.0)\n   - range: f32 (default 10.0, for point/spot attenuation)\n   - spot_angle: f32 (default 45°, for spot lights only)\n   Add LightType enum: Point, Spot, Directional.\n2. Light nodes use the existing Transform parent for position/rotation.\n3. In src/app/actions.rs: add Action::CreateLight(LightType).\n4. In src/app/action_handler.rs: handle CreateLight — create a Light node + Transform parent.\n5. In src/gpu/buffers.rs: add a small LightGpu buffer (max 8 lights). Collect all visible Light nodes, flatten to world-space position/direction.\n6. In src/gpu/codegen.rs: skip Light nodes during SDF codegen (lights don't contribute to SDF).\n7. Do NOT integrate lights into shading yet (separate task). This task is data model only.",
     "verification": "cargo check && cargo clippy -- -D warnings && cargo test. Light nodes can be created, positioned via transform parent, saved/loaded, and appear in scene tree. They don't affect rendering yet.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 22,

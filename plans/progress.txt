@@ -459,3 +459,43 @@ a full pipeline rebuild (structure_key=0). Now only shadow/AO/march/sky/fog/gamm
 trigger rebuild.
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (276/276) ✓
+
+--- Iteration 18: PRD #21 — Add Light node type to scene graph ---
+COMPLETED. Added Light node data model with LightType enum and full scene integration.
+
+Changes:
+- src/graph/scene.rs: Added LightType enum (Point, Spot, Directional) with label(),
+  badge(), and ALL constant. Added NodeData::Light variant with fields: light_type,
+  color (Vec3, default white), intensity (f32, default 1.0), range (f32, default 10.0),
+  spot_angle (f32, default 45°). All fields have serde defaults for backwards compat.
+  Added create_light() factory returning (light_id, transform_id) — creates Light node
+  wrapped in a Transform parent for positioning. Updated all exhaustive match blocks:
+  children() (no children), is_valid_drop_target (rejects, like Primitive),
+  structure_key (discriminant hash), data_fingerprint (color/intensity/range/spot_angle),
+  content_eq (full field comparison), duplicate_subtree (deep clone).
+  Added 9 unit tests: creation, no children, no geometry sphere, drop target rejection,
+  topo order inclusion, content_eq intensity change, fingerprint color change,
+  structure_key type change, duplicate subtree.
+- src/app/actions.rs: Added Action::CreateLight(LightType). Imported LightType.
+- src/app/action_handler.rs: Handles CreateLight — calls scene.create_light(), selects
+  the Transform parent (industry standard — select the positionable node), marks dirty.
+- src/gpu/buffers.rs: Light nodes stored in SdfNodeGpu with type_op[0] = 50/51/52
+  (Point/Spot/Directional), type_op[1] = intensity, type_op[2] = range,
+  type_op[3] = spot_angle. Color stored in color[rgb].
+- src/gpu/codegen.rs: Light nodes emit vec4f(1e10, -1, -1, 0) — infinite distance,
+  no contribution to SDF. Effectively skipped during scene evaluation.
+- src/graph/voxel.rs: evaluate_sdf_tree returns FAR_DISTANCE for Light nodes.
+  collect_bounds is a no-op for Light (no geometric bounds).
+- src/ui/scene_tree.rs: Added DOT_LIGHT color (warm yellow #FFDC32). Light nodes
+  shown as leaf nodes with LightType badge ([Pt], [Sp], [Dir]).
+- src/ui/properties.rs: Added Light property panel — type dropdown (Point/Spot/
+  Directional), color picker, intensity slider (0–10), range slider (0.1–50, hidden for
+  Directional), cone angle slider (1°–179°, shown only for Spot).
+- src/ui/node_graph.rs: Light nodes get badge color, output port "out", and inline
+  editing controls (type combo, color, intensity, range, cone angle).
+
+Note: Light nodes can be created, positioned, saved/loaded, and appear in scene tree
+and node graph. They don't affect rendering yet — that's PRD #23 (after #22 adds
+viewport visualization).
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (285/285) ✓

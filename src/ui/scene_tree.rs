@@ -16,6 +16,7 @@ const DOT_OPERATION: egui::Color32 = egui::Color32::from_rgb(80, 200, 120);  // 
 const DOT_SCULPT: egui::Color32 = egui::Color32::from_rgb(240, 160, 60);    // orange
 const DOT_TRANSFORM: egui::Color32 = egui::Color32::from_rgb(180, 120, 240); // purple
 const DOT_MODIFIER: egui::Color32 = egui::Color32::from_rgb(230, 210, 60);   // yellow
+const DOT_LIGHT: egui::Color32 = egui::Color32::from_rgb(255, 220, 50);      // warm yellow
 
 #[allow(clippy::too_many_arguments)]
 pub fn draw(
@@ -132,7 +133,7 @@ fn extract_info(scene: &Scene, id: NodeId, selected_set: &std::collections::Hash
     let is_selected = selected_set.contains(&id);
     let is_hidden = scene.is_hidden(id);
     let (is_leaf, children) = match &node.data {
-        NodeData::Primitive { .. } => (true, vec![]),
+        NodeData::Primitive { .. } | NodeData::Light { .. } => (true, vec![]),
         NodeData::Operation { left, right, .. } => (false, vec![*left, *right]),
         NodeData::Sculpt { input, .. } | NodeData::Transform { input, .. } | NodeData::Modifier { input, .. } => (false, vec![*input]),
     };
@@ -363,6 +364,7 @@ fn format_node_label(node: &SceneNode) -> String {
         NodeData::Sculpt { .. } => "[Scl]",
         NodeData::Transform { .. } => "[Xfm]",
         NodeData::Modifier { kind, .. } => kind.badge(),
+        NodeData::Light { light_type, .. } => light_type.badge(),
     };
     if node.locked {
         format!("{} \u{1F512} {}", badge, node.name)
@@ -378,6 +380,7 @@ fn node_type_color(data: &NodeData) -> egui::Color32 {
         NodeData::Sculpt { .. } => DOT_SCULPT,
         NodeData::Transform { .. } => DOT_TRANSFORM,
         NodeData::Modifier { .. } => DOT_MODIFIER,
+        NodeData::Light { .. } => DOT_LIGHT,
     }
 }
 
