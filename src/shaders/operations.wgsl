@@ -61,34 +61,25 @@ fn op_intersect(a: vec4f, b: vec4f, k: f32) -> vec4f {
 // The bevel width is controlled by k.
 fn op_chamfer_union(a: vec4f, b: vec4f, k: f32) -> vec4f {
     let d = min(min(a.x, b.x), (a.x - k + b.x) * sqrt(0.5));
-    // Blend factor: how close we are to the chamfer surface vs the original surfaces
-    let chamfer_d = (a.x - k + b.x) * sqrt(0.5);
-    let h = clamp(1.0 - (d - chamfer_d) / max(k, 0.0001), 0.0, 1.0) * 0.5;
-    if a.x < b.x {
-        return vec4f(d, a.y, b.y, h);
-    } else {
-        return vec4f(d, b.y, a.y, h);
-    }
+    // Same blend convention as smooth union: 0 = pure a, 1 = pure b
+    let h = clamp(0.5 + 0.5 * (b.x - a.x) / max(k, 0.0001), 0.0, 1.0);
+    return vec4f(d, a.y, b.y, 1.0 - h);
 }
 
 // Chamfer subtraction: carves shape b from shape a with a beveled edge.
 fn op_chamfer_subtract(a: vec4f, b: vec4f, k: f32) -> vec4f {
     let d = max(max(a.x, -b.x), (a.x + k - b.x) * sqrt(0.5));
-    let chamfer_d = (a.x + k - b.x) * sqrt(0.5);
-    let h = clamp(1.0 - (chamfer_d - d) / max(k, 0.0001), 0.0, 1.0) * 0.5;
+    // Same blend convention as smooth subtract: 0 = pure a, increasing = toward b
+    let h = clamp(0.5 - 0.5 * (a.x + b.x) / max(k, 0.0001), 0.0, 1.0);
     return vec4f(d, a.y, b.y, h);
 }
 
 // Chamfer intersection: keeps only the overlap with a beveled edge.
 fn op_chamfer_intersect(a: vec4f, b: vec4f, k: f32) -> vec4f {
     let d = max(max(a.x, b.x), (a.x - k + b.x) * sqrt(0.5));
-    let chamfer_d = (a.x - k + b.x) * sqrt(0.5);
-    let h = clamp(1.0 - (chamfer_d - d) / max(k, 0.0001), 0.0, 1.0) * 0.5;
-    if a.x > b.x {
-        return vec4f(d, a.y, b.y, h);
-    } else {
-        return vec4f(d, b.y, a.y, h);
-    }
+    // Same blend convention as smooth intersect: 0 = pure a, increasing = toward b
+    let h = clamp(0.5 - 0.5 * (b.x - a.x) / max(k, 0.0001), 0.0, 1.0);
+    return vec4f(d, a.y, b.y, h);
 }
 
 // GLSL-style modulo (x - y * floor(x/y)), differs from WGSL % for negative values.
@@ -103,12 +94,9 @@ fn op_stairs_union(a: vec4f, b: vec4f, k: f32, n: f32) -> vec4f {
     let u = b.x - k;
     let stair_d = 0.5 * (u + a.x + abs(glsl_mod(u - a.x + s, 2.0 * s) - s));
     let d = min(min(a.x, b.x), stair_d);
-    let h = clamp(0.5 - (d - stair_d) / max(k, 0.0001), 0.0, 1.0) * 0.5;
-    if a.x < b.x {
-        return vec4f(d, a.y, b.y, h);
-    } else {
-        return vec4f(d, b.y, a.y, h);
-    }
+    // Same blend convention as smooth union: 0 = pure a, 1 = pure b
+    let h = clamp(0.5 + 0.5 * (b.x - a.x) / max(k, 0.0001), 0.0, 1.0);
+    return vec4f(d, a.y, b.y, 1.0 - h);
 }
 
 // Staircase subtraction: carves shape b from shape a with a stepped edge.
@@ -144,18 +132,14 @@ fn op_columns_union(a: vec4f, b: vec4f, k: f32, n: f32) -> vec4f {
         p.y = p_mod1(p.y, column_radius * 2.0);
         let col_d = min(length(p) - column_radius, p.x);
         let d = min(min(a.x, b.x), col_d);
-        let h = clamp(0.5 - (d - col_d) / max(k, 0.0001), 0.0, 1.0) * 0.5;
-        if a.x < b.x {
-            return vec4f(d, a.y, b.y, h);
-        } else {
-            return vec4f(d, b.y, a.y, h);
-        }
+        // Same blend convention as smooth union: 0 = pure a, 1 = pure b
+        let h = clamp(0.5 + 0.5 * (b.x - a.x) / max(k, 0.0001), 0.0, 1.0);
+        return vec4f(d, a.y, b.y, 1.0 - h);
     } else {
-        if a.x < b.x {
-            return vec4f(a.x, a.y, -1.0, 0.0);
-        } else {
-            return vec4f(b.x, b.y, -1.0, 0.0);
-        }
+        // Outside column region — hard union fallback
+        let h = clamp(0.5 + 0.5 * (b.x - a.x) / max(k, 0.0001), 0.0, 1.0);
+        let d = min(a.x, b.x);
+        return vec4f(d, a.y, b.y, 1.0 - h);
     }
 }
 
