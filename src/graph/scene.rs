@@ -568,6 +568,10 @@ pub struct Scene {
     pub(crate) name_counters: HashMap<String, u32>,
     #[serde(default)]
     pub hidden_nodes: HashSet<NodeId>,
+    /// Per-node light linking bitmask. Bit N = light slot N affects this node.
+    /// Default `0xFF` (all lights) for nodes not in the map.
+    #[serde(default)]
+    pub light_masks: HashMap<NodeId, u8>,
 }
 
 impl Scene {
@@ -577,9 +581,27 @@ impl Scene {
             next_id: 0,
             name_counters: HashMap::new(),
             hidden_nodes: HashSet::new(),
+            light_masks: HashMap::new(),
         };
         scene.create_primitive(SdfPrimitive::Sphere);
+        scene.create_default_lights();
         scene
+    }
+
+    /// Get the light linking bitmask for a node. Returns `0xFF` (all lights)
+    /// if no custom mask is set.
+    pub fn get_light_mask(&self, id: NodeId) -> u8 {
+        self.light_masks.get(&id).copied().unwrap_or(0xFF)
+    }
+
+    /// Set the light linking bitmask for a node.
+    /// Used by light linking actions and UI (tasks 5-7).
+    pub fn set_light_mask(&mut self, id: NodeId, mask: u8) {
+        if mask == 0xFF {
+            self.light_masks.remove(&id);
+        } else {
+            self.light_masks.insert(id, mask);
+        }
     }
 
     pub fn next_name(&mut self, base: &str) -> String {
@@ -611,6 +633,7 @@ impl Scene {
 
     pub fn remove_node(&mut self, id: NodeId) -> Option<SceneNode> {
         self.hidden_nodes.remove(&id);
+        self.light_masks.remove(&id);
         let node = self.nodes.remove(&id);
         // Null out any references to this node (instead of cascade-deleting)
         let to_patch: Vec<(NodeId, bool, bool, bool)> = self
@@ -764,9 +787,63 @@ impl Scene {
                 spot_angle: 45.0,
             },
         );
-        // Create a Transform parent so the light can be positioned
-        let transform_id = self.create_transform(Some(light_id));
+        // Create a Transform parent positioned above and to the side of the origin
+        // so the light billboard is immediately visible (not buried inside geometry).
+        let transform_name = self.next_name("Transform");
+        let transform_id = self.add_node(transform_name, NodeData::Transform {
+            input: Some(light_id),
+            translation: Vec3::new(2.0, 3.0, 2.0),
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+        });
         (light_id, transform_id)
+    }
+
+    /// Create default Key and Fill directional lights for a new scene.
+    /// Key Light: warm white, intensity 1.5, direction (-0.5, -1.0, -0.3).
+    /// Fill Light: cool blue-white, intensity 0.4, direction (0.3, -0.5, 0.6).
+    pub fn create_default_lights(&mut self) {
+        // Key Light
+        let key_light_id = self.add_node(
+            "Key Light".to_string(),
+            NodeData::Light {
+                light_type: LightType::Directional,
+                color: Vec3::new(1.0, 0.98, 0.95),
+                intensity: 1.5,
+                range: 10.0,
+                spot_angle: 45.0,
+            },
+        );
+        let _key_transform_id = self.add_node(
+            "Key Light Transform".to_string(),
+            NodeData::Transform {
+                input: Some(key_light_id),
+                translation: Vec3::new(2.0, 4.0, 3.0),
+                rotation: Vec3::new(-0.5, -1.0, -0.3),
+                scale: Vec3::ONE,
+            },
+        );
+
+        // Fill Light
+        let fill_light_id = self.add_node(
+            "Fill Light".to_string(),
+            NodeData::Light {
+                light_type: LightType::Directional,
+                color: Vec3::new(0.85, 0.9, 1.0),
+                intensity: 0.4,
+                range: 10.0,
+                spot_angle: 45.0,
+            },
+        );
+        let _fill_transform_id = self.add_node(
+            "Fill Light Transform".to_string(),
+            NodeData::Transform {
+                input: Some(fill_light_id),
+                translation: Vec3::new(-2.0, 2.0, -3.0),
+                rotation: Vec3::new(0.3, -0.5, 0.6),
+                scale: Vec3::ONE,
+            },
+        );
     }
 
     /// Insert a Modifier above `target_id`.
@@ -1231,6 +1308,9 @@ impl Scene {
                     spot_angle.to_bits().hash(&mut hasher);
                 }
             }
+            // Include light mask in fingerprint
+            let mask = self.get_light_mask(id);
+            mask.hash(&mut hasher);
         }
         hasher.finish()
     }
@@ -1478,6 +1558,13 @@ impl Scene {
             self.nodes.insert(node.id, node);
         }
 
+        // Copy light masks for duplicated nodes
+        for (&old_id, &new_id) in &id_map {
+            if let Some(&mask) = self.light_masks.get(&old_id) {
+                self.light_masks.insert(new_id, mask);
+            }
+        }
+
         id_map.get(&root_id).copied()
     }
 
@@ -1658,6 +1745,9 @@ impl Scene {
     /// Deep equality check (topology + parameters). Used by undo system.
     pub fn content_eq(&self, other: &Scene) -> bool {
         if self.hidden_nodes != other.hidden_nodes {
+            return false;
+        }
+        if self.light_masks != other.light_masks {
             return false;
         }
         if self.nodes.len() != other.nodes.len() {
@@ -1874,17 +1964,25 @@ mod tests {
             next_id: 0,
             name_counters: HashMap::new(),
             hidden_nodes: HashSet::new(),
+            light_masks: HashMap::new(),
         }
     }
 
     // ── Scene::new ──────────────────────────────────────────────────
 
     #[test]
-    fn new_scene_has_one_sphere() {
+    fn new_scene_has_sphere_and_default_lights() {
         let scene = Scene::new();
-        assert_eq!(scene.nodes.len(), 1);
-        let node = scene.nodes.values().next().unwrap();
-        assert!(matches!(node.data, NodeData::Primitive { kind: SdfPrimitive::Sphere, .. }));
+        // 1 sphere + 2 lights + 2 light transforms = 5 nodes
+        assert_eq!(scene.nodes.len(), 5);
+        let has_sphere = scene.nodes.values().any(|n| {
+            matches!(n.data, NodeData::Primitive { kind: SdfPrimitive::Sphere, .. })
+        });
+        assert!(has_sphere);
+        let light_count = scene.nodes.values().filter(|n| {
+            matches!(n.data, NodeData::Light { .. })
+        }).count();
+        assert_eq!(light_count, 2);
     }
 
     // ── add_node / create factories ─────────────────────────────────
@@ -2420,7 +2518,9 @@ mod tests {
     fn content_eq_detects_position_change() {
         let scene = Scene::new();
         let mut modified = scene.clone();
-        let id = *modified.nodes.keys().next().unwrap();
+        let id = *modified.nodes.iter()
+            .find(|(_, n)| matches!(n.data, NodeData::Primitive { .. }))
+            .unwrap().0;
         if let Some(node) = modified.nodes.get_mut(&id) {
             if let NodeData::Primitive { position, .. } = &mut node.data {
                 *position = Vec3::new(99.0, 0.0, 0.0);
@@ -2828,11 +2928,76 @@ mod tests {
         match &scene.nodes[&transform_id].data {
             NodeData::Transform { input, translation, rotation, scale } => {
                 assert_eq!(*input, Some(light_id));
-                assert_eq!(*translation, Vec3::ZERO);
+                assert_eq!(*translation, Vec3::new(2.0, 3.0, 2.0));
                 assert_eq!(*rotation, Vec3::ZERO);
                 assert_eq!(*scale, Vec3::ONE);
             }
             _ => panic!("expected Transform parent"),
         }
+    }
+
+    // ── light_masks ────────────────────────────────────────────────
+
+    #[test]
+    fn light_mask_default_is_all_lights() {
+        let scene = Scene::new();
+        let id = *scene.nodes.keys().next().unwrap();
+        assert_eq!(scene.get_light_mask(id), 0xFF);
+    }
+
+    #[test]
+    fn light_mask_set_and_get() {
+        let mut scene = empty_scene();
+        let prim = scene.create_primitive(SdfPrimitive::Sphere);
+        scene.set_light_mask(prim, 0b0000_0101);
+        assert_eq!(scene.get_light_mask(prim), 0b0000_0101);
+    }
+
+    #[test]
+    fn light_mask_reset_to_default_removes_entry() {
+        let mut scene = empty_scene();
+        let prim = scene.create_primitive(SdfPrimitive::Sphere);
+        scene.set_light_mask(prim, 0x0F);
+        assert!(scene.light_masks.contains_key(&prim));
+        scene.set_light_mask(prim, 0xFF);
+        assert!(!scene.light_masks.contains_key(&prim));
+    }
+
+    #[test]
+    fn light_mask_cleaned_up_on_remove_node() {
+        let mut scene = empty_scene();
+        let prim = scene.create_primitive(SdfPrimitive::Sphere);
+        scene.set_light_mask(prim, 0x0F);
+        assert!(scene.light_masks.contains_key(&prim));
+        scene.remove_node(prim);
+        assert!(!scene.light_masks.contains_key(&prim));
+    }
+
+    #[test]
+    fn light_mask_included_in_content_eq() {
+        let mut scene = empty_scene();
+        let prim = scene.create_primitive(SdfPrimitive::Sphere);
+        let clone = scene.clone();
+        scene.set_light_mask(prim, 0x01);
+        assert!(!scene.content_eq(&clone));
+    }
+
+    #[test]
+    fn light_mask_included_in_data_fingerprint() {
+        let mut scene = empty_scene();
+        let prim = scene.create_primitive(SdfPrimitive::Sphere);
+        let fp_before = scene.data_fingerprint();
+        scene.set_light_mask(prim, 0x01);
+        let fp_after = scene.data_fingerprint();
+        assert_ne!(fp_before, fp_after);
+    }
+
+    #[test]
+    fn light_mask_duplicated_with_subtree() {
+        let mut scene = empty_scene();
+        let prim = scene.create_primitive(SdfPrimitive::Sphere);
+        scene.set_light_mask(prim, 0b0000_0011);
+        let new_root = scene.duplicate_subtree(prim).unwrap();
+        assert_eq!(scene.get_light_mask(new_root), 0b0000_0011);
     }
 }

@@ -163,6 +163,14 @@ mod tests {
     use super::*;
     use crate::graph::scene::{NodeData, Scene, SdfPrimitive};
 
+    /// Find the first Primitive node ID in a scene.
+    fn find_primitive_id(scene: &Scene) -> u64 {
+        *scene.nodes.iter()
+            .find(|(_, n)| matches!(n.data, NodeData::Primitive { .. }))
+            .expect("scene should have a primitive")
+            .0
+    }
+
     /// Create an empty scene (no default sphere) for predictable testing.
     fn empty_scene() -> Scene {
         Scene {
@@ -170,6 +178,7 @@ mod tests {
             next_id: 0,
             name_counters: std::collections::HashMap::new(),
             hidden_nodes: std::collections::HashSet::new(),
+            light_masks: std::collections::HashMap::new(),
         }
     }
 
@@ -403,8 +412,9 @@ mod tests {
     fn detect_label_edit_fallback() {
         let scene = Scene::new();
         let mut modified = scene.clone();
+        let prim_id = find_primitive_id(&scene);
         // Change a property without adding/removing nodes or changing selection
-        if let Some(node) = modified.nodes.values_mut().next() {
+        if let Some(node) = modified.nodes.get_mut(&prim_id) {
             if let crate::graph::scene::NodeData::Primitive { ref mut color, .. } = node.data {
                 *color = glam::Vec3::new(1.0, 0.0, 0.0);
             }
@@ -449,7 +459,7 @@ mod tests {
     fn property_slider_drag_coalesced_to_single_undo() {
         let mut history = History::new();
         let original_scene = Scene::new();
-        let node_id = *original_scene.nodes.keys().next().unwrap();
+        let node_id = find_primitive_id(&original_scene);
 
         // Frame 0: no changes yet
         history.begin_frame(&original_scene, Some(node_id));
@@ -503,7 +513,7 @@ mod tests {
     fn gizmo_drag_coalesced_to_single_undo() {
         let mut history = History::new();
         let original_scene = Scene::new();
-        let node_id = *original_scene.nodes.keys().next().unwrap();
+        let node_id = find_primitive_id(&original_scene);
 
         // Frame 0: idle
         history.begin_frame(&original_scene, Some(node_id));
@@ -546,7 +556,7 @@ mod tests {
     fn color_preset_click_creates_one_undo_entry() {
         let mut history = History::new();
         let original_scene = Scene::new();
-        let node_id = *original_scene.nodes.keys().next().unwrap();
+        let node_id = find_primitive_id(&original_scene);
 
         // Frame 0: idle
         history.begin_frame(&original_scene, Some(node_id));
@@ -581,7 +591,7 @@ mod tests {
     fn consecutive_drags_create_separate_undo_entries() {
         let mut history = History::new();
         let original_scene = Scene::new();
-        let node_id = *original_scene.nodes.keys().next().unwrap();
+        let node_id = find_primitive_id(&original_scene);
 
         // Frame 0: idle
         history.begin_frame(&original_scene, Some(node_id));

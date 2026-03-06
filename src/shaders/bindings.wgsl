@@ -14,11 +14,8 @@ struct Camera {
     scene_max: vec4f,
     brush_pos: vec4f,
     cross_section: vec4f,
-    // Dynamic lighting (no shader rebuild needed for changes)
-    key_light: vec4f,       // dir.xyz, diffuse_intensity
-    key_color_spec: vec4f,  // color.rgb, spec_intensity
-    fill_light: vec4f,      // dir.xyz, fill_intensity
-    fill_color_ambient: vec4f, // color.rgb, ambient_intensity
+    // Ambient lighting (global key/fill migrated to scene Directional nodes)
+    ambient_info: vec4f,    // x = ambient_intensity, yzw = unused
     // Scene lights (up to 8, packed as 4 vec4f per light)
     scene_light_info: vec4f,   // x = count, yzw = unused
     scene_lights: array<vec4f, 32>, // 8 lights × 4 vec4f

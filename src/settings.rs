@@ -561,14 +561,6 @@ impl RenderConfig {
 
     pub fn reset_lighting(&mut self) {
         let d = Self::default();
-        self.key_light_dir = d.key_light_dir;
-        self.key_diffuse = d.key_diffuse;
-        self.key_spec_power = d.key_spec_power;
-        self.key_spec_intensity = d.key_spec_intensity;
-        self.key_light_color = d.key_light_color;
-        self.fill_light_dir = d.fill_light_dir;
-        self.fill_intensity = d.fill_intensity;
-        self.fill_light_color = d.fill_light_color;
         self.ambient = d.ambient;
     }
 
@@ -608,21 +600,6 @@ impl RenderConfig {
 
     pub fn reset_all(&mut self) {
         *self = Self::default();
-    }
-
-    /// Pack light parameters into 4 vec4f arrays for the CameraUniform.
-    /// Layout:
-    ///   [0]: key_dir.xyz, key_diffuse
-    ///   [1]: key_color.rgb, key_spec_intensity
-    ///   [2]: fill_dir.xyz, fill_intensity
-    ///   [3]: fill_color.rgb, ambient
-    pub fn light_uniform_data(&self) -> [[f32; 4]; 4] {
-        [
-            [self.key_light_dir[0], self.key_light_dir[1], self.key_light_dir[2], self.key_diffuse],
-            [self.key_light_color[0], self.key_light_color[1], self.key_light_color[2], self.key_spec_intensity],
-            [self.fill_light_dir[0], self.fill_light_dir[1], self.fill_light_dir[2], self.fill_intensity],
-            [self.fill_light_color[0], self.fill_light_color[1], self.fill_light_color[2], self.ambient],
-        ]
     }
 
     /// Returns true if the change between self and other requires a shader

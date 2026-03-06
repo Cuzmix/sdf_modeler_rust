@@ -4,6 +4,19 @@ use crate::ui::gizmo::GizmoMode;
 
 use super::BakeRequest;
 
+/// Industry-standard lighting presets that configure scene Key + Fill lights.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum LightingPreset {
+    /// Classic 3-point studio setup: warm key, cool fill, moderate ambient.
+    Studio,
+    /// Bright daylight: strong warm key, soft sky fill, low ambient.
+    Outdoor,
+    /// High-contrast cinematic: strong warm key, minimal fill, very low ambient.
+    Dramatic,
+    /// Even, shadowless illumination: neutral key and fill, high ambient.
+    Flat,
+}
+
 /// Collects actions during a frame. Drained by the update loop.
 pub type ActionSink = Vec<Action>;
 
@@ -139,6 +152,16 @@ pub enum Action {
     ToggleSettings,
     ToggleCommandPalette,
     ShowToast { message: String, is_error: bool },
+
+    // ── Light linking ─────────────────────────────────────────────────
+    /// Set the full light mask for a geometry node (8-bit bitmask).
+    SetLightMask { node_id: NodeId, mask: u8 },
+    /// Toggle a single light slot bit in a geometry node's light mask.
+    ToggleLightMaskBit { node_id: NodeId, light_slot: u8, enabled: bool },
+
+    // ── Lighting presets ─────────────────────────────────────────────
+    /// Apply a lighting preset to scene Key/Fill lights and ambient.
+    ApplyLightingPreset(LightingPreset),
 
     // ── Settings / GPU ───────────────────────────────────────────────
     SettingsChanged,

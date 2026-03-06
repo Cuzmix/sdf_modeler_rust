@@ -61,6 +61,9 @@ fn collect_lights(scene: &Scene, parent_map: &HashMap<NodeId, NodeId>) -> Vec<Li
             let Some(&transform_id) = parent_map.get(&id) else {
                 continue;
             };
+            if scene.is_hidden(transform_id) {
+                continue;
+            }
             let Some(transform_node) = scene.nodes.get(&transform_id) else {
                 continue;
             };
@@ -262,15 +265,22 @@ fn draw_spot_light_wireframe(
     rect: Rect,
     color: Color32,
 ) {
-    let stroke = Stroke::new(WIREFRAME_STROKE, color.gamma_multiply(0.5));
+    let outer_stroke = Stroke::new(WIREFRAME_STROKE, color.gamma_multiply(0.5));
+    let inner_stroke = Stroke::new(WIREFRAME_STROKE * 0.7, color.gamma_multiply(0.25));
     let half_angle_rad = (spot_angle_deg * 0.5).to_radians();
     let cone_base_radius = range * half_angle_rad.tan();
+
+    // Inner cone at 80% of outer angle (matches shader falloff)
+    let inner_half_angle_rad = (spot_angle_deg * 0.5 * 0.8).to_radians();
+    let inner_cone_radius = range * inner_half_angle_rad.tan();
 
     // Compute cone base center
     let base_center = center + direction * range;
 
-    // Draw circle at cone base
-    draw_wireframe_circle(painter, base_center, direction, cone_base_radius, vp, rect, stroke);
+    // Draw outer circle at cone base
+    draw_wireframe_circle(painter, base_center, direction, cone_base_radius, vp, rect, outer_stroke);
+    // Draw inner circle at cone base (dimmer)
+    draw_wireframe_circle(painter, base_center, direction, inner_cone_radius, vp, rect, inner_stroke);
 
     // Draw cone lines from tip to base edge
     let up = if direction.y.abs() > 0.99 {
@@ -284,12 +294,23 @@ fn draw_spot_light_wireframe(
     let line_count = 8;
     for i in 0..line_count {
         let angle = (i as f32 / line_count as f32) * std::f32::consts::TAU;
+        // Outer cone silhouette lines
         let edge = base_center + (tangent * angle.cos() + bitangent * angle.sin()) * cone_base_radius;
         if let (Some(tip_screen), Some(edge_screen)) = (
             world_to_screen(center, vp, rect),
             world_to_screen(edge, vp, rect),
         ) {
-            painter.line_segment([tip_screen, edge_screen], stroke);
+            painter.line_segment([tip_screen, edge_screen], outer_stroke);
+        }
+        // Inner cone silhouette lines (dimmer, every other line)
+        if i % 2 == 0 {
+            let inner_edge = base_center + (tangent * angle.cos() + bitangent * angle.sin()) * inner_cone_radius;
+            if let (Some(tip_screen), Some(edge_screen)) = (
+                world_to_screen(center, vp, rect),
+                world_to_screen(inner_edge, vp, rect),
+            ) {
+                painter.line_segment([tip_screen, edge_screen], inner_stroke);
+            }
         }
     }
 }
@@ -304,7 +325,7 @@ fn draw_directional_light_wireframe(
     color: Color32,
 ) {
     let stroke = Stroke::new(WIREFRAME_STROKE, color.gamma_multiply(0.5));
-    let arrow_length = 3.0;
+    let arrow_length = 5.0;
     let spread = 0.8;
 
     let up = if direction.y.abs() > 0.99 {
@@ -370,6 +391,7 @@ pub fn draw_and_interact(
     rect: Rect,
     mouse_pos: Option<Pos2>,
     mouse_clicked: bool,
+    active_light_ids: &std::collections::HashSet<NodeId>,
 ) -> LightGizmoResult {
     let parent_map = scene.build_parent_map();
     let lights = collect_lights(scene, &parent_map);
@@ -397,9 +419,14 @@ pub fn draw_and_interact(
             continue;
         }
 
+        let is_active = active_light_ids.contains(&light.light_id);
+
         let color = light_color_to_egui(light.color, alpha);
         // Ensure icon is visible even for dark light colors
-        let draw_color = if light.color.length() < 0.3 {
+        let draw_color = if !is_active {
+            // Inactive lights (beyond 8-light limit) get desaturated gray
+            Color32::from_rgba_unmultiplied(120, 120, 120, (alpha * 0.5 * 255.0) as u8)
+        } else if light.color.length() < 0.3 {
             Color32::from_rgba_unmultiplied(200, 200, 200, (alpha * 255.0) as u8)
         } else {
             color
@@ -425,6 +452,20 @@ pub fn draw_and_interact(
             LightType::Directional => {
                 draw_directional_light_icon(painter, screen_pos, size, draw_color);
             }
+        }
+
+        // Draw small "X" over inactive light icons
+        if !is_active {
+            let x_size = size * 0.3;
+            let x_stroke = Stroke::new(2.0, Color32::from_rgb(255, 80, 80));
+            painter.line_segment(
+                [screen_pos + egui::vec2(-x_size, -x_size), screen_pos + egui::vec2(x_size, x_size)],
+                x_stroke,
+            );
+            painter.line_segment(
+                [screen_pos + egui::vec2(x_size, -x_size), screen_pos + egui::vec2(-x_size, x_size)],
+                x_stroke,
+            );
         }
 
         // Draw wireframe gizmo when selected

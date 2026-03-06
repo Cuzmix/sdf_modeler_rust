@@ -113,7 +113,7 @@ impl Camera {
         shading_mode: f32,
         brush_pos: [f32; 4],
         cross_section: [f32; 4],
-        light_data: [[f32; 4]; 4],
+        ambient: f32,
         scene_light_info: [f32; 4],
         scene_lights: [[f32; 4]; 32],
     ) -> CameraUniform {
@@ -134,10 +134,7 @@ impl Camera {
             scene_max: [scene_bounds.1[0], scene_bounds.1[1], scene_bounds.1[2], 0.0],
             brush_pos,
             cross_section,
-            key_light: light_data[0],
-            key_color_spec: light_data[1],
-            fill_light: light_data[2],
-            fill_color_ambient: light_data[3],
+            ambient_info: [ambient, 0.0, 0.0, 0.0],
             scene_light_info,
             scene_lights,
         }
@@ -229,14 +226,8 @@ pub struct CameraUniform {
     pub brush_pos: [f32; 4],
     /// Cross-section visualization params: [axis (0=X,1=Y,2=Z), position, 0, 0].
     pub cross_section: [f32; 4],
-    /// Key light: [dir.x, dir.y, dir.z, diffuse_intensity].
-    pub key_light: [f32; 4],
-    /// Key light color and spec: [color.r, color.g, color.b, spec_intensity].
-    pub key_color_spec: [f32; 4],
-    /// Fill light: [dir.x, dir.y, dir.z, fill_intensity].
-    pub fill_light: [f32; 4],
-    /// Fill light color and ambient: [color.r, color.g, color.b, ambient_intensity].
-    pub fill_color_ambient: [f32; 4],
+    /// Ambient lighting info: [ambient_intensity, 0, 0, 0].
+    pub ambient_info: [f32; 4],
     /// Scene light info: [count, 0, 0, 0].
     pub scene_light_info: [f32; 4],
     /// Scene lights: up to 8 lights × 4 vec4f = 32 vec4f.

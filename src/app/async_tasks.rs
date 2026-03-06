@@ -193,7 +193,7 @@ impl SdfApp {
             scene_lights_flat[i * 4 + 2] = light.color_range;
             scene_lights_flat[i * 4 + 3] = light.params;
         }
-        let uniform = self.doc.camera.to_uniform(viewport, 0.0, 0.0, false, scene_bounds, -1.0, 0.0, [0.0; 4], [0.0; 4], self.settings.render.light_uniform_data(), scene_light_info, scene_lights_flat);
+        let uniform = self.doc.camera.to_uniform(viewport, 0.0, 0.0, false, scene_bounds, -1.0, 0.0, [0.0; 4], [0.0; 4], self.settings.render.ambient, scene_light_info, scene_lights_flat);
 
         let pixels = resources.screenshot(
             &self.gpu.render_state.device,

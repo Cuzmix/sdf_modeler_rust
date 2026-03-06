@@ -22,6 +22,8 @@ pub enum Tab {
     RenderSettings,
     History,
     BrushSettings,
+    Lights,
+    LightLinking,
 }
 
 impl Tab {
@@ -33,6 +35,8 @@ impl Tab {
         Tab::RenderSettings,
         Tab::History,
         Tab::BrushSettings,
+        Tab::Lights,
+        Tab::LightLinking,
     ];
 
     pub fn label(&self) -> &'static str {
@@ -44,6 +48,8 @@ impl Tab {
             Tab::RenderSettings => "Render Settings",
             Tab::History => "History",
             Tab::BrushSettings => "Brush Settings",
+            Tab::Lights => "Lights",
+            Tab::LightLinking => "Light Linking",
         }
     }
 }
@@ -63,7 +69,7 @@ pub fn create_dock_state() -> DockState<Tab> {
         right,
         Split::Below,
         0.5,
-        Node::leaf_with(vec![Tab::SceneTree, Tab::History]),
+        Node::leaf_with(vec![Tab::SceneTree, Tab::History, Tab::Lights]),
     );
 
     let [_viewport, _graph] = surface.split(
@@ -187,6 +193,8 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
             Tab::RenderSettings => "Render Settings".into(),
             Tab::History => "History".into(),
             Tab::BrushSettings => "Brush Settings".into(),
+            Tab::Lights => "Lights".into(),
+            Tab::LightLinking => "Light Linking".into(),
         }
     }
 
@@ -216,6 +224,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.viewport.last_sculpt_hit,
                     self.viewport.hover_world_pos,
                     self.viewport.cursor_over_geometry,
+                    self.active_light_ids,
                 );
                 if let Some(pick) = vp_output.pending_pick {
                     *self.viewport.pending_pick = Some(pick);
@@ -296,6 +305,23 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
             }
             Tab::BrushSettings => {
                 brush_settings::draw(ui, self.sculpt_state);
+            }
+            Tab::Lights => {
+                crate::ui::lights_panel::draw(
+                    ui,
+                    self.scene,
+                    &mut self.node_graph_state.selected,
+                    self.actions,
+                    self.active_light_ids,
+                );
+            }
+            Tab::LightLinking => {
+                crate::ui::light_linking::draw(
+                    ui,
+                    self.scene,
+                    self.actions,
+                    self.active_light_ids,
+                );
             }
         }
     }

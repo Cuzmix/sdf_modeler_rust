@@ -7,6 +7,8 @@ pub mod import_dialog;
 pub mod gizmo;
 pub mod help;
 pub mod light_gizmo;
+pub mod light_linking;
+pub mod lights_panel;
 pub mod history_panel;
 pub mod node_graph;
 pub mod profiler;

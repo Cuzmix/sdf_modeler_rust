@@ -5,7 +5,7 @@ use crate::graph::history::History;
 use crate::graph::scene::{NodeData, Scene};
 use crate::sculpt::SculptState;
 
-use super::actions::{Action, SculptConvertMode};
+use super::actions::{Action, LightingPreset, SculptConvertMode};
 use super::state::SculptConvertDialog;
 use super::SdfApp;
 
@@ -725,6 +725,35 @@ impl SdfApp {
                     };
                 }
 
+                // ── Light linking ────────────────────────────────────
+                Action::SetLightMask { node_id, mask } => {
+                    self.doc.scene.set_light_mask(node_id, mask);
+                    self.gpu.buffer_dirty = true;
+                }
+                Action::ToggleLightMaskBit { node_id, light_slot, enabled } => {
+                    if light_slot < 8 {
+                        let current = self.doc.scene.get_light_mask(node_id);
+                        let new_mask = if enabled {
+                            current | (1 << light_slot)
+                        } else {
+                            current & !(1 << light_slot)
+                        };
+                        self.doc.scene.set_light_mask(node_id, new_mask);
+                        self.gpu.buffer_dirty = true;
+                    }
+                }
+
+                // ── Lighting presets ─────────────────────────────────
+                Action::ApplyLightingPreset(preset) => {
+                    apply_lighting_preset_to_scene(
+                        &mut self.doc.scene,
+                        &mut self.settings.render,
+                        preset,
+                    );
+                    self.settings.save();
+                    self.gpu.buffer_dirty = true;
+                }
+
                 // ── Settings / GPU ───────────────────────────────────
                 Action::SettingsChanged => {
                     self.settings.save();
@@ -829,4 +858,115 @@ impl SdfApp {
             self.gpu.buffer_dirty = true;
         }
     }
+}
+
+/// Apply a lighting preset by finding Key/Fill Light nodes in the scene
+/// and updating their properties. Also sets ambient and sky colors.
+fn apply_lighting_preset_to_scene(
+    scene: &mut Scene,
+    render_config: &mut crate::settings::RenderConfig,
+    preset: LightingPreset,
+) {
+    // Preset definitions: (key_color, key_intensity, key_dir, fill_color, fill_intensity, fill_dir, ambient, sky_horizon, sky_zenith)
+    let (key_color, key_intensity, key_dir, fill_color, fill_intensity, fill_dir, ambient, sky_horizon, sky_zenith) =
+        match preset {
+            LightingPreset::Studio => (
+                Vec3::new(1.0, 0.98, 0.95),   // warm white key
+                1.5,
+                Vec3::new(-0.5, -1.0, -0.3),
+                Vec3::new(0.85, 0.9, 1.0),    // cool blue-white fill
+                0.4,
+                Vec3::new(0.3, -0.5, 0.6),
+                0.05,
+                [0.7, 0.8, 0.95],
+                [0.2, 0.3, 0.6],
+            ),
+            LightingPreset::Outdoor => (
+                Vec3::new(1.0, 0.95, 0.85),   // warm sunlight
+                2.0,
+                Vec3::new(-0.4, -1.0, -0.2),
+                Vec3::new(0.6, 0.75, 1.0),    // sky blue fill
+                0.6,
+                Vec3::new(0.2, -0.3, 0.5),
+                0.08,
+                [0.85, 0.9, 1.0],
+                [0.35, 0.55, 0.9],
+            ),
+            LightingPreset::Dramatic => (
+                Vec3::new(1.0, 0.85, 0.7),    // warm amber key
+                2.5,
+                Vec3::new(-0.6, -0.8, -0.2),
+                Vec3::new(0.4, 0.5, 0.7),     // dim cool fill
+                0.15,
+                Vec3::new(0.5, -0.3, 0.7),
+                0.02,
+                [0.15, 0.1, 0.1],
+                [0.05, 0.05, 0.15],
+            ),
+            LightingPreset::Flat => (
+                Vec3::new(1.0, 1.0, 1.0),     // neutral white key
+                1.0,
+                Vec3::new(-0.3, -1.0, -0.2),
+                Vec3::new(1.0, 1.0, 1.0),     // neutral white fill
+                0.8,
+                Vec3::new(0.3, -0.5, 0.5),
+                0.15,
+                [0.9, 0.9, 0.9],
+                [0.7, 0.7, 0.8],
+            ),
+        };
+
+    // Update ambient and sky
+    render_config.ambient = ambient;
+    render_config.sky_horizon = sky_horizon;
+    render_config.sky_zenith = sky_zenith;
+
+    // Find and update Key Light and Fill Light nodes
+    let node_ids: Vec<_> = scene.nodes.keys().copied().collect();
+    for id in node_ids {
+        let name = scene.nodes.get(&id).map(|n| n.name.as_str()).unwrap_or("");
+        if name == "Key Light" {
+            if let Some(node) = scene.nodes.get_mut(&id) {
+                if let NodeData::Light { ref mut color, ref mut intensity, .. } = &mut node.data {
+                    *color = key_color;
+                    *intensity = key_intensity;
+                }
+            }
+            // Update the Key Light Transform's rotation (direction)
+            if let Some(transform_id) = find_parent_transform(scene, id) {
+                if let Some(t_node) = scene.nodes.get_mut(&transform_id) {
+                    if let NodeData::Transform { ref mut rotation, .. } = &mut t_node.data {
+                        *rotation = key_dir;
+                    }
+                }
+            }
+        } else if name == "Fill Light" {
+            if let Some(node) = scene.nodes.get_mut(&id) {
+                if let NodeData::Light { ref mut color, ref mut intensity, .. } = &mut node.data {
+                    *color = fill_color;
+                    *intensity = fill_intensity;
+                }
+            }
+            if let Some(transform_id) = find_parent_transform(scene, id) {
+                if let Some(t_node) = scene.nodes.get_mut(&transform_id) {
+                    if let NodeData::Transform { ref mut rotation, .. } = &mut t_node.data {
+                        *rotation = fill_dir;
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Find the Transform node that parents a given node (has `input = Some(child_id)`).
+fn find_parent_transform(
+    scene: &Scene,
+    child_id: crate::graph::scene::NodeId,
+) -> Option<crate::graph::scene::NodeId> {
+    scene.nodes.iter().find_map(|(&id, node)| {
+        if let NodeData::Transform { input: Some(inp), .. } = &node.data {
+            if *inp == child_id { return Some(id); }
+        }
+        None
+    })
 }

@@ -331,21 +331,45 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
             // Normals: map normal XYZ from [-1,1] to [0,1] as RGB
             color = n * 0.5 + 0.5;
         } else if shading_mode > 1.5 {
-            // Clay: uniform gray, hemisphere + key diffuse only
+            // Clay: uniform gray, hemisphere + first scene light diffuse
             let clay = vec3f(0.7, 0.7, 0.72);
             let sky_l = clamp(0.5 + 0.5 * n.y, 0.0, 1.0);
-            let key_dir = normalize(camera.key_light.xyz);
-            let key_diff = max(dot(n, key_dir), 0.0);
-            color = clay * (sky_l * 0.4 + key_diff * 0.6 + 0.15);
+            var clay_diff = 0.0;
+            let clay_light_count = i32(camera.scene_light_info.x + 0.5);
+            if clay_light_count > 0 {
+                let sl0_dir_int = camera.scene_lights[1];
+                let sl0_type = i32(camera.scene_lights[0].w + 0.5);
+                var clay_dir: vec3f;
+                if sl0_type == 2 {
+                    clay_dir = normalize(-sl0_dir_int.xyz);
+                } else {
+                    clay_dir = normalize(camera.scene_lights[0].xyz - p);
+                }
+                clay_diff = max(dot(n, clay_dir), 0.0);
+            }
+            color = clay * (sky_l * 0.4 + clay_diff * 0.6 + 0.15);
             color = pow(color, vec3f(1.0 / /*GAMMA*/));
         } else if shading_mode > 0.5 {
-            // Solid: per-node colors, flat diffuse, no shadows/AO
+            // Solid: per-node colors, scene lights diffuse, no shadows/AO
             let albedo = get_blended_color(mat_id, mat_b_id, blend_factor);
-            let key_dir = normalize(camera.key_light.xyz);
-            let key_diff = max(dot(n, key_dir), 0.0);
-            let fill_dir = normalize(camera.fill_light.xyz);
-            let fill_diff = max(dot(n, fill_dir), 0.0) * camera.fill_light.w;
-            color = albedo * (key_diff * 0.7 + fill_diff + 0.2);
+            var solid_light = 0.2;
+            let solid_light_count = i32(camera.scene_light_info.x + 0.5);
+            for (var sli = 0; sli < 8; sli++) {
+                if sli >= solid_light_count { break; }
+                let sb = sli * 4;
+                let sl_pos_type = camera.scene_lights[sb];
+                let sl_dir_int = camera.scene_lights[sb + 1];
+                let sl_type = i32(sl_pos_type.w + 0.5);
+                let sl_int = sl_dir_int.w;
+                var sl_dir: vec3f;
+                if sl_type == 2 {
+                    sl_dir = normalize(-sl_dir_int.xyz);
+                } else {
+                    sl_dir = normalize(sl_pos_type.xyz - p);
+                }
+                solid_light += max(dot(n, sl_dir), 0.0) * sl_int * 0.5;
+            }
+            color = albedo * solid_light;
             color = pow(color, vec3f(1.0 / /*GAMMA*/));
         } else {
         // Full: existing PBR pipeline
@@ -367,31 +391,7 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
         // Lambertian diffuse (energy-conserving: metals have no diffuse)
         let diffuse_color = albedo * (1.0 - mat_metallic) / PI;
 
-        // Key light — Cook-Torrance GGX BRDF
-        let key_dir = normalize(camera.key_light.xyz);
-        let key_h = normalize(key_dir + view_dir);
-        let NoL_key = max(dot(n, key_dir), 0.0);
-        let NoH_key = max(dot(n, key_h), 0.0);
-        let VoH_key = max(dot(view_dir, key_h), 0.0);
-
-        let D_key = D_GGX(NoH_key, roughness);
-        let G_key = G_SmithGGX(NoV, NoL_key, roughness);
-        let F_key = F_Schlick_vec3(VoH_key, f0);
-        let specular_key = D_key * G_key * F_key;
-
         /*SHADOW_LINE*/
-
-        // Fill light — same BRDF
-        let fill_dir = normalize(camera.fill_light.xyz);
-        let fill_h = normalize(fill_dir + view_dir);
-        let NoL_fill = max(dot(n, fill_dir), 0.0);
-        let NoH_fill = max(dot(n, fill_h), 0.0);
-        let VoH_fill = max(dot(view_dir, fill_h), 0.0);
-
-        let D_fill = D_GGX(NoH_fill, roughness);
-        let G_fill = G_SmithGGX(NoV, NoL_fill, roughness);
-        let F_fill = F_Schlick_vec3(VoH_fill, f0);
-        let specular_fill = D_fill * G_fill * F_fill;
 
         // Ambient occlusion
         /*AO_LINE*/
@@ -400,24 +400,21 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
         let sky = clamp(0.5 + 0.5 * n.y, 0.0, 1.0);
         let shadow_col = pow(vec3f(shadow), vec3f(1.0, 1.2, 1.5));
 
-        // Accumulate lighting — parameters from uniform buffer (no shader rebuild needed)
-        let key_diffuse_i = camera.key_light.w;
-        let key_spec_i = camera.key_color_spec.w;
-        let key_col = camera.key_color_spec.xyz;
-        let fill_i = camera.fill_light.w;
-        let fill_col = camera.fill_color_ambient.xyz;
-        let ambient_i = camera.fill_color_ambient.w;
+        // Ambient contribution
+        let ambient_i = camera.ambient_info.x;
+        color = diffuse_color * sky * ambient_i * ao;
 
-        let key_contribution = (diffuse_color + specular_key * key_spec_i) * NoL_key * key_diffuse_i * key_col;
-        let fill_contribution = (diffuse_color + specular_fill * key_spec_i) * NoL_fill * fill_i * fill_col;
-        color = key_contribution * shadow_col
-              + fill_contribution * ao
-              + diffuse_color * sky * ambient_i * ao;
-
-        // --- Scene lights (up to 8 positioned lights from Light nodes) ---
+        // --- Scene lights (up to 8 lights from Light nodes) ---
         let scene_light_count = i32(camera.scene_light_info.x + 0.5);
+        // Light linking bitmask: packed in nodes[mat_id].scale.w
+        var light_mask = 255u;
+        if mat_id >= 0 {
+            light_mask = u32(nodes[mat_id].scale.w + 0.5);
+        }
         for (var li = 0; li < 8; li++) {
             if li >= scene_light_count { break; }
+            // Skip this light if the geometry's bitmask excludes it
+            if (light_mask & (1u << u32(li))) == 0u { continue; }
             let base = li * 4;
             let sl_pos_type = camera.scene_lights[base];
             let sl_dir_int = camera.scene_lights[base + 1];
@@ -465,7 +462,13 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
             let sl_F = F_Schlick_vec3(sl_VoH, f0);
             let sl_specular = sl_D * sl_G * sl_F;
 
-            color += (diffuse_color + sl_specular) * sl_NoL * sl_intensity * sl_atten * sl_color;
+            let sl_contribution = (diffuse_color + sl_specular) * sl_NoL * sl_intensity * sl_atten * sl_color;
+            // First light gets shadow, others get AO
+            if li == 0 {
+                color += sl_contribution * shadow_col;
+            } else {
+                color += sl_contribution * ao;
+            }
         }
 
         // Environment reflection (sky gradient sampled along reflected ray)
@@ -475,6 +478,14 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
         let emissive_col = get_node_emissive(mat_id);
         let emissive_int = get_node_emissive_intensity(mat_id);
         color += emissive_col * emissive_int;
+
+        // Primary light direction for SSS/fog (first scene light or fallback down)
+        var primary_light_dir = vec3f(0.0, -1.0, 0.0);
+        if i32(camera.scene_light_info.x + 0.5) > 0 {
+            let plt = i32(camera.scene_lights[0].w + 0.5);
+            if plt == 2 { primary_light_dir = normalize(-camera.scene_lights[1].xyz); }
+            else { primary_light_dir = normalize(camera.scene_lights[0].xyz - p); }
+        }
 
         // Subsurface scattering (thickness-based approximation)
         /*SSS_LINE*/

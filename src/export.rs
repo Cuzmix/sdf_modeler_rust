@@ -964,6 +964,7 @@ mod tests {
             next_id: 0,
             name_counters: HashMap::new(),
             hidden_nodes: HashSet::new(),
+            light_masks: HashMap::new(),
         }
     }
 

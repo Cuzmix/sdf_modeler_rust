@@ -72,8 +72,18 @@ pub(crate) fn apply_march_placeholders(src: &str, config: &RenderConfig) -> Stri
 /// Build the render postlude with all placeholder replacements.
 pub(crate) fn build_postlude(config: &RenderConfig) -> String {
     let shadow_line = if config.shadows_enabled {
+        // Shadow direction from first scene light (replaces old global key light)
         format!(
-            "    var shadow = 1.0;\n    if camera.quality_mode < 0.5 {{ shadow = soft_shadow(p + n * {}, key_dir, {}, {}, SHADOW_PENUMBRA_K); }}",
+            concat!(
+                "    var shadow = 1.0;\n",
+                "    if camera.quality_mode < 0.5 && i32(camera.scene_light_info.x + 0.5) > 0 {{\n",
+                "        let shadow_type = i32(camera.scene_lights[0].w + 0.5);\n",
+                "        var shadow_dir: vec3f;\n",
+                "        if shadow_type == 2 {{ shadow_dir = normalize(-camera.scene_lights[1].xyz); }}\n",
+                "        else {{ shadow_dir = normalize(camera.scene_lights[0].xyz - p); }}\n",
+                "        shadow = soft_shadow(p + n * {}, shadow_dir, {}, {}, SHADOW_PENUMBRA_K);\n",
+                "    }}"
+            ),
             format_f32(config.shadow_bias),
             format_f32(config.shadow_mint),
             format_f32(config.shadow_maxt),
@@ -107,7 +117,7 @@ pub(crate) fn build_postlude(config: &RenderConfig) -> String {
 
     let sss_line = if config.sss_enabled {
         format!(
-            "    {{ let sss_d = scene_sdf(p + key_dir * 0.05).x + scene_sdf(p + key_dir * 0.1).x + scene_sdf(p + key_dir * 0.2).x; let sss_thick = max(0.0, sss_d); let sss_trans = exp(-sss_thick * {}) * clamp(dot(-rd, key_dir), 0.0, 1.0) * 0.5; color += albedo * vec3f({}) * sss_trans; }}",
+            "    {{ let sss_d = scene_sdf(p + primary_light_dir * 0.05).x + scene_sdf(p + primary_light_dir * 0.1).x + scene_sdf(p + primary_light_dir * 0.2).x; let sss_thick = max(0.0, sss_d); let sss_trans = exp(-sss_thick * {}) * clamp(dot(-rd, primary_light_dir), 0.0, 1.0) * 0.5; color += albedo * vec3f({}) * sss_trans; }}",
             format_f32(config.sss_strength),
             format_vec3(config.sss_color),
         )
@@ -117,7 +127,7 @@ pub(crate) fn build_postlude(config: &RenderConfig) -> String {
 
     let fog_line = if config.fog_enabled {
         format!(
-            "    {{ let fog_amt = 1.0 - exp(-t * {}); let sun_s = pow(max(dot(rd, key_dir), 0.0), 8.0); let fog_c = mix(vec3f({}), vec3f(1.0, 0.9, 0.7), sun_s); color = mix(color, fog_c, fog_amt); }}",
+            "    {{ let fog_amt = 1.0 - exp(-t * {}); let sun_s = pow(max(dot(rd, primary_light_dir), 0.0), 8.0); let fog_c = mix(vec3f({}), vec3f(1.0, 0.9, 0.7), sun_s); color = mix(color, fog_c, fog_amt); }}",
             format_f32(config.fog_density),
             format_vec3(config.fog_color),
         )

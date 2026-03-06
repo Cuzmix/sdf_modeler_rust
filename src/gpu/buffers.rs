@@ -78,6 +78,7 @@ pub fn build_node_buffer(
             continue;
         };
         let is_sel = if selected_set.contains(&node_id) { 1.0 } else { 0.0 };
+        let light_mask = scene.get_light_mask(node_id) as f32;
 
         match &node.data {
             NodeData::Primitive {
@@ -97,7 +98,7 @@ pub fn build_node_buffer(
                     type_op: [kind.gpu_type_id(), 0.0, *metallic, *roughness],
                     position: [position.x, position.y, position.z, 0.0],
                     rotation: [rotation.x, rotation.y, rotation.z, 0.0],
-                    scale: [scale.x, scale.y, scale.z, 0.0],
+                    scale: [scale.x, scale.y, scale.z, light_mask],
                     color: [color.x, color.y, color.z, is_sel],
                     extra0: [0.0; 4],
                     extra1: [emissive.x, emissive.y, emissive.z, *emissive_intensity],
@@ -134,7 +135,7 @@ pub fn build_node_buffer(
                     type_op: [20.0, *emissive_intensity, *metallic, *roughness],
                     position: [position.x, position.y, position.z, *layer_intensity],
                     rotation: [rotation.x, rotation.y, rotation.z, 0.0],
-                    scale: [1.0, 1.0, 1.0, 0.0],
+                    scale: [1.0, 1.0, 1.0, light_mask],
                     color: [color.x, color.y, color.z, is_sel],
                     extra0: [offset as f32, voxel_grid.resolution as f32, emissive.x, emissive.y],
                     extra1: [voxel_grid.bounds_min.x, voxel_grid.bounds_min.y, voxel_grid.bounds_min.z, emissive.z],
@@ -348,6 +349,7 @@ mod tests {
             next_id: 0,
             name_counters: HashMap::new(),
             hidden_nodes: HashSet::new(),
+            light_masks: HashMap::new(),
         }
     }
 

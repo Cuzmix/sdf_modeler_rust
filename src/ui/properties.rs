@@ -599,6 +599,9 @@ pub fn draw(
                 });
             }
 
+            // Light Linking
+            draw_light_linking_section(ui, scene, id, actions, active_light_ids);
+
             // Write back
             if let Some(node) = scene.nodes.get_mut(&id) {
                 if let NodeData::Primitive {
@@ -958,6 +961,9 @@ pub fn draw(
                     *sculpt_state = SculptState::Inactive;
                 }
             }
+
+            // Light Linking
+            draw_light_linking_section(ui, scene, id, actions, active_light_ids);
 
             // Write back
             if let Some(node) = scene.nodes.get_mut(&id) {
@@ -1337,4 +1343,86 @@ pub fn draw(
     if let Some(node) = scene.nodes.get_mut(&id) {
         node.name = name;
     }
+}
+
+/// Draw the Light Linking collapsing section for a geometry node.
+/// Shows per-light checkboxes allowing the user to control which lights affect this object.
+fn draw_light_linking_section(
+    ui: &mut egui::Ui,
+    scene: &Scene,
+    node_id: NodeId,
+    actions: &mut ActionSink,
+    active_light_ids: &HashSet<NodeId>,
+) {
+    // Collect active lights in stable order
+    let parent_map = scene.build_parent_map();
+    let mut light_entries: Vec<(usize, NodeId, String, glam::Vec3)> = Vec::new();
+
+    let mut all_lights: Vec<(NodeId, String, glam::Vec3)> = Vec::new();
+    for (&lid, node) in &scene.nodes {
+        if let NodeData::Light { color, .. } = &node.data {
+            if parent_map.contains_key(&lid) {
+                all_lights.push((lid, node.name.clone(), *color));
+            }
+        }
+    }
+    all_lights.sort_by_key(|(lid, _, _)| *lid);
+
+    for (slot, (lid, name, color)) in all_lights.iter().enumerate() {
+        if active_light_ids.contains(lid) {
+            light_entries.push((slot, *lid, name.clone(), *color));
+        }
+    }
+
+    if light_entries.is_empty() {
+        return;
+    }
+
+    egui::CollapsingHeader::new("Light Linking")
+        .default_open(false)
+        .show(ui, |ui| {
+            let current_mask = scene.get_light_mask(node_id);
+
+            for &(slot, _, ref light_name, light_color) in &light_entries {
+                let slot_u8 = slot as u8;
+                let mut linked = (current_mask & (1 << slot_u8)) != 0;
+                ui.horizontal(|ui| {
+                    // Color swatch
+                    let swatch_color = egui::Color32::from_rgb(
+                        (light_color.x * 255.0) as u8,
+                        (light_color.y * 255.0) as u8,
+                        (light_color.z * 255.0) as u8,
+                    );
+                    let (swatch_rect, _) = ui.allocate_exact_size(
+                        egui::vec2(12.0, 12.0),
+                        egui::Sense::hover(),
+                    );
+                    ui.painter().rect_filled(swatch_rect, 2.0, swatch_color);
+
+                    if ui.checkbox(&mut linked, light_name).changed() {
+                        actions.push(Action::ToggleLightMaskBit {
+                            node_id,
+                            light_slot: slot_u8,
+                            enabled: linked,
+                        });
+                    }
+                });
+            }
+
+            // Quick buttons
+            ui.horizontal(|ui| {
+                if ui.small_button("Link All").clicked() {
+                    actions.push(Action::SetLightMask {
+                        node_id,
+                        mask: 0xFF,
+                    });
+                }
+                if ui.small_button("Unlink All").clicked() {
+                    actions.push(Action::SetLightMask {
+                        node_id,
+                        mask: 0x00,
+                    });
+                }
+            });
+        });
 }

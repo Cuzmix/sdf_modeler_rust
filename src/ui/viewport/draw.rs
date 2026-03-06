@@ -427,6 +427,7 @@ pub fn draw(
     last_sculpt_hit: Option<glam::Vec3>,
     hover_world_pos: Option<glam::Vec3>,
     _cursor_over_geometry: bool,
+    active_light_ids: &std::collections::HashSet<crate::graph::scene::NodeId>,
 ) -> ViewportOutput {
     let mut output = ViewportOutput {
         pending_pick: None,
@@ -554,7 +555,7 @@ pub fn draw(
         shading_mode_val,
         brush_pos,
         cross_section,
-        render_config.light_uniform_data(),
+        render_config.ambient,
         scene_light_info,
         scene_lights_flat,
     );
@@ -602,6 +603,7 @@ pub fn draw(
             rect,
             mouse_pos,
             mouse_clicked,
+            active_light_ids,
         )
     } else {
         crate::ui::light_gizmo::LightGizmoResult {
@@ -690,7 +692,7 @@ pub fn draw(
                             0.0,
                             [0.0; 4],
                             [0.0; 4],
-                            [[0.0; 4]; 4],
+                            0.0,
                             [0.0; 4],
                             [[0.0; 4]; 32],
                         ),
@@ -739,7 +741,7 @@ pub fn draw(
                             0.0,
                             [0.0; 4],
                             [0.0; 4],
-                            [[0.0; 4]; 4],
+                            0.0,
                             [0.0; 4],
                             [[0.0; 4]; 32],
                         ),
@@ -852,7 +854,7 @@ pub fn draw(
                     (pos.y - rect.min.y) * pixels_per_point,
                 ];
                 let pick_uniform =
-                    camera.to_uniform(viewport, time, 0.0, false, scene_bounds, -1.0, 0.0, [0.0; 4], [0.0; 4], [[0.0; 4]; 4], [0.0; 4], [[0.0; 4]; 32]);
+                    camera.to_uniform(viewport, time, 0.0, false, scene_bounds, -1.0, 0.0, [0.0; 4], [0.0; 4], 0.0, [0.0; 4], [[0.0; 4]; 32]);
                 let ctrl_held = ui.input(|i| i.modifiers.ctrl);
                 output.pending_pick = Some(PendingPick {
                     mouse_pos: mouse_px,

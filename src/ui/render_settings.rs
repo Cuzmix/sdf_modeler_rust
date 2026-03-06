@@ -1,6 +1,6 @@
 use eframe::egui;
 
-use crate::app::actions::{Action, ActionSink};
+use crate::app::actions::{Action, ActionSink, LightingPreset};
 use crate::settings::{BackgroundMode, ShadingMode, Settings};
 
 /// Draw the Render Settings panel. Pushes `Action::SettingsChanged` if a shader-affecting
@@ -96,43 +96,22 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
     egui::CollapsingHeader::new("Lighting")
         .default_open(false)
         .show(ui, |ui| {
+            ui.weak("Key/Fill lights are scene Directional nodes.");
             ui.horizontal(|ui| {
                 ui.label("Presets:");
-                if ui.small_button("Studio").on_hover_text("Dark studio environment").clicked() {
-                    apply_lighting_preset_studio(config);
+                if ui.small_button("Studio").on_hover_text("Classic warm key + cool fill studio setup").clicked() {
+                    actions.push(Action::ApplyLightingPreset(LightingPreset::Studio));
                 }
-                if ui.small_button("Outdoor").on_hover_text("Bright outdoor lighting").clicked() {
-                    apply_lighting_preset_outdoor(config);
+                if ui.small_button("Outdoor").on_hover_text("Bright sunlight with blue sky fill").clicked() {
+                    actions.push(Action::ApplyLightingPreset(LightingPreset::Outdoor));
                 }
-                if ui.small_button("Dramatic").on_hover_text("High-contrast dramatic lighting").clicked() {
-                    apply_lighting_preset_dramatic(config);
+                if ui.small_button("Dramatic").on_hover_text("High-contrast cinematic lighting").clicked() {
+                    actions.push(Action::ApplyLightingPreset(LightingPreset::Dramatic));
                 }
-                if ui.small_button("Flat").on_hover_text("Even, low-contrast lighting").clicked() {
-                    apply_lighting_preset_flat(config);
+                if ui.small_button("Flat").on_hover_text("Even, shadowless illumination").clicked() {
+                    actions.push(Action::ApplyLightingPreset(LightingPreset::Flat));
                 }
             });
-            ui.separator();
-            ui.label("Key Light");
-            dir_editor(ui, &mut config.key_light_dir);
-            ui.horizontal(|ui| {
-                ui.label("Color:");
-                ui.color_edit_button_rgb(&mut config.key_light_color);
-            });
-            labeled_slider(ui, "Diffuse", &mut config.key_diffuse, 0.0..=2.0, false,
-                "Key light diffuse brightness");
-            labeled_slider(ui, "Spec Intensity", &mut config.key_spec_intensity, 0.0..=2.0, false,
-                "Specular highlight brightness");
-
-            ui.separator();
-            ui.label("Fill Light");
-            dir_editor(ui, &mut config.fill_light_dir);
-            ui.horizontal(|ui| {
-                ui.label("Color:");
-                ui.color_edit_button_rgb(&mut config.fill_light_color);
-            });
-            labeled_slider(ui, "Fill Intensity", &mut config.fill_intensity, 0.0..=1.0, false,
-                "Intensity of the secondary fill light");
-
             ui.separator();
             labeled_slider(ui, "Ambient", &mut config.ambient, 0.0..=0.5, false,
                 "Minimum base lighting (prevents fully black areas)");
@@ -344,16 +323,6 @@ fn labeled_slider_i32(
     });
 }
 
-fn dir_editor(ui: &mut egui::Ui, dir: &mut [f32; 3]) {
-    ui.horizontal(|ui| {
-        ui.label("X:");
-        ui.add(egui::DragValue::new(&mut dir[0]).speed(0.05));
-        ui.label("Y:");
-        ui.add(egui::DragValue::new(&mut dir[1]).speed(0.05));
-        ui.label("Z:");
-        ui.add(egui::DragValue::new(&mut dir[2]).speed(0.05));
-    });
-}
 
 fn apply_preset_fast(config: &mut crate::settings::RenderConfig) {
     config.shadows_enabled = false;
@@ -400,58 +369,3 @@ fn apply_preset_quality(config: &mut crate::settings::RenderConfig) {
     config.rest_render_scale = 1.0;
 }
 
-fn apply_lighting_preset_studio(config: &mut crate::settings::RenderConfig) {
-    config.key_light_dir = [1.0, 2.0, 3.0];
-    config.key_diffuse = 0.85;
-    config.key_spec_power = 32.0;
-    config.key_spec_intensity = 0.4;
-    config.key_light_color = [1.0, 1.0, 1.0];
-    config.fill_light_dir = [-1.0, 0.5, -1.0];
-    config.fill_intensity = 0.25;
-    config.fill_light_color = [1.0, 1.0, 1.0];
-    config.ambient = 0.06;
-    config.sky_horizon = [0.10, 0.10, 0.16];
-    config.sky_zenith = [0.02, 0.02, 0.05];
-}
-
-fn apply_lighting_preset_outdoor(config: &mut crate::settings::RenderConfig) {
-    config.key_light_dir = [0.5, 3.0, 1.0];
-    config.key_diffuse = 1.0;
-    config.key_spec_power = 24.0;
-    config.key_spec_intensity = 0.3;
-    config.key_light_color = [1.0, 0.95, 0.85];
-    config.fill_light_dir = [-0.5, 0.3, -1.0];
-    config.fill_intensity = 0.35;
-    config.fill_light_color = [0.7, 0.8, 1.0];
-    config.ambient = 0.1;
-    config.sky_horizon = [0.55, 0.65, 0.80];
-    config.sky_zenith = [0.20, 0.30, 0.60];
-}
-
-fn apply_lighting_preset_dramatic(config: &mut crate::settings::RenderConfig) {
-    config.key_light_dir = [2.0, 1.0, 0.5];
-    config.key_diffuse = 1.2;
-    config.key_spec_power = 64.0;
-    config.key_spec_intensity = 0.6;
-    config.key_light_color = [1.0, 0.9, 0.7];
-    config.fill_light_dir = [-1.0, -0.2, -0.5];
-    config.fill_intensity = 0.08;
-    config.fill_light_color = [0.5, 0.6, 0.9];
-    config.ambient = 0.02;
-    config.sky_horizon = [0.05, 0.04, 0.06];
-    config.sky_zenith = [0.01, 0.01, 0.02];
-}
-
-fn apply_lighting_preset_flat(config: &mut crate::settings::RenderConfig) {
-    config.key_light_dir = [0.0, 1.0, 0.5];
-    config.key_diffuse = 0.5;
-    config.key_spec_power = 8.0;
-    config.key_spec_intensity = 0.1;
-    config.key_light_color = [1.0, 1.0, 1.0];
-    config.fill_light_dir = [0.0, 0.5, -1.0];
-    config.fill_intensity = 0.4;
-    config.fill_light_color = [1.0, 1.0, 1.0];
-    config.ambient = 0.2;
-    config.sky_horizon = [0.3, 0.3, 0.35];
-    config.sky_zenith = [0.15, 0.15, 0.20];
-}
