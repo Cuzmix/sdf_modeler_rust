@@ -1,4 +1,4 @@
-use std::sync::atomic::AtomicU32;
+use std::sync::atomic::{AtomicBool, AtomicU32};
 use std::sync::Arc;
 
 use eframe::egui;
@@ -242,10 +242,13 @@ impl SdfApp {
         let padding = 0.5;
         let bounds_min = Vec3::from(bounds.0) - Vec3::splat(padding);
         let bounds_max = Vec3::from(bounds.1) + Vec3::splat(padding);
-        let resolution = self.settings.export_resolution.clamp(32, 512);
+        let max_res = self.settings.max_export_resolution.max(16);
+        let resolution = self.settings.export_resolution.clamp(16, max_res);
         let adaptive = self.settings.adaptive_export;
         let progress = Arc::new(AtomicU32::new(0));
         let progress_clone = Arc::clone(&progress);
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let cancelled_clone = Arc::clone(&cancelled);
         let (tx, rx) = std::sync::mpsc::channel();
         let ctx_clone = ctx.clone();
 
@@ -257,6 +260,7 @@ impl SdfApp {
                 bounds_max,
                 &progress_clone,
                 adaptive,
+                &cancelled_clone,
             );
             let _ = tx.send(mesh);
             ctx_clone.request_repaint();
@@ -266,8 +270,10 @@ impl SdfApp {
         self.async_state.export_status = ExportStatus::InProgress {
             progress,
             total,
+            resolution,
             receiver: rx,
             path,
+            cancelled,
         };
     }
 
@@ -277,8 +283,10 @@ impl SdfApp {
         let padding = 0.5;
         let bounds_min = Vec3::from(bounds.0) - Vec3::splat(padding);
         let bounds_max = Vec3::from(bounds.1) + Vec3::splat(padding);
-        let resolution = self.settings.export_resolution.clamp(32, 512);
+        let max_res = self.settings.max_export_resolution.max(16);
+        let resolution = self.settings.export_resolution.clamp(16, max_res);
         let progress = Arc::new(AtomicU32::new(0));
+        let cancelled = Arc::new(AtomicBool::new(false));
 
         let mesh = crate::export::marching_cubes(
             &self.doc.scene,
@@ -287,7 +295,12 @@ impl SdfApp {
             bounds_max,
             &progress,
             self.settings.adaptive_export,
+            &cancelled,
         );
+
+        let Some(mesh) = mesh else {
+            return;
+        };
 
         let mut buf = std::io::Cursor::new(Vec::new());
         if let Err(e) = crate::export::write_obj_to(&mesh, &mut buf) {
@@ -310,47 +323,62 @@ impl SdfApp {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn poll_export(&mut self) {
-        let completed = if let ExportStatus::InProgress { ref receiver, .. } = self.async_state.export_status {
+        let result = if let ExportStatus::InProgress { ref receiver, .. } = self.async_state.export_status {
             receiver.try_recv().ok()
         } else {
             None
         };
 
-        if let Some(mesh) = completed {
-            let path = if let ExportStatus::InProgress { ref path, .. } = self.async_state.export_status {
-                path.clone()
-            } else {
-                unreachable!()
-            };
+        let Some(maybe_mesh) = result else {
+            return;
+        };
 
-            match crate::export::write_mesh(&mesh, &path) {
-                Ok(()) => {
-                    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("obj").to_uppercase();
-                    let msg = format!(
-                        "Exported {} ({} verts, {} tris)",
-                        ext, mesh.vertices.len(), mesh.triangles.len(),
-                    );
-                    log::info!("{} to {:?}", msg, path);
-                    self.ui.toasts.push(super::Toast {
-                        message: msg,
-                        is_error: false,
-                        created: crate::compat::Instant::now(),
-                        duration: crate::compat::Duration::from_secs(4),
-                    });
-                }
-                Err(e) => {
-                    log::error!("Failed to write mesh: {}", e);
-                    self.ui.toasts.push(super::Toast {
-                        message: format!("Export failed: {}", e),
-                        is_error: true,
-                        created: crate::compat::Instant::now(),
-                        duration: crate::compat::Duration::from_secs(6),
-                    });
+        let path = if let ExportStatus::InProgress { ref path, .. } = self.async_state.export_status {
+            path.clone()
+        } else {
+            unreachable!()
+        };
+
+        match maybe_mesh {
+            Some(mesh) => {
+                match crate::export::write_mesh(&mesh, &path) {
+                    Ok(()) => {
+                        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("obj").to_uppercase();
+                        let msg = format!(
+                            "Exported {} ({} verts, {} tris)",
+                            ext, mesh.vertices.len(), mesh.triangles.len(),
+                        );
+                        log::info!("{} to {:?}", msg, path);
+                        self.ui.toasts.push(super::Toast {
+                            message: msg,
+                            is_error: false,
+                            created: crate::compat::Instant::now(),
+                            duration: crate::compat::Duration::from_secs(4),
+                        });
+                    }
+                    Err(e) => {
+                        log::error!("Failed to write mesh: {}", e);
+                        self.ui.toasts.push(super::Toast {
+                            message: format!("Export failed: {}", e),
+                            is_error: true,
+                            created: crate::compat::Instant::now(),
+                            duration: crate::compat::Duration::from_secs(6),
+                        });
+                    }
                 }
             }
-
-            self.async_state.export_status = ExportStatus::Idle;
+            None => {
+                // Export was cancelled
+                self.ui.toasts.push(super::Toast {
+                    message: "Export cancelled".into(),
+                    is_error: false,
+                    created: crate::compat::Instant::now(),
+                    duration: crate::compat::Duration::from_secs(3),
+                });
+            }
         }
+
+        self.async_state.export_status = ExportStatus::Idle;
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -386,14 +414,23 @@ impl SdfApp {
             }
         };
 
+        let filename = path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("mesh")
+            .to_string();
         let resolution = 64u32;
         let progress = Arc::new(AtomicU32::new(0));
         let progress_clone = Arc::clone(&progress);
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let cancelled_clone = Arc::clone(&cancelled);
         let (tx, rx) = std::sync::mpsc::channel();
         let ctx_clone = ctx.clone();
 
         std::thread::spawn(move || {
             let result = crate::mesh_import::mesh_to_sdf(&mesh, resolution, &progress_clone);
+            if cancelled_clone.load(std::sync::atomic::Ordering::Relaxed) {
+                return; // Drop the result, don't send
+            }
             let _ = tx.send(result);
             ctx_clone.request_repaint();
         });
@@ -401,7 +438,9 @@ impl SdfApp {
         self.async_state.import_status = ImportStatus::InProgress {
             progress,
             total: resolution,
+            filename,
             receiver: rx,
+            cancelled,
         };
     }
 
@@ -412,6 +451,22 @@ impl SdfApp {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn poll_import(&mut self) {
+        // Check if cancelled — if so, reset immediately without waiting for result
+        if let ImportStatus::InProgress { ref cancelled, ref receiver, .. } = self.async_state.import_status {
+            if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
+                // Try to drain the channel (thread may have already sent)
+                let _ = receiver.try_recv();
+                self.ui.toasts.push(super::Toast {
+                    message: "Import cancelled".into(),
+                    is_error: false,
+                    created: crate::compat::Instant::now(),
+                    duration: crate::compat::Duration::from_secs(3),
+                });
+                self.async_state.import_status = ImportStatus::Idle;
+                return;
+            }
+        }
+
         let completed = if let ImportStatus::InProgress { ref receiver, .. } = self.async_state.import_status {
             receiver.try_recv().ok()
         } else {

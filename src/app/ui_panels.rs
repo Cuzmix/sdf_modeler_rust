@@ -201,25 +201,8 @@ impl SdfApp {
 
 
                 // Progress indicators (right-aligned)
+                // Export and Import progress are shown in dedicated modals (export_progress.rs)
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if let ExportStatus::InProgress { ref progress, total, .. } = self.async_state.export_status {
-                        let done = progress.load(Ordering::Relaxed);
-                        let frac = done as f32 / total.max(1) as f32;
-                        ui.add(
-                            egui::ProgressBar::new(frac)
-                                .text(format!("Exporting... {:.0}%", frac * 100.0))
-                                .desired_width(200.0),
-                        );
-                    }
-                    if let ImportStatus::InProgress { ref progress, total, .. } = self.async_state.import_status {
-                        let done = progress.load(Ordering::Relaxed);
-                        let frac = done as f32 / total.max(1) as f32;
-                        ui.add(
-                            egui::ProgressBar::new(frac)
-                                .text(format!("Importing... {:.0}%", frac * 100.0))
-                                .desired_width(200.0),
-                        );
-                    }
                     if let BakeStatus::InProgress { ref progress, total, .. } = self.async_state.bake_status {
                         let done = progress.load(Ordering::Relaxed);
                         let frac = done as f32 / total.max(1) as f32;

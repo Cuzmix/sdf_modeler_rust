@@ -8,6 +8,7 @@ pub fn draw(
     ctx: &egui::Context,
     dialog: &mut Option<SculptConvertDialog>,
     actions: &mut ActionSink,
+    max_sculpt_resolution: u32,
 ) {
     let Some(state) = dialog.as_mut() else {
         return;
@@ -58,17 +59,18 @@ pub fn draw(
             });
 
             // Custom resolution input
+            let max_res = max_sculpt_resolution.max(16);
             ui.horizontal(|ui| {
                 ui.label("Custom:");
                 let mut res_i32 = state.resolution as i32;
                 let response = ui.add(
                     egui::DragValue::new(&mut res_i32)
                         .speed(1)
-                        .range(16..=320)
+                        .range(16..=max_res as i32)
                         .suffix("^3"),
                 );
                 if response.changed() {
-                    state.resolution = (res_i32 as u32).clamp(16, 320);
+                    state.resolution = (res_i32 as u32).clamp(16, max_res);
                 }
             });
 

@@ -8,7 +8,7 @@ pub(crate) mod state;
 mod ui_panels;
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use crate::compat::{Duration, Instant};
 
@@ -124,17 +124,21 @@ pub enum ExportStatus {
         progress: Arc<AtomicU32>,
         /// Total progress steps = (resolution+1) sample slices + resolution cell slices
         total: u32,
-        receiver: std::sync::mpsc::Receiver<crate::export::ExportMesh>,
+        resolution: u32,
+        receiver: std::sync::mpsc::Receiver<Option<crate::export::ExportMesh>>,
         path: std::path::PathBuf,
+        cancelled: Arc<AtomicBool>,
     },
 }
 
-pub(super) enum ImportStatus {
+pub enum ImportStatus {
     Idle,
     InProgress {
         progress: Arc<AtomicU32>,
         total: u32,
+        filename: String,
         receiver: std::sync::mpsc::Receiver<(crate::graph::voxel::VoxelGrid, glam::Vec3)>,
+        cancelled: Arc<AtomicBool>,
     },
 }
 
@@ -397,6 +401,7 @@ impl eframe::App for SdfApp {
             ctx,
             &mut self.ui.sculpt_convert_dialog,
             &mut action_sink,
+            self.settings.max_sculpt_resolution,
         );
 
         // Export dialog — acts on result
@@ -409,6 +414,10 @@ impl eframe::App for SdfApp {
             self.settings.save();
             self.start_export(ctx);
         }
+
+        // Export/Import progress modals (shown during active operations)
+        crate::ui::export_progress::draw_export(ctx, &self.async_state.export_status);
+        crate::ui::export_progress::draw_import(ctx, &self.async_state.import_status);
 
         // Unified settings window
         crate::ui::settings_window::draw(

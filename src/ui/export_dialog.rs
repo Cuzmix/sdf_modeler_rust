@@ -74,17 +74,18 @@ pub fn draw(
             }
 
             // Resolution input
+            let max_res = settings.max_export_resolution.max(16);
             let mut res_i32 = settings.export_resolution as i32;
             ui.horizontal(|ui| {
                 ui.label("Resolution:");
                 ui.add(
                     egui::DragValue::new(&mut res_i32)
                         .speed(1)
-                        .range(16..=2048)
+                        .range(16..=max_res as i32)
                         .suffix("^3"),
                 );
             });
-            settings.export_resolution = (res_i32 as u32).clamp(16, 2048);
+            settings.export_resolution = (res_i32 as u32).clamp(16, max_res);
 
             // Marching cubes estimate: surface-crossing cells ≈ 6*N^2 (sphere-like),
             // each generates ~2 triangles and ~3 unique vertices on average.

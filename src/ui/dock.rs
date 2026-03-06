@@ -250,6 +250,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.bake_progress,
                     self.actions,
                     self.active_light_ids,
+                    self.settings.max_sculpt_resolution,
                 );
                 // Defensive: clear selection if the node was deleted by properties panel
                 if let Some(sel) = self.node_graph_state.selected {

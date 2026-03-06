@@ -123,6 +123,52 @@ pub fn draw(
                         });
                     });
 
+                // --- Resolution Limits ---
+                egui::CollapsingHeader::new("Resolution Limits")
+                    .default_open(false)
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label("Max Export Resolution:");
+                            ui.add(
+                                egui::DragValue::new(&mut settings.max_export_resolution)
+                                    .speed(1)
+                                    .range(64..=4096_u32)
+                                    .suffix("^3"),
+                            );
+                        });
+                        ui.weak("Maximum resolution allowed in the export dialog.");
+
+                        ui.add_space(4.0);
+
+                        ui.horizontal(|ui| {
+                            ui.label("Max Sculpt Resolution:");
+                            ui.add(
+                                egui::DragValue::new(&mut settings.max_sculpt_resolution)
+                                    .speed(1)
+                                    .range(16..=512_u32)
+                                    .suffix("^3"),
+                            );
+                        });
+                        let voxel_bytes = (settings.max_sculpt_resolution as u64).pow(3) * 4;
+                        let gpu_limit_bytes: u64 = 1 << 27; // 128MB
+                        if voxel_bytes > gpu_limit_bytes {
+                            ui.colored_label(
+                                egui::Color32::from_rgb(255, 100, 100),
+                                format!(
+                                    "Exceeds GPU buffer limit ({} MB > {} MB) — will be rejected at bake time.",
+                                    voxel_bytes / (1024 * 1024),
+                                    gpu_limit_bytes / (1024 * 1024),
+                                ),
+                            );
+                        } else {
+                            ui.weak(format!(
+                                "GPU buffer usage: {} / {} MB",
+                                voxel_bytes / (1024 * 1024),
+                                gpu_limit_bytes / (1024 * 1024),
+                            ));
+                        }
+                    });
+
                 // --- Performance ---
                 let config = &mut settings.render;
                 egui::CollapsingHeader::new("Performance")

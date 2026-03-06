@@ -398,6 +398,7 @@ pub fn draw(
     bake_progress: Option<(u32, u32)>,
     actions: &mut ActionSink,
     active_light_ids: &HashSet<NodeId>,
+    max_sculpt_resolution: u32,
 ) {
     // Multi-select: show batch properties when more than 1 node is selected
     if selected_set.len() > 1 {
@@ -880,17 +881,18 @@ pub fn draw(
                             }
                         }
                     });
-                    // Custom input (max 320 — GPU storage buffer limit)
+                    // Custom input (capped by max_sculpt_resolution setting)
+                    let max_res = max_sculpt_resolution.max(16);
                     ui.horizontal(|ui| {
                         ui.label("Custom:");
                         let mut res_i32 = desired_resolution as i32;
                         if ui.add(
                             egui::DragValue::new(&mut res_i32)
                                 .speed(1)
-                                .range(16..=320)
+                                .range(16..=max_res as i32)
                                 .suffix("^3"),
                         ).changed() {
-                            desired_resolution = (res_i32 as u32).clamp(16, 320);
+                            desired_resolution = (res_i32 as u32).clamp(16, max_res);
                         }
                     });
                     let voxels = (desired_resolution as u64).pow(3);

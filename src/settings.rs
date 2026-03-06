@@ -132,6 +132,10 @@ pub struct Settings {
     pub recent_files: Vec<String>,
     #[serde(default = "default_export_resolution")]
     pub export_resolution: u32,
+    #[serde(default = "default_max_export_resolution")]
+    pub max_export_resolution: u32,
+    #[serde(default = "default_max_sculpt_resolution")]
+    pub max_sculpt_resolution: u32,
     #[serde(default)]
     pub adaptive_export: bool,
     #[serde(default)]
@@ -155,6 +159,8 @@ impl Default for Settings {
             auto_save_interval_secs: 120,
             recent_files: Vec::new(),
             export_resolution: 128,
+            max_export_resolution: 2048,
+            max_sculpt_resolution: 320,
             adaptive_export: false,
             snap: SnapConfig::default(),
             bookmarks: default_bookmarks(),
@@ -420,6 +426,8 @@ pub struct RenderConfig {
 fn default_true() -> bool { true }
 fn default_auto_save_interval() -> u32 { 120 }
 fn default_export_resolution() -> u32 { 128 }
+fn default_max_export_resolution() -> u32 { 2048 }
+fn default_max_sculpt_resolution() -> u32 { 320 }
 fn default_bg_solid_color() -> [f32; 3] { [0.12, 0.12, 0.15] }
 fn default_interaction_scale() -> f32 { 0.5 }
 fn default_rest_scale() -> f32 { 1.0 }

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::Path;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 use glam::Vec3;
 #[cfg(not(target_arch = "wasm32"))]
@@ -397,7 +397,8 @@ pub fn marching_cubes(
     bounds_max: Vec3,
     progress: &AtomicU32,
     adaptive: bool,
-) -> ExportMesh {
+    cancelled: &AtomicBool,
+) -> Option<ExportMesh> {
     let res = resolution as usize;
     let grid_size = res + 1; // Number of sample points per axis
     let step = (bounds_max - bounds_min) / resolution as f32;
@@ -531,6 +532,10 @@ pub fn marching_cubes(
         field[offset..offset + grid_size * grid_size].copy_from_slice(&slice);
     }
 
+    if cancelled.load(Ordering::Relaxed) {
+        return None;
+    }
+
     // Phase 2: Process cells to extract triangles (parallelized by z-slice)
     #[allow(clippy::type_complexity)]
     let cell_slices: Vec<(Vec<[f32; 3]>, Vec<[u32; 3]>)> = maybe_par_iter!(0..res)
@@ -612,6 +617,10 @@ pub fn marching_cubes(
         })
         .collect();
 
+    if cancelled.load(Ordering::Relaxed) {
+        return None;
+    }
+
     // Phase 3: Merge per-slice results with global dedup
     let mut vertices: Vec<[f32; 3]> = Vec::new();
     let mut triangles: Vec<[u32; 3]> = Vec::new();
@@ -648,7 +657,11 @@ pub fn marching_cubes(
             .collect()
     };
 
-    ExportMesh { vertices, triangles, vertex_colors }
+    if cancelled.load(Ordering::Relaxed) {
+        return None;
+    }
+
+    Some(ExportMesh { vertices, triangles, vertex_colors })
 }
 
 pub fn write_obj_to(mesh: &ExportMesh, writer: &mut impl Write) -> Result<(), String> {
@@ -1234,8 +1247,8 @@ mod tests {
         let mesh = marching_cubes(
             &scene, 8,
             Vec3::splat(-2.0), Vec3::splat(2.0),
-            &progress, false,
-        );
+            &progress, false, &AtomicBool::new(false),
+        ).unwrap();
         assert!(mesh.triangles.is_empty());
         assert!(mesh.vertices.is_empty());
     }
@@ -1247,8 +1260,8 @@ mod tests {
         let mesh = marching_cubes(
             &scene, 16,
             Vec3::splat(-2.0), Vec3::splat(2.0),
-            &progress, false,
-        );
+            &progress, false, &AtomicBool::new(false),
+        ).unwrap();
         assert!(!mesh.triangles.is_empty(), "sphere should produce triangles");
         assert!(!mesh.vertices.is_empty(), "sphere should produce vertices");
     }
@@ -1260,8 +1273,8 @@ mod tests {
         let mesh = marching_cubes(
             &scene, 32,
             Vec3::splat(-2.0), Vec3::splat(2.0),
-            &progress, false,
-        );
+            &progress, false, &AtomicBool::new(false),
+        ).unwrap();
         // All vertices should be approximately on the unit sphere surface
         for v in &mesh.vertices {
             let dist = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
@@ -1280,8 +1293,8 @@ mod tests {
         let mesh = marching_cubes(
             &scene, 16,
             Vec3::splat(-2.0), Vec3::splat(2.0),
-            &progress, false,
-        );
+            &progress, false, &AtomicBool::new(false),
+        ).unwrap();
         assert!(!mesh.triangles.is_empty(), "box should produce triangles");
     }
 
@@ -1292,8 +1305,8 @@ mod tests {
         let mesh = marching_cubes(
             &scene, 16,
             Vec3::splat(-2.0), Vec3::splat(2.0),
-            &progress, false,
-        );
+            &progress, false, &AtomicBool::new(false),
+        ).unwrap();
         assert_eq!(mesh.vertex_colors.len(), mesh.vertices.len());
         // Sphere color is red (1,0,0)
         for c in &mesh.vertex_colors {
@@ -1308,8 +1321,8 @@ mod tests {
         let _mesh = marching_cubes(
             &scene, 8,
             Vec3::splat(-2.0), Vec3::splat(2.0),
-            &progress, false,
-        );
+            &progress, false, &AtomicBool::new(false),
+        ).unwrap();
         // Progress should have been incremented (grid_size + res times)
         assert!(progress.load(Ordering::Relaxed) > 0);
     }
@@ -1321,8 +1334,8 @@ mod tests {
         let mesh = marching_cubes(
             &scene, 16,
             Vec3::splat(-2.0), Vec3::splat(2.0),
-            &progress, false,
-        );
+            &progress, false, &AtomicBool::new(false),
+        ).unwrap();
         let vertex_count = mesh.vertices.len() as u32;
         for tri in &mesh.triangles {
             for &idx in tri {
@@ -1338,8 +1351,8 @@ mod tests {
         let mesh = marching_cubes(
             &scene, 16,
             Vec3::splat(-2.0), Vec3::splat(2.0),
-            &progress, false,
-        );
+            &progress, false, &AtomicBool::new(false),
+        ).unwrap();
         // For a closed surface, vertices should be shared — # vertices << # triangle*3
         let total_vertex_refs = mesh.triangles.len() * 3;
         assert!(
@@ -1356,14 +1369,14 @@ mod tests {
         let mesh_normal = marching_cubes(
             &scene, 32,
             Vec3::splat(-2.0), Vec3::splat(2.0),
-            &progress1, false,
-        );
+            &progress1, false, &AtomicBool::new(false),
+        ).unwrap();
         let progress2 = AtomicU32::new(0);
         let mesh_adaptive = marching_cubes(
             &scene, 32,
             Vec3::splat(-2.0), Vec3::splat(2.0),
-            &progress2, true,
-        );
+            &progress2, true, &AtomicBool::new(false),
+        ).unwrap();
         // Adaptive should still produce triangles
         assert!(!mesh_adaptive.triangles.is_empty());
         // Should produce roughly similar triangle counts (within 2x)
@@ -1377,9 +1390,9 @@ mod tests {
     fn marching_cubes_higher_resolution_more_triangles() {
         let (scene, _id) = scene_with_sphere();
         let p1 = AtomicU32::new(0);
-        let mesh_low = marching_cubes(&scene, 8, Vec3::splat(-2.0), Vec3::splat(2.0), &p1, false);
+        let mesh_low = marching_cubes(&scene, 8, Vec3::splat(-2.0), Vec3::splat(2.0), &p1, false, &AtomicBool::new(false)).unwrap();
         let p2 = AtomicU32::new(0);
-        let mesh_high = marching_cubes(&scene, 16, Vec3::splat(-2.0), Vec3::splat(2.0), &p2, false);
+        let mesh_high = marching_cubes(&scene, 16, Vec3::splat(-2.0), Vec3::splat(2.0), &p2, false, &AtomicBool::new(false)).unwrap();
         assert!(
             mesh_high.triangles.len() > mesh_low.triangles.len(),
             "higher resolution should produce more triangles: {} vs {}",
@@ -1395,8 +1408,8 @@ mod tests {
         let mesh = marching_cubes(
             &scene, 8,
             Vec3::new(10.0, 10.0, 10.0), Vec3::new(12.0, 12.0, 12.0),
-            &progress, false,
-        );
+            &progress, false, &AtomicBool::new(false),
+        ).unwrap();
         assert!(mesh.triangles.is_empty(), "no geometry in bounds → no triangles");
     }
 
@@ -1850,8 +1863,8 @@ mod tests {
         let mesh = marching_cubes(
             &scene, 16,
             Vec3::splat(-3.0), Vec3::splat(3.0),
-            &progress, false,
-        );
+            &progress, false, &AtomicBool::new(false),
+        ).unwrap();
         assert!(!mesh.triangles.is_empty(), "CSG union should produce mesh");
     }
 }
