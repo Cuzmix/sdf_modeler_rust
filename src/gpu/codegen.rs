@@ -547,4 +547,928 @@ fn generate_scene_sdf_flat(
     lines.join("\n")
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::graph::scene::{CsgOp, ModifierKind, SdfPrimitive};
+    use crate::graph::voxel::VoxelGrid;
+    use glam::Vec3;
+    use std::collections::HashSet;
 
+    /// Create an empty scene (no default sphere) for predictable testing.
+    fn empty_scene() -> Scene {
+        Scene {
+            nodes: HashMap::new(),
+            next_id: 0,
+            name_counters: HashMap::new(),
+            hidden_nodes: HashSet::new(),
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // generate_scene_sdf — empty scene
+    // ═══════════════════════════════════════════════════════════════
+
+    #[test]
+    fn empty_scene_returns_far_sentinel() {
+        let scene = empty_scene();
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("fn scene_sdf(p: vec3f) -> vec2f"));
+        assert!(wgsl.contains("1e10"));
+        assert!(wgsl.contains("-1.0"));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // generate_scene_sdf — single primitive
+    // ═══════════════════════════════════════════════════════════════
+
+    #[test]
+    fn single_sphere_generates_sdf_sphere_call() {
+        let mut scene = empty_scene();
+        scene.create_primitive(SdfPrimitive::Sphere);
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("sdf_sphere"));
+        assert!(wgsl.contains("fn scene_sdf"));
+    }
+
+    #[test]
+    fn single_box_generates_sdf_box_call() {
+        let mut scene = empty_scene();
+        scene.create_primitive(SdfPrimitive::Box);
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("sdf_box"));
+    }
+
+    #[test]
+    fn single_cylinder_generates_sdf_cylinder_call() {
+        let mut scene = empty_scene();
+        scene.create_primitive(SdfPrimitive::Cylinder);
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("sdf_cylinder"));
+    }
+
+    #[test]
+    fn single_torus_generates_sdf_torus_call() {
+        let mut scene = empty_scene();
+        scene.create_primitive(SdfPrimitive::Torus);
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("sdf_torus"));
+    }
+
+    #[test]
+    fn single_plane_generates_sdf_plane_call() {
+        let mut scene = empty_scene();
+        scene.create_primitive(SdfPrimitive::Plane);
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("sdf_plane"));
+    }
+
+    #[test]
+    fn single_cone_generates_sdf_cone_call() {
+        let mut scene = empty_scene();
+        scene.create_primitive(SdfPrimitive::Cone);
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("sdf_cone"));
+    }
+
+    #[test]
+    fn single_capsule_generates_sdf_capsule_call() {
+        let mut scene = empty_scene();
+        scene.create_primitive(SdfPrimitive::Capsule);
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("sdf_capsule"));
+    }
+
+    #[test]
+    fn single_ellipsoid_generates_sdf_ellipsoid_call() {
+        let mut scene = empty_scene();
+        scene.create_primitive(SdfPrimitive::Ellipsoid);
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("sdf_ellipsoid"));
+    }
+
+    #[test]
+    fn single_hex_prism_generates_sdf_hex_prism_call() {
+        let mut scene = empty_scene();
+        scene.create_primitive(SdfPrimitive::HexPrism);
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("sdf_hex_prism"));
+    }
+
+    #[test]
+    fn single_pyramid_generates_sdf_pyramid_call() {
+        let mut scene = empty_scene();
+        scene.create_primitive(SdfPrimitive::Pyramid);
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("sdf_pyramid"));
+    }
+
+    #[test]
+    fn single_primitive_uses_rotate_euler() {
+        let mut scene = empty_scene();
+        scene.create_primitive(SdfPrimitive::Sphere);
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("rotate_euler"));
+    }
+
+    #[test]
+    fn single_primitive_returns_directly() {
+        let mut scene = empty_scene();
+        scene.create_primitive(SdfPrimitive::Sphere);
+        let wgsl = generate_scene_sdf(&scene, None);
+        // Single top-level node → direct return, no `var result`
+        assert!(wgsl.contains("return n0;"));
+        assert!(!wgsl.contains("var result"));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // generate_scene_sdf — CSG operations
+    // ═══════════════════════════════════════════════════════════════
+
+    #[test]
+    fn union_operation_generates_op_union() {
+        let mut scene = empty_scene();
+        let left = scene.create_primitive(SdfPrimitive::Sphere);
+        let right = scene.create_primitive(SdfPrimitive::Box);
+        scene.create_operation(CsgOp::Union, Some(left), Some(right));
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("op_union(n"));
+    }
+
+    #[test]
+    fn smooth_union_generates_op_smooth_union() {
+        let mut scene = empty_scene();
+        let left = scene.create_primitive(SdfPrimitive::Sphere);
+        let right = scene.create_primitive(SdfPrimitive::Box);
+        scene.create_operation(CsgOp::SmoothUnion, Some(left), Some(right));
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("op_smooth_union(n"));
+    }
+
+    #[test]
+    fn subtract_operation_generates_op_subtract() {
+        let mut scene = empty_scene();
+        let left = scene.create_primitive(SdfPrimitive::Sphere);
+        let right = scene.create_primitive(SdfPrimitive::Box);
+        scene.create_operation(CsgOp::Subtract, Some(left), Some(right));
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("op_subtract(n"));
+    }
+
+    #[test]
+    fn intersect_operation_generates_op_intersect() {
+        let mut scene = empty_scene();
+        let left = scene.create_primitive(SdfPrimitive::Sphere);
+        let right = scene.create_primitive(SdfPrimitive::Box);
+        scene.create_operation(CsgOp::Intersect, Some(left), Some(right));
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("op_intersect(n"));
+    }
+
+    #[test]
+    fn operation_with_one_child_passes_through() {
+        let mut scene = empty_scene();
+        let left = scene.create_primitive(SdfPrimitive::Sphere);
+        let op = scene.create_operation(CsgOp::Union, Some(left), None);
+        let wgsl = generate_scene_sdf(&scene, None);
+        let op_idx = scene.visible_topo_order().iter().position(|&id| id == op).unwrap();
+        let left_idx = scene.visible_topo_order().iter().position(|&id| id == left).unwrap();
+        assert!(wgsl.contains(&format!("let n{op_idx} = n{left_idx};")));
+    }
+
+    #[test]
+    fn operation_with_no_children_returns_far() {
+        let mut scene = empty_scene();
+        let op = scene.create_operation(CsgOp::Union, None, None);
+        let wgsl = generate_scene_sdf(&scene, None);
+        let op_idx = scene.visible_topo_order().iter().position(|&id| id == op).unwrap();
+        assert!(wgsl.contains(&format!("let n{op_idx} = vec2f(1e10, -1.0);")));
+    }
+
+    #[test]
+    fn operation_smooth_k_uses_type_op_y() {
+        let mut scene = empty_scene();
+        let left = scene.create_primitive(SdfPrimitive::Sphere);
+        let right = scene.create_primitive(SdfPrimitive::Box);
+        scene.create_operation(CsgOp::SmoothUnion, Some(left), Some(right));
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("type_op.y)"));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // generate_scene_sdf — multiple top-level nodes
+    // ═══════════════════════════════════════════════════════════════
+
+    #[test]
+    fn two_top_level_primitives_union_with_var_result() {
+        let mut scene = empty_scene();
+        scene.create_primitive(SdfPrimitive::Sphere);
+        scene.create_primitive(SdfPrimitive::Box);
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("var result"));
+        assert!(wgsl.contains("op_union(result"));
+        assert!(wgsl.contains("return result;"));
+    }
+
+    #[test]
+    fn three_top_level_primitives_chain_unions() {
+        let mut scene = empty_scene();
+        scene.create_primitive(SdfPrimitive::Sphere);
+        scene.create_primitive(SdfPrimitive::Box);
+        scene.create_primitive(SdfPrimitive::Cylinder);
+        let wgsl = generate_scene_sdf(&scene, None);
+        // Should have two op_union calls (one for 2nd, one for 3rd)
+        let union_count = wgsl.matches("op_union(result").count();
+        assert_eq!(union_count, 2);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // generate_scene_sdf — hidden nodes excluded
+    // ═══════════════════════════════════════════════════════════════
+
+    #[test]
+    fn hidden_node_excluded_from_codegen() {
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        scene.create_primitive(SdfPrimitive::Box);
+        scene.toggle_visibility(sphere);
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(!wgsl.contains("sdf_sphere"));
+        assert!(wgsl.contains("sdf_box"));
+    }
+
+    #[test]
+    fn all_hidden_returns_far_sentinel() {
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        scene.toggle_visibility(sphere);
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("1e10"));
+        assert!(wgsl.contains("-1.0"));
+        assert!(!wgsl.contains("sdf_sphere"));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Transform nodes
+    // ═══════════════════════════════════════════════════════════════
+
+    #[test]
+    fn transform_wrapping_primitive_generates_inverse_trs() {
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        scene.create_transform(Some(sphere));
+        let wgsl = generate_scene_sdf(&scene, None);
+        // Transform chain should produce translated/rotated/scaled point
+        assert!(wgsl.contains("position.xyz"));
+        assert!(wgsl.contains("rotation.xyz"));
+        assert!(wgsl.contains("scale.xyz"));
+    }
+
+    #[test]
+    fn transform_with_no_child_returns_far() {
+        let mut scene = empty_scene();
+        let xform = scene.create_transform(None);
+        let wgsl = generate_scene_sdf(&scene, None);
+        let order = scene.visible_topo_order();
+        let xform_idx = order.iter().position(|&id| id == xform).unwrap();
+        assert!(wgsl.contains(&format!("let n{xform_idx} = vec2f(1e10, -1.0);")));
+    }
+
+    #[test]
+    fn transform_applies_scale_distance_correction() {
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        let xform = scene.create_transform(Some(sphere));
+        let wgsl = generate_scene_sdf(&scene, None);
+        let order = scene.visible_topo_order();
+        let xform_idx = order.iter().position(|&id| id == xform).unwrap();
+        // Scale correction: min(scale.x, min(scale.y, scale.z))
+        assert!(wgsl.contains(&format!("let n{xform_idx} = vec2f(n")));
+        assert!(wgsl.contains("min(nodes["));
+    }
+
+    #[test]
+    fn nested_transforms_chain_correctly() {
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        let inner_xform = scene.create_transform(Some(sphere));
+        scene.create_transform(Some(inner_xform));
+        let wgsl = generate_scene_sdf(&scene, None);
+        // Sphere should see two transform chain steps
+        // tp<sphere_idx>_0 and tp<sphere_idx>_1
+        assert!(wgsl.contains("tp0_0"));
+        assert!(wgsl.contains("tp0_1"));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Modifier nodes — distance modifiers (Round, Onion)
+    // ═══════════════════════════════════════════════════════════════
+
+    #[test]
+    fn round_modifier_subtracts_value() {
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        let modifier = scene.create_modifier(ModifierKind::Round, Some(sphere));
+        let wgsl = generate_scene_sdf(&scene, None);
+        let order = scene.visible_topo_order();
+        let mod_idx = order.iter().position(|&id| id == modifier).unwrap();
+        let sph_idx = order.iter().position(|&id| id == sphere).unwrap();
+        // Round: n<mod> = vec2f(n<child>.x - nodes[<mod>].position.x, n<child>.y)
+        assert!(wgsl.contains(&format!("let n{mod_idx} = vec2f(n{sph_idx}.x - nodes[{mod_idx}].position.x")));
+    }
+
+    #[test]
+    fn onion_modifier_uses_abs() {
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        let modifier = scene.create_modifier(ModifierKind::Onion, Some(sphere));
+        let wgsl = generate_scene_sdf(&scene, None);
+        let order = scene.visible_topo_order();
+        let mod_idx = order.iter().position(|&id| id == modifier).unwrap();
+        let sph_idx = order.iter().position(|&id| id == sphere).unwrap();
+        assert!(wgsl.contains(&format!("abs(n{sph_idx}.x) - nodes[{mod_idx}].position.x")));
+    }
+
+    #[test]
+    fn modifier_with_no_child_returns_far() {
+        let mut scene = empty_scene();
+        let modifier = scene.create_modifier(ModifierKind::Round, None);
+        let wgsl = generate_scene_sdf(&scene, None);
+        let order = scene.visible_topo_order();
+        let mod_idx = order.iter().position(|&id| id == modifier).unwrap();
+        assert!(wgsl.contains(&format!("let n{mod_idx} = vec2f(1e10, -1.0);")));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Modifier nodes — point modifiers (in transform chain)
+    // ═══════════════════════════════════════════════════════════════
+
+    #[test]
+    fn twist_modifier_emits_twist_point() {
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        scene.create_modifier(ModifierKind::Twist, Some(sphere));
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("twist_point("));
+    }
+
+    #[test]
+    fn bend_modifier_emits_bend_point() {
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        scene.create_modifier(ModifierKind::Bend, Some(sphere));
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("bend_point("));
+    }
+
+    #[test]
+    fn taper_modifier_emits_taper_point() {
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        scene.create_modifier(ModifierKind::Taper, Some(sphere));
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("taper_point("));
+    }
+
+    #[test]
+    fn elongate_modifier_emits_elongate_point() {
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        scene.create_modifier(ModifierKind::Elongate, Some(sphere));
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("elongate_point("));
+    }
+
+    #[test]
+    fn mirror_modifier_emits_mirror_point() {
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        scene.create_modifier(ModifierKind::Mirror, Some(sphere));
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("mirror_point("));
+    }
+
+    #[test]
+    fn repeat_modifier_emits_repeat_point() {
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        scene.create_modifier(ModifierKind::Repeat, Some(sphere));
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("repeat_point("));
+    }
+
+    #[test]
+    fn finite_repeat_modifier_emits_finite_repeat_point() {
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        scene.create_modifier(ModifierKind::FiniteRepeat, Some(sphere));
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("finite_repeat_point("));
+    }
+
+    #[test]
+    fn radial_repeat_modifier_emits_radial_repeat_point() {
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        scene.create_modifier(ModifierKind::RadialRepeat, Some(sphere));
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("radial_repeat_point("));
+    }
+
+    #[test]
+    fn point_modifier_passes_through_distance() {
+        // Point modifiers don't modify the distance — they just pass n<child> through
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        let modifier = scene.create_modifier(ModifierKind::Twist, Some(sphere));
+        let wgsl = generate_scene_sdf(&scene, None);
+        let order = scene.visible_topo_order();
+        let mod_idx = order.iter().position(|&id| id == modifier).unwrap();
+        let sph_idx = order.iter().position(|&id| id == sphere).unwrap();
+        assert!(wgsl.contains(&format!("let n{mod_idx} = n{sph_idx};")));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // get_transform_chain
+    // ═══════════════════════════════════════════════════════════════
+
+    #[test]
+    fn transform_chain_empty_for_top_level_primitive() {
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        let parent_map = scene.build_parent_map();
+        let order = scene.visible_topo_order();
+        let idx_map: HashMap<NodeId, usize> = order.iter().enumerate().map(|(i, &id)| (id, i)).collect();
+        let chain = get_transform_chain(sphere, &parent_map, &scene, &idx_map);
+        assert!(chain.is_empty());
+    }
+
+    #[test]
+    fn transform_chain_includes_transform_ancestor() {
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        scene.create_transform(Some(sphere));
+        let parent_map = scene.build_parent_map();
+        let order = scene.visible_topo_order();
+        let idx_map: HashMap<NodeId, usize> = order.iter().enumerate().map(|(i, &id)| (id, i)).collect();
+        let chain = get_transform_chain(sphere, &parent_map, &scene, &idx_map);
+        assert_eq!(chain.len(), 1);
+        assert!(matches!(chain[0].1, ChainEntry::Transform));
+    }
+
+    #[test]
+    fn transform_chain_includes_point_modifier_ancestor() {
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        scene.create_modifier(ModifierKind::Twist, Some(sphere));
+        let parent_map = scene.build_parent_map();
+        let order = scene.visible_topo_order();
+        let idx_map: HashMap<NodeId, usize> = order.iter().enumerate().map(|(i, &id)| (id, i)).collect();
+        let chain = get_transform_chain(sphere, &parent_map, &scene, &idx_map);
+        assert_eq!(chain.len(), 1);
+        assert!(matches!(chain[0].1, ChainEntry::Modifier(ModifierKind::Twist)));
+    }
+
+    #[test]
+    fn transform_chain_skips_distance_modifier() {
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        scene.create_modifier(ModifierKind::Round, Some(sphere));
+        let parent_map = scene.build_parent_map();
+        let order = scene.visible_topo_order();
+        let idx_map: HashMap<NodeId, usize> = order.iter().enumerate().map(|(i, &id)| (id, i)).collect();
+        let chain = get_transform_chain(sphere, &parent_map, &scene, &idx_map);
+        assert!(chain.is_empty());
+    }
+
+    #[test]
+    fn transform_chain_innermost_first_order() {
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        let twist = scene.create_modifier(ModifierKind::Twist, Some(sphere));
+        scene.create_transform(Some(twist));
+        let parent_map = scene.build_parent_map();
+        let order = scene.visible_topo_order();
+        let idx_map: HashMap<NodeId, usize> = order.iter().enumerate().map(|(i, &id)| (id, i)).collect();
+        let chain = get_transform_chain(sphere, &parent_map, &scene, &idx_map);
+        assert_eq!(chain.len(), 2);
+        // First entry is innermost (Twist), second is outermost (Transform)
+        assert!(matches!(chain[0].1, ChainEntry::Modifier(ModifierKind::Twist)));
+        assert!(matches!(chain[1].1, ChainEntry::Transform));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // emit_transform_chain
+    // ═══════════════════════════════════════════════════════════════
+
+    #[test]
+    fn emit_transform_chain_empty_returns_p() {
+        let mut lines = Vec::new();
+        let result = emit_transform_chain(&mut lines, 0, &[]);
+        assert_eq!(result, "p");
+        assert!(lines.is_empty());
+    }
+
+    #[test]
+    fn emit_transform_chain_single_transform_generates_three_lets() {
+        let mut lines = Vec::new();
+        let chain = vec![(1, ChainEntry::Transform)];
+        let result = emit_transform_chain(&mut lines, 0, &chain);
+        assert_eq!(result, "tp0_0");
+        // Should generate translate, rotate, scale steps
+        assert_eq!(lines.len(), 3);
+        assert!(lines[0].contains("position.xyz"));
+        assert!(lines[1].contains("rotate_euler"));
+        assert!(lines[2].contains("scale.xyz"));
+    }
+
+    #[test]
+    fn emit_transform_chain_twist_generates_twist_point() {
+        let mut lines = Vec::new();
+        let chain = vec![(2, ChainEntry::Modifier(ModifierKind::Twist))];
+        let result = emit_transform_chain(&mut lines, 0, &chain);
+        assert_eq!(result, "tp0_0");
+        assert_eq!(lines.len(), 1);
+        assert!(lines[0].contains("twist_point(p"));
+    }
+
+    #[test]
+    fn emit_transform_chain_two_entries_chains_vars() {
+        let mut lines = Vec::new();
+        let chain = vec![
+            (2, ChainEntry::Modifier(ModifierKind::Mirror)),
+            (3, ChainEntry::Transform),
+        ];
+        let result = emit_transform_chain(&mut lines, 5, &chain);
+        assert_eq!(result, "tp5_1");
+        // Outermost (Transform at idx 3) is processed first (chain reversed)
+        assert!(lines[0].contains("nodes[3]"));
+        // Inner (Mirror at idx 2) is processed second, using the output of the first step
+        assert!(lines[3].contains("mirror_point(tp5_0"));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Sculpt nodes
+    // ═══════════════════════════════════════════════════════════════
+
+    #[test]
+    fn standalone_sculpt_uses_sdf_voxel_grid() {
+        let mut scene = empty_scene();
+        let grid = VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0));
+        let sculpt_id = scene.add_node(
+            "Sculpt".to_string(),
+            NodeData::Sculpt {
+                input: None,
+                position: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                color: Vec3::new(0.5, 0.5, 0.5),
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                layer_intensity: 1.0,
+                voxel_grid: grid,
+                desired_resolution: 8,
+            },
+        );
+        let wgsl = generate_scene_sdf(&scene, None);
+        let order = scene.visible_topo_order();
+        let sculpt_idx = order.iter().position(|&id| id == sculpt_id).unwrap();
+        // Standalone sculpt without tex_map uses sdf_voxel_grid
+        assert!(wgsl.contains(&format!("sdf_voxel_grid(lp{sculpt_idx}")));
+    }
+
+    #[test]
+    fn differential_sculpt_uses_disp_voxel_grid() {
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        let grid = VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0));
+        let sculpt_id = scene.create_sculpt(
+            sphere,
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::new(0.5, 0.5, 0.5),
+            grid,
+        );
+        let wgsl = generate_scene_sdf(&scene, None);
+        let order = scene.visible_topo_order();
+        let sculpt_idx = order.iter().position(|&id| id == sculpt_id).unwrap();
+        // Differential sculpt without tex_map uses disp_voxel_grid
+        assert!(wgsl.contains(&format!("disp_voxel_grid(lp{sculpt_idx}")));
+        // Should include layer_intensity via position.w
+        assert!(wgsl.contains("position.w"));
+    }
+
+    #[test]
+    fn sculpt_with_tex_map_uses_texture_path() {
+        let mut scene = empty_scene();
+        let grid = VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0));
+        let sculpt_id = scene.add_node(
+            "Sculpt".to_string(),
+            NodeData::Sculpt {
+                input: None,
+                position: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                color: Vec3::new(0.5, 0.5, 0.5),
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                layer_intensity: 1.0,
+                voxel_grid: grid,
+                desired_resolution: 8,
+            },
+        );
+        let mut tex_map = HashMap::new();
+        tex_map.insert(sculpt_id, 0usize);
+        let wgsl = generate_scene_sdf(&scene, Some(&tex_map));
+        assert!(wgsl.contains("sdf_voxel_tex_0("));
+    }
+
+    #[test]
+    fn differential_sculpt_with_tex_map_uses_disp_texture_path() {
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        let grid = VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0));
+        let sculpt_id = scene.create_sculpt(
+            sphere,
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::new(0.5, 0.5, 0.5),
+            grid,
+        );
+        let mut tex_map = HashMap::new();
+        tex_map.insert(sculpt_id, 2usize);
+        let wgsl = generate_scene_sdf(&scene, Some(&tex_map));
+        assert!(wgsl.contains("disp_voxel_tex_2("));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // generate_voxel_texture_decls
+    // ═══════════════════════════════════════════════════════════════
+
+    #[test]
+    fn no_sculpt_nodes_empty_texture_decls() {
+        let mut scene = empty_scene();
+        scene.create_primitive(SdfPrimitive::Sphere);
+        let (decls, tex_map) = generate_voxel_texture_decls(&scene);
+        assert!(decls.is_empty());
+        assert!(tex_map.is_empty());
+    }
+
+    #[test]
+    fn standalone_sculpt_generates_sdf_sampling_function() {
+        let mut scene = empty_scene();
+        let grid = VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0));
+        scene.add_node(
+            "Sculpt".to_string(),
+            NodeData::Sculpt {
+                input: None,
+                position: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                color: Vec3::new(0.5, 0.5, 0.5),
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                layer_intensity: 1.0,
+                voxel_grid: grid,
+                desired_resolution: 8,
+            },
+        );
+        let (decls, tex_map) = generate_voxel_texture_decls(&scene);
+        assert!(decls.contains("voxel_sampler"));
+        assert!(decls.contains("voxel_tex_0"));
+        assert!(decls.contains("fn sdf_voxel_tex_0("));
+        assert!(decls.contains("box_dist"));
+        assert_eq!(tex_map.len(), 1);
+    }
+
+    #[test]
+    fn differential_sculpt_generates_disp_sampling_function() {
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        let grid = VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0));
+        let sculpt_id = scene.create_sculpt(
+            sphere,
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::new(0.5, 0.5, 0.5),
+            grid,
+        );
+        let (decls, tex_map) = generate_voxel_texture_decls(&scene);
+        assert!(decls.contains("fn disp_voxel_tex_0("));
+        assert!(decls.contains("return 0.0"));
+        assert!(tex_map.contains_key(&sculpt_id));
+    }
+
+    #[test]
+    fn texture_decl_bindings_start_at_group_2() {
+        let mut scene = empty_scene();
+        let grid = VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0));
+        scene.add_node(
+            "Sculpt".to_string(),
+            NodeData::Sculpt {
+                input: None,
+                position: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                color: Vec3::new(0.5, 0.5, 0.5),
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                layer_intensity: 1.0,
+                voxel_grid: grid,
+                desired_resolution: 8,
+            },
+        );
+        let (decls, _) = generate_voxel_texture_decls(&scene);
+        assert!(decls.contains("@group(2) @binding(0) var voxel_sampler"));
+        assert!(decls.contains("@group(2) @binding(1) var voxel_tex_0"));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Two-phase codegen with bounding skip
+    // ═══════════════════════════════════════════════════════════════
+
+    #[test]
+    fn expensive_subtree_wrapped_in_bounding_check() {
+        let mut scene = empty_scene();
+        // Cheap subtree (no sculpt)
+        scene.create_primitive(SdfPrimitive::Sphere);
+        // Expensive subtree (has sculpt)
+        let box_prim = scene.create_primitive(SdfPrimitive::Box);
+        let grid = VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0));
+        scene.create_sculpt(
+            box_prim,
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::new(0.5, 0.5, 0.5),
+            grid,
+        );
+        let wgsl = generate_scene_sdf(&scene, None);
+        // Two-phase: bounding sphere check wrapping the expensive subtree
+        assert!(wgsl.contains("_bd"));
+        assert!(wgsl.contains("if _bd < result.x"));
+    }
+
+    #[test]
+    fn single_expensive_no_cheap_uses_flat_codegen() {
+        let mut scene = empty_scene();
+        // Only expensive subtree — no benefit from bounding skip, uses flat codegen
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        let grid = VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0));
+        scene.create_sculpt(
+            sphere,
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::new(0.5, 0.5, 0.5),
+            grid,
+        );
+        let wgsl = generate_scene_sdf(&scene, None);
+        // Should NOT have bounding skip — flat codegen
+        assert!(!wgsl.contains("_bd"));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Complex scenes
+    // ═══════════════════════════════════════════════════════════════
+
+    #[test]
+    fn operation_with_transform_children() {
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        let xform_sphere = scene.create_transform(Some(sphere));
+        let box_prim = scene.create_primitive(SdfPrimitive::Box);
+        let xform_box = scene.create_transform(Some(box_prim));
+        scene.create_operation(CsgOp::Union, Some(xform_sphere), Some(xform_box));
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("sdf_sphere"));
+        assert!(wgsl.contains("sdf_box"));
+        assert!(wgsl.contains("op_union(n"));
+    }
+
+    #[test]
+    fn modifier_chain_on_primitive() {
+        // Round(Mirror(Sphere))
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        let mirror = scene.create_modifier(ModifierKind::Mirror, Some(sphere));
+        scene.create_modifier(ModifierKind::Round, Some(mirror));
+        let wgsl = generate_scene_sdf(&scene, None);
+        // Mirror is a point modifier → mirror_point in sphere's chain
+        assert!(wgsl.contains("mirror_point("));
+        // Round is a distance modifier → subtraction
+        assert!(wgsl.contains("abs(") || wgsl.contains(".x -"));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // structure_key stability via codegen
+    // ═══════════════════════════════════════════════════════════════
+
+    #[test]
+    fn same_topology_generates_same_codegen() {
+        let mut scene1 = empty_scene();
+        scene1.create_primitive(SdfPrimitive::Sphere);
+        let wgsl1 = generate_scene_sdf(&scene1, None);
+
+        let mut scene2 = empty_scene();
+        scene2.create_primitive(SdfPrimitive::Sphere);
+        let wgsl2 = generate_scene_sdf(&scene2, None);
+
+        assert_eq!(wgsl1, wgsl2);
+    }
+
+    #[test]
+    fn different_topology_generates_different_codegen() {
+        let mut scene1 = empty_scene();
+        scene1.create_primitive(SdfPrimitive::Sphere);
+        let wgsl1 = generate_scene_sdf(&scene1, None);
+
+        let mut scene2 = empty_scene();
+        scene2.create_primitive(SdfPrimitive::Box);
+        let wgsl2 = generate_scene_sdf(&scene2, None);
+
+        assert_ne!(wgsl1, wgsl2);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // format_f32 and format_vec3 (from shader_templates)
+    // ═══════════════════════════════════════════════════════════════
+
+    #[test]
+    fn format_f32_integer_adds_decimal() {
+        use super::super::shader_templates::format_f32;
+        assert_eq!(format_f32(1.0), "1.0");
+        assert_eq!(format_f32(0.0), "0.0");
+        assert_eq!(format_f32(-5.0), "-5.0");
+    }
+
+    #[test]
+    fn format_f32_decimal_unchanged() {
+        use super::super::shader_templates::format_f32;
+        assert_eq!(format_f32(1.5), "1.5");
+        assert_eq!(format_f32(0.001), "0.001");
+    }
+
+    #[test]
+    fn format_vec3_formats_all_components() {
+        use super::super::shader_templates::format_vec3;
+        let result = format_vec3([1.0, 2.5, -3.0]);
+        assert_eq!(result, "1.0, 2.5, -3.0");
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Primitive node uses local point variable
+    // ═══════════════════════════════════════════════════════════════
+
+    #[test]
+    fn primitive_generates_local_point_lp() {
+        let mut scene = empty_scene();
+        scene.create_primitive(SdfPrimitive::Sphere);
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("let lp0"));
+    }
+
+    #[test]
+    fn primitive_material_id_is_node_index() {
+        let mut scene = empty_scene();
+        scene.create_primitive(SdfPrimitive::Sphere);
+        let wgsl = generate_scene_sdf(&scene, None);
+        // Material ID is f32(index)
+        assert!(wgsl.contains("f32(0)"));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Sculpt node with rotate_euler
+    // ═══════════════════════════════════════════════════════════════
+
+    #[test]
+    fn sculpt_generates_rotate_euler_for_local_point() {
+        let mut scene = empty_scene();
+        let grid = VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0));
+        scene.add_node(
+            "Sculpt".to_string(),
+            NodeData::Sculpt {
+                input: None,
+                position: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                color: Vec3::new(0.5, 0.5, 0.5),
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                layer_intensity: 1.0,
+                voxel_grid: grid,
+                desired_resolution: 8,
+            },
+        );
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("rotate_euler("));
+    }
+}

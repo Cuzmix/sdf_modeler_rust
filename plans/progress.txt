@@ -91,3 +91,34 @@ Sprint initialized. No iterations completed yet.
 - Helpers: `empty_scene()`, `scene_with_sphere()`, `scene_with_box()`, `sample_mesh()`, `sample_mesh_no_colors()`
 - All 180 tests pass (16 history + 46 scene + 57 voxel + 61 export). cargo check, clippy clean.
 - Files changed: `src/export.rs`, `plans/prd.json`, `plans/progress.txt`
+
+## Iteration 5 — PRD #3: WGSL codegen unit tests
+- Added 69 unit tests to `src/gpu/codegen.rs` covering:
+  - Empty scene returns far sentinel (1e10, -1.0)
+  - Single primitive codegen for all 10 SDF types (Sphere, Box, Cylinder, Torus, Plane, Cone, Capsule, Ellipsoid, HexPrism, Pyramid)
+  - Primitive uses rotate_euler, local point (lp), material ID as f32(index)
+  - Single primitive returns directly (no var result)
+  - CSG operations: Union, SmoothUnion, Subtract, Intersect → correct WGSL function names
+  - Operation with one child passes through, no children returns far
+  - Operation smooth_k reads from type_op.y
+  - Multiple top-level primitives: var result + chained op_union calls
+  - Hidden nodes excluded from codegen, all hidden returns far
+  - Transform: inverse TRS chain (position/rotation/scale), scale distance correction
+  - Transform with no child returns far
+  - Nested transforms chain correctly (tp0_0, tp0_1)
+  - Distance modifiers: Round subtracts value, Onion uses abs()
+  - Modifier with no child returns far
+  - Point modifiers: Twist, Bend, Taper, Elongate, Mirror, Repeat, FiniteRepeat, RadialRepeat → emit correct *_point() calls
+  - Point modifier passes through distance unchanged
+  - get_transform_chain: empty for top-level, includes Transform ancestor, includes point modifier, skips distance modifier, innermost-first order
+  - emit_transform_chain: empty returns "p", single transform generates 3 lets, twist generates twist_point, two entries chain variables correctly
+  - Sculpt: standalone uses sdf_voxel_grid, differential uses disp_voxel_grid, with tex_map uses texture path
+  - Sculpt generates rotate_euler for local point
+  - generate_voxel_texture_decls: no sculpt → empty, standalone → sdf sampling fn, differential → disp sampling fn, bindings at @group(2)
+  - Two-phase codegen: expensive subtree wrapped in bounding check, single expensive no cheap uses flat codegen
+  - Complex scenes: operation with transform children, modifier chain on primitive
+  - Structure key stability: same topology → same codegen, different topology → different codegen
+  - format_f32: integer adds decimal, decimal unchanged
+  - format_vec3: formats all three components
+- All 249 tests pass (16 history + 46 scene + 57 voxel + 61 export + 69 codegen). cargo check, clippy clean.
+- Files changed: `src/gpu/codegen.rs`, `plans/prd.json`, `plans/progress.txt`

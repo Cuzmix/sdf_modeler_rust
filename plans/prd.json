@@ -18,7 +18,7 @@
     "category": "testing",
     "description": "Add unit tests for WGSL codegen (expression builder, structure_key hashing, transform handling)",
     "verification": "cargo test -- codegen passes, verifies generated WGSL matches expected output for known scene trees",
-    "passes": false
+    "passes": true
   },
   {
     "id": 4,
