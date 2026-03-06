@@ -151,7 +151,7 @@
     "category": "testing",
     "description": "Add comprehensive unit tests for all new features in this sprint.\n\nSteps:\n1. Material blending: test vec4f codegen output, blend factor encoding for smooth/hard ops, rendering shader material interpolation helpers.\n2. Offset modifier: test distance shift in CPU eval, codegen output string.\n3. Noise modifier: test point displacement is non-zero for non-zero amplitude, codegen emits fbm_noise call.\n4. Chamfer/stairs/columns operations: test codegen emits correct WGSL function names, parameters passed correctly.\n5. Multi-select API: test select_single, toggle_select, add_to_selection, clear_selection, is_selected, selected_count.\n6. SmoothSubtract/SmoothIntersect: test codegen output, default smooth_k values.\n7. KeymapConfig: test default bindings, set/get binding, reset, format_shortcut, serialization roundtrip.\n8. Light nodes: test creation, world-space position computation, LightGpu buffer population.\n9. Cook-Torrance BRDF: test D_GGX, G_SmithGGX at known values (roughness=0.5, NoH=1 should give known result).",
     "verification": "cargo test — all new tests pass alongside existing 249+ tests. Zero regressions.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 28,

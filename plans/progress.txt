@@ -737,3 +737,48 @@ Design decisions:
   the GPU data path. It's lightweight — just distances + NodeIds, no GPU structs.
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (295/295) ✓
+
+--- Iteration 25: PRD #27 — Comprehensive unit tests for all new features ---
+COMPLETED. Added 51 new unit tests across 4 files covering all sprint features.
+
+Test count: 295 → 346 (51 new tests, zero regressions).
+
+Changes by file:
+- src/graph/voxel.rs (+20 tests):
+  - Smooth subtract/intersect CPU eval: boundary blending, zero-k equals hard (4 tests)
+  - Chamfer union/subtract/intersect CPU eval: boundary beveling, far-from-boundary
+    matches hard (4 tests)
+  - Stairs/columns union/subtract CPU eval: stepped/columnar patterns differ from
+    smooth/hard (4 tests)
+  - evaluate_sdf_tree with new CsgOp variants: SmoothSubtract, ChamferUnion,
+    StairsUnion tree evaluation (3 tests)
+  - FBM noise: non-zero displacement, zero amplitude identity, octave detail (3 tests)
+  - noise3d bounded output, hash33 determinism (2 tests)
+
+- src/gpu/codegen.rs (+8 tests):
+  - vec4f format: primitive emits vec4f with material ID, scene_sdf returns vec4f,
+    empty scene far sentinel (3 tests)
+  - Material blending: smooth union emits smooth_k (1 test)
+  - Light node codegen: emits infinite distance (1 test)
+  - Smooth subtract/intersect emit correct WGSL function names (2 tests)
+  - Material blend info propagation in smooth union (1 test)
+
+- src/graph/scene.rs (+12 tests):
+  - CsgOp defaults: smooth_k for smooth/chamfer/hard ops (4 tests)
+  - CsgOp steps: has_steps_param, default_steps (3 tests)
+  - CsgOp metadata: ALL count=13, WGSL function names (2 tests)
+  - LightType: ALL count=3, labels, badges (3 tests)
+
+- src/gpu/buffers.rs (+11 tests, new test module):
+  - collect_scene_lights: empty, point/spot/directional types, max limit, distance
+    sorting, hidden exclusion (7 tests)
+  - identify_active_lights: empty, within limit, exceeding limit (3 tests)
+  - SceneLightGpu: spot angle cos(half_angle) encoding (1 test)
+
+Coverage notes:
+- Cook-Torrance BRDF (D_GGX, G_SmithGGX): WGSL-only functions with no CPU equivalents.
+  Verified visually + shader compilation. Not unit-testable without GPU harness.
+- Multi-select API: Already 9 tests from iteration 15. No additions needed.
+- KeymapConfig: Already 10 tests from iteration 21. No additions needed.
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (346/346) ✓

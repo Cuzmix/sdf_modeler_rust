@@ -2602,4 +2602,119 @@ mod tests {
             _ => panic!("expected Transform with Light child"),
         }
     }
+
+    // -----------------------------------------------------------------------
+    // CsgOp default_smooth_k values
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn csg_op_smooth_subtract_default_k() {
+        assert!((CsgOp::SmoothSubtract.default_smooth_k() - 0.3).abs() < 1e-5);
+    }
+
+    #[test]
+    fn csg_op_smooth_intersect_default_k() {
+        assert!((CsgOp::SmoothIntersect.default_smooth_k() - 0.3).abs() < 1e-5);
+    }
+
+    #[test]
+    fn csg_op_chamfer_default_k() {
+        assert!((CsgOp::ChamferUnion.default_smooth_k() - 0.2).abs() < 1e-5);
+        assert!((CsgOp::ChamferSubtract.default_smooth_k() - 0.2).abs() < 1e-5);
+        assert!((CsgOp::ChamferIntersect.default_smooth_k() - 0.2).abs() < 1e-5);
+    }
+
+    #[test]
+    fn csg_op_hard_ops_have_zero_k() {
+        assert_eq!(CsgOp::Union.default_smooth_k(), 0.0);
+        assert_eq!(CsgOp::Subtract.default_smooth_k(), 0.0);
+        assert_eq!(CsgOp::Intersect.default_smooth_k(), 0.0);
+    }
+
+    #[test]
+    fn csg_op_stairs_columns_have_steps_param() {
+        assert!(CsgOp::StairsUnion.has_steps_param());
+        assert!(CsgOp::StairsSubtract.has_steps_param());
+        assert!(CsgOp::ColumnsUnion.has_steps_param());
+        assert!(CsgOp::ColumnsSubtract.has_steps_param());
+        // All other ops should NOT have steps param
+        assert!(!CsgOp::Union.has_steps_param());
+        assert!(!CsgOp::SmoothUnion.has_steps_param());
+        assert!(!CsgOp::ChamferUnion.has_steps_param());
+    }
+
+    #[test]
+    fn csg_op_stairs_columns_default_steps() {
+        assert_eq!(CsgOp::StairsUnion.default_steps(), 4.0);
+        assert_eq!(CsgOp::ColumnsSubtract.default_steps(), 4.0);
+        assert_eq!(CsgOp::Union.default_steps(), 0.0);
+    }
+
+    #[test]
+    fn csg_op_all_has_13_variants() {
+        assert_eq!(CsgOp::ALL.len(), 13);
+    }
+
+    #[test]
+    fn csg_op_wgsl_function_names() {
+        assert_eq!(CsgOp::SmoothSubtract.wgsl_function_name(), "op_subtract");
+        assert_eq!(CsgOp::SmoothIntersect.wgsl_function_name(), "op_intersect");
+        assert_eq!(CsgOp::ChamferUnion.wgsl_function_name(), "op_chamfer_union");
+        assert_eq!(CsgOp::StairsUnion.wgsl_function_name(), "op_stairs_union");
+        assert_eq!(CsgOp::ColumnsSubtract.wgsl_function_name(), "op_columns_subtract");
+    }
+
+    // -----------------------------------------------------------------------
+    // LightType properties
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn light_type_all_has_3_variants() {
+        assert_eq!(LightType::ALL.len(), 3);
+    }
+
+    #[test]
+    fn light_type_labels() {
+        assert_eq!(LightType::Point.label(), "Point");
+        assert_eq!(LightType::Spot.label(), "Spot");
+        assert_eq!(LightType::Directional.label(), "Directional");
+    }
+
+    #[test]
+    fn light_type_badges() {
+        assert_eq!(LightType::Point.badge(), "[Pt]");
+        assert_eq!(LightType::Spot.badge(), "[Sp]");
+        assert_eq!(LightType::Directional.badge(), "[Dir]");
+    }
+
+    #[test]
+    fn create_light_sets_default_properties() {
+        let mut scene = empty_scene();
+        let (light_id, _) = scene.create_light(LightType::Spot);
+        match &scene.nodes[&light_id].data {
+            NodeData::Light { light_type, color, intensity, range, spot_angle } => {
+                assert_eq!(*light_type, LightType::Spot);
+                assert_eq!(*color, Vec3::ONE);
+                assert!((intensity - 1.0).abs() < 1e-5);
+                assert!((range - 10.0).abs() < 1e-5);
+                assert!((spot_angle - 45.0).abs() < 1e-5);
+            }
+            _ => panic!("expected Light node"),
+        }
+    }
+
+    #[test]
+    fn create_light_wraps_in_transform() {
+        let mut scene = empty_scene();
+        let (light_id, transform_id) = scene.create_light(LightType::Directional);
+        match &scene.nodes[&transform_id].data {
+            NodeData::Transform { input, translation, rotation, scale } => {
+                assert_eq!(*input, Some(light_id));
+                assert_eq!(*translation, Vec3::ZERO);
+                assert_eq!(*rotation, Vec3::ZERO);
+                assert_eq!(*scale, Vec3::ONE);
+            }
+            _ => panic!("expected Transform parent"),
+        }
+    }
 }

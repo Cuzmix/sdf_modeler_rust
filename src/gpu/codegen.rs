@@ -573,7 +573,7 @@ fn generate_scene_sdf_flat(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graph::scene::{CsgOp, ModifierKind, SdfPrimitive};
+    use crate::graph::scene::{CsgOp, LightType, ModifierKind, SdfPrimitive};
     use crate::graph::voxel::VoxelGrid;
     use glam::Vec3;
     use std::collections::HashSet;
@@ -1608,5 +1608,94 @@ mod tests {
         );
         let wgsl = generate_scene_sdf(&scene, None);
         assert!(wgsl.contains("rotate_euler("));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // vec4f format verification (material blending infrastructure)
+    // ═══════════════════════════════════════════════════════════════
+
+    #[test]
+    fn primitive_emits_vec4f_with_material_id() {
+        let mut scene = empty_scene();
+        scene.create_primitive(SdfPrimitive::Sphere);
+        let wgsl = generate_scene_sdf(&scene, None);
+        // Primitive should emit vec4f(distance, mat_id, -1.0, 0.0) format
+        assert!(wgsl.contains("vec4f("), "should use vec4f format");
+        assert!(wgsl.contains("f32(0)"), "material ID should be node index");
+        assert!(wgsl.contains("-1.0"), "mat_b should be -1.0 for single primitive");
+    }
+
+    #[test]
+    fn scene_sdf_returns_vec4f() {
+        let mut scene = empty_scene();
+        scene.create_primitive(SdfPrimitive::Box);
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("fn scene_sdf(p: vec3f) -> vec4f"));
+    }
+
+    #[test]
+    fn smooth_union_emits_smooth_k_for_material_blending() {
+        let mut scene = empty_scene();
+        let a = scene.create_primitive(SdfPrimitive::Sphere);
+        let b = scene.create_primitive(SdfPrimitive::Box);
+        scene.add_node("SmoothU".into(), NodeData::Operation {
+            op: CsgOp::SmoothUnion,
+            smooth_k: 0.5,
+            steps: 0.0,
+            left: Some(a),
+            right: Some(b),
+        });
+        let wgsl = generate_scene_sdf(&scene, None);
+        // Smooth union should call op_smooth_union which carries blend factor
+        assert!(wgsl.contains("op_smooth_union("), "should emit smooth union call");
+        assert!(wgsl.contains("type_op.y"), "should use smooth_k from uniform buffer");
+    }
+
+    #[test]
+    fn empty_scene_returns_vec4f_far_sentinel() {
+        let scene = empty_scene();
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("vec4f(1e10, -1.0, -1.0, 0.0)"), "empty scene should return far sentinel vec4f");
+    }
+
+    #[test]
+    fn light_node_emits_infinite_distance() {
+        let mut scene = empty_scene();
+        scene.create_light(LightType::Point);
+        let wgsl = generate_scene_sdf(&scene, None);
+        // Light nodes should emit infinite distance (no SDF contribution)
+        assert!(wgsl.contains("1e10"), "light node should emit infinite distance");
+    }
+
+    #[test]
+    fn operation_with_smooth_subtract_emits_op_subtract() {
+        let mut scene = empty_scene();
+        let a = scene.create_primitive(SdfPrimitive::Sphere);
+        let b = scene.create_primitive(SdfPrimitive::Box);
+        scene.add_node("SmoothSub".into(), NodeData::Operation {
+            op: CsgOp::SmoothSubtract,
+            smooth_k: 0.3,
+            steps: 0.0,
+            left: Some(a),
+            right: Some(b),
+        });
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("op_subtract("), "smooth subtract uses op_subtract WGSL function");
+    }
+
+    #[test]
+    fn operation_with_smooth_intersect_emits_op_intersect() {
+        let mut scene = empty_scene();
+        let a = scene.create_primitive(SdfPrimitive::Sphere);
+        let b = scene.create_primitive(SdfPrimitive::Box);
+        scene.add_node("SmoothInt".into(), NodeData::Operation {
+            op: CsgOp::SmoothIntersect,
+            smooth_k: 0.3,
+            steps: 0.0,
+            left: Some(a),
+            right: Some(b),
+        });
+        let wgsl = generate_scene_sdf(&scene, None);
+        assert!(wgsl.contains("op_intersect("), "smooth intersect uses op_intersect WGSL function");
     }
 }

@@ -334,3 +334,181 @@ fn rotate_euler_light(p: glam::Vec3, r: glam::Vec3) -> glam::Vec3 {
     let (sz, cz) = r.z.sin_cos();
     glam::Vec3::new(cz * q.x - sz * q.y, sz * q.x + cz * q.y, q.z)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::graph::scene::{LightType, NodeData, Scene};
+    use glam::Vec3;
+    use std::collections::{HashMap, HashSet};
+
+    fn empty_scene() -> Scene {
+        Scene {
+            nodes: HashMap::new(),
+            next_id: 0,
+            name_counters: HashMap::new(),
+            hidden_nodes: HashSet::new(),
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // collect_scene_lights
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn collect_scene_lights_empty_scene_returns_zero() {
+        let scene = empty_scene();
+        let (count, lights) = collect_scene_lights(&scene, Vec3::ZERO);
+        assert_eq!(count, 0);
+        assert!(lights.is_empty());
+    }
+
+    #[test]
+    fn collect_scene_lights_single_point_light() {
+        let mut scene = empty_scene();
+        let (_light_id, _transform_id) = scene.create_light(LightType::Point);
+        let (count, lights) = collect_scene_lights(&scene, Vec3::ZERO);
+        assert_eq!(count, 1);
+        assert_eq!(lights.len(), 1);
+        // Point light type = 0.0
+        assert!((lights[0].position_type[3] - 0.0).abs() < 1e-5);
+        // Default intensity = 1.0
+        assert!((lights[0].direction_intensity[3] - 1.0).abs() < 1e-5);
+        // Default color = white
+        assert!((lights[0].color_range[0] - 1.0).abs() < 1e-5);
+        assert!((lights[0].color_range[1] - 1.0).abs() < 1e-5);
+        assert!((lights[0].color_range[2] - 1.0).abs() < 1e-5);
+        // Default range = 10.0
+        assert!((lights[0].color_range[3] - 10.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn collect_scene_lights_spot_light_type() {
+        let mut scene = empty_scene();
+        scene.create_light(LightType::Spot);
+        let (count, lights) = collect_scene_lights(&scene, Vec3::ZERO);
+        assert_eq!(count, 1);
+        // Spot light type = 1.0
+        assert!((lights[0].position_type[3] - 1.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn collect_scene_lights_directional_type() {
+        let mut scene = empty_scene();
+        scene.create_light(LightType::Directional);
+        let (count, lights) = collect_scene_lights(&scene, Vec3::ZERO);
+        assert_eq!(count, 1);
+        // Directional light type = 2.0
+        assert!((lights[0].position_type[3] - 2.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn collect_scene_lights_respects_max_limit() {
+        let mut scene = empty_scene();
+        // Create 10 lights (exceeds MAX_SCENE_LIGHTS = 8)
+        for _ in 0..10 {
+            scene.create_light(LightType::Point);
+        }
+        let (count, lights) = collect_scene_lights(&scene, Vec3::ZERO);
+        assert_eq!(count, MAX_SCENE_LIGHTS as u32);
+        assert_eq!(lights.len(), MAX_SCENE_LIGHTS);
+    }
+
+    #[test]
+    fn collect_scene_lights_sorted_by_distance_to_camera() {
+        let mut scene = empty_scene();
+        // Create light at (10, 0, 0) — far from camera
+        let (_, far_transform) = scene.create_light(LightType::Point);
+        if let Some(node) = scene.nodes.get_mut(&far_transform) {
+            if let NodeData::Transform { translation, .. } = &mut node.data {
+                *translation = Vec3::new(10.0, 0.0, 0.0);
+            }
+        }
+        // Create light at (1, 0, 0) — close to camera
+        let (_, near_transform) = scene.create_light(LightType::Point);
+        if let Some(node) = scene.nodes.get_mut(&near_transform) {
+            if let NodeData::Transform { translation, .. } = &mut node.data {
+                *translation = Vec3::new(1.0, 0.0, 0.0);
+            }
+        }
+        let camera_pos = Vec3::ZERO;
+        let (count, lights) = collect_scene_lights(&scene, camera_pos);
+        assert_eq!(count, 2);
+        // First light should be the nearest one (at x=1)
+        assert!((lights[0].position_type[0] - 1.0).abs() < 1e-5,
+            "nearest light should be first, got x={}", lights[0].position_type[0]);
+        // Second light should be farther (at x=10)
+        assert!((lights[1].position_type[0] - 10.0).abs() < 1e-5,
+            "farther light should be second, got x={}", lights[1].position_type[0]);
+    }
+
+    #[test]
+    fn collect_scene_lights_hidden_lights_excluded() {
+        let mut scene = empty_scene();
+        let (light_id, _) = scene.create_light(LightType::Point);
+        scene.hidden_nodes.insert(light_id);
+        let (count, lights) = collect_scene_lights(&scene, Vec3::ZERO);
+        assert_eq!(count, 0);
+        assert!(lights.is_empty());
+    }
+
+    // -----------------------------------------------------------------------
+    // identify_active_lights
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn identify_active_lights_empty_scene() {
+        let scene = empty_scene();
+        let (active, total) = identify_active_lights(&scene, Vec3::ZERO);
+        assert_eq!(total, 0);
+        assert!(active.is_empty());
+    }
+
+    #[test]
+    fn identify_active_lights_within_limit() {
+        let mut scene = empty_scene();
+        let (light_id, _) = scene.create_light(LightType::Point);
+        let (active, total) = identify_active_lights(&scene, Vec3::ZERO);
+        assert_eq!(total, 1);
+        assert_eq!(active.len(), 1);
+        assert!(active.contains(&light_id));
+    }
+
+    #[test]
+    fn identify_active_lights_exceeding_limit() {
+        let mut scene = empty_scene();
+        let mut all_light_ids = Vec::new();
+        for _ in 0..10 {
+            let (light_id, _) = scene.create_light(LightType::Point);
+            all_light_ids.push(light_id);
+        }
+        let (active, total) = identify_active_lights(&scene, Vec3::ZERO);
+        assert_eq!(total, 10);
+        assert_eq!(active.len(), MAX_SCENE_LIGHTS);
+        // All active IDs should be valid light node IDs
+        for id in &active {
+            assert!(all_light_ids.contains(id));
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // SceneLightGpu spot angle encoding
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn scene_light_gpu_spot_angle_encoded_as_cos_half() {
+        let mut scene = empty_scene();
+        let (light_id, _) = scene.create_light(LightType::Spot);
+        // Default spot_angle = 45 degrees
+        if let Some(node) = scene.nodes.get_mut(&light_id) {
+            if let NodeData::Light { spot_angle, .. } = &mut node.data {
+                *spot_angle = 90.0;
+            }
+        }
+        let (_, lights) = collect_scene_lights(&scene, Vec3::ZERO);
+        // cos(90/2 degrees) = cos(45 degrees) = sqrt(2)/2 ≈ 0.7071
+        let expected_cos = (45.0_f32.to_radians()).cos();
+        assert!((lights[0].params[0] - expected_cos).abs() < 1e-3,
+            "spot angle cosine encoding: expected {expected_cos}, got {}", lights[0].params[0]);
+    }
+}

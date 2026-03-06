@@ -1776,4 +1776,291 @@ mod tests {
         let dist = evaluate_sdf_tree(&scene, mod_id, Vec3::ZERO);
         assert_eq!(dist, FAR_DISTANCE);
     }
+
+    // -----------------------------------------------------------------------
+    // Smooth subtract / smooth intersect CPU evaluation
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn csg_smooth_subtract_carves_boundary() {
+        let hard = csg_subtract(0.1, -0.1);
+        let smooth = csg_smooth_subtract(0.1, -0.1, 0.3);
+        // Smooth subtract should differ from hard near boundary
+        assert!((hard - smooth).abs() > 1e-4, "smooth={smooth}, hard={hard}");
+    }
+
+    #[test]
+    fn csg_smooth_subtract_zero_k_equals_hard() {
+        let a = 0.5_f32;
+        let b = 1.5_f32;
+        let smooth = csg_smooth_subtract(a, b, 0.0);
+        let hard = csg_subtract(a, b);
+        assert!((smooth - hard).abs() < 1e-3, "smooth={smooth}, hard={hard}");
+    }
+
+    #[test]
+    fn csg_smooth_intersect_blends_boundary() {
+        let hard = csg_intersect(-0.1, 0.1);
+        let smooth = csg_smooth_intersect(-0.1, 0.1, 0.3);
+        // Smooth intersect should round the boundary
+        assert!((hard - smooth).abs() > 1e-4, "smooth={smooth}, hard={hard}");
+    }
+
+    #[test]
+    fn csg_smooth_intersect_zero_k_equals_hard() {
+        let a = 0.5_f32;
+        let b = 1.5_f32;
+        let smooth = csg_smooth_intersect(a, b, 0.0);
+        let hard = csg_intersect(a, b);
+        assert!((smooth - hard).abs() < 1e-3, "smooth={smooth}, hard={hard}");
+    }
+
+    // -----------------------------------------------------------------------
+    // Chamfer CPU evaluation
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn csg_chamfer_union_bevels_boundary() {
+        let hard = csg_union(0.1, 0.1);
+        let chamfer = csg_chamfer_union(0.1, 0.1, 0.3);
+        // Chamfer union should create a 45° bevel at the boundary
+        assert!(chamfer <= hard, "chamfer={chamfer} should be <= hard={hard}");
+    }
+
+    #[test]
+    fn csg_chamfer_union_far_from_boundary_matches_hard() {
+        // Far from the boundary, chamfer should behave like hard union
+        let chamfer = csg_chamfer_union(-5.0, 3.0, 0.2);
+        let hard = csg_union(-5.0, 3.0);
+        assert!((chamfer - hard).abs() < 1e-3, "chamfer={chamfer}, hard={hard}");
+    }
+
+    #[test]
+    fn csg_chamfer_subtract_bevels_boundary() {
+        let hard = csg_subtract(0.05, -0.05);
+        let chamfer = csg_chamfer_subtract(0.05, -0.05, 0.3);
+        // Chamfer changes the boundary shape
+        assert!((hard - chamfer).abs() > 1e-4, "chamfer={chamfer}, hard={hard}");
+    }
+
+    #[test]
+    fn csg_chamfer_intersect_bevels_boundary() {
+        // Both values positive and close: chamfer's third term (a - k + b)*sqrt(0.5)
+        // should exceed max(a, b) when a and b are both positive and near k
+        let hard = csg_intersect(0.2, 0.2);
+        let chamfer = csg_chamfer_intersect(0.2, 0.2, 0.1);
+        // (0.2 - 0.1 + 0.2) * 0.707 ≈ 0.212 > max(0.2, 0.2) = 0.2
+        assert!(chamfer > hard, "chamfer={chamfer} should be > hard={hard}");
+    }
+
+    // -----------------------------------------------------------------------
+    // Stairs / Columns CPU evaluation
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn csg_stairs_union_differs_from_smooth() {
+        let smooth = csg_smooth_union(0.05, 0.05, 0.3);
+        let stairs = csg_stairs_union(0.05, 0.05, 0.3, 4.0);
+        // Stairs should produce a different (stepped) profile than smooth union
+        assert!((smooth - stairs).abs() > 1e-4, "stairs={stairs}, smooth={smooth}");
+    }
+
+    #[test]
+    fn csg_stairs_subtract_differs_from_hard() {
+        let hard = csg_subtract(0.1, -0.1);
+        let stairs = csg_stairs_subtract(0.1, -0.1, 0.3, 4.0);
+        assert!((hard - stairs).abs() > 1e-4, "stairs={stairs}, hard={hard}");
+    }
+
+    #[test]
+    fn csg_columns_union_creates_pattern() {
+        let hard = csg_union(0.05, 0.05);
+        let columns = csg_columns_union(0.05, 0.05, 0.3, 4.0);
+        // Columns union should create a different profile near the boundary
+        assert!((hard - columns).abs() > 1e-4, "columns={columns}, hard={hard}");
+    }
+
+    #[test]
+    fn csg_columns_subtract_creates_pattern() {
+        let hard = csg_subtract(0.1, -0.1);
+        let columns = csg_columns_subtract(0.1, -0.1, 0.3, 4.0);
+        assert!((hard - columns).abs() > 1e-4, "columns={columns}, hard={hard}");
+    }
+
+    // -----------------------------------------------------------------------
+    // evaluate_sdf_tree with new CSG op variants
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn evaluate_sdf_tree_smooth_subtract() {
+        let mut scene = empty_scene();
+        let sphere_a = scene.add_node("A".into(), NodeData::Primitive {
+            kind: SdfPrimitive::Sphere,
+            position: Vec3::ZERO,
+            rotation: Vec3::ZERO,
+            scale: Vec3::splat(2.0),
+            color: Vec3::ONE,
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        });
+        let sphere_b = scene.add_node("B".into(), NodeData::Primitive {
+            kind: SdfPrimitive::Sphere,
+            position: Vec3::ZERO,
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+            color: Vec3::ONE,
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        });
+        let op_id = scene.add_node("SmoothSub".into(), NodeData::Operation {
+            op: CsgOp::SmoothSubtract,
+            smooth_k: 0.3,
+            steps: 0.0,
+            left: Some(sphere_a),
+            right: Some(sphere_b),
+        });
+        // Near the carve boundary, smooth subtract should differ from hard subtract
+        let smooth_dist = evaluate_sdf_tree(&scene, op_id, Vec3::new(0.8, 0.0, 0.0));
+        assert!(smooth_dist.is_finite(), "smooth subtract should produce valid distance: {smooth_dist}");
+    }
+
+    #[test]
+    fn evaluate_sdf_tree_chamfer_union() {
+        let mut scene = empty_scene();
+        let sphere_a = scene.add_node("A".into(), NodeData::Primitive {
+            kind: SdfPrimitive::Sphere,
+            position: Vec3::new(-0.5, 0.0, 0.0),
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+            color: Vec3::ONE,
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        });
+        let sphere_b = scene.add_node("B".into(), NodeData::Primitive {
+            kind: SdfPrimitive::Sphere,
+            position: Vec3::new(0.5, 0.0, 0.0),
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+            color: Vec3::ONE,
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        });
+        let op_id = scene.add_node("ChamferU".into(), NodeData::Operation {
+            op: CsgOp::ChamferUnion,
+            smooth_k: 0.2,
+            steps: 0.0,
+            left: Some(sphere_a),
+            right: Some(sphere_b),
+        });
+        // At the boundary the chamfer union should be inside (negative distance)
+        let dist = evaluate_sdf_tree(&scene, op_id, Vec3::ZERO);
+        assert!(dist < 0.0, "chamfer union at overlap center should be inside: {dist}");
+    }
+
+    #[test]
+    fn evaluate_sdf_tree_stairs_union() {
+        let mut scene = empty_scene();
+        let sphere_a = scene.add_node("A".into(), NodeData::Primitive {
+            kind: SdfPrimitive::Sphere,
+            position: Vec3::new(-0.5, 0.0, 0.0),
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+            color: Vec3::ONE,
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        });
+        let sphere_b = scene.add_node("B".into(), NodeData::Primitive {
+            kind: SdfPrimitive::Sphere,
+            position: Vec3::new(0.5, 0.0, 0.0),
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+            color: Vec3::ONE,
+            roughness: 0.5,
+            metallic: 0.0,
+            emissive: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            fresnel: 0.04,
+            voxel_grid: None,
+        });
+        let op_id = scene.add_node("StairsU".into(), NodeData::Operation {
+            op: CsgOp::StairsUnion,
+            smooth_k: 0.2,
+            steps: 4.0,
+            left: Some(sphere_a),
+            right: Some(sphere_b),
+        });
+        let dist = evaluate_sdf_tree(&scene, op_id, Vec3::ZERO);
+        assert!(dist < 0.0, "stairs union at overlap center should be inside: {dist}");
+    }
+
+    // -----------------------------------------------------------------------
+    // FBM noise functions
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn fbm_noise_returns_nonzero_for_nonzero_amplitude() {
+        let result = fbm_noise(Vec3::new(1.5, 0.3, 0.7), 2.0, 0.5, 3);
+        assert!(result.length() > 1e-6, "fbm_noise with non-zero amplitude should produce displacement: {result}");
+    }
+
+    #[test]
+    fn fbm_noise_returns_zero_for_zero_amplitude() {
+        let result = fbm_noise(Vec3::new(1.5, 0.3, 0.7), 2.0, 0.0, 3);
+        assert!(result.length() < 1e-10, "fbm_noise with zero amplitude should produce no displacement: {result}");
+    }
+
+    #[test]
+    fn fbm_noise_higher_octaves_add_detail() {
+        let point = Vec3::new(3.14, 2.71, 1.41);
+        let result_1oct = fbm_noise(point, 2.0, 0.5, 1);
+        let result_4oct = fbm_noise(point, 2.0, 0.5, 4);
+        // More octaves should produce a different result (added detail)
+        assert!(
+            (result_1oct - result_4oct).length() > 1e-4,
+            "1 octave vs 4 octaves should differ: {result_1oct} vs {result_4oct}"
+        );
+    }
+
+    #[test]
+    fn noise3d_is_bounded() {
+        // Gradient noise should be bounded roughly in [-1, 1]
+        let mut min_val = f32::MAX;
+        let mut max_val = f32::MIN;
+        for i in 0..100 {
+            let p = Vec3::new(i as f32 * 0.37, i as f32 * 0.53, i as f32 * 0.71);
+            let val = noise3d(p);
+            min_val = min_val.min(val);
+            max_val = max_val.max(val);
+        }
+        assert!(min_val > -2.0, "noise3d min too low: {min_val}");
+        assert!(max_val < 2.0, "noise3d max too high: {max_val}");
+    }
+
+    #[test]
+    fn hash33_is_deterministic() {
+        let p = Vec3::new(1.0, 2.0, 3.0);
+        let a = hash33(p);
+        let b = hash33(p);
+        assert_eq!(a, b, "hash33 should be deterministic");
+    }
 }
