@@ -11,13 +11,15 @@ use crate::ui::gizmo::{GizmoMode, GizmoSpace, GizmoState};
 use crate::ui::node_graph::{self, NodeGraphState};
 use crate::settings::Settings;
 use crate::graph::history::History;
-use crate::ui::{brush_settings, history_panel, properties, render_settings, scene_tree, viewport};
+use crate::ui::{brush_settings, history_panel, light_graph, properties, render_settings, scene_tree, viewport};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Tab {
     Viewport,
     NodeGraph,
+    LightGraph,
     Properties,
+    ReferenceImages,
     SceneTree,
     RenderSettings,
     History,
@@ -31,7 +33,9 @@ impl Tab {
     pub const ALL: &[Tab] = &[
         Tab::Viewport,
         Tab::NodeGraph,
+        Tab::LightGraph,
         Tab::Properties,
+        Tab::ReferenceImages,
         Tab::SceneTree,
         Tab::RenderSettings,
         Tab::History,
@@ -45,7 +49,9 @@ impl Tab {
         match self {
             Tab::Viewport => "Viewport",
             Tab::NodeGraph => "Node Graph",
+            Tab::LightGraph => "Light Graph",
             Tab::Properties => "Properties",
+            Tab::ReferenceImages => "Reference Images",
             Tab::SceneTree => "Scene Tree",
             Tab::RenderSettings => "Render Settings",
             Tab::History => "History",
@@ -65,14 +71,14 @@ pub fn create_dock_state() -> DockState<Tab> {
         NodeIndex::root(),
         Split::Right,
         0.8,
-        Node::leaf_with(vec![Tab::Properties, Tab::RenderSettings]),
+        Node::leaf_with(vec![Tab::Properties, Tab::RenderSettings, Tab::ReferenceImages]),
     );
 
     let [_props, _tree] = surface.split(
         right,
         Split::Below,
         0.5,
-        Node::leaf_with(vec![Tab::SceneTree, Tab::History, Tab::Lights, Tab::SceneStats]),
+        Node::leaf_with(vec![Tab::SceneTree, Tab::History, Tab::Lights, Tab::LightGraph, Tab::SceneStats]),
     );
 
     let [_viewport, _graph] = surface.split(
@@ -93,7 +99,7 @@ pub fn create_dock_sculpting() -> DockState<Tab> {
         NodeIndex::root(),
         Split::Right,
         0.82,
-        Node::leaf_with(vec![Tab::BrushSettings, Tab::Properties]),
+        Node::leaf_with(vec![Tab::BrushSettings, Tab::Properties, Tab::ReferenceImages]),
     );
     let [_brush, _tree] = surface.split(
         right,
@@ -112,7 +118,7 @@ pub fn create_dock_rendering() -> DockState<Tab> {
         NodeIndex::root(),
         Split::Right,
         0.75,
-        Node::leaf_with(vec![Tab::RenderSettings, Tab::Properties]),
+        Node::leaf_with(vec![Tab::RenderSettings, Tab::Properties, Tab::ReferenceImages]),
     );
     state
 }
@@ -176,6 +182,7 @@ pub struct SdfTabViewer<'a> {
     pub camera: &'a mut Camera,
     pub scene: &'a mut Scene,
     pub node_graph_state: &'a mut NodeGraphState,
+    pub light_graph_state: &'a mut NodeGraphState,
     pub active_tool: &'a ActiveTool,
     pub sculpt_state: &'a mut SculptState,
     pub settings: &'a mut Settings,
@@ -207,7 +214,9 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
         match tab {
             Tab::Viewport => "Viewport".into(),
             Tab::NodeGraph => "Node Graph".into(),
+            Tab::LightGraph => "Light Graph".into(),
             Tab::Properties => "Properties".into(),
+            Tab::ReferenceImages => "Reference Images".into(),
             Tab::SceneTree => "Scene Tree".into(),
             Tab::RenderSettings => "Render Settings".into(),
             Tab::History => "History".into(),
@@ -288,7 +297,6 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.settings.max_sculpt_resolution,
                     self.viewport.soloed_light,
                     self.material_library,
-                    self.reference_images,
                 );
                 // Defensive: clear selection if the node was deleted by properties panel
                 if let Some(sel) = self.node_graph_state.selected {
@@ -345,6 +353,16 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.active_light_ids,
                 );
             }
+            Tab::LightGraph => {
+                light_graph::draw(
+                    ui,
+                    self.scene,
+                    self.light_graph_state,
+                    &mut self.node_graph_state.selected,
+                    &mut self.node_graph_state.selected_set,
+                    self.actions,
+                );
+            }
             Tab::LightLinking => {
                 crate::ui::light_linking::draw(
                     ui,
@@ -352,6 +370,9 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.actions,
                     self.active_light_ids,
                 );
+            }
+            Tab::ReferenceImages => {
+                crate::ui::reference_image::draw_controls(ui, self.reference_images, self.actions);
             }
             Tab::SceneStats => {
                 crate::ui::scene_stats::draw(ui, self.scene, self.timings);

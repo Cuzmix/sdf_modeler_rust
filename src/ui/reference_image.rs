@@ -237,42 +237,68 @@ pub fn draw_overlay(
         if !image.visible {
             continue;
         }
-        let corners = quad_world_corners(image);
-        let projected: Option<[egui::Pos2; 4]> = corners
-            .iter()
-            .map(|&corner| crate::ui::gizmo::world_to_screen(corner, &view_proj, rect))
-            .collect::<Option<Vec<_>>>()
-            .and_then(|pts| pts.try_into().ok());
-        let Some(projected) = projected else {
-            continue;
-        };
-
         let tint = egui::Color32::from_white_alpha((image.opacity.clamp(0.0, 1.0) * 255.0) as u8);
         let mut mesh = egui::Mesh::with_texture(image.texture_id());
-        let base = mesh.vertices.len() as u32;
-        mesh.vertices.push(egui::epaint::Vertex {
-            pos: projected[0],
-            uv: egui::pos2(0.0, 0.0),
-            color: tint,
-        });
-        mesh.vertices.push(egui::epaint::Vertex {
-            pos: projected[1],
-            uv: egui::pos2(1.0, 0.0),
-            color: tint,
-        });
-        mesh.vertices.push(egui::epaint::Vertex {
-            pos: projected[2],
-            uv: egui::pos2(1.0, 1.0),
-            color: tint,
-        });
-        mesh.vertices.push(egui::epaint::Vertex {
-            pos: projected[3],
-            uv: egui::pos2(0.0, 1.0),
-            color: tint,
-        });
-        mesh.indices
-            .extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
-        painter.add(egui::Shape::mesh(mesh));
+        let corners = quad_world_corners(image);
+        let tess = 20usize;
+        let inv_tess = 1.0 / tess as f32;
+
+        // Use grid tessellation to avoid affine UV warping artifacts at oblique angles.
+        // egui meshes interpolate UVs in screen space; subdividing approximates perspective-correct mapping.
+        for y in 0..tess {
+            let v0 = y as f32 * inv_tess;
+            let v1 = (y + 1) as f32 * inv_tess;
+            for x in 0..tess {
+                let u0 = x as f32 * inv_tess;
+                let u1 = (x + 1) as f32 * inv_tess;
+
+                let p00 = bilerp_quad(corners, u0, v0);
+                let p10 = bilerp_quad(corners, u1, v0);
+                let p11 = bilerp_quad(corners, u1, v1);
+                let p01 = bilerp_quad(corners, u0, v1);
+
+                let s00 = crate::ui::gizmo::world_to_screen(p00, &view_proj, rect);
+                let s10 = crate::ui::gizmo::world_to_screen(p10, &view_proj, rect);
+                let s11 = crate::ui::gizmo::world_to_screen(p11, &view_proj, rect);
+                let s01 = crate::ui::gizmo::world_to_screen(p01, &view_proj, rect);
+                let (Some(s00), Some(s10), Some(s11), Some(s01)) = (s00, s10, s11, s01) else {
+                    continue;
+                };
+
+                let base = mesh.vertices.len() as u32;
+                mesh.vertices.push(egui::epaint::Vertex {
+                    pos: s00,
+                    uv: egui::pos2(u0, v0),
+                    color: tint,
+                });
+                mesh.vertices.push(egui::epaint::Vertex {
+                    pos: s10,
+                    uv: egui::pos2(u1, v0),
+                    color: tint,
+                });
+                mesh.vertices.push(egui::epaint::Vertex {
+                    pos: s11,
+                    uv: egui::pos2(u1, v1),
+                    color: tint,
+                });
+                mesh.vertices.push(egui::epaint::Vertex {
+                    pos: s01,
+                    uv: egui::pos2(u0, v1),
+                    color: tint,
+                });
+                mesh.indices
+                    .extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
+            }
+        }
+
+        if !mesh.indices.is_empty() {
+            painter.add(egui::Shape::mesh(mesh));
+        }
     }
 }
 
+fn bilerp_quad(corners: [Vec3; 4], u: f32, v: f32) -> Vec3 {
+    let top = corners[0].lerp(corners[1], u);
+    let bottom = corners[3].lerp(corners[2], u);
+    top.lerp(bottom, v)
+}

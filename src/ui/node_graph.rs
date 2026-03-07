@@ -665,6 +665,18 @@ impl NodeTemplateIter for AllSdfTemplates {
         for m in ModifierKind::ALL {
             templates.push(SdfNodeTemplate::Modifier(m.clone()));
         }
+        templates
+    }
+}
+
+/// Enumerates templates for the dedicated Light Graph finder.
+pub struct LightSdfTemplates;
+
+impl NodeTemplateIter for LightSdfTemplates {
+    type Item = SdfNodeTemplate;
+
+    fn all_kinds(&self) -> Vec<Self::Item> {
+        let mut templates = Vec::new();
         for l in LightType::ALL {
             templates.push(SdfNodeTemplate::Light(l.clone()));
         }
@@ -678,6 +690,12 @@ impl NodeTemplateIter for AllSdfTemplates {
 
 pub type SdfGraphState =
     GraphEditorState<SdfNodeData, SdfDataType, SdfValueType, SdfNodeTemplate, SdfGraphUserState>;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum GraphFilterMode {
+    SdfOnly,
+    LightsOnly,
+}
 
 // ---------------------------------------------------------------------------
 // ID Mapping
@@ -711,10 +729,48 @@ impl NodeIdMap {
 // Sync: Scene -> Graph (full rebuild)
 // ---------------------------------------------------------------------------
 
+fn light_related_scene_ids(scene: &Scene) -> HashSet<SceneNodeId> {
+    let parent_map = scene.build_parent_map();
+    let mut included: HashSet<SceneNodeId> = HashSet::new();
+
+    for (&id, node) in &scene.nodes {
+        if matches!(node.data, NodeData::Light { .. }) {
+            included.insert(id);
+            let mut cursor = id;
+            while let Some(parent) = parent_map.get(&cursor).copied() {
+                let Some(parent_node) = scene.nodes.get(&parent) else {
+                    break;
+                };
+                // Light graph shows light chains (Light <- Transform <- Transform ...).
+                // Stop if the chain reaches a non-transform parent.
+                if !matches!(parent_node.data, NodeData::Transform { .. }) {
+                    break;
+                }
+                if included.insert(parent) {
+                    cursor = parent;
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+
+    included
+}
+
 pub fn rebuild_graph_from_scene(
     scene: &Scene,
     graph_state: &mut SdfGraphState,
     id_map: &mut NodeIdMap,
+) {
+    rebuild_graph_from_scene_with_filter(scene, graph_state, id_map, GraphFilterMode::SdfOnly);
+}
+
+fn rebuild_graph_from_scene_impl(
+    scene: &Scene,
+    graph_state: &mut SdfGraphState,
+    id_map: &mut NodeIdMap,
+    include_node: impl Fn(SceneNodeId) -> bool,
 ) {
     // Save old positions (keyed by scene_node_id) before clearing
     let mut saved_positions: HashMap<SceneNodeId, egui::Pos2> = HashMap::new();
@@ -737,6 +793,9 @@ pub fn rebuild_graph_from_scene(
     scene_ids.sort();
 
     for &sid in &scene_ids {
+        if !include_node(sid) {
+            continue;
+        }
         let Some(node) = scene.nodes.get(&sid) else {
             continue;
         };
@@ -797,6 +856,9 @@ pub fn rebuild_graph_from_scene(
 
     // Create connections
     for &sid in &scene_ids {
+        if !include_node(sid) {
+            continue;
+        }
         let Some(node) = scene.nodes.get(&sid) else {
             continue;
         };
@@ -850,6 +912,28 @@ pub fn rebuild_graph_from_scene(
 
     // Auto-layout nodes that don't have saved positions
     auto_layout_graph(scene, graph_state, id_map);
+}
+
+fn rebuild_graph_from_scene_with_filter(
+    scene: &Scene,
+    graph_state: &mut SdfGraphState,
+    id_map: &mut NodeIdMap,
+    filter_mode: GraphFilterMode,
+) {
+    match filter_mode {
+        GraphFilterMode::SdfOnly => {
+            let light_related = light_related_scene_ids(scene);
+            rebuild_graph_from_scene_impl(scene, graph_state, id_map, move |sid| {
+                !light_related.contains(&sid)
+            });
+        }
+        GraphFilterMode::LightsOnly => {
+            let light_related = light_related_scene_ids(scene);
+            rebuild_graph_from_scene_impl(scene, graph_state, id_map, move |sid| {
+                light_related.contains(&sid)
+            });
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1182,17 +1266,75 @@ mod multi_select_tests {
 }
 
 pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState, actions: &mut ActionSink) {
+    ui.push_id("sdf_node_graph_panel", |ui| {
+        draw_with_filter(ui, scene, state, actions, GraphFilterMode::SdfOnly);
+    });
+}
+
+pub fn draw_lights(
+    ui: &mut egui::Ui,
+    scene: &mut Scene,
+    state: &mut NodeGraphState,
+    selected: &mut Option<SceneNodeId>,
+    selected_set: &mut HashSet<SceneNodeId>,
+    actions: &mut ActionSink,
+) {
+    let light_related = light_related_scene_ids(scene);
+    if let Some(sel) = *selected {
+        if light_related.contains(&sel) {
+            state.selected = Some(sel);
+            state.selected_set = selected_set
+                .iter()
+                .copied()
+                .filter(|id| light_related.contains(id))
+                .collect();
+            if state.selected_set.is_empty() {
+                state.selected_set.insert(sel);
+            }
+        }
+    }
+
+    let prev_local_selected = state.selected;
+    let prev_local_set = state.selected_set.clone();
+    ui.push_id("light_node_graph_panel", |ui| {
+        draw_with_filter(ui, scene, state, actions, GraphFilterMode::LightsOnly);
+    });
+    if state.selected != prev_local_selected || state.selected_set != prev_local_set {
+        *selected = state.selected;
+        *selected_set = state.selected_set.clone();
+    }
+}
+
+fn draw_with_filter(
+    ui: &mut egui::Ui,
+    scene: &mut Scene,
+    state: &mut NodeGraphState,
+    actions: &mut ActionSink,
+    filter_mode: GraphFilterMode,
+) {
     // Peek at graph_rect for toolbar's Organize button (toolbar is drawn first,
     // but the rect doesn't change between toolbar and graph area).
     let full_rect = ui.available_rect_before_wrap();
 
     // Draw toolbar above the graph
-    draw_toolbar(ui, scene, state, full_rect, actions);
+    draw_toolbar(ui, scene, state, full_rect, actions, filter_mode);
 
     // Detect if scene changed externally (undo/redo, load, scene tree edit)
     let structure_key = scene.structure_key();
     if state.needs_initial_rebuild || structure_key != state.last_structure_key {
-        rebuild_graph_from_scene(scene, &mut state.graph_state, &mut state.id_map);
+        match filter_mode {
+            GraphFilterMode::SdfOnly => {
+                rebuild_graph_from_scene(scene, &mut state.graph_state, &mut state.id_map);
+            }
+            GraphFilterMode::LightsOnly => {
+                rebuild_graph_from_scene_with_filter(
+                    scene,
+                    &mut state.graph_state,
+                    &mut state.id_map,
+                    filter_mode,
+                );
+            }
+        }
         state.last_structure_key = structure_key;
         state.needs_initial_rebuild = false;
         state.layout_dirty = false;
@@ -1235,12 +1377,20 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState, ac
     state.user_state.zoom = state.graph_state.pan_zoom.zoom;
     let responses = ui
         .allocate_ui(graph_rect.size(), |ui| {
-            state.graph_state.draw_graph_editor(
-                ui,
-                AllSdfTemplates,
-                &mut state.user_state,
-                vec![],
-            )
+            match filter_mode {
+                GraphFilterMode::SdfOnly => state.graph_state.draw_graph_editor(
+                    ui,
+                    AllSdfTemplates,
+                    &mut state.user_state,
+                    vec![],
+                ),
+                GraphFilterMode::LightsOnly => state.graph_state.draw_graph_editor(
+                    ui,
+                    LightSdfTemplates,
+                    &mut state.user_state,
+                    vec![],
+                ),
+            }
         })
         .inner;
 
@@ -1312,110 +1462,136 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState, ac
             state.select_single(scene_id);
         }
     } else if responses.cursor_in_editor && !responses.cursor_in_finder {
-        // User clicked empty space in the graph
-        // Only deselect if no nodes are selected and cursor is in editor
-        if state.graph_state.selected_nodes.is_empty() {
+        // User clicked empty space in the graph.
+        // Don't clear selection for nodes that are intentionally filtered out in this view.
+        let selected_is_visible = state
+            .selected
+            .and_then(|sid| state.id_map.scene_to_graph.get(&sid).copied())
+            .is_some();
+        if state.graph_state.selected_nodes.is_empty() && (selected_is_visible || state.selected.is_none()) {
             state.clear_selection();
         }
     }
-
     // Draw minimap overlay in the bottom-right corner
-    draw_minimap(ui, graph_rect, scene, state);
+    draw_minimap(ui, graph_rect, scene, state, filter_mode);
 }
 
 // ---------------------------------------------------------------------------
 // Toolbar
 // ---------------------------------------------------------------------------
 
-fn draw_toolbar(ui: &mut egui::Ui, scene: &Scene, state: &mut NodeGraphState, graph_rect: egui::Rect, actions: &mut ActionSink) {
+fn draw_toolbar(
+    ui: &mut egui::Ui,
+    scene: &Scene,
+    state: &mut NodeGraphState,
+    graph_rect: egui::Rect,
+    actions: &mut ActionSink,
+    filter_mode: GraphFilterMode,
+) {
     egui::Frame::none()
         .fill(Color32::from_rgb(30, 30, 35))
         .inner_margin(egui::Margin::symmetric(6.0, 4.0))
         .show(ui, |ui| { ui.horizontal(|ui| {
-        ui.menu_button("+ Primitive", |ui| {
-            for kind in SdfPrimitive::ALL {
-                if ui.button(kind.base_name()).clicked() {
-                    actions.push(Action::CreatePrimitive(kind.clone()));
-                    ui.close_menu();
-                }
-            }
-        });
+        let selected_visible = state
+            .selected
+            .filter(|sid| state.id_map.scene_to_graph.contains_key(sid));
 
-        ui.menu_button("+ Operation", |ui| {
-            for op in CsgOp::ALL {
-                if ui.button(op.base_name()).clicked() {
-                    create_op_from_selection(scene, op.clone(), actions);
-                    ui.close_menu();
-                }
-            }
-        });
+        match filter_mode {
+            GraphFilterMode::SdfOnly => {
+                ui.menu_button("+ Primitive", |ui| {
+                    for kind in SdfPrimitive::ALL {
+                        if ui.button(kind.base_name()).clicked() {
+                            actions.push(Action::CreatePrimitive(kind.clone()));
+                            ui.close_menu();
+                        }
+                    }
+                });
 
-        ui.menu_button("+ Transform", |ui| {
-            if ui.button("Transform").clicked() {
-                if let Some(sel) = state.selected {
-                    actions.push(Action::InsertTransformAbove { target: sel });
-                } else {
-                    actions.push(Action::CreateTransform { input: None });
-                }
-                ui.close_menu();
-            }
-        });
+                ui.menu_button("+ Operation", |ui| {
+                    for op in CsgOp::ALL {
+                        if ui.button(op.base_name()).clicked() {
+                            create_op_from_selection_filtered(
+                                scene,
+                                op.clone(),
+                                actions,
+                                |id| state.id_map.scene_to_graph.contains_key(&id),
+                            );
+                            ui.close_menu();
+                        }
+                    }
+                });
 
-        ui.menu_button("+ Modifier", |ui| {
-            ui.label("Deform");
-            for kind in [ModifierKind::Twist, ModifierKind::Bend, ModifierKind::Taper, ModifierKind::Noise] {
-                if ui.button(kind.base_name()).clicked() {
-                    toolbar_add_modifier(state.selected, kind, actions);
-                    ui.close_menu();
-                }
-            }
-            ui.separator();
-            ui.label("Shape");
-            for kind in [ModifierKind::Round, ModifierKind::Onion, ModifierKind::Elongate] {
-                if ui.button(kind.base_name()).clicked() {
-                    toolbar_add_modifier(state.selected, kind, actions);
-                    ui.close_menu();
-                }
-            }
-            ui.separator();
-            ui.label("Repeat");
-            for kind in [ModifierKind::Mirror, ModifierKind::Repeat, ModifierKind::FiniteRepeat] {
-                if ui.button(kind.base_name()).clicked() {
-                    toolbar_add_modifier(state.selected, kind, actions);
-                    ui.close_menu();
-                }
-            }
-        });
+                ui.menu_button("+ Transform", |ui| {
+                    if ui.button("Transform").clicked() {
+                        if let Some(sel) = selected_visible {
+                            actions.push(Action::InsertTransformAbove { target: sel });
+                        } else {
+                            actions.push(Action::CreateTransform { input: None });
+                        }
+                        ui.close_menu();
+                    }
+                });
 
-        ui.menu_button("+ Light", |ui| {
-            for light_type in LightType::ALL {
-                if ui.button(light_type.label()).clicked() {
-                    actions.push(Action::CreateLight(light_type.clone()));
-                    ui.close_menu();
+                ui.menu_button("+ Modifier", |ui| {
+                    ui.label("Deform");
+                    for kind in [ModifierKind::Twist, ModifierKind::Bend, ModifierKind::Taper, ModifierKind::Noise] {
+                        if ui.button(kind.base_name()).clicked() {
+                            toolbar_add_modifier(selected_visible, kind, actions);
+                            ui.close_menu();
+                        }
+                    }
+                    ui.separator();
+                    ui.label("Shape");
+                    for kind in [ModifierKind::Round, ModifierKind::Onion, ModifierKind::Elongate] {
+                        if ui.button(kind.base_name()).clicked() {
+                            toolbar_add_modifier(selected_visible, kind, actions);
+                            ui.close_menu();
+                        }
+                    }
+                    ui.separator();
+                    ui.label("Repeat");
+                    for kind in [ModifierKind::Mirror, ModifierKind::Repeat, ModifierKind::FiniteRepeat] {
+                        if ui.button(kind.base_name()).clicked() {
+                            toolbar_add_modifier(selected_visible, kind, actions);
+                            ui.close_menu();
+                        }
+                    }
+                });
+
+                if ui.button("Load Preset").clicked() {
+                    actions.push(Action::LoadNodePreset);
                 }
             }
-        });
-
-        if ui.button("Load Preset").clicked() {
-            actions.push(Action::LoadNodePreset);
+            GraphFilterMode::LightsOnly => {
+                ui.menu_button("+ Light", |ui| {
+                    for light_type in LightType::ALL {
+                        if ui.button(light_type.label()).clicked() {
+                            actions.push(Action::CreateLight(light_type.clone()));
+                            ui.close_menu();
+                        }
+                    }
+                });
+            }
         }
 
-        if ui
-            .add_enabled(state.selected.is_some(), egui::Button::new("+ Sculpt"))
-            .on_hover_text("Add sculpt modifier to selected node (Ctrl+R)")
-            .clicked()
-        {
-            actions.push(Action::EnterSculptMode);
+        if matches!(filter_mode, GraphFilterMode::SdfOnly) {
+            if ui
+                .add_enabled(selected_visible.is_some(), egui::Button::new("+ Sculpt"))
+                .on_hover_text("Add sculpt modifier to selected node (Ctrl+R)")
+                .clicked()
+            {
+                actions.push(Action::EnterSculptMode);
+            }
+
+            ui.separator();
         }
 
-        ui.separator();
-
-        let has_selection = state.selected.is_some();
+        let has_selection = selected_visible.is_some();
         if ui
             .add_enabled(has_selection, egui::Button::new("Delete"))
             .clicked()
         {
-            if let Some(sel) = state.selected {
+            if let Some(sel) = selected_visible {
                 actions.push(Action::DeleteNode(sel));
             }
         }
@@ -1426,7 +1602,7 @@ fn draw_toolbar(ui: &mut egui::Ui, scene: &Scene, state: &mut NodeGraphState, gr
             .add_enabled(has_selection, egui::Button::new("Focus Selected"))
             .clicked()
         {
-            if let Some(sel) = state.selected {
+            if let Some(sel) = selected_visible {
                 if let Some(&graph_id) = state.id_map.scene_to_graph.get(&sel) {
                     if let Some(&pos) = state.graph_state.node_positions.get(graph_id) {
                         let zoom = state.graph_state.pan_zoom.zoom;
@@ -1446,7 +1622,6 @@ fn draw_toolbar(ui: &mut egui::Ui, scene: &Scene, state: &mut NodeGraphState, gr
         }
     }); });
 }
-
 // ---------------------------------------------------------------------------
 // Minimap
 // ---------------------------------------------------------------------------
@@ -1467,6 +1642,7 @@ fn draw_minimap(
     graph_rect: egui::Rect,
     scene: &Scene,
     state: &mut NodeGraphState,
+    filter_mode: GraphFilterMode,
 ) {
     let node_positions = &state.graph_state.node_positions;
     if node_positions.is_empty() {
@@ -1554,7 +1730,11 @@ fn draw_minimap(
     );
 
     // Use a foreground Area so the minimap floats above the graph and captures input
-    let area_resp = egui::Area::new(egui::Id::new("node_graph_minimap"))
+    let minimap_id = match filter_mode {
+        GraphFilterMode::SdfOnly => "node_graph_minimap_sdf",
+        GraphFilterMode::LightsOnly => "node_graph_minimap_lights",
+    };
+    let area_resp = egui::Area::new(egui::Id::new(minimap_id))
         .order(egui::Order::Foreground)
         .fixed_pos(minimap_pos)
         .interactable(true)
@@ -1695,8 +1875,18 @@ fn toolbar_add_modifier(selected: Option<SceneNodeId>, kind: ModifierKind, actio
     }
 }
 
-fn create_op_from_selection(scene: &Scene, op: CsgOp, actions: &mut ActionSink) {
-    let tops = scene.top_level_nodes();
+fn create_op_from_selection_filtered(
+    scene: &Scene,
+    op: CsgOp,
+    actions: &mut ActionSink,
+    include_node: impl Fn(SceneNodeId) -> bool,
+) {
+    let tops: Vec<_> = scene
+        .top_level_nodes()
+        .into_iter()
+        .filter(|id| include_node(*id))
+        .collect();
+
     let left = if tops.len() >= 2 {
         Some(tops[tops.len() - 2])
     } else {
@@ -1785,3 +1975,13 @@ fn scalar_drag(
     });
     changed
 }
+
+
+
+
+
+
+
+
+
+

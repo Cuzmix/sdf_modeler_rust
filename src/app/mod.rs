@@ -330,6 +330,7 @@ impl SdfApp {
             ui: UiState {
                 dock_state: dock::create_dock_state(),
                 node_graph_state: NodeGraphState::new(),
+                light_graph_state: NodeGraphState::new(),
                 show_debug: false,
                 show_help: false,
                 show_export_dialog: false,
@@ -597,6 +598,7 @@ impl eframe::App for SdfApp {
             camera: &mut self.doc.camera,
             scene: &mut self.doc.scene,
             node_graph_state: &mut self.ui.node_graph_state,
+            light_graph_state: &mut self.ui.light_graph_state,
             active_tool: &self.doc.active_tool,
             sculpt_state: &mut self.doc.sculpt_state,
             settings: &mut self.settings,

@@ -188,6 +188,7 @@ impl ImportDialog {
 pub struct UiState {
     pub dock_state: DockState<Tab>,
     pub node_graph_state: NodeGraphState,
+    pub light_graph_state: NodeGraphState,
     pub show_debug: bool,
     pub show_help: bool,
     pub show_export_dialog: bool,

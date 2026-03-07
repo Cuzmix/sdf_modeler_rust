@@ -8,7 +8,6 @@ use crate::graph::scene::{CsgOp, ModifierKind, NodeData, NodeId, Scene, SdfPrimi
 use crate::graph::voxel;
 use crate::material_preset::{self, MaterialLibrary};
 use crate::sculpt::SculptState;
-use crate::ui::reference_image::ReferenceImageManager;
 
 const SCALE_MIN: f32 = 0.01;
 const SCALE_MAX: f32 = 100.0;
@@ -381,7 +380,6 @@ pub fn draw(
     max_sculpt_resolution: u32,
     soloed_light: Option<NodeId>,
     material_library: &mut MaterialLibrary,
-    reference_images: &mut ReferenceImageManager,
 ) {
     // Multi-select: show batch properties when more than 1 node is selected
     if selected_set.len() > 1 {
@@ -396,7 +394,6 @@ pub fn draw(
             ui.add_space(8.0);
             ui.weak("Click a node in the viewport or scene tree");
         });
-        crate::ui::reference_image::draw_controls(ui, reference_images, actions);
         return;
     };
 
