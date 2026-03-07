@@ -5,7 +5,7 @@ use egui_node_graph2::*;
 
 use crate::app::actions::{Action, ActionSink};
 use crate::graph::scene::{
-    CsgOp, ModifierKind, NodeData, NodeId as SceneNodeId, Scene, SdfPrimitive,
+    CsgOp, LightType, ModifierKind, NodeData, NodeId as SceneNodeId, Scene, SdfPrimitive,
 };
 
 // ---------------------------------------------------------------------------
@@ -17,6 +17,7 @@ const COLOR_OP_BADGE: Color32 = Color32::from_rgb(200, 120, 50);
 const COLOR_SCULPT_BADGE: Color32 = Color32::from_rgb(150, 100, 200);
 const COLOR_TRANSFORM_BADGE: Color32 = Color32::from_rgb(100, 180, 170);
 const COLOR_MODIFIER_BADGE: Color32 = Color32::from_rgb(180, 160, 80);
+const COLOR_LIGHT_BADGE: Color32 = Color32::from_rgb(220, 200, 80);
 const COLOR_PORT: Color32 = Color32::from_rgb(100, 200, 100);
 
 const COL_SPACING: f32 = 260.0;
@@ -61,6 +62,7 @@ pub enum SdfCategory {
     Operation,
     Transform,
     Modifier,
+    Light,
 }
 impl CategoryTrait for SdfCategory {
     fn name(&self) -> String {
@@ -69,6 +71,7 @@ impl CategoryTrait for SdfCategory {
             Self::Operation => "Operation".into(),
             Self::Transform => "Transform".into(),
             Self::Modifier => "Modifier".into(),
+            Self::Light => "Light".into(),
         }
     }
 }
@@ -80,6 +83,7 @@ pub enum SdfNodeTemplate {
     Operation(CsgOp),
     Transform,
     Modifier(ModifierKind),
+    Light(LightType),
 }
 
 /// User state passed through to all trait methods.
@@ -173,7 +177,7 @@ impl NodeDataTrait for SdfNodeData {
                 NodeData::Sculpt { .. } => COLOR_SCULPT_BADGE,
                 NodeData::Transform { .. } => COLOR_TRANSFORM_BADGE,
                 NodeData::Modifier { .. } => COLOR_MODIFIER_BADGE,
-                NodeData::Light { .. } => COLOR_MODIFIER_BADGE, // warm yellow, same family
+                NodeData::Light { .. } => COLOR_LIGHT_BADGE,
             })
     }
 
@@ -559,6 +563,7 @@ impl NodeTemplateTrait for SdfNodeTemplate {
             Self::Operation(o) => std::borrow::Cow::Borrowed(o.base_name()),
             Self::Transform => std::borrow::Cow::Borrowed("Transform"),
             Self::Modifier(m) => std::borrow::Cow::Borrowed(m.base_name()),
+            Self::Light(l) => std::borrow::Cow::Owned(format!("{} Light", l.label())),
         }
     }
 
@@ -571,6 +576,7 @@ impl NodeTemplateTrait for SdfNodeTemplate {
             Self::Operation(_) => vec![SdfCategory::Operation],
             Self::Transform => vec![SdfCategory::Transform],
             Self::Modifier(_) => vec![SdfCategory::Modifier],
+            Self::Light(_) => vec![SdfCategory::Light],
         }
     }
 
@@ -580,6 +586,7 @@ impl NodeTemplateTrait for SdfNodeTemplate {
             Self::Operation(o) => o.base_name().to_string(),
             Self::Transform => "Transform".to_string(),
             Self::Modifier(m) => m.base_name().to_string(),
+            Self::Light(l) => format!("{} Light", l.label()),
         }
     }
 
@@ -596,7 +603,7 @@ impl NodeTemplateTrait for SdfNodeTemplate {
     ) {
         // Add ports based on node type
         match self {
-            Self::Primitive(_) => {
+            Self::Primitive(_) | Self::Light(_) => {
                 // Output only
                 graph.add_output_param(node_id, "out".to_string(), SdfDataType::Sdf);
             }
@@ -656,6 +663,9 @@ impl NodeTemplateIter for AllSdfTemplates {
         templates.push(SdfNodeTemplate::Transform);
         for m in ModifierKind::ALL {
             templates.push(SdfNodeTemplate::Modifier(m.clone()));
+        }
+        for l in LightType::ALL {
+            templates.push(SdfNodeTemplate::Light(l.clone()));
         }
         templates
     }
@@ -1236,19 +1246,32 @@ pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState, ac
     // Handle nodes created via the node finder
     let created: Vec<_> = state.user_state.created_via_finder.drain(..).collect();
     for (graph_id, template) in created {
+        let is_light = matches!(template, SdfNodeTemplate::Light(_));
         let scene_id = match template {
             SdfNodeTemplate::Primitive(kind) => scene.create_primitive(kind),
             SdfNodeTemplate::Operation(op) => scene.create_operation(op, None, None),
             SdfNodeTemplate::Transform => scene.create_transform(None),
             SdfNodeTemplate::Modifier(kind) => scene.create_modifier(kind, None),
+            SdfNodeTemplate::Light(light_type) => {
+                // create_light returns (light_id, transform_id) — select transform
+                let (_light_id, transform_id) = scene.create_light(light_type);
+                transform_id
+            }
         };
-        // Update the graph node's user_data with the real scene id
-        state.graph_state.graph[graph_id].user_data.scene_node_id = scene_id;
-        // Update the label to match the scene node name
-        if let Some(node) = scene.nodes.get(&scene_id) {
-            state.graph_state.graph[graph_id].label = node.name.clone();
+        if is_light {
+            // Light creation adds both Light + Transform nodes to the scene,
+            // so a full graph rebuild is needed to show both nodes correctly.
+            state.needs_initial_rebuild = true;
+            state.pending_center_node = Some(scene_id);
+        } else {
+            // Update the graph node's user_data with the real scene id
+            state.graph_state.graph[graph_id].user_data.scene_node_id = scene_id;
+            // Update the label to match the scene node name
+            if let Some(node) = scene.nodes.get(&scene_id) {
+                state.graph_state.graph[graph_id].label = node.name.clone();
+            }
+            state.id_map.insert(scene_id, graph_id);
         }
-        state.id_map.insert(scene_id, graph_id);
         state.select_single(scene_id);
         state.last_structure_key = scene.structure_key();
     }
@@ -1460,7 +1483,7 @@ fn draw_minimap(
                             NodeData::Sculpt { .. } => COLOR_SCULPT_BADGE,
                             NodeData::Transform { .. } => COLOR_TRANSFORM_BADGE,
                             NodeData::Modifier { .. } => COLOR_MODIFIER_BADGE,
-                            NodeData::Light { .. } => COLOR_MODIFIER_BADGE,
+                            NodeData::Light { .. } => COLOR_LIGHT_BADGE,
                         })
                 })
                 .unwrap_or(Color32::GRAY);
