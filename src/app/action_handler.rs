@@ -873,10 +873,10 @@ fn apply_lighting_preset_to_scene(
             LightingPreset::Studio => (
                 Vec3::new(1.0, 0.98, 0.95),   // warm white key
                 1.5,
-                Vec3::new(-0.5, -1.0, -0.3),
+                Vec3::new(0.9593, 0.5990, 0.8957),
                 Vec3::new(0.85, 0.9, 1.0),    // cool blue-white fill
                 0.4,
-                Vec3::new(0.3, -0.5, 0.6),
+                Vec3::new(-0.5400, 0.2128, -0.7362),
                 0.05,
                 [0.7, 0.8, 0.95],
                 [0.2, 0.3, 0.6],
@@ -884,10 +884,10 @@ fn apply_lighting_preset_to_scene(
             LightingPreset::Outdoor => (
                 Vec3::new(1.0, 0.95, 0.85),   // warm sunlight
                 2.0,
-                Vec3::new(-0.4, -1.0, -0.2),
+                Vec3::new(0.8221, 0.7508, 0.7608),
                 Vec3::new(0.6, 0.75, 1.0),    // sky blue fill
                 0.6,
-                Vec3::new(0.2, -0.3, 0.5),
+                Vec3::new(-0.3228, 0.1596, -0.5564),
                 0.08,
                 [0.85, 0.9, 1.0],
                 [0.35, 0.55, 0.9],
@@ -895,10 +895,10 @@ fn apply_lighting_preset_to_scene(
             LightingPreset::Dramatic => (
                 Vec3::new(1.0, 0.85, 0.7),    // warm amber key
                 2.5,
-                Vec3::new(-0.6, -0.8, -0.2),
+                Vec3::new(0.8623, 0.4871, 0.6877),
                 Vec3::new(0.4, 0.5, 0.7),     // dim cool fill
                 0.15,
-                Vec3::new(0.5, -0.3, 0.7),
+                Vec3::new(-0.5669, -0.1107, -0.7449),
                 0.02,
                 [0.15, 0.1, 0.1],
                 [0.05, 0.05, 0.15],
@@ -906,10 +906,10 @@ fn apply_lighting_preset_to_scene(
             LightingPreset::Flat => (
                 Vec3::new(1.0, 1.0, 1.0),     // neutral white key
                 1.0,
-                Vec3::new(-0.3, -1.0, -0.2),
+                Vec3::new(0.7163, 0.8171, 0.6860),
                 Vec3::new(1.0, 1.0, 1.0),     // neutral white fill
                 0.8,
-                Vec3::new(0.3, -0.5, 0.5),
+                Vec3::new(-0.5190, 0.2633, -0.6474),
                 0.15,
                 [0.9, 0.9, 0.9],
                 [0.7, 0.7, 0.8],

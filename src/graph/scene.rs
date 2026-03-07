@@ -825,7 +825,7 @@ impl Scene {
             NodeData::Transform {
                 input: Some(key_light_id),
                 translation: Vec3::new(2.0, 4.0, 3.0),
-                rotation: Vec3::new(-0.5, -1.0, -0.3),
+                rotation: Vec3::new(0.9593, 0.5990, 0.8957),
                 scale: Vec3::ONE,
             },
         );
@@ -846,7 +846,7 @@ impl Scene {
             NodeData::Transform {
                 input: Some(fill_light_id),
                 translation: Vec3::new(-2.0, 2.0, -3.0),
-                rotation: Vec3::new(0.3, -0.5, 0.6),
+                rotation: Vec3::new(-0.5400, 0.2128, -0.7362),
                 scale: Vec3::ONE,
             },
         );

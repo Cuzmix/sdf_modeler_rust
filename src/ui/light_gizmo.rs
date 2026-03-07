@@ -76,8 +76,9 @@ fn collect_lights(scene: &Scene, parent_map: &HashMap<NodeId, NodeId>) -> Vec<Li
                 continue;
             };
 
-            // Compute direction from rotation (default light direction is -Y)
-            let direction = rotate_euler(Vec3::NEG_Y, *rotation).normalize_or_zero();
+            // Compute direction from rotation (default light direction is -Y).
+            // Use inverse rotation so direction arrows match gizmo drag convention.
+            let direction = inverse_rotate_euler(Vec3::NEG_Y, *rotation).normalize_or_zero();
 
             lights.push(LightInfo {
                 light_id: id,
@@ -99,15 +100,15 @@ fn collect_lights(scene: &Scene, parent_map: &HashMap<NodeId, NodeId>) -> Vec<Li
     lights
 }
 
-/// Euler XYZ rotation (same convention as gizmo.rs).
-fn rotate_euler(p: Vec3, r: Vec3) -> Vec3 {
+/// Inverse Euler XYZ rotation (applies -Z, -Y, -X — matches gizmo drag convention).
+fn inverse_rotate_euler(p: Vec3, r: Vec3) -> Vec3 {
     let mut q = p;
-    let (sx, cx) = r.x.sin_cos();
-    q = Vec3::new(q.x, cx * q.y - sx * q.z, sx * q.y + cx * q.z);
-    let (sy, cy) = r.y.sin_cos();
+    let (sz, cz) = (-r.z).sin_cos();
+    q = Vec3::new(cz * q.x - sz * q.y, sz * q.x + cz * q.y, q.z);
+    let (sy, cy) = (-r.y).sin_cos();
     q = Vec3::new(cy * q.x + sy * q.z, q.y, -sy * q.x + cy * q.z);
-    let (sz, cz) = r.z.sin_cos();
-    Vec3::new(cz * q.x - sz * q.y, sz * q.x + cz * q.y, q.z)
+    let (sx, cx) = (-r.x).sin_cos();
+    Vec3::new(q.x, cx * q.y - sx * q.z, sx * q.y + cx * q.z)
 }
 
 // ---------------------------------------------------------------------------

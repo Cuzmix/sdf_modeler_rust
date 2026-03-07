@@ -263,8 +263,9 @@ pub fn collect_scene_lights(
                 continue;
             };
 
-            // Compute direction from rotation (default light direction is -Y)
-            let direction = rotate_euler_light(glam::Vec3::NEG_Y, *rotation);
+            // Compute direction from rotation (default light direction is -Y).
+            // Use inverse rotation so GPU direction matches gizmo drag convention.
+            let direction = inverse_rotate_euler_light(glam::Vec3::NEG_Y, *rotation);
             let direction = if direction.length_squared() > 0.001 {
                 direction.normalize()
             } else {
@@ -349,15 +350,15 @@ pub fn identify_active_lights(
     (active_ids, total_count)
 }
 
-/// Euler XYZ rotation (matches light_gizmo.rs / gizmo.rs convention).
-fn rotate_euler_light(p: glam::Vec3, r: glam::Vec3) -> glam::Vec3 {
+/// Inverse Euler XYZ rotation (applies -Z, -Y, -X — matches gizmo drag convention).
+fn inverse_rotate_euler_light(p: glam::Vec3, r: glam::Vec3) -> glam::Vec3 {
     let mut q = p;
-    let (sx, cx) = r.x.sin_cos();
-    q = glam::Vec3::new(q.x, cx * q.y - sx * q.z, sx * q.y + cx * q.z);
-    let (sy, cy) = r.y.sin_cos();
+    let (sz, cz) = (-r.z).sin_cos();
+    q = glam::Vec3::new(cz * q.x - sz * q.y, sz * q.x + cz * q.y, q.z);
+    let (sy, cy) = (-r.y).sin_cos();
     q = glam::Vec3::new(cy * q.x + sy * q.z, q.y, -sy * q.x + cy * q.z);
-    let (sz, cz) = r.z.sin_cos();
-    glam::Vec3::new(cz * q.x - sz * q.y, sz * q.x + cz * q.y, q.z)
+    let (sx, cx) = (-r.x).sin_cos();
+    glam::Vec3::new(q.x, cx * q.y - sx * q.z, sx * q.y + cx * q.z)
 }
 
 #[cfg(test)]
