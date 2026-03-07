@@ -395,8 +395,8 @@ where
                 connection_color,
             );
         }
-
-                // draw existing connections
+        // draw existing connections
+        let mut connection_segments: Vec<((InputId, OutputId), Pos2, Pos2)> = Vec::new();
         let mut connection_under_cursor: Option<((InputId, OutputId), f32)> = None;
         for (input, outputs) in self.graph.iter_connection_groups() {
             for (hook_n, &output) in outputs.iter().enumerate() {
@@ -415,6 +415,7 @@ where
                     dst_pos,
                     connection_color,
                 );
+                connection_segments.push(((input, output), src_pos, dst_pos));
 
                 let distance = connection_distance_to_pos(&self.pan_zoom, src_pos, dst_pos, cursor_pos);
                 let hover_threshold = 12.0 * self.pan_zoom.zoom;
@@ -521,10 +522,10 @@ where
             );
 
             self.selected_nodes = node_rects
-                .into_iter()
+                .iter()
                 .filter_map(|(node_id, rect)| {
-                    if selection_rect.intersects(rect) {
-                        Some(node_id)
+                    if selection_rect.intersects(*rect) {
+                        Some(*node_id)
                     } else {
                         None
                     }
@@ -578,6 +579,37 @@ where
             self.ongoing_box_selection = None;
         }
 
+        // Fallback for auto-insert workflows:
+        // if the cursor itself isn't close enough to a wire on drop,
+        // use the dropped node's rect against nearby wires.
+        if connection_under_cursor.is_none() {
+            if let Some(ended_node_id) = delayed_responses.iter().rev().find_map(|r| {
+                if let NodeResponse::MoveNodeEnded(id) = r {
+                    Some(*id)
+                } else {
+                    None
+                }
+            }) {
+                if let Some(node_rect) = node_rects.get(&ended_node_id) {
+                    let mut best: Option<((InputId, OutputId), f32)> = None;
+                    for (conn, src_pos, dst_pos) in connection_segments.iter().copied() {
+                        let distance =
+                            connection_distance_to_rect(&self.pan_zoom, src_pos, dst_pos, *node_rect);
+                        match best {
+                            Some((_, best_dist)) if distance >= best_dist => {}
+                            _ => best = Some((conn, distance)),
+                        }
+                    }
+                    let node_hover_threshold = 20.0 * self.pan_zoom.zoom;
+                    if let Some((conn, distance)) = best {
+                        if distance <= node_hover_threshold {
+                            connection_under_cursor = Some((conn, distance));
+                        }
+                    }
+                }
+            }
+        }
+
         GraphResponse {
             node_responses: delayed_responses,
             cursor_in_editor,
@@ -628,6 +660,22 @@ fn connection_distance_to_pos(pan_zoom: &PanZoom, src_pos: Pos2, dst_pos: Pos2, 
             min_dist = d;
         }
         prev = curr;
+    }
+    min_dist
+}
+
+
+fn connection_distance_to_rect(pan_zoom: &PanZoom, src_pos: Pos2, dst_pos: Pos2, rect: Rect) -> f32 {
+    let control_scale = ((dst_pos.x - src_pos.x) * pan_zoom.zoom / 2.0).max(30.0 * pan_zoom.zoom);
+    let src_control = src_pos + Vec2::X * control_scale;
+    let dst_control = dst_pos - Vec2::X * control_scale;
+
+    let mut min_dist = f32::MAX;
+    let steps = 24;
+    for i in 0..=steps {
+        let t = i as f32 / steps as f32;
+        let p = cubic_bezier_point(src_pos, src_control, dst_control, dst_pos, t);
+        min_dist = min_dist.min(rect.distance_to_pos(p));
     }
     min_dist
 }
