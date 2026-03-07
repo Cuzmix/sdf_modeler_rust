@@ -166,7 +166,7 @@ pub fn build_node_buffer(
                     extra2: [0.0; 4],
                 });
             }
-            NodeData::Light { color, intensity, range, spot_angle, light_type } => {
+            NodeData::Light { color, intensity, range, spot_angle, light_type, .. } => {
                 let type_val = match light_type {
                     crate::graph::scene::LightType::Point => 50.0,
                     crate::graph::scene::LightType::Spot => 51.0,
@@ -206,7 +206,8 @@ pub struct SceneLightGpu {
     pub direction_intensity: [f32; 4],
     /// rgb = color, w = range
     pub color_range: [f32; 4],
-    /// x = cos(half_spot_angle), y = 0, z = 0, w = 0
+    /// x = cos(half_spot_angle), y = cast_shadows (0/1), z = shadow_softness,
+    /// w = packed shadow_color (RGB8 encoded as floor(r*255)*65536 + floor(g*255)*256 + floor(b*255))
     pub params: [f32; 4],
 }
 
@@ -235,6 +236,9 @@ pub fn collect_scene_lights(
             intensity,
             range,
             spot_angle,
+            cast_shadows,
+            shadow_softness,
+            shadow_color,
         } = &node.data
         {
             if scene.is_hidden(id) {
@@ -290,7 +294,12 @@ pub fn collect_scene_lights(
                     position_type: [translation.x, translation.y, translation.z, type_val],
                     direction_intensity: [direction.x, direction.y, direction.z, *intensity],
                     color_range: [color.x, color.y, color.z, *range],
-                    params: [cos_half_angle, 0.0, 0.0, 0.0],
+                    params: [
+                        cos_half_angle,
+                        if *cast_shadows { 1.0 } else { 0.0 },
+                        *shadow_softness,
+                        pack_rgb8(*shadow_color),
+                    ],
                 },
             ));
         }
@@ -348,6 +357,16 @@ pub fn identify_active_lights(
         .collect();
 
     (active_ids, total_count)
+}
+
+/// Pack an RGB color (each component 0.0–1.0) into a single f32.
+/// Encoding: floor(r*255)*65536 + floor(g*255)*256 + floor(b*255).
+/// Unpacked in WGSL: r = floor(v / 65536.0) / 255.0, etc.
+pub fn pack_rgb8(color: glam::Vec3) -> f32 {
+    let r = (color.x.clamp(0.0, 1.0) * 255.0).floor() as u32;
+    let g = (color.y.clamp(0.0, 1.0) * 255.0).floor() as u32;
+    let b = (color.z.clamp(0.0, 1.0) * 255.0).floor() as u32;
+    (r * 65536 + g * 256 + b) as f32
 }
 
 /// Inverse Euler XYZ rotation (applies -Z, -Y, -X — matches gizmo drag convention).
@@ -576,5 +595,57 @@ mod tests {
         // Negative intensity must be preserved in the GPU buffer (direction_intensity.w)
         assert!((lights[0].direction_intensity[3] - (-3.5)).abs() < 1e-5,
             "negative intensity must be preserved: expected -3.5, got {}", lights[0].direction_intensity[3]);
+    }
+
+    #[test]
+    fn collect_scene_lights_shadow_params_packed() {
+        let mut scene = empty_scene();
+        let (light_id, _) = scene.create_light(LightType::Directional);
+        // Set shadow params
+        if let NodeData::Light {
+            cast_shadows,
+            shadow_softness,
+            shadow_color,
+            ..
+        } = &mut scene.nodes.get_mut(&light_id).unwrap().data
+        {
+            *cast_shadows = true;
+            *shadow_softness = 16.0;
+            *shadow_color = Vec3::new(0.0, 0.0, 1.0); // blue shadows
+        }
+        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO);
+        assert_eq!(count, 1);
+        // params.y = cast_shadows = 1.0
+        assert!((lights[0].params[1] - 1.0).abs() < 1e-5);
+        // params.z = shadow_softness = 16.0
+        assert!((lights[0].params[2] - 16.0).abs() < 1e-5);
+        // params.w = packed shadow color (blue = r=0, g=0, b=255 → 0*65536 + 0*256 + 255 = 255.0)
+        assert!((lights[0].params[3] - 255.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn collect_scene_lights_no_shadows_by_default_for_point() {
+        let mut scene = empty_scene();
+        let (_light_id, _) = scene.create_light(LightType::Point);
+        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO);
+        assert_eq!(count, 1);
+        // Point lights default to cast_shadows=false
+        assert!(lights[0].params[1] < 0.5, "point light should default to no shadows");
+    }
+
+    #[test]
+    fn pack_rgb8_encodes_correctly() {
+        // Pure red
+        let red = pack_rgb8(Vec3::new(1.0, 0.0, 0.0));
+        assert!((red - (255.0 * 65536.0)).abs() < 1.0);
+        // Pure green
+        let green = pack_rgb8(Vec3::new(0.0, 1.0, 0.0));
+        assert!((green - (255.0 * 256.0)).abs() < 1.0);
+        // Pure blue
+        let blue = pack_rgb8(Vec3::new(0.0, 0.0, 1.0));
+        assert!((blue - 255.0).abs() < 1.0);
+        // Black
+        let black = pack_rgb8(Vec3::ZERO);
+        assert!(black.abs() < 1.0);
     }
 }

@@ -231,6 +231,7 @@ pub struct CameraUniform {
     /// Scene light info: [count, 0, 0, 0].
     pub scene_light_info: [f32; 4],
     /// Scene lights: up to 8 lights × 4 vec4f = 32 vec4f.
-    /// Each light: [position.xyz, type], [direction.xyz, intensity], [color.rgb, range], [cos_half_spot, 0, 0, 0].
+    /// Each light: [position.xyz, type], [direction.xyz, intensity], [color.rgb, range],
+    /// [cos_half_spot, cast_shadows, shadow_softness, packed_shadow_color].
     pub scene_lights: [[f32; 4]; 32],
 }

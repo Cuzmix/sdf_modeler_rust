@@ -52,6 +52,7 @@ fn collect_lights(scene: &Scene, parent_map: &HashMap<NodeId, NodeId>) -> Vec<Li
             intensity,
             range,
             spot_angle,
+            ..
         } = &node.data
         {
             if scene.is_hidden(id) {

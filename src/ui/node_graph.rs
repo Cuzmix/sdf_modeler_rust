@@ -511,6 +511,7 @@ impl NodeDataTrait for SdfNodeData {
                 ref mut intensity,
                 ref mut range,
                 ref mut spot_angle,
+                ..
             } => {
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new("Type").small());

@@ -436,6 +436,8 @@ fn default_light_intensity() -> f32 { 1.0 }
 fn default_light_range() -> f32 { 10.0 }
 fn default_spot_angle() -> f32 { 45.0 }
 fn default_light_color() -> Vec3 { Vec3::ONE }
+fn default_shadow_softness() -> f32 { 8.0 }
+fn default_cast_shadows_true() -> bool { true }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum NodeData {
@@ -517,6 +519,15 @@ pub enum NodeData {
         range: f32,
         #[serde(default = "default_spot_angle")]
         spot_angle: f32,
+        /// Whether this light casts shadows. Default true for Directional/Spot, false for Point.
+        #[serde(default = "default_cast_shadows_true")]
+        cast_shadows: bool,
+        /// Shadow softness (k parameter for soft_shadow). Higher = sharper. Range 1.0–64.0.
+        #[serde(default = "default_shadow_softness")]
+        shadow_softness: f32,
+        /// Shadow color (tint for shadowed regions). Default black = normal shadows.
+        #[serde(default)]
+        shadow_color: Vec3,
     },
 }
 
@@ -785,11 +796,14 @@ impl Scene {
         let light_id = self.add_node(
             light_name,
             NodeData::Light {
-                light_type,
+                light_type: light_type.clone(),
                 color: Vec3::ONE,
                 intensity: 1.0,
                 range: 10.0,
                 spot_angle: 45.0,
+                cast_shadows: !matches!(light_type, LightType::Point),
+                shadow_softness: 8.0,
+                shadow_color: Vec3::ZERO,
             },
         );
         // Create a Transform parent positioned above and to the side of the origin
@@ -818,6 +832,9 @@ impl Scene {
                 intensity: 1.5,
                 range: 10.0,
                 spot_angle: 45.0,
+                cast_shadows: true,
+                shadow_softness: 8.0,
+                shadow_color: Vec3::ZERO,
             },
         );
         let _key_transform_id = self.add_node(
@@ -839,6 +856,9 @@ impl Scene {
                 intensity: 0.4,
                 range: 10.0,
                 spot_angle: 45.0,
+                cast_shadows: false,
+                shadow_softness: 8.0,
+                shadow_color: Vec3::ZERO,
             },
         );
         let _fill_transform_id = self.add_node(
@@ -860,6 +880,9 @@ impl Scene {
                 intensity: 0.05,
                 range: 10.0,
                 spot_angle: 45.0,
+                cast_shadows: false,
+                shadow_softness: 8.0,
+                shadow_color: Vec3::ZERO,
             },
         );
         let _ambient_transform_id = self.add_node(
@@ -1326,13 +1349,18 @@ impl Scene {
                     extra.y.to_bits().hash(&mut hasher);
                     extra.z.to_bits().hash(&mut hasher);
                 }
-                NodeData::Light { color, intensity, range, spot_angle, .. } => {
+                NodeData::Light { color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color, .. } => {
                     color.x.to_bits().hash(&mut hasher);
                     color.y.to_bits().hash(&mut hasher);
                     color.z.to_bits().hash(&mut hasher);
                     intensity.to_bits().hash(&mut hasher);
                     range.to_bits().hash(&mut hasher);
                     spot_angle.to_bits().hash(&mut hasher);
+                    cast_shadows.hash(&mut hasher);
+                    shadow_softness.to_bits().hash(&mut hasher);
+                    shadow_color.x.to_bits().hash(&mut hasher);
+                    shadow_color.y.to_bits().hash(&mut hasher);
+                    shadow_color.z.to_bits().hash(&mut hasher);
                 }
             }
             // Include light mask in fingerprint
@@ -1563,13 +1591,16 @@ impl Scene {
                         extra: *extra,
                     }
                 }
-                NodeData::Light { light_type, color, intensity, range, spot_angle } => {
+                NodeData::Light { light_type, color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color } => {
                     NodeData::Light {
                         light_type: light_type.clone(),
                         color: *color,
                         intensity: *intensity,
                         range: *range,
                         spot_angle: *spot_angle,
+                        cast_shadows: *cast_shadows,
+                        shadow_softness: *shadow_softness,
+                        shadow_color: *shadow_color,
                     }
                 }
             };
@@ -1955,6 +1986,9 @@ impl Scene {
                         intensity: int1,
                         range: r1,
                         spot_angle: sa1,
+                        cast_shadows: cs1,
+                        shadow_softness: ss1,
+                        shadow_color: sc1,
                     },
                     NodeData::Light {
                         light_type: lt2,
@@ -1962,6 +1996,9 @@ impl Scene {
                         intensity: int2,
                         range: r2,
                         spot_angle: sa2,
+                        cast_shadows: cs2,
+                        shadow_softness: ss2,
+                        shadow_color: sc2,
                     },
                 ) => {
                     if std::mem::discriminant(lt1) != std::mem::discriminant(lt2)
@@ -1969,6 +2006,9 @@ impl Scene {
                         || int1 != int2
                         || r1 != r2
                         || sa1 != sa2
+                        || cs1 != cs2
+                        || ss1 != ss2
+                        || sc1 != sc2
                     {
                         return false;
                     }
@@ -2759,6 +2799,9 @@ mod tests {
             intensity: 1.0,
             range: 10.0,
             spot_angle: 45.0,
+            cast_shadows: false,
+            shadow_softness: 8.0,
+            shadow_color: Vec3::ZERO,
         };
         assert_eq!(data.children().count(), 0);
     }
@@ -2771,6 +2814,9 @@ mod tests {
             intensity: 2.0,
             range: 5.0,
             spot_angle: 30.0,
+            cast_shadows: true,
+            shadow_softness: 8.0,
+            shadow_color: Vec3::ZERO,
         };
         assert!(data.geometry_local_sphere().is_none());
     }
@@ -2939,12 +2985,16 @@ mod tests {
         let mut scene = empty_scene();
         let (light_id, _) = scene.create_light(LightType::Spot);
         match &scene.nodes[&light_id].data {
-            NodeData::Light { light_type, color, intensity, range, spot_angle } => {
+            NodeData::Light { light_type, color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color } => {
                 assert_eq!(*light_type, LightType::Spot);
                 assert_eq!(*color, Vec3::ONE);
                 assert!((intensity - 1.0).abs() < 1e-5);
                 assert!((range - 10.0).abs() < 1e-5);
                 assert!((spot_angle - 45.0).abs() < 1e-5);
+                // Spot lights default to cast_shadows=true
+                assert!(*cast_shadows);
+                assert!((shadow_softness - 8.0).abs() < 1e-5);
+                assert_eq!(*shadow_color, Vec3::ZERO);
             }
             _ => panic!("expected Light node"),
         }

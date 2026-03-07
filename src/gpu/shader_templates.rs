@@ -71,26 +71,10 @@ pub(crate) fn apply_march_placeholders(src: &str, config: &RenderConfig) -> Stri
 
 /// Build the render postlude with all placeholder replacements.
 pub(crate) fn build_postlude(config: &RenderConfig) -> String {
-    let shadow_line = if config.shadows_enabled {
-        // Shadow direction from first scene light (replaces old global key light)
-        format!(
-            concat!(
-                "    var shadow = 1.0;\n",
-                "    if camera.quality_mode < 0.5 && i32(camera.scene_light_info.x + 0.5) > 0 {{\n",
-                "        let shadow_type = i32(camera.scene_lights[0].w + 0.5);\n",
-                "        var shadow_dir: vec3f;\n",
-                "        if shadow_type == 2 {{ shadow_dir = normalize(-camera.scene_lights[1].xyz); }}\n",
-                "        else {{ shadow_dir = normalize(camera.scene_lights[0].xyz - p); }}\n",
-                "        shadow = soft_shadow(p + n * {}, shadow_dir, {}, {}, SHADOW_PENUMBRA_K);\n",
-                "    }}"
-            ),
-            format_f32(config.shadow_bias),
-            format_f32(config.shadow_mint),
-            format_f32(config.shadow_maxt),
-        )
-    } else {
-        "    let shadow = 1.0;".to_string()
-    };
+    // Shadows are now computed per-light in the scene light loop (rendering.wgsl).
+    // The SHADOW_LINE placeholder is kept empty — shadow config is passed via
+    // SHADOWS_ENABLED, SHADOW_BIAS, SHADOW_MINT, SHADOW_MAXT constants.
+    let shadow_line = "";
 
     let ao_line = if config.ao_enabled {
         "    var ao = 1.0;\n    if camera.quality_mode < 0.5 { ao = calc_ao(p, n); }".to_string()
@@ -140,6 +124,10 @@ pub(crate) fn build_postlude(config: &RenderConfig) -> String {
     apply_march_placeholders(RENDERING, config)
         .replace("/*SHADOW_STEPS*/", &config.shadow_steps.to_string())
         .replace("/*SHADOW_PENUMBRA_K*/", &format_f32(config.shadow_penumbra_k))
+        .replace("/*SHADOW_BIAS*/", &format_f32(config.shadow_bias))
+        .replace("/*SHADOW_MINT*/", &format_f32(config.shadow_mint))
+        .replace("/*SHADOW_MAXT*/", &format_f32(config.shadow_maxt))
+        .replace("/*SHADOWS_ENABLED*/", if config.shadows_enabled { "true" } else { "false" })
         .replace("/*AO_SAMPLES*/", &config.ao_samples.to_string())
         .replace("/*AO_STEP*/", &format_f32(config.ao_step))
         .replace("/*AO_DECAY*/", &format_f32(config.ao_decay))
@@ -154,7 +142,7 @@ pub(crate) fn build_postlude(config: &RenderConfig) -> String {
         }))
         .replace("/*SKY_CUTOFF*/", &format_f32(sky_cutoff))
         .replace("/*GAMMA*/", &format_f32(config.gamma))
-        .replace("/*SHADOW_LINE*/", &shadow_line)
+        .replace("/*SHADOW_LINE*/", shadow_line)
         .replace("/*AO_LINE*/", &ao_line)
         .replace("/*ENV_REFL_LINE*/", &env_refl_line)
         .replace("/*SSS_LINE*/", &sss_line)

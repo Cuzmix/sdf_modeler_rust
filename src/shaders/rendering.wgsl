@@ -10,6 +10,10 @@
 // --- Rendering quality constants ---
 const SHADOW_STEPS: i32 = /*SHADOW_STEPS*/;
 const SHADOW_PENUMBRA_K: f32 = /*SHADOW_PENUMBRA_K*/;
+const SHADOW_BIAS: f32 = /*SHADOW_BIAS*/;
+const SHADOW_MINT: f32 = /*SHADOW_MINT*/;
+const SHADOW_MAXT: f32 = /*SHADOW_MAXT*/;
+const SHADOWS_ENABLED: bool = /*SHADOWS_ENABLED*/;
 const AO_SAMPLES: i32 = /*AO_SAMPLES*/;
 const AO_STEP: f32 = /*AO_STEP*/;
 const AO_DECAY: f32 = /*AO_DECAY*/;
@@ -356,7 +360,7 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
             let solid_light_count = i32(camera.scene_light_info.x + 0.5);
             for (var sli = 0; sli < 8; sli++) {
                 if sli >= solid_light_count { break; }
-                let sb = sli * 4;
+                let sb = sli * 5;
                 let sl_pos_type = camera.scene_lights[sb];
                 let sl_dir_int = camera.scene_lights[sb + 1];
                 let sl_type = i32(sl_pos_type.w + 0.5);
@@ -398,8 +402,6 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
 
         // Hemispherical sky light (iq outdoor lighting)
         let sky = clamp(0.5 + 0.5 * n.y, 0.0, 1.0);
-        let shadow_col = pow(vec3f(shadow), vec3f(1.0, 1.2, 1.5));
-
         // Ambient contribution
         let ambient_i = camera.ambient_info.x;
         color = diffuse_color * sky * ambient_i * ao;
@@ -411,6 +413,8 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
         if mat_id >= 0 {
             light_mask = u32(nodes[mat_id].scale.w + 0.5);
         }
+        // Track how many shadow-casting lights we've evaluated (budget: max 2)
+        var shadow_budget = 0;
         for (var li = 0; li < 8; li++) {
             if li >= scene_light_count { break; }
             // Skip this light if the geometry's bitmask excludes it
@@ -425,6 +429,15 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
             let sl_intensity = sl_dir_int.w;
             let sl_color = sl_col_range.xyz;
             let sl_range = sl_col_range.w;
+            let sl_cast_shadows = sl_params.y > 0.5;
+            let sl_shadow_softness = sl_params.z;
+            // Unpack shadow color from RGB8 encoded float (r*65536 + g*256 + b)
+            let sl_sc_packed = sl_params.w;
+            let sl_shadow_color = vec3f(
+                floor(sl_sc_packed / 65536.0) / 255.0,
+                floor(fract(sl_sc_packed / 65536.0) * 256.0) / 255.0,
+                fract(sl_sc_packed / 256.0) * 256.0 / 255.0,
+            );
 
             // Compute light direction and attenuation
             var sl_light_dir: vec3f;
@@ -463,12 +476,16 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
             let sl_specular = sl_D * sl_G * sl_F;
 
             let sl_contribution = (diffuse_color + sl_specular) * sl_NoL * sl_intensity * sl_atten * sl_color;
-            // First light gets shadow, others get AO
-            if li == 0 {
-                color += sl_contribution * shadow_col;
-            } else {
-                color += sl_contribution * ao;
+
+            // Per-light shadow (budget: max 2 shadow-casting lights for performance)
+            var sl_shadow_factor = vec3f(1.0);
+            if SHADOWS_ENABLED && sl_cast_shadows && shadow_budget < 2 && camera.quality_mode < 0.5 {
+                let sl_shadow = soft_shadow(p + n * SHADOW_BIAS, sl_light_dir, SHADOW_MINT, SHADOW_MAXT, sl_shadow_softness);
+                // Apply shadow color: mix shadow_color → white by shadow factor
+                sl_shadow_factor = mix(sl_shadow_color, vec3f(1.0), sl_shadow);
+                shadow_budget += 1;
             }
+            color += sl_contribution * sl_shadow_factor * ao;
         }
 
         // Environment reflection (sky gradient sampled along reflected ray)

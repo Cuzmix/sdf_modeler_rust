@@ -1189,6 +1189,9 @@ pub fn draw(
             mut intensity,
             mut range,
             mut spot_angle,
+            mut cast_shadows,
+            mut shadow_softness,
+            mut shadow_color,
         } => {
             ui.label("Type: Light");
             if !active_light_ids.contains(&id) {
@@ -1249,6 +1252,26 @@ pub fn draw(
                 });
             }
 
+            // Shadow controls (not shown for Ambient lights)
+            if !matches!(light_type, crate::graph::scene::LightType::Ambient) {
+                ui.separator();
+                ui.label(egui::RichText::new("Shadows").strong());
+                ui.checkbox(&mut cast_shadows, "Cast Shadows");
+                if cast_shadows {
+                    ui.horizontal(|ui| {
+                        ui.label("Softness:");
+                        ui.add(egui::Slider::new(&mut shadow_softness, 1.0..=64.0)
+                            .logarithmic(true));
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Shadow Color:");
+                        let mut sc_arr = [shadow_color.x, shadow_color.y, shadow_color.z];
+                        ui.color_edit_button_rgb(&mut sc_arr);
+                        shadow_color = glam::Vec3::new(sc_arr[0], sc_arr[1], sc_arr[2]);
+                    });
+                }
+            }
+
             ui.separator();
             if ui.button("Delete Node").on_hover_text("Remove this light from the scene").clicked() {
                 actions.push(Action::DeleteNode(id));
@@ -1263,12 +1286,18 @@ pub fn draw(
                     intensity: ref mut int,
                     range: ref mut r,
                     spot_angle: ref mut sa,
+                    cast_shadows: ref mut cs,
+                    shadow_softness: ref mut ss,
+                    shadow_color: ref mut sc,
                 } = node.data {
                     *lt = light_type;
                     *c = color;
                     *int = intensity;
                     *r = range;
                     *sa = spot_angle;
+                    *cs = cast_shadows;
+                    *ss = shadow_softness;
+                    *sc = shadow_color;
                 }
             }
         }

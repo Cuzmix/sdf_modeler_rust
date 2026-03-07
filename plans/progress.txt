@@ -942,3 +942,58 @@ Changes:
   the GPU buffer's direction_intensity.w field without clamping or sign loss.
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (381/381) ✓, cargo build ✓
+
+--- Iteration 28: PRD #35 — Per-light shadow controls ---
+COMPLETED. Added cast_shadows, shadow_softness, and shadow_color to each Light node.
+
+Changes:
+- src/graph/scene.rs: Added 3 fields to NodeData::Light:
+  - cast_shadows: bool (default true for Directional/Spot, false for Point)
+  - shadow_softness: f32 (default 8.0, maps to soft_shadow k parameter)
+  - shadow_color: Vec3 (default black — tints shadowed regions for artistic control)
+  All with #[serde(default)] for backwards compatibility. Updated all exhaustive match
+  blocks: data_fingerprint, content_eq/deep_eq, duplicate_subtree, create_light,
+  create_default_lights (key=true, fill=false, ambient=false). Updated 2 test constructors.
+- src/gpu/buffers.rs: Packed shadow params into existing SceneLightGpu params vec4f:
+  params = [cos_half_angle, cast_shadows(0/1), shadow_softness, packed_shadow_color].
+  Shadow color encoded as RGB8 float (r*65536 + g*256 + b) via new pack_rgb8() helper.
+  No struct size change — still 4 × vec4f per light, 32 entries in camera uniform.
+  collect_scene_lights now reads and packs cast_shadows, shadow_softness, shadow_color.
+  Added 3 unit tests: shadow_params_packed, no_shadows_by_default_for_point, pack_rgb8.
+- src/shaders/rendering.wgsl: Replaced old "first light gets shadow, others get AO"
+  with per-light shadow system. Each light in the scene loop checks its cast_shadows
+  flag and calls soft_shadow() with per-light shadow_softness. Shadow color applied via
+  mix(shadow_color, white, shadow_factor). Performance budget: max 2 shadow-casting
+  lights per frame (tracked via shadow_budget counter). Added SHADOW_BIAS, SHADOW_MINT,
+  SHADOW_MAXT, SHADOWS_ENABLED constants (replaced at build time from RenderConfig).
+  Unpacks shadow_color from packed RGB8 float in shader.
+  Removed old global shadow_col blue tint (pow(shadow, vec3(1,1.2,1.5))).
+- src/gpu/shader_templates.rs: Removed old global SHADOW_LINE code (was computing
+  shadow for first light only). Now empty — shadows computed per-light in shader loop.
+  Added 4 new placeholder replacements: SHADOW_BIAS, SHADOW_MINT, SHADOW_MAXT,
+  SHADOWS_ENABLED.
+- src/shaders/bindings.wgsl: Comment update (still 4 vec4f per light).
+- src/ui/properties.rs: Added shadow controls to Light properties panel:
+  "Cast Shadows" checkbox, "Softness" slider (1.0–64.0, logarithmic),
+  "Shadow Color" color picker. Hidden for Ambient lights. Softness/color only
+  shown when cast_shadows is enabled.
+- src/ui/node_graph.rs: Added .. to Light destructure (shadow params not shown
+  in compact node graph — only in properties panel).
+- src/ui/light_gizmo.rs: Added .. to Light destructure for compatibility.
+- src/app/async_tasks.rs: No stride changes needed (still 4 vec4f per light).
+
+Design decisions:
+- RGB8 packing for shadow color: fits in a single f32 (8 bits per channel). Plenty
+  of precision for shadow tinting. Avoids expanding the light struct beyond 4 vec4f
+  which would exceed bytemuck's array size limit for Pod/Zeroable derive.
+- Max 2 shadow-casting lights: industry-standard forward rendering budget. Shadows
+  are the most expensive per-light operation (full raymarch per shadow ray). The
+  shader-side budget counter ensures predictable performance regardless of how many
+  lights have cast_shadows=true.
+- Point lights default to cast_shadows=false: point light shadows require 6 shadow
+  rays for omnidirectional coverage (cubemap) which is prohibitively expensive in
+  real-time SDF. Users can opt in if needed.
+- Logarithmic softness slider: shadow softness perception is logarithmic — the
+  visual difference between k=1 and k=4 is much greater than k=32 and k=64.
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (384/384) ✓, cargo build ✓
