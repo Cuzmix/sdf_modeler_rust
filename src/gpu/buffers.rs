@@ -195,7 +195,7 @@ pub fn build_node_buffer(
     buffer
 }
 
-/// GPU representation of a scene light (4 × vec4f = 64 bytes).
+/// GPU representation of a scene light (5 × vec4f = 80 bytes).
 /// Packed into the camera uniform buffer as a flat array of vec4f.
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]
@@ -209,6 +209,8 @@ pub struct SceneLightGpu {
     /// x = cos(half_spot_angle), y = cast_shadows (0/1), z = shadow_softness,
     /// w = packed shadow_color (RGB8 encoded as floor(r*255)*65536 + floor(g*255)*256 + floor(b*255))
     pub params: [f32; 4],
+    /// x = volumetric (0.0 = off, 1.0 = on), y = volumetric_density, zw = reserved
+    pub volumetric: [f32; 4],
 }
 
 /// Collected ambient contribution from scene Ambient light nodes.
@@ -240,6 +242,8 @@ pub fn collect_scene_lights(
             cast_shadows,
             shadow_softness,
             shadow_color,
+            volumetric,
+            volumetric_density,
         } = &node.data
         {
             if scene.is_hidden(id) {
@@ -310,6 +314,12 @@ pub fn collect_scene_lights(
                         if *cast_shadows { 1.0 } else { 0.0 },
                         *shadow_softness,
                         pack_rgb8(*shadow_color),
+                    ],
+                    volumetric: [
+                        if *volumetric { 1.0 } else { 0.0 },
+                        *volumetric_density,
+                        0.0,
+                        0.0,
                     ],
                 },
             ));

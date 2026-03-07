@@ -185,17 +185,21 @@ impl SdfApp {
         let viewport = [0.0, 0.0, width as f32, height as f32];
         let (scene_light_count, scene_light_list, scene_ambient) =
             crate::gpu::buffers::collect_scene_lights(&self.doc.scene, self.doc.camera.eye(), self.doc.soloed_light);
-        let scene_light_info = [scene_light_count as f32, 0.0, 0.0, 0.0];
+        let volumetric_count = scene_light_list.iter().filter(|l| l.volumetric[0] > 0.5).count() as f32;
+        let volumetric_steps = self.settings.render.volumetric_steps as f32;
+        let scene_light_info = [scene_light_count as f32, volumetric_count, volumetric_steps, 0.0];
         let mut scene_lights_flat = [[0.0_f32; 4]; 32];
+        let mut scene_light_vol = [[0.0_f32; 4]; 8];
         for (i, light) in scene_light_list.iter().enumerate() {
             scene_lights_flat[i * 4] = light.position_type;
             scene_lights_flat[i * 4 + 1] = light.direction_intensity;
             scene_lights_flat[i * 4 + 2] = light.color_range;
             scene_lights_flat[i * 4 + 3] = light.params;
+            scene_light_vol[i] = light.volumetric;
         }
         let ambient_luminance = scene_ambient.color.dot(glam::Vec3::new(0.2126, 0.7152, 0.0722));
         let effective_ambient = if ambient_luminance > 0.0 { ambient_luminance } else { self.settings.render.ambient };
-        let uniform = self.doc.camera.to_uniform(viewport, 0.0, 0.0, false, scene_bounds, -1.0, 0.0, [0.0; 4], [0.0; 4], effective_ambient, scene_light_info, scene_lights_flat);
+        let uniform = self.doc.camera.to_uniform(viewport, 0.0, 0.0, false, scene_bounds, -1.0, 0.0, [0.0; 4], [0.0; 4], effective_ambient, scene_light_info, scene_lights_flat, scene_light_vol);
 
         let pixels = resources.screenshot(
             &self.gpu.render_state.device,

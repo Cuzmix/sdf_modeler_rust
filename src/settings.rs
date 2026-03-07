@@ -328,6 +328,10 @@ pub struct RenderConfig {
     #[serde(default = "default_sss_color")]
     pub sss_color: [f32; 3],
 
+    // Volumetric scattering
+    #[serde(default = "default_volumetric_steps")]
+    pub volumetric_steps: u32,
+
     // Fog
     pub fog_enabled: bool,
     pub fog_density: f32,
@@ -443,6 +447,7 @@ fn default_env_reflection_intensity() -> f32 { 0.3 }
 fn default_bloom_threshold() -> f32 { 0.8 }
 fn default_bloom_intensity() -> f32 { 0.3 }
 fn default_bloom_radius() -> f32 { 3.0 }
+fn default_volumetric_steps() -> u32 { 24 }
 fn default_safety_border() -> f32 { 0.05 }
 fn default_cross_section_axis() -> u8 { 1 }
 fn default_bookmarks() -> Vec<Option<CameraBookmark>> { vec![None; 9] }
@@ -489,6 +494,8 @@ impl Default for RenderConfig {
             sss_enabled: false,
             sss_strength: 5.0,
             sss_color: [1.0, 0.4, 0.2],
+
+            volumetric_steps: 24,
 
             fog_enabled: false,
             fog_density: 0.04,

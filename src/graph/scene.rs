@@ -528,7 +528,17 @@ pub enum NodeData {
         /// Shadow color (tint for shadowed regions). Default black = normal shadows.
         #[serde(default)]
         shadow_color: Vec3,
+        /// Whether this light emits volumetric scattering (god rays).
+        #[serde(default)]
+        volumetric: bool,
+        /// Density of volumetric scattering (0.01–1.0). Higher = more opaque beams.
+        #[serde(default = "default_volumetric_density")]
+        volumetric_density: f32,
     },
+}
+
+fn default_volumetric_density() -> f32 {
+    0.15
 }
 
 impl NodeData {
@@ -804,6 +814,8 @@ impl Scene {
                 cast_shadows: !matches!(light_type, LightType::Point),
                 shadow_softness: 8.0,
                 shadow_color: Vec3::ZERO,
+                volumetric: false,
+                volumetric_density: 0.15,
             },
         );
         // Create a Transform parent positioned above and to the side of the origin
@@ -835,6 +847,8 @@ impl Scene {
                 cast_shadows: true,
                 shadow_softness: 8.0,
                 shadow_color: Vec3::ZERO,
+                volumetric: false,
+                volumetric_density: 0.15,
             },
         );
         let _key_transform_id = self.add_node(
@@ -859,6 +873,8 @@ impl Scene {
                 cast_shadows: false,
                 shadow_softness: 8.0,
                 shadow_color: Vec3::ZERO,
+                volumetric: false,
+                volumetric_density: 0.15,
             },
         );
         let _fill_transform_id = self.add_node(
@@ -883,6 +899,8 @@ impl Scene {
                 cast_shadows: false,
                 shadow_softness: 8.0,
                 shadow_color: Vec3::ZERO,
+                volumetric: false,
+                volumetric_density: 0.15,
             },
         );
         let _ambient_transform_id = self.add_node(
@@ -1349,7 +1367,7 @@ impl Scene {
                     extra.y.to_bits().hash(&mut hasher);
                     extra.z.to_bits().hash(&mut hasher);
                 }
-                NodeData::Light { color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color, .. } => {
+                NodeData::Light { color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color, volumetric, volumetric_density, .. } => {
                     color.x.to_bits().hash(&mut hasher);
                     color.y.to_bits().hash(&mut hasher);
                     color.z.to_bits().hash(&mut hasher);
@@ -1361,6 +1379,8 @@ impl Scene {
                     shadow_color.x.to_bits().hash(&mut hasher);
                     shadow_color.y.to_bits().hash(&mut hasher);
                     shadow_color.z.to_bits().hash(&mut hasher);
+                    volumetric.hash(&mut hasher);
+                    volumetric_density.to_bits().hash(&mut hasher);
                 }
             }
             // Include light mask in fingerprint
@@ -1591,7 +1611,7 @@ impl Scene {
                         extra: *extra,
                     }
                 }
-                NodeData::Light { light_type, color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color } => {
+                NodeData::Light { light_type, color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color, volumetric, volumetric_density } => {
                     NodeData::Light {
                         light_type: light_type.clone(),
                         color: *color,
@@ -1601,6 +1621,8 @@ impl Scene {
                         cast_shadows: *cast_shadows,
                         shadow_softness: *shadow_softness,
                         shadow_color: *shadow_color,
+                        volumetric: *volumetric,
+                        volumetric_density: *volumetric_density,
                     }
                 }
             };
@@ -1989,6 +2011,8 @@ impl Scene {
                         cast_shadows: cs1,
                         shadow_softness: ss1,
                         shadow_color: sc1,
+                        volumetric: vol1,
+                        volumetric_density: vd1,
                     },
                     NodeData::Light {
                         light_type: lt2,
@@ -1999,6 +2023,8 @@ impl Scene {
                         cast_shadows: cs2,
                         shadow_softness: ss2,
                         shadow_color: sc2,
+                        volumetric: vol2,
+                        volumetric_density: vd2,
                     },
                 ) => {
                     if std::mem::discriminant(lt1) != std::mem::discriminant(lt2)
@@ -2009,6 +2035,8 @@ impl Scene {
                         || cs1 != cs2
                         || ss1 != ss2
                         || sc1 != sc2
+                        || vol1 != vol2
+                        || vd1 != vd2
                     {
                         return false;
                     }
@@ -2802,6 +2830,8 @@ mod tests {
             cast_shadows: false,
             shadow_softness: 8.0,
             shadow_color: Vec3::ZERO,
+            volumetric: false,
+            volumetric_density: 0.15,
         };
         assert_eq!(data.children().count(), 0);
     }
@@ -2817,6 +2847,8 @@ mod tests {
             cast_shadows: true,
             shadow_softness: 8.0,
             shadow_color: Vec3::ZERO,
+            volumetric: false,
+            volumetric_density: 0.15,
         };
         assert!(data.geometry_local_sphere().is_none());
     }
@@ -2985,7 +3017,7 @@ mod tests {
         let mut scene = empty_scene();
         let (light_id, _) = scene.create_light(LightType::Spot);
         match &scene.nodes[&light_id].data {
-            NodeData::Light { light_type, color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color } => {
+            NodeData::Light { light_type, color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color, volumetric, volumetric_density } => {
                 assert_eq!(*light_type, LightType::Spot);
                 assert_eq!(*color, Vec3::ONE);
                 assert!((intensity - 1.0).abs() < 1e-5);
@@ -2995,6 +3027,8 @@ mod tests {
                 assert!(*cast_shadows);
                 assert!((shadow_softness - 8.0).abs() < 1e-5);
                 assert_eq!(*shadow_color, Vec3::ZERO);
+                assert!(!volumetric);
+                assert!((volumetric_density - 0.15).abs() < 1e-5);
             }
             _ => panic!("expected Light node"),
         }

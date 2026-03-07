@@ -201,6 +201,25 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
             }
         });
 
+    // --- Volumetric Scattering ---
+    egui::CollapsingHeader::new("Volumetric Scattering")
+        .default_open(false)
+        .show(ui, |ui| {
+            ui.label("Ray march steps for volumetric light scattering (god rays).");
+            ui.horizontal(|ui| {
+                ui.label("Steps:");
+                let mut steps = config.volumetric_steps as f32;
+                if ui.add(egui::Slider::new(&mut steps, 8.0..=48.0)
+                    .step_by(1.0)
+                    .suffix(" steps"))
+                    .on_hover_text("Fewer steps = faster but more banding. 24 is a good default.")
+                    .changed()
+                {
+                    config.volumetric_steps = steps as u32;
+                }
+            });
+        });
+
     // --- Bloom ---
     egui::CollapsingHeader::new("Bloom")
         .default_open(false)

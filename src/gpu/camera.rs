@@ -116,6 +116,7 @@ impl Camera {
         ambient: f32,
         scene_light_info: [f32; 4],
         scene_lights: [[f32; 4]; 32],
+        scene_light_vol: [[f32; 4]; 8],
     ) -> CameraUniform {
         let aspect = viewport[2] / viewport[3].max(1.0);
         let view = self.view_matrix();
@@ -137,6 +138,7 @@ impl Camera {
             ambient_info: [ambient, 0.0, 0.0, 0.0],
             scene_light_info,
             scene_lights,
+            scene_light_vol,
         }
     }
 
@@ -228,10 +230,13 @@ pub struct CameraUniform {
     pub cross_section: [f32; 4],
     /// Ambient lighting info: [ambient_intensity, 0, 0, 0].
     pub ambient_info: [f32; 4],
-    /// Scene light info: [count, 0, 0, 0].
+    /// Scene light info: [count, volumetric_count, volumetric_steps, 0].
     pub scene_light_info: [f32; 4],
     /// Scene lights: up to 8 lights × 4 vec4f = 32 vec4f.
     /// Each light: [position.xyz, type], [direction.xyz, intensity], [color.rgb, range],
     /// [cos_half_spot, cast_shadows, shadow_softness, packed_shadow_color].
     pub scene_lights: [[f32; 4]; 32],
+    /// Per-light volumetric params: up to 8 lights × 1 vec4f = 8 vec4f.
+    /// Each: [volumetric_on, volumetric_density, 0, 0].
+    pub scene_light_vol: [[f32; 4]; 8],
 }

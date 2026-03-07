@@ -360,7 +360,7 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
             let solid_light_count = i32(camera.scene_light_info.x + 0.5);
             for (var sli = 0; sli < 8; sli++) {
                 if sli >= solid_light_count { break; }
-                let sb = sli * 5;
+                let sb = sli * 4;
                 let sl_pos_type = camera.scene_lights[sb];
                 let sl_dir_int = camera.scene_lights[sb + 1];
                 let sl_type = i32(sl_pos_type.w + 0.5);
@@ -495,6 +495,74 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
         let emissive_col = get_node_emissive(mat_id);
         let emissive_int = get_node_emissive_intensity(mat_id);
         color += emissive_col * emissive_int;
+
+        // --- Volumetric scattering (god rays) ---
+        // Only runs when at least one light has volumetric enabled,
+        // and not in interactive quality mode.
+        let vol_count = i32(camera.scene_light_info.y + 0.5);
+        if vol_count > 0 && camera.quality_mode < 0.5 {
+            let vol_steps = i32(camera.scene_light_info.z + 0.5);
+            let t_end = select(t, /*MARCH_MAX_DIST*/ * 0.5, sdf_miss);
+            let step_size = t_end / f32(vol_steps);
+            // Dithered offset to reduce banding (screen-space hash)
+            let screen_hash = fract(sin(dot(uv, vec2f(12.9898, 78.233))) * 43758.5453);
+            var vol_scatter = vec3f(0.0);
+            var transmittance = 1.0;
+
+            for (var vs = 0; vs < 48; vs++) {
+                if vs >= vol_steps { break; }
+                let sample_t = (f32(vs) + screen_hash) * step_size;
+                let sample_p = ro + rd * sample_t;
+
+                for (var vli = 0; vli < 8; vli++) {
+                    if vli >= scene_light_count { break; }
+                    let vl_vol = camera.scene_light_vol[vli];
+                    // Skip non-volumetric lights
+                    if vl_vol.x < 0.5 { continue; }
+                    let vl_density = vl_vol.y;
+
+                    let vb = vli * 4;
+                    let vl_pos_type = camera.scene_lights[vb];
+                    let vl_dir_int = camera.scene_lights[vb + 1];
+                    let vl_col_range = camera.scene_lights[vb + 2];
+                    let vl_type = i32(vl_pos_type.w + 0.5);
+                    let vl_intensity = vl_dir_int.w;
+                    let vl_color = vl_col_range.xyz;
+                    let vl_range = vl_col_range.w;
+
+                    // Compute attenuation at sample point
+                    var vl_atten = 1.0;
+                    if vl_type == 2 {
+                        // Directional: no positional attenuation
+                        vl_atten = 1.0;
+                    } else {
+                        // Point/Spot: distance-based attenuation
+                        let to_light = vl_pos_type.xyz - sample_p;
+                        let dist = length(to_light);
+                        let dist_ratio = dist / max(vl_range, 0.001);
+                        let window = max(1.0 - dist_ratio * dist_ratio, 0.0);
+                        vl_atten = (window * window) / max(dist * dist, 0.01);
+                    }
+
+                    // Spot cone falloff
+                    if vl_type == 1 {
+                        let vl_params_s = camera.scene_lights[vb + 3];
+                        let cos_half = vl_params_s.x;
+                        let to_light = normalize(vl_pos_type.xyz - sample_p);
+                        let cos_theta = dot(-to_light, normalize(vl_dir_int.xyz));
+                        let inner_cos = mix(1.0, cos_half, 0.8);
+                        vl_atten *= clamp((cos_theta - cos_half) / max(inner_cos - cos_half, 0.0001), 0.0, 1.0);
+                    }
+
+                    // Accumulate in-scatter
+                    let scatter = vl_color * abs(vl_intensity) * vl_atten * vl_density * step_size;
+                    vol_scatter += scatter * transmittance;
+                }
+                // Beer-Lambert absorption along ray
+                transmittance *= exp(-step_size * 0.05);
+            }
+            color = color * transmittance + vol_scatter;
+        }
 
         // Primary light direction for SSS/fog (first scene light or fallback down)
         var primary_light_dir = vec3f(0.0, -1.0, 0.0);

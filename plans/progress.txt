@@ -1040,3 +1040,63 @@ Design decisions:
   clears to prevent stale references.
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (386/386) ✓, cargo build ✓
+
+--- Iteration 30: PRD #32 — Per-light volumetric scattering (god rays) ---
+COMPLETED. Added per-light volumetric scattering via in-scatter accumulation during raymarching.
+
+Changes:
+- src/graph/scene.rs: Added `volumetric: bool` (default false) and `volumetric_density: f32`
+  (default 0.15) to NodeData::Light. Both fields have #[serde(default)] for backwards compat.
+  Updated all exhaustive match blocks: data_fingerprint, content_eq/deep_eq, duplicate_subtree,
+  create_light, create_default_lights (all false). Updated 3 test constructors.
+- src/gpu/buffers.rs: Added `volumetric: [f32; 4]` field to SceneLightGpu struct (now 5 × vec4f
+  per light = 80 bytes). Format: [volumetric_on (0/1), volumetric_density, 0, 0].
+  collect_scene_lights() now reads and packs volumetric flag + density from Light nodes.
+- src/gpu/camera.rs: Added `scene_light_vol: [[f32; 4]; 8]` to CameraUniform as a separate
+  array alongside the existing scene_lights (bytemuck Pod only supports arrays up to size 32,
+  so a single 40-entry array wasn't possible). Updated to_uniform() signature to accept the
+  new volumetric array parameter. scene_light_info now carries [count, vol_count, vol_steps, 0].
+- src/shaders/bindings.wgsl: Added `scene_light_vol: array<vec4f, 8>` to Camera struct.
+  Updated scene_light_info comment to document y=vol_count, z=vol_steps fields.
+- src/shaders/rendering.wgsl: Added volumetric accumulation pass in Full PBR shading path
+  (after emissive, before SSS/fog/tonemap). When vol_count > 0 and not interactive quality:
+  - Marches along camera ray from origin to hit point (or half MAX_DIST on miss) in
+    configurable steps (8–48, default 24 from render settings).
+  - Dithered step offset using screen-space sin hash to reduce banding artifacts.
+  - At each sample point, iterates over scene lights checking camera.scene_light_vol[i].x.
+  - For volumetric lights: computes point/spot/directional attenuation matching the main
+    light loop, including spot cone falloff for Spot lights.
+  - Accumulates in-scatter: light_color * abs(intensity) * attenuation * density * step_size.
+  - Beer-Lambert transmittance along the ray (exp(-step_size * 0.05)).
+  - Final compositing: color = color * transmittance + vol_scatter.
+  - Skipped entirely in Clay/Solid modes and interactive quality mode (quality_mode > 0.5).
+  Fixed stride from 5 back to 4 in Solid mode scene light loop (was erroneously 5 from
+  a previous iteration's incomplete stride change).
+- src/ui/properties.rs: Added "Volumetric" section in Light properties panel (Point and
+  Spot only). "Enable Volumetric" checkbox + "Density" slider (0.01–1.0, logarithmic).
+  Updated read pattern and write-back to include volumetric + volumetric_density fields.
+- src/settings.rs: Added `volumetric_steps: u32` (default 24) to RenderConfig with
+  #[serde(default)] for backwards compatibility.
+- src/ui/render_settings.rs: Added "Volumetric Scattering" collapsing section with
+  "Steps" slider (8–48, step 1) controlling ray march quality vs performance.
+- src/ui/viewport/draw.rs: Computes volumetric_count (lights with vol enabled) and
+  volumetric_steps from render config, packs into scene_light_info[1] and [2].
+  Builds separate scene_light_vol array for volumetric params. Updated all to_uniform()
+  call sites (render + 3 pick calls) with the new parameter.
+- src/app/async_tasks.rs: Updated screenshot uniform to include volumetric data.
+
+Design decisions:
+- Separate vol array vs expanded scene_lights: bytemuck's Pod/Zeroable traits only
+  implement for arrays up to size 32. Instead of unsafe manual impl, added a separate
+  8-entry array (one vec4f per light) alongside the existing 32-entry array. Clean split.
+- Directional volumetrics excluded from UI: directional lights affect the entire scene
+  uniformly so volumetric scattering has no visible directional structure without shadow
+  maps. Only Point and Spot show the volumetric controls.
+- Performance guard: volumetric pass completely skipped when vol_count == 0 (zero overhead
+  for scenes without volumetric lights). Also skipped during interactive quality (dragging).
+- abs(intensity) for scatter: negative/subtractive lights still produce visible volumetric
+  scatter (the light beam is visible, even if the surface lighting subtracts).
+- Beer-Lambert absorption: gentle 0.05 coefficient so volumetrics fade naturally at distance
+  without over-darkening the scene.
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (386/386) ✓, cargo build ✓

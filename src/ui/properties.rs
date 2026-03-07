@@ -1193,6 +1193,8 @@ pub fn draw(
             mut cast_shadows,
             mut shadow_softness,
             mut shadow_color,
+            mut volumetric,
+            mut volumetric_density,
         } => {
             ui.horizontal(|ui| {
                 ui.label("Type: Light");
@@ -1288,6 +1290,21 @@ pub fn draw(
                 }
             }
 
+            // Volumetric scattering (Point and Spot only)
+            if matches!(light_type, crate::graph::scene::LightType::Point | crate::graph::scene::LightType::Spot) {
+                ui.separator();
+                ui.label(egui::RichText::new("Volumetric").strong());
+                ui.checkbox(&mut volumetric, "Enable Volumetric")
+                    .on_hover_text("Volumetric light scattering (god rays)");
+                if volumetric {
+                    ui.horizontal(|ui| {
+                        ui.label("Density:");
+                        ui.add(egui::Slider::new(&mut volumetric_density, 0.01..=1.0)
+                            .logarithmic(true));
+                    });
+                }
+            }
+
             ui.separator();
             if ui.button("Delete Node").on_hover_text("Remove this light from the scene").clicked() {
                 actions.push(Action::DeleteNode(id));
@@ -1305,6 +1322,8 @@ pub fn draw(
                     cast_shadows: ref mut cs,
                     shadow_softness: ref mut ss,
                     shadow_color: ref mut sc,
+                    volumetric: ref mut vol,
+                    volumetric_density: ref mut vd,
                 } = node.data {
                     *lt = light_type;
                     *c = color;
@@ -1314,6 +1333,8 @@ pub fn draw(
                     *cs = cast_shadows;
                     *ss = shadow_softness;
                     *sc = shadow_color;
+                    *vol = volumetric;
+                    *vd = volumetric_density;
                 }
             }
         }

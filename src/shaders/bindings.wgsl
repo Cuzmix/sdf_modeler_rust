@@ -17,8 +17,10 @@ struct Camera {
     // Ambient lighting (global key/fill migrated to scene Directional nodes)
     ambient_info: vec4f,    // x = ambient_intensity, yzw = unused
     // Scene lights (up to 8, packed as 4 vec4f per light)
-    scene_light_info: vec4f,   // x = count, yzw = unused
+    scene_light_info: vec4f,   // x = count, y = volumetric_count, z = volumetric_steps, w = unused
     scene_lights: array<vec4f, 32>, // 8 lights × 4 vec4f
+    // Per-light volumetric params (1 vec4f per light)
+    scene_light_vol: array<vec4f, 8>, // [volumetric_on, density, 0, 0]
 }
 
 struct SdfNode {
