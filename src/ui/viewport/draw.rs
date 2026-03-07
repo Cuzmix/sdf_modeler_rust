@@ -428,6 +428,8 @@ pub fn draw(
     hover_world_pos: Option<glam::Vec3>,
     _cursor_over_geometry: bool,
     active_light_ids: &std::collections::HashSet<crate::graph::scene::NodeId>,
+    soloed_light: Option<NodeId>,
+    solo_label: Option<&str>,
 ) -> ViewportOutput {
     let mut output = ViewportOutput {
         pending_pick: None,
@@ -535,7 +537,7 @@ pub fn draw(
     ];
     // Collect scene lights for the GPU (up to 8, sorted by distance to camera)
     let (scene_light_count, scene_light_list, scene_ambient) =
-        crate::gpu::buffers::collect_scene_lights(scene, camera.eye());
+        crate::gpu::buffers::collect_scene_lights(scene, camera.eye(), soloed_light);
     let scene_light_info = [scene_light_count as f32, 0.0, 0.0, 0.0];
     let mut scene_lights_flat = [[0.0_f32; 4]; 32];
     for (i, light) in scene_light_list.iter().enumerate() {
@@ -968,6 +970,28 @@ pub fn draw(
         );
     }
 
+    // --- Solo light indicator ---
+    if let Some(label) = solo_label {
+        let text = format!("SOLO: {}", label);
+        let font = egui::FontId::proportional(13.0);
+        let y_offset = if isolation_label.is_some() { 24.0 } else { 8.0 };
+        let pos = egui::pos2(rect.center().x, rect.min.y + y_offset);
+        ui.painter().text(
+            pos + egui::vec2(1.0, 1.0),
+            egui::Align2::CENTER_TOP,
+            &text,
+            font.clone(),
+            egui::Color32::from_black_alpha(180),
+        );
+        ui.painter().text(
+            pos,
+            egui::Align2::CENTER_TOP,
+            &text,
+            font,
+            egui::Color32::from_rgb(255, 220, 50), // warm yellow
+        );
+    }
+
     // --- Sculpt context indicator (warm accent bar below isolation indicator) ---
     if let SculptState::Active { node_id, .. } = sculpt_state {
         let node_name = scene
@@ -977,7 +1001,9 @@ pub fn draw(
             .unwrap_or("Unknown");
         let text = format!("Sculpting: {}", node_name);
         let font = egui::FontId::proportional(13.0);
-        let y_offset = if isolation_label.is_some() { 24.0 } else { 8.0 };
+        let mut y_offset = 8.0;
+        if isolation_label.is_some() { y_offset += 16.0; }
+        if solo_label.is_some() { y_offset += 16.0; }
         let pos = egui::pos2(rect.center().x, rect.min.y + y_offset);
         ui.painter().text(
             pos + egui::vec2(1.0, 1.0),

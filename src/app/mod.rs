@@ -232,6 +232,7 @@ impl SdfApp {
                 sculpt_state: SculptState::Inactive,
                 sculpt_history: crate::sculpt_history::SculptHistory::new(),
                 clipboard_node: None,
+                soloed_light: None,
             },
             gizmo: GizmoContext {
                 state: GizmoState::Idle,
@@ -456,6 +457,9 @@ impl eframe::App for SdfApp {
         let isolation_label: Option<String> = self.ui.isolation_state.as_ref().and_then(|iso| {
             self.doc.scene.nodes.get(&iso.isolated_node).map(|n| n.name.clone())
         });
+        let solo_label: Option<String> = self.doc.soloed_light.and_then(|id| {
+            self.doc.scene.nodes.get(&id).map(|n| n.name.clone())
+        });
         let fps_info = if self.settings.show_fps_overlay {
             Some((self.perf.timings.avg_fps, self.perf.timings.avg_frame_ms))
         } else {
@@ -518,6 +522,8 @@ impl eframe::App for SdfApp {
                 is_hover_pick: &mut is_hover_pick,
                 hover_world_pos: self.async_state.hover_world_pos,
                 cursor_over_geometry: self.async_state.cursor_over_geometry,
+                soloed_light: self.doc.soloed_light,
+                solo_label: solo_label.clone(),
             },
             scene_tree: SceneTreeContext {
                 renaming_node: &mut self.ui.renaming_node,

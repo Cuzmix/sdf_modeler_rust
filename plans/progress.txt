@@ -997,3 +997,46 @@ Design decisions:
   visual difference between k=1 and k=4 is much greater than k=32 and k=64.
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (384/384) ✓, cargo build ✓
+
+--- Iteration 29: PRD #36 — Light Solo mode ---
+COMPLETED. Added Light Solo mode for isolating individual light contributions.
+
+Changes:
+- src/app/state.rs: Added `soloed_light: Option<NodeId>` to DocumentState. When set,
+  only the soloed light contributes to scene lighting (ambient suppressed too).
+- src/app/actions.rs: Added Action::SoloLight(Option<NodeId>). Toggle semantics:
+  Some(id) with id == current → clear solo; Some(id) different → set new solo;
+  None → clear solo.
+- src/app/action_handler.rs: Handles SoloLight action with toggle logic. Also clears
+  soloed_light on NewScene and DeleteNode (if the deleted node was soloed).
+- src/gpu/buffers.rs: collect_scene_lights() now accepts `soloed_light: Option<NodeId>`.
+  When soloed, skips all lights except the soloed one. Ambient lights are suppressed
+  when soloing a non-ambient light. Added 2 unit tests: solo_light_filters_to_single_light
+  and solo_light_suppresses_ambient.
+- src/ui/scene_tree.rs: Added 'S' (solo) toggle button next to Light leaf nodes in both
+  draw_node_recursive and draw_flat_node. Button is yellow when soloed, gray when not.
+  Both functions accept new `soloed_light: Option<NodeId>` parameter.
+- src/ui/properties.rs: Added Solo/Unsolo toggle button in Light properties header.
+  Dark gold background when soloed for visual distinction.
+- src/ui/viewport/draw.rs: Added "SOLO: LightName" indicator at viewport top in yellow
+  text (same pattern as isolation mode indicator). Stacks correctly below isolation
+  indicator and above sculpt indicator.
+- src/ui/dock.rs: Extended ViewportContext with `soloed_light` and `solo_label` fields.
+  Updated viewport::draw, properties::draw, and scene_tree::draw call sites.
+- src/app/mod.rs: Computes solo_label from soloed_light each frame. Passes through
+  to ViewportContext.
+- src/app/async_tasks.rs: Screenshot uniform passes soloed_light to collect_scene_lights.
+
+Design decisions:
+- S keyboard shortcut NOT added: plain S is already bound to QuickSculptMode. Adding
+  context-dependent shortcuts (S = solo if Light selected, S = sculpt otherwise) would
+  require significant input system changes. Users can rebind via the keymap editor if
+  they want a solo shortcut. The UI buttons in scene tree and properties panel provide
+  full functionality.
+- Ambient suppression: when soloing a non-ambient light, all Ambient lights are
+  suppressed to give a true isolated view of that light's contribution. If the user
+  solos an Ambient light, only that ambient contributes.
+- Solo cleared on delete: if the soloed light is deleted, solo mode automatically
+  clears to prevent stale references.
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (386/386) ✓, cargo build ✓

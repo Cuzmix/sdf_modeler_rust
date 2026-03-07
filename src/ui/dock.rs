@@ -145,6 +145,10 @@ pub struct ViewportContext<'a> {
     pub hover_world_pos: Option<Vec3>,
     /// Whether cursor is currently over geometry (from last hover pick).
     pub cursor_over_geometry: bool,
+    /// Currently soloed light node ID (None = no solo).
+    pub soloed_light: Option<NodeId>,
+    /// Label for solo mode indicator (None = not soloed).
+    pub solo_label: Option<String>,
 }
 
 /// Refs needed only by the scene tree tab.
@@ -225,6 +229,8 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.viewport.hover_world_pos,
                     self.viewport.cursor_over_geometry,
                     self.active_light_ids,
+                    self.viewport.soloed_light,
+                    self.viewport.solo_label.as_deref(),
                 );
                 if let Some(pick) = vp_output.pending_pick {
                     *self.viewport.pending_pick = Some(pick);
@@ -260,6 +266,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.actions,
                     self.active_light_ids,
                     self.settings.max_sculpt_resolution,
+                    self.viewport.soloed_light,
                 );
                 // Defensive: clear selection if the node was deleted by properties panel
                 if let Some(sel) = self.node_graph_state.selected {
@@ -282,6 +289,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.actions,
                     self.scene_tree.search_filter,
                     self.active_light_ids,
+                    self.viewport.soloed_light,
                 );
                 // If scene tree changed selection, scroll graph to it
                 if self.node_graph_state.selected != prev_selected {

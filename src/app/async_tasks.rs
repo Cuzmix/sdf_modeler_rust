@@ -184,7 +184,7 @@ impl SdfApp {
         let scene_bounds = self.doc.scene.compute_bounds();
         let viewport = [0.0, 0.0, width as f32, height as f32];
         let (scene_light_count, scene_light_list, scene_ambient) =
-            crate::gpu::buffers::collect_scene_lights(&self.doc.scene, self.doc.camera.eye());
+            crate::gpu::buffers::collect_scene_lights(&self.doc.scene, self.doc.camera.eye(), self.doc.soloed_light);
         let scene_light_info = [scene_light_count as f32, 0.0, 0.0, 0.0];
         let mut scene_lights_flat = [[0.0_f32; 4]; 32];
         for (i, light) in scene_light_list.iter().enumerate() {

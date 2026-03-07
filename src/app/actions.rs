@@ -159,6 +159,11 @@ pub enum Action {
     /// Toggle a single light slot bit in a geometry node's light mask.
     ToggleLightMaskBit { node_id: NodeId, light_slot: u8, enabled: bool },
 
+    // ── Light Solo ───────────────────────────────────────────────────
+    /// Toggle light solo mode. Some(id) = solo that light (or unsolo if already soloed).
+    /// None = clear solo.
+    SoloLight(Option<NodeId>),
+
     // ── Lighting presets ─────────────────────────────────────────────
     /// Apply a lighting preset to scene Key/Fill lights and ambient.
     ApplyLightingPreset(LightingPreset),

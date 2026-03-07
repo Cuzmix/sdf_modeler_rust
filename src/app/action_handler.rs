@@ -31,6 +31,7 @@ impl SdfApp {
                     self.ui.node_graph_state.needs_initial_rebuild = true;
                     self.doc.sculpt_state = SculptState::Inactive;
                     self.ui.isolation_state = None;
+                    self.doc.soloed_light = None;
                     self.gpu.current_structure_key = 0;
                     self.gpu.buffer_dirty = true;
                     self.persistence.saved_fingerprint = self.doc.scene.data_fingerprint();
@@ -105,6 +106,9 @@ impl SdfApp {
                             self.ui.node_graph_state.clear_selection();
                         } else {
                             self.ui.node_graph_state.selected_set.remove(&id);
+                        }
+                        if self.doc.soloed_light == Some(id) {
+                            self.doc.soloed_light = None;
                         }
                         self.ui.node_graph_state.needs_initial_rebuild = true;
                         self.doc.sculpt_state = SculptState::Inactive;
@@ -741,6 +745,24 @@ impl SdfApp {
                         self.doc.scene.set_light_mask(node_id, new_mask);
                         self.gpu.buffer_dirty = true;
                     }
+                }
+
+                // ── Light Solo ───────────────────────────────────────
+                Action::SoloLight(target) => {
+                    match target {
+                        Some(id) => {
+                            if self.doc.soloed_light == Some(id) {
+                                // Already soloed — toggle off
+                                self.doc.soloed_light = None;
+                            } else {
+                                self.doc.soloed_light = Some(id);
+                            }
+                        }
+                        None => {
+                            self.doc.soloed_light = None;
+                        }
+                    }
+                    self.gpu.buffer_dirty = true;
                 }
 
                 // ── Lighting presets ─────────────────────────────────

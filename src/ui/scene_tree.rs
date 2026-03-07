@@ -30,6 +30,7 @@ pub fn draw(
     actions: &mut ActionSink,
     search_filter: &mut String,
     active_light_ids: &std::collections::HashSet<NodeId>,
+    soloed_light: Option<NodeId>,
 ) {
     ui.heading("Scene Tree");
 
@@ -76,14 +77,14 @@ pub fn draw(
         }
 
         for id in matching {
-            draw_flat_node(ui, scene, id, selected, selected_set, renaming, rename_buf, actions, active_light_ids);
+            draw_flat_node(ui, scene, id, selected, selected_set, renaming, rename_buf, actions, active_light_ids, soloed_light);
         }
         return;
     }
 
     let mut visited = HashSet::new();
     for id in tops {
-        draw_node_recursive(ui, scene, id, selected, selected_set, renaming, rename_buf, &mut visited, drag_state, actions, active_light_ids);
+        draw_node_recursive(ui, scene, id, selected, selected_set, renaming, rename_buf, &mut visited, drag_state, actions, active_light_ids, soloed_light);
     }
 
     // "Drop here to make top-level" area when dragging
@@ -223,6 +224,7 @@ fn draw_node_recursive(
     drag_state: &mut Option<NodeId>,
     actions: &mut ActionSink,
     active_light_ids: &std::collections::HashSet<NodeId>,
+    soloed_light: Option<NodeId>,
 ) {
     if !visited.insert(id) {
         ui.label(format!("  (cycle: #{})", id));
@@ -309,6 +311,19 @@ fn draw_node_recursive(
                     *renaming = Some(id);
                 }
             }
+            // Solo button for Light nodes
+            if scene.nodes.get(&id).is_some_and(|n| matches!(n.data, NodeData::Light { .. })) {
+                let is_soloed = soloed_light == Some(id);
+                let solo_text = egui::RichText::new("S").small();
+                let solo_text = if is_soloed {
+                    solo_text.color(egui::Color32::from_rgb(255, 220, 50))
+                } else {
+                    solo_text.color(egui::Color32::from_gray(120))
+                };
+                if ui.small_button(solo_text).clicked() {
+                    actions.push(Action::SoloLight(Some(id)));
+                }
+            }
             handle_drag_drop(ui, &response, scene, id, drag_state);
             node_context_menu(&response, ui, scene, id, selected, renaming, rename_buf, actions);
         });
@@ -331,7 +346,7 @@ fn draw_node_recursive(
             .show(ui, |ui| {
                 for child_opt in &info.children {
                     if let Some(child_id) = child_opt {
-                        draw_node_recursive(ui, scene, *child_id, selected, selected_set, renaming, rename_buf, visited, drag_state, actions, active_light_ids);
+                        draw_node_recursive(ui, scene, *child_id, selected, selected_set, renaming, rename_buf, visited, drag_state, actions, active_light_ids, soloed_light);
                     } else {
                         ui.label("  (empty)");
                     }
@@ -410,6 +425,7 @@ fn draw_flat_node(
     rename_buf: &mut String,
     actions: &mut ActionSink,
     active_light_ids: &std::collections::HashSet<NodeId>,
+    soloed_light: Option<NodeId>,
 ) {
     let Some(info) = extract_info(scene, id, selected_set) else { return };
     let is_inactive_light = scene.nodes.get(&id).is_some_and(|n| {
@@ -470,6 +486,19 @@ fn draw_flat_node(
             if let Some(node) = scene.nodes.get(&id) {
                 *rename_buf = node.name.clone();
                 *renaming = Some(id);
+            }
+        }
+        // Solo button for Light nodes
+        if scene.nodes.get(&id).is_some_and(|n| matches!(n.data, NodeData::Light { .. })) {
+            let is_soloed = soloed_light == Some(id);
+            let solo_text = egui::RichText::new("S").small();
+            let solo_text = if is_soloed {
+                solo_text.color(egui::Color32::from_rgb(255, 220, 50))
+            } else {
+                solo_text.color(egui::Color32::from_gray(120))
+            };
+            if ui.small_button(solo_text).clicked() {
+                actions.push(Action::SoloLight(Some(id)));
             }
         }
         node_context_menu(&response, ui, scene, id, selected, renaming, rename_buf, actions);

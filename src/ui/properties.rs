@@ -399,6 +399,7 @@ pub fn draw(
     actions: &mut ActionSink,
     active_light_ids: &HashSet<NodeId>,
     max_sculpt_resolution: u32,
+    soloed_light: Option<NodeId>,
 ) {
     // Multi-select: show batch properties when more than 1 node is selected
     if selected_set.len() > 1 {
@@ -1193,7 +1194,22 @@ pub fn draw(
             mut shadow_softness,
             mut shadow_color,
         } => {
-            ui.label("Type: Light");
+            ui.horizontal(|ui| {
+                ui.label("Type: Light");
+                let is_soloed = soloed_light == Some(id);
+                let solo_text = if is_soloed { "Unsolo" } else { "Solo" };
+                let btn = egui::Button::new(
+                    egui::RichText::new(solo_text).small()
+                );
+                let btn = if is_soloed {
+                    btn.fill(egui::Color32::from_rgb(80, 60, 10))
+                } else {
+                    btn
+                };
+                if ui.add(btn).clicked() {
+                    actions.push(Action::SoloLight(Some(id)));
+                }
+            });
             if !active_light_ids.contains(&id) {
                 ui.add_space(4.0);
                 ui.label(

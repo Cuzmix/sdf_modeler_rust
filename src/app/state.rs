@@ -32,6 +32,8 @@ pub struct DocumentState {
     pub sculpt_state: SculptState,
     pub sculpt_history: SculptHistory,
     pub clipboard_node: Option<NodeId>,
+    /// When set, only this Light node contributes to scene lighting (Solo mode).
+    pub soloed_light: Option<NodeId>,
 }
 
 // ---------------------------------------------------------------------------
