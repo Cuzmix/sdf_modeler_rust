@@ -36,7 +36,14 @@
       "Bash(grep -E \"\\\\.wgsl$\")",
       "WebFetch(domain:www.ronja-tutorials.com)",
       "WebSearch",
-      "WebFetch(domain:docs.blender.org)"
+      "WebFetch(domain:docs.blender.org)",
+      "Bash(taskkill //F //IM sdf_modeler.exe)",
+      "Bash(cargo test differential_sculpt)",
+      "Bash(cargo test --lib)",
+      "Read(//c/Users/Manny/AppData/Local/Temp/claude/c--Users-Manny-Documents-Code-Projects-Typscript-sdf-modeler-rust/tasks/**)",
+      "Bash(cargo test --lib app::state::tests)",
+      "Bash(cargo test naga_validates_render_shader_with_all_postlude)",
+      "Read(//c/Users/Manny/Documents/Code/ Projects/Typscript/sdf_modeler_rust/src/**)"
     ]
   }
 }
