@@ -1386,6 +1386,15 @@ fn draw_toolbar(ui: &mut egui::Ui, scene: &Scene, state: &mut NodeGraphState, gr
             }
         });
 
+        ui.menu_button("+ Light", |ui| {
+            for light_type in LightType::ALL {
+                if ui.button(light_type.label()).clicked() {
+                    actions.push(Action::CreateLight(light_type.clone()));
+                    ui.close_menu();
+                }
+            }
+        });
+
         if ui
             .add_enabled(state.selected.is_some(), egui::Button::new("+ Sculpt"))
             .on_hover_text("Add sculpt modifier to selected node (Ctrl+R)")
