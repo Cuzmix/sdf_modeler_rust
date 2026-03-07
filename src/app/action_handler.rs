@@ -765,6 +765,26 @@ impl SdfApp {
                     self.gpu.buffer_dirty = true;
                 }
 
+                // ── Light Cookie ─────────────────────────────────────
+                Action::SetLightCookie { light_id, cookie } => {
+                    // Validate: cookie must be a Primitive or Operation node (not Light/Transform/etc.)
+                    let valid = cookie.is_none_or(|cookie_id| {
+                        self.doc.scene.nodes.get(&cookie_id).is_some_and(|n| {
+                            matches!(n.data, NodeData::Primitive { .. } | NodeData::Operation { .. })
+                        })
+                    });
+                    if valid {
+                        if let Some(node) = self.doc.scene.nodes.get_mut(&light_id) {
+                            if let NodeData::Light { ref mut cookie_node, .. } = node.data {
+                                *cookie_node = cookie;
+                            }
+                        }
+                        // Cookie changes affect shader codegen (new cookie_sdf function)
+                        self.gpu.current_structure_key = 0;
+                        self.gpu.buffer_dirty = true;
+                    }
+                }
+
                 // ── Lighting presets ─────────────────────────────────
                 Action::ApplyLightingPreset(preset) => {
                     apply_lighting_preset_to_scene(

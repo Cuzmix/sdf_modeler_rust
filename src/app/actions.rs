@@ -164,6 +164,11 @@ pub enum Action {
     /// None = clear solo.
     SoloLight(Option<NodeId>),
 
+    // ── Light Cookie ──────────────────────────────────────────────────
+    /// Set or clear a light's SDF cookie shape. The cookie node must be a Primitive
+    /// or Operation subtree whose SDF shapes the light's beam.
+    SetLightCookie { light_id: NodeId, cookie: Option<NodeId> },
+
     // ── Lighting presets ─────────────────────────────────────────────
     /// Apply a lighting preset to scene Key/Fill lights and ambient.
     ApplyLightingPreset(LightingPreset),

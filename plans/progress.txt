@@ -1100,3 +1100,69 @@ Design decisions:
   without over-darkening the scene.
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (386/386) ✓, cargo build ✓
+
+--- Iteration 31: PRD #34 — SDF-shaped light cookies ---
+COMPLETED. Added SDF cookie shapes for lights — an SDF-native feature impossible in
+traditional mesh renderers. Lights can reference a Primitive or Operation node as a
+"cookie" that shapes their beam.
+
+Changes:
+- src/graph/scene.rs: Added `cookie_node: Option<NodeId>` field to NodeData::Light
+  (default None, serde default for backwards compat). Cookie references a Primitive
+  or Operation node whose SDF shape modulates the light's intensity. Updated all
+  exhaustive match blocks: structure_key (hashes cookie_node — triggers shader rebuild),
+  data_fingerprint (hashes cookie_node), content_eq/deep_eq, duplicate_subtree,
+  create_light, create_default_lights (all None). Updated 3 test constructors.
+- src/app/actions.rs: Added Action::SetLightCookie { light_id, cookie }.
+- src/app/action_handler.rs: Handles SetLightCookie with validation — cookie must be
+  Primitive or Operation node (rejects Light, Transform, Modifier, Sculpt). Sets
+  cookie_node on the light, forces structure_key=0 (shader rebuild) since new cookie_sdf
+  function must be generated.
+- src/gpu/codegen.rs: Added cookie SDF codegen system:
+  - build_cookie_mapping(scene) -> HashMap<NodeId, usize>: deterministic mapping from
+    light node ID → cookie function index. Sorted by node ID for stability. Used by
+    both codegen (shader generation) and buffer packing (GPU upload).
+  - generate_cookie_sdf_functions(): for each light with a cookie, generates a standalone
+    `fn cookie_sdf_N(p: vec3f) -> f32` function that evaluates the cookie subtree SDF.
+    Uses the same emit_node_wgsl infrastructure as scene_sdf, but only for the cookie's
+    subtree nodes. Also generates `fn eval_cookie_sdf(idx, p) -> f32` dispatcher with
+    if-chain mapping index → cookie function.
+  - generate_shader() includes cookie functions between scene_sdf and postlude.
+  - Added 4 unit tests: no_cookies_generates_empty_dispatcher, cookie_generates_cookie_sdf_function,
+    cookie_mapping_deterministic, naga_validates_render_shader_with_cookie.
+- src/gpu/buffers.rs: Extended SceneLightGpu volumetric field documentation.
+  collect_scene_lights() now builds cookie mapping via build_cookie_mapping() and packs
+  cookie info: volumetric.z = has_cookie (0/1), volumetric.w = cookie_sdf_index (-1/0+).
+  The mapping is deterministic (sorted by node ID), matching the codegen output.
+- src/shaders/rendering.wgsl: Added cookie evaluation in the scene light loop after spot
+  cone falloff. When a light has a cookie (scene_light_vol[li].z > 0.5), reads the cookie
+  index from scene_light_vol[li].w, calls eval_cookie_sdf(idx, p) to evaluate the cookie
+  SDF at the shading point, and modulates attenuation via smoothstep(0.02, -0.02, dist).
+  Inside cookie shape = full light, outside = no light, with soft edge at boundary.
+- src/shaders/bindings.wgsl: Updated scene_light_vol comment to document cookie fields.
+- src/ui/properties.rs: Added "Cookie Shape" section in Light properties (Point and Spot
+  only). ComboBox lists all Primitive/Operation nodes sorted by name, plus "None" to clear.
+  Selecting a node pushes Action::SetLightCookie. Shows current cookie node name when set.
+- src/ui/light_gizmo.rs: Added `has_cookie` field to LightInfo struct. When a light has
+  a cookie, draws a blue "C" badge in a circle at the top-right of the billboard icon.
+
+Design decisions:
+- Cookie functions indexed by light node ID: build_cookie_mapping sorts lights by node ID
+  and assigns sequential indices (0, 1, 2...). Both codegen and buffer packing use the
+  same deterministic algorithm, ensuring the shader's cookie_sdf_N function matches the
+  buffer's cookie_sdf_index. The mapping is rebuilt on structure_key change (when cookies
+  are added/removed/changed), which triggers shader rebuild.
+- World-space evaluation: cookie SDF is evaluated at the shading point in world space
+  (not light-local space). The cookie primitive's own transforms (position/scale/rotation)
+  define where the cookie shape sits in the scene. This means moving/scaling/rotating the
+  cookie primitive directly shapes the light beam.
+- Soft edge via smoothstep: smoothstep(0.02, -0.02, cookie_dist) provides a smooth
+  transition at the cookie boundary, avoiding hard aliased edges. The 0.02 radius gives
+  a subtle feathering effect.
+- Point and Spot only: Directional and Ambient lights don't have meaningful cookie
+  behavior (no spatial falloff to shape). Cookie UI hidden for those types.
+- Structure key includes cookie_node: adding/removing/changing a cookie triggers shader
+  rebuild (correct, since new cookie_sdf functions must be generated). Modifying the
+  cookie primitive's properties (position, scale) only updates the node buffer (fast path).
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (390/390) ✓, cargo build ✓

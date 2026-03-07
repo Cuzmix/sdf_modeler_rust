@@ -20,7 +20,7 @@ struct Camera {
     scene_light_info: vec4f,   // x = count, y = volumetric_count, z = volumetric_steps, w = unused
     scene_lights: array<vec4f, 32>, // 8 lights × 4 vec4f
     // Per-light volumetric params (1 vec4f per light)
-    scene_light_vol: array<vec4f, 8>, // [volumetric_on, density, 0, 0]
+    scene_light_vol: array<vec4f, 8>, // [volumetric_on, density, has_cookie, cookie_idx]
 }
 
 struct SdfNode {

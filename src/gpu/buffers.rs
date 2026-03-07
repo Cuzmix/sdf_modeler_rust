@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use bytemuck::{Pod, Zeroable};
 
+use crate::gpu::codegen::build_cookie_mapping;
 use crate::graph::scene::{LightType, NodeData, NodeId, Scene, MAX_SCENE_LIGHTS};
 
 /// 128-byte GPU node (8 x vec4f).
@@ -209,7 +210,8 @@ pub struct SceneLightGpu {
     /// x = cos(half_spot_angle), y = cast_shadows (0/1), z = shadow_softness,
     /// w = packed shadow_color (RGB8 encoded as floor(r*255)*65536 + floor(g*255)*256 + floor(b*255))
     pub params: [f32; 4],
-    /// x = volumetric (0.0 = off, 1.0 = on), y = volumetric_density, zw = reserved
+    /// x = volumetric (0.0 = off, 1.0 = on), y = volumetric_density,
+    /// z = has_cookie (0.0 = no, 1.0 = yes), w = cookie_sdf_index (-1 = none, 0+ = index)
     pub volumetric: [f32; 4],
 }
 
@@ -229,6 +231,7 @@ pub fn collect_scene_lights(
     soloed_light: Option<NodeId>,
 ) -> (u32, Vec<SceneLightGpu>, SceneAmbient) {
     let parent_map = scene.build_parent_map();
+    let cookie_map = build_cookie_mapping(scene);
     let mut lights: Vec<(f32, SceneLightGpu)> = Vec::new();
     let mut ambient = SceneAmbient::default();
 
@@ -244,6 +247,7 @@ pub fn collect_scene_lights(
             shadow_color,
             volumetric,
             volumetric_density,
+            ..
         } = &node.data
         {
             if scene.is_hidden(id) {
@@ -318,8 +322,8 @@ pub fn collect_scene_lights(
                     volumetric: [
                         if *volumetric { 1.0 } else { 0.0 },
                         *volumetric_density,
-                        0.0,
-                        0.0,
+                        if cookie_map.contains_key(&id) { 1.0 } else { 0.0 },
+                        cookie_map.get(&id).map(|&idx| idx as f32).unwrap_or(-1.0),
                     ],
                 },
             ));

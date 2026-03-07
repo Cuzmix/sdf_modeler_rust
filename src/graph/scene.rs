@@ -534,6 +534,10 @@ pub enum NodeData {
         /// Density of volumetric scattering (0.01–1.0). Higher = more opaque beams.
         #[serde(default = "default_volumetric_density")]
         volumetric_density: f32,
+        /// Optional SDF cookie: reference to a Primitive or Operation node whose SDF
+        /// shapes the light's beam. Inside the cookie shape = full light, outside = no light.
+        #[serde(default)]
+        cookie_node: Option<NodeId>,
     },
 }
 
@@ -816,6 +820,7 @@ impl Scene {
                 shadow_color: Vec3::ZERO,
                 volumetric: false,
                 volumetric_density: 0.15,
+                cookie_node: None,
             },
         );
         // Create a Transform parent positioned above and to the side of the origin
@@ -849,6 +854,7 @@ impl Scene {
                 shadow_color: Vec3::ZERO,
                 volumetric: false,
                 volumetric_density: 0.15,
+                cookie_node: None,
             },
         );
         let _key_transform_id = self.add_node(
@@ -875,6 +881,7 @@ impl Scene {
                 shadow_color: Vec3::ZERO,
                 volumetric: false,
                 volumetric_density: 0.15,
+                cookie_node: None,
             },
         );
         let _fill_transform_id = self.add_node(
@@ -901,6 +908,7 @@ impl Scene {
                 shadow_color: Vec3::ZERO,
                 volumetric: false,
                 volumetric_density: 0.15,
+                cookie_node: None,
             },
         );
         let _ambient_transform_id = self.add_node(
@@ -1277,9 +1285,10 @@ impl Scene {
                     std::mem::discriminant(kind).hash(&mut hasher);
                     input.hash(&mut hasher);
                 }
-                NodeData::Light { light_type, .. } => {
+                NodeData::Light { light_type, cookie_node, .. } => {
                     5u8.hash(&mut hasher);
                     std::mem::discriminant(light_type).hash(&mut hasher);
+                    cookie_node.hash(&mut hasher);
                 }
             }
         }
@@ -1367,7 +1376,7 @@ impl Scene {
                     extra.y.to_bits().hash(&mut hasher);
                     extra.z.to_bits().hash(&mut hasher);
                 }
-                NodeData::Light { color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color, volumetric, volumetric_density, .. } => {
+                NodeData::Light { color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color, volumetric, volumetric_density, cookie_node, .. } => {
                     color.x.to_bits().hash(&mut hasher);
                     color.y.to_bits().hash(&mut hasher);
                     color.z.to_bits().hash(&mut hasher);
@@ -1381,6 +1390,7 @@ impl Scene {
                     shadow_color.z.to_bits().hash(&mut hasher);
                     volumetric.hash(&mut hasher);
                     volumetric_density.to_bits().hash(&mut hasher);
+                    cookie_node.hash(&mut hasher);
                 }
             }
             // Include light mask in fingerprint
@@ -1611,7 +1621,7 @@ impl Scene {
                         extra: *extra,
                     }
                 }
-                NodeData::Light { light_type, color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color, volumetric, volumetric_density } => {
+                NodeData::Light { light_type, color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color, volumetric, volumetric_density, cookie_node } => {
                     NodeData::Light {
                         light_type: light_type.clone(),
                         color: *color,
@@ -1623,6 +1633,7 @@ impl Scene {
                         shadow_color: *shadow_color,
                         volumetric: *volumetric,
                         volumetric_density: *volumetric_density,
+                        cookie_node: *cookie_node,
                     }
                 }
             };
@@ -2013,6 +2024,7 @@ impl Scene {
                         shadow_color: sc1,
                         volumetric: vol1,
                         volumetric_density: vd1,
+                        cookie_node: ck1,
                     },
                     NodeData::Light {
                         light_type: lt2,
@@ -2025,6 +2037,7 @@ impl Scene {
                         shadow_color: sc2,
                         volumetric: vol2,
                         volumetric_density: vd2,
+                        cookie_node: ck2,
                     },
                 ) => {
                     if std::mem::discriminant(lt1) != std::mem::discriminant(lt2)
@@ -2037,6 +2050,7 @@ impl Scene {
                         || sc1 != sc2
                         || vol1 != vol2
                         || vd1 != vd2
+                        || ck1 != ck2
                     {
                         return false;
                     }
@@ -2832,6 +2846,7 @@ mod tests {
             shadow_color: Vec3::ZERO,
             volumetric: false,
             volumetric_density: 0.15,
+            cookie_node: None,
         };
         assert_eq!(data.children().count(), 0);
     }
@@ -2849,6 +2864,7 @@ mod tests {
             shadow_color: Vec3::ZERO,
             volumetric: false,
             volumetric_density: 0.15,
+            cookie_node: None,
         };
         assert!(data.geometry_local_sphere().is_none());
     }
@@ -3017,7 +3033,7 @@ mod tests {
         let mut scene = empty_scene();
         let (light_id, _) = scene.create_light(LightType::Spot);
         match &scene.nodes[&light_id].data {
-            NodeData::Light { light_type, color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color, volumetric, volumetric_density } => {
+            NodeData::Light { light_type, color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color, volumetric, volumetric_density, cookie_node } => {
                 assert_eq!(*light_type, LightType::Spot);
                 assert_eq!(*color, Vec3::ONE);
                 assert!((intensity - 1.0).abs() < 1e-5);
@@ -3029,6 +3045,7 @@ mod tests {
                 assert_eq!(*shadow_color, Vec3::ZERO);
                 assert!(!volumetric);
                 assert!((volumetric_density - 0.15).abs() < 1e-5);
+                assert!(cookie_node.is_none());
             }
             _ => panic!("expected Light node"),
         }

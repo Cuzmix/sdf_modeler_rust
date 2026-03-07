@@ -80,8 +80,16 @@ pub fn generate_shader(
     let (tex_decls, sculpt_tex_map) = generate_voxel_texture_decls(scene);
     let tex_map = if sculpt_tex_map.is_empty() { None } else { Some(&sculpt_tex_map) };
     let scene_sdf = generate_scene_sdf(scene, tex_map);
+    let cookie_sdfs = generate_cookie_sdf_functions(scene, tex_map);
     let postlude = build_postlude(config);
-    format!("{}\n{}\n{}\n{}", render_prelude(), tex_decls, scene_sdf, postlude)
+    format!(
+        "{}\n{}\n{}\n{}\n{}",
+        render_prelude(),
+        tex_decls,
+        scene_sdf,
+        cookie_sdfs,
+        postlude
+    )
 }
 
 pub fn generate_pick_shader(scene: &Scene, config: &RenderConfig) -> String {
@@ -572,6 +580,136 @@ fn generate_scene_sdf_flat(
     lines.push("}".to_string());
 
     lines.join("\n")
+}
+
+// ---------------------------------------------------------------------------
+// Cookie SDF generation
+// ---------------------------------------------------------------------------
+
+/// Build a deterministic mapping from light node ID → cookie function index.
+/// Used by both codegen (shader generation) and buffer packing (GPU upload).
+/// The mapping is stable as long as the scene structure doesn't change.
+pub fn build_cookie_mapping(scene: &Scene) -> HashMap<NodeId, usize> {
+    let mut lights_with_cookies: Vec<(NodeId, NodeId)> = scene
+        .nodes
+        .iter()
+        .filter_map(|(&id, node)| {
+            if let NodeData::Light {
+                cookie_node: Some(cookie_id),
+                ..
+            } = &node.data
+            {
+                // Only include if both the light and cookie node exist and are visible
+                if !scene.is_hidden(id) && scene.nodes.contains_key(cookie_id) {
+                    Some((id, *cookie_id))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .collect();
+    lights_with_cookies.sort_by_key(|(id, _)| *id);
+    lights_with_cookies
+        .into_iter()
+        .enumerate()
+        .map(|(idx, (light_id, _))| (light_id, idx))
+        .collect()
+}
+
+/// Generate cookie SDF functions for all lights that have cookie shapes.
+/// Returns WGSL code containing:
+/// - `fn cookie_sdf_N(p: vec3f) -> f32` for each cookie (N = 0, 1, 2...)
+/// - `fn eval_cookie_sdf(idx: i32, p: vec3f) -> f32` dispatcher
+fn generate_cookie_sdf_functions(
+    scene: &Scene,
+    sculpt_tex_map: Option<&HashMap<NodeId, usize>>,
+) -> String {
+    let cookie_mapping = build_cookie_mapping(scene);
+    if cookie_mapping.is_empty() {
+        // Always generate the dispatcher even if no cookies, so the shader can reference it
+        return "fn eval_cookie_sdf(idx: i32, p: vec3f) -> f32 {\n    return 1e10;\n}\n"
+            .to_string();
+    }
+
+    let order = scene.visible_topo_order();
+    let idx_map: HashMap<NodeId, usize> = order
+        .iter()
+        .enumerate()
+        .map(|(i, &id)| (id, i))
+        .collect();
+    let parent_map = scene.build_parent_map();
+
+    // Collect (light_id, cookie_node_id) sorted by cookie index
+    let mut cookies: Vec<(usize, NodeId, NodeId)> = Vec::new();
+    for (&light_id, &cookie_idx) in &cookie_mapping {
+        if let Some(node) = scene.nodes.get(&light_id) {
+            if let NodeData::Light {
+                cookie_node: Some(cookie_id),
+                ..
+            } = &node.data
+            {
+                cookies.push((cookie_idx, light_id, *cookie_id));
+            }
+        }
+    }
+    cookies.sort_by_key(|(idx, _, _)| *idx);
+
+    let mut all_lines = Vec::new();
+
+    for (cookie_idx, _light_id, cookie_id) in &cookies {
+        // Collect the cookie subtree nodes
+        let subtree_nodes: HashSet<NodeId> = scene.collect_subtree(*cookie_id).into_iter().collect();
+
+        let mut lines = Vec::new();
+        lines.push(format!(
+            "fn cookie_sdf_{cookie_idx}(p: vec3f) -> f32 {{"
+        ));
+
+        // Emit all subtree nodes in topo order
+        for (i, &node_id) in order.iter().enumerate() {
+            if !subtree_nodes.contains(&node_id) {
+                continue;
+            }
+            let Some(node) = scene.nodes.get(&node_id) else {
+                continue;
+            };
+            emit_node_wgsl(
+                &mut lines,
+                i,
+                node_id,
+                node,
+                &parent_map,
+                scene,
+                &idx_map,
+                sculpt_tex_map,
+            );
+        }
+
+        // Return the distance from the cookie subtree root
+        if let Some(&root_idx) = idx_map.get(cookie_id) {
+            lines.push(format!("    return n{root_idx}.x;"));
+        } else {
+            lines.push("    return 1e10;".to_string());
+        }
+        lines.push("}".to_string());
+        all_lines.push(lines.join("\n"));
+    }
+
+    // Generate dispatcher function
+    let mut dispatcher = Vec::new();
+    dispatcher.push("fn eval_cookie_sdf(idx: i32, p: vec3f) -> f32 {".to_string());
+    for (cookie_idx, _, _) in &cookies {
+        dispatcher.push(format!(
+            "    if idx == {cookie_idx} {{ return cookie_sdf_{cookie_idx}(p); }}"
+        ));
+    }
+    dispatcher.push("    return 1e10;".to_string());
+    dispatcher.push("}".to_string());
+    all_lines.push(dispatcher.join("\n"));
+
+    all_lines.join("\n\n")
 }
 
 #[cfg(test)]
@@ -1918,5 +2056,67 @@ mod tests {
         config.tonemapping_aces = true;
         let shader = generate_shader(&scene, &config);
         validate_wgsl(&shader, "render shader with all postlude features enabled");
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Cookie SDF codegen
+    // ═══════════════════════════════════════════════════════════════
+
+    #[test]
+    fn no_cookies_generates_empty_dispatcher() {
+        let scene = empty_scene();
+        let wgsl = generate_cookie_sdf_functions(&scene, None);
+        assert!(wgsl.contains("fn eval_cookie_sdf"));
+        assert!(wgsl.contains("return 1e10;"));
+        assert!(!wgsl.contains("cookie_sdf_0"));
+    }
+
+    #[test]
+    fn cookie_generates_cookie_sdf_function() {
+        let mut scene = empty_scene();
+        let prim_id = scene.create_primitive(SdfPrimitive::Torus);
+        let (light_id, _) = scene.create_light(LightType::Spot);
+        // Set the torus as the light's cookie
+        if let NodeData::Light { ref mut cookie_node, .. } = scene.nodes.get_mut(&light_id).unwrap().data {
+            *cookie_node = Some(prim_id);
+        }
+        let wgsl = generate_cookie_sdf_functions(&scene, None);
+        assert!(wgsl.contains("fn cookie_sdf_0(p: vec3f) -> f32"));
+        assert!(wgsl.contains("sdf_torus"));
+        assert!(wgsl.contains("fn eval_cookie_sdf(idx: i32, p: vec3f) -> f32"));
+        assert!(wgsl.contains("if idx == 0"));
+    }
+
+    #[test]
+    fn cookie_mapping_deterministic() {
+        let mut scene = empty_scene();
+        let prim_id = scene.create_primitive(SdfPrimitive::Box);
+        let (light_a, _) = scene.create_light(LightType::Point);
+        let (light_b, _) = scene.create_light(LightType::Spot);
+        // Both lights get cookies
+        if let NodeData::Light { ref mut cookie_node, .. } = scene.nodes.get_mut(&light_a).unwrap().data {
+            *cookie_node = Some(prim_id);
+        }
+        if let NodeData::Light { ref mut cookie_node, .. } = scene.nodes.get_mut(&light_b).unwrap().data {
+            *cookie_node = Some(prim_id);
+        }
+        let mapping = build_cookie_mapping(&scene);
+        assert_eq!(mapping.len(), 2);
+        // Mapping is stable across calls
+        let mapping2 = build_cookie_mapping(&scene);
+        assert_eq!(mapping, mapping2);
+    }
+
+    #[test]
+    fn naga_validates_render_shader_with_cookie() {
+        let mut scene = empty_scene();
+        let prim_id = scene.create_primitive(SdfPrimitive::Sphere);
+        let (light_id, _) = scene.create_light(LightType::Spot);
+        if let NodeData::Light { ref mut cookie_node, .. } = scene.nodes.get_mut(&light_id).unwrap().data {
+            *cookie_node = Some(prim_id);
+        }
+        let config = RenderConfig::default();
+        let shader = generate_shader(&scene, &config);
+        validate_wgsl(&shader, "render shader with SDF cookie");
     }
 }

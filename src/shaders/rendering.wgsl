@@ -465,6 +465,16 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
                 sl_atten *= clamp((cos_theta - cos_half_angle) / max(inner_cos - cos_half_angle, 0.0001), 0.0, 1.0);
             }
 
+            // SDF cookie shape modulation
+            let sl_has_cookie = camera.scene_light_vol[li].z > 0.5;
+            if sl_has_cookie {
+                let sl_cookie_idx = i32(camera.scene_light_vol[li].w + 0.5);
+                let sl_cookie_dist = eval_cookie_sdf(sl_cookie_idx, p);
+                // Inside cookie shape (dist < 0) = full light, outside = no light
+                // smoothstep provides a soft edge at the boundary
+                sl_atten *= smoothstep(0.02, -0.02, sl_cookie_dist);
+            }
+
             // Cook-Torrance BRDF for this light
             let sl_h = normalize(sl_light_dir + view_dir);
             let sl_NoL = max(dot(n, sl_light_dir), 0.0);

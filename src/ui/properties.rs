@@ -1195,6 +1195,7 @@ pub fn draw(
             mut shadow_color,
             mut volumetric,
             mut volumetric_density,
+            cookie_node,
         } => {
             ui.horizontal(|ui| {
                 ui.label("Type: Light");
@@ -1305,6 +1306,60 @@ pub fn draw(
                 }
             }
 
+            // Cookie shape (Point and Spot only — Directional/Ambient don't benefit)
+            if matches!(light_type, crate::graph::scene::LightType::Point | crate::graph::scene::LightType::Spot) {
+                ui.separator();
+                ui.label(egui::RichText::new("Cookie Shape").strong());
+                ui.label(
+                    egui::RichText::new("Use an SDF primitive to shape this light's beam")
+                        .weak()
+                        .small(),
+                );
+
+                // Collect candidate nodes (Primitives and Operations)
+                let cookie_label = cookie_node
+                    .and_then(|cid| scene.nodes.get(&cid))
+                    .map(|n| n.name.clone())
+                    .unwrap_or_else(|| "None".to_string());
+
+                egui::ComboBox::from_id_salt(format!("cookie_{}", id))
+                    .selected_text(&cookie_label)
+                    .show_ui(ui, |ui| {
+                        // "None" option to clear the cookie
+                        if ui.selectable_label(cookie_node.is_none(), "None").clicked() {
+                            actions.push(Action::SetLightCookie {
+                                light_id: id,
+                                cookie: None,
+                            });
+                        }
+                        // List all Primitive and Operation nodes
+                        let mut candidates: Vec<(NodeId, String)> = scene
+                            .nodes
+                            .iter()
+                            .filter_map(|(&nid, n)| {
+                                if matches!(
+                                    n.data,
+                                    NodeData::Primitive { .. } | NodeData::Operation { .. }
+                                ) {
+                                    Some((nid, n.name.clone()))
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect();
+                        candidates.sort_by(|a, b| a.1.cmp(&b.1));
+                        for (cid, name) in candidates {
+                            let selected = cookie_node == Some(cid);
+                            if ui.selectable_label(selected, &name).clicked() {
+                                actions.push(Action::SetLightCookie {
+                                    light_id: id,
+                                    cookie: Some(cid),
+                                });
+                            }
+                        }
+                    });
+            }
+
             ui.separator();
             if ui.button("Delete Node").on_hover_text("Remove this light from the scene").clicked() {
                 actions.push(Action::DeleteNode(id));
@@ -1324,6 +1379,7 @@ pub fn draw(
                     shadow_color: ref mut sc,
                     volumetric: ref mut vol,
                     volumetric_density: ref mut vd,
+                    ..
                 } = node.data {
                     *lt = light_type;
                     *c = color;

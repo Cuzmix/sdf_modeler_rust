@@ -39,6 +39,8 @@ struct LightInfo {
     intensity: f32,
     /// Direction the light points (from Transform rotation). Default -Y.
     direction: Vec3,
+    /// Whether this light has an SDF cookie shape attached.
+    has_cookie: bool,
 }
 
 /// Collect all visible Light nodes and their world-space transforms.
@@ -52,6 +54,7 @@ fn collect_lights(scene: &Scene, parent_map: &HashMap<NodeId, NodeId>) -> Vec<Li
             intensity,
             range,
             spot_angle,
+            cookie_node,
             ..
         } = &node.data
         {
@@ -96,6 +99,7 @@ fn collect_lights(scene: &Scene, parent_map: &HashMap<NodeId, NodeId>) -> Vec<Li
                 } else {
                     Vec3::NEG_Y
                 },
+                has_cookie: cookie_node.is_some(),
             });
         }
     }
@@ -492,6 +496,23 @@ pub fn draw_and_interact(
                 let p1 = screen_pos + egui::vec2(a1.cos(), a1.sin()) * dash_radius;
                 painter.line_segment([p0, p1], dash_stroke);
             }
+        }
+
+        // Draw cookie badge (small "C" in a circle) when light has an SDF cookie
+        if light.has_cookie {
+            let badge_offset = egui::vec2(size * 0.6, -size * 0.6);
+            let badge_center = screen_pos + badge_offset;
+            let badge_radius = size * 0.25;
+            let badge_bg = Color32::from_rgba_unmultiplied(40, 120, 200, (alpha * 220.0) as u8);
+            let badge_text_col = Color32::from_rgba_unmultiplied(255, 255, 255, (alpha * 255.0) as u8);
+            painter.circle_filled(badge_center, badge_radius + 1.0, badge_bg);
+            painter.text(
+                badge_center,
+                egui::Align2::CENTER_CENTER,
+                "C",
+                egui::FontId::proportional(badge_radius * 1.6),
+                badge_text_col,
+            );
         }
 
         // Draw small "X" over inactive light icons
