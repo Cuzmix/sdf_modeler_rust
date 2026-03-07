@@ -146,69 +146,12 @@ src/
 
 ## Key Architecture Patterns
 
-### Action System (React/Redux-inspired)
-- `Action` enum in `src/app/actions.rs` — all structural state-mutating intents
-- `ActionSink = Vec<Action>` — UI pushes actions, never mutates state directly
-- `process_actions()` in `src/app/action_handler.rs` — single mutation point (Redux reducer)
-- **Data-level edits** (sliders, colors, gizmo transforms) use `&mut Scene` for zero-latency
-- **Structural changes** (delete, create, insert modifier, bake, tool switch) go through actions
+> **Detailed reference**: Architecture, GPU pipeline, raymarching, and shader conventions are documented in the `sdf-architecture` Claude skill (auto-loaded when working on GPU/shader/codegen code) and in `docs/architecture.md`.
 
-### Update Loop Phases (per frame)
-1. Frame setup (timing, input)
-2. Async polling (export progress, bake results)
-3. GPU pipeline sync (shader recompilation if topology changed)
-4. Collect actions from keyboard shortcuts + UI drawing
-5. `process_actions()` — apply all queued actions
-6. Post-action cleanup
-7. GPU upload + dirty tracking
-8. Finalize (history snapshot, request repaint)
-
-### State Decomposition
-`SdfApp` is decomposed into sub-structs in `src/app/state.rs`:
-- `DocumentState` — scene, camera, history, active_tool, sculpt_state, clipboard_node
-- `GizmoContext` — gizmo mode, space, state
-- `GpuSyncState` — buffer dirty flags, pipeline state
-- `AsyncState` — background task handles
-- `UiState` — node_graph_state, dock state, UI toggles
-- `PersistenceState` — save/load state
-- `PerfState` — frame timings, profiler data
-
-Access pattern: `self.doc.scene`, `self.gpu.buffer_dirty`, `self.ui.node_graph_state`
-
-### Scene Graph
-- Binary tree with `HashMap<NodeId, SceneNode>` in `src/graph/scene.rs`
-- Node types: primitives, CSG operations, transforms, modifiers
-- Codegen flattens tree to WGSL via post-order traversal (`src/gpu/codegen.rs`)
-- Fast/slow path: `structure_key()` hashes topology — slider drags only update storage buffer (fast), topology changes regenerate shader (slow)
-
-### GPU Pipeline
-- Bind groups: @group(0)=camera, @group(1)=scene storage, @group(2)=voxel textures
-- Render shader: `texture_3d<f32>` + `textureSampleLevel` for hardware trilinear
-- Pick shader: 1x1 Rgba8Unorm, encoding 0=bg, 1=floor, 2+=node, 253-255=gizmo axes
-- Brush shader: compute shader for sculpt voxel modification
-- Custom device limits: `max_storage_buffers_per_shader_stage = 4`, 128MB storage buffers
-
-### Mesh Export
-- Hand-rolled marching cubes in `src/export.rs`
-- rayon-parallelized by z-slice, two-phase vertex deduplication
-- Formats: OBJ, STL (binary), PLY (ASCII), glTF Binary (.glb), USD ASCII (.usda)
-- Async: `start_export` spawns thread, `poll_export` checks mpsc channel
-
----
-
-## Raymarching & SDF Notes (iq-inspired)
-
-- Conservative step: `t += d * 0.9` + epsilon 0.0005 + 96 max steps
-- Enhanced sphere tracing: Keinert over-relaxation (omega=1.2), ~20% fewer steps
-- Tetrahedron normals (4 evals vs 6)
-- Distance-adaptive normal epsilon: `clamp(0.001*t, 0.0005, 0.05)`
-- Improved soft shadows (Aaltonen variant with `ph` tracking)
-- Scene-level ray-AABB intersection for early-out
-- Interactive quality mode: half steps, skip AO+shadows during camera drag
-- Per-subtree bounding skip: expensive subtrees (with sculpt) wrapped in AABB conditional
-- Binary search refinement is BAD (50% slower per iq)
-- GPU ternaries don't create real branches — don't "optimize" with step/mix
-- sqrt() is nearly free on GPU
+- **Action system**: Redux-inspired. `Action` enum → `process_actions()` reducer. Data-level edits use `&mut Scene` directly; structural changes go through actions.
+- **Two-speed GPU sync**: `structure_key()` changes → shader rebuild (~10ms). `data_fingerprint()` changes → buffer upload only (~1ms).
+- **State decomposition**: `SdfApp` has 7 sub-structs (doc, gizmo, gpu, async_state, ui, persistence, perf).
+- **Scene graph**: Binary tree with `HashMap<NodeId, SceneNode>`. Codegen flattens to WGSL via post-order traversal.
 
 ---
 
