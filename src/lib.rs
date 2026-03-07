@@ -6,6 +6,7 @@ mod gpu;
 mod graph;
 mod io;
 pub mod keymap;
+mod material_preset;
 mod mesh_import;
 mod sculpt;
 mod sculpt_history;

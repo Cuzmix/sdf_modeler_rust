@@ -1345,3 +1345,44 @@ Coverage summary:
 - Expression: all functions (23 existing) ✓, t=0 validation ✓, preset formulas ✓, error handling ✓
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (449/449) ✓, cargo build ✓
+
+--- Iteration 36: PRD #43 — Material Presets library ---
+COMPLETED. Added material presets library with 22 built-in presets organized by category
+and user-saved presets with disk persistence.
+
+Changes:
+- Created src/material_preset.rs: New module with MaterialPreset struct (name, category,
+  color, roughness, metallic, fresnel, emissive_intensity) and MaterialLibrary for user
+  presets. 22 built-in presets across 5 categories:
+  - Metals (7): Gold, Silver, Copper, Brushed Steel, Aluminum, Bronze, Iron
+  - Plastics (4): Red Plastic, White Plastic, Black Rubber, Glossy Plastic
+  - Stone (4): Marble, Concrete, Granite, Sandstone
+  - Organic (4): Skin, Wood, Leather, Clay
+  - Special (3): Glass, Mirror, Emissive White
+  All values based on real-world IOR/albedo references. MaterialLibrary persists user
+  presets to materials.json next to the executable (same pattern as settings.json).
+  Duplicate name detection on save (replaces existing). 6 unit tests: preset count,
+  category coverage, serialization roundtrip, duplicate name replacement, remove, library
+  roundtrip.
+- src/lib.rs: Registered pub mod material_preset.
+- src/app/mod.rs: Added material_library field to SdfApp, loaded from disk on startup.
+  Passed through SdfTabViewer to properties panel.
+- src/ui/dock.rs: Added material_library field to SdfTabViewer. Passed to properties::draw.
+- src/ui/properties.rs: Removed inline MaterialPreset struct and MATERIAL_PRESETS const
+  (8 hardcoded presets). Replaced with categorized dropdown using built_in_presets()
+  (22 presets) + user presets section. Both Primitive and Sculpt material sections updated.
+  Added Save button (floppy disk icon) that saves current material values as a user preset.
+  User presets show delete (✕) button inline. Changes auto-save to disk.
+
+Design decisions:
+- No Action variants added: material preset application works through the existing direct
+  mutation pattern (local variables → write-back at end of draw). Adding Action::ApplyMaterialPreset
+  would be redundant since the property write-back already handles the GPU buffer update.
+  The Save button writes directly to MaterialLibrary and calls save() — no structural
+  state change requiring the action system.
+- built_in_presets() returns Vec (not const): allows future extensibility (plugin presets)
+  without changing the API. Called per-frame but trivially cheap (~22 allocations).
+- User preset names auto-generated as "Custom N". Users can later rename via a future
+  right-click context menu enhancement.
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (455/455) ✓, cargo build ✓

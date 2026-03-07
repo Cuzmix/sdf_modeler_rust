@@ -6,32 +6,11 @@ use crate::app::BakeRequest;
 use crate::app::actions::{Action, ActionSink};
 use crate::graph::scene::{CsgOp, ModifierKind, NodeData, NodeId, Scene, SdfPrimitive};
 use crate::graph::voxel;
+use crate::material_preset::{self, MaterialLibrary};
 use crate::sculpt::SculptState;
 
 const SCALE_MIN: f32 = 0.01;
 const SCALE_MAX: f32 = 100.0;
-
-/// Material preset: (name, optional_color, metallic, roughness, fresnel, emissive_intensity).
-/// `None` for color means "keep current color".
-struct MaterialPreset {
-    name: &'static str,
-    color: Option<[f32; 3]>,
-    metallic: f32,
-    roughness: f32,
-    fresnel: f32,
-    emissive_intensity: f32,
-}
-
-const MATERIAL_PRESETS: &[MaterialPreset] = &[
-    MaterialPreset { name: "Default",  color: None,                        metallic: 0.0, roughness: 0.5,  fresnel: 0.04, emissive_intensity: 0.0 },
-    MaterialPreset { name: "Gold",     color: Some([1.0, 0.76, 0.33]),     metallic: 1.0, roughness: 0.3,  fresnel: 0.95, emissive_intensity: 0.0 },
-    MaterialPreset { name: "Silver",   color: Some([0.95, 0.93, 0.88]),    metallic: 1.0, roughness: 0.2,  fresnel: 0.97, emissive_intensity: 0.0 },
-    MaterialPreset { name: "Chrome",   color: Some([0.77, 0.78, 0.78]),    metallic: 1.0, roughness: 0.05, fresnel: 0.98, emissive_intensity: 0.0 },
-    MaterialPreset { name: "Plastic",  color: None,                        metallic: 0.0, roughness: 0.4,  fresnel: 0.04, emissive_intensity: 0.0 },
-    MaterialPreset { name: "Ceramic",  color: None,                        metallic: 0.0, roughness: 0.1,  fresnel: 0.04, emissive_intensity: 0.0 },
-    MaterialPreset { name: "Rubber",   color: None,                        metallic: 0.0, roughness: 0.9,  fresnel: 0.02, emissive_intensity: 0.0 },
-    MaterialPreset { name: "Glow",     color: None,                        metallic: 0.0, roughness: 0.5,  fresnel: 0.04, emissive_intensity: 2.0 },
-];
 
 /// Common color presets as (name, [r, g, b]).
 const COLOR_PRESETS: &[(&str, [f32; 3])] = &[
@@ -400,6 +379,7 @@ pub fn draw(
     active_light_ids: &HashSet<NodeId>,
     max_sculpt_resolution: u32,
     soloed_light: Option<NodeId>,
+    material_library: &mut MaterialLibrary,
 ) {
     // Multi-select: show batch properties when more than 1 node is selected
     if selected_set.len() > 1 {
@@ -514,27 +494,79 @@ pub fn draw(
                 .default_open(true)
                 .show(ui, |ui| {
                     // Material presets
+                    // Material preset dropdown (built-in + user presets)
+                    let built_in = material_preset::built_in_presets();
                     ui.horizontal(|ui| {
                         ui.label("Preset:");
                         egui::ComboBox::from_id_salt("prim_mat_preset")
                             .selected_text("Apply...")
-                            .width(80.0)
+                            .width(120.0)
                             .show_ui(ui, |ui| {
-                                for preset in MATERIAL_PRESETS {
-                                    if ui.selectable_label(false, preset.name).clicked() {
-                                        if let Some(c) = preset.color {
-                                            color = glam::Vec3::new(c[0], c[1], c[2]);
+                                let mut apply_preset = |preset: &material_preset::MaterialPreset| {
+                                    if let Some(c) = preset.color {
+                                        color = glam::Vec3::new(c[0], c[1], c[2]);
+                                    }
+                                    metallic = preset.metallic;
+                                    roughness = preset.roughness;
+                                    fresnel = preset.fresnel;
+                                    emissive_intensity = preset.emissive_intensity;
+                                    if preset.emissive_intensity > 0.0 && emissive == glam::Vec3::ZERO {
+                                        emissive = color;
+                                    }
+                                };
+                                // Built-in categories
+                                for category in material_preset::CATEGORIES {
+                                    if *category == material_preset::CATEGORY_USER {
+                                        continue; // user presets shown separately below
+                                    }
+                                    let in_category: Vec<_> = built_in.iter()
+                                        .filter(|p| p.category == *category)
+                                        .collect();
+                                    if in_category.is_empty() {
+                                        continue;
+                                    }
+                                    ui.label(egui::RichText::new(*category).strong().small());
+                                    for preset in &in_category {
+                                        if ui.selectable_label(false, &preset.name).clicked() {
+                                            apply_preset(preset);
                                         }
-                                        metallic = preset.metallic;
-                                        roughness = preset.roughness;
-                                        fresnel = preset.fresnel;
-                                        emissive_intensity = preset.emissive_intensity;
-                                        if preset.emissive_intensity > 0.0 && emissive == glam::Vec3::ZERO {
-                                            emissive = color;
-                                        }
+                                    }
+                                    ui.separator();
+                                }
+                                // User presets
+                                if !material_library.user_presets.is_empty() {
+                                    ui.label(egui::RichText::new("User").strong().small());
+                                    let mut remove_index = None;
+                                    for (idx, preset) in material_library.user_presets.iter().enumerate() {
+                                        ui.horizontal(|ui| {
+                                            if ui.selectable_label(false, &preset.name).clicked() {
+                                                apply_preset(preset);
+                                            }
+                                            if ui.small_button("\u{2715}").on_hover_text("Delete preset").clicked() {
+                                                remove_index = Some(idx);
+                                            }
+                                        });
+                                    }
+                                    if let Some(idx) = remove_index {
+                                        material_library.remove_preset(idx);
+                                        material_library.save();
                                     }
                                 }
                             });
+                        // Save as Preset button
+                        if ui.small_button("\u{1F4BE}").on_hover_text("Save current material as preset").clicked() {
+                            let preset_name = format!("Custom {}", material_library.user_presets.len() + 1);
+                            let preset = material_preset::MaterialPreset::from_node_material(
+                                &preset_name,
+                                [color.x, color.y, color.z],
+                                roughness,
+                                metallic,
+                                fresnel,
+                                emissive_intensity,
+                            );
+                            material_library.save_preset(preset);
+                            material_library.save();
+                        }
                     });
 
                     ui.label("Color");
@@ -812,28 +844,66 @@ pub fn draw(
                 .default_open(true)
                 .id_salt("sculpt_material")
                 .show(ui, |ui| {
-                    // Material presets
+                    // Material preset dropdown (built-in + user presets)
+                    let built_in_sculpt = material_preset::built_in_presets();
                     ui.horizontal(|ui| {
                         ui.label("Preset:");
                         egui::ComboBox::from_id_salt("sculpt_mat_preset")
                             .selected_text("Apply...")
-                            .width(80.0)
+                            .width(120.0)
                             .show_ui(ui, |ui| {
-                                for preset in MATERIAL_PRESETS {
-                                    if ui.selectable_label(false, preset.name).clicked() {
-                                        if let Some(c) = preset.color {
-                                            color = glam::Vec3::new(c[0], c[1], c[2]);
+                                let mut apply_preset = |preset: &material_preset::MaterialPreset| {
+                                    if let Some(c) = preset.color {
+                                        color = glam::Vec3::new(c[0], c[1], c[2]);
+                                    }
+                                    metallic = preset.metallic;
+                                    roughness = preset.roughness;
+                                    fresnel = preset.fresnel;
+                                    emissive_intensity = preset.emissive_intensity;
+                                    if preset.emissive_intensity > 0.0 && emissive == glam::Vec3::ZERO {
+                                        emissive = color;
+                                    }
+                                };
+                                for category in material_preset::CATEGORIES {
+                                    if *category == material_preset::CATEGORY_USER {
+                                        continue;
+                                    }
+                                    let in_category: Vec<_> = built_in_sculpt.iter()
+                                        .filter(|p| p.category == *category)
+                                        .collect();
+                                    if in_category.is_empty() {
+                                        continue;
+                                    }
+                                    ui.label(egui::RichText::new(*category).strong().small());
+                                    for preset in &in_category {
+                                        if ui.selectable_label(false, &preset.name).clicked() {
+                                            apply_preset(preset);
                                         }
-                                        metallic = preset.metallic;
-                                        roughness = preset.roughness;
-                                        fresnel = preset.fresnel;
-                                        emissive_intensity = preset.emissive_intensity;
-                                        if preset.emissive_intensity > 0.0 && emissive == glam::Vec3::ZERO {
-                                            emissive = color;
+                                    }
+                                    ui.separator();
+                                }
+                                if !material_library.user_presets.is_empty() {
+                                    ui.label(egui::RichText::new("User").strong().small());
+                                    for preset in material_library.user_presets.iter() {
+                                        if ui.selectable_label(false, &preset.name).clicked() {
+                                            apply_preset(preset);
                                         }
                                     }
                                 }
                             });
+                        if ui.small_button("\u{1F4BE}").on_hover_text("Save current material as preset").clicked() {
+                            let preset_name = format!("Custom {}", material_library.user_presets.len() + 1);
+                            let preset = material_preset::MaterialPreset::from_node_material(
+                                &preset_name,
+                                [color.x, color.y, color.z],
+                                roughness,
+                                metallic,
+                                fresnel,
+                                emissive_intensity,
+                            );
+                            material_library.save_preset(preset);
+                            material_library.save();
+                        }
                     });
 
                     ui.label("Color");

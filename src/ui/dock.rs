@@ -183,6 +183,8 @@ pub struct SdfTabViewer<'a> {
     pub history: &'a History,
     /// Set of Light NodeIds currently active on GPU (nearest to camera).
     pub active_light_ids: &'a std::collections::HashSet<NodeId>,
+    /// Material preset library (built-in + user-saved).
+    pub material_library: &'a mut crate::material_preset::MaterialLibrary,
 }
 
 impl<'a> TabViewer for SdfTabViewer<'a> {
@@ -267,6 +269,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.active_light_ids,
                     self.settings.max_sculpt_resolution,
                     self.viewport.soloed_light,
+                    self.material_library,
                 );
                 // Defensive: clear selection if the node was deleted by properties panel
                 if let Some(sel) = self.node_graph_state.selected {

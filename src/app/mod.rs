@@ -178,6 +178,8 @@ pub struct SdfApp {
     pub(super) perf: PerfState,
     /// Application settings (render quality, export, etc.).
     pub(super) settings: Settings,
+    /// Material preset library (built-in + user-saved).
+    pub(super) material_library: crate::material_preset::MaterialLibrary,
     /// Initial vsync state (preserved across settings changes).
     pub(super) initial_vsync: bool,
     /// Last frame timestamp for delta calculation.
@@ -303,6 +305,7 @@ impl SdfApp {
                 composite_full_update_needed: false,
             },
             settings,
+            material_library: crate::material_preset::MaterialLibrary::load(),
             initial_vsync,
             last_time: 0.0,
         }
@@ -534,6 +537,7 @@ impl eframe::App for SdfApp {
             actions: &mut action_sink,
             history: &self.doc.history,
             active_light_ids: &self.ui.active_light_ids,
+            material_library: &mut self.material_library,
         };
 
         egui::CentralPanel::default()
