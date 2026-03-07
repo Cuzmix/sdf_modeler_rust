@@ -343,6 +343,7 @@ pub fn collect_scene_lights(
     scene: &Scene,
     camera_pos: glam::Vec3,
     soloed_light: Option<NodeId>,
+    time: f32,
 ) -> (u32, Vec<SceneLightGpu>, SceneAmbient) {
     let parent_map = scene.build_parent_map();
     let cookie_map = build_cookie_mapping(scene);
@@ -364,6 +365,8 @@ pub fn collect_scene_lights(
             proximity_mode,
             proximity_range,
             array_config,
+            intensity_expr,
+            color_hue_expr,
             ..
         } = &node.data
         {
@@ -378,11 +381,30 @@ pub fn collect_scene_lights(
                 }
             }
 
+            // Evaluate expression overrides for intensity and color hue
+            let effective_base_intensity = if let Some(ref expr_str) = intensity_expr {
+                crate::expression::parse_expression(expr_str)
+                    .map(|expr| crate::expression::evaluate(&expr, time))
+                    .unwrap_or(*intensity)
+            } else {
+                *intensity
+            };
+            let effective_color = if let Some(ref expr_str) = color_hue_expr {
+                crate::expression::parse_expression(expr_str)
+                    .map(|expr| {
+                        let hue_degrees = crate::expression::evaluate(&expr, time);
+                        hue_rotate_color(*color, hue_degrees)
+                    })
+                    .unwrap_or(*color)
+            } else {
+                *color
+            };
+
             // Ambient lights accumulate into scene ambient — no position/direction needed
             if *light_type == LightType::Ambient {
                 // Suppress ambient when soloing a non-ambient light
                 if soloed_light.is_none() {
-                    ambient.color += *color * *intensity;
+                    ambient.color += effective_color * effective_base_intensity;
                 }
                 continue;
             }
@@ -413,15 +435,15 @@ pub fn collect_scene_lights(
                         // Apply hue variation across instances
                         let instance_color = if cfg.color_variation > 0.0 {
                             let hue_shift = (instance_index as f32 / positions.len() as f32) * cfg.color_variation;
-                            hue_rotate_color(*color, hue_shift * 360.0)
+                            hue_rotate_color(effective_color, hue_shift * 360.0)
                         } else {
-                            *color
+                            effective_color
                         };
                         lights.push((
                             dist_to_camera,
                             SceneLightGpu {
                                 position_type: [world_pos.x, world_pos.y, world_pos.z, 0.0], // Point type
-                                direction_intensity: [0.0, -1.0, 0.0, *intensity],
+                                direction_intensity: [0.0, -1.0, 0.0, effective_base_intensity],
                                 color_range: [instance_color.x, instance_color.y, instance_color.z, *range],
                                 params: [1.0, 0.0, 8.0, 0.0], // No shadows, no cookie
                                 volumetric: [0.0, 0.0, 0.0, -1.0],
@@ -453,7 +475,7 @@ pub fn collect_scene_lights(
 
             // Compute proximity-modulated intensity on CPU (zero GPU cost).
             let effective_intensity = match proximity_mode {
-                ProximityMode::Off => *intensity,
+                ProximityMode::Off => effective_base_intensity,
                 ProximityMode::Brighten | ProximityMode::Dim => {
                     let sdf_dist = evaluate_scene_sdf_at_point(scene, *translation);
                     let proximity_range_clamped = proximity_range.max(0.001);
@@ -462,9 +484,9 @@ pub fn collect_scene_lights(
                     let smooth_t = t * t * (3.0 - 2.0 * t);
                     match proximity_mode {
                         // Brighten: factor = 1.0 + (1.0 - smooth_t), so max 2x at surface
-                        ProximityMode::Brighten => *intensity * (1.0 + (1.0 - smooth_t)),
+                        ProximityMode::Brighten => effective_base_intensity * (1.0 + (1.0 - smooth_t)),
                         // Dim: factor = smooth_t, so 0 at surface, 1 at range
-                        ProximityMode::Dim => *intensity * smooth_t,
+                        ProximityMode::Dim => effective_base_intensity * smooth_t,
                         ProximityMode::Off => unreachable!(),
                     }
                 }
@@ -477,7 +499,7 @@ pub fn collect_scene_lights(
                 SceneLightGpu {
                     position_type: [translation.x, translation.y, translation.z, type_val],
                     direction_intensity: [direction.x, direction.y, direction.z, effective_intensity],
-                    color_range: [color.x, color.y, color.z, *range],
+                    color_range: [effective_color.x, effective_color.y, effective_color.z, *range],
                     params: [
                         cos_half_angle,
                         if *cast_shadows { 1.0 } else { 0.0 },
@@ -594,7 +616,7 @@ mod tests {
     #[test]
     fn collect_scene_lights_empty_scene_returns_zero() {
         let scene = empty_scene();
-        let (count, lights, _ambient) = collect_scene_lights(&scene, Vec3::ZERO, None);
+        let (count, lights, _ambient) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
         assert_eq!(count, 0);
         assert!(lights.is_empty());
     }
@@ -603,7 +625,7 @@ mod tests {
     fn collect_scene_lights_single_point_light() {
         let mut scene = empty_scene();
         let (_light_id, _transform_id) = scene.create_light(LightType::Point);
-        let (count, lights, _ambient) = collect_scene_lights(&scene, Vec3::ZERO, None);
+        let (count, lights, _ambient) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
         assert_eq!(count, 1);
         assert_eq!(lights.len(), 1);
         // Point light type = 0.0
@@ -622,7 +644,7 @@ mod tests {
     fn collect_scene_lights_spot_light_type() {
         let mut scene = empty_scene();
         scene.create_light(LightType::Spot);
-        let (count, lights, _ambient) = collect_scene_lights(&scene, Vec3::ZERO, None);
+        let (count, lights, _ambient) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
         assert_eq!(count, 1);
         // Spot light type = 1.0
         assert!((lights[0].position_type[3] - 1.0).abs() < 1e-5);
@@ -632,7 +654,7 @@ mod tests {
     fn collect_scene_lights_directional_type() {
         let mut scene = empty_scene();
         scene.create_light(LightType::Directional);
-        let (count, lights, _ambient) = collect_scene_lights(&scene, Vec3::ZERO, None);
+        let (count, lights, _ambient) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
         assert_eq!(count, 1);
         // Directional light type = 2.0
         assert!((lights[0].position_type[3] - 2.0).abs() < 1e-5);
@@ -645,7 +667,7 @@ mod tests {
         for _ in 0..10 {
             scene.create_light(LightType::Point);
         }
-        let (count, lights, _ambient) = collect_scene_lights(&scene, Vec3::ZERO, None);
+        let (count, lights, _ambient) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
         assert_eq!(count, MAX_SCENE_LIGHTS as u32);
         assert_eq!(lights.len(), MAX_SCENE_LIGHTS);
     }
@@ -668,7 +690,7 @@ mod tests {
             }
         }
         let camera_pos = Vec3::ZERO;
-        let (count, lights, _ambient) = collect_scene_lights(&scene, camera_pos, None);
+        let (count, lights, _ambient) = collect_scene_lights(&scene, camera_pos, None, 0.0);
         assert_eq!(count, 2);
         // First light should be the nearest one (at x=1)
         assert!((lights[0].position_type[0] - 1.0).abs() < 1e-5,
@@ -683,7 +705,7 @@ mod tests {
         let mut scene = empty_scene();
         let (light_id, _) = scene.create_light(LightType::Point);
         scene.hidden_nodes.insert(light_id);
-        let (count, lights, _ambient) = collect_scene_lights(&scene, Vec3::ZERO, None);
+        let (count, lights, _ambient) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
         assert_eq!(count, 0);
         assert!(lights.is_empty());
     }
@@ -700,7 +722,7 @@ mod tests {
                 }
             }
         }
-        let (count, lights, ambient) = collect_scene_lights(&scene, Vec3::ZERO, None);
+        let (count, lights, ambient) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
         // Ambient lights don't go into the light array
         assert_eq!(count, 0);
         assert!(lights.is_empty());
@@ -763,7 +785,7 @@ mod tests {
                 *spot_angle = 90.0;
             }
         }
-        let (_, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None);
+        let (_, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
         // cos(90/2 degrees) = cos(45 degrees) = sqrt(2)/2 ≈ 0.7071
         let expected_cos = (45.0_f32.to_radians()).cos();
         assert!((lights[0].params[0] - expected_cos).abs() < 1e-3,
@@ -780,7 +802,7 @@ mod tests {
                 *intensity = -3.5;
             }
         }
-        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None);
+        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
         assert_eq!(count, 1);
         // Negative intensity must be preserved in the GPU buffer (direction_intensity.w)
         assert!((lights[0].direction_intensity[3] - (-3.5)).abs() < 1e-5,
@@ -803,7 +825,7 @@ mod tests {
             *shadow_softness = 16.0;
             *shadow_color = Vec3::new(0.0, 0.0, 1.0); // blue shadows
         }
-        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None);
+        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
         assert_eq!(count, 1);
         // params.y = cast_shadows = 1.0
         assert!((lights[0].params[1] - 1.0).abs() < 1e-5);
@@ -817,7 +839,7 @@ mod tests {
     fn collect_scene_lights_no_shadows_by_default_for_point() {
         let mut scene = empty_scene();
         let (_light_id, _) = scene.create_light(LightType::Point);
-        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None);
+        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
         assert_eq!(count, 1);
         // Point lights default to cast_shadows=false
         assert!(lights[0].params[1] < 0.5, "point light should default to no shadows");
@@ -831,17 +853,17 @@ mod tests {
         let (_light_c, _) = scene.create_light(LightType::Directional);
 
         // Without solo: all 3 lights returned
-        let (count, _, _) = collect_scene_lights(&scene, Vec3::ZERO, None);
+        let (count, _, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
         assert_eq!(count, 3);
 
         // Solo light A: only 1 light returned
-        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, Some(light_a));
+        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, Some(light_a), 0.0);
         assert_eq!(count, 1);
         // Point light type = 0.0
         assert!((lights[0].position_type[3] - 0.0).abs() < 0.01);
 
         // Solo light B: only 1 light returned (Spot)
-        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, Some(light_b));
+        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, Some(light_b), 0.0);
         assert_eq!(count, 1);
         assert!((lights[0].position_type[3] - 1.0).abs() < 0.01);
     }
@@ -860,11 +882,11 @@ mod tests {
         }
 
         // Without solo: ambient contributes
-        let (_, _, ambient) = collect_scene_lights(&scene, Vec3::ZERO, None);
+        let (_, _, ambient) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
         assert!(ambient.color.length() > 0.0);
 
         // Solo the point light: ambient suppressed
-        let (_, _, ambient) = collect_scene_lights(&scene, Vec3::ZERO, Some(point_id));
+        let (_, _, ambient) = collect_scene_lights(&scene, Vec3::ZERO, Some(point_id), 0.0);
         assert!(ambient.color.length() < 0.01);
     }
 
@@ -894,7 +916,7 @@ mod tests {
                 *intensity = 5.0;
             }
         }
-        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None);
+        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
         assert_eq!(count, 1);
         assert!((lights[0].direction_intensity[3] - 5.0).abs() < 1e-5);
     }
@@ -938,6 +960,8 @@ mod tests {
                 proximity_mode: ProximityMode::Brighten,
                 proximity_range: 2.0,
                 array_config: None,
+                intensity_expr: None,
+                color_hue_expr: None,
             },
         );
         let _transform_id = scene.add_node(
@@ -949,7 +973,7 @@ mod tests {
                 scale: Vec3::ONE,
             },
         );
-        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None);
+        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
         assert_eq!(count, 1);
         // Light at 1.2 from sphere surface (d≈0.2), Brighten should boost intensity > 1.0
         assert!(lights[0].direction_intensity[3] > 1.0);
@@ -992,6 +1016,8 @@ mod tests {
                 proximity_mode: ProximityMode::Dim,
                 proximity_range: 2.0,
                 array_config: None,
+                intensity_expr: None,
+                color_hue_expr: None,
             },
         );
         let _transform_id = scene.add_node(
@@ -1003,7 +1029,7 @@ mod tests {
                 scale: Vec3::ONE,
             },
         );
-        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None);
+        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
         assert_eq!(count, 1);
         // Light at 1.2 from sphere surface (d≈0.2), Dim should reduce intensity < 1.0
         assert!(lights[0].direction_intensity[3] < 1.0);
@@ -1036,6 +1062,8 @@ mod tests {
                     radius: 3.0,
                     color_variation: 0.0,
                 }),
+                intensity_expr: None,
+                color_hue_expr: None,
             },
         );
         let _transform_id = scene.add_node(
@@ -1047,7 +1075,7 @@ mod tests {
                 scale: Vec3::ONE,
             },
         );
-        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None);
+        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
         assert_eq!(count, 4, "Ring with 4 should produce 4 point lights");
         // All should be point type (0.0)
         for light in &lights {
@@ -1083,6 +1111,8 @@ mod tests {
                     radius: 3.0,
                     color_variation: 0.0,
                 }),
+                intensity_expr: None,
+                color_hue_expr: None,
             },
         );
         let _transform_id = scene.add_node(
@@ -1094,7 +1124,7 @@ mod tests {
                 scale: Vec3::ONE,
             },
         );
-        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None);
+        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
         assert_eq!(count as usize, MAX_SCENE_LIGHTS, "Should cap at MAX_SCENE_LIGHTS");
         assert_eq!(lights.len(), MAX_SCENE_LIGHTS);
     }
@@ -1125,6 +1155,8 @@ mod tests {
                     radius: 2.0,
                     color_variation: 1.0, // Full rainbow spread
                 }),
+                intensity_expr: None,
+                color_hue_expr: None,
             },
         );
         let _transform_id = scene.add_node(
@@ -1136,7 +1168,7 @@ mod tests {
                 scale: Vec3::ONE,
             },
         );
-        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None);
+        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
         assert_eq!(count, 3);
         // First light should still be red-ish (hue shift 0)
         assert!(lights[0].color_range[0] > 0.8, "First instance should be red");

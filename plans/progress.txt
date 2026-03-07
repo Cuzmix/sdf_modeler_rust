@@ -1258,3 +1258,50 @@ Design decisions:
   across the full 360° hue spectrum.
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (399/399) ✓, cargo build ✓
+
+--- Iteration 34: PRD #39 — Light animation expressions ---
+COMPLETED. Added expression-based light animation for time-driven dynamic lighting.
+
+Changes:
+- Created src/expression.rs: Minimal recursive-descent expression evaluator.
+  - Tokenizer: float literals, identifiers, operators (+,-,*,/), parens, commas.
+  - AST: Expression enum (Literal, Variable, Negate, BinOp, Call).
+  - Parser: recursive descent with correct precedence (add/sub < mul/div < unary < primary).
+  - 9 built-in functions: sin, cos, abs, fract, floor, clamp, mix, step, smoothstep.
+  - Constants: `t` (time variable), `pi` (π). Division by zero returns 0.
+  - 4 expression presets: Pulse, Flicker, Slow Glow, Rainbow.
+  - 23 unit tests covering all functions, edge cases, error handling, and preset expressions.
+- src/lib.rs: Registered pub mod expression.
+- src/graph/scene.rs: Added `intensity_expr: Option<String>` and `color_hue_expr: Option<String>`
+  to NodeData::Light. Both #[serde(default)] for backwards compatibility. Updated all exhaustive
+  match blocks: data_fingerprint (hashes both), content_eq (compares both), duplicate_subtree
+  (clones both), create_light, create_default_lights (all None). Added has_light_expressions()
+  helper that returns true if any Light node has an active expression. Updated test constructors.
+- src/gpu/buffers.rs: collect_scene_lights() now accepts `time: f32` parameter. For each light
+  with intensity_expr, parses and evaluates at current time to override static intensity. For
+  color_hue_expr, evaluates to get hue shift degrees and applies via existing hue_rotate_color().
+  Expressions apply before proximity modulation (so proximity operates on animated intensity).
+  Updated all 25+ test call sites with time=0.0.
+- src/ui/properties.rs: Added collapsible "Expressions" section in Light properties (not for
+  Ambient or Array types). Contains: preset dropdown (Pulse/Flicker/Slow Glow/Rainbow/Clear All),
+  text input for Intensity Expression with live preview ("Current: 0.73" in green) or error
+  message in red, text input for Color Hue Expression with live preview ("Current: 180.0°").
+  Both fields written back to scene on change.
+- src/ui/viewport/draw.rs: Passes `time` to collect_scene_lights (already available in scope).
+- src/app/async_tasks.rs: Screenshot uniform passes self.last_time to collect_scene_lights.
+- src/app/mod.rs: Added has_light_expressions() to needs_repaint check — when any light has
+  an expression, continuous repaint is enabled so animations run smoothly.
+
+Design decisions:
+- CPU-side expression evaluation: expressions are evaluated once per light per frame on the CPU,
+  not per-pixel on the GPU. This is correct because the expressions only affect per-light
+  properties (intensity, color), not per-pixel values. Zero GPU cost.
+- Parse on every frame: the expression string is re-parsed each frame. For the tiny expressions
+  involved (typically <20 tokens), parsing takes <1μs. Caching the parsed AST would require
+  invalidation logic for when the user edits the text field — not worth the complexity.
+- hue_rotate_color reuse: the existing hue rotation function (from Array lights) is reused for
+  color hue expressions. Degrees-based, matching the Rainbow preset (0-360 range).
+- Expression errors shown inline: invalid expressions show a red error message in the properties
+  panel. The static value is used as fallback when parsing fails — no visual disruption.
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (422/422) ✓, cargo build ✓

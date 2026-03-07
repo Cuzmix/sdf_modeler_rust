@@ -614,6 +614,12 @@ pub enum NodeData {
         /// Only meaningful when light_type is Array.
         #[serde(default)]
         array_config: Option<LightArrayConfig>,
+        /// Optional expression for animating intensity over time. Overrides static intensity.
+        #[serde(default)]
+        intensity_expr: Option<String>,
+        /// Optional expression for animating color hue over time (result = degrees of hue shift).
+        #[serde(default)]
+        color_hue_expr: Option<String>,
     },
 }
 
@@ -736,6 +742,18 @@ impl Scene {
         } else {
             self.light_masks.insert(id, mask);
         }
+    }
+
+    /// Returns true if any Light node in the scene has an active animation expression.
+    /// Used to determine if continuous repaint is needed.
+    pub fn has_light_expressions(&self) -> bool {
+        self.nodes.values().any(|n| {
+            if let NodeData::Light { intensity_expr, color_hue_expr, .. } = &n.data {
+                intensity_expr.is_some() || color_hue_expr.is_some()
+            } else {
+                false
+            }
+        })
     }
 
     pub fn next_name(&mut self, base: &str) -> String {
@@ -929,6 +947,8 @@ impl Scene {
                 proximity_mode: ProximityMode::Off,
                 proximity_range: 2.0,
                 array_config: if is_array { Some(LightArrayConfig::default()) } else { None },
+                intensity_expr: None,
+                color_hue_expr: None,
             },
         );
         // Create a Transform parent positioned above and to the side of the origin
@@ -966,6 +986,8 @@ impl Scene {
                 proximity_mode: ProximityMode::Off,
                 proximity_range: 2.0,
                 array_config: None,
+                intensity_expr: None,
+                color_hue_expr: None,
             },
         );
         let _key_transform_id = self.add_node(
@@ -996,6 +1018,8 @@ impl Scene {
                 proximity_mode: ProximityMode::Off,
                 proximity_range: 2.0,
                 array_config: None,
+                intensity_expr: None,
+                color_hue_expr: None,
             },
         );
         let _fill_transform_id = self.add_node(
@@ -1026,6 +1050,8 @@ impl Scene {
                 proximity_mode: ProximityMode::Off,
                 proximity_range: 2.0,
                 array_config: None,
+                intensity_expr: None,
+                color_hue_expr: None,
             },
         );
         let _ambient_transform_id = self.add_node(
@@ -1497,7 +1523,7 @@ impl Scene {
                     extra.y.to_bits().hash(&mut hasher);
                     extra.z.to_bits().hash(&mut hasher);
                 }
-                NodeData::Light { color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color, volumetric, volumetric_density, cookie_node, proximity_mode, proximity_range, array_config, .. } => {
+                NodeData::Light { color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color, volumetric, volumetric_density, cookie_node, proximity_mode, proximity_range, array_config, intensity_expr, color_hue_expr, .. } => {
                     color.x.to_bits().hash(&mut hasher);
                     color.y.to_bits().hash(&mut hasher);
                     color.z.to_bits().hash(&mut hasher);
@@ -1520,6 +1546,8 @@ impl Scene {
                         cfg.radius.to_bits().hash(&mut hasher);
                         cfg.color_variation.to_bits().hash(&mut hasher);
                     }
+                    intensity_expr.hash(&mut hasher);
+                    color_hue_expr.hash(&mut hasher);
                 }
             }
             // Include light mask in fingerprint
@@ -1750,7 +1778,7 @@ impl Scene {
                         extra: *extra,
                     }
                 }
-                NodeData::Light { light_type, color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color, volumetric, volumetric_density, cookie_node, proximity_mode, proximity_range, array_config } => {
+                NodeData::Light { light_type, color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color, volumetric, volumetric_density, cookie_node, proximity_mode, proximity_range, array_config, intensity_expr, color_hue_expr } => {
                     NodeData::Light {
                         light_type: light_type.clone(),
                         color: *color,
@@ -1766,6 +1794,8 @@ impl Scene {
                         proximity_mode: proximity_mode.clone(),
                         proximity_range: *proximity_range,
                         array_config: array_config.clone(),
+                        intensity_expr: intensity_expr.clone(),
+                        color_hue_expr: color_hue_expr.clone(),
                     }
                 }
             };
@@ -2160,6 +2190,8 @@ impl Scene {
                         proximity_mode: pm1,
                         proximity_range: pr1,
                         array_config: ac1,
+                        intensity_expr: ie1,
+                        color_hue_expr: ce1,
                     },
                     NodeData::Light {
                         light_type: lt2,
@@ -2176,6 +2208,8 @@ impl Scene {
                         proximity_mode: pm2,
                         proximity_range: pr2,
                         array_config: ac2,
+                        intensity_expr: ie2,
+                        color_hue_expr: ce2,
                     },
                 ) => {
                     if std::mem::discriminant(lt1) != std::mem::discriminant(lt2)
@@ -2192,6 +2226,8 @@ impl Scene {
                         || pm1 != pm2
                         || pr1 != pr2
                         || ac1 != ac2
+                        || ie1 != ie2
+                        || ce1 != ce2
                     {
                         return false;
                     }
@@ -2991,6 +3027,8 @@ mod tests {
             proximity_mode: ProximityMode::Off,
             proximity_range: 2.0,
             array_config: None,
+            intensity_expr: None,
+            color_hue_expr: None,
         };
         assert_eq!(data.children().count(), 0);
     }
@@ -3012,6 +3050,8 @@ mod tests {
             proximity_mode: ProximityMode::Off,
             proximity_range: 2.0,
             array_config: None,
+            intensity_expr: None,
+            color_hue_expr: None,
         };
         assert!(data.geometry_local_sphere().is_none());
     }
@@ -3180,7 +3220,7 @@ mod tests {
         let mut scene = empty_scene();
         let (light_id, _) = scene.create_light(LightType::Spot);
         match &scene.nodes[&light_id].data {
-            NodeData::Light { light_type, color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color, volumetric, volumetric_density, cookie_node, proximity_mode, proximity_range, array_config } => {
+            NodeData::Light { light_type, color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color, volumetric, volumetric_density, cookie_node, proximity_mode, proximity_range, array_config, intensity_expr, color_hue_expr } => {
                 assert_eq!(*light_type, LightType::Spot);
                 assert_eq!(*color, Vec3::ONE);
                 assert!((intensity - 1.0).abs() < 1e-5);
@@ -3196,6 +3236,8 @@ mod tests {
                 assert_eq!(*proximity_mode, ProximityMode::Off);
                 assert!((proximity_range - 2.0).abs() < 1e-5);
                 assert!(array_config.is_none());
+                assert!(intensity_expr.is_none());
+                assert!(color_hue_expr.is_none());
             }
             _ => panic!("expected Light node"),
         }

@@ -537,7 +537,7 @@ pub fn draw(
     ];
     // Collect scene lights for the GPU (up to 8, sorted by distance to camera)
     let (scene_light_count, scene_light_list, scene_ambient) =
-        crate::gpu::buffers::collect_scene_lights(scene, camera.eye(), soloed_light);
+        crate::gpu::buffers::collect_scene_lights(scene, camera.eye(), soloed_light, time);
     let volumetric_count = scene_light_list.iter().filter(|l| l.volumetric[0] > 0.5).count() as f32;
     let volumetric_steps = render_config.volumetric_steps as f32;
     let scene_light_info = [scene_light_count as f32, volumetric_count, volumetric_steps, 0.0];

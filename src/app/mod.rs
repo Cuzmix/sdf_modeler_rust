@@ -668,7 +668,8 @@ impl eframe::App for SdfApp {
             || !matches!(self.async_state.pick_state, PickState::Idle)
             || self.async_state.pending_pick.is_some()
             || self.gpu.buffer_dirty
-            || self.settings.continuous_repaint;
+            || self.settings.continuous_repaint
+            || self.doc.scene.has_light_expressions();
         if needs_repaint {
             ctx.request_repaint();
         }

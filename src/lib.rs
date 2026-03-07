@@ -1,5 +1,6 @@
 mod app;
 mod compat;
+pub mod expression;
 mod export;
 mod gpu;
 mod graph;

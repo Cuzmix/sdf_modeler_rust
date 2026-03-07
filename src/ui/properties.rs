@@ -1199,6 +1199,8 @@ pub fn draw(
             mut proximity_mode,
             mut proximity_range,
             mut array_config,
+            mut intensity_expr,
+            mut color_hue_expr,
         } => {
             ui.horizontal(|ui| {
                 ui.label("Type: Light");
@@ -1427,6 +1429,114 @@ pub fn draw(
                     });
             }
 
+            // Expressions section (not for Ambient or Array)
+            if !matches!(light_type, crate::graph::scene::LightType::Ambient | crate::graph::scene::LightType::Array) {
+                ui.separator();
+                egui::CollapsingHeader::new(egui::RichText::new("Expressions").strong())
+                    .default_open(intensity_expr.is_some() || color_hue_expr.is_some())
+                    .show(ui, |ui| {
+                        ui.label(
+                            egui::RichText::new("Animate properties with math expressions using t (time)")
+                                .weak()
+                                .small(),
+                        );
+
+                        // Preset dropdown
+                        egui::ComboBox::from_id_salt(format!("expr_preset_{}", id))
+                            .selected_text("Presets...")
+                            .show_ui(ui, |ui| {
+                                for preset in crate::expression::EXPRESSION_PRESETS {
+                                    if ui.selectable_label(false, preset.name).clicked() {
+                                        if !preset.intensity_expr.is_empty() {
+                                            intensity_expr = Some(preset.intensity_expr.to_string());
+                                        }
+                                        if !preset.color_hue_expr.is_empty() {
+                                            color_hue_expr = Some(preset.color_hue_expr.to_string());
+                                        }
+                                    }
+                                }
+                                if ui.selectable_label(false, "Clear All").clicked() {
+                                    intensity_expr = None;
+                                    color_hue_expr = None;
+                                }
+                            });
+                        ui.add_space(4.0);
+
+                        // Intensity expression
+                        ui.label("Intensity Expression:");
+                        let mut int_text = intensity_expr.clone().unwrap_or_default();
+                        let int_response = ui.add(
+                            egui::TextEdit::singleline(&mut int_text)
+                                .hint_text("e.g. 0.5 + 0.5 * sin(t * 3.0)")
+                                .desired_width(200.0),
+                        );
+                        if int_response.changed() {
+                            intensity_expr = if int_text.trim().is_empty() {
+                                None
+                            } else {
+                                Some(int_text.clone())
+                            };
+                        }
+                        if let Some(ref expr_str) = intensity_expr {
+                            match crate::expression::parse_expression(expr_str) {
+                                Ok(expr) => {
+                                    let now = ui.input(|i| i.time) as f32;
+                                    let val = crate::expression::evaluate(&expr, now);
+                                    ui.label(
+                                        egui::RichText::new(format!("Current: {val:.3}"))
+                                            .small()
+                                            .color(egui::Color32::from_rgb(120, 200, 120)),
+                                    );
+                                }
+                                Err(err) => {
+                                    ui.label(
+                                        egui::RichText::new(format!("Error: {err}"))
+                                            .small()
+                                            .color(egui::Color32::from_rgb(255, 80, 80)),
+                                    );
+                                }
+                            }
+                        }
+                        ui.add_space(4.0);
+
+                        // Color hue expression
+                        ui.label("Color Hue Expression:");
+                        let mut hue_text = color_hue_expr.clone().unwrap_or_default();
+                        let hue_response = ui.add(
+                            egui::TextEdit::singleline(&mut hue_text)
+                                .hint_text("e.g. fract(t * 0.1) * 360.0")
+                                .desired_width(200.0),
+                        );
+                        if hue_response.changed() {
+                            color_hue_expr = if hue_text.trim().is_empty() {
+                                None
+                            } else {
+                                Some(hue_text.clone())
+                            };
+                        }
+                        if let Some(ref expr_str) = color_hue_expr {
+                            match crate::expression::parse_expression(expr_str) {
+                                Ok(expr) => {
+                                    let now = ui.input(|i| i.time) as f32;
+                                    let val = crate::expression::evaluate(&expr, now);
+                                    ui.label(
+                                        egui::RichText::new(format!("Current: {val:.1}\u{00B0}"))
+                                            .small()
+                                            .color(egui::Color32::from_rgb(120, 200, 120)),
+                                    );
+                                }
+                                Err(err) => {
+                                    ui.label(
+                                        egui::RichText::new(format!("Error: {err}"))
+                                            .small()
+                                            .color(egui::Color32::from_rgb(255, 80, 80)),
+                                    );
+                                }
+                            }
+                        }
+                    });
+            }
+
             ui.separator();
             if ui.button("Delete Node").on_hover_text("Remove this light from the scene").clicked() {
                 actions.push(Action::DeleteNode(id));
@@ -1449,6 +1559,8 @@ pub fn draw(
                     proximity_mode: ref mut pm,
                     proximity_range: ref mut pr,
                     array_config: ref mut ac,
+                    intensity_expr: ref mut ie,
+                    color_hue_expr: ref mut ce,
                     ..
                 } = node.data {
                     *lt = light_type;
@@ -1464,6 +1576,8 @@ pub fn draw(
                     *pm = proximity_mode;
                     *pr = proximity_range;
                     *ac = array_config;
+                    *ie = intensity_expr;
+                    *ce = color_hue_expr;
                 }
             }
         }
