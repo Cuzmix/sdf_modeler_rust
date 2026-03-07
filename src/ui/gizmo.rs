@@ -225,6 +225,12 @@ fn extract_node_transform(scene: &Scene, node_id: NodeId) -> Option<NodeTransfor
             scale: Vec3::ONE,
             has_scale: false,
         }),
+        Some(NodeData::Transform { translation, rotation, scale, .. }) => Some(NodeTransform {
+            position: *translation,
+            rotation: *rotation,
+            scale: *scale,
+            has_scale: true,
+        }),
         _ => None,
     }
 }
@@ -483,25 +489,28 @@ fn handle_scale_drag(
     let factor = 1.0 + projected * SCALE_SENSITIVITY;
 
     if let Some(node) = scene.nodes.get_mut(&drag_node) {
-        if let NodeData::Primitive { ref mut scale, ref mut position, .. } = node.data {
-            // When pivot is offset, scaling around pivot shifts position
-            if pivot_offset.length_squared() > 1e-6 {
-                let pivot_world = *position + inverse_rotate_euler(*pivot_offset, node_rotation);
-                let offset = *position - pivot_world;
-                let mut scale_vec = Vec3::ONE;
-                match axis {
-                    GizmoAxis::X => scale_vec.x = factor,
-                    GizmoAxis::Y => scale_vec.y = factor,
-                    GizmoAxis::Z => scale_vec.z = factor,
-                }
-                *position = pivot_world + offset * scale_vec;
-            }
-
+        let (scale, position) = match &mut node.data {
+            NodeData::Primitive { ref mut scale, ref mut position, .. } => (scale, position),
+            NodeData::Transform { ref mut scale, ref mut translation, .. } => (scale, translation),
+            _ => return,
+        };
+        // When pivot is offset, scaling around pivot shifts position
+        if pivot_offset.length_squared() > 1e-6 {
+            let pivot_world = *position + inverse_rotate_euler(*pivot_offset, node_rotation);
+            let offset = *position - pivot_world;
+            let mut scale_vec = Vec3::ONE;
             match axis {
-                GizmoAxis::X => scale.x = (scale.x * factor).max(0.01),
-                GizmoAxis::Y => scale.y = (scale.y * factor).max(0.01),
-                GizmoAxis::Z => scale.z = (scale.z * factor).max(0.01),
+                GizmoAxis::X => scale_vec.x = factor,
+                GizmoAxis::Y => scale_vec.y = factor,
+                GizmoAxis::Z => scale_vec.z = factor,
             }
+            *position = pivot_world + offset * scale_vec;
+        }
+
+        match axis {
+            GizmoAxis::X => scale.x = (scale.x * factor).max(0.01),
+            GizmoAxis::Y => scale.y = (scale.y * factor).max(0.01),
+            GizmoAxis::Z => scale.z = (scale.z * factor).max(0.01),
         }
     }
 }
@@ -537,25 +546,18 @@ fn handle_rotate_drag(
     let delta_quat = Quat::from_axis_angle(axis_dir, angle_delta);
 
     if let Some(node) = scene.nodes.get_mut(&drag_node) {
-        match &mut node.data {
-            NodeData::Primitive { ref mut rotation, ref mut position, .. } => {
-                if pivot_offset.length_squared() > 1e-6 {
-                    let pivot_world = *position + inverse_rotate_euler(*pivot_offset, node_rotation);
-                    let offset = *position - pivot_world;
-                    *position = pivot_world + delta_quat * offset;
-                }
-                apply_rotation_delta(rotation, axis, angle_delta, axis_dir, gizmo_space);
-            }
-            NodeData::Sculpt { ref mut rotation, ref mut position, .. } => {
-                if pivot_offset.length_squared() > 1e-6 {
-                    let pivot_world = *position + inverse_rotate_euler(*pivot_offset, node_rotation);
-                    let offset = *position - pivot_world;
-                    *position = pivot_world + delta_quat * offset;
-                }
-                apply_rotation_delta(rotation, axis, angle_delta, axis_dir, gizmo_space);
-            }
-            _ => {}
+        let (rotation, position) = match &mut node.data {
+            NodeData::Primitive { ref mut rotation, ref mut position, .. } => (rotation, position),
+            NodeData::Sculpt { ref mut rotation, ref mut position, .. } => (rotation, position),
+            NodeData::Transform { ref mut rotation, ref mut translation, .. } => (rotation, translation),
+            _ => return,
+        };
+        if pivot_offset.length_squared() > 1e-6 {
+            let pivot_world = *position + inverse_rotate_euler(*pivot_offset, node_rotation);
+            let offset = *position - pivot_world;
+            *position = pivot_world + delta_quat * offset;
         }
+        apply_rotation_delta(rotation, axis, angle_delta, axis_dir, gizmo_space);
     }
 }
 
@@ -583,6 +585,7 @@ fn apply_position_delta(scene: &mut Scene, node_id: NodeId, delta: Vec3) {
         match &mut node.data {
             NodeData::Primitive { ref mut position, .. } => *position += delta,
             NodeData::Sculpt { ref mut position, .. } => *position += delta,
+            NodeData::Transform { ref mut translation, .. } => *translation += delta,
             _ => {}
         }
     }
@@ -831,6 +834,7 @@ fn snap_position(scene: &mut Scene, node_id: NodeId, axis_idx: usize, snap: f32)
         let pos = match &mut node.data {
             NodeData::Primitive { ref mut position, .. } => position,
             NodeData::Sculpt { ref mut position, .. } => position,
+            NodeData::Transform { ref mut translation, .. } => translation,
             _ => return,
         };
         match axis_idx {
@@ -846,6 +850,7 @@ fn snap_rotation(scene: &mut Scene, node_id: NodeId, axis_idx: usize, snap_rad: 
         let rot = match &mut node.data {
             NodeData::Primitive { ref mut rotation, .. } => rotation,
             NodeData::Sculpt { ref mut rotation, .. } => rotation,
+            NodeData::Transform { ref mut rotation, .. } => rotation,
             _ => return,
         };
         match axis_idx {
@@ -858,12 +863,15 @@ fn snap_rotation(scene: &mut Scene, node_id: NodeId, axis_idx: usize, snap_rad: 
 
 fn snap_scale(scene: &mut Scene, node_id: NodeId, axis_idx: usize, snap: f32) {
     if let Some(node) = scene.nodes.get_mut(&node_id) {
-        if let NodeData::Primitive { ref mut scale, .. } = node.data {
-            match axis_idx {
-                0 => scale.x = snap_value(scale.x, snap).max(0.01),
-                1 => scale.y = snap_value(scale.y, snap).max(0.01),
-                _ => scale.z = snap_value(scale.z, snap).max(0.01),
-            }
+        let scale = match &mut node.data {
+            NodeData::Primitive { ref mut scale, .. } => scale,
+            NodeData::Transform { ref mut scale, .. } => scale,
+            _ => return,
+        };
+        match axis_idx {
+            0 => scale.x = snap_value(scale.x, snap).max(0.01),
+            1 => scale.y = snap_value(scale.y, snap).max(0.01),
+            _ => scale.z = snap_value(scale.z, snap).max(0.01),
         }
     }
 }
