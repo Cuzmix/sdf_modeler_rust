@@ -56,6 +56,10 @@ pub enum Action {
     SaveProject,
     SaveNodePreset(NodeId),
     LoadNodePreset,
+    AddReferenceImage,
+    RemoveReferenceImage(usize),
+    ToggleReferenceImageVisibility(usize),
+    ToggleAllReferenceImages,
 
     // ── Selection ────────────────────────────────────────────────────
     Select(Option<NodeId>),

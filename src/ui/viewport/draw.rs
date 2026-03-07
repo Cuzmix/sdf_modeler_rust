@@ -430,6 +430,7 @@ pub fn draw(
     active_light_ids: &std::collections::HashSet<crate::graph::scene::NodeId>,
     soloed_light: Option<NodeId>,
     solo_label: Option<&str>,
+    reference_images: &crate::ui::reference_image::ReferenceImageManager,
 ) -> ViewportOutput {
     let mut output = ViewportOutput {
         pending_pick: None,
@@ -606,6 +607,9 @@ pub fn draw(
     if render_config.show_node_labels {
         draw_node_labels(ui.painter(), camera, scene, *selected, rect);
     }
+
+    // --- Reference image overlay ---
+    crate::ui::reference_image::draw_overlay(ui.painter(), camera, rect, reference_images);
 
     // --- Light gizmo overlay ---
     let light_gizmo_result = if render_config.show_light_gizmos {

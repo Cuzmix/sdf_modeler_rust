@@ -1497,3 +1497,54 @@ Verification:
 - cargo build: PASS
 
 Manual verification: pending (save preset from scene tree, then load via node graph toolbar).
+
+--- Iteration 40: PRD #45 - Reference Image support ---
+COMPLETED. Added viewport reference image overlays, controls, and action wiring.
+
+Changes:
+- src/ui/reference_image.rs (new):
+  - Added `RefPlane` enum (Front/Back/Left/Right/Top/Bottom).
+  - Added `ReferenceImage` model and `ReferenceImageManager`.
+  - Implemented image loading via `image` crate + egui texture upload.
+  - Implemented visibility management (single + all).
+  - Implemented controls UI (`draw_controls`) with:
+    - Add image button
+    - per-image plane/opacity/scale/offset/locked controls
+    - per-image show/hide/remove
+    - global toggle all (Alt+R)
+  - Implemented viewport quad rendering (`draw_overlay`) using projected 3D corners + egui mesh.
+- src/app/actions.rs:
+  - Added actions:
+    - `AddReferenceImage`
+    - `RemoveReferenceImage(usize)`
+    - `ToggleReferenceImageVisibility(usize)`
+    - `ToggleAllReferenceImages`
+- src/app/action_handler.rs:
+  - Added handlers for all reference image actions.
+  - `AddReferenceImage` opens file dialog (PNG/JPG/JPEG), loads texture into manager, shows toast.
+  - Added remove/toggle/toggle-all behavior.
+- src/app/state.rs:
+  - Added `UiState.reference_images: ReferenceImageManager`.
+- src/app/mod.rs + src/ui/dock.rs + src/ui/viewport/draw.rs:
+  - Threaded reference image manager through dock/viewport context.
+  - Viewport now renders reference image overlays after main render and before gizmo.
+- src/ui/properties.rs:
+  - When no node is selected, shows reference image controls panel.
+- src/keymap.rs + src/app/input.rs:
+  - Added `ActionBinding::ToggleReferenceImages` with default `Alt+R`.
+  - Dispatch now triggers `Action::ToggleAllReferenceImages`.
+- src/ui/mod.rs:
+  - Registered `reference_image` module.
+- plans/prd.json:
+  - Marked PRD #45 as passed.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS (462 passed)
+- cargo build: PASS
+
+Manual verification pending:
+- Add PNG/JPG from no-selection properties panel
+- confirm plane switching, opacity/scale/offset edits
+- confirm Alt+R toggles all reference overlays

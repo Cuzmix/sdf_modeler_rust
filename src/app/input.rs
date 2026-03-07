@@ -176,6 +176,9 @@ impl SdfApp {
             ActionBinding::ShowQuickToolbar => {
                 self.ui.show_quick_toolbar = !self.ui.show_quick_toolbar;
             }
+            ActionBinding::ToggleReferenceImages => {
+                actions.push(Action::ToggleAllReferenceImages);
+            }
             ActionBinding::QuickSculptMode => {
                 // Context already checked in phase 1
                 actions.push(Action::EnterSculptMode);

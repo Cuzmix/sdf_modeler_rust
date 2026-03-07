@@ -171,6 +171,54 @@ impl SdfApp {
                         });
                     }
                 }
+                Action::AddReferenceImage => {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        if let Some(path) = rfd::FileDialog::new()
+                            .set_title("Add Reference Image")
+                            .add_filter("Images", &["png", "jpg", "jpeg"])
+                            .pick_file()
+                        {
+                            match self.ui.reference_images.add_from_path(ctx, &path) {
+                                Ok(()) => {
+                                    self.ui.toasts.push(super::Toast {
+                                        message: format!("Loaded reference image: {}", path.display()),
+                                        is_error: false,
+                                        created: crate::compat::Instant::now(),
+                                        duration: crate::compat::Duration::from_secs(4),
+                                    });
+                                }
+                                Err(e) => {
+                                    log::error!("Failed to load reference image: {}", e);
+                                    self.ui.toasts.push(super::Toast {
+                                        message: format!("Failed to load image: {}", e),
+                                        is_error: true,
+                                        created: crate::compat::Instant::now(),
+                                        duration: crate::compat::Duration::from_secs(5),
+                                    });
+                                }
+                            }
+                        }
+                    }
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        self.ui.toasts.push(super::Toast {
+                            message: "Reference images are not supported in web builds".into(),
+                            is_error: true,
+                            created: crate::compat::Instant::now(),
+                            duration: crate::compat::Duration::from_secs(4),
+                        });
+                    }
+                }
+                Action::RemoveReferenceImage(index) => {
+                    self.ui.reference_images.remove(index);
+                }
+                Action::ToggleReferenceImageVisibility(index) => {
+                    self.ui.reference_images.toggle_visibility(index);
+                }
+                Action::ToggleAllReferenceImages => {
+                    self.ui.reference_images.toggle_all_visibility();
+                }
                 Action::Select(id) => {
                     if let Some(node_id) = id {
                         self.ui.node_graph_state.select_single(node_id);

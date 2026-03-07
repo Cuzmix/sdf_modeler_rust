@@ -14,6 +14,7 @@ pub mod node_graph;
 pub mod profiler;
 pub mod properties;
 pub mod quick_toolbar;
+pub mod reference_image;
 pub mod recovery_dialog;
 pub mod render_settings;
 pub mod scene_stats;

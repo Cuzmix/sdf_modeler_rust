@@ -188,6 +188,8 @@ pub struct SdfTabViewer<'a> {
     pub active_light_ids: &'a std::collections::HashSet<NodeId>,
     /// Material preset library (built-in + user-saved).
     pub material_library: &'a mut crate::material_preset::MaterialLibrary,
+    /// Reference image manager used by viewport/properties panels.
+    pub reference_images: &'a mut crate::ui::reference_image::ReferenceImageManager,
     /// Frame timing data for scene stats panel.
     pub timings: &'a crate::app::FrameTimings,
 }
@@ -239,6 +241,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.active_light_ids,
                     self.viewport.soloed_light,
                     self.viewport.solo_label.as_deref(),
+                    &*self.reference_images,
                 );
                 if let Some(pick) = vp_output.pending_pick {
                     *self.viewport.pending_pick = Some(pick);
@@ -276,6 +279,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.settings.max_sculpt_resolution,
                     self.viewport.soloed_light,
                     self.material_library,
+                    self.reference_images,
                 );
                 // Defensive: clear selection if the node was deleted by properties panel
                 if let Some(sel) = self.node_graph_state.selected {

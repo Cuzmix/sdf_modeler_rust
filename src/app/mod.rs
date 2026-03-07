@@ -354,6 +354,7 @@ impl SdfApp {
                 last_light_warning_count: None,
                 show_recovery_dialog,
                 recovery_summary,
+                reference_images: crate::ui::reference_image::ReferenceImageManager::default(),
             },
             persistence: PersistenceState {
                 current_file_path: None,
@@ -598,7 +599,7 @@ impl eframe::App for SdfApp {
             settings: &mut self.settings,
             time: now as f32,
             bake_progress,
-            viewport: ViewportContext {
+                viewport: ViewportContext {
                 gizmo_state: &mut self.gizmo.state,
                 gizmo_mode: &self.gizmo.mode,
                 gizmo_space: &self.gizmo.space,
@@ -614,11 +615,11 @@ impl eframe::App for SdfApp {
                 isolation_label: isolation_label.clone(),
                 turntable_active: self.ui.turntable_active,
                 is_hover_pick: &mut is_hover_pick,
-                hover_world_pos: self.async_state.hover_world_pos,
-                cursor_over_geometry: self.async_state.cursor_over_geometry,
-                soloed_light: self.doc.soloed_light,
-                solo_label: solo_label.clone(),
-            },
+                    hover_world_pos: self.async_state.hover_world_pos,
+                    cursor_over_geometry: self.async_state.cursor_over_geometry,
+                    soloed_light: self.doc.soloed_light,
+                    solo_label: solo_label.clone(),
+                },
             scene_tree: SceneTreeContext {
                 renaming_node: &mut self.ui.renaming_node,
                 rename_buf: &mut self.ui.rename_buf,
@@ -629,6 +630,7 @@ impl eframe::App for SdfApp {
             history: &self.doc.history,
             active_light_ids: &self.ui.active_light_ids,
             material_library: &mut self.material_library,
+            reference_images: &mut self.ui.reference_images,
             timings: &self.perf.timings,
         };
 

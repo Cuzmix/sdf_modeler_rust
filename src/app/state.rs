@@ -17,6 +17,7 @@ use crate::sculpt_history::SculptHistory;
 use crate::ui::dock::Tab;
 use crate::ui::gizmo::{GizmoMode, GizmoSpace, GizmoState};
 use crate::ui::node_graph::NodeGraphState;
+use crate::ui::reference_image::ReferenceImageManager;
 
 use super::{BakeStatus, ExportStatus, FrameTimings, ImportStatus, PickState, Toast};
 
@@ -221,6 +222,8 @@ pub struct UiState {
     pub show_recovery_dialog: bool,
     /// Recovery modal context built from autosave.meta.
     pub recovery_summary: String,
+    /// Reference images used as modeling guides in the viewport.
+    pub reference_images: ReferenceImageManager,
 }
 
 // ---------------------------------------------------------------------------
