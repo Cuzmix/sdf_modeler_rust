@@ -146,6 +146,8 @@ pub struct Settings {
     pub export_presets: Vec<ExportPreset>,
     #[serde(default)]
     pub keymap: KeymapConfig,
+    #[serde(default = "default_true")]
+    pub last_clean_exit: bool,
 }
 
 impl Default for Settings {
@@ -166,6 +168,7 @@ impl Default for Settings {
             bookmarks: default_bookmarks(),
             export_presets: default_export_presets(),
             keymap: KeymapConfig::default(),
+            last_clean_exit: true,
         }
     }
 }

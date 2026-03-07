@@ -217,6 +217,10 @@ pub struct UiState {
     /// The last total light count that triggered a toast warning.
     /// Used to avoid spamming the same warning repeatedly.
     pub last_light_warning_count: Option<usize>,
+    /// Startup crash recovery modal visibility.
+    pub show_recovery_dialog: bool,
+    /// Recovery modal context built from autosave.meta.
+    pub recovery_summary: String,
 }
 
 // ---------------------------------------------------------------------------

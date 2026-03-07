@@ -1,5 +1,7 @@
 use glam::Vec3;
 use serde::{Deserialize, Serialize};
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::gpu::camera::Camera;
 use crate::graph::scene::{NodeData, Scene};
@@ -11,6 +13,16 @@ pub struct ProjectFile {
     pub version: u32,
     pub scene: Scene,
     pub camera: Camera,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct RecoveryMeta {
+    pub autosave_unix_secs: u64,
+    #[serde(default)]
+    pub project_path: Option<String>,
+    #[serde(default)]
+    pub last_project_save_unix_secs: Option<u64>,
 }
 
 // ── Pure serialization (shared by native + WASM) ────────────────────────────
@@ -72,6 +84,91 @@ pub fn auto_save_path() -> std::path::PathBuf {
     path.pop();
     path.push("autosave.sdf");
     path
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn auto_save_meta_path() -> std::path::PathBuf {
+    let mut path = std::env::current_exe().unwrap_or_default();
+    path.pop();
+    path.push("autosave.meta");
+    path
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn read_recovery_meta() -> Option<RecoveryMeta> {
+    let meta_path = auto_save_meta_path();
+    let data = std::fs::read_to_string(meta_path).ok()?;
+    serde_json::from_str(&data).ok()
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn write_recovery_meta(project_path: Option<&std::path::Path>) -> Result<(), String> {
+    let autosave_unix_secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+
+    let project_path_str = project_path.map(|path| path.to_string_lossy().to_string());
+    let last_project_save_unix_secs = project_path
+        .and_then(|path| std::fs::metadata(path).ok())
+        .and_then(|meta| meta.modified().ok())
+        .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+        .map(|d| d.as_secs());
+
+    let meta = RecoveryMeta {
+        autosave_unix_secs,
+        project_path: project_path_str,
+        last_project_save_unix_secs,
+    };
+    let json = serde_json::to_string_pretty(&meta).map_err(|e| e.to_string())?;
+    std::fs::write(auto_save_meta_path(), json).map_err(|e| e.to_string())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn has_recovery_file() -> bool {
+    let autosave_path = auto_save_path();
+    if !autosave_path.exists() {
+        return false;
+    }
+    let autosave_mtime = std::fs::metadata(&autosave_path)
+        .ok()
+        .and_then(|meta| meta.modified().ok())
+        .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+        .map(|d| d.as_secs());
+
+    let Some(meta) = read_recovery_meta() else {
+        // If metadata is missing but autosave exists, still offer recovery.
+        return true;
+    };
+
+    if let Some(project_path) = meta.project_path.as_deref() {
+        let project_mtime = std::fs::metadata(project_path)
+            .ok()
+            .and_then(|meta| meta.modified().ok())
+            .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+            .map(|d| d.as_secs());
+        if let (Some(autosave_secs), Some(project_secs)) = (autosave_mtime, project_mtime) {
+            return autosave_secs > project_secs;
+        }
+    }
+
+    match meta.last_project_save_unix_secs {
+        Some(last_save) => autosave_mtime.unwrap_or(meta.autosave_unix_secs) > last_save,
+        None => true,
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn remove_recovery_files() -> Result<(), String> {
+    let autosave = auto_save_path();
+    if autosave.exists() {
+        std::fs::remove_file(&autosave).map_err(|e| e.to_string())?;
+    }
+    let meta = auto_save_meta_path();
+    if meta.exists() {
+        std::fs::remove_file(&meta).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 #[cfg(not(target_arch = "wasm32"))]

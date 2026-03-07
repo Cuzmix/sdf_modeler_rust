@@ -187,11 +187,65 @@ pub struct SdfApp {
 }
 
 impl SdfApp {
+    #[cfg(not(target_arch = "wasm32"))]
+    fn recovery_summary_from_meta(meta: Option<&crate::io::RecoveryMeta>) -> String {
+        let timestamp = meta.map(|m| m.autosave_unix_secs).unwrap_or(0);
+        let project_hint = meta
+            .and_then(|m| m.project_path.as_deref())
+            .map(|path| format!("\nSource project: {path}"))
+            .unwrap_or_default();
+        format!(
+            "Recovered unsaved work found from UNIX timestamp {timestamp}.{project_hint}"
+        )
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn recover_from_autosave(&mut self) -> bool {
+        let autosave_path = crate::io::auto_save_path();
+        match crate::io::load_project(&autosave_path) {
+            Ok(project) => {
+                self.doc.scene = project.scene;
+                self.doc.camera = project.camera;
+                self.doc.history = crate::graph::history::History::new();
+                self.ui.node_graph_state.clear_selection();
+                self.ui.node_graph_state.needs_initial_rebuild = true;
+                self.doc.sculpt_state = SculptState::Inactive;
+                self.gpu.current_structure_key = 0;
+                self.gpu.buffer_dirty = true;
+                self.persistence.current_file_path = None;
+                self.persistence.saved_fingerprint = 0;
+                self.persistence.scene_dirty = true;
+                true
+            }
+            Err(error) => {
+                log::error!("Failed to recover autosave: {}", error);
+                self.ui.toasts.push(Toast {
+                    message: "Failed to recover autosave".into(),
+                    is_error: true,
+                    created: crate::compat::Instant::now(),
+                    duration: crate::compat::Duration::from_secs(5),
+                });
+                false
+            }
+        }
+    }
+
     pub fn new(cc: &eframe::CreationContext<'_>, settings: Settings) -> Self {
         let render_state = cc
             .wgpu_render_state
             .clone()
             .expect("WGPU render state required");
+
+        #[cfg(not(target_arch = "wasm32"))]
+        let recovery_meta = crate::io::read_recovery_meta();
+        #[cfg(not(target_arch = "wasm32"))]
+        let show_recovery_dialog = !settings.last_clean_exit && crate::io::has_recovery_file();
+        #[cfg(not(target_arch = "wasm32"))]
+        let recovery_summary = Self::recovery_summary_from_meta(recovery_meta.as_ref());
+        #[cfg(target_arch = "wasm32")]
+        let show_recovery_dialog = false;
+        #[cfg(target_arch = "wasm32")]
+        let recovery_summary = String::new();
 
         let scene = crate::graph::scene::Scene::new();
         let shader_src = codegen::generate_shader(&scene, &settings.render);
@@ -223,7 +277,13 @@ impl SdfApp {
             res.update_voxel_buffer(&render_state.device, &render_state.queue, &voxel_data);
         }
 
+        let mut settings = settings;
         let initial_vsync = settings.vsync_enabled;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            settings.last_clean_exit = false;
+            settings.save();
+        }
 
         Self {
             doc: DocumentState {
@@ -292,6 +352,8 @@ impl SdfApp {
                 active_light_ids: std::collections::HashSet::new(),
                 total_light_count: 0,
                 last_light_warning_count: None,
+                show_recovery_dialog,
+                recovery_summary,
             },
             persistence: PersistenceState {
                 current_file_path: None,
@@ -385,6 +447,35 @@ impl eframe::App for SdfApp {
         // ── 4. Collect actions from keyboard + UI drawing ──────────────
         let mut action_sink = actions::ActionSink::new();
         self.collect_keyboard_actions(ctx, &mut action_sink);
+
+        if self.ui.show_recovery_dialog {
+            #[cfg(not(target_arch = "wasm32"))]
+            if let Some(action) = crate::ui::recovery_dialog::draw(
+                ctx,
+                &mut self.ui.show_recovery_dialog,
+                &self.ui.recovery_summary,
+                !self.settings.recent_files.is_empty(),
+            ) {
+                match action {
+                    crate::ui::recovery_dialog::RecoveryDialogAction::Recover => {
+                        let _ = self.recover_from_autosave();
+                    }
+                    crate::ui::recovery_dialog::RecoveryDialogAction::Discard => {
+                        if let Err(error) = crate::io::remove_recovery_files() {
+                            log::error!("Failed to remove recovery files: {}", error);
+                        }
+                    }
+                    crate::ui::recovery_dialog::RecoveryDialogAction::OpenLastProject => {
+                        if let Some(path) = self.settings.recent_files.first() {
+                            let open_path = std::path::PathBuf::from(path);
+                            let _ = self.load_project_from_path(&open_path);
+                        }
+                    }
+                }
+            }
+            ctx.request_repaint();
+            return;
+        }
 
         self.show_menu_bar(ctx, &mut action_sink);
         self.show_status_bar(ctx);
@@ -618,10 +709,13 @@ impl eframe::App for SdfApp {
             && self.persistence.last_auto_save.elapsed() >= Duration::from_secs(self.settings.auto_save_interval_secs as u64)
         {
             self.persistence.last_auto_save = Instant::now();
-            let path = self.persistence.current_file_path.clone().unwrap_or_else(crate::io::auto_save_path);
+            let path = crate::io::auto_save_path();
             if let Err(e) = crate::io::save_project(&self.doc.scene, &self.doc.camera, &path) {
                 log::error!("Auto-save failed: {}", e);
             } else {
+                if let Err(e) = crate::io::write_recovery_meta(self.persistence.current_file_path.as_deref()) {
+                    log::error!("Auto-save metadata write failed: {}", e);
+                }
                 log::info!("Auto-saved to {}", path.display());
             }
         }
@@ -680,5 +774,11 @@ impl eframe::App for SdfApp {
         }
 
         self.perf.timings.total_cpu_s = frame_start.elapsed().as_secs_f64();
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn on_exit(&mut self) {
+        self.settings.last_clean_exit = true;
+        self.settings.save();
     }
 }

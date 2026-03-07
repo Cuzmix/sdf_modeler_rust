@@ -1,4 +1,4 @@
-[
+﻿[
   {
     "id": 6,
     "category": "rendering",
@@ -249,7 +249,7 @@
     "category": "workflow",
     "description": "Add crash recovery dialog on startup.\n\nContext: The app already has autosave (writes to autosave.sdf every 120s). But if the app crashes, the user gets no indication that recoverable work exists. Every shipping app (Blender, Photoshop, Word) shows a recovery dialog on startup.\n\nSteps:\n1. In src/io.rs: add `fn has_recovery_file() -> bool` — checks if autosave.sdf exists AND is newer than the last-known save timestamp.\n2. In src/settings.rs: add `last_clean_exit: bool` (default true). Set to false on app startup, set to true in the eframe `on_exit()` callback. If last_clean_exit is false on startup AND autosave.sdf exists, the app crashed.\n3. In src/app/mod.rs startup (new() or first frame): if crash detected, set a flag `show_recovery_dialog: bool` in UiState.\n4. Create src/ui/recovery_dialog.rs: modal egui::Window with:\n   - 'Recovered unsaved work found from [timestamp]'\n   - [Recover] button: loads autosave.sdf into the scene, clears the flag.\n   - [Discard] button: deletes autosave.sdf, starts with empty scene.\n   - [Open Last Project] button: opens the most recent file from recent_files list.\n5. Register module in src/ui/mod.rs. Draw the dialog in the main update loop (before other UI, as a modal blocker).\n6. In the autosave logic: write a companion `autosave.meta` file containing the timestamp and the current project path (if any). The recovery dialog reads this to show context.",
     "verification": "cargo check && cargo clippy -- -D warnings && cargo test. To test: launch app, create objects, wait for autosave (or reduce interval to 5s), force-kill the process (Task Manager). Relaunch — recovery dialog appears. Click Recover — scene restored. Click Discard — empty scene, autosave deleted.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 42,

@@ -856,7 +856,7 @@ impl SdfApp {
     }
 
     /// Load a project file and update all relevant state.
-    fn load_project_from_path(&mut self, path: &std::path::Path) -> bool {
+    pub(super) fn load_project_from_path(&mut self, path: &std::path::Path) -> bool {
         match crate::io::load_project(&path.to_path_buf()) {
             Ok(project) => {
                 self.doc.scene = project.scene;

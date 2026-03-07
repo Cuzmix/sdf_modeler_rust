@@ -1410,3 +1410,43 @@ Changes:
 - src/app/mod.rs: Passes &self.perf.timings to SdfTabViewer.
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (460/460) ✓, cargo build ✓
+
+--- Iteration 38: PRD #41 � Crash recovery dialog on startup ---
+COMPLETED. Added startup crash recovery flow with autosave metadata, modal recovery UI, and clean-exit tracking.
+
+Changes:
+- src/io.rs:
+  - Added recovery metadata support:
+    - `RecoveryMeta` struct (`autosave_unix_secs`, `project_path`, `last_project_save_unix_secs`)
+    - `auto_save_meta_path()`
+    - `read_recovery_meta()`
+    - `write_recovery_meta(project_path)`
+    - `remove_recovery_files()`
+  - Added `has_recovery_file()` to detect valid recovery data:
+    - requires `autosave.sdf`
+    - compares autosave mtime against last saved project mtime when available
+- src/settings.rs:
+  - Added persistent `last_clean_exit: bool` (default `true`).
+- src/app/state.rs:
+  - Added `UiState.show_recovery_dialog` and `UiState.recovery_summary`.
+- src/ui/recovery_dialog.rs (new):
+  - Added blocking modal dialog with:
+    - `[Recover]` ? load `autosave.sdf`
+    - `[Discard]` ? delete `autosave.sdf` + `autosave.meta`
+    - `[Open Last Project]` ? load most recent path from `recent_files`
+  - Includes dimmed backdrop and contextual recovery message.
+- src/ui/mod.rs:
+  - Registered `recovery_dialog` module.
+- src/app/mod.rs:
+  - Startup crash detection:
+    - if `last_clean_exit == false` and `has_recovery_file()` then show modal.
+    - reads `autosave.meta` to build dialog summary.
+  - Startup lifecycle now marks `last_clean_exit = false` and saves settings.
+  - Added `on_exit()` hook to mark `last_clean_exit = true` and save settings.
+  - Added blocking recovery handling path before normal UI draw.
+  - Autosave now always writes `autosave.sdf` and companion `autosave.meta`.
+- src/app/action_handler.rs:
+  - Made `load_project_from_path` `pub(super)` so startup recovery flow can reuse it.
+
+Verification: cargo check ?, cargo clippy -- -D warnings ?, cargo test (460/460) ?, cargo build ?
+Manual verification: NOT RUN in this iteration (kill/relaunch crash scenario still required).
