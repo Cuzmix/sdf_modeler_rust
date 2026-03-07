@@ -62,6 +62,7 @@ pub enum SdfCategory {
     Operation,
     Transform,
     Modifier,
+    Utility,
     Light,
 }
 impl CategoryTrait for SdfCategory {
@@ -71,6 +72,7 @@ impl CategoryTrait for SdfCategory {
             Self::Operation => "Operation".into(),
             Self::Transform => "Transform".into(),
             Self::Modifier => "Modifier".into(),
+            Self::Utility => "Utility".into(),
             Self::Light => "Light".into(),
         }
     }
@@ -83,6 +85,7 @@ pub enum SdfNodeTemplate {
     Operation(CsgOp),
     Transform,
     Modifier(ModifierKind),
+    Reroute,
     Light(LightType),
 }
 
@@ -564,6 +567,7 @@ impl NodeTemplateTrait for SdfNodeTemplate {
             Self::Operation(o) => std::borrow::Cow::Borrowed(o.base_name()),
             Self::Transform => std::borrow::Cow::Borrowed("Transform"),
             Self::Modifier(m) => std::borrow::Cow::Borrowed(m.base_name()),
+            Self::Reroute => std::borrow::Cow::Borrowed("Reroute"),
             Self::Light(l) => std::borrow::Cow::Owned(format!("{} Light", l.label())),
         }
     }
@@ -577,6 +581,7 @@ impl NodeTemplateTrait for SdfNodeTemplate {
             Self::Operation(_) => vec![SdfCategory::Operation],
             Self::Transform => vec![SdfCategory::Transform],
             Self::Modifier(_) => vec![SdfCategory::Modifier],
+            Self::Reroute => vec![SdfCategory::Utility],
             Self::Light(_) => vec![SdfCategory::Light],
         }
     }
@@ -587,6 +592,7 @@ impl NodeTemplateTrait for SdfNodeTemplate {
             Self::Operation(o) => o.base_name().to_string(),
             Self::Transform => "Transform".to_string(),
             Self::Modifier(m) => m.base_name().to_string(),
+            Self::Reroute => "Reroute".to_string(),
             Self::Light(l) => format!("{} Light", l.label()),
         }
     }
@@ -627,7 +633,7 @@ impl NodeTemplateTrait for SdfNodeTemplate {
                 );
                 graph.add_output_param(node_id, "out".to_string(), SdfDataType::Sdf);
             }
-            Self::Transform | Self::Modifier(_) => {
+            Self::Transform | Self::Modifier(_) | Self::Reroute => {
                 graph.add_input_param(
                     node_id,
                     "input".to_string(),
@@ -662,6 +668,7 @@ impl NodeTemplateIter for AllSdfTemplates {
             templates.push(SdfNodeTemplate::Operation(o.clone()));
         }
         templates.push(SdfNodeTemplate::Transform);
+        templates.push(SdfNodeTemplate::Reroute);
         for m in ModifierKind::ALL {
             templates.push(SdfNodeTemplate::Modifier(m.clone()));
         }
@@ -1088,6 +1095,102 @@ fn process_graph_responses(
     }
 }
 
+
+fn is_reroute_transform(scene: &Scene, node_id: SceneNodeId) -> bool {
+    scene
+        .nodes
+        .get(&node_id)
+        .is_some_and(|n| matches!(n.data, NodeData::Transform { .. }) && n.name.starts_with("Reroute"))
+}
+
+fn is_insertable_passthrough(scene: &Scene, node_id: SceneNodeId) -> bool {
+    scene.nodes.get(&node_id).is_some_and(|n| {
+        matches!(n.data, NodeData::Modifier { .. }) || is_reroute_transform(scene, node_id)
+    })
+}
+
+fn graph_node_has_any_connections(
+    graph: &SdfGraphState,
+    graph_node_id: NodeId,
+) -> bool {
+    let node = &graph.graph[graph_node_id];
+
+    let has_input = node
+        .inputs
+        .iter()
+        .any(|(_, iid)| !graph.graph.connections(*iid).is_empty());
+    if has_input {
+        return true;
+    }
+
+    node.outputs.iter().any(|(_, oid)| {
+        graph
+            .graph
+            .iter_connections()
+            .any(|(_, out)| out == *oid)
+    })
+}
+
+fn try_auto_insert_candidates_on_hovered_connection(
+    scene: &mut Scene,
+    state: &mut NodeGraphState,
+    responses: &GraphResponse<SdfResponse, SdfNodeData>,
+    candidate_graph_nodes: &[NodeId],
+) -> bool {
+    let Some((target_input, source_output)) = responses.connection_under_cursor else {
+        return false;
+    };
+
+    let source_graph_node = state.graph_state.graph.get_output(source_output).node;
+    let target_graph_node = state.graph_state.graph.get_input(target_input).node;
+
+    let Some(&source_scene_id) = state.id_map.graph_to_scene.get(&source_graph_node) else {
+        return false;
+    };
+    let Some(&target_scene_id) = state.id_map.graph_to_scene.get(&target_graph_node) else {
+        return false;
+    };
+
+    let input_name = state.graph_state.graph[target_graph_node]
+        .inputs
+        .iter()
+        .find(|(_, iid)| *iid == target_input)
+        .map(|(name, _)| name.as_str());
+
+    for graph_node_id in candidate_graph_nodes {
+        if *graph_node_id == source_graph_node || *graph_node_id == target_graph_node {
+            continue;
+        }
+
+        let Some(&insert_scene_id) = state.id_map.graph_to_scene.get(graph_node_id) else {
+            continue;
+        };
+
+        if !is_insertable_passthrough(scene, insert_scene_id) {
+            continue;
+        }
+
+        // Safety: only auto-insert clean pass-through nodes (no existing links).
+        if graph_node_has_any_connections(&state.graph_state, *graph_node_id) {
+            continue;
+        }
+
+        scene.set_sculpt_input(insert_scene_id, Some(source_scene_id));
+        match input_name {
+            Some("left") => scene.set_left_child(target_scene_id, Some(insert_scene_id)),
+            Some("right") => scene.set_right_child(target_scene_id, Some(insert_scene_id)),
+            Some("input") => scene.set_sculpt_input(target_scene_id, Some(insert_scene_id)),
+            _ => continue,
+        }
+
+        state.select_single(insert_scene_id);
+        state.needs_initial_rebuild = true;
+        state.last_structure_key = scene.structure_key();
+        return true;
+    }
+
+    false
+}
 // ---------------------------------------------------------------------------
 // Public state & draw
 // ---------------------------------------------------------------------------
@@ -1402,15 +1505,29 @@ fn draw_with_filter(
         })
         .inner;
 
+    let mut auto_insert_candidates: Vec<NodeId> = responses
+        .node_responses
+        .iter()
+        .filter_map(|r| match r {
+            NodeResponse::MoveNodeEnded(id) => Some(*id),
+            _ => None,
+        })
+        .collect();
+
     // Handle nodes created via the node finder
     let created: Vec<_> = state.user_state.created_via_finder.drain(..).collect();
     for (graph_id, template) in created {
         let is_light = matches!(template, SdfNodeTemplate::Light(_));
+        let is_auto_insert_candidate = matches!(
+            template,
+            SdfNodeTemplate::Modifier(_) | SdfNodeTemplate::Transform | SdfNodeTemplate::Reroute
+        );
         let scene_id = match template {
             SdfNodeTemplate::Primitive(kind) => scene.create_primitive(kind),
             SdfNodeTemplate::Operation(op) => scene.create_operation(op, None, None),
             SdfNodeTemplate::Transform => scene.create_transform(None),
             SdfNodeTemplate::Modifier(kind) => scene.create_modifier(kind, None),
+            SdfNodeTemplate::Reroute => scene.create_reroute(None),
             SdfNodeTemplate::Light(light_type) => {
                 // create_light returns (light_id, transform_id) — select transform
                 let (_light_id, transform_id) = scene.create_light(light_type);
@@ -1430,6 +1547,9 @@ fn draw_with_filter(
                 state.graph_state.graph[graph_id].label = node.name.clone();
             }
             state.id_map.insert(scene_id, graph_id);
+            if is_auto_insert_candidate {
+                auto_insert_candidates.push(graph_id);
+            }
         }
         state.select_single(scene_id);
         state.last_structure_key = scene.structure_key();
@@ -1457,6 +1577,17 @@ fn draw_with_filter(
     if layout_dirty {
         state.layout_dirty = true;
         state.last_structure_key = scene.structure_key();
+    }
+
+    if matches!(filter_mode, GraphFilterMode::SdfOnly) && !auto_insert_candidates.is_empty() {
+        if try_auto_insert_candidates_on_hovered_connection(
+            scene,
+            state,
+            &responses,
+            &auto_insert_candidates,
+        ) {
+            state.layout_dirty = true;
+        }
     }
     // Consume layout_dirty: run auto-layout for any new/repositioned nodes
     if state.layout_dirty {
@@ -1536,6 +1667,13 @@ fn draw_toolbar(
                         } else {
                             actions.push(Action::CreateTransform { input: None });
                         }
+                        ui.close_menu();
+                    }
+                });
+
+                ui.menu_button("+ Utility", |ui| {
+                    if ui.button("Reroute").clicked() {
+                        actions.push(Action::CreateReroute { input: None });
                         ui.close_menu();
                     }
                 });
@@ -1983,6 +2121,17 @@ fn scalar_drag(
     });
     changed
 }
+
+
+
+
+
+
+
+
+
+
+
 
 
 

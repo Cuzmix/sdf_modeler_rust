@@ -62,6 +62,8 @@ pub enum NodeResponse<UserResponse: UserResponseTrait, NodeData: NodeDataTrait> 
         node: NodeId,
         drag_delta: Vec2,
     },
+    /// Emitted once when a node drag interaction stops.
+    MoveNodeEnded(NodeId),
     User(UserResponse),
 }
 
@@ -78,6 +80,8 @@ pub struct GraphResponse<UserResponse: UserResponseTrait, NodeData: NodeDataTrai
     pub cursor_in_editor: bool,
     /// Is the mouse currently hovering the node finder?
     pub cursor_in_finder: bool,
+    /// Existing connection currently under the cursor (if any).
+    pub connection_under_cursor: Option<(InputId, OutputId)>,
 }
 impl<UserResponse: UserResponseTrait, NodeData: NodeDataTrait> Default
     for GraphResponse<UserResponse, NodeData>
@@ -87,6 +91,7 @@ impl<UserResponse: UserResponseTrait, NodeData: NodeDataTrait> Default
             node_responses: Default::default(),
             cursor_in_editor: false,
             cursor_in_finder: false,
+            connection_under_cursor: None,
         }
     }
 }
@@ -391,7 +396,8 @@ where
             );
         }
 
-        // draw existing connections
+                // draw existing connections
+        let mut connection_under_cursor: Option<((InputId, OutputId), f32)> = None;
         for (input, outputs) in self.graph.iter_connection_groups() {
             for (hook_n, &output) in outputs.iter().enumerate() {
                 let port_type = self
@@ -409,6 +415,17 @@ where
                     dst_pos,
                     connection_color,
                 );
+
+                let distance = connection_distance_to_pos(&self.pan_zoom, src_pos, dst_pos, cursor_pos);
+                let hover_threshold = 12.0 * self.pan_zoom.zoom;
+                if distance <= hover_threshold {
+                    match connection_under_cursor {
+                        Some((_, best)) if distance >= best => {}
+                        _ => {
+                            connection_under_cursor = Some(((input, output), distance));
+                        }
+                    }
+                }
             }
         }
 
@@ -481,6 +498,7 @@ where
                         }
                     }
                 }
+                NodeResponse::MoveNodeEnded(_) => {}
                 NodeResponse::User(_) => {
                     // These are handled by the user code.
                 }
@@ -564,6 +582,7 @@ where
             node_responses: delayed_responses,
             cursor_in_editor,
             cursor_in_finder,
+            connection_under_cursor: connection_under_cursor.map(|(conn, _)| conn),
         }
     }
 }
@@ -592,6 +611,51 @@ fn draw_connection(
     );
 
     painter.add(bezier);
+}
+fn connection_distance_to_pos(pan_zoom: &PanZoom, src_pos: Pos2, dst_pos: Pos2, point: Pos2) -> f32 {
+    let control_scale = ((dst_pos.x - src_pos.x) * pan_zoom.zoom / 2.0).max(30.0 * pan_zoom.zoom);
+    let src_control = src_pos + Vec2::X * control_scale;
+    let dst_control = dst_pos - Vec2::X * control_scale;
+
+    let mut min_dist = f32::MAX;
+    let mut prev = src_pos;
+    const SAMPLES: usize = 24;
+    for i in 1..=SAMPLES {
+        let t = i as f32 / SAMPLES as f32;
+        let curr = cubic_bezier_point(src_pos, src_control, dst_control, dst_pos, t);
+        let d = distance_to_segment(point, prev, curr);
+        if d < min_dist {
+            min_dist = d;
+        }
+        prev = curr;
+    }
+    min_dist
+}
+
+fn cubic_bezier_point(p0: Pos2, p1: Pos2, p2: Pos2, p3: Pos2, t: f32) -> Pos2 {
+    let u = 1.0 - t;
+    let uu = u * u;
+    let tt = t * t;
+    let uuu = uu * u;
+    let ttt = tt * t;
+
+    let p = p0.to_vec2() * uuu
+        + p1.to_vec2() * (3.0 * uu * t)
+        + p2.to_vec2() * (3.0 * u * tt)
+        + p3.to_vec2() * ttt;
+    Pos2::new(p.x, p.y)
+}
+
+fn distance_to_segment(p: Pos2, a: Pos2, b: Pos2) -> f32 {
+    let ab = b - a;
+    let ap = p - a;
+    let len2 = ab.length_sq();
+    if len2 <= f32::EPSILON {
+        return ap.length();
+    }
+    let t = (ap.dot(ab) / len2).clamp(0.0, 1.0);
+    let proj = a + ab * t;
+    p.distance(proj)
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1159,6 +1223,9 @@ where
             });
             responses.push(NodeResponse::RaiseNode(self.node_id));
         }
+        if window_response.drag_stopped() {
+            responses.push(NodeResponse::MoveNodeEnded(self.node_id));
+        }
 
         // Node selection
         //
@@ -1217,6 +1284,17 @@ where
         resp
     }
 }
+
+
+
+
+
+
+
+
+
+
+
 
 
 

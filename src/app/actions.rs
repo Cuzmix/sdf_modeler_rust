@@ -113,6 +113,7 @@ pub enum Action {
     CreatePrimitive(SdfPrimitive),
     CreateOperation { op: CsgOp, left: Option<NodeId>, right: Option<NodeId> },
     CreateTransform { input: Option<NodeId> },
+    CreateReroute { input: Option<NodeId> },
     CreateModifier { kind: ModifierKind, input: Option<NodeId> },
     CreateLight(LightType),
     InsertModifierAbove { target: NodeId, kind: ModifierKind },
@@ -185,3 +186,5 @@ pub enum Action {
     SettingsChanged,
     MarkBufferDirty,
 }
+
+
