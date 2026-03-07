@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use bytemuck::{Pod, Zeroable};
 
 use crate::gpu::codegen::build_cookie_mapping;
-use crate::graph::scene::{LightType, NodeData, NodeId, Scene, MAX_SCENE_LIGHTS};
+use crate::graph::scene::{LightType, NodeData, NodeId, ProximityMode, Scene, MAX_SCENE_LIGHTS};
+use crate::graph::voxel::evaluate_scene_sdf_at_point;
 
 /// 128-byte GPU node (8 x vec4f).
 #[repr(C)]
@@ -247,6 +248,8 @@ pub fn collect_scene_lights(
             shadow_color,
             volumetric,
             volumetric_density,
+            proximity_mode,
+            proximity_range,
             ..
         } = &node.data
         {
@@ -305,13 +308,32 @@ pub fn collect_scene_lights(
             let half_angle_rad = (spot_angle * 0.5).to_radians();
             let cos_half_angle = half_angle_rad.cos();
 
+            // Compute proximity-modulated intensity on CPU (zero GPU cost).
+            let effective_intensity = match proximity_mode {
+                ProximityMode::Off => *intensity,
+                ProximityMode::Brighten | ProximityMode::Dim => {
+                    let sdf_dist = evaluate_scene_sdf_at_point(scene, *translation);
+                    let proximity_range_clamped = proximity_range.max(0.001);
+                    // smoothstep(edge0, edge1, x): 0 at edge0, 1 at edge1
+                    let t = (sdf_dist / proximity_range_clamped).clamp(0.0, 1.0);
+                    let smooth_t = t * t * (3.0 - 2.0 * t);
+                    match proximity_mode {
+                        // Brighten: factor = 1.0 + (1.0 - smooth_t), so max 2x at surface
+                        ProximityMode::Brighten => *intensity * (1.0 + (1.0 - smooth_t)),
+                        // Dim: factor = smooth_t, so 0 at surface, 1 at range
+                        ProximityMode::Dim => *intensity * smooth_t,
+                        ProximityMode::Off => unreachable!(),
+                    }
+                }
+            };
+
             let dist_to_camera = (*translation - camera_pos).length();
 
             lights.push((
                 dist_to_camera,
                 SceneLightGpu {
                     position_type: [translation.x, translation.y, translation.z, type_val],
-                    direction_intensity: [direction.x, direction.y, direction.z, *intensity],
+                    direction_intensity: [direction.x, direction.y, direction.z, effective_intensity],
                     color_range: [color.x, color.y, color.z, *range],
                     params: [
                         cos_half_angle,
@@ -717,5 +739,129 @@ mod tests {
         // Black
         let black = pack_rgb8(Vec3::ZERO);
         assert!(black.abs() < 1.0);
+    }
+
+    #[test]
+    fn proximity_off_preserves_intensity() {
+        let mut scene = empty_scene();
+        let (light_id, _) = scene.create_light(LightType::Point);
+        // Default proximity_mode is Off, so intensity should be unchanged
+        if let Some(node) = scene.nodes.get_mut(&light_id) {
+            if let NodeData::Light { intensity, .. } = &mut node.data {
+                *intensity = 5.0;
+            }
+        }
+        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None);
+        assert_eq!(count, 1);
+        assert!((lights[0].direction_intensity[3] - 5.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn proximity_brighten_increases_intensity_near_surface() {
+        use crate::graph::scene::{SdfPrimitive, ProximityMode};
+        let mut scene = empty_scene();
+        // Create a sphere at origin with scale 1.0
+        let _sphere_id = scene.add_node(
+            "Sphere".to_string(),
+            NodeData::Primitive {
+                kind: SdfPrimitive::Sphere,
+                position: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
+        // Place light very close to sphere surface (sphere radius=1, light at x=1.2)
+        let light_id = scene.add_node(
+            "Light".to_string(),
+            NodeData::Light {
+                light_type: LightType::Point,
+                color: Vec3::ONE,
+                intensity: 1.0,
+                range: 10.0,
+                spot_angle: 45.0,
+                cast_shadows: false,
+                shadow_softness: 8.0,
+                shadow_color: Vec3::ZERO,
+                volumetric: false,
+                volumetric_density: 0.15,
+                cookie_node: None,
+                proximity_mode: ProximityMode::Brighten,
+                proximity_range: 2.0,
+            },
+        );
+        let _transform_id = scene.add_node(
+            "Transform".to_string(),
+            NodeData::Transform {
+                input: Some(light_id),
+                translation: Vec3::new(1.2, 0.0, 0.0),
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+            },
+        );
+        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None);
+        assert_eq!(count, 1);
+        // Light at 1.2 from sphere surface (d≈0.2), Brighten should boost intensity > 1.0
+        assert!(lights[0].direction_intensity[3] > 1.0);
+    }
+
+    #[test]
+    fn proximity_dim_decreases_intensity_near_surface() {
+        use crate::graph::scene::{SdfPrimitive, ProximityMode};
+        let mut scene = empty_scene();
+        let _sphere_id = scene.add_node(
+            "Sphere".to_string(),
+            NodeData::Primitive {
+                kind: SdfPrimitive::Sphere,
+                position: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
+        let light_id = scene.add_node(
+            "Light".to_string(),
+            NodeData::Light {
+                light_type: LightType::Point,
+                color: Vec3::ONE,
+                intensity: 1.0,
+                range: 10.0,
+                spot_angle: 45.0,
+                cast_shadows: false,
+                shadow_softness: 8.0,
+                shadow_color: Vec3::ZERO,
+                volumetric: false,
+                volumetric_density: 0.15,
+                cookie_node: None,
+                proximity_mode: ProximityMode::Dim,
+                proximity_range: 2.0,
+            },
+        );
+        let _transform_id = scene.add_node(
+            "Transform".to_string(),
+            NodeData::Transform {
+                input: Some(light_id),
+                translation: Vec3::new(1.2, 0.0, 0.0),
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+            },
+        );
+        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None);
+        assert_eq!(count, 1);
+        // Light at 1.2 from sphere surface (d≈0.2), Dim should reduce intensity < 1.0
+        assert!(lights[0].direction_intensity[3] < 1.0);
+        assert!(lights[0].direction_intensity[3] > 0.0);
     }
 }

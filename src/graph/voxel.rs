@@ -484,6 +484,20 @@ fn csg_columns_subtract(a: f32, b: f32, k: f32, n: f32) -> f32 {
 // Recursive SDF tree evaluator
 // ---------------------------------------------------------------------------
 
+/// Evaluate the entire scene SDF at a world-space point.
+/// Computes the minimum distance across all top-level subtrees (union).
+pub fn evaluate_scene_sdf_at_point(scene: &Scene, p: Vec3) -> f32 {
+    let top_nodes = scene.top_level_nodes();
+    let mut result = FAR_DISTANCE;
+    for &node_id in &top_nodes {
+        let d = evaluate_sdf_tree(scene, node_id, p);
+        if d < result {
+            result = d;
+        }
+    }
+    result
+}
+
 /// Evaluate the combined SDF of a subtree at a world-space point.
 pub fn evaluate_sdf_tree(scene: &Scene, node_id: NodeId, p: Vec3) -> f32 {
     let Some(node) = scene.nodes.get(&node_id) else {

@@ -1196,6 +1196,8 @@ pub fn draw(
             mut volumetric,
             mut volumetric_density,
             cookie_node,
+            mut proximity_mode,
+            mut proximity_range,
         } => {
             ui.horizontal(|ui| {
                 ui.label("Type: Light");
@@ -1306,6 +1308,34 @@ pub fn draw(
                 }
             }
 
+            // Proximity modulation (Point and Spot only — position-dependent)
+            if matches!(light_type, crate::graph::scene::LightType::Point | crate::graph::scene::LightType::Spot) {
+                ui.separator();
+                ui.label(egui::RichText::new("Proximity").strong());
+                ui.label(
+                    egui::RichText::new("Modulate intensity by distance to surfaces")
+                        .weak()
+                        .small(),
+                );
+                let mut new_pm = proximity_mode.clone();
+                egui::ComboBox::from_id_salt(format!("proximity_mode_{}", id))
+                    .selected_text(new_pm.label())
+                    .show_ui(ui, |ui| {
+                        for pm in crate::graph::scene::ProximityMode::ALL {
+                            ui.selectable_value(&mut new_pm, pm.clone(), pm.label());
+                        }
+                    });
+                if std::mem::discriminant(&new_pm) != std::mem::discriminant(&proximity_mode) {
+                    proximity_mode = new_pm;
+                }
+                if !matches!(proximity_mode, crate::graph::scene::ProximityMode::Off) {
+                    ui.horizontal(|ui| {
+                        ui.label("Range:");
+                        ui.add(egui::Slider::new(&mut proximity_range, 0.1..=10.0));
+                    });
+                }
+            }
+
             // Cookie shape (Point and Spot only — Directional/Ambient don't benefit)
             if matches!(light_type, crate::graph::scene::LightType::Point | crate::graph::scene::LightType::Spot) {
                 ui.separator();
@@ -1379,6 +1409,8 @@ pub fn draw(
                     shadow_color: ref mut sc,
                     volumetric: ref mut vol,
                     volumetric_density: ref mut vd,
+                    proximity_mode: ref mut pm,
+                    proximity_range: ref mut pr,
                     ..
                 } = node.data {
                     *lt = light_type;
@@ -1391,6 +1423,8 @@ pub fn draw(
                     *sc = shadow_color;
                     *vol = volumetric;
                     *vd = volumetric_density;
+                    *pm = proximity_mode;
+                    *pr = proximity_range;
                 }
             }
         }

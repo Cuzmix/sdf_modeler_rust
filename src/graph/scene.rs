@@ -538,11 +538,45 @@ pub enum NodeData {
         /// shapes the light's beam. Inside the cookie shape = full light, outside = no light.
         #[serde(default)]
         cookie_node: Option<NodeId>,
+        /// Proximity modulation mode — modulates intensity based on distance to SDF surfaces.
+        #[serde(default)]
+        proximity_mode: ProximityMode,
+        /// Distance over which the proximity effect ramps (0.1–10.0).
+        #[serde(default = "default_proximity_range")]
+        proximity_range: f32,
     },
 }
 
 fn default_volumetric_density() -> f32 {
     0.15
+}
+fn default_proximity_range() -> f32 {
+    2.0
+}
+
+/// Proximity light modulation mode — SDF-native feature where light intensity
+/// is modulated by the light's distance to the nearest SDF surface.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+pub enum ProximityMode {
+    /// No proximity modulation — intensity unchanged.
+    #[default]
+    Off,
+    /// Light brightens as it approaches surfaces (factor = 1.0 + smoothstep effect).
+    Brighten,
+    /// Light dims as it approaches surfaces (factor = smoothstep away from surface).
+    Dim,
+}
+
+impl ProximityMode {
+    pub const ALL: &[Self] = &[Self::Off, Self::Brighten, Self::Dim];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Off => "Off",
+            Self::Brighten => "Brighten",
+            Self::Dim => "Dim",
+        }
+    }
 }
 
 impl NodeData {
@@ -821,6 +855,8 @@ impl Scene {
                 volumetric: false,
                 volumetric_density: 0.15,
                 cookie_node: None,
+                proximity_mode: ProximityMode::Off,
+                proximity_range: 2.0,
             },
         );
         // Create a Transform parent positioned above and to the side of the origin
@@ -855,6 +891,8 @@ impl Scene {
                 volumetric: false,
                 volumetric_density: 0.15,
                 cookie_node: None,
+                proximity_mode: ProximityMode::Off,
+                proximity_range: 2.0,
             },
         );
         let _key_transform_id = self.add_node(
@@ -882,6 +920,8 @@ impl Scene {
                 volumetric: false,
                 volumetric_density: 0.15,
                 cookie_node: None,
+                proximity_mode: ProximityMode::Off,
+                proximity_range: 2.0,
             },
         );
         let _fill_transform_id = self.add_node(
@@ -909,6 +949,8 @@ impl Scene {
                 volumetric: false,
                 volumetric_density: 0.15,
                 cookie_node: None,
+                proximity_mode: ProximityMode::Off,
+                proximity_range: 2.0,
             },
         );
         let _ambient_transform_id = self.add_node(
@@ -1376,7 +1418,7 @@ impl Scene {
                     extra.y.to_bits().hash(&mut hasher);
                     extra.z.to_bits().hash(&mut hasher);
                 }
-                NodeData::Light { color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color, volumetric, volumetric_density, cookie_node, .. } => {
+                NodeData::Light { color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color, volumetric, volumetric_density, cookie_node, proximity_mode, proximity_range, .. } => {
                     color.x.to_bits().hash(&mut hasher);
                     color.y.to_bits().hash(&mut hasher);
                     color.z.to_bits().hash(&mut hasher);
@@ -1391,6 +1433,8 @@ impl Scene {
                     volumetric.hash(&mut hasher);
                     volumetric_density.to_bits().hash(&mut hasher);
                     cookie_node.hash(&mut hasher);
+                    std::mem::discriminant(proximity_mode).hash(&mut hasher);
+                    proximity_range.to_bits().hash(&mut hasher);
                 }
             }
             // Include light mask in fingerprint
@@ -1621,7 +1665,7 @@ impl Scene {
                         extra: *extra,
                     }
                 }
-                NodeData::Light { light_type, color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color, volumetric, volumetric_density, cookie_node } => {
+                NodeData::Light { light_type, color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color, volumetric, volumetric_density, cookie_node, proximity_mode, proximity_range } => {
                     NodeData::Light {
                         light_type: light_type.clone(),
                         color: *color,
@@ -1634,6 +1678,8 @@ impl Scene {
                         volumetric: *volumetric,
                         volumetric_density: *volumetric_density,
                         cookie_node: *cookie_node,
+                        proximity_mode: proximity_mode.clone(),
+                        proximity_range: *proximity_range,
                     }
                 }
             };
@@ -2025,6 +2071,8 @@ impl Scene {
                         volumetric: vol1,
                         volumetric_density: vd1,
                         cookie_node: ck1,
+                        proximity_mode: pm1,
+                        proximity_range: pr1,
                     },
                     NodeData::Light {
                         light_type: lt2,
@@ -2038,6 +2086,8 @@ impl Scene {
                         volumetric: vol2,
                         volumetric_density: vd2,
                         cookie_node: ck2,
+                        proximity_mode: pm2,
+                        proximity_range: pr2,
                     },
                 ) => {
                     if std::mem::discriminant(lt1) != std::mem::discriminant(lt2)
@@ -2051,6 +2101,8 @@ impl Scene {
                         || vol1 != vol2
                         || vd1 != vd2
                         || ck1 != ck2
+                        || pm1 != pm2
+                        || pr1 != pr2
                     {
                         return false;
                     }
@@ -2847,6 +2899,8 @@ mod tests {
             volumetric: false,
             volumetric_density: 0.15,
             cookie_node: None,
+            proximity_mode: ProximityMode::Off,
+            proximity_range: 2.0,
         };
         assert_eq!(data.children().count(), 0);
     }
@@ -2865,6 +2919,8 @@ mod tests {
             volumetric: false,
             volumetric_density: 0.15,
             cookie_node: None,
+            proximity_mode: ProximityMode::Off,
+            proximity_range: 2.0,
         };
         assert!(data.geometry_local_sphere().is_none());
     }
@@ -3033,7 +3089,7 @@ mod tests {
         let mut scene = empty_scene();
         let (light_id, _) = scene.create_light(LightType::Spot);
         match &scene.nodes[&light_id].data {
-            NodeData::Light { light_type, color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color, volumetric, volumetric_density, cookie_node } => {
+            NodeData::Light { light_type, color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color, volumetric, volumetric_density, cookie_node, proximity_mode, proximity_range } => {
                 assert_eq!(*light_type, LightType::Spot);
                 assert_eq!(*color, Vec3::ONE);
                 assert!((intensity - 1.0).abs() < 1e-5);
@@ -3046,6 +3102,8 @@ mod tests {
                 assert!(!volumetric);
                 assert!((volumetric_density - 0.15).abs() < 1e-5);
                 assert!(cookie_node.is_none());
+                assert_eq!(*proximity_mode, ProximityMode::Off);
+                assert!((proximity_range - 2.0).abs() < 1e-5);
             }
             _ => panic!("expected Light node"),
         }

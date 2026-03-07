@@ -1166,3 +1166,43 @@ Design decisions:
   cookie primitive's properties (position, scale) only updates the node buffer (fast path).
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (390/390) ✓, cargo build ✓
+
+--- Iteration 32: PRD #37 — SDF-proximity light modulation ---
+COMPLETED. Added ProximityMode (Off/Brighten/Dim) for SDF-native light intensity modulation.
+
+Changes:
+- src/graph/scene.rs: Added ProximityMode enum (Off, Brighten, Dim) with label(), ALL
+  constant. Added `proximity_mode: ProximityMode` (default Off) and `proximity_range: f32`
+  (default 2.0) to NodeData::Light. Both fields have #[serde(default)] for backwards
+  compatibility. Updated all exhaustive match blocks: data_fingerprint (hashes discriminant
+  + range), content_eq/deep_eq (compares both fields), duplicate_subtree (clones both),
+  create_light, create_default_lights (all Off). Updated 3 test constructors.
+- src/graph/voxel.rs: Added evaluate_scene_sdf_at_point(scene, p) → f32 utility function.
+  Computes minimum distance across all top-level subtrees (union). Used by proximity
+  computation on the CPU side.
+- src/gpu/buffers.rs: collect_scene_lights() now extracts proximity_mode and proximity_range.
+  For lights with proximity != Off, evaluates scene SDF at the light's world position using
+  evaluate_scene_sdf_at_point() on the CPU. Computes proximity factor:
+  - Brighten: intensity * (1.0 + (1.0 - smoothstep(0, range, dist))) — max 2x at surface
+  - Dim: intensity * smoothstep(0, range, dist) — 0 at surface, full at range
+  Multiplies intensity by factor before uploading to GPU buffer. Zero GPU cost — all
+  computation happens once per frame on CPU, not per-pixel.
+  Added 3 unit tests: proximity_off_preserves_intensity, proximity_brighten_increases_near,
+  proximity_dim_decreases_near.
+- src/ui/properties.rs: Added "Proximity" section in Light properties (Point and Spot only).
+  ComboBox for mode (Off/Brighten/Dim), Range slider (0.1–10.0) shown when mode != Off.
+  Write-back includes proximity_mode and proximity_range fields.
+
+Design decisions:
+- CPU-side evaluation (PRD step 5 optimization): proximity factor is computed on the CPU
+  using the existing evaluate_sdf_tree infrastructure. This avoids adding per-pixel SDF
+  evals on the GPU (which would cost 1 full scene_sdf call per light per pixel — expensive).
+  The factor only depends on the light's world position, not the shading point, so computing
+  it once per frame is correct.
+- Smoothstep-based falloff: uses t*t*(3-2t) for smooth transitions. Brighten adds up to
+  1.0 extra intensity at the surface (2x total). Dim goes from 0 at surface to full
+  intensity at the proximity range boundary.
+- Point and Spot only in UI: Directional and Ambient lights have no meaningful position
+  relative to surfaces, so proximity controls are hidden for those types.
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (393/393) ✓, cargo build ✓
