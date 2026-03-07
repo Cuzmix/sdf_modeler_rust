@@ -1263,8 +1263,16 @@ mod multi_select_tests {
         let state = NodeGraphState::new();
         assert_eq!(state.selected_count(), 0);
     }
-}
 
+    #[test]
+    fn graph_editor_instance_ids_are_unique() {
+        let sdf_state = NodeGraphState::new();
+        let light_state = NodeGraphState::new();
+        assert_ne!(sdf_state.graph_state.instance_id, 0);
+        assert_ne!(light_state.graph_state.instance_id, 0);
+        assert_ne!(sdf_state.graph_state.instance_id, light_state.graph_state.instance_id);
+    }
+}
 pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState, actions: &mut ActionSink) {
     ui.push_id("sdf_node_graph_panel", |ui| {
         draw_with_filter(ui, scene, state, actions, GraphFilterMode::SdfOnly);

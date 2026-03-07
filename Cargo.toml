@@ -46,3 +46,6 @@ web-sys = { version = "0.3", features = [
 ] }
 js-sys = "0.3"
 console_error_panic_hook = "0.1"
+
+[patch.crates-io]
+egui_node_graph2 = { path = "third_party/egui_node_graph2" }
