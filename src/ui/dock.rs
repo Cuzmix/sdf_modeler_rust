@@ -24,6 +24,7 @@ pub enum Tab {
     BrushSettings,
     Lights,
     LightLinking,
+    SceneStats,
 }
 
 impl Tab {
@@ -37,6 +38,7 @@ impl Tab {
         Tab::BrushSettings,
         Tab::Lights,
         Tab::LightLinking,
+        Tab::SceneStats,
     ];
 
     pub fn label(&self) -> &'static str {
@@ -50,6 +52,7 @@ impl Tab {
             Tab::BrushSettings => "Brush Settings",
             Tab::Lights => "Lights",
             Tab::LightLinking => "Light Linking",
+            Tab::SceneStats => "Scene Stats",
         }
     }
 }
@@ -69,7 +72,7 @@ pub fn create_dock_state() -> DockState<Tab> {
         right,
         Split::Below,
         0.5,
-        Node::leaf_with(vec![Tab::SceneTree, Tab::History, Tab::Lights]),
+        Node::leaf_with(vec![Tab::SceneTree, Tab::History, Tab::Lights, Tab::SceneStats]),
     );
 
     let [_viewport, _graph] = surface.split(
@@ -185,6 +188,8 @@ pub struct SdfTabViewer<'a> {
     pub active_light_ids: &'a std::collections::HashSet<NodeId>,
     /// Material preset library (built-in + user-saved).
     pub material_library: &'a mut crate::material_preset::MaterialLibrary,
+    /// Frame timing data for scene stats panel.
+    pub timings: &'a crate::app::FrameTimings,
 }
 
 impl<'a> TabViewer for SdfTabViewer<'a> {
@@ -201,6 +206,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
             Tab::BrushSettings => "Brush Settings".into(),
             Tab::Lights => "Lights".into(),
             Tab::LightLinking => "Light Linking".into(),
+            Tab::SceneStats => "Scene Stats".into(),
         }
     }
 
@@ -333,6 +339,9 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.actions,
                     self.active_light_ids,
                 );
+            }
+            Tab::SceneStats => {
+                crate::ui::scene_stats::draw(ui, self.scene, self.timings);
             }
         }
     }

@@ -1386,3 +1386,27 @@ Design decisions:
   right-click context menu enhancement.
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (455/455) ✓, cargo build ✓
+
+--- Iteration 37: PRD #42 — Scene Statistics panel ---
+COMPLETED. Added dockable Scene Stats panel showing real-time scene complexity metrics.
+
+Changes:
+- src/graph/scene.rs: Added NodeTypeCounts struct (total, visible, primitives, operations,
+  transforms, modifiers, sculpts, lights). Added 3 helper methods on Scene:
+  - node_type_counts() — counts nodes by type, tracks visible vs hidden
+  - voxel_memory_bytes() — sums all VoxelGrid data allocations (len * sizeof f32)
+  - sdf_eval_complexity() — counts visible_topo_order nodes excluding lights
+  Added 5 unit tests: empty/default counts, hidden exclusion, voxel memory, complexity.
+- Created src/ui/scene_stats.rs: Panel draw function with 4 collapsible sections:
+  - Node Counts: total, visible, per-type with color-coded dots (matching scene tree colors)
+  - SDF Complexity: eval node count + estimated shader ops (heuristic: prim*10+op*20+mod*15+xform*5+sculpt*30)
+  - Voxel Memory: formatted bytes with green/yellow/red thresholds (10MB/50MB)
+  - Frame Timing: FPS + ms/frame with color-coded FPS indicator
+  All numbers use monospace formatting for alignment.
+- src/ui/mod.rs: Registered scene_stats module.
+- src/ui/dock.rs: Added Tab::SceneStats variant to enum, ALL array, label(), title(),
+  and ui() match arms. Added to default layout (tab alongside SceneTree/History/Lights).
+  Added timings field to SdfTabViewer.
+- src/app/mod.rs: Passes &self.perf.timings to SdfTabViewer.
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (460/460) ✓, cargo build ✓

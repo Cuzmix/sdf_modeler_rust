@@ -538,6 +538,7 @@ impl eframe::App for SdfApp {
             history: &self.doc.history,
             active_light_ids: &self.ui.active_light_ids,
             material_library: &mut self.material_library,
+            timings: &self.perf.timings,
         };
 
         egui::CentralPanel::default()
