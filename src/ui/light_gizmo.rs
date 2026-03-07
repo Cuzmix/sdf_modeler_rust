@@ -41,6 +41,10 @@ struct LightInfo {
     direction: Vec3,
     /// Whether this light has an SDF cookie shape attached.
     has_cookie: bool,
+    /// For Array lights: the expanded instance positions in world space.
+    array_positions: Vec<Vec3>,
+    /// For Array lights: per-instance colors after hue variation.
+    array_colors: Vec<Vec3>,
 }
 
 /// Collect all visible Light nodes and their world-space transforms.
@@ -55,6 +59,7 @@ fn collect_lights(scene: &Scene, parent_map: &HashMap<NodeId, NodeId>) -> Vec<Li
             range,
             spot_angle,
             cookie_node,
+            array_config,
             ..
         } = &node.data
         {
@@ -85,6 +90,31 @@ fn collect_lights(scene: &Scene, parent_map: &HashMap<NodeId, NodeId>) -> Vec<Li
             // Use inverse rotation so direction arrows match gizmo drag convention.
             let direction = inverse_rotate_euler(Vec3::NEG_Y, *rotation).normalize_or_zero();
 
+            // Compute array instance positions and colors for Array lights
+            let (array_positions, array_colors) = if *light_type == LightType::Array {
+                if let Some(cfg) = array_config {
+                    let local_positions = compute_array_positions(&cfg.pattern, cfg.count, cfg.radius);
+                    let world_positions: Vec<Vec3> = local_positions.iter()
+                        .map(|lp| *translation + *lp)
+                        .collect();
+                    let colors: Vec<Vec3> = (0..local_positions.len())
+                        .map(|i| {
+                            if cfg.color_variation > 0.0 {
+                                let hue_shift = (i as f32 / local_positions.len() as f32) * cfg.color_variation * 360.0;
+                                hue_rotate(*color, hue_shift)
+                            } else {
+                                *color
+                            }
+                        })
+                        .collect();
+                    (world_positions, colors)
+                } else {
+                    (Vec::new(), Vec::new())
+                }
+            } else {
+                (Vec::new(), Vec::new())
+            };
+
             lights.push(LightInfo {
                 light_id: id,
                 transform_id,
@@ -100,6 +130,8 @@ fn collect_lights(scene: &Scene, parent_map: &HashMap<NodeId, NodeId>) -> Vec<Li
                     Vec3::NEG_Y
                 },
                 has_cookie: cookie_node.is_some(),
+                array_positions,
+                array_colors,
             });
         }
     }
@@ -116,6 +148,86 @@ fn inverse_rotate_euler(p: Vec3, r: Vec3) -> Vec3 {
     q = Vec3::new(cy * q.x + sy * q.z, q.y, -sy * q.x + cy * q.z);
     let (sx, cx) = (-r.x).sin_cos();
     Vec3::new(q.x, cx * q.y - sx * q.z, sx * q.y + cx * q.z)
+}
+
+/// Compute local positions for a Light Array pattern (same logic as buffers.rs).
+fn compute_array_positions(
+    pattern: &crate::graph::scene::ArrayPattern,
+    count: u32,
+    radius: f32,
+) -> Vec<Vec3> {
+    use crate::graph::scene::ArrayPattern;
+    let n = count.max(1) as usize;
+    let mut positions = Vec::with_capacity(n);
+    match pattern {
+        ArrayPattern::Ring => {
+            for i in 0..n {
+                let angle = (i as f32 / n as f32) * std::f32::consts::TAU;
+                positions.push(Vec3::new(angle.cos() * radius, 0.0, angle.sin() * radius));
+            }
+        }
+        ArrayPattern::Line => {
+            let total_length = radius * 2.0;
+            for i in 0..n {
+                let t = if n > 1 { i as f32 / (n - 1) as f32 } else { 0.5 };
+                positions.push(Vec3::new(-radius + t * total_length, 0.0, 0.0));
+            }
+        }
+        ArrayPattern::Grid => {
+            let side = (n as f32).sqrt().ceil() as usize;
+            let mut placed = 0;
+            for row in 0..side {
+                for col in 0..side {
+                    if placed >= n { break; }
+                    let tx = if side > 1 { col as f32 / (side - 1) as f32 } else { 0.5 };
+                    let tz = if side > 1 { row as f32 / (side - 1) as f32 } else { 0.5 };
+                    positions.push(Vec3::new(-radius + tx * radius * 2.0, 0.0, -radius + tz * radius * 2.0));
+                    placed += 1;
+                }
+            }
+        }
+        ArrayPattern::Spiral => {
+            for i in 0..n {
+                let t = i as f32 / n.max(1) as f32;
+                let angle = t * std::f32::consts::TAU * 2.0;
+                let r = t * radius;
+                positions.push(Vec3::new(angle.cos() * r, 0.0, angle.sin() * r));
+            }
+        }
+    }
+    positions
+}
+
+/// Rotate a color's hue by a given number of degrees.
+fn hue_rotate(color: Vec3, degrees: f32) -> Vec3 {
+    let r = color.x;
+    let g = color.y;
+    let b = color.z;
+    let max_c = r.max(g).max(b);
+    let min_c = r.min(g).min(b);
+    let delta = max_c - min_c;
+    let hue = if delta < 1e-6 {
+        0.0
+    } else if (max_c - r).abs() < 1e-6 {
+        60.0 * (((g - b) / delta) % 6.0)
+    } else if (max_c - g).abs() < 1e-6 {
+        60.0 * ((b - r) / delta + 2.0)
+    } else {
+        60.0 * ((r - g) / delta + 4.0)
+    };
+    let saturation = if max_c < 1e-6 { 0.0 } else { delta / max_c };
+    let value = max_c;
+    let new_hue = (hue + degrees).rem_euclid(360.0);
+    let c = value * saturation;
+    let x = c * (1.0 - ((new_hue / 60.0) % 2.0 - 1.0).abs());
+    let m = value - c;
+    let (r1, g1, b1) = if new_hue < 60.0 { (c, x, 0.0) }
+        else if new_hue < 120.0 { (x, c, 0.0) }
+        else if new_hue < 180.0 { (0.0, c, x) }
+        else if new_hue < 240.0 { (0.0, x, c) }
+        else if new_hue < 300.0 { (x, 0.0, c) }
+        else { (c, 0.0, x) };
+    Vec3::new(r1 + m, g1 + m, b1 + m)
 }
 
 // ---------------------------------------------------------------------------
@@ -222,6 +334,27 @@ fn draw_ambient_light_icon(painter: &egui::Painter, center: Pos2, size: f32, col
     painter.circle_stroke(center, size * 0.6, ring_stroke);
     // Small filled center dot
     painter.circle_filled(center, size * 0.08, color);
+}
+
+/// Draw a stacked-dots icon for a Light Array (center billboard).
+fn draw_array_light_icon(painter: &egui::Painter, center: Pos2, size: f32, color: Color32) {
+    // Three stacked circles representing multiple lights
+    let dot_radius = size * 0.15;
+    let spacing = size * 0.28;
+    painter.circle_filled(center + egui::vec2(0.0, -spacing), dot_radius, color);
+    painter.circle_filled(center, dot_radius, color);
+    painter.circle_filled(center + egui::vec2(0.0, spacing), dot_radius, color);
+    // Enclosing dashed circle
+    let dash_count = 12;
+    let dash_stroke = Stroke::new(1.2, color);
+    let radius = size * 0.55;
+    for i in 0..dash_count {
+        let a0 = (i as f32 / dash_count as f32) * std::f32::consts::TAU;
+        let a1 = ((i as f32 + 0.5) / dash_count as f32) * std::f32::consts::TAU;
+        let p0 = center + egui::vec2(a0.cos(), a0.sin()) * radius;
+        let p1 = center + egui::vec2(a1.cos(), a1.sin()) * radius;
+        painter.line_segment([p0, p1], dash_stroke);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -390,6 +523,46 @@ fn draw_directional_light_wireframe(
     }
 }
 
+/// Draw dashed lines connecting array light instance positions (wireframe pattern outline).
+fn draw_array_wireframe(
+    painter: &egui::Painter,
+    positions: &[Vec3],
+    vp: &glam::Mat4,
+    rect: Rect,
+    color: Color32,
+) {
+    if positions.len() < 2 {
+        return;
+    }
+    let stroke = Stroke::new(WIREFRAME_STROKE, color.gamma_multiply(0.5));
+    // Connect instances in order with dashed lines
+    for i in 0..positions.len() {
+        let next = (i + 1) % positions.len();
+        if let (Some(s), Some(e)) = (
+            world_to_screen(positions[i], vp, rect),
+            world_to_screen(positions[next], vp, rect),
+        ) {
+            // Dashed line
+            let dir = e - s;
+            let len = dir.length();
+            if len < 1.0 {
+                continue;
+            }
+            let d = dir / len;
+            let dash_len = 6.0;
+            let gap_len = 4.0;
+            let mut t = 0.0;
+            while t < len {
+                let end_t = (t + dash_len).min(len);
+                let p0 = s + d * t;
+                let p1 = s + d * end_t;
+                painter.line_segment([p0, p1], stroke);
+                t = end_t + gap_len;
+            }
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -472,6 +645,24 @@ pub fn draw_and_interact(
                 draw_directional_light_icon(painter, screen_pos, size, draw_color);
             }
             LightType::Ambient => draw_ambient_light_icon(painter, screen_pos, size, draw_color),
+            LightType::Array => {
+                // Draw a stacked-dots icon at the array center
+                draw_array_light_icon(painter, screen_pos, size, draw_color);
+                // Draw smaller point light icons at each instance position
+                let instance_size = size * 0.6;
+                for (i, pos) in light.array_positions.iter().enumerate() {
+                    if let Some(inst_screen) = world_to_screen(*pos, &vp, rect) {
+                        if rect.contains(inst_screen) {
+                            let inst_color = if i < light.array_colors.len() {
+                                light_color_to_egui(light.array_colors[i], alpha)
+                            } else {
+                                draw_color
+                            };
+                            draw_point_light_icon(painter, inst_screen, instance_size, inst_color);
+                        }
+                    }
+                }
+            }
         }
 
         // Draw minus sign overlay for negative/subtractive lights
@@ -572,6 +763,16 @@ pub fn draw_and_interact(
                         screen_pos,
                         size * 0.8,
                         Stroke::new(WIREFRAME_STROKE, wireframe_color),
+                    );
+                }
+                LightType::Array => {
+                    // Draw dashed outline connecting array instance positions
+                    draw_array_wireframe(
+                        painter,
+                        &light.array_positions,
+                        &vp,
+                        rect,
+                        wireframe_color,
                     );
                 }
             }

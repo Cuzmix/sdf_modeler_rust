@@ -1198,6 +1198,7 @@ pub fn draw(
             cookie_node,
             mut proximity_mode,
             mut proximity_range,
+            mut array_config,
         } => {
             ui.horizontal(|ui| {
                 ui.label("Type: Light");
@@ -1238,9 +1239,45 @@ pub fn draw(
                     }
                 });
             if std::mem::discriminant(&new_lt) != std::mem::discriminant(&light_type) {
-                light_type = new_lt;
+                light_type = new_lt.clone();
+                // Initialize array_config when switching to Array type
+                if matches!(new_lt, crate::graph::scene::LightType::Array) && array_config.is_none() {
+                    array_config = Some(crate::graph::scene::LightArrayConfig::default());
+                }
             }
             ui.separator();
+
+            // Array-specific controls
+            if matches!(light_type, crate::graph::scene::LightType::Array) {
+                if let Some(ref mut cfg) = array_config {
+                    ui.label(egui::RichText::new("Array Pattern").strong());
+                    let mut new_pattern = cfg.pattern.clone();
+                    egui::ComboBox::from_id_salt(format!("array_pattern_{}", id))
+                        .selected_text(new_pattern.label())
+                        .show_ui(ui, |ui| {
+                            for p in crate::graph::scene::ArrayPattern::ALL {
+                                ui.selectable_value(&mut new_pattern, p.clone(), p.label());
+                            }
+                        });
+                    cfg.pattern = new_pattern;
+
+                    ui.horizontal(|ui| {
+                        ui.label("Count:");
+                        let mut count_i32 = cfg.count as i32;
+                        ui.add(egui::Slider::new(&mut count_i32, 2..=32));
+                        cfg.count = count_i32 as u32;
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Radius:");
+                        ui.add(egui::Slider::new(&mut cfg.radius, 0.1..=20.0));
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("Color Variation:");
+                        ui.add(egui::Slider::new(&mut cfg.color_variation, 0.0..=1.0));
+                    });
+                    ui.separator();
+                }
+            }
 
             ui.label("Color");
             let mut color_arr = [color.x, color.y, color.z];
@@ -1257,8 +1294,8 @@ pub fn draw(
                 ui.add(egui::Slider::new(&mut intensity, -10.0..=10.0));
             });
 
-            // Range: only relevant for Point and Spot
-            if matches!(light_type, crate::graph::scene::LightType::Point | crate::graph::scene::LightType::Spot) {
+            // Range: relevant for Point, Spot, and Array
+            if matches!(light_type, crate::graph::scene::LightType::Point | crate::graph::scene::LightType::Spot | crate::graph::scene::LightType::Array) {
                 ui.horizontal(|ui| {
                     ui.label("Range:");
                     ui.add(egui::Slider::new(&mut range, 0.1..=50.0));
@@ -1273,8 +1310,8 @@ pub fn draw(
                 });
             }
 
-            // Shadow controls (not shown for Ambient lights)
-            if !matches!(light_type, crate::graph::scene::LightType::Ambient) {
+            // Shadow controls (not shown for Ambient or Array lights)
+            if !matches!(light_type, crate::graph::scene::LightType::Ambient | crate::graph::scene::LightType::Array) {
                 ui.separator();
                 ui.label(egui::RichText::new("Shadows").strong());
                 ui.checkbox(&mut cast_shadows, "Cast Shadows");
@@ -1411,6 +1448,7 @@ pub fn draw(
                     volumetric_density: ref mut vd,
                     proximity_mode: ref mut pm,
                     proximity_range: ref mut pr,
+                    array_config: ref mut ac,
                     ..
                 } = node.data {
                     *lt = light_type;
@@ -1425,6 +1463,7 @@ pub fn draw(
                     *vd = volumetric_density;
                     *pm = proximity_mode;
                     *pr = proximity_range;
+                    *ac = array_config;
                 }
             }
         }

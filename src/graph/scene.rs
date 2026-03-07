@@ -403,10 +403,12 @@ pub enum LightType {
     /// Global ambient light — uniform illumination from all directions.
     /// Has color and intensity but no position, direction, or falloff.
     Ambient,
+    /// Procedural light array — spawns N point lights in a geometric pattern.
+    Array,
 }
 
 impl LightType {
-    pub const ALL: &[Self] = &[Self::Point, Self::Spot, Self::Directional, Self::Ambient];
+    pub const ALL: &[Self] = &[Self::Point, Self::Spot, Self::Directional, Self::Ambient, Self::Array];
 
     pub fn label(&self) -> &'static str {
         match self {
@@ -414,6 +416,7 @@ impl LightType {
             Self::Spot => "Spot",
             Self::Directional => "Directional",
             Self::Ambient => "Ambient",
+            Self::Array => "Array",
         }
     }
 
@@ -423,6 +426,69 @@ impl LightType {
             Self::Spot => "[Sp]",
             Self::Directional => "[Dir]",
             Self::Ambient => "[Amb]",
+            Self::Array => "[Arr]",
+        }
+    }
+}
+
+/// Geometric pattern for a Light Array.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+pub enum ArrayPattern {
+    /// Lights evenly spaced on a circle in the local XZ plane.
+    #[default]
+    Ring,
+    /// Lights evenly spaced along the local X axis.
+    Line,
+    /// Lights arranged in a grid in the local XZ plane.
+    Grid,
+    /// Lights arranged in an Archimedean spiral in the local XZ plane.
+    Spiral,
+}
+
+impl ArrayPattern {
+    pub const ALL: &[Self] = &[Self::Ring, Self::Line, Self::Grid, Self::Spiral];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Ring => "Ring",
+            Self::Line => "Line",
+            Self::Grid => "Grid",
+            Self::Spiral => "Spiral",
+        }
+    }
+}
+
+/// Configuration for a procedural Light Array node.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct LightArrayConfig {
+    /// Geometric pattern of the array.
+    #[serde(default)]
+    pub pattern: ArrayPattern,
+    /// Number of lights in the array (2–32).
+    #[serde(default = "default_array_count")]
+    pub count: u32,
+    /// Overall size of the pattern (radius for Ring/Spiral, half-length for Line, extent for Grid).
+    #[serde(default = "default_array_radius")]
+    pub radius: f32,
+    /// Hue variation across instances (0.0 = uniform, 1.0 = full rainbow spread).
+    #[serde(default)]
+    pub color_variation: f32,
+}
+
+fn default_array_count() -> u32 {
+    6
+}
+fn default_array_radius() -> f32 {
+    2.0
+}
+
+impl Default for LightArrayConfig {
+    fn default() -> Self {
+        Self {
+            pattern: ArrayPattern::Ring,
+            count: default_array_count(),
+            radius: default_array_radius(),
+            color_variation: 0.0,
         }
     }
 }
@@ -544,6 +610,10 @@ pub enum NodeData {
         /// Distance over which the proximity effect ramps (0.1–10.0).
         #[serde(default = "default_proximity_range")]
         proximity_range: f32,
+        /// Configuration for Array light type (pattern, count, radius, color variation).
+        /// Only meaningful when light_type is Array.
+        #[serde(default)]
+        array_config: Option<LightArrayConfig>,
     },
 }
 
@@ -840,16 +910,17 @@ impl Scene {
     }
 
     pub fn create_light(&mut self, light_type: LightType) -> (NodeId, NodeId) {
-        let light_name = self.next_name(light_type.label());
+        let is_array = matches!(light_type, LightType::Array);
+        let light_name = self.next_name(if is_array { "Light Array" } else { light_type.label() });
         let light_id = self.add_node(
             light_name,
             NodeData::Light {
                 light_type: light_type.clone(),
                 color: Vec3::ONE,
                 intensity: 1.0,
-                range: 10.0,
+                range: if is_array { 5.0 } else { 10.0 },
                 spot_angle: 45.0,
-                cast_shadows: !matches!(light_type, LightType::Point),
+                cast_shadows: !matches!(light_type, LightType::Point | LightType::Array),
                 shadow_softness: 8.0,
                 shadow_color: Vec3::ZERO,
                 volumetric: false,
@@ -857,6 +928,7 @@ impl Scene {
                 cookie_node: None,
                 proximity_mode: ProximityMode::Off,
                 proximity_range: 2.0,
+                array_config: if is_array { Some(LightArrayConfig::default()) } else { None },
             },
         );
         // Create a Transform parent positioned above and to the side of the origin
@@ -893,6 +965,7 @@ impl Scene {
                 cookie_node: None,
                 proximity_mode: ProximityMode::Off,
                 proximity_range: 2.0,
+                array_config: None,
             },
         );
         let _key_transform_id = self.add_node(
@@ -922,6 +995,7 @@ impl Scene {
                 cookie_node: None,
                 proximity_mode: ProximityMode::Off,
                 proximity_range: 2.0,
+                array_config: None,
             },
         );
         let _fill_transform_id = self.add_node(
@@ -951,6 +1025,7 @@ impl Scene {
                 cookie_node: None,
                 proximity_mode: ProximityMode::Off,
                 proximity_range: 2.0,
+                array_config: None,
             },
         );
         let _ambient_transform_id = self.add_node(
@@ -1327,10 +1402,14 @@ impl Scene {
                     std::mem::discriminant(kind).hash(&mut hasher);
                     input.hash(&mut hasher);
                 }
-                NodeData::Light { light_type, cookie_node, .. } => {
+                NodeData::Light { light_type, cookie_node, array_config, .. } => {
                     5u8.hash(&mut hasher);
                     std::mem::discriminant(light_type).hash(&mut hasher);
                     cookie_node.hash(&mut hasher);
+                    // Array count affects how many GPU lights are generated
+                    if let Some(cfg) = array_config {
+                        cfg.count.hash(&mut hasher);
+                    }
                 }
             }
         }
@@ -1418,7 +1497,7 @@ impl Scene {
                     extra.y.to_bits().hash(&mut hasher);
                     extra.z.to_bits().hash(&mut hasher);
                 }
-                NodeData::Light { color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color, volumetric, volumetric_density, cookie_node, proximity_mode, proximity_range, .. } => {
+                NodeData::Light { color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color, volumetric, volumetric_density, cookie_node, proximity_mode, proximity_range, array_config, .. } => {
                     color.x.to_bits().hash(&mut hasher);
                     color.y.to_bits().hash(&mut hasher);
                     color.z.to_bits().hash(&mut hasher);
@@ -1435,6 +1514,12 @@ impl Scene {
                     cookie_node.hash(&mut hasher);
                     std::mem::discriminant(proximity_mode).hash(&mut hasher);
                     proximity_range.to_bits().hash(&mut hasher);
+                    if let Some(cfg) = array_config {
+                        std::mem::discriminant(&cfg.pattern).hash(&mut hasher);
+                        cfg.count.hash(&mut hasher);
+                        cfg.radius.to_bits().hash(&mut hasher);
+                        cfg.color_variation.to_bits().hash(&mut hasher);
+                    }
                 }
             }
             // Include light mask in fingerprint
@@ -1665,7 +1750,7 @@ impl Scene {
                         extra: *extra,
                     }
                 }
-                NodeData::Light { light_type, color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color, volumetric, volumetric_density, cookie_node, proximity_mode, proximity_range } => {
+                NodeData::Light { light_type, color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color, volumetric, volumetric_density, cookie_node, proximity_mode, proximity_range, array_config } => {
                     NodeData::Light {
                         light_type: light_type.clone(),
                         color: *color,
@@ -1680,6 +1765,7 @@ impl Scene {
                         cookie_node: *cookie_node,
                         proximity_mode: proximity_mode.clone(),
                         proximity_range: *proximity_range,
+                        array_config: array_config.clone(),
                     }
                 }
             };
@@ -2073,6 +2159,7 @@ impl Scene {
                         cookie_node: ck1,
                         proximity_mode: pm1,
                         proximity_range: pr1,
+                        array_config: ac1,
                     },
                     NodeData::Light {
                         light_type: lt2,
@@ -2088,6 +2175,7 @@ impl Scene {
                         cookie_node: ck2,
                         proximity_mode: pm2,
                         proximity_range: pr2,
+                        array_config: ac2,
                     },
                 ) => {
                     if std::mem::discriminant(lt1) != std::mem::discriminant(lt2)
@@ -2103,6 +2191,7 @@ impl Scene {
                         || ck1 != ck2
                         || pm1 != pm2
                         || pr1 != pr2
+                        || ac1 != ac2
                     {
                         return false;
                     }
@@ -2901,6 +2990,7 @@ mod tests {
             cookie_node: None,
             proximity_mode: ProximityMode::Off,
             proximity_range: 2.0,
+            array_config: None,
         };
         assert_eq!(data.children().count(), 0);
     }
@@ -2921,6 +3011,7 @@ mod tests {
             cookie_node: None,
             proximity_mode: ProximityMode::Off,
             proximity_range: 2.0,
+            array_config: None,
         };
         assert!(data.geometry_local_sphere().is_none());
     }
@@ -3064,8 +3155,8 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[test]
-    fn light_type_all_has_4_variants() {
-        assert_eq!(LightType::ALL.len(), 4);
+    fn light_type_all_has_5_variants() {
+        assert_eq!(LightType::ALL.len(), 5);
     }
 
     #[test]
@@ -3089,7 +3180,7 @@ mod tests {
         let mut scene = empty_scene();
         let (light_id, _) = scene.create_light(LightType::Spot);
         match &scene.nodes[&light_id].data {
-            NodeData::Light { light_type, color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color, volumetric, volumetric_density, cookie_node, proximity_mode, proximity_range } => {
+            NodeData::Light { light_type, color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color, volumetric, volumetric_density, cookie_node, proximity_mode, proximity_range, array_config } => {
                 assert_eq!(*light_type, LightType::Spot);
                 assert_eq!(*color, Vec3::ONE);
                 assert!((intensity - 1.0).abs() < 1e-5);
@@ -3104,6 +3195,7 @@ mod tests {
                 assert!(cookie_node.is_none());
                 assert_eq!(*proximity_mode, ProximityMode::Off);
                 assert!((proximity_range - 2.0).abs() < 1e-5);
+                assert!(array_config.is_none());
             }
             _ => panic!("expected Light node"),
         }
@@ -3121,6 +3213,25 @@ mod tests {
                 assert_eq!(*scale, Vec3::ONE);
             }
             _ => panic!("expected Transform parent"),
+        }
+    }
+
+    #[test]
+    fn create_light_array_has_default_config() {
+        let mut scene = empty_scene();
+        let (light_id, _) = scene.create_light(LightType::Array);
+        match &scene.nodes[&light_id].data {
+            NodeData::Light { light_type, array_config, range, .. } => {
+                assert_eq!(*light_type, LightType::Array);
+                let cfg = array_config.as_ref().expect("Array light must have array_config");
+                assert_eq!(cfg.pattern, ArrayPattern::Ring);
+                assert_eq!(cfg.count, 6);
+                assert!((cfg.radius - 2.0).abs() < 1e-5);
+                assert!((cfg.color_variation - 0.0).abs() < 1e-5);
+                // Array lights default to range=5 (not 10)
+                assert!((range - 5.0).abs() < 1e-5);
+            }
+            _ => panic!("expected Light node"),
         }
     }
 

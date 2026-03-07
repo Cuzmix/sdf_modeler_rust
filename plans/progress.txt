@@ -1206,3 +1206,55 @@ Design decisions:
   relative to surfaces, so proximity controls are hidden for those types.
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (393/393) ✓, cargo build ✓
+
+--- Iteration 33: PRD #38 — Procedural Light Array node ---
+COMPLETED. Added Light Array node for spawning patterned multi-light rigs.
+
+Changes:
+- src/graph/scene.rs: Added LightType::Array variant. Added ArrayPattern enum (Ring, Line,
+  Grid, Spiral) with Default derive (#[default] Ring). Added LightArrayConfig struct with
+  pattern, count (2-32, default 6), radius (default 2.0), color_variation (0.0-1.0).
+  Added `array_config: Option<LightArrayConfig>` field to NodeData::Light with
+  #[serde(default)] for backwards compat. Updated create_light() to initialize array_config
+  for Array type (range=5 instead of 10, cast_shadows=false). Updated all exhaustive match
+  blocks: structure_key (hashes array count), data_fingerprint (hashes pattern/count/radius/
+  color_variation), content_eq, duplicate_subtree, create_default_lights (all None).
+  LightType::ALL now has 5 variants. Updated 3 test constructors. Added create_light_array
+  test verifying default config.
+- src/gpu/buffers.rs: Added expand_array_pattern() function computing local positions for
+  Ring (circle in XZ), Line (along X axis), Grid (sqrt(n)×sqrt(n) in XZ), and Spiral
+  (Archimedean in XZ). Added hue_rotate_color() for HSV-based hue shifting. Updated
+  collect_scene_lights() to expand Array lights into N individual point lights at computed
+  world positions with optional hue variation. Array instances respect MAX_SCENE_LIGHTS cap.
+  Updated build_node_buffer() with Array type_val=54.0. Added 5 unit tests: ring expansion
+  (4 lights), max lights cap (20→8), color variation hue shift, line pattern positions,
+  grid pattern positions.
+- src/ui/properties.rs: Added array_config to Light destructure and write-back. When type
+  is Array, shows Pattern dropdown (Ring/Line/Grid/Spiral), Count slider (2-32), Radius
+  slider (0.1-20.0), Color Variation slider (0.0-1.0). Auto-initializes array_config on
+  type switch to Array. Range slider shown for Array (per-instance range). Shadow/volumetric/
+  proximity/cookie sections hidden for Array type.
+- src/ui/light_gizmo.rs: Added array_positions and array_colors fields to LightInfo.
+  collect_lights() now computes expanded world positions and hue-rotated colors for Array
+  lights. Added draw_array_light_icon() (3 stacked dots + dashed circle). Array draws
+  smaller (60%) point light icons at each instance position. Added draw_array_wireframe()
+  drawing dashed lines connecting instance positions when selected. Both icon and wireframe
+  match arms handle LightType::Array. Added compute_array_positions() and hue_rotate()
+  helper functions matching the buffers.rs logic.
+- src/ui/scene_tree.rs: Added DOT_LIGHT_ARRAY constant (light purple). node_type_color()
+  returns distinct color for Array lights vs regular lights.
+- src/ui/node_graph.rs: No changes needed — type dropdown iterates LightType::ALL which
+  now includes Array. Badge display uses light_type.badge() which returns "[Arr]".
+
+Design decisions:
+- Array lights expand into simple point lights (no per-instance shadows, cookies, or
+  volumetrics). This keeps the implementation clean and performant. Users wanting advanced
+  per-light features should use individual lights.
+- Pattern computation is duplicated between buffers.rs (GPU data) and light_gizmo.rs
+  (viewport visualization) to maintain module independence. Both use the same algorithm.
+- array_config is Option<LightArrayConfig> rather than a flat struct to avoid bloating
+  the Light variant for the 99% case (non-array lights). None for all non-Array types.
+- Hue rotation uses standard HSV→RGB conversion. Color variation 1.0 spreads instances
+  across the full 360° hue spectrum.
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (399/399) ✓, cargo build ✓

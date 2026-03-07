@@ -399,6 +399,7 @@ fn format_node_label(node: &SceneNode) -> String {
 }
 
 const DOT_LIGHT_NEGATIVE: egui::Color32 = egui::Color32::from_rgb(255, 80, 80); // red for negative/subtractive
+const DOT_LIGHT_ARRAY: egui::Color32 = egui::Color32::from_rgb(200, 180, 255);  // light purple for array
 
 fn node_type_color(data: &NodeData) -> egui::Color32 {
     match data {
@@ -407,8 +408,14 @@ fn node_type_color(data: &NodeData) -> egui::Color32 {
         NodeData::Sculpt { .. } => DOT_SCULPT,
         NodeData::Transform { .. } => DOT_TRANSFORM,
         NodeData::Modifier { .. } => DOT_MODIFIER,
-        NodeData::Light { intensity, .. } => {
-            if *intensity < 0.0 { DOT_LIGHT_NEGATIVE } else { DOT_LIGHT }
+        NodeData::Light { light_type, intensity, .. } => {
+            if matches!(light_type, crate::graph::scene::LightType::Array) {
+                DOT_LIGHT_ARRAY
+            } else if *intensity < 0.0 {
+                DOT_LIGHT_NEGATIVE
+            } else {
+                DOT_LIGHT
+            }
         }
     }
 }

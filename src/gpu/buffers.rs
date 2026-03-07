@@ -174,6 +174,7 @@ pub fn build_node_buffer(
                     crate::graph::scene::LightType::Spot => 51.0,
                     crate::graph::scene::LightType::Directional => 52.0,
                     crate::graph::scene::LightType::Ambient => 53.0,
+                    crate::graph::scene::LightType::Array => 54.0,
                 };
                 buffer.push(SdfNodeGpu {
                     type_op: [type_val, *intensity, *range, *spot_angle],
@@ -223,6 +224,118 @@ pub struct SceneAmbient {
     pub color: glam::Vec3,
 }
 
+/// Compute local positions for a Light Array pattern.
+fn expand_array_pattern(
+    pattern: &crate::graph::scene::ArrayPattern,
+    count: u32,
+    radius: f32,
+) -> Vec<glam::Vec3> {
+    use crate::graph::scene::ArrayPattern;
+    let n = count.max(1) as usize;
+    let mut positions = Vec::with_capacity(n);
+    match pattern {
+        ArrayPattern::Ring => {
+            for i in 0..n {
+                let angle = (i as f32 / n as f32) * std::f32::consts::TAU;
+                positions.push(glam::Vec3::new(
+                    angle.cos() * radius,
+                    0.0,
+                    angle.sin() * radius,
+                ));
+            }
+        }
+        ArrayPattern::Line => {
+            let total_length = radius * 2.0;
+            for i in 0..n {
+                let t = if n > 1 { i as f32 / (n - 1) as f32 } else { 0.5 };
+                positions.push(glam::Vec3::new(
+                    -radius + t * total_length,
+                    0.0,
+                    0.0,
+                ));
+            }
+        }
+        ArrayPattern::Grid => {
+            let side = (n as f32).sqrt().ceil() as usize;
+            let mut placed = 0;
+            for row in 0..side {
+                for col in 0..side {
+                    if placed >= n {
+                        break;
+                    }
+                    let tx = if side > 1 { col as f32 / (side - 1) as f32 } else { 0.5 };
+                    let tz = if side > 1 { row as f32 / (side - 1) as f32 } else { 0.5 };
+                    positions.push(glam::Vec3::new(
+                        -radius + tx * radius * 2.0,
+                        0.0,
+                        -radius + tz * radius * 2.0,
+                    ));
+                    placed += 1;
+                }
+            }
+        }
+        ArrayPattern::Spiral => {
+            for i in 0..n {
+                let t = i as f32 / n.max(1) as f32;
+                let angle = t * std::f32::consts::TAU * 2.0; // 2 full revolutions
+                let r = t * radius;
+                positions.push(glam::Vec3::new(
+                    angle.cos() * r,
+                    0.0,
+                    angle.sin() * r,
+                ));
+            }
+        }
+    }
+    positions
+}
+
+/// Rotate a color's hue by a given number of degrees (0-360).
+fn hue_rotate_color(color: glam::Vec3, degrees: f32) -> glam::Vec3 {
+    // Convert RGB to HSV, shift hue, convert back
+    let r = color.x;
+    let g = color.y;
+    let b = color.z;
+    let max_c = r.max(g).max(b);
+    let min_c = r.min(g).min(b);
+    let delta = max_c - min_c;
+
+    // Compute hue (0-360)
+    let hue = if delta < 1e-6 {
+        0.0
+    } else if (max_c - r).abs() < 1e-6 {
+        60.0 * (((g - b) / delta) % 6.0)
+    } else if (max_c - g).abs() < 1e-6 {
+        60.0 * ((b - r) / delta + 2.0)
+    } else {
+        60.0 * ((r - g) / delta + 4.0)
+    };
+    let saturation = if max_c < 1e-6 { 0.0 } else { delta / max_c };
+    let value = max_c;
+
+    // Shift hue
+    let new_hue = (hue + degrees).rem_euclid(360.0);
+
+    // HSV to RGB
+    let c = value * saturation;
+    let x = c * (1.0 - ((new_hue / 60.0) % 2.0 - 1.0).abs());
+    let m = value - c;
+    let (r1, g1, b1) = if new_hue < 60.0 {
+        (c, x, 0.0)
+    } else if new_hue < 120.0 {
+        (x, c, 0.0)
+    } else if new_hue < 180.0 {
+        (0.0, c, x)
+    } else if new_hue < 240.0 {
+        (0.0, x, c)
+    } else if new_hue < 300.0 {
+        (x, 0.0, c)
+    } else {
+        (c, 0.0, x)
+    };
+    glam::Vec3::new(r1 + m, g1 + m, b1 + m)
+}
+
 /// Collect visible Light nodes from the scene, sorted by distance to camera (nearest first).
 /// Returns (directional/point/spot count, gpu lights, accumulated ambient).
 /// Ambient-type lights contribute to the returned `SceneAmbient` instead of the light array.
@@ -250,6 +363,7 @@ pub fn collect_scene_lights(
             volumetric_density,
             proximity_mode,
             proximity_range,
+            array_config,
             ..
         } = &node.data
         {
@@ -289,6 +403,35 @@ pub fn collect_scene_lights(
                 continue;
             };
 
+            // Light Array: expand into N individual point lights
+            if *light_type == LightType::Array {
+                if let Some(cfg) = array_config {
+                    let positions = expand_array_pattern(&cfg.pattern, cfg.count, cfg.radius);
+                    for (instance_index, local_pos) in positions.iter().enumerate() {
+                        let world_pos = *translation + *local_pos;
+                        let dist_to_camera = (world_pos - camera_pos).length();
+                        // Apply hue variation across instances
+                        let instance_color = if cfg.color_variation > 0.0 {
+                            let hue_shift = (instance_index as f32 / positions.len() as f32) * cfg.color_variation;
+                            hue_rotate_color(*color, hue_shift * 360.0)
+                        } else {
+                            *color
+                        };
+                        lights.push((
+                            dist_to_camera,
+                            SceneLightGpu {
+                                position_type: [world_pos.x, world_pos.y, world_pos.z, 0.0], // Point type
+                                direction_intensity: [0.0, -1.0, 0.0, *intensity],
+                                color_range: [instance_color.x, instance_color.y, instance_color.z, *range],
+                                params: [1.0, 0.0, 8.0, 0.0], // No shadows, no cookie
+                                volumetric: [0.0, 0.0, 0.0, -1.0],
+                            },
+                        ));
+                    }
+                }
+                continue;
+            }
+
             // Compute direction from rotation (default light direction is -Y).
             // Use inverse rotation so GPU direction matches gizmo drag convention.
             let direction = inverse_rotate_euler_light(glam::Vec3::NEG_Y, *rotation);
@@ -302,7 +445,7 @@ pub fn collect_scene_lights(
                 LightType::Point => 0.0,
                 LightType::Spot => 1.0,
                 LightType::Directional => 2.0,
-                LightType::Ambient => unreachable!(), // handled above
+                LightType::Ambient | LightType::Array => unreachable!(), // handled above
             };
 
             let half_angle_rad = (spot_angle * 0.5).to_radians();
@@ -794,6 +937,7 @@ mod tests {
                 cookie_node: None,
                 proximity_mode: ProximityMode::Brighten,
                 proximity_range: 2.0,
+                array_config: None,
             },
         );
         let _transform_id = scene.add_node(
@@ -847,6 +991,7 @@ mod tests {
                 cookie_node: None,
                 proximity_mode: ProximityMode::Dim,
                 proximity_range: 2.0,
+                array_config: None,
             },
         );
         let _transform_id = scene.add_node(
@@ -863,5 +1008,168 @@ mod tests {
         // Light at 1.2 from sphere surface (d≈0.2), Dim should reduce intensity < 1.0
         assert!(lights[0].direction_intensity[3] < 1.0);
         assert!(lights[0].direction_intensity[3] > 0.0);
+    }
+
+    #[test]
+    fn light_array_ring_expands_to_n_point_lights() {
+        use crate::graph::scene::{LightArrayConfig, ArrayPattern};
+        let mut scene = empty_scene();
+        let light_id = scene.add_node(
+            "Array".to_string(),
+            NodeData::Light {
+                light_type: LightType::Array,
+                color: Vec3::ONE,
+                intensity: 2.0,
+                range: 5.0,
+                spot_angle: 45.0,
+                cast_shadows: false,
+                shadow_softness: 8.0,
+                shadow_color: Vec3::ZERO,
+                volumetric: false,
+                volumetric_density: 0.15,
+                cookie_node: None,
+                proximity_mode: crate::graph::scene::ProximityMode::Off,
+                proximity_range: 2.0,
+                array_config: Some(LightArrayConfig {
+                    pattern: ArrayPattern::Ring,
+                    count: 4,
+                    radius: 3.0,
+                    color_variation: 0.0,
+                }),
+            },
+        );
+        let _transform_id = scene.add_node(
+            "Transform".to_string(),
+            NodeData::Transform {
+                input: Some(light_id),
+                translation: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+            },
+        );
+        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None);
+        assert_eq!(count, 4, "Ring with 4 should produce 4 point lights");
+        // All should be point type (0.0)
+        for light in &lights {
+            assert!((light.position_type[3] - 0.0).abs() < 1e-5, "Array instances are point lights");
+            assert!((light.direction_intensity[3] - 2.0).abs() < 1e-5, "Intensity preserved");
+            assert!((light.color_range[3] - 5.0).abs() < 1e-5, "Range preserved");
+        }
+    }
+
+    #[test]
+    fn light_array_respects_max_lights() {
+        use crate::graph::scene::{LightArrayConfig, ArrayPattern};
+        let mut scene = empty_scene();
+        let light_id = scene.add_node(
+            "Array".to_string(),
+            NodeData::Light {
+                light_type: LightType::Array,
+                color: Vec3::ONE,
+                intensity: 1.0,
+                range: 5.0,
+                spot_angle: 45.0,
+                cast_shadows: false,
+                shadow_softness: 8.0,
+                shadow_color: Vec3::ZERO,
+                volumetric: false,
+                volumetric_density: 0.15,
+                cookie_node: None,
+                proximity_mode: crate::graph::scene::ProximityMode::Off,
+                proximity_range: 2.0,
+                array_config: Some(LightArrayConfig {
+                    pattern: ArrayPattern::Ring,
+                    count: 20, // More than MAX_SCENE_LIGHTS
+                    radius: 3.0,
+                    color_variation: 0.0,
+                }),
+            },
+        );
+        let _transform_id = scene.add_node(
+            "Transform".to_string(),
+            NodeData::Transform {
+                input: Some(light_id),
+                translation: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+            },
+        );
+        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None);
+        assert_eq!(count as usize, MAX_SCENE_LIGHTS, "Should cap at MAX_SCENE_LIGHTS");
+        assert_eq!(lights.len(), MAX_SCENE_LIGHTS);
+    }
+
+    #[test]
+    fn light_array_color_variation_shifts_hue() {
+        use crate::graph::scene::{LightArrayConfig, ArrayPattern};
+        let mut scene = empty_scene();
+        let light_id = scene.add_node(
+            "Array".to_string(),
+            NodeData::Light {
+                light_type: LightType::Array,
+                color: Vec3::new(1.0, 0.0, 0.0), // Red
+                intensity: 1.0,
+                range: 5.0,
+                spot_angle: 45.0,
+                cast_shadows: false,
+                shadow_softness: 8.0,
+                shadow_color: Vec3::ZERO,
+                volumetric: false,
+                volumetric_density: 0.15,
+                cookie_node: None,
+                proximity_mode: crate::graph::scene::ProximityMode::Off,
+                proximity_range: 2.0,
+                array_config: Some(LightArrayConfig {
+                    pattern: ArrayPattern::Ring,
+                    count: 3,
+                    radius: 2.0,
+                    color_variation: 1.0, // Full rainbow spread
+                }),
+            },
+        );
+        let _transform_id = scene.add_node(
+            "Transform".to_string(),
+            NodeData::Transform {
+                input: Some(light_id),
+                translation: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+            },
+        );
+        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None);
+        assert_eq!(count, 3);
+        // First light should still be red-ish (hue shift 0)
+        assert!(lights[0].color_range[0] > 0.8, "First instance should be red");
+        // Second light should be shifted significantly (hue shift ~120°)
+        let second_is_different = (lights[1].color_range[0] - lights[0].color_range[0]).abs() > 0.3
+            || (lights[1].color_range[1] - lights[0].color_range[1]).abs() > 0.3;
+        assert!(second_is_different, "Color variation should shift hue for different instances");
+    }
+
+    #[test]
+    fn expand_array_pattern_line() {
+        use crate::graph::scene::ArrayPattern;
+        let positions = expand_array_pattern(&ArrayPattern::Line, 3, 2.0);
+        assert_eq!(positions.len(), 3);
+        // First at -radius, last at +radius
+        assert!((positions[0].x - (-2.0)).abs() < 1e-5);
+        assert!((positions[2].x - 2.0).abs() < 1e-5);
+        // All at y=0, z=0
+        for p in &positions {
+            assert!((p.y).abs() < 1e-5);
+            assert!((p.z).abs() < 1e-5);
+        }
+    }
+
+    #[test]
+    fn expand_array_pattern_grid() {
+        use crate::graph::scene::ArrayPattern;
+        let positions = expand_array_pattern(&ArrayPattern::Grid, 4, 1.0);
+        assert_eq!(positions.len(), 4);
+        // 4 lights → 2×2 grid
+        // All should be at y=0
+        for p in &positions {
+            assert!((p.y).abs() < 1e-5);
+        }
     }
 }
