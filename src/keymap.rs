@@ -234,6 +234,7 @@ pub enum ActionBinding {
     ToggleTurntable,
     ShowQuickToolbar,
     ToggleReferenceImages,
+    ToggleMeasurementTool,
 
     // Sculpt brush modes
     SculptBrushAdd,
@@ -269,7 +270,7 @@ impl ActionBinding {
         Self::ToggleGizmoSpace, Self::ResetPivot, Self::EnterSculptMode,
         Self::QuickSculptMode,
         Self::ToggleIsolation, Self::CycleShadingMode, Self::ToggleTurntable,
-        Self::ShowQuickToolbar, Self::ToggleReferenceImages,
+        Self::ShowQuickToolbar, Self::ToggleReferenceImages, Self::ToggleMeasurementTool,
         Self::SculptBrushAdd, Self::SculptBrushCarve, Self::SculptBrushSmooth,
         Self::SculptBrushFlatten, Self::SculptBrushInflate, Self::SculptBrushGrab,
         Self::SculptBrushShrink, Self::SculptBrushGrow,
@@ -317,6 +318,7 @@ impl ActionBinding {
             Self::ToggleTurntable => "Toggle Turntable",
             Self::ShowQuickToolbar => "Quick Primitives",
             Self::ToggleReferenceImages => "Toggle Reference Images",
+            Self::ToggleMeasurementTool => "Toggle Measurement Tool",
             Self::SculptBrushAdd => "Brush: Add",
             Self::SculptBrushCarve => "Brush: Carve",
             Self::SculptBrushSmooth => "Brush: Smooth",
@@ -363,7 +365,7 @@ impl ActionBinding {
 
             Self::ToggleIsolation | Self::CycleShadingMode |
             Self::ToggleTurntable | Self::ShowQuickToolbar |
-            Self::ToggleReferenceImages => "Viewport",
+            Self::ToggleReferenceImages | Self::ToggleMeasurementTool => "Viewport",
 
             Self::SculptBrushAdd | Self::SculptBrushCarve | Self::SculptBrushSmooth |
             Self::SculptBrushFlatten | Self::SculptBrushInflate | Self::SculptBrushGrab |
@@ -435,6 +437,7 @@ impl Default for KeymapConfig {
         bind(ActionBinding::ToggleTurntable,    KeyCombo::new(K::Space));
         bind(ActionBinding::ShowQuickToolbar,   KeyCombo::shift(K::A));
         bind(ActionBinding::ToggleReferenceImages, KeyCombo::alt(K::R));
+        bind(ActionBinding::ToggleMeasurementTool, KeyCombo::new(K::M));
 
         // Sculpt brush modes
         bind(ActionBinding::SculptBrushAdd,     KeyCombo::new(K::Num1));
@@ -545,6 +548,10 @@ mod tests {
             keymap.get_binding(ActionBinding::ToggleReferenceImages),
             Some(&KeyCombo::alt(SerializableKey::R))
         );
+        assert_eq!(
+            keymap.get_binding(ActionBinding::ToggleMeasurementTool),
+            Some(&KeyCombo::new(SerializableKey::M))
+        );
     }
 
     #[test]
@@ -575,6 +582,7 @@ mod tests {
         assert_eq!(keymap.format_shortcut(ActionBinding::ResetPivot), Some("Alt+C".to_string()));
         assert_eq!(keymap.format_shortcut(ActionBinding::ShowQuickToolbar), Some("Shift+A".to_string()));
         assert_eq!(keymap.format_shortcut(ActionBinding::ToggleReferenceImages), Some("Alt+R".to_string()));
+        assert_eq!(keymap.format_shortcut(ActionBinding::ToggleMeasurementTool), Some("M".to_string()));
     }
 
     #[test]

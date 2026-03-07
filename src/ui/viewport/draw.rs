@@ -49,6 +49,40 @@ fn ray_aabb(origin: glam::Vec3, dir: glam::Vec3, box_min: glam::Vec3, box_max: g
     (t_enter, t_exit)
 }
 
+/// Build a world-space ray from a screen-space cursor position.
+fn cursor_world_ray(camera: &Camera, rect: egui::Rect, cursor: egui::Pos2) -> (glam::Vec3, glam::Vec3) {
+    let aspect = (rect.width() / rect.height().max(1.0)).max(1e-5);
+    let ndc_x = ((cursor.x - rect.min.x) / rect.width()) * 2.0 - 1.0;
+    let ndc_y = -(((cursor.y - rect.min.y) / rect.height()) * 2.0 - 1.0);
+    let inv_vp = (camera.projection_matrix(aspect) * camera.view_matrix()).inverse();
+    let near = inv_vp.project_point3(glam::Vec3::new(ndc_x, ndc_y, -1.0));
+    let far = inv_vp.project_point3(glam::Vec3::new(ndc_x, ndc_y, 1.0));
+    let dir = (far - near).normalize_or_zero();
+    (near, dir)
+}
+
+/// CPU sphere-trace against the scene SDF. Returns hit point on/near the surface.
+fn raycast_scene_surface(scene: &Scene, origin: glam::Vec3, dir: glam::Vec3) -> Option<glam::Vec3> {
+    if dir.length_squared() <= 1e-8 {
+        return None;
+    }
+    let mut t = 0.0_f32;
+    const MAX_DIST: f32 = 200.0;
+    const HIT_EPS: f32 = 0.002;
+    for _ in 0..128 {
+        let p = origin + dir * t;
+        let d = crate::graph::voxel::evaluate_scene_sdf_at_point(scene, p);
+        if d.abs() <= HIT_EPS {
+            return Some(p);
+        }
+        t += d.abs().max(0.005);
+        if t >= MAX_DIST {
+            break;
+        }
+    }
+    None
+}
+
 /// CPU-side voxel raycast: unproject cursor to a world ray, transform into
 /// local voxel space, and march through the SDF grid. Returns true if the ray
 /// hits actual solid geometry (SDF near zero), false if it passes through
@@ -431,6 +465,9 @@ pub fn draw(
     soloed_light: Option<NodeId>,
     solo_label: Option<&str>,
     reference_images: &crate::ui::reference_image::ReferenceImageManager,
+    show_distance_readout: &mut bool,
+    measurement_mode: &mut bool,
+    measurement_points: &mut Vec<glam::Vec3>,
 ) -> ViewportOutput {
     let mut output = ViewportOutput {
         pending_pick: None,
@@ -867,8 +904,18 @@ pub fn draw(
     } else if !gizmo_consumed {
         // Normal mode: click to pick
         if response.clicked() {
-            // Light billboard click takes priority over GPU pick
-            if let Some(transform_id) = light_gizmo_result.clicked_transform_id {
+            if *measurement_mode {
+                if let Some(pos) = response.interact_pointer_pos() {
+                    let (ray_origin, ray_dir) = cursor_world_ray(camera, rect, pos);
+                    if let Some(hit) = raycast_scene_surface(scene, ray_origin, ray_dir) {
+                        if measurement_points.len() >= 2 {
+                            measurement_points.clear();
+                        }
+                        measurement_points.push(hit);
+                    }
+                }
+            } else if let Some(transform_id) = light_gizmo_result.clicked_transform_id {
+                // Light billboard click takes priority over GPU pick
                 actions.push(Action::Select(Some(transform_id)));
             } else if let Some(pos) = response.interact_pointer_pos() {
                 let mouse_px = [
@@ -1053,6 +1100,98 @@ pub fn draw(
         );
     }
 
+    // --- SDF distance readout near cursor ---
+    if *show_distance_readout {
+        if let Some(cursor) = ui.input(|i| i.pointer.hover_pos()) {
+            if rect.contains(cursor) {
+                let (ray_origin, ray_dir) = cursor_world_ray(camera, rect, cursor);
+                let hit = raycast_scene_surface(scene, ray_origin, ray_dir);
+                let text = if hit.is_some() {
+                    "Surface".to_string()
+                } else {
+                    let sample_point = ray_origin + ray_dir * 2.0;
+                    let d = crate::graph::voxel::evaluate_scene_sdf_at_point(scene, sample_point);
+                    format!("D: {:.3}", d)
+                };
+                let pos = cursor + egui::vec2(12.0, 12.0);
+                let font = egui::FontId::monospace(11.0);
+                ui.painter().text(
+                    pos + egui::vec2(1.0, 1.0),
+                    egui::Align2::LEFT_TOP,
+                    &text,
+                    font.clone(),
+                    egui::Color32::from_black_alpha(180),
+                );
+                ui.painter().text(
+                    pos,
+                    egui::Align2::LEFT_TOP,
+                    &text,
+                    font,
+                    egui::Color32::from_rgb(210, 220, 235),
+                );
+            }
+        }
+    }
+
+    // --- Measurement overlay ---
+    if *measurement_mode {
+        let vp = camera.projection_matrix((rect.width() / rect.height().max(1.0)).max(1e-5))
+            * camera.view_matrix();
+        if measurement_points.len() == 1 {
+            let text = "Measure: click second point";
+            let pos = egui::pos2(rect.center().x, rect.max.y - 24.0);
+            let font = egui::FontId::proportional(12.0);
+            ui.painter().text(
+                pos + egui::vec2(1.0, 1.0),
+                egui::Align2::CENTER_CENTER,
+                text,
+                font.clone(),
+                egui::Color32::from_black_alpha(180),
+            );
+            ui.painter().text(
+                pos,
+                egui::Align2::CENTER_CENTER,
+                text,
+                font,
+                egui::Color32::from_rgb(255, 220, 120),
+            );
+        } else if measurement_points.len() >= 2 {
+            let a = measurement_points[0];
+            let b = measurement_points[1];
+            let a_screen = gizmo::world_to_screen(a, &vp, rect);
+            let b_screen = gizmo::world_to_screen(b, &vp, rect);
+            if let (Some(a_screen), Some(b_screen)) = (a_screen, b_screen) {
+                ui.painter().line_segment(
+                    [a_screen, b_screen],
+                    egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 220, 90)),
+                );
+                ui.painter()
+                    .circle_filled(a_screen, 4.0, egui::Color32::from_rgb(255, 220, 90));
+                ui.painter()
+                    .circle_filled(b_screen, 4.0, egui::Color32::from_rgb(255, 220, 90));
+
+                let dist = a.distance(b);
+                let mid = egui::pos2((a_screen.x + b_screen.x) * 0.5, (a_screen.y + b_screen.y) * 0.5);
+                let label = format!("{:.3} units", dist);
+                let font = egui::FontId::monospace(11.0);
+                ui.painter().text(
+                    mid + egui::vec2(1.0, 1.0),
+                    egui::Align2::CENTER_BOTTOM,
+                    &label,
+                    font.clone(),
+                    egui::Color32::from_black_alpha(180),
+                );
+                ui.painter().text(
+                    mid,
+                    egui::Align2::CENTER_BOTTOM,
+                    &label,
+                    font,
+                    egui::Color32::from_rgb(255, 235, 140),
+                );
+            }
+        }
+    }
+
     // --- Floating toolbar overlay ---
     let overlay_frame = egui::Frame::window(&ui.ctx().style())
         .fill(egui::Color32::from_rgba_premultiplied(30, 30, 38, 220));
@@ -1076,6 +1215,26 @@ pub fn draw(
                     && !sculpt_tool_active
                 {
                     actions.push(Action::SetTool(ActiveTool::Sculpt));
+                }
+            });
+
+            ui.horizontal(|ui| {
+                if ui
+                    .selectable_label(*measurement_mode, "Measure")
+                    .on_hover_text("Toggle measurement tool (M)")
+                    .clicked()
+                {
+                    actions.push(Action::ToggleMeasurementTool);
+                }
+                if ui
+                    .selectable_label(*show_distance_readout, "Distance")
+                    .on_hover_text("Toggle cursor distance readout")
+                    .clicked()
+                {
+                    actions.push(Action::ToggleDistanceReadout);
+                }
+                if *measurement_mode && ui.small_button("Clear").clicked() {
+                    measurement_points.clear();
                 }
             });
 

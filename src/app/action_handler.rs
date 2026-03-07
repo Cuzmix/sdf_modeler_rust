@@ -698,6 +698,13 @@ impl SdfApp {
                 }
 
                 // ── Properties ─────────────────────────────────────
+                Action::ToggleDistanceReadout => {
+                    self.ui.show_distance_readout = !self.ui.show_distance_readout;
+                }
+                Action::ToggleMeasurementTool => {
+                    self.ui.measurement_mode = !self.ui.measurement_mode;
+                    self.ui.measurement_points.clear();
+                }
                 Action::CopyProperties => {
                     if let Some(sel) = self.ui.node_graph_state.selected {
                         if let Some(node) = self.doc.scene.nodes.get(&sel) {

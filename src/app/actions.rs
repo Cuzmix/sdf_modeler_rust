@@ -140,6 +140,8 @@ pub enum Action {
     ToggleIsolation,
     CycleShadingMode,
     ToggleTurntable,
+    ToggleDistanceReadout,
+    ToggleMeasurementTool,
 
     // ── Properties ─────────────────────────────────────────────────
     CopyProperties,

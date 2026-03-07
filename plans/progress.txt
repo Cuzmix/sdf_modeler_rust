@@ -1548,3 +1548,54 @@ Manual verification pending:
 - Add PNG/JPG from no-selection properties panel
 - confirm plane switching, opacity/scale/offset edits
 - confirm Alt+R toggles all reference overlays
+
+--- Iteration 41: PRD #46 - SDF distance readout + measurement tool ---
+COMPLETED. Added viewport distance readout, two-point measurement mode, action/keymap plumbing, and tool UI.
+
+Changes:
+- src/app/state.rs:
+  - Added `UiState.show_distance_readout`.
+  - Added `UiState.measurement_mode`.
+  - Added `UiState.measurement_points: Vec<Vec3>`.
+- src/app/mod.rs + src/ui/dock.rs:
+  - Threaded distance/measurement state into `ViewportContext` and viewport draw call.
+- src/app/actions.rs:
+  - Added `Action::ToggleDistanceReadout`.
+  - Added `Action::ToggleMeasurementTool`.
+- src/app/action_handler.rs:
+  - Implemented both toggle actions.
+  - Measurement toggle clears existing measurement points.
+- src/keymap.rs:
+  - Added `ActionBinding::ToggleMeasurementTool`.
+  - Default binding: `M`.
+  - Added labels/category/default + test assertions.
+- src/app/input.rs:
+  - Dispatches `ActionBinding::ToggleMeasurementTool` to `Action::ToggleMeasurementTool`.
+- src/ui/viewport/draw.rs:
+  - Added cursor ray helper (`cursor_world_ray`) and CPU SDF raycast helper (`raycast_scene_surface`).
+  - Added cursor-distance overlay when enabled:
+    - shows `Surface` when ray hits
+    - otherwise shows `D: <value>` using CPU SDF sample
+  - Added measurement interaction:
+    - in measurement mode, click places point A then point B on SDF surface
+    - third click resets and starts a new pair
+  - Added measurement overlay rendering:
+    - line + endpoint dots + midpoint distance label
+  - Added viewport tools UI controls:
+    - `Measure` toggle (M)
+    - `Distance` toggle
+    - `Clear` button while measuring
+  - Measurement mode consumes click selection/picking (intentional tool behavior).
+- plans/prd.json:
+  - Marked PRD #46 as passed.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS (462 passed)
+- cargo build: PASS
+
+Manual verification pending:
+- Enable Distance in viewport tools and confirm cursor overlay updates.
+- Enable Measure and click two points on geometry; confirm line + distance label.
+- Press `M` to toggle measurement mode and reset points.

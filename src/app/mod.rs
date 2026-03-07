@@ -355,6 +355,9 @@ impl SdfApp {
                 show_recovery_dialog,
                 recovery_summary,
                 reference_images: crate::ui::reference_image::ReferenceImageManager::default(),
+                show_distance_readout: false,
+                measurement_mode: false,
+                measurement_points: Vec::new(),
             },
             persistence: PersistenceState {
                 current_file_path: None,
@@ -619,6 +622,9 @@ impl eframe::App for SdfApp {
                     cursor_over_geometry: self.async_state.cursor_over_geometry,
                     soloed_light: self.doc.soloed_light,
                     solo_label: solo_label.clone(),
+                    show_distance_readout: &mut self.ui.show_distance_readout,
+                    measurement_mode: &mut self.ui.measurement_mode,
+                    measurement_points: &mut self.ui.measurement_points,
                 },
             scene_tree: SceneTreeContext {
                 renaming_node: &mut self.ui.renaming_node,

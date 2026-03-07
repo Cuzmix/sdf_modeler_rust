@@ -156,6 +156,7 @@ impl SdfApp {
             ActionBinding::ToggleIsolation => actions.push(Action::ToggleIsolation),
             ActionBinding::CycleShadingMode => actions.push(Action::CycleShadingMode),
             ActionBinding::ToggleTurntable => actions.push(Action::ToggleTurntable),
+            ActionBinding::ToggleMeasurementTool => actions.push(Action::ToggleMeasurementTool),
             ActionBinding::ShowExportDialog => actions.push(Action::ShowExportDialog),
 
             // --- Context-sensitive actions ---

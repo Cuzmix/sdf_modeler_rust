@@ -152,6 +152,12 @@ pub struct ViewportContext<'a> {
     pub soloed_light: Option<NodeId>,
     /// Label for solo mode indicator (None = not soloed).
     pub solo_label: Option<String>,
+    /// Show cursor distance readout overlay.
+    pub show_distance_readout: &'a mut bool,
+    /// Two-point measurement tool mode flag.
+    pub measurement_mode: &'a mut bool,
+    /// Collected measurement points in world space.
+    pub measurement_points: &'a mut Vec<Vec3>,
 }
 
 /// Refs needed only by the scene tree tab.
@@ -242,6 +248,9 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.viewport.soloed_light,
                     self.viewport.solo_label.as_deref(),
                     &*self.reference_images,
+                    self.viewport.show_distance_readout,
+                    self.viewport.measurement_mode,
+                    self.viewport.measurement_points,
                 );
                 if let Some(pick) = vp_output.pending_pick {
                     *self.viewport.pending_pick = Some(pick);

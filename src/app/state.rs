@@ -224,6 +224,12 @@ pub struct UiState {
     pub recovery_summary: String,
     /// Reference images used as modeling guides in the viewport.
     pub reference_images: ReferenceImageManager,
+    /// Show a cursor-relative SDF distance readout in the viewport.
+    pub show_distance_readout: bool,
+    /// Interactive two-point measurement mode.
+    pub measurement_mode: bool,
+    /// Measurement points in world space (0, 1, or 2 points).
+    pub measurement_points: Vec<Vec3>,
 }
 
 // ---------------------------------------------------------------------------
