@@ -54,6 +54,8 @@ pub enum Action {
     OpenProject,
     OpenRecentProject(String),
     SaveProject,
+    SaveNodePreset(NodeId),
+    LoadNodePreset,
 
     // ── Selection ────────────────────────────────────────────────────
     Select(Option<NodeId>),

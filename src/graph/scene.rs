@@ -1702,6 +1702,13 @@ impl Scene {
         set
     }
 
+    /// Collect all node IDs in the subtree rooted at `root` as a stable, sorted list.
+    pub fn collect_subtree_nodes(&self, root: NodeId) -> Vec<NodeId> {
+        let mut nodes: Vec<NodeId> = self.collect_subtree(root).into_iter().collect();
+        nodes.sort_unstable();
+        nodes
+    }
+
     /// Duplicate an entire subtree rooted at `root_id`.
     /// Returns the new root ID, or None if `root_id` doesn't exist.
     /// Sculpt nodes get their voxel grids deep-cloned. Names get " Copy" appended.
@@ -2701,6 +2708,17 @@ mod tests {
         assert!(subtree.contains(&root));
         assert!(subtree.contains(&leaf_a));
         assert!(subtree.contains(&leaf_b));
+    }
+
+    #[test]
+    fn collect_subtree_nodes_returns_sorted_list() {
+        let mut scene = empty_scene();
+        let leaf_a = scene.create_primitive(SdfPrimitive::Sphere);
+        let leaf_b = scene.create_primitive(SdfPrimitive::Box);
+        let root = scene.create_operation(CsgOp::Union, Some(leaf_a), Some(leaf_b));
+
+        let nodes = scene.collect_subtree_nodes(root);
+        assert_eq!(nodes, vec![leaf_a, leaf_b, root]);
     }
 
     // ── visible_topo_order ──────────────────────────────────────────

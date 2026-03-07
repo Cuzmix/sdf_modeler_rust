@@ -171,6 +171,10 @@ fn node_context_menu(
             }
             ui.close_menu();
         }
+        if ui.button("Save as Preset...").clicked() {
+            actions.push(Action::SaveNodePreset(id));
+            ui.close_menu();
+        }
         let delete_enabled = !locked;
         if ui.add_enabled(delete_enabled, egui::Button::new("Delete")).clicked() {
             actions.push(Action::DeleteNode(id));

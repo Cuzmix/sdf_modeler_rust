@@ -1450,3 +1450,50 @@ Changes:
 
 Verification: cargo check ?, cargo clippy -- -D warnings ?, cargo test (460/460) ?, cargo build ?
 Manual verification: NOT RUN in this iteration (kill/relaunch crash scenario still required).
+
+--- Iteration 39: PRD #44 - Node Presets (save/load subtree templates) ---
+COMPLETED. Added subtree preset save/load pipeline with ID remapping, action wiring, and UI entry points.
+
+Changes:
+- src/graph/scene.rs:
+  - Added `collect_subtree_nodes(root) -> Vec<NodeId>` returning a stable sorted subtree list.
+  - Added test `collect_subtree_nodes_returns_sorted_list`.
+- src/io.rs:
+  - Added preset format structs: `SubtreePresetFile`, `SubtreePresetNode`, `PRESET_VERSION`.
+  - Added `save_subtree_preset(scene, root, path)`:
+    - serializes only subtree nodes
+    - stores relative IDs + `root_id`
+    - preserves name, locked, hidden, light_mask, and NodeData
+  - Added `load_subtree_preset(scene, path) -> NodeId`:
+    - validates version
+    - allocates fresh NodeIds
+    - remaps all internal node references
+    - restores hidden/light mask state
+  - Added `remap_subtree_node_references` helper.
+  - Added roundtrip test `subtree_preset_roundtrip_preserves_structure_and_properties`.
+- src/app/actions.rs:
+  - Added `Action::SaveNodePreset(NodeId)` and `Action::LoadNodePreset`.
+- src/app/action_handler.rs:
+  - Implemented SaveNodePreset:
+    - opens save dialog (.sdfpreset)
+    - writes preset via `io::save_subtree_preset`
+    - emits success/error toast
+  - Implemented LoadNodePreset:
+    - opens open dialog (.sdfpreset)
+    - loads via `io::load_subtree_preset`
+    - selects loaded root, triggers graph rebuild + GPU buffer refresh
+    - emits success/error toast
+- src/ui/scene_tree.rs:
+  - Added context menu item `Save as Preset...` for any node.
+- src/ui/node_graph.rs:
+  - Added toolbar button `Load Preset` to trigger `Action::LoadNodePreset`.
+- plans/prd.json:
+  - Marked PRD #44 `passes: true`.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS (462 passed)
+- cargo build: PASS
+
+Manual verification: pending (save preset from scene tree, then load via node graph toolbar).

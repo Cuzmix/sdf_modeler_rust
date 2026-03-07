@@ -82,6 +82,95 @@ impl SdfApp {
                 }
 
                 // ── Selection ────────────────────────────────────────
+                Action::SaveNodePreset(node_id) => {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        let default_name = self
+                            .doc
+                            .scene
+                            .nodes
+                            .get(&node_id)
+                            .map(|n| format!("{}.sdfpreset", n.name.replace(' ', "_")))
+                            .unwrap_or_else(|| "node_preset.sdfpreset".to_string());
+                        if let Some(path) = rfd::FileDialog::new()
+                            .set_title("Save Node Preset")
+                            .set_file_name(&default_name)
+                            .add_filter("SDF Node Preset", &["sdfpreset"])
+                            .save_file()
+                        {
+                            match crate::io::save_subtree_preset(&self.doc.scene, node_id, &path) {
+                                Ok(()) => {
+                                    self.ui.toasts.push(super::Toast {
+                                        message: format!("Saved preset: {}", path.display()),
+                                        is_error: false,
+                                        created: crate::compat::Instant::now(),
+                                        duration: crate::compat::Duration::from_secs(4),
+                                    });
+                                }
+                                Err(e) => {
+                                    log::error!("Failed to save node preset: {}", e);
+                                    self.ui.toasts.push(super::Toast {
+                                        message: format!("Failed to save preset: {}", e),
+                                        is_error: true,
+                                        created: crate::compat::Instant::now(),
+                                        duration: crate::compat::Duration::from_secs(5),
+                                    });
+                                }
+                            }
+                        }
+                    }
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        self.ui.toasts.push(super::Toast {
+                            message: "Node presets are not supported in web builds".into(),
+                            is_error: true,
+                            created: crate::compat::Instant::now(),
+                            duration: crate::compat::Duration::from_secs(4),
+                        });
+                    }
+                }
+                Action::LoadNodePreset => {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        if let Some(path) = rfd::FileDialog::new()
+                            .set_title("Load Node Preset")
+                            .add_filter("SDF Node Preset", &["sdfpreset"])
+                            .pick_file()
+                        {
+                            match crate::io::load_subtree_preset(&mut self.doc.scene, &path) {
+                                Ok(root_id) => {
+                                    self.ui.node_graph_state.select_single(root_id);
+                                    self.ui.node_graph_state.needs_initial_rebuild = true;
+                                    self.gpu.buffer_dirty = true;
+                                    self.ui.toasts.push(super::Toast {
+                                        message: format!("Loaded preset: {}", path.display()),
+                                        is_error: false,
+                                        created: crate::compat::Instant::now(),
+                                        duration: crate::compat::Duration::from_secs(4),
+                                    });
+                                }
+                                Err(e) => {
+                                    log::error!("Failed to load node preset: {}", e);
+                                    self.ui.toasts.push(super::Toast {
+                                        message: format!("Failed to load preset: {}", e),
+                                        is_error: true,
+                                        created: crate::compat::Instant::now(),
+                                        duration: crate::compat::Duration::from_secs(5),
+                                    });
+                                }
+                            }
+                        }
+                    }
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        self.ui.toasts.push(super::Toast {
+                            message: "Node presets are not supported in web builds".into(),
+                            is_error: true,
+                            created: crate::compat::Instant::now(),
+                            duration: crate::compat::Duration::from_secs(4),
+                        });
+                    }
+                }
                 Action::Select(id) => {
                     if let Some(node_id) = id {
                         self.ui.node_graph_state.select_single(node_id);
