@@ -513,4 +513,45 @@ mod tests {
     fn expression_with_t_and_operations() {
         assert!((eval("t * t + 1.0", 3.0) - 10.0).abs() < 1e-5);
     }
+
+    // ── t=0 produces expected results for common functions ──────────
+
+    #[test]
+    fn sin_at_t_zero_is_zero() {
+        assert!(eval("sin(t)", 0.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn cos_at_t_zero_is_one() {
+        assert!((eval("cos(t)", 0.0) - 1.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn fract_at_t_zero_is_zero() {
+        assert!(eval("fract(t)", 0.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn pulse_preset_at_t_zero() {
+        // "0.5 + 0.5 * sin(t * 3.0)" at t=0 → 0.5 + 0.5*sin(0) = 0.5
+        assert!((eval("0.5 + 0.5 * sin(t * 3.0)", 0.0) - 0.5).abs() < 1e-5);
+    }
+
+    #[test]
+    fn slow_glow_preset_at_t_zero() {
+        // "0.5 + 0.5 * sin(t * 0.5)" at t=0 → 0.5
+        assert!((eval("0.5 + 0.5 * sin(t * 0.5)", 0.0) - 0.5).abs() < 1e-5);
+    }
+
+    #[test]
+    fn rainbow_preset_at_t_zero() {
+        // "fract(t * 0.1) * 360.0" at t=0 → 0
+        assert!(eval("fract(t * 0.1) * 360.0", 0.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn flicker_preset_at_t_zero() {
+        // "0.8 + 0.2 * sin(t * 20.0) * sin(t * 7.3)" at t=0 → 0.8 + 0.2*0*0 = 0.8
+        assert!((eval("0.8 + 0.2 * sin(t * 20.0) * sin(t * 7.3)", 0.0) - 0.8).abs() < 1e-5);
+    }
 }

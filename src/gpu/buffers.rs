@@ -1204,4 +1204,182 @@ mod tests {
             assert!((p.y).abs() < 1e-5);
         }
     }
+
+    // -----------------------------------------------------------------------
+    // Volumetric scattering: flag/density packing + volumetric light count
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn volumetric_flag_and_density_packed_into_buffer() {
+        let mut scene = empty_scene();
+        let (light_id, _) = scene.create_light(LightType::Point);
+        if let NodeData::Light {
+            ref mut volumetric,
+            ref mut volumetric_density,
+            ..
+        } = scene.nodes.get_mut(&light_id).unwrap().data
+        {
+            *volumetric = true;
+            *volumetric_density = 0.42;
+        }
+        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
+        assert_eq!(count, 1);
+        // volumetric.x = 1.0 (enabled)
+        assert!((lights[0].volumetric[0] - 1.0).abs() < 1e-5, "volumetric flag should be 1.0");
+        // volumetric.y = density
+        assert!((lights[0].volumetric[1] - 0.42).abs() < 1e-5, "volumetric density should be 0.42");
+    }
+
+    #[test]
+    fn volumetric_disabled_packs_zero_flag() {
+        let mut scene = empty_scene();
+        let (_light_id, _) = scene.create_light(LightType::Point);
+        // Default: volumetric = false
+        let (_, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
+        assert!((lights[0].volumetric[0]).abs() < 1e-5, "volumetric flag should be 0.0 by default");
+    }
+
+    #[test]
+    fn volumetric_light_count_computed_correctly() {
+        let mut scene = empty_scene();
+        // Create 3 lights: 2 volumetric, 1 not
+        let (l1, _) = scene.create_light(LightType::Point);
+        let (l2, _) = scene.create_light(LightType::Spot);
+        let (_l3, _) = scene.create_light(LightType::Point);
+
+        if let NodeData::Light { ref mut volumetric, .. } = scene.nodes.get_mut(&l1).unwrap().data {
+            *volumetric = true;
+        }
+        if let NodeData::Light { ref mut volumetric, .. } = scene.nodes.get_mut(&l2).unwrap().data {
+            *volumetric = true;
+        }
+        // l3 stays default (volumetric=false)
+
+        let (_, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
+        let vol_count = lights.iter().filter(|l| l.volumetric[0] > 0.5).count();
+        assert_eq!(vol_count, 2, "should have exactly 2 volumetric lights");
+    }
+
+    // -----------------------------------------------------------------------
+    // Cookie SDF: buffer packing
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn cookie_node_packs_into_volumetric_fields() {
+        use crate::graph::scene::SdfPrimitive;
+        let mut scene = empty_scene();
+        let prim_id = scene.create_primitive(SdfPrimitive::Sphere);
+        let (light_id, _) = scene.create_light(LightType::Spot);
+        if let NodeData::Light { ref mut cookie_node, .. } = scene.nodes.get_mut(&light_id).unwrap().data {
+            *cookie_node = Some(prim_id);
+        }
+        let (_, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
+        assert_eq!(lights.len(), 1);
+        // volumetric.z = has_cookie = 1.0
+        assert!((lights[0].volumetric[2] - 1.0).abs() < 1e-5, "has_cookie should be 1.0");
+        // volumetric.w = cookie index >= 0
+        assert!(lights[0].volumetric[3] >= 0.0, "cookie index should be >= 0");
+    }
+
+    #[test]
+    fn no_cookie_packs_negative_index() {
+        let mut scene = empty_scene();
+        let (_light_id, _) = scene.create_light(LightType::Point);
+        let (_, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
+        // volumetric.z = has_cookie = 0.0
+        assert!((lights[0].volumetric[2]).abs() < 1e-5, "has_cookie should be 0.0");
+        // volumetric.w = cookie index = -1.0
+        assert!((lights[0].volumetric[3] - (-1.0)).abs() < 1e-5, "cookie index should be -1.0");
+    }
+
+    // -----------------------------------------------------------------------
+    // Shadow: max 2 shadow-casters packed correctly
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn multiple_shadow_casters_all_marked_in_buffer() {
+        let mut scene = empty_scene();
+        let (l1, _) = scene.create_light(LightType::Directional);
+        let (l2, _) = scene.create_light(LightType::Spot);
+        let (l3, _) = scene.create_light(LightType::Point);
+
+        // Enable shadows on all 3
+        for lid in [l1, l2, l3] {
+            if let NodeData::Light { ref mut cast_shadows, .. } = scene.nodes.get_mut(&lid).unwrap().data {
+                *cast_shadows = true;
+            }
+        }
+        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
+        assert_eq!(count, 3);
+        // All 3 lights should have cast_shadows=1.0 in the buffer
+        // (the shader-side budget of max 2 is enforced in WGSL, not in Rust)
+        let shadow_count = lights.iter().filter(|l| l.params[1] > 0.5).count();
+        assert_eq!(shadow_count, 3, "all 3 lights should have cast_shadows=1.0 in buffer");
+    }
+
+    #[test]
+    fn shadow_softness_packed_correctly() {
+        let mut scene = empty_scene();
+        let (light_id, _) = scene.create_light(LightType::Spot);
+        if let NodeData::Light { ref mut cast_shadows, ref mut shadow_softness, .. } =
+            scene.nodes.get_mut(&light_id).unwrap().data
+        {
+            *cast_shadows = true;
+            *shadow_softness = 32.5;
+        }
+        let (_, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
+        assert!((lights[0].params[2] - 32.5).abs() < 1e-5, "shadow softness should be 32.5");
+    }
+
+    // -----------------------------------------------------------------------
+    // Expression: time-based intensity override
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn expression_overrides_intensity_at_time() {
+        let mut scene = empty_scene();
+        let (light_id, _) = scene.create_light(LightType::Point);
+        if let NodeData::Light { ref mut intensity_expr, ref mut intensity, .. } =
+            scene.nodes.get_mut(&light_id).unwrap().data
+        {
+            *intensity = 5.0; // static value (should be overridden)
+            *intensity_expr = Some("sin(t * 3.0) * 0.5 + 0.5".to_string());
+        }
+        // At t=0: sin(0)*0.5+0.5 = 0.5
+        let (_, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
+        assert!((lights[0].direction_intensity[3] - 0.5).abs() < 1e-3,
+            "intensity at t=0 should be 0.5, got {}", lights[0].direction_intensity[3]);
+    }
+
+    #[test]
+    fn expression_color_hue_rotates_at_time() {
+        let mut scene = empty_scene();
+        let (light_id, _) = scene.create_light(LightType::Point);
+        if let NodeData::Light { ref mut color, ref mut color_hue_expr, .. } =
+            scene.nodes.get_mut(&light_id).unwrap().data
+        {
+            *color = Vec3::new(1.0, 0.0, 0.0); // Red
+            *color_hue_expr = Some("120.0".to_string()); // Constant 120° hue shift
+        }
+        let (_, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
+        // Red shifted 120° → should be approximately green
+        let r = lights[0].color_range[0];
+        let g = lights[0].color_range[1];
+        assert!(g > r, "120° hue shift of red should be more green than red, r={r}, g={g}");
+    }
+
+    #[test]
+    fn invalid_expression_falls_back_to_static_intensity() {
+        let mut scene = empty_scene();
+        let (light_id, _) = scene.create_light(LightType::Point);
+        if let NodeData::Light { ref mut intensity_expr, ref mut intensity, .. } =
+            scene.nodes.get_mut(&light_id).unwrap().data
+        {
+            *intensity = 7.0;
+            *intensity_expr = Some("invalid+++".to_string()); // Bad expression
+        }
+        let (_, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
+        assert!((lights[0].direction_intensity[3] - 7.0).abs() < 1e-3,
+            "invalid expression should fall back to static intensity 7.0");
+    }
 }

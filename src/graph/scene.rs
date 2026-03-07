@@ -3341,4 +3341,195 @@ mod tests {
         let new_root = scene.duplicate_subtree(prim).unwrap();
         assert_eq!(scene.get_light_mask(new_root), 0b0000_0011);
     }
+
+    // ── Advanced lighting: cookie_node serialization ─────────────────
+
+    #[test]
+    fn cookie_node_serialization_roundtrip() {
+        let mut scene = empty_scene();
+        let prim_id = scene.create_primitive(SdfPrimitive::Sphere);
+        let (light_id, _) = scene.create_light(LightType::Spot);
+        if let NodeData::Light { ref mut cookie_node, .. } = scene.nodes.get_mut(&light_id).unwrap().data {
+            *cookie_node = Some(prim_id);
+        }
+        // Serialize and deserialize the light node's data
+        let node = &scene.nodes[&light_id];
+        let json = serde_json::to_string(&node.data).expect("serialize NodeData");
+        let deserialized: NodeData = serde_json::from_str(&json).expect("deserialize NodeData");
+        match deserialized {
+            NodeData::Light { cookie_node, .. } => {
+                assert_eq!(cookie_node, Some(prim_id), "cookie_node should survive serialization roundtrip");
+            }
+            _ => panic!("expected Light variant"),
+        }
+    }
+
+    #[test]
+    fn cookie_node_none_serialization_roundtrip() {
+        let mut scene = empty_scene();
+        let (light_id, _) = scene.create_light(LightType::Point);
+        let node = &scene.nodes[&light_id];
+        let json = serde_json::to_string(&node.data).expect("serialize");
+        let deserialized: NodeData = serde_json::from_str(&json).expect("deserialize");
+        match deserialized {
+            NodeData::Light { cookie_node, .. } => {
+                assert!(cookie_node.is_none(), "cookie_node should be None after roundtrip");
+            }
+            _ => panic!("expected Light variant"),
+        }
+    }
+
+    // ── Advanced lighting: expression serialization ──────────────────
+
+    #[test]
+    fn light_expression_serialization_roundtrip() {
+        let mut scene = empty_scene();
+        let (light_id, _) = scene.create_light(LightType::Point);
+        if let NodeData::Light {
+            ref mut intensity_expr,
+            ref mut color_hue_expr,
+            ..
+        } = scene.nodes.get_mut(&light_id).unwrap().data
+        {
+            *intensity_expr = Some("sin(t * 3.0) * 0.5 + 0.5".to_string());
+            *color_hue_expr = Some("fract(t * 0.1) * 360.0".to_string());
+        }
+        let json = serde_json::to_string(&scene.nodes[&light_id].data).expect("serialize");
+        let deserialized: NodeData = serde_json::from_str(&json).expect("deserialize");
+        match deserialized {
+            NodeData::Light { intensity_expr, color_hue_expr, .. } => {
+                assert_eq!(intensity_expr.as_deref(), Some("sin(t * 3.0) * 0.5 + 0.5"));
+                assert_eq!(color_hue_expr.as_deref(), Some("fract(t * 0.1) * 360.0"));
+            }
+            _ => panic!("expected Light variant"),
+        }
+    }
+
+    // ── Advanced lighting: volumetric serialization ──────────────────
+
+    #[test]
+    fn volumetric_fields_serialization_roundtrip() {
+        let mut scene = empty_scene();
+        let (light_id, _) = scene.create_light(LightType::Spot);
+        if let NodeData::Light {
+            ref mut volumetric,
+            ref mut volumetric_density,
+            ..
+        } = scene.nodes.get_mut(&light_id).unwrap().data
+        {
+            *volumetric = true;
+            *volumetric_density = 0.73;
+        }
+        let json = serde_json::to_string(&scene.nodes[&light_id].data).expect("serialize");
+        let deserialized: NodeData = serde_json::from_str(&json).expect("deserialize");
+        match deserialized {
+            NodeData::Light { volumetric, volumetric_density, .. } => {
+                assert!(volumetric, "volumetric flag should survive roundtrip");
+                assert!((volumetric_density - 0.73).abs() < 1e-5, "density should survive roundtrip");
+            }
+            _ => panic!("expected Light variant"),
+        }
+    }
+
+    // ── Advanced lighting: shadow fields serialization ───────────────
+
+    #[test]
+    fn shadow_fields_serialization_roundtrip() {
+        let mut scene = empty_scene();
+        let (light_id, _) = scene.create_light(LightType::Directional);
+        if let NodeData::Light {
+            ref mut cast_shadows,
+            ref mut shadow_softness,
+            ref mut shadow_color,
+            ..
+        } = scene.nodes.get_mut(&light_id).unwrap().data
+        {
+            *cast_shadows = true;
+            *shadow_softness = 24.0;
+            *shadow_color = Vec3::new(0.1, 0.2, 0.3);
+        }
+        let json = serde_json::to_string(&scene.nodes[&light_id].data).expect("serialize");
+        let deserialized: NodeData = serde_json::from_str(&json).expect("deserialize");
+        match deserialized {
+            NodeData::Light { cast_shadows, shadow_softness, shadow_color, .. } => {
+                assert!(cast_shadows, "cast_shadows should survive roundtrip");
+                assert!((shadow_softness - 24.0).abs() < 1e-5);
+                assert!((shadow_color.x - 0.1).abs() < 1e-5);
+                assert!((shadow_color.y - 0.2).abs() < 1e-5);
+                assert!((shadow_color.z - 0.3).abs() < 1e-5);
+            }
+            _ => panic!("expected Light variant"),
+        }
+    }
+
+    // ── Advanced lighting: proximity fields serialization ────────────
+
+    #[test]
+    fn proximity_fields_serialization_roundtrip() {
+        let mut scene = empty_scene();
+        let (light_id, _) = scene.create_light(LightType::Point);
+        if let NodeData::Light {
+            ref mut proximity_mode,
+            ref mut proximity_range,
+            ..
+        } = scene.nodes.get_mut(&light_id).unwrap().data
+        {
+            *proximity_mode = ProximityMode::Brighten;
+            *proximity_range = 5.5;
+        }
+        let json = serde_json::to_string(&scene.nodes[&light_id].data).expect("serialize");
+        let deserialized: NodeData = serde_json::from_str(&json).expect("deserialize");
+        match deserialized {
+            NodeData::Light { proximity_mode, proximity_range, .. } => {
+                assert_eq!(proximity_mode, ProximityMode::Brighten);
+                assert!((proximity_range - 5.5).abs() < 1e-5);
+            }
+            _ => panic!("expected Light variant"),
+        }
+    }
+
+    // ── Advanced lighting: structure_key changes with cookie ─────────
+
+    #[test]
+    fn structure_key_changes_when_cookie_added() {
+        let mut scene = empty_scene();
+        let prim_id = scene.create_primitive(SdfPrimitive::Sphere);
+        let (light_id, _) = scene.create_light(LightType::Spot);
+
+        let key_before = scene.structure_key();
+        if let NodeData::Light { ref mut cookie_node, .. } = scene.nodes.get_mut(&light_id).unwrap().data {
+            *cookie_node = Some(prim_id);
+        }
+        let key_after = scene.structure_key();
+        assert_ne!(key_before, key_after, "structure_key should change when cookie is added");
+    }
+
+    // ── Advanced lighting: has_light_expressions ─────────────────────
+
+    #[test]
+    fn has_light_expressions_false_when_no_expressions() {
+        let mut scene = empty_scene();
+        scene.create_light(LightType::Point);
+        assert!(!scene.has_light_expressions(), "no expressions set");
+    }
+
+    #[test]
+    fn has_light_expressions_true_when_intensity_expr_set() {
+        let mut scene = empty_scene();
+        let (light_id, _) = scene.create_light(LightType::Point);
+        if let NodeData::Light { ref mut intensity_expr, .. } = scene.nodes.get_mut(&light_id).unwrap().data {
+            *intensity_expr = Some("sin(t)".to_string());
+        }
+        assert!(scene.has_light_expressions(), "should detect intensity expression");
+    }
+
+    #[test]
+    fn has_light_expressions_true_when_color_hue_expr_set() {
+        let mut scene = empty_scene();
+        let (light_id, _) = scene.create_light(LightType::Point);
+        if let NodeData::Light { ref mut color_hue_expr, .. } = scene.nodes.get_mut(&light_id).unwrap().data {
+            *color_hue_expr = Some("t * 60.0".to_string());
+        }
+        assert!(scene.has_light_expressions(), "should detect color hue expression");
+    }
 }

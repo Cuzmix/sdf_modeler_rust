@@ -242,7 +242,7 @@
     "category": "testing",
     "description": "Add comprehensive unit tests for all advanced lighting features in this sprint.\n\nSteps:\n1. Volumetric scattering: test that volumetric flag/density pack correctly into light buffer params. Test that volumetric light count is computed correctly (0 when no volumetric lights).\n2. Negative lights: test that negative intensity is preserved in GPU buffer packing. Test that intensity range validation allows negative values.\n3. Light cookies: test cookie_node serialization roundtrip. Test validation rejects Light nodes as cookies. Test cookie SDF codegen generates `cookie_sdf_N` function.\n4. Per-light shadows: test shadow parameter packing (cast_shadows, shadow_softness, shadow_color). Test max 2 shadow-caster selection by intensity.\n5. Light Solo: test solo state toggle behavior (set, clear, switch). Test that collect_scene_lights returns only soloed light.\n6. Proximity modulation: test CPU-side SDF evaluation at light position. Test proximity factor computation for Brighten/Dim modes at known distances.\n7. Light Array: test expansion of Ring/Line/Grid patterns into individual lights. Test that expanded count respects MAX_SCENE_LIGHTS. Test color variation hue shift.\n8. Expression evaluator: test parse + evaluate for all supported functions. Test error handling for invalid expressions. Test preset expressions at known time values. Test that `t=0` produces expected results for sin(t), cos(t), etc.",
     "verification": "cargo test — all new tests pass alongside existing tests. Zero regressions. Expression evaluator tested with edge cases (division by zero returns 0, empty string returns error).",
-    "passes": false
+    "passes": true
   },
   {
     "id": 41,
