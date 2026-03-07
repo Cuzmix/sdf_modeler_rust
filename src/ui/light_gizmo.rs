@@ -36,6 +36,7 @@ struct LightInfo {
     color: Vec3,
     range: f32,
     spot_angle: f32,
+    intensity: f32,
     /// Direction the light points (from Transform rotation). Default -Y.
     direction: Vec3,
 }
@@ -48,9 +49,9 @@ fn collect_lights(scene: &Scene, parent_map: &HashMap<NodeId, NodeId>) -> Vec<Li
         if let NodeData::Light {
             light_type,
             color,
+            intensity,
             range,
             spot_angle,
-            ..
         } = &node.data
         {
             if scene.is_hidden(id) {
@@ -86,6 +87,7 @@ fn collect_lights(scene: &Scene, parent_map: &HashMap<NodeId, NodeId>) -> Vec<Li
                 world_pos: *translation,
                 light_type: light_type.clone(),
                 color: *color,
+                intensity: *intensity,
                 range: *range,
                 spot_angle: *spot_angle,
                 direction: if direction.length_squared() > 0.5 {
@@ -465,6 +467,30 @@ pub fn draw_and_interact(
                 draw_directional_light_icon(painter, screen_pos, size, draw_color);
             }
             LightType::Ambient => draw_ambient_light_icon(painter, screen_pos, size, draw_color),
+        }
+
+        // Draw minus sign overlay for negative/subtractive lights
+        if light.intensity < 0.0 {
+            let minus_half = size * 0.35;
+            let minus_stroke = Stroke::new(2.5, Color32::from_rgb(255, 60, 60));
+            painter.line_segment(
+                [
+                    screen_pos + egui::vec2(-minus_half, 0.0),
+                    screen_pos + egui::vec2(minus_half, 0.0),
+                ],
+                minus_stroke,
+            );
+            // Dashed circle to indicate subtractive nature
+            let dash_radius = size * 0.75;
+            let dash_count = 12;
+            let dash_stroke = Stroke::new(1.5, Color32::from_rgba_unmultiplied(255, 60, 60, (alpha * 200.0) as u8));
+            for i in 0..dash_count {
+                let a0 = (i as f32 / dash_count as f32) * std::f32::consts::TAU;
+                let a1 = ((i as f32 + 0.5) / dash_count as f32) * std::f32::consts::TAU;
+                let p0 = screen_pos + egui::vec2(a0.cos(), a0.sin()) * dash_radius;
+                let p1 = screen_pos + egui::vec2(a1.cos(), a1.sin()) * dash_radius;
+                painter.line_segment([p0, p1], dash_stroke);
+            }
         }
 
         // Draw small "X" over inactive light icons

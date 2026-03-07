@@ -831,3 +831,114 @@ validation without matching bind group layout. The non-sculpt shader paths cover
 all the codegen logic that's been a source of bugs.
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (359/359) ✓, cargo build ✓
+
+=== Sprint 3: Advanced Lighting System ===
+
+9 PRD items (IDs 32-40):
+- #32: Per-light volumetric scattering (god rays via in-scatter during raymarch)
+- #33: Negative/subtractive lights (allow negative intensity for artistic control)
+- #34: SDF-shaped light cookies (use SDF primitives to shape light beams)
+- #35: Per-light shadow controls (softness, color, enable/disable per light)
+- #36: Light Solo mode (isolate individual light contributions for debugging)
+- #37: SDF-proximity light modulation (intensity driven by distance to surfaces)
+- #38: Procedural Light Array node (ring/grid/line/spiral patterns of lights)
+- #39: Light animation expressions (time-based dynamic lighting with math expressions)
+- #40: Comprehensive tests for all advanced lighting features
+
+Priority order: #33 (trivial, high value) → #35 (extends existing shadows) → #36 (UI only, no shader) → #32 (biggest visual impact) → #34 (SDF-native differentiator) → #37 (SDF-native) → #38 (Houdini-style) → #39 (expression system) → #40 (tests)
+
+=== Sprint 4: Robustness, Polish & Competitive Features ===
+
+15 PRD items (IDs 41-55):
+
+Robustness & Trust:
+- #41: Crash recovery dialog on startup (detect unclean exit, offer autosave restore)
+- #51: Graceful handling of corrupt/incompatible project files (unknown nodes, version field, .bak backups)
+- #52: Performance warnings (proactive alerts when scene exceeds complexity thresholds)
+
+Workflow Essentials:
+- #43: Material Presets library (20+ built-in: Gold, Chrome, Plastic, etc. + user-saved)
+- #44: Node Presets — save/load subtree templates as .sdfpreset files
+- #46: SDF Distance Readout + Measurement Tool (SDF-native precision tool)
+
+Visual & Rendering:
+- #47: High-Quality Render dialog (resolution multiplier, supersampling, transparent bg)
+- #49: HDRI Environment Lighting / IBL (cubemap reflections, irradiance, split-sum)
+- #50: Turntable Animation Export (PNG sequence or GIF)
+
+Scene Power:
+- #48: SDF Instancing — reference nodes (one subtree, many eval points, shared codegen)
+- #45: Reference Images in viewport (model against photos)
+
+Polish & Delight:
+- #53: Theme system (Dark/Light/System + accent color + font size)
+- #54: Welcome / Onboarding dialog (first-launch, demo scene, quick-start tips)
+- #42: Scene Statistics panel (node counts, voxel memory, SDF complexity)
+
+Testing:
+- #55: Comprehensive tests for all sprint 4 features
+
+Priority order: #43 (material presets — tiny, huge UX win) → #41 (crash recovery — trust) → #42 (scene stats — small panel) → #51 (file robustness) → #53 (theme — polish) → #47 (render dialog) → #52 (perf warnings) → #54 (welcome) → #44 (node presets) → #46 (measurement) → #48 (instancing — big) → #45 (reference images) → #50 (turntable export) → #49 (HDRI — biggest) → #55 (tests)
+
+=== Sprint 5: Adaptive Export & Procedural Texturing ===
+
+5 PRD items (IDs 56-60):
+
+Adaptive Mesh Export:
+- #56: Octree-based adaptive marching cubes — curvature-driven refinement, 2:1 balanced octree, T-junction stitching, rayon parallel leaf processing
+
+Procedural Texturing (3-phase):
+- #57: Phase 1 — data model (TexturePattern enum: Noise/Marble/Wood/Rust/Gradient/Checker/Voronoi, ProceduralTexture struct, GPU buffer packing)
+- #58: Phase 2 — WGSL texture functions + codegen + properties UI (tex_* evaluation, Voronoi noise, per-node texture controls)
+- #59: Phase 3 — presets (~15 named presets: Granite, Marble, Oak, Corroded Bronze, etc.) + texture stacking (2 layers, blend modes: Replace/Multiply/Overlay/Add)
+
+Testing:
+- #60: Comprehensive tests (octree manifold checks, texture serialization, naga WGSL validation, blend modes, preset coverage)
+
+Priority order: #57 (texture data model — foundation) → #58 (shader + UI — makes textures visible) → #56 (adaptive export — independent track) → #59 (presets + stacking — polish) → #60 (tests)
+
+=== Sprint 6: Advanced Procedural Texturing ===
+
+10 PRD items (IDs 61-70):
+
+SDF-Native Texturing (unique differentiators):
+- #61: Curvature-driven texturing — auto edge wear/rust from SDF Laplacian (6 extra SDF evals)
+- #62: AO-driven dirt/weathering — automatic crevice grime using existing AO computation
+- #63: Height-based + Normal/Facing-based blending — terrain-style snow/rock/grass on any shape
+- #64: Boolean-edge texturing — unique materials at CSG seams using vec4f blend_factor
+- #65: Roughness/metallic/emission variation — textures modulate PBR properties, not just color
+
+Additional Pattern Types:
+- #66: Cellular cracks (Voronoi F2-F1) + Hexagonal grid patterns
+- #67: Brick pattern (proper offset rows + mortar) + Reaction-diffusion Turing spots/stripes
+- #68: Image projection / decals — project PNG/JPG onto SDF surfaces from a direction
+- #69: Texture bombing — scatter random stamp instances (spots, scratches, stars) across surfaces
+
+Testing:
+- #70: Comprehensive tests for all advanced texturing features + naga validation
+
+Priority order: #65 (roughness/emission variation — enhances ALL existing textures) → #61 (curvature — highest impact SDF-native feature) → #62 (AO dirt — pairs with curvature) → #64 (boolean edge — leverages existing vec4f) → #66 (cracks + hex — popular patterns) → #63 (height/facing — terrain) → #67 (brick + turing — more variety) → #69 (bombing — advanced) → #68 (image projection — needs texture infrastructure) → #70 (tests)
+
+--- Iteration 27: PRD #33 — Negative/subtractive lights ---
+COMPLETED. Added support for negative intensity lights that subtract illumination.
+
+Changes:
+- src/ui/properties.rs: Extended Light intensity slider range from (0.0–10.0) to
+  (-10.0–10.0). Added color-coded intensity label: green text for positive intensity,
+  red text for negative intensity, giving clear visual feedback on light polarity.
+- src/shaders/rendering.wgsl: No changes needed — verified that the existing scene light
+  accumulation loop handles negative intensity correctly. The contribution formula
+  `(diffuse + specular) * NoL * intensity * attenuation * color` naturally subtracts when
+  intensity is negative. No premature per-light clamping exists — color is only clamped
+  after tonemapping at the very end.
+- src/ui/light_gizmo.rs: Added `intensity` field to LightInfo struct. When intensity < 0,
+  draws a red minus sign (-) across the billboard icon center plus a dashed red circle
+  outline, making subtractive lights instantly recognizable in the viewport.
+- src/ui/scene_tree.rs: Added DOT_LIGHT_NEGATIVE constant (red, rgb 255/80/80). Updated
+  node_type_color() to return red dot for lights with negative intensity instead of the
+  default warm yellow, providing visual distinction in the scene hierarchy.
+- src/gpu/buffers.rs: Added unit test `collect_scene_lights_negative_intensity_preserved`
+  verifying that a light with intensity -3.5 has its negative value correctly packed into
+  the GPU buffer's direction_intensity.w field without clamping or sign loss.
+
+Verification: cargo check ✓, cargo clippy ✓, cargo test (381/381) ✓, cargo build ✓

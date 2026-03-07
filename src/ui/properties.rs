@@ -1224,8 +1224,13 @@ pub fn draw(
             color = glam::Vec3::new(color_arr[0], color_arr[1], color_arr[2]);
 
             ui.horizontal(|ui| {
-                ui.label("Intensity:");
-                ui.add(egui::Slider::new(&mut intensity, 0.0..=10.0));
+                let intensity_label = if intensity < 0.0 {
+                    egui::RichText::new("Intensity:").color(egui::Color32::from_rgb(255, 80, 80))
+                } else {
+                    egui::RichText::new("Intensity:").color(egui::Color32::from_rgb(80, 200, 120))
+                };
+                ui.label(intensity_label);
+                ui.add(egui::Slider::new(&mut intensity, -10.0..=10.0));
             });
 
             // Range: only relevant for Point and Spot

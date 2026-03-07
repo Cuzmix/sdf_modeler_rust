@@ -560,4 +560,21 @@ mod tests {
         assert!((lights[0].params[0] - expected_cos).abs() < 1e-3,
             "spot angle cosine encoding: expected {expected_cos}, got {}", lights[0].params[0]);
     }
+
+    #[test]
+    fn collect_scene_lights_negative_intensity_preserved() {
+        let mut scene = empty_scene();
+        let (light_id, _) = scene.create_light(LightType::Point);
+        // Set negative intensity (subtractive light)
+        if let Some(node) = scene.nodes.get_mut(&light_id) {
+            if let NodeData::Light { intensity, .. } = &mut node.data {
+                *intensity = -3.5;
+            }
+        }
+        let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO);
+        assert_eq!(count, 1);
+        // Negative intensity must be preserved in the GPU buffer (direction_intensity.w)
+        assert!((lights[0].direction_intensity[3] - (-3.5)).abs() < 1e-5,
+            "negative intensity must be preserved: expected -3.5, got {}", lights[0].direction_intensity[3]);
+    }
 }

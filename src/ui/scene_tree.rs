@@ -383,6 +383,8 @@ fn format_node_label(node: &SceneNode) -> String {
     }
 }
 
+const DOT_LIGHT_NEGATIVE: egui::Color32 = egui::Color32::from_rgb(255, 80, 80); // red for negative/subtractive
+
 fn node_type_color(data: &NodeData) -> egui::Color32 {
     match data {
         NodeData::Primitive { .. } => DOT_PRIMITIVE,
@@ -390,7 +392,9 @@ fn node_type_color(data: &NodeData) -> egui::Color32 {
         NodeData::Sculpt { .. } => DOT_SCULPT,
         NodeData::Transform { .. } => DOT_TRANSFORM,
         NodeData::Modifier { .. } => DOT_MODIFIER,
-        NodeData::Light { .. } => DOT_LIGHT,
+        NodeData::Light { intensity, .. } => {
+            if *intensity < 0.0 { DOT_LIGHT_NEGATIVE } else { DOT_LIGHT }
+        }
     }
 }
 
