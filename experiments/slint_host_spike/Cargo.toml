@@ -1,0 +1,8 @@
+[package]
+name = "slint_host_spike"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+slint = { version = "1.15.1", features = ["unstable-wgpu-28", "unstable-winit-030"] }
+pollster = "0.3"

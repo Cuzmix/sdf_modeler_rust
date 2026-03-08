@@ -22,6 +22,9 @@ impl SdfApp {
     /// here, making the data flow explicit and easy to trace.
     pub(super) fn process_actions(&mut self, actions: Vec<Action>, ctx: &egui::Context) {
         for action in actions {
+            if self.try_process_action_via_core(&action) {
+                continue;
+            }
             match action {
                 // ── Scene ────────────────────────────────────────────
                 Action::NewScene => {
@@ -1168,5 +1171,6 @@ fn find_parent_transform(
         None
     })
 }
+
 
 

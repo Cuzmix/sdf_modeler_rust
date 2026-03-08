@@ -1599,3 +1599,250 @@ Manual verification pending:
 - Enable Distance in viewport tools and confirm cursor overlay updates.
 - Enable Measure and click two points on geometry; confirm line + distance label.
 - Press `M` to toggle measurement mode and reset points.
+
+=== Sprint 7: Slint Cross-Platform Migration ===
+
+10 PRD items (IDs 71-80):
+
+Architecture and foundation:
+- #71: Slint host + wgpu spike and ADR (choose host model before implementation)
+- #72: Extract UI-agnostic AppCore and command/snapshot interfaces
+
+Frontend migration:
+- #73: Slint app shell + command bus integration
+- #74: Viewport renderer integration in Slint host (camera/pick/gizmo parity)
+- #75: Port non-graph panels to Slint (Scene Tree, History, Render Settings, Lights, Scene Stats, Properties)
+- #76: Focus/input routing manager for deterministic shortcut and pointer behavior
+
+Node graph migration:
+- #77: Slint Node Graph 2.0 foundation (placement, organize, minimap, graph separation)
+- #78: Advanced graph UX (ALT bypass, comments/groups/reroute, subgraph scaffolding, alignment guides)
+
+Release readiness:
+- #79: Cross-platform CI and packaging matrix (Windows/macOS/Linux)
+- #80: Cutover validation suite and legacy-egui decommission plan
+
+Priority order:
+#71 -> #72 -> #73 -> #74 -> #75 -> #76 -> #77 -> #78 -> #79 -> #80
+
+Execution model:
+- Keep `legacy-egui-ui` available during transition.
+- Use parity checklists and regression tests at every phase gate.
+
+--- Iteration 42: PRD #71 - Slint host spike + ADR ---
+COMPLETED. Implemented isolated Slint migration host spike, benchmarked both host models on Windows, and accepted Option B via ADR.
+
+Changes:
+- experiments/slint_host_spike/
+  - Added isolated spike crate with no production runtime coupling.
+  - Added shared utilities for viewport pointer normalization and frame pacing metrics.
+  - Added two binaries:
+    - model_a_slint_owned.rs (Slint-owned lifecycle + rendering notifier image path)
+    - model_b_winit_owned.rs (winit/wgpu-owned lifecycle baseline)
+  - Added run instructions and benchmark output format in README.
+- plans/
+  - Added reproducible run targets:
+    - run-slint-spike.ps1
+    - run-slint-spike.sh
+- docs/
+  - Added ADR: docs/adr/adr-0001-slint-host-architecture.md
+  - Added perf baseline: docs/slint_migration/perf_baseline.md
+- .gitignore
+  - Added experiments target ignore to keep spike build artifacts out of repo.
+- plans/prd.json
+  - Marked PRD #71 as passed.
+
+Benchmark evidence (3-second run):
+- Model A: fps_avg=9.48, frame_ms_avg=86.39, p95=99.55, p99=191.66, idle_cpu_estimate_pct=99.64
+- Model B: fps_avg=61.01, frame_ms_avg=16.34, p95=17.03, p99=17.15, idle_cpu_estimate_pct=1.57
+
+Decision:
+- Accepted Option B (winit/wgpu-owned host loop) as migration baseline.
+- Rejected Option A as primary due weaker frame pacing in this spike.
+
+Verification:
+- Spike crate compile-check: PASS (`cargo check --manifest-path experiments/slint_host_spike/Cargo.toml`)
+- Manual spike runs: PASS (both models render viewport and report pointer mapping/benchmarks)
+- Main repo verification loop: pending in this iteration end-step.
+
+--- Iteration 43: PRD #72 - Extract UI-agnostic AppCore + egui adapter ---
+COMPLETED. Added a framework-neutral core state/command layer and routed a safe Action subset through it while preserving current egui behavior.
+
+Changes:
+- src/core/
+  - Added app_core.rs:
+    - `AppCore` owning scene/history/camera/selection/tool/sculpt/async flags/soloed light.
+    - `apply_command(CoreCommand) -> CoreCommandResult` for migrated commands:
+      - Select
+      - CreatePrimitive/CreateOperation/CreateTransform/CreateModifier/CreateLight
+      - DeleteSelected/DeleteNode
+      - Undo/Redo
+      - ApplyNodeTransformPatch
+    - `snapshot() -> CoreSnapshot` for framework-neutral read state.
+    - Unit tests for command equivalence paths (selection, create/delete, undo/redo, transform patch).
+- src/app/
+  - Added core_adapter.rs:
+    - Action-to-CoreCommand mapping for migrated subset.
+    - Adapter bridge that syncs `SdfApp` state into/out of `AppCore`.
+    - Result application back to UI/GPU flags (`buffer_dirty`, graph rebuild, isolation clear, center-node routing).
+  - Updated mod.rs to include `core_adapter`.
+  - Updated action_handler.rs:
+    - `process_actions()` now tries core path first (`try_process_action_via_core`) and falls back to legacy match arms for non-migrated actions.
+- src/lib.rs
+  - Exported `pub mod core;`.
+- docs/architecture.md
+  - Added section "1.5 UI-Agnostic Core Adapter (Migration Step)" documenting Action -> CoreCommand -> AppCore flow and adapter role.
+- plans/prd.json
+  - Marked PRD #72 as passed.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS (474 passed)
+- cargo build: PASS
+
+--- Iteration 44: PRD #75 - Slint non-graph panel foundation (read-only) ---
+PARTIAL (foundation slice). Implemented modular Slint panel read-models and wired shell placeholders to live core data.
+
+Changes:
+- src/ui_slint/panels/
+  - Added `read_model.rs` with `PanelReadModel` + `build_panel_read_model(core, settings)`.
+  - Read-model includes:
+    - Scene Tree text (hierarchy, node type, selection/hidden markers)
+    - History text (undo/redo summaries)
+    - Lights text (active/total + per-light rows)
+    - Render Settings text summary
+    - Scene Stats text summary
+    - Properties text (selected node, variant-specific details)
+  - Added unit tests:
+    - `panel_read_model_contains_expected_sections`
+    - `panel_read_model_no_selection_properties`
+- src/ui_slint/mod.rs
+  - Added Slint `panels` module wiring.
+  - `apply_snapshot` now builds panel read-model and updates shell panel properties.
+  - Snapshot update path now threads `Settings` into panel rendering.
+- src/ui_slint/app_shell.slint
+  - Replaced panel placeholders with dedicated panel text properties:
+    - `sceneTreePanelText`, `historyPanelText`, `lightsPanelText`
+    - `propertiesPanelText`, `renderSettingsPanelText`, `sceneStatsPanelText`
+  - Left and right sidebars now display live read-only panel content.
+- docs/slint_migration/panel_parity.md (new)
+  - Added parity checklist for PRD #75 with read-only milestones marked complete and editable workflows left unchecked.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS (480 passed)
+- cargo build: PASS
+
+Manual verification pending:
+- Run shell mode (`SDF_SLINT_HOST_MODE=shell`) and confirm all six panels display live updates from core state.
+- Confirm toolbar actions (new/add sphere/undo/redo/tool toggles) refresh panel text immediately.
+
+--- Iteration 45: PRD #75 - Slint panel actions (interactive slice) ---
+PARTIAL (interactive shell slice). Added command-driven panel workflows for selected-node operations and light creation.
+
+Changes:
+- src/core/commands.rs
+  - Added command variants:
+    - `ToggleSelectedVisibility`
+    - `RenameNode { id, name }`
+    - `RenameSelected(String)`
+    - `FocusSelected`
+- src/core/app_core.rs
+  - Implemented handlers for new commands:
+    - selected visibility toggle via scene hidden set
+    - selected rename + direct node rename
+    - focus selected via `compute_subtree_sphere` + `camera.focus_on`
+  - Added tests:
+    - `toggle_selected_visibility_hides_selected_node`
+    - `rename_selected_updates_node_name`
+    - `focus_selected_updates_camera_target`
+- src/ui_slint/panels/read_model.rs
+  - Extended `build_panel_read_model` with `scene_tree_filter` input.
+  - Added scene-tree filtering path (flat filtered rows by node name).
+- src/ui_slint/mod.rs
+  - Added shell callback wiring for panel actions:
+    - delete selected
+    - toggle selected visibility
+    - focus selected
+    - rename selected (from shell text input)
+    - create point/spot/directional/ambient light
+  - Snapshot path now feeds scene-tree filter into panel read-model.
+- src/ui_slint/app_shell.slint
+  - Added panel control callbacks and inputs:
+    - scene-tree filter input
+    - rename-selected input + button
+    - delete/toggle-visibility/focus buttons
+    - light creation buttons (+Point/+Spot/+Dir/+Amb)
+- docs/slint_migration/panel_parity.md
+  - Updated checklist to mark completed interactive items for scene-tree and light creation actions.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS (483 passed)
+- cargo build: PASS
+
+Manual verification pending:
+- Run shell mode and verify:
+  - Scene-tree filter updates list text output.
+  - Rename selected changes selected node name.
+  - Toggle visibility marks selected node hidden and affects scene-tree markers.
+  - Delete removes selected node.
+  - Focus selected updates camera framing state.
+  - +Point/+Spot/+Dir/+Amb create lights and update Lights panel summary.
+
+--- Iteration 46: Slint default host mode switched to shell ---
+COMPLETED. `--frontend slint` now opens the Slint shell UI by default (buttons/panels visible) without requiring env configuration.
+
+Changes:
+- src/ui_slint/mod.rs
+  - Updated host selection logic in `run()`:
+    - Default path is shell mode.
+    - Winit viewport-only host now requires explicit `SDF_SLINT_HOST_MODE=viewport`.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS (483 passed)
+- cargo build: PASS
+
+Manual verification pending:
+- Launch with `cargo run -- --frontend slint` and confirm shell controls render by default.
+- Set `SDF_SLINT_HOST_MODE=viewport` to confirm viewport-only override still works.
+
+--- Iteration 47: Slint shell viewport lifecycle controls ---
+COMPLETED. Added explicit external viewport host process management to the Slint shell, with runtime status in UI and safe open/close behavior.
+
+Changes:
+- src/ui_slint/app_shell.slint
+  - Added shell properties:
+    - `viewportStatusText`
+    - `viewportWindowRunning`
+  - Added callback: `closeViewportWindow()`.
+  - Top toolbar now includes:
+    - `Open Viewport 3D`
+    - `Close Viewport 3D` (enabled only while running)
+  - Center viewport placeholder now shows live viewport host status text.
+- src/ui_slint/mod.rs
+  - Added `ViewportProcessController` to manage child process lifecycle:
+    - poll running state (`try_wait`)
+    - open viewport host window (`--frontend slint` + `SDF_SLINT_HOST_MODE=viewport`)
+    - close viewport host window (`kill` + `wait`)
+  - Snapshot updates now include viewport-running state and status text.
+  - Wired shell callbacks for open/close viewport actions with toast feedback.
+  - On shell exit, attempts graceful viewport host shutdown to avoid orphan process.
+  - Added `not(doc)` cfg guards for Slint runtime module path so doctests compile cleanly.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS (483 passed, doc-tests included)
+- cargo build: PASS
+
+Manual verification pending:
+- Launch shell mode and click `Open Viewport 3D`; confirm external viewport window appears and shell status changes to running.
+- Click `Open Viewport 3D` again; confirm no duplicate window spawn and status remains running.
+- Click `Close Viewport 3D`; confirm viewport window closes and shell status changes to stopped.
+- Close shell while viewport is open; confirm viewport host is terminated.

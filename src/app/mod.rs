@@ -1,6 +1,7 @@
 mod action_handler;
 pub(crate) mod actions;
 mod async_tasks;
+mod core_adapter;
 mod gpu_sync;
 mod input;
 mod sculpting;
@@ -792,3 +793,4 @@ impl eframe::App for SdfApp {
         self.settings.save();
     }
 }
+

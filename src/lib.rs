@@ -1,5 +1,6 @@
 mod app;
 mod compat;
+pub mod core;
 pub mod expression;
 mod export;
 mod gpu;
@@ -12,8 +13,64 @@ mod sculpt;
 mod sculpt_history;
 mod settings;
 mod ui;
+#[cfg(not(target_arch = "wasm32"))]
+mod ui_slint;
 
-// ── Native entry point ──────────────────────────────────────────────────────
+#[cfg(not(target_arch = "wasm32"))]
+fn parse_frontend_from_args() -> Option<settings::FrontendKind> {
+    let args: Vec<String> = std::env::args().collect();
+
+    for (idx, arg) in args.iter().enumerate() {
+        if let Some(raw) = arg.strip_prefix("--frontend=") {
+            if let Some(frontend) = settings::FrontendKind::from_str(raw) {
+                return Some(frontend);
+            }
+        }
+        if arg == "--frontend" {
+            if let Some(next) = args.get(idx + 1) {
+                if let Some(frontend) = settings::FrontendKind::from_str(next) {
+                    return Some(frontend);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn run_selected_frontend() -> Result<(), Box<dyn std::error::Error>> {
+    let settings = settings::Settings::load();
+
+    let selected_frontend = parse_frontend_from_args()
+        .or_else(|| {
+            std::env::var("SDF_FRONTEND")
+                .ok()
+                .and_then(|raw| settings::FrontendKind::from_str(&raw))
+        })
+        .unwrap_or(settings.preferred_frontend);
+
+    match selected_frontend {
+        settings::FrontendKind::Egui => {
+            #[cfg(feature = "legacy-egui-ui")]
+            {
+                run_native()
+                    .map_err(|err| -> Box<dyn std::error::Error> { Box::new(err) })
+            }
+            #[cfg(not(feature = "legacy-egui-ui"))]
+            {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Unsupported,
+                    "legacy-egui-ui feature is not enabled",
+                )
+                .into());
+            }
+        }
+        settings::FrontendKind::Slint => ui_slint::run_slint_shell(&settings),
+    }
+}
+
+// --- Native entry point ------------------------------------------------------
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn run_native() -> eframe::Result<()> {
@@ -69,7 +126,7 @@ pub fn run_native() -> eframe::Result<()> {
     )
 }
 
-// ── WASM entry point ────────────────────────────────────────────────────────
+// --- WASM entry point --------------------------------------------------------
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;

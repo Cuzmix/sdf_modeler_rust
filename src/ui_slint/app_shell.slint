@@ -1,0 +1,249 @@
+import { Button, CheckBox } from "std-widgets.slint";
+
+export component AppShell inherits Window {
+    title: "SDF Modeler (Slint Shell)";
+    preferred-width: 1360px;
+    preferred-height: 860px;
+
+    in-out property <string> fpsText: "FPS: --";
+    in-out property <string> selectionText: "Selection: none";
+    in-out property <string> sceneText: "Nodes: 0";
+    in-out property <string> undoText: "Undo: 0";
+    in-out property <string> toastText: "";
+    in-out property <bool> toastVisible: false;
+    in-out property <bool> debugEnabled: false;
+    in-out property <bool> settingsOpen: false;
+
+    in-out property <string> sceneTreePanelText: "";
+    in-out property <string> historyPanelText: "";
+    in-out property <string> lightsPanelText: "";
+    in-out property <string> propertiesPanelText: "";
+    in-out property <string> renderSettingsPanelText: "";
+    in-out property <string> sceneStatsPanelText: "";
+    in-out property <string> sceneTreeFilterText: "";
+    in-out property <string> renameSelectedInput: "";
+    in-out property <string> viewportStatusText: "Viewport window: stopped";
+    in-out property <bool> viewportWindowRunning: false;
+
+    callback fileNew();
+    callback fileOpen();
+    callback fileSave();
+    callback addSphere();
+    callback addPointLight();
+    callback addSpotLight();
+    callback addDirectionalLight();
+    callback addAmbientLight();
+    callback soloSelectedLight();
+    callback clearSoloLight();
+    callback deleteSelected();
+    callback toggleSelectedVisibility();
+    callback focusSelected();
+    callback renameSelected();
+    callback editUndo();
+    callback editRedo();
+    callback toolSelect();
+    callback toolSculpt();
+    callback toggleDebug();
+    callback toggleSettings();
+    callback openViewportWindow();
+    callback closeViewportWindow();
+
+    Rectangle {
+        background: #171922;
+        border-color: #2d3141;
+        border-width: 1px;
+
+        VerticalLayout {
+            spacing: 6px;
+            padding: 8px;
+
+            Rectangle {
+                min-height: 44px;
+                background: #1f2330;
+                border-color: #343a4f;
+                border-width: 1px;
+                HorizontalLayout {
+                    spacing: 6px;
+                    padding: 6px;
+                    Button { text: "New"; clicked => { root.fileNew(); } }
+                    Button { text: "Open"; clicked => { root.fileOpen(); } }
+                    Button { text: "Save"; clicked => { root.fileSave(); } }
+                    Rectangle { width: 12px; }
+                    Button { text: "Add Sphere"; clicked => { root.addSphere(); } }
+                    Button { text: "Undo"; clicked => { root.editUndo(); } }
+                    Button { text: "Redo"; clicked => { root.editRedo(); } }
+                    Button { text: "Delete"; clicked => { root.deleteSelected(); } }
+                    Button { text: "Toggle Vis"; clicked => { root.toggleSelectedVisibility(); } }
+                    Button { text: "Focus"; clicked => { root.focusSelected(); } }
+                    Rectangle { width: 12px; }
+                    Button { text: "Select Tool"; clicked => { root.toolSelect(); } }
+                    Button { text: "Open Viewport 3D"; clicked => { root.openViewportWindow(); } }
+                    Button {
+                        text: "Close Viewport 3D";
+                        enabled: root.viewportWindowRunning;
+                        clicked => { root.closeViewportWindow(); }
+                    }
+                    Button { text: "Sculpt Tool"; clicked => { root.toolSculpt(); } }
+                    Rectangle { width: 12px; }
+                    CheckBox {
+                        text: "Debug";
+                        checked: root.debugEnabled;
+                        toggled => { root.toggleDebug(); }
+                    }
+                    CheckBox {
+                        text: "Settings";
+                        checked: root.settingsOpen;
+                        toggled => { root.toggleSettings(); }
+                    }
+                }
+            }
+
+            HorizontalLayout {
+                spacing: 6px;
+
+                Rectangle {
+                    min-width: 320px;
+                    background: #1d202b;
+                    border-color: #30374a;
+                    border-width: 1px;
+                    VerticalLayout {
+                        padding: 10px;
+                        spacing: 8px;
+                        Text { text: "Scene Tree"; color: #dfe3ee; font-size: 15px; }
+                        HorizontalLayout {
+                            spacing: 4px;
+                            Text { text: "Filter:"; color: #aeb6c9; }
+                            TextInput { text <=> root.sceneTreeFilterText; }
+                        }
+                        HorizontalLayout {
+                            spacing: 4px;
+                            TextInput { text <=> root.renameSelectedInput; }
+                            Button { text: "Rename"; clicked => { root.renameSelected(); } }
+                        }
+                        Text {
+                            text: root.sceneTreePanelText;
+                            color: #aeb6c9;
+                            font-size: 12px;
+                            wrap: word-wrap;
+                        }
+                        Text { text: "History"; color: #dfe3ee; font-size: 15px; }
+                        Text {
+                            text: root.historyPanelText;
+                            color: #aeb6c9;
+                            font-size: 12px;
+                            wrap: word-wrap;
+                        }
+                        Text { text: "Lights"; color: #dfe3ee; font-size: 15px; }
+                        HorizontalLayout {
+                            spacing: 4px;
+                            Button { text: "+Point"; clicked => { root.addPointLight(); } }
+                            Button { text: "+Spot"; clicked => { root.addSpotLight(); } }
+                            Button { text: "+Dir"; clicked => { root.addDirectionalLight(); } }
+                            Button { text: "+Amb"; clicked => { root.addAmbientLight(); } }
+                        }
+                        HorizontalLayout {
+                            spacing: 4px;
+                            Button { text: "Solo Sel"; clicked => { root.soloSelectedLight(); } }
+                            Button { text: "Clear Solo"; clicked => { root.clearSoloLight(); } }
+                        }
+                        Text {
+                            text: root.lightsPanelText;
+                            color: #aeb6c9;
+                            font-size: 12px;
+                            wrap: word-wrap;
+                        }
+                    }
+                }
+
+                Rectangle {
+                    background: #12151d;
+                    border-color: #30374a;
+                    border-width: 1px;
+                    HorizontalLayout {
+                        padding: 10px;
+                        VerticalLayout {
+                            spacing: 8px;
+                            Text {
+                                text: "Viewport Placeholder (Slint shell stage)";
+                                color: #7f89a3;
+                                font-size: 18px;
+                            }
+                            Text {
+                                text: root.viewportStatusText;
+                                color: #a7b1cc;
+                                font-size: 14px;
+                            }
+                            Text {
+                                text: "Use 'Open Viewport 3D' to launch the active viewport host window.";
+                                color: #7f89a3;
+                                font-size: 13px;
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    min-width: 340px;
+                    background: #1d202b;
+                    border-color: #30374a;
+                    border-width: 1px;
+                    VerticalLayout {
+                        padding: 10px;
+                        spacing: 10px;
+                        Text { text: "Properties"; color: #dfe3ee; font-size: 15px; }
+                        Text {
+                            text: root.propertiesPanelText;
+                            color: #aeb6c9;
+                            font-size: 12px;
+                            wrap: word-wrap;
+                        }
+                        Text { text: "Render Settings"; color: #dfe3ee; font-size: 15px; }
+                        Text {
+                            text: root.renderSettingsPanelText;
+                            color: #aeb6c9;
+                            font-size: 12px;
+                            wrap: word-wrap;
+                        }
+                        Text { text: "Scene Stats"; color: #dfe3ee; font-size: 15px; }
+                        Text {
+                            text: root.sceneStatsPanelText;
+                            color: #aeb6c9;
+                            font-size: 12px;
+                            wrap: word-wrap;
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                min-height: 34px;
+                background: #1f2330;
+                border-color: #343a4f;
+                border-width: 1px;
+                HorizontalLayout {
+                    padding: 6px;
+                    spacing: 12px;
+                    Text { text: root.fpsText; color: #dfe3ee; }
+                    Text { text: root.selectionText; color: #dfe3ee; }
+                    Text { text: root.sceneText; color: #dfe3ee; }
+                    Text { text: root.undoText; color: #dfe3ee; }
+                }
+            }
+
+            if root.toastVisible : Rectangle {
+                min-height: 30px;
+                background: #27404a;
+                border-color: #4b7a8a;
+                border-width: 1px;
+                Text {
+                    text: root.toastText;
+                    color: #e7f6fb;
+                    vertical-alignment: center;
+                    horizontal-alignment: center;
+                }
+            }
+        }
+    }
+}
+
+

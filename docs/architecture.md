@@ -119,6 +119,24 @@ The `eframe::App::update()` method in `src/app/mod.rs` runs every frame in 8 pha
 
 8. **Finalize** — Call `history.end_frame()` to commit undo snapshot if scene changed. Determine if repaint is needed (dragging, animating, sculpting, async tasks). Request repaint only when necessary (avoids idle GPU spin).
 
+### 1.5 UI-Agnostic Core Adapter (Migration Step)
+
+To prepare for Slint frontend migration, the app now includes a framework-neutral core module at `src/core/`.
+
+Current data flow for migrated commands:
+
+```text
+UI (egui) -> Action -> core_adapter -> CoreCommand -> AppCore -> CoreCommandResult
+                                                   -> CoreSnapshot (read model)
+```
+
+- `AppCore` owns scene, history, camera, selection, tool state, and async status flags.
+- `CoreCommand` is the neutral write interface (selection, create/delete, undo/redo, transform patch).
+- `CoreSnapshot` is the neutral read interface for future non-egui frontends.
+- `src/app/core_adapter.rs` bridges existing `Action` handling to `AppCore` while the rest of the egui reducer remains intact.
+
+This keeps existing behavior stable while moving mutation logic into a reusable core layer.
+
 ---
 
 ## 2. Module-by-Module Documentation
@@ -1110,3 +1128,4 @@ src/shaders/
 ├── voxel_sampling.wgsl, pick.wgsl, brush.wgsl, blit.wgsl
 └── composite_entry.wgsl
 ```
+

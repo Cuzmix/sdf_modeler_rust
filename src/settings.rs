@@ -2,6 +2,30 @@ use serde::{Deserialize, Serialize};
 
 use crate::keymap::KeymapConfig;
 
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum FrontendKind {
+    #[default]
+    Egui,
+    Slint,
+}
+
+impl FrontendKind {
+    pub fn from_str(value: &str) -> Option<Self> {
+        match value.to_ascii_lowercase().as_str() {
+            "egui" | "legacy" => Some(Self::Egui),
+            "slint" => Some(Self::Slint),
+            _ => None,
+        }
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Egui => "egui",
+            Self::Slint => "slint",
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, PartialEq, Default)]
 pub enum BackgroundMode {
     #[default]
@@ -146,6 +170,8 @@ pub struct Settings {
     pub export_presets: Vec<ExportPreset>,
     #[serde(default)]
     pub keymap: KeymapConfig,
+    #[serde(default)]
+    pub preferred_frontend: FrontendKind,
     #[serde(default = "default_true")]
     pub last_clean_exit: bool,
 }
@@ -168,6 +194,7 @@ impl Default for Settings {
             bookmarks: default_bookmarks(),
             export_presets: default_export_presets(),
             keymap: KeymapConfig::default(),
+            preferred_frontend: FrontendKind::Egui,
             last_clean_exit: true,
         }
     }
@@ -650,3 +677,6 @@ impl RenderConfig {
             || self.outline_thickness != other.outline_thickness
     }
 }
+
+
+

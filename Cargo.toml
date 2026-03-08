@@ -14,6 +14,11 @@ debug = true  # include debug symbols for profiling (flamegraph, samply)
 [lib]
 crate-type = ["rlib"]
 
+[features]
+default = ["legacy-egui-ui", "slint-ui"]
+legacy-egui-ui = []
+slint-ui = ["dep:slint"]
+
 [dependencies]
 eframe = { version = "0.29", default-features = false, features = [
     "accesskit", "default_fonts", "wgpu", "wayland", "x11",
@@ -25,6 +30,9 @@ bytemuck = { version = "1", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 log = "0.4"
+slint = { version = "1.15.1", optional = true }
+pollster = "0.4"
+winit = "0.30.12"
 
 [dev-dependencies]
 naga = { version = "22.1", features = ["wgsl-in"] }
@@ -49,3 +57,6 @@ console_error_panic_hook = "0.1"
 
 [patch.crates-io]
 egui_node_graph2 = { path = "third_party/egui_node_graph2" }
+
+[build-dependencies]
+slint-build = "1.15.1"

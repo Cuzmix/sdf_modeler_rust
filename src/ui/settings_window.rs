@@ -2,7 +2,7 @@ use eframe::egui;
 
 use crate::app::actions::{Action, ActionSink};
 use crate::keymap::{ActionBinding, KeyCombo, KeymapConfig, SerializableKey};
-use crate::settings::Settings;
+use crate::settings::{FrontendKind, Settings};
 
 /// Draw the System Settings window. Pushes `Action::SettingsChanged` if a
 /// shader-affecting setting changed.
@@ -15,7 +15,8 @@ pub fn draw(
     actions: &mut ActionSink,
     rebinding_action: &mut Option<ActionBinding>,
 ) {
-    let before = settings.render.clone();
+    let before_render = settings.render.clone();
+    let before_frontend = settings.preferred_frontend;
     let mut imported = false;
 
     egui::Window::new("Settings")
@@ -54,6 +55,25 @@ pub fn draw(
                         ui.checkbox(show_debug, "Show Profiler")
                             .on_hover_text("Toggle the profiler window (F4)");
                         ui.separator();
+                        ui.horizontal(|ui| {
+                            ui.label("Frontend");
+                            egui::ComboBox::from_id_salt("preferred_frontend")
+                                .selected_text(settings.preferred_frontend.label())
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(
+                                        &mut settings.preferred_frontend,
+                                        FrontendKind::Egui,
+                                        FrontendKind::Egui.label(),
+                                    );
+                                    ui.selectable_value(
+                                        &mut settings.preferred_frontend,
+                                        FrontendKind::Slint,
+                                        FrontendKind::Slint.label(),
+                                    );
+                                });
+                        });
+                        ui.small("(applies on next launch)");
+                        ui.separator();
                         ui.checkbox(&mut settings.vsync_enabled, "VSync");
                         if settings.vsync_enabled != initial_vsync {
                             ui.weak("(restart required)");
@@ -75,7 +95,7 @@ pub fn draw(
                         ui.checkbox(&mut settings.render.show_light_gizmos, "Show Light Gizmos")
                             .on_hover_text("Display billboard icons and wireframe gizmos for light nodes");
                         ui.checkbox(&mut settings.render.clamp_orbit_pitch, "Clamp Orbit Pitch")
-                            .on_hover_text("Limit vertical orbit to ±89°. When off, allows full 360° gimbal rotation.");
+                            .on_hover_text("Limit vertical orbit to +/-89 deg. When off, allows full 360 deg gimbal rotation.");
                         ui.separator();
                         labeled_slider(ui, "Roll Sensitivity", &mut settings.render.roll_sensitivity, 0.001..=0.02, false,
                             "How fast Ctrl+Alt+drag and touch twist roll the camera");
@@ -90,7 +110,7 @@ pub fn draw(
                         ui.label("Hold Ctrl while dragging a gizmo to snap.");
                         labeled_slider(ui, "Translate", &mut settings.snap.translate_snap, 0.05..=2.0, false,
                             "Snap increment for position (world units)");
-                        labeled_slider(ui, "Rotate (°)", &mut settings.snap.rotate_snap, 1.0..=90.0, false,
+                        labeled_slider(ui, "Rotate (deg)", &mut settings.snap.rotate_snap, 1.0..=90.0, false,
                             "Snap increment for rotation (degrees)");
                         labeled_slider(ui, "Scale", &mut settings.snap.scale_snap, 0.01..=1.0, false,
                             "Snap increment for scale");
@@ -155,7 +175,7 @@ pub fn draw(
                             ui.colored_label(
                                 egui::Color32::from_rgb(255, 100, 100),
                                 format!(
-                                    "Exceeds GPU buffer limit ({} MB > {} MB) — will be rejected at bake time.",
+                                    "Exceeds GPU buffer limit ({} MB > {} MB) -- will be rejected at bake time.",
                                     voxel_bytes / (1024 * 1024),
                                     gpu_limit_bytes / (1024 * 1024),
                                 ),
@@ -229,7 +249,7 @@ pub fn draw(
             });
         });
 
-    if imported || settings.render != before {
+    if imported || settings.render != before_render || settings.preferred_frontend != before_frontend {
         actions.push(Action::SettingsChanged);
     }
 }
@@ -309,7 +329,7 @@ fn draw_binding_row(
         ui.colored_label(egui::Color32::YELLOW, "Press key...");
     } else {
         let shortcut_text = keymap.format_shortcut(action)
-            .unwrap_or_else(|| "—".to_string());
+            .unwrap_or_else(|| "--".to_string());
         ui.monospace(&shortcut_text);
     }
 
@@ -433,3 +453,4 @@ fn labeled_slider(
         ui.add(slider);
     });
 }
+
