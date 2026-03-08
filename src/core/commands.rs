@@ -76,5 +76,3 @@ pub struct CoreCommandResult {
     pub pending_center_node: Option<NodeId>,
     pub toast_message: Option<String>,
 }
-
-

@@ -31,8 +31,12 @@ fn ease_out_cubic(t: f32) -> f32 {
 fn lerp_angle(a: f32, b: f32, t: f32) -> f32 {
     let mut diff = b - a;
     // Wrap to [-PI, PI]
-    while diff > std::f32::consts::PI { diff -= std::f32::consts::TAU; }
-    while diff < -std::f32::consts::PI { diff += std::f32::consts::TAU; }
+    while diff > std::f32::consts::PI {
+        diff -= std::f32::consts::TAU;
+    }
+    while diff < -std::f32::consts::PI {
+        diff += std::f32::consts::TAU;
+    }
     a + diff * t
 }
 
@@ -79,7 +83,11 @@ impl Camera {
     }
 
     fn up(&self) -> Vec3 {
-        if self.pitch.cos() >= 0.0 { Vec3::Y } else { Vec3::NEG_Y }
+        if self.pitch.cos() >= 0.0 {
+            Vec3::Y
+        } else {
+            Vec3::NEG_Y
+        }
     }
 
     pub fn view_matrix(&self) -> Mat4 {
@@ -131,7 +139,12 @@ impl Camera {
             quality_mode,
             grid_enabled: if grid_enabled { 1.0 } else { 0.0 },
             selected_idx,
-            scene_min: [scene_bounds.0[0], scene_bounds.0[1], scene_bounds.0[2], shading_mode],
+            scene_min: [
+                scene_bounds.0[0],
+                scene_bounds.0[1],
+                scene_bounds.0[2],
+                shading_mode,
+            ],
             scene_max: [scene_bounds.1[0], scene_bounds.1[1], scene_bounds.1[2], 0.0],
             brush_pos,
             cross_section,

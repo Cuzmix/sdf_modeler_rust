@@ -3,10 +3,10 @@ use std::io::Write;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
+use crate::compat::maybe_par_iter;
 use glam::Vec3;
 #[cfg(not(target_arch = "wasm32"))]
 use rayon::prelude::*;
-use crate::compat::maybe_par_iter;
 
 use crate::graph::scene::{NodeData, Scene};
 use crate::graph::voxel;
@@ -325,22 +325,34 @@ pub struct ExportMesh {
 
 /// Corner offsets for a unit cube (matches edge/tri table convention).
 const CORNERS: [[u32; 3]; 8] = [
-    [0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0],
-    [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1],
+    [0, 0, 0],
+    [1, 0, 0],
+    [1, 1, 0],
+    [0, 1, 0],
+    [0, 0, 1],
+    [1, 0, 1],
+    [1, 1, 1],
+    [0, 1, 1],
 ];
 
 /// Each edge connects two corners (indices into CORNERS).
 const EDGE_CORNERS: [[usize; 2]; 12] = [
-    [0, 1], [1, 2], [2, 3], [3, 0],
-    [4, 5], [5, 6], [6, 7], [7, 4],
-    [0, 4], [1, 5], [2, 6], [3, 7],
+    [0, 1],
+    [1, 2],
+    [2, 3],
+    [3, 0],
+    [4, 5],
+    [5, 6],
+    [6, 7],
+    [7, 4],
+    [0, 4],
+    [1, 5],
+    [2, 6],
+    [3, 7],
 ];
 
 /// Interpolate vertex position along an edge where the SDF crosses zero.
-fn interp_vertex(
-    p0: Vec3, v0: f32,
-    p1: Vec3, v1: f32,
-) -> Vec3 {
+fn interp_vertex(p0: Vec3, v0: f32, p1: Vec3, v1: f32) -> Vec3 {
     if (v1 - v0).abs() < 1e-10 {
         return p0;
     }
@@ -377,7 +389,11 @@ fn collect_leaf_colors(scene: &Scene) -> Vec<(crate::graph::scene::NodeId, [f32;
 }
 
 /// Find the color of the closest leaf node at a given point.
-fn sample_color_at(scene: &Scene, p: Vec3, leaves: &[(crate::graph::scene::NodeId, [f32; 3])]) -> [f32; 3] {
+fn sample_color_at(
+    scene: &Scene,
+    p: Vec3,
+    leaves: &[(crate::graph::scene::NodeId, [f32; 3])],
+) -> [f32; 3] {
     let mut best_dist = f32::MAX;
     let mut best_color = [0.5, 0.5, 0.5];
     for &(id, color) in leaves {
@@ -444,7 +460,11 @@ pub fn marching_cubes(
                         let gy = y + c[1] as usize;
                         let gz = z + c[2] as usize;
                         let v = coarse_slices[gz][gy * coarse_gs + gx];
-                        if v < 0.0 { has_neg = true; } else { has_pos = true; }
+                        if v < 0.0 {
+                            has_neg = true;
+                        } else {
+                            has_pos = true;
+                        }
                     }
                     if has_neg && has_pos {
                         coarse_active[z * coarse_div * coarse_div + y * coarse_div + x] = true;
@@ -466,7 +486,9 @@ pub fn marching_cubes(
                                     let ny = (y + dy).wrapping_sub(1);
                                     let nz = (z + dz).wrapping_sub(1);
                                     if nx < coarse_div && ny < coarse_div && nz < coarse_div {
-                                        expanded[nz * coarse_div * coarse_div + ny * coarse_div + nx] = true;
+                                        expanded
+                                            [nz * coarse_div * coarse_div + ny * coarse_div + nx] =
+                                            true;
                                     }
                                 }
                             }
@@ -573,16 +595,18 @@ pub fn marching_cubes(
                     for e in 0..12 {
                         if edges & (1 << e) != 0 {
                             let [c0, c1] = EDGE_CORNERS[e];
-                            let p0 = bounds_min + Vec3::new(
-                                (x + CORNERS[c0][0] as usize) as f32,
-                                (y + CORNERS[c0][1] as usize) as f32,
-                                (z + CORNERS[c0][2] as usize) as f32,
-                            ) * step;
-                            let p1 = bounds_min + Vec3::new(
-                                (x + CORNERS[c1][0] as usize) as f32,
-                                (y + CORNERS[c1][1] as usize) as f32,
-                                (z + CORNERS[c1][2] as usize) as f32,
-                            ) * step;
+                            let p0 = bounds_min
+                                + Vec3::new(
+                                    (x + CORNERS[c0][0] as usize) as f32,
+                                    (y + CORNERS[c0][1] as usize) as f32,
+                                    (z + CORNERS[c0][2] as usize) as f32,
+                                ) * step;
+                            let p1 = bounds_min
+                                + Vec3::new(
+                                    (x + CORNERS[c1][0] as usize) as f32,
+                                    (y + CORNERS[c1][1] as usize) as f32,
+                                    (z + CORNERS[c1][2] as usize) as f32,
+                                ) * step;
                             edge_verts[e] = interp_vertex(p0, vals[c0], p1, vals[c1]);
                         }
                     }
@@ -643,7 +667,11 @@ pub fn marching_cubes(
         }
 
         for tri in &local_tris {
-            triangles.push([remap[tri[0] as usize], remap[tri[1] as usize], remap[tri[2] as usize]]);
+            triangles.push([
+                remap[tri[0] as usize],
+                remap[tri[1] as usize],
+                remap[tri[2] as usize],
+            ]);
         }
     }
 
@@ -661,13 +689,22 @@ pub fn marching_cubes(
         return None;
     }
 
-    Some(ExportMesh { vertices, triangles, vertex_colors })
+    Some(ExportMesh {
+        vertices,
+        triangles,
+        vertex_colors,
+    })
 }
 
 pub fn write_obj_to(mesh: &ExportMesh, writer: &mut impl Write) -> Result<(), String> {
     writeln!(writer, "# SDF Modeler Export").map_err(|e| e.to_string())?;
-    writeln!(writer, "# Vertices: {}, Triangles: {}", mesh.vertices.len(), mesh.triangles.len())
-        .map_err(|e| e.to_string())?;
+    writeln!(
+        writer,
+        "# Vertices: {}, Triangles: {}",
+        mesh.vertices.len(),
+        mesh.triangles.len()
+    )
+    .map_err(|e| e.to_string())?;
 
     for v in &mesh.vertices {
         writeln!(writer, "v {} {} {}", v[0], v[1], v[2]).map_err(|e| e.to_string())?;
@@ -700,7 +737,8 @@ pub fn write_stl(mesh: &ExportMesh, path: &Path) -> Result<(), String> {
 
     // Triangle count (u32 LE)
     let num_tris = mesh.triangles.len() as u32;
-    w.write_all(&num_tris.to_le_bytes()).map_err(|e| e.to_string())?;
+    w.write_all(&num_tris.to_le_bytes())
+        .map_err(|e| e.to_string())?;
 
     for tri in &mesh.triangles {
         let v0 = Vec3::from(mesh.vertices[tri[0] as usize]);
@@ -719,7 +757,8 @@ pub fn write_stl(mesh: &ExportMesh, path: &Path) -> Result<(), String> {
             }
         }
         // Attribute byte count
-        w.write_all(&0u16.to_le_bytes()).map_err(|e| e.to_string())?;
+        w.write_all(&0u16.to_le_bytes())
+            .map_err(|e| e.to_string())?;
     }
 
     w.flush().map_err(|e| e.to_string())?;
@@ -754,7 +793,8 @@ pub fn write_ply(mesh: &ExportMesh, path: &Path) -> Result<(), String> {
             let r = (c[0].clamp(0.0, 1.0) * 255.0) as u8;
             let g = (c[1].clamp(0.0, 1.0) * 255.0) as u8;
             let b = (c[2].clamp(0.0, 1.0) * 255.0) as u8;
-            writeln!(w, "{} {} {} {} {} {}", v[0], v[1], v[2], r, g, b).map_err(|e| e.to_string())?;
+            writeln!(w, "{} {} {} {} {} {}", v[0], v[1], v[2], r, g, b)
+                .map_err(|e| e.to_string())?;
         } else {
             writeln!(w, "{} {} {}", v[0], v[1], v[2]).map_err(|e| e.to_string())?;
         }
@@ -776,7 +816,11 @@ pub fn write_glb(mesh: &ExportMesh, path: &Path) -> Result<(), String> {
 
     // --- Build binary buffer: [positions] [colors?] [indices] ---
     let pos_bytes = mesh.vertices.len() * 12; // 3 x f32
-    let col_bytes = if has_colors { mesh.vertex_colors.len() * 12 } else { 0 }; // 3 x f32
+    let col_bytes = if has_colors {
+        mesh.vertex_colors.len() * 12
+    } else {
+        0
+    }; // 3 x f32
     let idx_bytes = mesh.triangles.len() * 12; // 3 x u32
     let bin_len = pos_bytes + col_bytes + idx_bytes;
 
@@ -796,24 +840,35 @@ pub fn write_glb(mesh: &ExportMesh, path: &Path) -> Result<(), String> {
         format!(
             r#"{{"asset":{{"version":"2.0","generator":"SDF Modeler"}},"scene":0,"scenes":[{{"nodes":[0]}}],"nodes":[{{"mesh":0}}],"meshes":[{{"primitives":[{{"attributes":{{"POSITION":0,"COLOR_0":2}},"indices":1}}]}}],"accessors":[{{"bufferView":0,"componentType":5126,"count":{},"type":"VEC3","min":[{},{},{}],"max":[{},{},{}]}},{{"bufferView":2,"componentType":5125,"count":{},"type":"SCALAR"}},{{"bufferView":1,"componentType":5126,"count":{},"type":"VEC3"}}],"bufferViews":[{{"buffer":0,"byteOffset":0,"byteLength":{},"target":34962}},{{"buffer":0,"byteOffset":{},"byteLength":{},"target":34962}},{{"buffer":0,"byteOffset":{},"byteLength":{},"target":34963}}],"buffers":[{{"byteLength":{}}}]}}"#,
             mesh.vertices.len(),
-            pos_min[0], pos_min[1], pos_min[2],
-            pos_max[0], pos_max[1], pos_max[2],
+            pos_min[0],
+            pos_min[1],
+            pos_min[2],
+            pos_max[0],
+            pos_max[1],
+            pos_max[2],
             mesh.triangles.len() * 3,
             mesh.vertex_colors.len(),
             pos_bytes,
-            pos_bytes, col_bytes,
-            idx_offset, idx_bytes,
+            pos_bytes,
+            col_bytes,
+            idx_offset,
+            idx_bytes,
             bin_len,
         )
     } else {
         format!(
             r#"{{"asset":{{"version":"2.0","generator":"SDF Modeler"}},"scene":0,"scenes":[{{"nodes":[0]}}],"nodes":[{{"mesh":0}}],"meshes":[{{"primitives":[{{"attributes":{{"POSITION":0}},"indices":1}}]}}],"accessors":[{{"bufferView":0,"componentType":5126,"count":{},"type":"VEC3","min":[{},{},{}],"max":[{},{},{}]}},{{"bufferView":1,"componentType":5125,"count":{},"type":"SCALAR"}}],"bufferViews":[{{"buffer":0,"byteOffset":0,"byteLength":{},"target":34962}},{{"buffer":0,"byteOffset":{},"byteLength":{},"target":34963}}],"buffers":[{{"byteLength":{}}}]}}"#,
             mesh.vertices.len(),
-            pos_min[0], pos_min[1], pos_min[2],
-            pos_max[0], pos_max[1], pos_max[2],
+            pos_min[0],
+            pos_min[1],
+            pos_min[2],
+            pos_max[0],
+            pos_max[1],
+            pos_max[2],
             mesh.triangles.len() * 3,
             pos_bytes,
-            pos_bytes, idx_bytes,
+            pos_bytes,
+            idx_bytes,
             bin_len,
         )
     };
@@ -829,19 +884,27 @@ pub fn write_glb(mesh: &ExportMesh, path: &Path) -> Result<(), String> {
     let total_len = 12 + 8 + json_chunk_len + 8 + bin_chunk_len;
 
     // --- GLB Header ---
-    w.write_all(b"glTF").map_err(|e| e.to_string())?;                      // magic
-    w.write_all(&2u32.to_le_bytes()).map_err(|e| e.to_string())?;           // version
-    w.write_all(&(total_len as u32).to_le_bytes()).map_err(|e| e.to_string())?; // length
+    w.write_all(b"glTF").map_err(|e| e.to_string())?; // magic
+    w.write_all(&2u32.to_le_bytes())
+        .map_err(|e| e.to_string())?; // version
+    w.write_all(&(total_len as u32).to_le_bytes())
+        .map_err(|e| e.to_string())?; // length
 
     // --- JSON Chunk ---
-    w.write_all(&(json_chunk_len as u32).to_le_bytes()).map_err(|e| e.to_string())?;
-    w.write_all(&0x4E4F534Au32.to_le_bytes()).map_err(|e| e.to_string())?;  // "JSON"
+    w.write_all(&(json_chunk_len as u32).to_le_bytes())
+        .map_err(|e| e.to_string())?;
+    w.write_all(&0x4E4F534Au32.to_le_bytes())
+        .map_err(|e| e.to_string())?; // "JSON"
     w.write_all(json_bytes).map_err(|e| e.to_string())?;
-    for _ in 0..json_pad { w.write_all(b" ").map_err(|e| e.to_string())?; }
+    for _ in 0..json_pad {
+        w.write_all(b" ").map_err(|e| e.to_string())?;
+    }
 
     // --- BIN Chunk ---
-    w.write_all(&(bin_chunk_len as u32).to_le_bytes()).map_err(|e| e.to_string())?;
-    w.write_all(&0x004E4942u32.to_le_bytes()).map_err(|e| e.to_string())?;  // "BIN\0"
+    w.write_all(&(bin_chunk_len as u32).to_le_bytes())
+        .map_err(|e| e.to_string())?;
+    w.write_all(&0x004E4942u32.to_le_bytes())
+        .map_err(|e| e.to_string())?; // "BIN\0"
 
     // Positions
     for v in &mesh.vertices {
@@ -863,7 +926,9 @@ pub fn write_glb(mesh: &ExportMesh, path: &Path) -> Result<(), String> {
             w.write_all(&i.to_le_bytes()).map_err(|e| e.to_string())?;
         }
     }
-    for _ in 0..bin_pad { w.write_all(&[0u8]).map_err(|e| e.to_string())?; }
+    for _ in 0..bin_pad {
+        w.write_all(&[0u8]).map_err(|e| e.to_string())?;
+    }
 
     w.flush().map_err(|e| e.to_string())?;
     Ok(())
@@ -886,7 +951,9 @@ pub fn write_usda(mesh: &ExportMesh, path: &Path) -> Result<(), String> {
     // points
     write!(w, "    point3f[] points = [").map_err(|e| e.to_string())?;
     for (i, v) in mesh.vertices.iter().enumerate() {
-        if i > 0 { write!(w, ", ").map_err(|e| e.to_string())?; }
+        if i > 0 {
+            write!(w, ", ").map_err(|e| e.to_string())?;
+        }
         write!(w, "({}, {}, {})", v[0], v[1], v[2]).map_err(|e| e.to_string())?;
     }
     writeln!(w, "]").map_err(|e| e.to_string())?;
@@ -894,7 +961,9 @@ pub fn write_usda(mesh: &ExportMesh, path: &Path) -> Result<(), String> {
     // faceVertexCounts — all triangles
     write!(w, "    int[] faceVertexCounts = [").map_err(|e| e.to_string())?;
     for i in 0..mesh.triangles.len() {
-        if i > 0 { write!(w, ", ").map_err(|e| e.to_string())?; }
+        if i > 0 {
+            write!(w, ", ").map_err(|e| e.to_string())?;
+        }
         write!(w, "3").map_err(|e| e.to_string())?;
     }
     writeln!(w, "]").map_err(|e| e.to_string())?;
@@ -904,7 +973,9 @@ pub fn write_usda(mesh: &ExportMesh, path: &Path) -> Result<(), String> {
     let mut first = true;
     for t in &mesh.triangles {
         for &idx in t {
-            if !first { write!(w, ", ").map_err(|e| e.to_string())?; }
+            if !first {
+                write!(w, ", ").map_err(|e| e.to_string())?;
+            }
             write!(w, "{}", idx).map_err(|e| e.to_string())?;
             first = false;
         }
@@ -915,11 +986,17 @@ pub fn write_usda(mesh: &ExportMesh, path: &Path) -> Result<(), String> {
     if mesh.vertex_colors.len() == mesh.vertices.len() {
         write!(w, "    color3f[] primvars:displayColor = [").map_err(|e| e.to_string())?;
         for (i, c) in mesh.vertex_colors.iter().enumerate() {
-            if i > 0 { write!(w, ", ").map_err(|e| e.to_string())?; }
+            if i > 0 {
+                write!(w, ", ").map_err(|e| e.to_string())?;
+            }
             write!(w, "({}, {}, {})", c[0], c[1], c[2]).map_err(|e| e.to_string())?;
         }
         writeln!(w, "]").map_err(|e| e.to_string())?;
-        writeln!(w, "    uniform token primvars:displayColor:interpolation = \"vertex\"").map_err(|e| e.to_string())?;
+        writeln!(
+            w,
+            "    uniform token primvars:displayColor:interpolation = \"vertex\""
+        )
+        .map_err(|e| e.to_string())?;
     }
 
     writeln!(w, "}}").map_err(|e| e.to_string())?;
@@ -930,7 +1007,12 @@ pub fn write_usda(mesh: &ExportMesh, path: &Path) -> Result<(), String> {
 
 /// Write an ExportMesh to the given path, choosing format by file extension.
 pub fn write_mesh(mesh: &ExportMesh, path: &Path) -> Result<(), String> {
-    match path.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).as_deref() {
+    match path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
+        .as_deref()
+    {
         Some("stl") => write_stl(mesh, path),
         Some("ply") => write_ply(mesh, path),
         Some("glb") => write_glb(mesh, path),
@@ -952,7 +1034,7 @@ mod tests {
 
     use glam::Vec3;
 
-    use crate::graph::scene::{NodeData, NodeId, Scene, SdfPrimitive, CsgOp};
+    use crate::graph::scene::{CsgOp, NodeData, NodeId, Scene, SdfPrimitive};
 
     // -----------------------------------------------------------------------
     // Helpers
@@ -971,66 +1053,60 @@ mod tests {
     fn scene_with_sphere() -> (Scene, NodeId) {
         let mut scene = empty_scene();
         let name = scene.next_name("Sphere");
-        let id = scene.add_node(name, NodeData::Primitive {
-            kind: SdfPrimitive::Sphere,
-            position: Vec3::ZERO,
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-            color: Vec3::new(1.0, 0.0, 0.0),
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            voxel_grid: None,
-        });
+        let id = scene.add_node(
+            name,
+            NodeData::Primitive {
+                kind: SdfPrimitive::Sphere,
+                position: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                color: Vec3::new(1.0, 0.0, 0.0),
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
         (scene, id)
     }
 
     fn scene_with_box() -> (Scene, NodeId) {
         let mut scene = empty_scene();
         let name = scene.next_name("Box");
-        let id = scene.add_node(name, NodeData::Primitive {
-            kind: SdfPrimitive::Box,
-            position: Vec3::ZERO,
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-            color: Vec3::new(0.0, 1.0, 0.0),
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            voxel_grid: None,
-        });
+        let id = scene.add_node(
+            name,
+            NodeData::Primitive {
+                kind: SdfPrimitive::Box,
+                position: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                color: Vec3::new(0.0, 1.0, 0.0),
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
         (scene, id)
     }
 
     /// Build a simple mesh for format writer tests.
     fn sample_mesh() -> ExportMesh {
         ExportMesh {
-            vertices: vec![
-                [0.0, 0.0, 0.0],
-                [1.0, 0.0, 0.0],
-                [0.0, 1.0, 0.0],
-            ],
+            vertices: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
             triangles: vec![[0, 1, 2]],
-            vertex_colors: vec![
-                [1.0, 0.0, 0.0],
-                [0.0, 1.0, 0.0],
-                [0.0, 0.0, 1.0],
-            ],
+            vertex_colors: vec![[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
         }
     }
 
     /// Build a mesh with no vertex colors.
     fn sample_mesh_no_colors() -> ExportMesh {
         ExportMesh {
-            vertices: vec![
-                [0.0, 0.0, 0.0],
-                [1.0, 0.0, 0.0],
-                [0.0, 1.0, 0.0],
-            ],
+            vertices: vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
             triangles: vec![[0, 1, 2]],
             vertex_colors: vec![],
         }
@@ -1043,8 +1119,10 @@ mod tests {
     #[test]
     fn interp_vertex_midpoint_when_symmetric() {
         let result = interp_vertex(
-            Vec3::new(0.0, 0.0, 0.0), -1.0,
-            Vec3::new(2.0, 0.0, 0.0), 1.0,
+            Vec3::new(0.0, 0.0, 0.0),
+            -1.0,
+            Vec3::new(2.0, 0.0, 0.0),
+            1.0,
         );
         assert!((result.x - 1.0).abs() < 1e-6);
         assert!(result.y.abs() < 1e-6);
@@ -1053,18 +1131,17 @@ mod tests {
 
     #[test]
     fn interp_vertex_at_p0_when_v0_is_zero() {
-        let result = interp_vertex(
-            Vec3::new(0.0, 0.0, 0.0), 0.0,
-            Vec3::new(1.0, 0.0, 0.0), 1.0,
-        );
+        let result = interp_vertex(Vec3::new(0.0, 0.0, 0.0), 0.0, Vec3::new(1.0, 0.0, 0.0), 1.0);
         assert!((result.x - 0.0).abs() < 1e-6);
     }
 
     #[test]
     fn interp_vertex_at_p1_when_v1_is_zero() {
         let result = interp_vertex(
-            Vec3::new(0.0, 0.0, 0.0), -1.0,
-            Vec3::new(1.0, 0.0, 0.0), 0.0,
+            Vec3::new(0.0, 0.0, 0.0),
+            -1.0,
+            Vec3::new(1.0, 0.0, 0.0),
+            0.0,
         );
         assert!((result.x - 1.0).abs() < 1e-6);
     }
@@ -1073,26 +1150,27 @@ mod tests {
     fn interp_vertex_quarter_way() {
         // v0=-1, v1=3 → t = 1/4
         let result = interp_vertex(
-            Vec3::new(0.0, 0.0, 0.0), -1.0,
-            Vec3::new(4.0, 0.0, 0.0), 3.0,
+            Vec3::new(0.0, 0.0, 0.0),
+            -1.0,
+            Vec3::new(4.0, 0.0, 0.0),
+            3.0,
         );
         assert!((result.x - 1.0).abs() < 1e-5);
     }
 
     #[test]
     fn interp_vertex_equal_values_returns_p0() {
-        let result = interp_vertex(
-            Vec3::new(0.0, 0.0, 0.0), 1.0,
-            Vec3::new(1.0, 0.0, 0.0), 1.0,
-        );
+        let result = interp_vertex(Vec3::new(0.0, 0.0, 0.0), 1.0, Vec3::new(1.0, 0.0, 0.0), 1.0);
         assert!((result.x - 0.0).abs() < 1e-6);
     }
 
     #[test]
     fn interp_vertex_3d_interpolation() {
         let result = interp_vertex(
-            Vec3::new(0.0, 0.0, 0.0), -1.0,
-            Vec3::new(1.0, 2.0, 3.0), 1.0,
+            Vec3::new(0.0, 0.0, 0.0),
+            -1.0,
+            Vec3::new(1.0, 2.0, 3.0),
+            1.0,
         );
         assert!((result.x - 0.5).abs() < 1e-5);
         assert!((result.y - 1.0).abs() < 1e-5);
@@ -1157,14 +1235,17 @@ mod tests {
     fn collect_leaf_colors_skips_operations() {
         let mut scene = empty_scene();
         let name = scene.next_name("Union");
-        scene.add_node(name, NodeData::Operation {
-            op: CsgOp::Union,
-            left: None,
-            right: None,
-            smooth_k: 0.0,
-            steps: 0.0,
-            color_blend: -1.0,
-        });
+        scene.add_node(
+            name,
+            NodeData::Operation {
+                op: CsgOp::Union,
+                left: None,
+                right: None,
+                smooth_k: 0.0,
+                steps: 0.0,
+                color_blend: -1.0,
+            },
+        );
         let leaves = collect_leaf_colors(&scene);
         assert!(leaves.is_empty());
     }
@@ -1189,34 +1270,40 @@ mod tests {
         let mut scene = empty_scene();
         // Sphere at origin — red
         let name1 = scene.next_name("Sphere");
-        scene.add_node(name1, NodeData::Primitive {
-            kind: SdfPrimitive::Sphere,
-            position: Vec3::ZERO,
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-            color: Vec3::new(1.0, 0.0, 0.0),
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            voxel_grid: None,
-        });
+        scene.add_node(
+            name1,
+            NodeData::Primitive {
+                kind: SdfPrimitive::Sphere,
+                position: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                color: Vec3::new(1.0, 0.0, 0.0),
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
         // Sphere at (5,0,0) — blue
         let name2 = scene.next_name("Sphere");
-        scene.add_node(name2, NodeData::Primitive {
-            kind: SdfPrimitive::Sphere,
-            position: Vec3::new(5.0, 0.0, 0.0),
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-            color: Vec3::new(0.0, 0.0, 1.0),
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            voxel_grid: None,
-        });
+        scene.add_node(
+            name2,
+            NodeData::Primitive {
+                kind: SdfPrimitive::Sphere,
+                position: Vec3::new(5.0, 0.0, 0.0),
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                color: Vec3::new(0.0, 0.0, 1.0),
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
         let leaves = collect_leaf_colors(&scene);
         // Point at origin should be closest to red sphere
         let color = sample_color_at(&scene, Vec3::ZERO, &leaves);
@@ -1246,10 +1333,15 @@ mod tests {
         let scene = empty_scene();
         let progress = AtomicU32::new(0);
         let mesh = marching_cubes(
-            &scene, 8,
-            Vec3::splat(-2.0), Vec3::splat(2.0),
-            &progress, false, &AtomicBool::new(false),
-        ).unwrap();
+            &scene,
+            8,
+            Vec3::splat(-2.0),
+            Vec3::splat(2.0),
+            &progress,
+            false,
+            &AtomicBool::new(false),
+        )
+        .unwrap();
         assert!(mesh.triangles.is_empty());
         assert!(mesh.vertices.is_empty());
     }
@@ -1259,11 +1351,19 @@ mod tests {
         let (scene, _id) = scene_with_sphere();
         let progress = AtomicU32::new(0);
         let mesh = marching_cubes(
-            &scene, 16,
-            Vec3::splat(-2.0), Vec3::splat(2.0),
-            &progress, false, &AtomicBool::new(false),
-        ).unwrap();
-        assert!(!mesh.triangles.is_empty(), "sphere should produce triangles");
+            &scene,
+            16,
+            Vec3::splat(-2.0),
+            Vec3::splat(2.0),
+            &progress,
+            false,
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+        assert!(
+            !mesh.triangles.is_empty(),
+            "sphere should produce triangles"
+        );
         assert!(!mesh.vertices.is_empty(), "sphere should produce vertices");
     }
 
@@ -1272,17 +1372,25 @@ mod tests {
         let (scene, _id) = scene_with_sphere();
         let progress = AtomicU32::new(0);
         let mesh = marching_cubes(
-            &scene, 32,
-            Vec3::splat(-2.0), Vec3::splat(2.0),
-            &progress, false, &AtomicBool::new(false),
-        ).unwrap();
+            &scene,
+            32,
+            Vec3::splat(-2.0),
+            Vec3::splat(2.0),
+            &progress,
+            false,
+            &AtomicBool::new(false),
+        )
+        .unwrap();
         // All vertices should be approximately on the unit sphere surface
         for v in &mesh.vertices {
             let dist = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
             assert!(
                 (dist - 1.0).abs() < 0.15,
                 "vertex at [{}, {}, {}] has radius {}, expected ~1.0",
-                v[0], v[1], v[2], dist
+                v[0],
+                v[1],
+                v[2],
+                dist
             );
         }
     }
@@ -1292,10 +1400,15 @@ mod tests {
         let (scene, _id) = scene_with_box();
         let progress = AtomicU32::new(0);
         let mesh = marching_cubes(
-            &scene, 16,
-            Vec3::splat(-2.0), Vec3::splat(2.0),
-            &progress, false, &AtomicBool::new(false),
-        ).unwrap();
+            &scene,
+            16,
+            Vec3::splat(-2.0),
+            Vec3::splat(2.0),
+            &progress,
+            false,
+            &AtomicBool::new(false),
+        )
+        .unwrap();
         assert!(!mesh.triangles.is_empty(), "box should produce triangles");
     }
 
@@ -1304,10 +1417,15 @@ mod tests {
         let (scene, _id) = scene_with_sphere();
         let progress = AtomicU32::new(0);
         let mesh = marching_cubes(
-            &scene, 16,
-            Vec3::splat(-2.0), Vec3::splat(2.0),
-            &progress, false, &AtomicBool::new(false),
-        ).unwrap();
+            &scene,
+            16,
+            Vec3::splat(-2.0),
+            Vec3::splat(2.0),
+            &progress,
+            false,
+            &AtomicBool::new(false),
+        )
+        .unwrap();
         assert_eq!(mesh.vertex_colors.len(), mesh.vertices.len());
         // Sphere color is red (1,0,0)
         for c in &mesh.vertex_colors {
@@ -1320,10 +1438,15 @@ mod tests {
         let (scene, _id) = scene_with_sphere();
         let progress = AtomicU32::new(0);
         let _mesh = marching_cubes(
-            &scene, 8,
-            Vec3::splat(-2.0), Vec3::splat(2.0),
-            &progress, false, &AtomicBool::new(false),
-        ).unwrap();
+            &scene,
+            8,
+            Vec3::splat(-2.0),
+            Vec3::splat(2.0),
+            &progress,
+            false,
+            &AtomicBool::new(false),
+        )
+        .unwrap();
         // Progress should have been incremented (grid_size + res times)
         assert!(progress.load(Ordering::Relaxed) > 0);
     }
@@ -1333,14 +1456,24 @@ mod tests {
         let (scene, _id) = scene_with_sphere();
         let progress = AtomicU32::new(0);
         let mesh = marching_cubes(
-            &scene, 16,
-            Vec3::splat(-2.0), Vec3::splat(2.0),
-            &progress, false, &AtomicBool::new(false),
-        ).unwrap();
+            &scene,
+            16,
+            Vec3::splat(-2.0),
+            Vec3::splat(2.0),
+            &progress,
+            false,
+            &AtomicBool::new(false),
+        )
+        .unwrap();
         let vertex_count = mesh.vertices.len() as u32;
         for tri in &mesh.triangles {
             for &idx in tri {
-                assert!(idx < vertex_count, "triangle index {} out of bounds ({})", idx, vertex_count);
+                assert!(
+                    idx < vertex_count,
+                    "triangle index {} out of bounds ({})",
+                    idx,
+                    vertex_count
+                );
             }
         }
     }
@@ -1350,16 +1483,22 @@ mod tests {
         let (scene, _id) = scene_with_sphere();
         let progress = AtomicU32::new(0);
         let mesh = marching_cubes(
-            &scene, 16,
-            Vec3::splat(-2.0), Vec3::splat(2.0),
-            &progress, false, &AtomicBool::new(false),
-        ).unwrap();
+            &scene,
+            16,
+            Vec3::splat(-2.0),
+            Vec3::splat(2.0),
+            &progress,
+            false,
+            &AtomicBool::new(false),
+        )
+        .unwrap();
         // For a closed surface, vertices should be shared — # vertices << # triangle*3
         let total_vertex_refs = mesh.triangles.len() * 3;
         assert!(
             mesh.vertices.len() < total_vertex_refs,
             "expected deduplication: {} vertices vs {} references",
-            mesh.vertices.len(), total_vertex_refs
+            mesh.vertices.len(),
+            total_vertex_refs
         );
     }
 
@@ -1368,36 +1507,69 @@ mod tests {
         let (scene, _id) = scene_with_sphere();
         let progress1 = AtomicU32::new(0);
         let mesh_normal = marching_cubes(
-            &scene, 32,
-            Vec3::splat(-2.0), Vec3::splat(2.0),
-            &progress1, false, &AtomicBool::new(false),
-        ).unwrap();
+            &scene,
+            32,
+            Vec3::splat(-2.0),
+            Vec3::splat(2.0),
+            &progress1,
+            false,
+            &AtomicBool::new(false),
+        )
+        .unwrap();
         let progress2 = AtomicU32::new(0);
         let mesh_adaptive = marching_cubes(
-            &scene, 32,
-            Vec3::splat(-2.0), Vec3::splat(2.0),
-            &progress2, true, &AtomicBool::new(false),
-        ).unwrap();
+            &scene,
+            32,
+            Vec3::splat(-2.0),
+            Vec3::splat(2.0),
+            &progress2,
+            true,
+            &AtomicBool::new(false),
+        )
+        .unwrap();
         // Adaptive should still produce triangles
         assert!(!mesh_adaptive.triangles.is_empty());
         // Should produce roughly similar triangle counts (within 2x)
         let ratio = mesh_adaptive.triangles.len() as f64 / mesh_normal.triangles.len() as f64;
-        assert!(ratio > 0.5 && ratio < 2.0,
+        assert!(
+            ratio > 0.5 && ratio < 2.0,
             "adaptive ratio {} seems wrong (normal={}, adaptive={})",
-            ratio, mesh_normal.triangles.len(), mesh_adaptive.triangles.len());
+            ratio,
+            mesh_normal.triangles.len(),
+            mesh_adaptive.triangles.len()
+        );
     }
 
     #[test]
     fn marching_cubes_higher_resolution_more_triangles() {
         let (scene, _id) = scene_with_sphere();
         let p1 = AtomicU32::new(0);
-        let mesh_low = marching_cubes(&scene, 8, Vec3::splat(-2.0), Vec3::splat(2.0), &p1, false, &AtomicBool::new(false)).unwrap();
+        let mesh_low = marching_cubes(
+            &scene,
+            8,
+            Vec3::splat(-2.0),
+            Vec3::splat(2.0),
+            &p1,
+            false,
+            &AtomicBool::new(false),
+        )
+        .unwrap();
         let p2 = AtomicU32::new(0);
-        let mesh_high = marching_cubes(&scene, 16, Vec3::splat(-2.0), Vec3::splat(2.0), &p2, false, &AtomicBool::new(false)).unwrap();
+        let mesh_high = marching_cubes(
+            &scene,
+            16,
+            Vec3::splat(-2.0),
+            Vec3::splat(2.0),
+            &p2,
+            false,
+            &AtomicBool::new(false),
+        )
+        .unwrap();
         assert!(
             mesh_high.triangles.len() > mesh_low.triangles.len(),
             "higher resolution should produce more triangles: {} vs {}",
-            mesh_high.triangles.len(), mesh_low.triangles.len()
+            mesh_high.triangles.len(),
+            mesh_low.triangles.len()
         );
     }
 
@@ -1407,11 +1579,19 @@ mod tests {
         let progress = AtomicU32::new(0);
         // Bounds far from origin (sphere is at origin with radius 1)
         let mesh = marching_cubes(
-            &scene, 8,
-            Vec3::new(10.0, 10.0, 10.0), Vec3::new(12.0, 12.0, 12.0),
-            &progress, false, &AtomicBool::new(false),
-        ).unwrap();
-        assert!(mesh.triangles.is_empty(), "no geometry in bounds → no triangles");
+            &scene,
+            8,
+            Vec3::new(10.0, 10.0, 10.0),
+            Vec3::new(12.0, 12.0, 12.0),
+            &progress,
+            false,
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+        assert!(
+            mesh.triangles.is_empty(),
+            "no geometry in bounds → no triangles"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -1444,8 +1624,13 @@ mod tests {
     #[test]
     fn write_obj_to_multiple_triangles() {
         let mesh = ExportMesh {
-            vertices: vec![[0.0,0.0,0.0],[1.0,0.0,0.0],[0.0,1.0,0.0],[1.0,1.0,0.0]],
-            triangles: vec![[0,1,2],[1,3,2]],
+            vertices: vec![
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0],
+            ],
+            triangles: vec![[0, 1, 2], [1, 3, 2]],
             vertex_colors: vec![],
         };
         let mut buf = Vec::new();
@@ -1457,7 +1642,11 @@ mod tests {
 
     #[test]
     fn write_obj_to_empty_mesh() {
-        let mesh = ExportMesh { vertices: vec![], triangles: vec![], vertex_colors: vec![] };
+        let mesh = ExportMesh {
+            vertices: vec![],
+            triangles: vec![],
+            vertex_colors: vec![],
+        };
         let mut buf = Vec::new();
         write_obj_to(&mesh, &mut buf).unwrap();
         let output = String::from_utf8(buf).unwrap();
@@ -1500,8 +1689,13 @@ mod tests {
     #[test]
     fn write_stl_multiple_triangles() {
         let mesh = ExportMesh {
-            vertices: vec![[0.0,0.0,0.0],[1.0,0.0,0.0],[0.0,1.0,0.0],[1.0,1.0,0.0]],
-            triangles: vec![[0,1,2],[1,3,2]],
+            vertices: vec![
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0],
+            ],
+            triangles: vec![[0, 1, 2], [1, 3, 2]],
             vertex_colors: vec![],
         };
         let tmp = std::env::temp_dir().join("test_export_multi.stl");
@@ -1688,8 +1882,13 @@ mod tests {
     #[test]
     fn write_usda_face_vertex_counts_all_3() {
         let mesh = ExportMesh {
-            vertices: vec![[0.0,0.0,0.0],[1.0,0.0,0.0],[0.0,1.0,0.0],[1.0,1.0,0.0]],
-            triangles: vec![[0,1,2],[1,3,2]],
+            vertices: vec![
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0],
+                [1.0, 1.0, 0.0],
+            ],
+            triangles: vec![[0, 1, 2], [1, 3, 2]],
             vertex_colors: vec![],
         };
         let tmp = std::env::temp_dir().join("test_export_fvc.usda");
@@ -1823,49 +2022,63 @@ mod tests {
     fn marching_cubes_csg_union_produces_mesh() {
         let mut scene = empty_scene();
         let name1 = scene.next_name("Sphere");
-        let s1 = scene.add_node(name1, NodeData::Primitive {
-            kind: SdfPrimitive::Sphere,
-            position: Vec3::new(-0.5, 0.0, 0.0),
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-            color: Vec3::ONE,
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            voxel_grid: None,
-        });
+        let s1 = scene.add_node(
+            name1,
+            NodeData::Primitive {
+                kind: SdfPrimitive::Sphere,
+                position: Vec3::new(-0.5, 0.0, 0.0),
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
         let name2 = scene.next_name("Sphere");
-        let s2 = scene.add_node(name2, NodeData::Primitive {
-            kind: SdfPrimitive::Sphere,
-            position: Vec3::new(0.5, 0.0, 0.0),
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-            color: Vec3::ONE,
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            voxel_grid: None,
-        });
+        let s2 = scene.add_node(
+            name2,
+            NodeData::Primitive {
+                kind: SdfPrimitive::Sphere,
+                position: Vec3::new(0.5, 0.0, 0.0),
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
         let name_op = scene.next_name("Union");
-        scene.add_node(name_op, NodeData::Operation {
-            op: CsgOp::Union,
-            left: Some(s1),
-            right: Some(s2),
-            smooth_k: 0.0,
-            steps: 0.0,
-            color_blend: -1.0,
-        });
+        scene.add_node(
+            name_op,
+            NodeData::Operation {
+                op: CsgOp::Union,
+                left: Some(s1),
+                right: Some(s2),
+                smooth_k: 0.0,
+                steps: 0.0,
+                color_blend: -1.0,
+            },
+        );
 
         let progress = AtomicU32::new(0);
         let mesh = marching_cubes(
-            &scene, 16,
-            Vec3::splat(-3.0), Vec3::splat(3.0),
-            &progress, false, &AtomicBool::new(false),
-        ).unwrap();
+            &scene,
+            16,
+            Vec3::splat(-3.0),
+            Vec3::splat(3.0),
+            &progress,
+            false,
+            &AtomicBool::new(false),
+        )
+        .unwrap();
         assert!(!mesh.triangles.is_empty(), "CSG union should produce mesh");
     }
 }

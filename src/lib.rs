@@ -1,8 +1,9 @@
+#[cfg(feature = "legacy-egui-ui")]
 mod app;
 mod compat;
 pub mod core;
-pub mod expression;
 mod export;
+pub mod expression;
 mod gpu;
 mod graph;
 mod io;
@@ -39,10 +40,27 @@ fn parse_frontend_from_args() -> Option<settings::FrontendKind> {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+fn resolve_frontend_choice(requested: settings::FrontendKind) -> settings::FrontendKind {
+    match requested {
+        settings::FrontendKind::Egui
+            if !cfg!(feature = "legacy-egui-ui") && cfg!(feature = "slint-ui") =>
+        {
+            settings::FrontendKind::Slint
+        }
+        settings::FrontendKind::Slint
+            if !cfg!(feature = "slint-ui") && cfg!(feature = "legacy-egui-ui") =>
+        {
+            settings::FrontendKind::Egui
+        }
+        _ => requested,
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 pub fn run_selected_frontend() -> Result<(), Box<dyn std::error::Error>> {
     let settings = settings::Settings::load();
 
-    let selected_frontend = parse_frontend_from_args()
+    let selected_frontend_requested = parse_frontend_from_args()
         .or_else(|| {
             std::env::var("SDF_FRONTEND")
                 .ok()
@@ -50,33 +68,40 @@ pub fn run_selected_frontend() -> Result<(), Box<dyn std::error::Error>> {
         })
         .unwrap_or(settings.preferred_frontend);
 
+    let selected_frontend = resolve_frontend_choice(selected_frontend_requested);
+    if selected_frontend != selected_frontend_requested {
+        eprintln!(
+            "Requested frontend '{}' unavailable in this build; falling back to '{}'",
+            selected_frontend_requested.label(),
+            selected_frontend.label(),
+        );
+    }
+
     match selected_frontend {
         settings::FrontendKind::Egui => {
             #[cfg(feature = "legacy-egui-ui")]
             {
-                run_native()
-                    .map_err(|err| -> Box<dyn std::error::Error> { Box::new(err) })
+                run_native().map_err(|err| -> Box<dyn std::error::Error> { Box::new(err) })
             }
             #[cfg(not(feature = "legacy-egui-ui"))]
             {
-                return Err(std::io::Error::new(
+                Err(std::io::Error::new(
                     std::io::ErrorKind::Unsupported,
                     "legacy-egui-ui feature is not enabled",
                 )
-                .into());
+                .into())
             }
         }
         settings::FrontendKind::Slint => ui_slint::run_slint_shell(&settings),
     }
 }
-
 // --- Native entry point ------------------------------------------------------
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "legacy-egui-ui"))]
 pub fn run_native() -> eframe::Result<()> {
-    use std::sync::Arc;
     use eframe::egui;
-    use eframe::wgpu;
+    use std::sync::Arc;
+    use wgpu;
 
     env_logger::init();
 
@@ -128,16 +153,16 @@ pub fn run_native() -> eframe::Result<()> {
 
 // --- WASM entry point --------------------------------------------------------
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", feature = "legacy-egui-ui"))]
 use wasm_bindgen::prelude::*;
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", feature = "legacy-egui-ui"))]
 #[wasm_bindgen]
 pub struct WebHandle {
     runner: eframe::WebRunner,
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", feature = "legacy-egui-ui"))]
 #[wasm_bindgen]
 impl WebHandle {
     #[wasm_bindgen(constructor)]
@@ -152,8 +177,8 @@ impl WebHandle {
     #[wasm_bindgen]
     pub async fn start(&self, canvas_id: &str) -> Result<(), JsValue> {
         use std::sync::Arc;
-        use eframe::wgpu;
         use wasm_bindgen::JsCast;
+        use wgpu;
 
         let document = web_sys::window()
             .and_then(|w| w.document())

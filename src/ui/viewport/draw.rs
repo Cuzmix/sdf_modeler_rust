@@ -1,13 +1,11 @@
 use eframe::egui;
 use eframe::egui_wgpu;
-use eframe::wgpu;
+use wgpu;
 
 use crate::app::actions::{Action, ActionSink};
 use crate::gpu::camera::{Camera, CameraUniform};
 use crate::gpu::picking::PendingPick;
-use crate::graph::scene::{
-    CsgOp, ModifierKind, NodeData, NodeId, Scene, SdfPrimitive,
-};
+use crate::graph::scene::{CsgOp, ModifierKind, NodeData, NodeId, Scene, SdfPrimitive};
 use crate::sculpt::{self, ActiveTool, BrushMode, SculptState};
 use crate::settings::SnapConfig;
 use crate::ui::gizmo::{self, GizmoMode, GizmoSpace, GizmoState};
@@ -38,7 +36,12 @@ fn in_safety_border(pos: egui::Pos2, rect: egui::Rect, fraction: f32) -> bool {
 
 /// Standard slab-method ray-AABB intersection. Returns (t_enter, t_exit).
 /// If t_enter >= t_exit, the ray misses the box.
-fn ray_aabb(origin: glam::Vec3, dir: glam::Vec3, box_min: glam::Vec3, box_max: glam::Vec3) -> (f32, f32) {
+fn ray_aabb(
+    origin: glam::Vec3,
+    dir: glam::Vec3,
+    box_min: glam::Vec3,
+    box_max: glam::Vec3,
+) -> (f32, f32) {
     let inv_dir = glam::Vec3::new(1.0 / dir.x, 1.0 / dir.y, 1.0 / dir.z);
     let t1 = (box_min - origin) * inv_dir;
     let t2 = (box_max - origin) * inv_dir;
@@ -50,7 +53,11 @@ fn ray_aabb(origin: glam::Vec3, dir: glam::Vec3, box_min: glam::Vec3, box_max: g
 }
 
 /// Build a world-space ray from a screen-space cursor position.
-fn cursor_world_ray(camera: &Camera, rect: egui::Rect, cursor: egui::Pos2) -> (glam::Vec3, glam::Vec3) {
+fn cursor_world_ray(
+    camera: &Camera,
+    rect: egui::Rect,
+    cursor: egui::Pos2,
+) -> (glam::Vec3, glam::Vec3) {
     let aspect = (rect.width() / rect.height().max(1.0)).max(1e-5);
     let ndc_x = ((cursor.x - rect.min.x) / rect.width()) * 2.0 - 1.0;
     let ndc_y = -(((cursor.y - rect.min.y) / rect.height()) * 2.0 - 1.0);
@@ -109,9 +116,13 @@ fn cursor_in_sculpt_bounds(
         None => return false,
     };
     let (position, rotation, voxel_grid, input_child) = match &node.data {
-        NodeData::Sculpt { position, rotation, voxel_grid, input, .. } => {
-            (*position, *rotation, voxel_grid, *input)
-        }
+        NodeData::Sculpt {
+            position,
+            rotation,
+            voxel_grid,
+            input,
+            ..
+        } => (*position, *rotation, voxel_grid, *input),
         _ => return false,
     };
 
@@ -131,7 +142,12 @@ fn cursor_in_sculpt_bounds(
     let local_dir = sculpt::inverse_rotate_euler(ray_dir, rotation).normalize();
 
     // Ray-AABB intersection with voxel grid bounds
-    let (t_enter, t_exit) = ray_aabb(local_origin, local_dir, voxel_grid.bounds_min, voxel_grid.bounds_max);
+    let (t_enter, t_exit) = ray_aabb(
+        local_origin,
+        local_dir,
+        voxel_grid.bounds_min,
+        voxel_grid.bounds_max,
+    );
     if t_enter >= t_exit {
         return false; // Ray misses the voxel grid entirely
     }
@@ -576,9 +592,17 @@ pub fn draw(
     // Collect scene lights for the GPU (up to 8, sorted by distance to camera)
     let (scene_light_count, scene_light_list, scene_ambient) =
         crate::gpu::buffers::collect_scene_lights(scene, camera.eye(), soloed_light, time);
-    let volumetric_count = scene_light_list.iter().filter(|l| l.volumetric[0] > 0.5).count() as f32;
+    let volumetric_count = scene_light_list
+        .iter()
+        .filter(|l| l.volumetric[0] > 0.5)
+        .count() as f32;
     let volumetric_steps = render_config.volumetric_steps as f32;
-    let scene_light_info = [scene_light_count as f32, volumetric_count, volumetric_steps, 0.0];
+    let scene_light_info = [
+        scene_light_count as f32,
+        volumetric_count,
+        volumetric_steps,
+        0.0,
+    ];
     let mut scene_lights_flat = [[0.0_f32; 4]; 32];
     let mut scene_light_vol = [[0.0_f32; 4]; 8];
     for (i, light) in scene_light_list.iter().enumerate() {
@@ -591,7 +615,9 @@ pub fn draw(
 
     // Combine scene Ambient lights with render config fallback
     // Scene ambient color's luminance overrides config if any Ambient nodes exist
-    let ambient_luminance = scene_ambient.color.dot(glam::Vec3::new(0.2126, 0.7152, 0.0722));
+    let ambient_luminance = scene_ambient
+        .color
+        .dot(glam::Vec3::new(0.2126, 0.7152, 0.0722));
     let effective_ambient = if ambient_luminance > 0.0 {
         ambient_luminance
     } else {
@@ -697,7 +723,10 @@ pub fn draw(
     if sculpt_active {
         // Sculpt mode: same navigation as select mode, plus sculpt when over mesh.
         // CPU-side bounding sphere test gives instant orbit-vs-sculpt — zero GPU latency.
-        if !gizmo_consumed && response.dragged_by(egui::PointerButton::Primary) && !multi_touch_active {
+        if !gizmo_consumed
+            && response.dragged_by(egui::PointerButton::Primary)
+            && !multi_touch_active
+        {
             let drag_origin = ui.input(|i| i.pointer.press_origin());
             let in_border = drag_origin
                 .map(|origin| in_safety_border(origin, rect, render_config.sculpt_safety_border))
@@ -707,7 +736,9 @@ pub fn draw(
             // check if drag origin is inside. Instant, no async pipeline needed.
             let cursor_on_mesh = if !in_border {
                 drag_origin
-                    .map(|origin| cursor_in_sculpt_bounds(origin, sculpt_state, scene, camera, rect))
+                    .map(|origin| {
+                        cursor_in_sculpt_bounds(origin, sculpt_state, scene, camera, rect)
+                    })
                     .unwrap_or(false)
             } else {
                 false
@@ -826,11 +857,7 @@ pub fn draw(
         }
 
         // Minimal 2D crosshair cursor (3D shader ring is the primary brush preview)
-        if let SculptState::Active {
-            ref brush_mode,
-            ..
-        } = sculpt_state
-        {
+        if let SculptState::Active { ref brush_mode, .. } = sculpt_state {
             if let Some(hover_pos) = response.hover_pos() {
                 let modifiers = ui.input(|i| i.modifiers);
                 let effective_mode =
@@ -838,11 +865,8 @@ pub fn draw(
                 let mode_color = brush_cursor_color(&effective_mode);
 
                 // Small center dot
-                ui.painter().circle_filled(
-                    hover_pos,
-                    2.5,
-                    egui::Color32::from_white_alpha(180),
-                );
+                ui.painter()
+                    .circle_filled(hover_pos, 2.5, egui::Color32::from_white_alpha(180));
                 // Thin crosshair lines (6px each direction)
                 let cross = 6.0;
                 let stroke = egui::Stroke::new(1.0, mode_color);
@@ -922,8 +946,21 @@ pub fn draw(
                     (pos.x - rect.min.x) * pixels_per_point,
                     (pos.y - rect.min.y) * pixels_per_point,
                 ];
-                let pick_uniform =
-                    camera.to_uniform(viewport, time, 0.0, false, scene_bounds, -1.0, 0.0, [0.0; 4], [0.0; 4], 0.0, [0.0; 4], [[0.0; 4]; 32], [[0.0; 4]; 8]);
+                let pick_uniform = camera.to_uniform(
+                    viewport,
+                    time,
+                    0.0,
+                    false,
+                    scene_bounds,
+                    -1.0,
+                    0.0,
+                    [0.0; 4],
+                    [0.0; 4],
+                    0.0,
+                    [0.0; 4],
+                    [[0.0; 4]; 32],
+                    [[0.0; 4]; 8],
+                );
                 let ctrl_held = ui.input(|i| i.modifiers.ctrl);
                 output.pending_pick = Some(PendingPick {
                     mouse_pos: mouse_px,
@@ -1060,8 +1097,12 @@ pub fn draw(
         let text = format!("Sculpting: {}", node_name);
         let font = egui::FontId::proportional(13.0);
         let mut y_offset = 8.0;
-        if isolation_label.is_some() { y_offset += 16.0; }
-        if solo_label.is_some() { y_offset += 16.0; }
+        if isolation_label.is_some() {
+            y_offset += 16.0;
+        }
+        if solo_label.is_some() {
+            y_offset += 16.0;
+        }
         let pos = egui::pos2(rect.center().x, rect.min.y + y_offset);
         ui.painter().text(
             pos + egui::vec2(1.0, 1.0),
@@ -1171,7 +1212,10 @@ pub fn draw(
                     .circle_filled(b_screen, 4.0, egui::Color32::from_rgb(255, 220, 90));
 
                 let dist = a.distance(b);
-                let mid = egui::pos2((a_screen.x + b_screen.x) * 0.5, (a_screen.y + b_screen.y) * 0.5);
+                let mid = egui::pos2(
+                    (a_screen.x + b_screen.x) * 0.5,
+                    (a_screen.y + b_screen.y) * 0.5,
+                );
                 let label = format!("{:.3} units", dist);
                 let font = egui::FontId::monospace(11.0);
                 ui.painter().text(
@@ -1267,7 +1311,10 @@ pub fn draw(
                 // Primitives — flow layout wraps based on window width
                 ui.horizontal_wrapped(|ui| {
                     for prim in SdfPrimitive::ALL {
-                        if ui.add(egui::Button::new(prim.base_name()).min_size(btn_size)).clicked() {
+                        if ui
+                            .add(egui::Button::new(prim.base_name()).min_size(btn_size))
+                            .clicked()
+                        {
                             actions.push(Action::CreatePrimitive(prim.clone()));
                         }
                     }
@@ -1279,7 +1326,10 @@ pub fn draw(
                 ui.label(egui::RichText::new("Boolean").size(11.0).weak());
                 ui.horizontal_wrapped(|ui| {
                     for op in CsgOp::ALL {
-                        if ui.add(egui::Button::new(op.base_name()).min_size(btn_size)).clicked() {
+                        if ui
+                            .add(egui::Button::new(op.base_name()).min_size(btn_size))
+                            .clicked()
+                        {
                             let tops = scene.top_level_nodes();
                             if tops.len() >= 2 {
                                 let left = Some(tops[tops.len() - 2]);
@@ -1300,7 +1350,10 @@ pub fn draw(
                     ui.label(egui::RichText::new("Modify").size(11.0).weak());
                     ui.horizontal_wrapped(|ui| {
                         for kind in ModifierKind::ALL {
-                            if ui.add(egui::Button::new(kind.base_name()).min_size(btn_size)).clicked() {
+                            if ui
+                                .add(egui::Button::new(kind.base_name()).min_size(btn_size))
+                                .clicked()
+                            {
                                 actions.push(Action::InsertModifierAbove {
                                     target: sel_id,
                                     kind: kind.clone(),

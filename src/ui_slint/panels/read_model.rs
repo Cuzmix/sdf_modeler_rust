@@ -16,9 +16,17 @@ pub struct PanelReadModel {
     pub properties_text: String,
 }
 
-pub fn build_panel_read_model(core: &AppCore, settings: &Settings, scene_tree_filter: &str) -> PanelReadModel {
+pub fn build_panel_read_model(
+    core: &AppCore,
+    settings: &Settings,
+    scene_tree_filter: &str,
+) -> PanelReadModel {
     PanelReadModel {
-        scene_tree_text: build_scene_tree_text(&core.scene, core.selection.primary, scene_tree_filter),
+        scene_tree_text: build_scene_tree_text(
+            &core.scene,
+            core.selection.primary,
+            scene_tree_filter,
+        ),
         history_text: build_history_text(core),
         lights_text: build_lights_text(core),
         render_settings_text: build_render_settings_text(settings),
@@ -27,7 +35,11 @@ pub fn build_panel_read_model(core: &AppCore, settings: &Settings, scene_tree_fi
     }
 }
 
-fn build_scene_tree_text(scene: &Scene, selected_primary: Option<NodeId>, filter_text: &str) -> String {
+fn build_scene_tree_text(
+    scene: &Scene,
+    selected_primary: Option<NodeId>,
+    filter_text: &str,
+) -> String {
     let top_level = scene.top_level_nodes();
     if top_level.is_empty() {
         return "Empty scene".to_string();
@@ -56,7 +68,11 @@ fn build_scene_tree_text(scene: &Scene, selected_primary: Option<NodeId>, filter
 
         for node_id in matching_ids {
             if let Some(node) = scene.nodes.get(&node_id) {
-                let selected_marker = if selected_primary == Some(node_id) { "*" } else { " " };
+                let selected_marker = if selected_primary == Some(node_id) {
+                    "*"
+                } else {
+                    " "
+                };
                 let hidden_marker = if scene.is_hidden(node_id) { "H" } else { " " };
                 let _ = writeln!(
                     output,
@@ -74,7 +90,14 @@ fn build_scene_tree_text(scene: &Scene, selected_primary: Option<NodeId>, filter
 
     let mut visited = HashSet::new();
     for node_id in top_level {
-        append_scene_tree_node(scene, node_id, 0, selected_primary, &mut visited, &mut output);
+        append_scene_tree_node(
+            scene,
+            node_id,
+            0,
+            selected_primary,
+            &mut visited,
+            &mut output,
+        );
     }
     output
 }
@@ -117,17 +140,38 @@ fn append_scene_tree_node(
     match &node.data {
         NodeData::Operation { left, right, .. } => {
             if let Some(left_id) = left {
-                append_scene_tree_node(scene, *left_id, depth + 1, selected_primary, visited, output);
+                append_scene_tree_node(
+                    scene,
+                    *left_id,
+                    depth + 1,
+                    selected_primary,
+                    visited,
+                    output,
+                );
             }
             if let Some(right_id) = right {
-                append_scene_tree_node(scene, *right_id, depth + 1, selected_primary, visited, output);
+                append_scene_tree_node(
+                    scene,
+                    *right_id,
+                    depth + 1,
+                    selected_primary,
+                    visited,
+                    output,
+                );
             }
         }
         NodeData::Sculpt { input, .. }
         | NodeData::Transform { input, .. }
         | NodeData::Modifier { input, .. } => {
             if let Some(input_id) = input {
-                append_scene_tree_node(scene, *input_id, depth + 1, selected_primary, visited, output);
+                append_scene_tree_node(
+                    scene,
+                    *input_id,
+                    depth + 1,
+                    selected_primary,
+                    visited,
+                    output,
+                );
             }
         }
         NodeData::Primitive { .. } | NodeData::Light { .. } => {}
@@ -254,13 +298,28 @@ fn build_render_settings_text(settings: &Settings) -> String {
     let _ = writeln!(
         output,
         "Scale rest/interact: {:.2}/{:.2}",
-        render.rest_render_scale,
-        render.interaction_render_scale
+        render.rest_render_scale, render.interaction_render_scale
     );
-    let _ = writeln!(output, "Shadows: {}", if render.shadows_enabled { "on" } else { "off" });
-    let _ = writeln!(output, "AO: {}", if render.ao_enabled { "on" } else { "off" });
-    let _ = writeln!(output, "Fog: {}", if render.fog_enabled { "on" } else { "off" });
-    let _ = writeln!(output, "Bloom: {}", if render.bloom_enabled { "on" } else { "off" });
+    let _ = writeln!(
+        output,
+        "Shadows: {}",
+        if render.shadows_enabled { "on" } else { "off" }
+    );
+    let _ = writeln!(
+        output,
+        "AO: {}",
+        if render.ao_enabled { "on" } else { "off" }
+    );
+    let _ = writeln!(
+        output,
+        "Fog: {}",
+        if render.fog_enabled { "on" } else { "off" }
+    );
+    let _ = writeln!(
+        output,
+        "Bloom: {}",
+        if render.bloom_enabled { "on" } else { "off" }
+    );
 
     output
 }
@@ -445,7 +504,10 @@ mod tests {
 
         let model: PanelReadModel = build_panel_read_model(&core, &settings, "");
 
-        assert!(model.scene_tree_text.contains("Primitive") || model.scene_tree_text.contains("Transform"));
+        assert!(
+            model.scene_tree_text.contains("Primitive")
+                || model.scene_tree_text.contains("Transform")
+        );
         assert!(model.history_text.contains("Undo:"));
         assert!(model.lights_text.contains("Active lights:"));
         assert!(model.render_settings_text.contains("Shading:"));
@@ -473,8 +535,3 @@ mod tests {
         assert_eq!(model.properties_text, "No selection");
     }
 }
-
-
-
-
-

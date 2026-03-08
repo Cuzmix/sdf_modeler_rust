@@ -51,8 +51,17 @@ pub fn draw(
             // Resolution presets
             ui.horizontal(|ui| {
                 ui.label("Resolution:");
-                for &(label, res) in &[("Low", 32u32), ("Medium", 64), ("High", 96), ("Ultra", 128), ("Extreme", 256)] {
-                    if ui.selectable_label(state.resolution == res, label).clicked() {
+                for &(label, res) in &[
+                    ("Low", 32u32),
+                    ("Medium", 64),
+                    ("High", 96),
+                    ("Ultra", 128),
+                    ("Extreme", 256),
+                ] {
+                    if ui
+                        .selectable_label(state.resolution == res, label)
+                        .clicked()
+                    {
                         state.resolution = res;
                     }
                 }
@@ -79,13 +88,17 @@ pub fn draw(
             let mem_mb = (voxels as f64 * 4.0) / (1024.0 * 1024.0);
             ui.weak(format!(
                 "{} voxels ({:.1} MB)",
-                format_voxel_count(voxels), mem_mb
+                format_voxel_count(voxels),
+                mem_mb
             ));
 
             if state.resolution > 256 {
                 ui.colored_label(
                     egui::Color32::from_rgb(255, 100, 100),
-                    format!("Warning: {:.0} MB RAM — may cause slowdowns or crashes", mem_mb),
+                    format!(
+                        "Warning: {:.0} MB RAM — may cause slowdowns or crashes",
+                        mem_mb
+                    ),
                 );
             } else if state.resolution > 128 {
                 ui.colored_label(

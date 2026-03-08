@@ -96,18 +96,23 @@ pub fn draw(
             let estimated_verts = estimated_tris * 3 / 2; // ~1.5 verts per tri after dedup
             ui.weak(format!(
                 "{} voxels ({:.1} MB)",
-                format_voxel_count(voxels), mem_mb
+                format_voxel_count(voxels),
+                mem_mb
             ));
             ui.weak(format!(
                 "~{} triangles, ~{} vertices (estimate for typical geometry)",
-                format_vertex_count(estimated_tris), format_vertex_count(estimated_verts)
+                format_vertex_count(estimated_tris),
+                format_vertex_count(estimated_verts)
             ));
 
             // Warnings
             if settings.export_resolution > 512 {
                 ui.colored_label(
                     egui::Color32::from_rgb(255, 100, 100),
-                    format!("Warning: {:.0} MB — export may take very long or run out of memory", mem_mb),
+                    format!(
+                        "Warning: {:.0} MB — export may take very long or run out of memory",
+                        mem_mb
+                    ),
                 );
             } else if settings.export_resolution > 256 {
                 ui.colored_label(
@@ -130,7 +135,10 @@ pub fn draw(
             // Export button
             let export_idle = matches!(export_status, ExportStatus::Idle);
             ui.horizontal(|ui| {
-                if ui.add_enabled(export_idle, egui::Button::new("Export...")).clicked() {
+                if ui
+                    .add_enabled(export_idle, egui::Button::new("Export..."))
+                    .clicked()
+                {
                     do_export = true;
                 }
                 if ui.button("Cancel").clicked() {

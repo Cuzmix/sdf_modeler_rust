@@ -52,7 +52,9 @@ impl SdfApp {
                 left: *left,
                 right: *right,
             }),
-            Action::CreateTransform { input } => Some(CoreCommand::CreateTransform { input: *input }),
+            Action::CreateTransform { input } => {
+                Some(CoreCommand::CreateTransform { input: *input })
+            }
             Action::CreateModifier { kind, input } => Some(CoreCommand::CreateModifier {
                 kind: kind.clone(),
                 input: *input,
@@ -75,8 +77,14 @@ impl SdfApp {
         };
         let async_state = CoreAsyncState {
             bake_in_progress: !matches!(self.async_state.bake_status, super::BakeStatus::Idle),
-            export_in_progress: !matches!(self.async_state.export_status, super::ExportStatus::Idle),
-            import_in_progress: !matches!(self.async_state.import_status, super::ImportStatus::Idle),
+            export_in_progress: !matches!(
+                self.async_state.export_status,
+                super::ExportStatus::Idle
+            ),
+            import_in_progress: !matches!(
+                self.async_state.import_status,
+                super::ImportStatus::Idle
+            ),
             pick_in_progress: !matches!(self.async_state.pick_state, super::PickState::Idle),
         };
 

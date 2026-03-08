@@ -3,7 +3,6 @@ use std::error::Error;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use eframe::wgpu;
 use pollster::block_on;
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalSize;
@@ -136,7 +135,8 @@ impl FramePacingTracker {
     fn record_frame(&mut self, work_time: Duration) {
         let now = Instant::now();
         if let Some(previous) = self.last_frame_time {
-            self.frame_intervals_ms.push((now - previous).as_secs_f32() * 1000.0);
+            self.frame_intervals_ms
+                .push((now - previous).as_secs_f32() * 1000.0);
         }
         self.last_frame_time = Some(now);
         self.busy_time += work_time;
@@ -344,7 +344,8 @@ impl GpuState {
 
         let shader_src = codegen::generate_shader(&core.scene, &settings.render);
         let pick_shader_src = codegen::generate_pick_shader(&core.scene, &settings.render);
-        let resources = ViewportResources::new(&device, config.format, &shader_src, &pick_shader_src);
+        let resources =
+            ViewportResources::new(&device, config.format, &shader_src, &pick_shader_src);
 
         Ok(Self {
             window,
@@ -411,10 +412,15 @@ impl SlintViewportApp {
         let structure_key = self.core.scene.structure_key();
         if structure_key != self.runtime.current_structure_key {
             let shader_src = codegen::generate_shader(&self.core.scene, &self.settings.render);
-            let pick_shader_src = codegen::generate_pick_shader(&self.core.scene, &self.settings.render);
+            let pick_shader_src =
+                codegen::generate_pick_shader(&self.core.scene, &self.settings.render);
             let sculpt_count = buffers::collect_sculpt_tex_info(&self.core.scene).len();
-            gpu.resources
-                .rebuild_pipeline(&gpu.device, &shader_src, &pick_shader_src, sculpt_count);
+            gpu.resources.rebuild_pipeline(
+                &gpu.device,
+                &shader_src,
+                &pick_shader_src,
+                sculpt_count,
+            );
             self.runtime.current_structure_key = structure_key;
             self.runtime.buffer_dirty = true;
         }
@@ -427,13 +433,18 @@ impl SlintViewportApp {
 
         if self.runtime.buffer_dirty {
             let (voxel_data, voxel_offsets) = buffers::build_voxel_buffer(&self.core.scene);
-            let node_data =
-                buffers::build_node_buffer(&self.core.scene, &self.core.selection.set, &voxel_offsets);
+            let node_data = buffers::build_node_buffer(
+                &self.core.scene,
+                &self.core.selection.set,
+                &voxel_offsets,
+            );
             let sculpt_infos = buffers::collect_sculpt_tex_info(&self.core.scene);
 
             self.runtime.voxel_gpu_offsets = voxel_offsets;
-            self.runtime.sculpt_tex_indices =
-                sculpt_infos.iter().map(|info| (info.node_id, info.tex_idx as u32)).collect();
+            self.runtime.sculpt_tex_indices = sculpt_infos
+                .iter()
+                .map(|info| (info.node_id, info.tex_idx as u32))
+                .collect();
 
             gpu.resources
                 .update_scene_buffer(&gpu.device, &gpu.queue, &node_data);
@@ -457,7 +468,12 @@ impl SlintViewportApp {
         }
     }
 
-    fn build_render_uniform(&self, viewport: ViewportRect, render_scale: f32, time_s: f32) -> CameraUniform {
+    fn build_render_uniform(
+        &self,
+        viewport: ViewportRect,
+        render_scale: f32,
+        time_s: f32,
+    ) -> CameraUniform {
         let render_w = (viewport.width * render_scale).max(1.0);
         let render_h = (viewport.height * render_scale).max(1.0);
         let render_viewport = [0.0, 0.0, render_w, render_h];
@@ -485,8 +501,10 @@ impl SlintViewportApp {
             self.core.soloed_light,
             time_s,
         );
-        let volumetric_count =
-            scene_lights.iter().filter(|light| light.volumetric[0] > 0.5).count() as f32;
+        let volumetric_count = scene_lights
+            .iter()
+            .filter(|light| light.volumetric[0] > 0.5)
+            .count() as f32;
         let mut scene_lights_flat = [[0.0_f32; 4]; 32];
         let mut scene_light_vol = [[0.0_f32; 4]; 8];
         for (idx, light) in scene_lights.iter().enumerate() {
@@ -630,8 +648,11 @@ impl SlintViewportApp {
             render_scale,
             self.runtime.benchmark_start.elapsed().as_secs_f32(),
         );
-        gpu.queue
-            .write_buffer(&gpu.resources.camera_buffer, 0, bytemuck::bytes_of(&uniform));
+        gpu.queue.write_buffer(
+            &gpu.resources.camera_buffer,
+            0,
+            bytemuck::bytes_of(&uniform),
+        );
 
         gpu.resources.ensure_offscreen_texture(
             &gpu.device,
@@ -791,7 +812,12 @@ impl ApplicationHandler for SlintViewportApp {
         }
     }
 
-    fn window_event(&mut self, event_loop: &ActiveEventLoop, _window_id: WindowId, event: WindowEvent) {
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        _window_id: WindowId,
+        event: WindowEvent,
+    ) {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => {
@@ -860,8 +886,11 @@ impl ApplicationHandler for SlintViewportApp {
                 } else {
                     let fps = self.runtime.tick_fps();
                     if let Some(gpu) = self.gpu.as_ref() {
-                        gpu.window
-                            .set_title(&frame_stats_title(fps, &self.core, self.runtime.last_pointer_hint));
+                        gpu.window.set_title(&frame_stats_title(
+                            fps,
+                            &self.core,
+                            self.runtime.last_pointer_hint,
+                        ));
                     }
                 }
             }
@@ -883,10 +912,9 @@ impl ApplicationHandler for SlintViewportApp {
                         if let Some(drag) = drag {
                             if drag.kind == DragKind::Orbit && !drag.moved {
                                 if let Some(pointer) = map_pointer_to_viewport(px, py, viewport) {
-                                    let picked = self
-                                        .gpu
-                                        .as_ref()
-                                        .and_then(|gpu| self.picked_node_at(gpu, viewport, pointer));
+                                    let picked = self.gpu.as_ref().and_then(|gpu| {
+                                        self.picked_node_at(gpu, viewport, pointer)
+                                    });
                                     if self.runtime.modifiers.control_key() {
                                         if let Some(id) = picked {
                                             self.apply_core_command(CoreCommand::ToggleSelect(id));
@@ -942,8 +970,11 @@ impl ApplicationHandler for SlintViewportApp {
                 match render_result {
                     Ok(()) => {
                         let fps = self.runtime.tick_fps();
-                        gpu.window
-                            .set_title(&frame_stats_title(fps, &self.core, self.runtime.last_pointer_hint));
+                        gpu.window.set_title(&frame_stats_title(
+                            fps,
+                            &self.core,
+                            self.runtime.last_pointer_hint,
+                        ));
                     }
                     Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
                         let size = gpu.window.inner_size();
@@ -964,9 +995,7 @@ impl ApplicationHandler for SlintViewportApp {
                     if !self.runtime.benchmark_reported {
                         eprintln!(
                             "{}",
-                            self.runtime
-                                .pacing
-                                .build_report("main_slint_winit_host")
+                            self.runtime.pacing.build_report("main_slint_winit_host")
                         );
                         self.runtime.benchmark_reported = true;
                     }
@@ -1033,13 +1062,3 @@ mod tests {
         assert!(map_pointer_to_viewport(50.0, 130.0, viewport).is_none());
     }
 }
-
-
-
-
-
-
-
-
-
-

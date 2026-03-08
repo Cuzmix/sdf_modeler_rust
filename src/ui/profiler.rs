@@ -1,7 +1,7 @@
 use eframe::egui;
 
-use crate::app::FrameTimings;
 use crate::app::state::GpuSyncState;
+use crate::app::FrameTimings;
 use crate::gpu::camera::Camera;
 use crate::graph::scene::Scene;
 use crate::settings::Settings;
@@ -35,9 +35,10 @@ pub fn draw(
             } else {
                 egui::Color32::from_rgb(255, 100, 100)
             };
-            ui.colored_label(color, format!(
-                "FPS: {:.0}  ({:.2} ms)", t.avg_fps, t.avg_frame_ms
-            ));
+            ui.colored_label(
+                color,
+                format!("FPS: {:.0}  ({:.2} ms)", t.avg_fps, t.avg_frame_ms),
+            );
 
             // --- Frame time sparkline ---
             let history_ordered: Vec<f32> = {
@@ -50,10 +51,8 @@ pub fn draw(
             let max_ms = history_ordered.iter().cloned().fold(1.0_f32, f32::max);
             let target_ms = 16.67_f32; // 60 FPS target line
 
-            let (rect, _) = ui.allocate_exact_size(
-                egui::vec2(ui.available_width(), 50.0),
-                egui::Sense::hover(),
-            );
+            let (rect, _) = ui
+                .allocate_exact_size(egui::vec2(ui.available_width(), 50.0), egui::Sense::hover());
             let painter = ui.painter_at(rect);
             painter.rect_filled(rect, 2.0, egui::Color32::from_gray(30));
 
@@ -61,8 +60,14 @@ pub fn draw(
             let target_y = rect.bottom() - (target_ms / max_ms) * rect.height();
             if target_y > rect.top() {
                 painter.line_segment(
-                    [egui::pos2(rect.left(), target_y), egui::pos2(rect.right(), target_y)],
-                    egui::Stroke::new(1.0, egui::Color32::from_rgba_premultiplied(100, 100, 255, 80)),
+                    [
+                        egui::pos2(rect.left(), target_y),
+                        egui::pos2(rect.right(), target_y),
+                    ],
+                    egui::Stroke::new(
+                        1.0,
+                        egui::Color32::from_rgba_premultiplied(100, 100, 255, 80),
+                    ),
                 );
             }
 
@@ -94,9 +99,18 @@ pub fn draw(
             egui::CollapsingHeader::new("CPU Phases")
                 .default_open(true)
                 .show(ui, |ui| {
-                    ui.monospace(format!("Pipeline sync:  {:6.2} ms", t.pipeline_sync_s * 1000.0));
-                    ui.monospace(format!("Buffer upload:  {:6.2} ms", t.buffer_upload_s * 1000.0));
-                    ui.monospace(format!("Comp dispatch:  {:6.2} ms", t.composite_dispatch_s * 1000.0));
+                    ui.monospace(format!(
+                        "Pipeline sync:  {:6.2} ms",
+                        t.pipeline_sync_s * 1000.0
+                    ));
+                    ui.monospace(format!(
+                        "Buffer upload:  {:6.2} ms",
+                        t.buffer_upload_s * 1000.0
+                    ));
+                    ui.monospace(format!(
+                        "Comp dispatch:  {:6.2} ms",
+                        t.composite_dispatch_s * 1000.0
+                    ));
                     ui.monospace(format!("UI draw:        {:6.2} ms", t.ui_draw_s * 1000.0));
                     ui.monospace(format!("Total CPU:      {:6.2} ms", t.total_cpu_s * 1000.0));
                 });
@@ -112,7 +126,11 @@ pub fn draw(
                     ui.label(format!("Sculpt textures: {}", gpu.sculpt_tex_indices.len()));
                     ui.label(format!(
                         "Composite: {}",
-                        if settings.render.composite_volume_enabled { "ON" } else { "OFF" }
+                        if settings.render.composite_volume_enabled {
+                            "ON"
+                        } else {
+                            "OFF"
+                        }
                     ));
                 });
 
@@ -123,7 +141,8 @@ pub fn draw(
                     let renderer = gpu.render_state.renderer.read();
                     if let Some(res) = renderer.callback_resources.get::<ViewportResources>() {
                         ui.label(format!(
-                            "Render size: {}x{}", res.render_width, res.render_height
+                            "Render size: {}x{}",
+                            res.render_width, res.render_height
                         ));
                         ui.label(format!("Composite active: {}", res.use_composite));
                     }

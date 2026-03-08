@@ -1,10 +1,13 @@
-use eframe::wgpu;
+use wgpu;
 
 use super::ViewportResources;
 
 impl ViewportResources {
     /// Create the bind group layout for voxel textures: binding 0 = sampler, then N texture_3d bindings.
-    pub(super) fn create_voxel_tex_bgl(device: &wgpu::Device, tex_count: usize) -> wgpu::BindGroupLayout {
+    pub(super) fn create_voxel_tex_bgl(
+        device: &wgpu::Device,
+        tex_count: usize,
+    ) -> wgpu::BindGroupLayout {
         let mut entries = vec![wgpu::BindGroupLayoutEntry {
             binding: 0,
             visibility: wgpu::ShaderStages::FRAGMENT | wgpu::ShaderStages::COMPUTE,
@@ -61,7 +64,11 @@ impl ViewportResources {
         for i in 0..count {
             let tex = device.create_texture(&wgpu::TextureDescriptor {
                 label: Some(&format!("Voxel Tex {i}")),
-                size: wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
+                size: wgpu::Extent3d {
+                    width: 1,
+                    height: 1,
+                    depth_or_array_layers: 1,
+                },
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D3,
@@ -76,7 +83,10 @@ impl ViewportResources {
         self.voxel_texture_views = views;
         self.voxel_tex_bgl = Self::create_voxel_tex_bgl(device, count);
         self.voxel_tex_bind_group = Self::create_voxel_tex_bind_group(
-            device, &self.voxel_tex_bgl, &self.voxel_sampler, &self.voxel_texture_views,
+            device,
+            &self.voxel_tex_bgl,
+            &self.voxel_sampler,
+            &self.voxel_texture_views,
         );
     }
 
@@ -109,11 +119,15 @@ impl ViewportResources {
                 usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
                 view_formats: &[],
             });
-            self.voxel_texture_views[tex_idx] = tex.create_view(&wgpu::TextureViewDescriptor::default());
+            self.voxel_texture_views[tex_idx] =
+                tex.create_view(&wgpu::TextureViewDescriptor::default());
             self.voxel_textures[tex_idx] = tex;
             // Rebuild bind group with updated view
             self.voxel_tex_bind_group = Self::create_voxel_tex_bind_group(
-                device, &self.voxel_tex_bgl, &self.voxel_sampler, &self.voxel_texture_views,
+                device,
+                &self.voxel_tex_bgl,
+                &self.voxel_sampler,
+                &self.voxel_texture_views,
             );
         }
         // Upload data

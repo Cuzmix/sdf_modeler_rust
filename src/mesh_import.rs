@@ -3,9 +3,9 @@ use std::path::Path;
 
 use glam::Vec3;
 
+use crate::compat::maybe_par_iter;
 #[cfg(not(target_arch = "wasm32"))]
 use rayon::prelude::*;
-use crate::compat::maybe_par_iter;
 
 use crate::graph::voxel::VoxelGrid;
 
@@ -35,9 +35,15 @@ pub fn load_obj(path: &Path) -> Result<TriMesh, String> {
         if line.starts_with("v ") {
             let parts: Vec<&str> = line.split_whitespace().collect();
             if parts.len() >= 4 {
-                let x: f32 = parts[1].parse().map_err(|e: std::num::ParseFloatError| e.to_string())?;
-                let y: f32 = parts[2].parse().map_err(|e: std::num::ParseFloatError| e.to_string())?;
-                let z: f32 = parts[3].parse().map_err(|e: std::num::ParseFloatError| e.to_string())?;
+                let x: f32 = parts[1]
+                    .parse()
+                    .map_err(|e: std::num::ParseFloatError| e.to_string())?;
+                let y: f32 = parts[2]
+                    .parse()
+                    .map_err(|e: std::num::ParseFloatError| e.to_string())?;
+                let z: f32 = parts[3]
+                    .parse()
+                    .map_err(|e: std::num::ParseFloatError| e.to_string())?;
                 vertices.push(Vec3::new(x, y, z));
             }
         } else if line.starts_with("f ") {
@@ -46,7 +52,8 @@ pub fn load_obj(path: &Path) -> Result<TriMesh, String> {
             let indices: Vec<u32> = parts
                 .iter()
                 .filter_map(|s| {
-                    s.split('/').next()
+                    s.split('/')
+                        .next()
                         .and_then(|idx| idx.parse::<u32>().ok())
                         .map(|i| i - 1) // Convert to 0-indexed
                 })
@@ -64,7 +71,10 @@ pub fn load_obj(path: &Path) -> Result<TriMesh, String> {
         return Err("No geometry found in OBJ file".to_string());
     }
 
-    Ok(TriMesh { vertices, triangles })
+    Ok(TriMesh {
+        vertices,
+        triangles,
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -84,7 +94,11 @@ pub fn load_stl(path: &Path) -> Result<TriMesh, String> {
     let num_tris = u32::from_le_bytes([data[80], data[81], data[82], data[83]]) as usize;
     let expected = 84 + num_tris * 50;
     if data.len() < expected {
-        return Err(format!("STL file truncated: expected {} bytes, got {}", expected, data.len()));
+        return Err(format!(
+            "STL file truncated: expected {} bytes, got {}",
+            expected,
+            data.len()
+        ));
     }
 
     let mut vertices = Vec::with_capacity(num_tris * 3);
@@ -108,7 +122,10 @@ pub fn load_stl(path: &Path) -> Result<TriMesh, String> {
         return Err("No triangles found in STL file".to_string());
     }
 
-    Ok(TriMesh { vertices, triangles })
+    Ok(TriMesh {
+        vertices,
+        triangles,
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -116,7 +133,12 @@ pub fn load_stl(path: &Path) -> Result<TriMesh, String> {
 // ---------------------------------------------------------------------------
 
 pub fn load_mesh(path: &Path) -> Result<TriMesh, String> {
-    match path.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).as_deref() {
+    match path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
+        .as_deref()
+    {
         Some("stl") => load_stl(path),
         Some("obj") => load_obj(path),
         _ => Err("Unsupported mesh format (use OBJ or STL)".to_string()),

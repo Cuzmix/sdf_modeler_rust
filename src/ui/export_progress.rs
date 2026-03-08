@@ -10,11 +10,8 @@ fn draw_overlay(ctx: &egui::Context) {
     egui::Area::new(egui::Id::new("progress_modal_overlay"))
         .fixed_pos(screen_rect.min)
         .show(ctx, |ui| {
-            ui.painter().rect_filled(
-                screen_rect,
-                0.0,
-                egui::Color32::from_black_alpha(100),
-            );
+            ui.painter()
+                .rect_filled(screen_rect, 0.0, egui::Color32::from_black_alpha(100));
         });
 }
 
@@ -35,10 +32,7 @@ pub fn draw_export(ctx: &egui::Context, export_status: &ExportStatus) -> bool {
     let done = progress.load(Ordering::Relaxed);
     let frac = done as f32 / (*total).max(1) as f32;
 
-    let filename = path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("mesh");
+    let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("mesh");
     let ext = path
         .extension()
         .and_then(|e| e.to_str())
@@ -75,7 +69,10 @@ pub fn draw_export(ctx: &egui::Context, export_status: &ExportStatus) -> bool {
             } else if done < *total {
                 let cell_done = done - sample_slices;
                 let cell_total = *total - sample_slices;
-                format!("Phase 2/3: Extracting triangles ({}/{})", cell_done, cell_total)
+                format!(
+                    "Phase 2/3: Extracting triangles ({}/{})",
+                    cell_done, cell_total
+                )
             } else {
                 "Phase 3/3: Merging vertices and sampling colors...".to_string()
             };

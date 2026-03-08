@@ -27,8 +27,16 @@ pub enum SdfPrimitive {
 
 impl SdfPrimitive {
     pub const ALL: &[Self] = &[
-        Self::Sphere, Self::Box, Self::Cylinder, Self::Torus, Self::Plane,
-        Self::Cone, Self::Capsule, Self::Ellipsoid, Self::HexPrism, Self::Pyramid,
+        Self::Sphere,
+        Self::Box,
+        Self::Cylinder,
+        Self::Torus,
+        Self::Plane,
+        Self::Cone,
+        Self::Capsule,
+        Self::Ellipsoid,
+        Self::HexPrism,
+        Self::Pyramid,
     ];
 
     pub fn base_name(&self) -> &'static str {
@@ -162,10 +170,18 @@ pub enum ModifierKind {
 
 impl ModifierKind {
     pub const ALL: &[Self] = &[
-        Self::Twist, Self::Bend, Self::Taper,
-        Self::Round, Self::Onion, Self::Elongate,
-        Self::Mirror, Self::Repeat, Self::FiniteRepeat, Self::RadialRepeat,
-        Self::Offset, Self::Noise,
+        Self::Twist,
+        Self::Bend,
+        Self::Taper,
+        Self::Round,
+        Self::Onion,
+        Self::Elongate,
+        Self::Mirror,
+        Self::Repeat,
+        Self::FiniteRepeat,
+        Self::RadialRepeat,
+        Self::Offset,
+        Self::Noise,
     ];
 
     pub fn base_name(&self) -> &'static str {
@@ -247,9 +263,15 @@ impl ModifierKind {
     /// Distance modifiers modify the distance after child evaluation.
     pub fn is_point_modifier(&self) -> bool {
         match self {
-            Self::Twist | Self::Bend | Self::Taper
-            | Self::Elongate | Self::Mirror | Self::Repeat | Self::FiniteRepeat
-            | Self::RadialRepeat | Self::Noise => true,
+            Self::Twist
+            | Self::Bend
+            | Self::Taper
+            | Self::Elongate
+            | Self::Mirror
+            | Self::Repeat
+            | Self::FiniteRepeat
+            | Self::RadialRepeat
+            | Self::Noise => true,
             Self::Round | Self::Onion | Self::Offset => false,
         }
     }
@@ -408,7 +430,13 @@ pub enum LightType {
 }
 
 impl LightType {
-    pub const ALL: &[Self] = &[Self::Point, Self::Spot, Self::Directional, Self::Ambient, Self::Array];
+    pub const ALL: &[Self] = &[
+        Self::Point,
+        Self::Spot,
+        Self::Directional,
+        Self::Ambient,
+        Self::Array,
+    ];
 
     pub fn label(&self) -> &'static str {
         match self {
@@ -493,17 +521,39 @@ impl Default for LightArrayConfig {
     }
 }
 
-fn default_roughness() -> f32 { 0.5 }
-fn default_fresnel() -> f32 { 0.04 }
-fn default_layer_intensity() -> f32 { 1.0 }
-fn default_scale() -> Vec3 { Vec3::ONE }
-fn default_color_blend() -> f32 { -1.0 }
-fn default_light_intensity() -> f32 { 1.0 }
-fn default_light_range() -> f32 { 10.0 }
-fn default_spot_angle() -> f32 { 45.0 }
-fn default_light_color() -> Vec3 { Vec3::ONE }
-fn default_shadow_softness() -> f32 { 8.0 }
-fn default_cast_shadows_true() -> bool { true }
+fn default_roughness() -> f32 {
+    0.5
+}
+fn default_fresnel() -> f32 {
+    0.04
+}
+fn default_layer_intensity() -> f32 {
+    1.0
+}
+fn default_scale() -> Vec3 {
+    Vec3::ONE
+}
+fn default_color_blend() -> f32 {
+    -1.0
+}
+fn default_light_intensity() -> f32 {
+    1.0
+}
+fn default_light_range() -> f32 {
+    10.0
+}
+fn default_spot_angle() -> f32 {
+    45.0
+}
+fn default_light_color() -> Vec3 {
+    Vec3::ONE
+}
+fn default_shadow_softness() -> f32 {
+    8.0
+}
+fn default_cast_shadows_true() -> bool {
+    true
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum NodeData {
@@ -672,11 +722,17 @@ impl NodeData {
     /// Returns None for non-geometry nodes.
     pub fn geometry_local_sphere(&self) -> Option<([f32; 3], f32)> {
         match self {
-            NodeData::Primitive { position, scale, .. } => {
+            NodeData::Primitive {
+                position, scale, ..
+            } => {
                 let r = scale.x.max(scale.y).max(scale.z);
                 Some(([position.x, position.y, position.z], r))
             }
-            NodeData::Sculpt { position, voxel_grid, .. } => {
+            NodeData::Sculpt {
+                position,
+                voxel_grid,
+                ..
+            } => {
                 let mid = [
                     position.x + (voxel_grid.bounds_min.x + voxel_grid.bounds_max.x) * 0.5,
                     position.y + (voxel_grid.bounds_min.y + voxel_grid.bounds_max.y) * 0.5,
@@ -761,7 +817,12 @@ impl Scene {
     /// Used to determine if continuous repaint is needed.
     pub fn has_light_expressions(&self) -> bool {
         self.nodes.values().any(|n| {
-            if let NodeData::Light { intensity_expr, color_hue_expr, .. } = &n.data {
+            if let NodeData::Light {
+                intensity_expr,
+                color_hue_expr,
+                ..
+            } = &n.data
+            {
                 intensity_expr.is_some() || color_hue_expr.is_some()
             } else {
                 false
@@ -782,7 +843,15 @@ impl Scene {
     pub fn add_node(&mut self, name: String, data: NodeData) -> NodeId {
         let id = self.next_id;
         self.next_id += 1;
-        self.nodes.insert(id, SceneNode { id, name, data, locked: false });
+        self.nodes.insert(
+            id,
+            SceneNode {
+                id,
+                name,
+                data,
+                locked: false,
+            },
+        );
         id
     }
 
@@ -925,34 +994,52 @@ impl Scene {
 
     pub fn create_transform(&mut self, input: Option<NodeId>) -> NodeId {
         let name = self.next_name("Transform");
-        self.add_node(name, NodeData::Transform {
-            input,
-            translation: Vec3::ZERO,
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-        })
+        self.add_node(
+            name,
+            NodeData::Transform {
+                input,
+                translation: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+            },
+        )
     }
 
     pub fn create_reroute(&mut self, input: Option<NodeId>) -> NodeId {
         let name = self.next_name("Reroute");
-        self.add_node(name, NodeData::Transform {
-            input,
-            translation: Vec3::ZERO,
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-        })
+        self.add_node(
+            name,
+            NodeData::Transform {
+                input,
+                translation: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+            },
+        )
     }
 
     pub fn create_modifier(&mut self, kind: ModifierKind, input: Option<NodeId>) -> NodeId {
         let name = self.next_name(kind.base_name());
         let value = kind.default_value();
         let extra = kind.default_extra();
-        self.add_node(name, NodeData::Modifier { kind, input, value, extra })
+        self.add_node(
+            name,
+            NodeData::Modifier {
+                kind,
+                input,
+                value,
+                extra,
+            },
+        )
     }
 
     pub fn create_light(&mut self, light_type: LightType) -> (NodeId, NodeId) {
         let is_array = matches!(light_type, LightType::Array);
-        let light_name = self.next_name(if is_array { "Light Array" } else { light_type.label() });
+        let light_name = self.next_name(if is_array {
+            "Light Array"
+        } else {
+            light_type.label()
+        });
         let light_id = self.add_node(
             light_name,
             NodeData::Light {
@@ -969,7 +1056,11 @@ impl Scene {
                 cookie_node: None,
                 proximity_mode: ProximityMode::Off,
                 proximity_range: 2.0,
-                array_config: if is_array { Some(LightArrayConfig::default()) } else { None },
+                array_config: if is_array {
+                    Some(LightArrayConfig::default())
+                } else {
+                    None
+                },
                 intensity_expr: None,
                 color_hue_expr: None,
             },
@@ -977,12 +1068,15 @@ impl Scene {
         // Create a Transform parent positioned above and to the side of the origin
         // so the light billboard is immediately visible (not buried inside geometry).
         let transform_name = self.next_name("Transform");
-        let transform_id = self.add_node(transform_name, NodeData::Transform {
-            input: Some(light_id),
-            translation: Vec3::new(2.0, 3.0, 2.0),
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-        });
+        let transform_id = self.add_node(
+            transform_name,
+            NodeData::Transform {
+                input: Some(light_id),
+                translation: Vec3::new(2.0, 3.0, 2.0),
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+            },
+        );
         (light_id, transform_id)
     }
 
@@ -1451,7 +1545,12 @@ impl Scene {
                     std::mem::discriminant(kind).hash(&mut hasher);
                     input.hash(&mut hasher);
                 }
-                NodeData::Light { light_type, cookie_node, array_config, .. } => {
+                NodeData::Light {
+                    light_type,
+                    cookie_node,
+                    array_config,
+                    ..
+                } => {
                     5u8.hash(&mut hasher);
                     std::mem::discriminant(light_type).hash(&mut hasher);
                     cookie_node.hash(&mut hasher);
@@ -1479,7 +1578,16 @@ impl Scene {
             node.name.hash(&mut hasher);
             match &node.data {
                 NodeData::Primitive {
-                    position, rotation, scale, color, metallic, roughness, emissive, emissive_intensity, fresnel, ..
+                    position,
+                    rotation,
+                    scale,
+                    color,
+                    metallic,
+                    roughness,
+                    emissive,
+                    emissive_intensity,
+                    fresnel,
+                    ..
                 } => {
                     position.x.to_bits().hash(&mut hasher);
                     position.y.to_bits().hash(&mut hasher);
@@ -1501,13 +1609,27 @@ impl Scene {
                     emissive_intensity.to_bits().hash(&mut hasher);
                     fresnel.to_bits().hash(&mut hasher);
                 }
-                NodeData::Operation { smooth_k, steps, color_blend, .. } => {
+                NodeData::Operation {
+                    smooth_k,
+                    steps,
+                    color_blend,
+                    ..
+                } => {
                     smooth_k.to_bits().hash(&mut hasher);
                     steps.to_bits().hash(&mut hasher);
                     color_blend.to_bits().hash(&mut hasher);
                 }
                 NodeData::Sculpt {
-                    position, rotation, color, metallic, roughness, emissive, emissive_intensity, fresnel, desired_resolution, ..
+                    position,
+                    rotation,
+                    color,
+                    metallic,
+                    roughness,
+                    emissive,
+                    emissive_intensity,
+                    fresnel,
+                    desired_resolution,
+                    ..
                 } => {
                     position.x.to_bits().hash(&mut hasher);
                     position.y.to_bits().hash(&mut hasher);
@@ -1527,7 +1649,12 @@ impl Scene {
                     fresnel.to_bits().hash(&mut hasher);
                     desired_resolution.hash(&mut hasher);
                 }
-                NodeData::Transform { translation, rotation, scale, .. } => {
+                NodeData::Transform {
+                    translation,
+                    rotation,
+                    scale,
+                    ..
+                } => {
                     translation.x.to_bits().hash(&mut hasher);
                     translation.y.to_bits().hash(&mut hasher);
                     translation.z.to_bits().hash(&mut hasher);
@@ -1546,7 +1673,24 @@ impl Scene {
                     extra.y.to_bits().hash(&mut hasher);
                     extra.z.to_bits().hash(&mut hasher);
                 }
-                NodeData::Light { color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color, volumetric, volumetric_density, cookie_node, proximity_mode, proximity_range, array_config, intensity_expr, color_hue_expr, .. } => {
+                NodeData::Light {
+                    color,
+                    intensity,
+                    range,
+                    spot_angle,
+                    cast_shadows,
+                    shadow_softness,
+                    shadow_color,
+                    volumetric,
+                    volumetric_density,
+                    cookie_node,
+                    proximity_mode,
+                    proximity_range,
+                    array_config,
+                    intensity_expr,
+                    color_hue_expr,
+                    ..
+                } => {
                     color.x.to_bits().hash(&mut hasher);
                     color.y.to_bits().hash(&mut hasher);
                     color.z.to_bits().hash(&mut hasher);
@@ -1582,10 +1726,14 @@ impl Scene {
 
     /// Returns nodes not referenced as a child by any other node.
     pub fn top_level_nodes(&self) -> Vec<NodeId> {
-        let referenced: HashSet<NodeId> = self.nodes.values()
+        let referenced: HashSet<NodeId> = self
+            .nodes
+            .values()
             .flat_map(|n| n.data.children())
             .collect();
-        let mut top: Vec<NodeId> = self.nodes.keys()
+        let mut top: Vec<NodeId> = self
+            .nodes
+            .keys()
             .filter(|id| !referenced.contains(id))
             .cloned()
             .collect();
@@ -1608,10 +1756,21 @@ impl Scene {
         result
     }
 
-    fn visible_topo_visit(&self, id: NodeId, visited: &mut HashSet<NodeId>, result: &mut Vec<NodeId>) {
-        if !visited.insert(id) { return; }
-        if self.hidden_nodes.contains(&id) { return; }
-        let Some(node) = self.nodes.get(&id) else { return; };
+    fn visible_topo_visit(
+        &self,
+        id: NodeId,
+        visited: &mut HashSet<NodeId>,
+        result: &mut Vec<NodeId>,
+    ) {
+        if !visited.insert(id) {
+            return;
+        }
+        if self.hidden_nodes.contains(&id) {
+            return;
+        }
+        let Some(node) = self.nodes.get(&id) else {
+            return;
+        };
         for child_id in node.data.children() {
             self.visible_topo_visit(child_id, visited, result);
         }
@@ -1634,7 +1793,11 @@ impl Scene {
     /// Walk upward from `start` through the parent map. Return the first
     /// ancestor whose `NodeData` is `Sculpt` and that has `start` somewhere
     /// in its input chain.
-    pub fn find_sculpt_parent(&self, start: NodeId, parent_map: &HashMap<NodeId, NodeId>) -> Option<NodeId> {
+    pub fn find_sculpt_parent(
+        &self,
+        start: NodeId,
+        parent_map: &HashMap<NodeId, NodeId>,
+    ) -> Option<NodeId> {
         let mut current = start;
         while let Some(&parent_id) = parent_map.get(&current) {
             if let Some(parent_node) = self.nodes.get(&parent_id) {
@@ -1661,7 +1824,13 @@ impl Scene {
         let mut current = leaf_id;
         while let Some(&pid) = parent_map.get(&current) {
             if let Some(parent) = self.nodes.get(&pid) {
-                if let NodeData::Transform { translation, rotation, scale, .. } = &parent.data {
+                if let NodeData::Transform {
+                    translation,
+                    rotation,
+                    scale,
+                    ..
+                } = &parent.data
+                {
                     // Scale: expand radius, scale center
                     let s = scale.x.abs().max(scale.y.abs()).max(scale.z.abs());
                     wr *= s;
@@ -1704,7 +1873,9 @@ impl Scene {
         let mut set = HashSet::new();
         let mut stack = vec![root];
         while let Some(id) = stack.pop() {
-            if !set.insert(id) { continue; }
+            if !set.insert(id) {
+                continue;
+            }
             if let Some(node) = self.nodes.get(&id) {
                 stack.extend(node.data.children());
             }
@@ -1747,12 +1918,25 @@ impl Scene {
             })
         };
 
-        let cloned_nodes: Vec<SceneNode> = subtree.iter().filter_map(|&old_id| {
-            let node = self.nodes.get(&old_id)?;
-            let new_id = *id_map.get(&old_id)?;
-            let new_data = match &node.data {
-                NodeData::Primitive { kind, position, rotation, scale, color, roughness, metallic, emissive, emissive_intensity, fresnel, .. } => {
+        let cloned_nodes: Vec<SceneNode> = subtree
+            .iter()
+            .filter_map(|&old_id| {
+                let node = self.nodes.get(&old_id)?;
+                let new_id = *id_map.get(&old_id)?;
+                let new_data = match &node.data {
                     NodeData::Primitive {
+                        kind,
+                        position,
+                        rotation,
+                        scale,
+                        color,
+                        roughness,
+                        metallic,
+                        emissive,
+                        emissive_intensity,
+                        fresnel,
+                        ..
+                    } => NodeData::Primitive {
                         kind: kind.clone(),
                         position: *position,
                         rotation: *rotation,
@@ -1764,20 +1948,36 @@ impl Scene {
                         emissive_intensity: *emissive_intensity,
                         fresnel: *fresnel,
                         voxel_grid: None,
-                    }
-                }
-                NodeData::Operation { op, smooth_k, steps, color_blend, left, right } => {
+                    },
                     NodeData::Operation {
+                        op,
+                        smooth_k,
+                        steps,
+                        color_blend,
+                        left,
+                        right,
+                    } => NodeData::Operation {
                         op: op.clone(),
                         smooth_k: *smooth_k,
                         steps: *steps,
                         color_blend: *color_blend,
                         left: remap(left),
                         right: remap(right),
-                    }
-                }
-                NodeData::Sculpt { input, position, rotation, color, roughness, metallic, emissive, emissive_intensity, fresnel, layer_intensity, voxel_grid, desired_resolution } => {
+                    },
                     NodeData::Sculpt {
+                        input,
+                        position,
+                        rotation,
+                        color,
+                        roughness,
+                        metallic,
+                        emissive,
+                        emissive_intensity,
+                        fresnel,
+                        layer_intensity,
+                        voxel_grid,
+                        desired_resolution,
+                    } => NodeData::Sculpt {
                         input: remap(input),
                         position: *position,
                         rotation: *rotation,
@@ -1790,26 +1990,47 @@ impl Scene {
                         layer_intensity: *layer_intensity,
                         voxel_grid: voxel_grid.clone(),
                         desired_resolution: *desired_resolution,
-                    }
-                }
-                NodeData::Transform { input, translation, rotation, scale } => {
+                    },
                     NodeData::Transform {
+                        input,
+                        translation,
+                        rotation,
+                        scale,
+                    } => NodeData::Transform {
                         input: remap(input),
                         translation: *translation,
                         rotation: *rotation,
                         scale: *scale,
-                    }
-                }
-                NodeData::Modifier { kind, input, value, extra } => {
+                    },
                     NodeData::Modifier {
+                        kind,
+                        input,
+                        value,
+                        extra,
+                    } => NodeData::Modifier {
                         kind: kind.clone(),
                         input: remap(input),
                         value: *value,
                         extra: *extra,
-                    }
-                }
-                NodeData::Light { light_type, color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color, volumetric, volumetric_density, cookie_node, proximity_mode, proximity_range, array_config, intensity_expr, color_hue_expr } => {
+                    },
                     NodeData::Light {
+                        light_type,
+                        color,
+                        intensity,
+                        range,
+                        spot_angle,
+                        cast_shadows,
+                        shadow_softness,
+                        shadow_color,
+                        volumetric,
+                        volumetric_density,
+                        cookie_node,
+                        proximity_mode,
+                        proximity_range,
+                        array_config,
+                        intensity_expr,
+                        color_hue_expr,
+                    } => NodeData::Light {
                         light_type: light_type.clone(),
                         color: *color,
                         intensity: *intensity,
@@ -1826,16 +2047,16 @@ impl Scene {
                         array_config: array_config.clone(),
                         intensity_expr: intensity_expr.clone(),
                         color_hue_expr: color_hue_expr.clone(),
-                    }
-                }
-            };
-            Some(SceneNode {
-                id: new_id,
-                name: format!("{} Copy", node.name),
-                data: new_data,
-                locked: false,
+                    },
+                };
+                Some(SceneNode {
+                    id: new_id,
+                    name: format!("{} Copy", node.name),
+                    data: new_data,
+                    locked: false,
+                })
             })
-        }).collect();
+            .collect();
 
         for node in cloned_nodes {
             self.nodes.insert(node.id, node);
@@ -2225,11 +2446,7 @@ impl Scene {
                         scale: s2,
                     },
                 ) => {
-                    if i1 != i2
-                        || t1 != t2
-                        || r1 != r2
-                        || s1 != s2
-                    {
+                    if i1 != i2 || t1 != t2 || r1 != r2 || s1 != s2 {
                         return false;
                     }
                 }
@@ -2343,12 +2560,20 @@ mod tests {
         // 1 sphere + 3 lights (Key, Fill, Ambient) + 3 light transforms = 7 nodes
         assert_eq!(scene.nodes.len(), 7);
         let has_sphere = scene.nodes.values().any(|n| {
-            matches!(n.data, NodeData::Primitive { kind: SdfPrimitive::Sphere, .. })
+            matches!(
+                n.data,
+                NodeData::Primitive {
+                    kind: SdfPrimitive::Sphere,
+                    ..
+                }
+            )
         });
         assert!(has_sphere);
-        let light_count = scene.nodes.values().filter(|n| {
-            matches!(n.data, NodeData::Light { .. })
-        }).count();
+        let light_count = scene
+            .nodes
+            .values()
+            .filter(|n| matches!(n.data, NodeData::Light { .. }))
+            .count();
         assert_eq!(light_count, 3);
     }
 
@@ -2370,7 +2595,9 @@ mod tests {
         let right = scene.create_primitive(SdfPrimitive::Box);
         let op = scene.create_operation(CsgOp::Union, Some(left), Some(right));
         match &scene.nodes[&op].data {
-            NodeData::Operation { left: l, right: r, .. } => {
+            NodeData::Operation {
+                left: l, right: r, ..
+            } => {
                 assert_eq!(*l, Some(left));
                 assert_eq!(*r, Some(right));
             }
@@ -2402,7 +2629,6 @@ mod tests {
             _ => panic!("expected Modifier"),
         }
     }
-
 
     #[test]
     fn create_reroute_links_input() {
@@ -2613,7 +2839,9 @@ mod tests {
 
         scene.swap_children(op);
         match &scene.nodes[&op].data {
-            NodeData::Operation { left: l, right: r, .. } => {
+            NodeData::Operation {
+                left: l, right: r, ..
+            } => {
                 assert_eq!(*l, Some(right));
                 assert_eq!(*r, Some(left));
             }
@@ -2874,7 +3102,12 @@ mod tests {
         let (bmin, bmax) = scene.compute_bounds();
         // Sphere radius=1 at origin, padding=1.5 → bounds should be at least [-2.5, 2.5]
         for i in 0..3 {
-            assert!(bmin[i] <= -2.5, "bmin[{}] = {} should be <= -2.5", i, bmin[i]);
+            assert!(
+                bmin[i] <= -2.5,
+                "bmin[{}] = {} should be <= -2.5",
+                i,
+                bmin[i]
+            );
             assert!(bmax[i] >= 2.5, "bmax[{}] = {} should be >= 2.5", i, bmax[i]);
         }
     }
@@ -2908,9 +3141,12 @@ mod tests {
     fn content_eq_detects_position_change() {
         let scene = Scene::new();
         let mut modified = scene.clone();
-        let id = *modified.nodes.iter()
+        let id = *modified
+            .nodes
+            .iter()
             .find(|(_, n)| matches!(n.data, NodeData::Primitive { .. }))
-            .unwrap().0;
+            .unwrap()
+            .0;
         if let Some(node) = modified.nodes.get_mut(&id) {
             if let NodeData::Primitive { position, .. } = &mut node.data {
                 *position = Vec3::new(99.0, 0.0, 0.0);
@@ -2996,9 +3232,8 @@ mod tests {
         let mut scene = empty_scene();
         let prim = scene.create_primitive(SdfPrimitive::Sphere);
         let grid = VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0));
-        let sculpt_id = scene.insert_sculpt_above(
-            prim, Vec3::ZERO, Vec3::ZERO, Vec3::new(0.5, 0.5, 0.5), grid,
-        );
+        let sculpt_id =
+            scene.insert_sculpt_above(prim, Vec3::ZERO, Vec3::ZERO, Vec3::new(0.5, 0.5, 0.5), grid);
 
         // Sculpt's input should be the original primitive
         match &scene.nodes[&sculpt_id].data {
@@ -3019,7 +3254,11 @@ mod tests {
 
         let grid = VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0));
         let sculpt_id = scene.insert_sculpt_above(
-            sphere, Vec3::ZERO, Vec3::ZERO, Vec3::new(0.5, 0.5, 0.5), grid,
+            sphere,
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::new(0.5, 0.5, 0.5),
+            grid,
         );
 
         // Operation's left child should now be the sculpt, not the original sphere
@@ -3043,9 +3282,8 @@ mod tests {
         let mut scene = empty_scene();
         let prim = scene.create_primitive(SdfPrimitive::Sphere);
         let grid = VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0));
-        let sculpt_id = scene.insert_sculpt_above(
-            prim, Vec3::ZERO, Vec3::ZERO, Vec3::new(0.5, 0.5, 0.5), grid,
-        );
+        let sculpt_id =
+            scene.insert_sculpt_above(prim, Vec3::ZERO, Vec3::ZERO, Vec3::new(0.5, 0.5, 0.5), grid);
 
         let parent_map = scene.build_parent_map();
         // Starting from the child primitive, should find the sculpt parent
@@ -3057,9 +3295,8 @@ mod tests {
         let mut scene = empty_scene();
         let prim = scene.create_primitive(SdfPrimitive::Sphere);
         let grid = VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0));
-        let sculpt_id = scene.insert_sculpt_above(
-            prim, Vec3::ZERO, Vec3::ZERO, Vec3::new(0.5, 0.5, 0.5), grid,
-        );
+        let sculpt_id =
+            scene.insert_sculpt_above(prim, Vec3::ZERO, Vec3::ZERO, Vec3::new(0.5, 0.5, 0.5), grid);
 
         // This is the critical check for the differential sculpt brush fix:
         // when the pick shader returns the child primitive's material ID,
@@ -3077,7 +3314,11 @@ mod tests {
 
         let grid = VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0));
         let sculpt_id = scene.insert_sculpt_above(
-            sphere, Vec3::ZERO, Vec3::ZERO, Vec3::new(0.5, 0.5, 0.5), grid,
+            sphere,
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::new(0.5, 0.5, 0.5),
+            grid,
         );
 
         // Sphere is a child of sculpt, sculpt is a child of union
@@ -3107,7 +3348,10 @@ mod tests {
         let (light_id, transform_id) = scene.create_light(LightType::Point);
         assert!(scene.nodes.contains_key(&light_id));
         assert!(scene.nodes.contains_key(&transform_id));
-        assert!(matches!(scene.nodes[&light_id].data, NodeData::Light { .. }));
+        assert!(matches!(
+            scene.nodes[&light_id].data,
+            NodeData::Light { .. }
+        ));
         match &scene.nodes[&transform_id].data {
             NodeData::Transform { input, .. } => assert_eq!(*input, Some(light_id)),
             _ => panic!("expected Transform parent"),
@@ -3226,7 +3470,10 @@ mod tests {
         assert_ne!(new_root, transform_id);
         // The duplicated tree should have a Transform containing a Light
         match &scene.nodes[&new_root].data {
-            NodeData::Transform { input: Some(child_id), .. } => {
+            NodeData::Transform {
+                input: Some(child_id),
+                ..
+            } => {
                 assert!(matches!(scene.nodes[child_id].data, NodeData::Light { .. }));
             }
             _ => panic!("expected Transform with Light child"),
@@ -3291,7 +3538,10 @@ mod tests {
         assert_eq!(CsgOp::SmoothIntersect.wgsl_function_name(), "op_intersect");
         assert_eq!(CsgOp::ChamferUnion.wgsl_function_name(), "op_chamfer_union");
         assert_eq!(CsgOp::StairsUnion.wgsl_function_name(), "op_stairs_union");
-        assert_eq!(CsgOp::ColumnsSubtract.wgsl_function_name(), "op_columns_subtract");
+        assert_eq!(
+            CsgOp::ColumnsSubtract.wgsl_function_name(),
+            "op_columns_subtract"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -3324,7 +3574,24 @@ mod tests {
         let mut scene = empty_scene();
         let (light_id, _) = scene.create_light(LightType::Spot);
         match &scene.nodes[&light_id].data {
-            NodeData::Light { light_type, color, intensity, range, spot_angle, cast_shadows, shadow_softness, shadow_color, volumetric, volumetric_density, cookie_node, proximity_mode, proximity_range, array_config, intensity_expr, color_hue_expr } => {
+            NodeData::Light {
+                light_type,
+                color,
+                intensity,
+                range,
+                spot_angle,
+                cast_shadows,
+                shadow_softness,
+                shadow_color,
+                volumetric,
+                volumetric_density,
+                cookie_node,
+                proximity_mode,
+                proximity_range,
+                array_config,
+                intensity_expr,
+                color_hue_expr,
+            } => {
                 assert_eq!(*light_type, LightType::Spot);
                 assert_eq!(*color, Vec3::ONE);
                 assert!((intensity - 1.0).abs() < 1e-5);
@@ -3352,7 +3619,12 @@ mod tests {
         let mut scene = empty_scene();
         let (light_id, transform_id) = scene.create_light(LightType::Directional);
         match &scene.nodes[&transform_id].data {
-            NodeData::Transform { input, translation, rotation, scale } => {
+            NodeData::Transform {
+                input,
+                translation,
+                rotation,
+                scale,
+            } => {
                 assert_eq!(*input, Some(light_id));
                 assert_eq!(*translation, Vec3::new(2.0, 3.0, 2.0));
                 assert_eq!(*rotation, Vec3::ZERO);
@@ -3367,9 +3639,16 @@ mod tests {
         let mut scene = empty_scene();
         let (light_id, _) = scene.create_light(LightType::Array);
         match &scene.nodes[&light_id].data {
-            NodeData::Light { light_type, array_config, range, .. } => {
+            NodeData::Light {
+                light_type,
+                array_config,
+                range,
+                ..
+            } => {
                 assert_eq!(*light_type, LightType::Array);
-                let cfg = array_config.as_ref().expect("Array light must have array_config");
+                let cfg = array_config
+                    .as_ref()
+                    .expect("Array light must have array_config");
                 assert_eq!(cfg.pattern, ArrayPattern::Ring);
                 assert_eq!(cfg.count, 6);
                 assert!((cfg.radius - 2.0).abs() < 1e-5);
@@ -3453,7 +3732,11 @@ mod tests {
         let mut scene = empty_scene();
         let prim_id = scene.create_primitive(SdfPrimitive::Sphere);
         let (light_id, _) = scene.create_light(LightType::Spot);
-        if let NodeData::Light { ref mut cookie_node, .. } = scene.nodes.get_mut(&light_id).unwrap().data {
+        if let NodeData::Light {
+            ref mut cookie_node,
+            ..
+        } = scene.nodes.get_mut(&light_id).unwrap().data
+        {
             *cookie_node = Some(prim_id);
         }
         // Serialize and deserialize the light node's data
@@ -3462,7 +3745,11 @@ mod tests {
         let deserialized: NodeData = serde_json::from_str(&json).expect("deserialize NodeData");
         match deserialized {
             NodeData::Light { cookie_node, .. } => {
-                assert_eq!(cookie_node, Some(prim_id), "cookie_node should survive serialization roundtrip");
+                assert_eq!(
+                    cookie_node,
+                    Some(prim_id),
+                    "cookie_node should survive serialization roundtrip"
+                );
             }
             _ => panic!("expected Light variant"),
         }
@@ -3477,7 +3764,10 @@ mod tests {
         let deserialized: NodeData = serde_json::from_str(&json).expect("deserialize");
         match deserialized {
             NodeData::Light { cookie_node, .. } => {
-                assert!(cookie_node.is_none(), "cookie_node should be None after roundtrip");
+                assert!(
+                    cookie_node.is_none(),
+                    "cookie_node should be None after roundtrip"
+                );
             }
             _ => panic!("expected Light variant"),
         }
@@ -3501,7 +3791,11 @@ mod tests {
         let json = serde_json::to_string(&scene.nodes[&light_id].data).expect("serialize");
         let deserialized: NodeData = serde_json::from_str(&json).expect("deserialize");
         match deserialized {
-            NodeData::Light { intensity_expr, color_hue_expr, .. } => {
+            NodeData::Light {
+                intensity_expr,
+                color_hue_expr,
+                ..
+            } => {
                 assert_eq!(intensity_expr.as_deref(), Some("sin(t * 3.0) * 0.5 + 0.5"));
                 assert_eq!(color_hue_expr.as_deref(), Some("fract(t * 0.1) * 360.0"));
             }
@@ -3527,9 +3821,16 @@ mod tests {
         let json = serde_json::to_string(&scene.nodes[&light_id].data).expect("serialize");
         let deserialized: NodeData = serde_json::from_str(&json).expect("deserialize");
         match deserialized {
-            NodeData::Light { volumetric, volumetric_density, .. } => {
+            NodeData::Light {
+                volumetric,
+                volumetric_density,
+                ..
+            } => {
                 assert!(volumetric, "volumetric flag should survive roundtrip");
-                assert!((volumetric_density - 0.73).abs() < 1e-5, "density should survive roundtrip");
+                assert!(
+                    (volumetric_density - 0.73).abs() < 1e-5,
+                    "density should survive roundtrip"
+                );
             }
             _ => panic!("expected Light variant"),
         }
@@ -3555,7 +3856,12 @@ mod tests {
         let json = serde_json::to_string(&scene.nodes[&light_id].data).expect("serialize");
         let deserialized: NodeData = serde_json::from_str(&json).expect("deserialize");
         match deserialized {
-            NodeData::Light { cast_shadows, shadow_softness, shadow_color, .. } => {
+            NodeData::Light {
+                cast_shadows,
+                shadow_softness,
+                shadow_color,
+                ..
+            } => {
                 assert!(cast_shadows, "cast_shadows should survive roundtrip");
                 assert!((shadow_softness - 24.0).abs() < 1e-5);
                 assert!((shadow_color.x - 0.1).abs() < 1e-5);
@@ -3584,7 +3890,11 @@ mod tests {
         let json = serde_json::to_string(&scene.nodes[&light_id].data).expect("serialize");
         let deserialized: NodeData = serde_json::from_str(&json).expect("deserialize");
         match deserialized {
-            NodeData::Light { proximity_mode, proximity_range, .. } => {
+            NodeData::Light {
+                proximity_mode,
+                proximity_range,
+                ..
+            } => {
                 assert_eq!(proximity_mode, ProximityMode::Brighten);
                 assert!((proximity_range - 5.5).abs() < 1e-5);
             }
@@ -3601,11 +3911,18 @@ mod tests {
         let (light_id, _) = scene.create_light(LightType::Spot);
 
         let key_before = scene.structure_key();
-        if let NodeData::Light { ref mut cookie_node, .. } = scene.nodes.get_mut(&light_id).unwrap().data {
+        if let NodeData::Light {
+            ref mut cookie_node,
+            ..
+        } = scene.nodes.get_mut(&light_id).unwrap().data
+        {
             *cookie_node = Some(prim_id);
         }
         let key_after = scene.structure_key();
-        assert_ne!(key_before, key_after, "structure_key should change when cookie is added");
+        assert_ne!(
+            key_before, key_after,
+            "structure_key should change when cookie is added"
+        );
     }
 
     // ── Advanced lighting: has_light_expressions ─────────────────────
@@ -3621,20 +3938,34 @@ mod tests {
     fn has_light_expressions_true_when_intensity_expr_set() {
         let mut scene = empty_scene();
         let (light_id, _) = scene.create_light(LightType::Point);
-        if let NodeData::Light { ref mut intensity_expr, .. } = scene.nodes.get_mut(&light_id).unwrap().data {
+        if let NodeData::Light {
+            ref mut intensity_expr,
+            ..
+        } = scene.nodes.get_mut(&light_id).unwrap().data
+        {
             *intensity_expr = Some("sin(t)".to_string());
         }
-        assert!(scene.has_light_expressions(), "should detect intensity expression");
+        assert!(
+            scene.has_light_expressions(),
+            "should detect intensity expression"
+        );
     }
 
     #[test]
     fn has_light_expressions_true_when_color_hue_expr_set() {
         let mut scene = empty_scene();
         let (light_id, _) = scene.create_light(LightType::Point);
-        if let NodeData::Light { ref mut color_hue_expr, .. } = scene.nodes.get_mut(&light_id).unwrap().data {
+        if let NodeData::Light {
+            ref mut color_hue_expr,
+            ..
+        } = scene.nodes.get_mut(&light_id).unwrap().data
+        {
             *color_hue_expr = Some("t * 60.0".to_string());
         }
-        assert!(scene.has_light_expressions(), "should detect color hue expression");
+        assert!(
+            scene.has_light_expressions(),
+            "should detect color hue expression"
+        );
     }
 
     // ── Scene statistics helpers ────────────────────────────────────
@@ -3665,9 +3996,12 @@ mod tests {
     #[test]
     fn node_type_counts_hidden_nodes_excluded_from_visible() {
         let mut scene = Scene::new();
-        let sphere_id = scene.nodes.values().find(|n| {
-            matches!(n.data, NodeData::Primitive { .. })
-        }).unwrap().id;
+        let sphere_id = scene
+            .nodes
+            .values()
+            .find(|n| matches!(n.data, NodeData::Primitive { .. }))
+            .unwrap()
+            .id;
         scene.hidden_nodes.insert(sphere_id);
         let counts = scene.node_type_counts();
         assert_eq!(counts.total, 7);
@@ -3691,5 +4025,3 @@ mod tests {
         assert!(complexity <= counts.total - counts.lights);
     }
 }
-
-

@@ -1,10 +1,10 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
+use crate::compat::maybe_par_iter;
 use glam::{Vec2, Vec3, Vec3Swizzles};
 #[cfg(not(target_arch = "wasm32"))]
 use rayon::prelude::*;
-use crate::compat::maybe_par_iter;
 use serde::{Deserialize, Serialize};
 
 use crate::graph::scene::{CsgOp, NodeData, NodeId, Scene, SdfPrimitive};
@@ -57,7 +57,9 @@ fn noise3d(p: Vec3) -> f32 {
     let g011 = hash33(cell + Vec3::new(0.0, 1.0, 1.0)).dot(local - Vec3::new(0.0, 1.0, 1.0));
     let g111 = hash33(cell + Vec3::new(1.0, 1.0, 1.0)).dot(local - Vec3::new(1.0, 1.0, 1.0));
 
-    fn lerp(a: f32, b: f32, t: f32) -> f32 { a + (b - a) * t }
+    fn lerp(a: f32, b: f32, t: f32) -> f32 {
+        a + (b - a) * t
+    }
 
     let mix_x0 = lerp(g000, g100, fade.x);
     let mix_x1 = lerp(g010, g110, fade.x);
@@ -100,7 +102,9 @@ pub fn max_subtree_resolution(scene: &Scene, root: NodeId) -> u32 {
     let mut stack = vec![root];
     let mut visited = std::collections::HashSet::new();
     while let Some(id) = stack.pop() {
-        if !visited.insert(id) { continue; }
+        if !visited.insert(id) {
+            continue;
+        }
         if let Some(node) = scene.nodes.get(&id) {
             if let NodeData::Sculpt { ref voxel_grid, .. } = node.data {
                 max_res = max_res.max(voxel_grid.resolution);
@@ -108,7 +112,11 @@ pub fn max_subtree_resolution(scene: &Scene, root: NodeId) -> u32 {
             stack.extend(node.data.children());
         }
     }
-    if max_res == 0 { DEFAULT_RESOLUTION } else { max_res }
+    if max_res == 0 {
+        DEFAULT_RESOLUTION
+    } else {
+        max_res
+    }
 }
 
 /// A 3D signed distance field stored as a flat array.
@@ -145,9 +153,16 @@ mod sparse_voxel_data {
 
     pub fn serialize<S: Serializer>(data: &Vec<f32>, serializer: S) -> Result<S::Ok, S::Error> {
         // Auto-detect fill: count values near FAR_DISTANCE vs near 0.0
-        let near_far = data.iter().filter(|&&d| (d - FAR_DISTANCE).abs() < 0.001).count();
+        let near_far = data
+            .iter()
+            .filter(|&&d| (d - FAR_DISTANCE).abs() < 0.001)
+            .count();
         let near_zero = data.iter().filter(|&&d| d.abs() < 0.001).count();
-        let fill = if near_far >= near_zero { FAR_DISTANCE } else { 0.0 };
+        let fill = if near_far >= near_zero {
+            FAR_DISTANCE
+        } else {
+            0.0
+        };
 
         let non_fill: Vec<(u32, f32)> = data
             .iter()
@@ -159,7 +174,11 @@ mod sparse_voxel_data {
         // Use sparse if it saves space: each sparse entry = (u32, f32) = 2 values
         // vs dense = 1 value per voxel. Sparse wins when non_fill * 2 < total.
         if non_fill.len() * 2 < data.len() {
-            let repr = SparseRepr { total: data.len(), fill, entries: non_fill };
+            let repr = SparseRepr {
+                total: data.len(),
+                fill,
+                entries: non_fill,
+            };
             repr.serialize(serializer)
         } else {
             data.serialize(serializer)
@@ -199,7 +218,9 @@ mod sparse_voxel_data {
                     "total" => total = Some(map.next_value()?),
                     "fill" => fill = Some(map.next_value()?),
                     "entries" => entries = Some(map.next_value()?),
-                    _ => { let _: serde::de::IgnoredAny = map.next_value()?; }
+                    _ => {
+                        let _: serde::de::IgnoredAny = map.next_value()?;
+                    }
                 }
             }
 
@@ -236,7 +257,6 @@ impl VoxelGrid {
         (z * resolution * resolution + y * resolution + x) as usize
     }
 
-
     /// Maps a local-space position to continuous grid coordinates [0, res-1].
     pub fn world_to_grid(&self, local_pos: Vec3) -> Vec3 {
         let norm = (local_pos - self.bounds_min) / (self.bounds_max - self.bounds_min);
@@ -255,7 +275,8 @@ impl VoxelGrid {
             && self.bounds_min == other.bounds_min
             && self.bounds_max == other.bounds_max
             && self.data.len() == other.data.len()
-            && self.data
+            && self
+                .data
                 .iter()
                 .zip(other.data.iter())
                 .all(|(a, b)| a.to_bits() == b.to_bits())
@@ -388,7 +409,11 @@ fn evaluate_sdf(kind: &SdfPrimitive, p: Vec3, s: Vec3) -> f32 {
             let t = ((q.y - 0.5 * xz.y) / (m2 + 0.25)).clamp(0.0, 1.0);
             let a = m2 * (q.x + ss) * (q.x + ss) + q.y * q.y;
             let bb = m2 * (q.x + 0.5 * t) * (q.x + 0.5 * t) + (q.y - m2 * t) * (q.y - m2 * t);
-            let d2 = if q.y.min(-q.x * m2 - q.y * 0.5) > 0.0 { 0.0 } else { a.min(bb) };
+            let d2 = if q.y.min(-q.x * m2 - q.y * 0.5) > 0.0 {
+                0.0
+            } else {
+                a.min(bb)
+            };
             ((d2 + q.z * q.z) / m2).sqrt() * q.z.max(-p.y).signum()
         }
     }
@@ -459,7 +484,8 @@ fn p_mod1(p: f32, size: f32) -> f32 {
 
 fn csg_columns_union(a: f32, b: f32, k: f32, n: f32) -> f32 {
     if a < k && b < k {
-        let column_radius = k * std::f32::consts::SQRT_2 / ((n.max(1.0) - 1.0) * 2.0 + std::f32::consts::SQRT_2);
+        let column_radius =
+            k * std::f32::consts::SQRT_2 / ((n.max(1.0) - 1.0) * 2.0 + std::f32::consts::SQRT_2);
         let c = std::f32::consts::FRAC_1_SQRT_2;
         let mut px = a * c - b * c;
         let mut py = a * c + b * c;
@@ -558,16 +584,29 @@ pub fn evaluate_sdf_tree(scene: &Scene, node_id: NodeId, p: Vec3) -> f32 {
                 let analytical = evaluate_sdf_tree(scene, *child_id, p);
                 let gc = voxel_grid.world_to_grid(local_p);
                 let max_c = (voxel_grid.resolution - 1) as f32;
-                let outside = gc.x < 0.0 || gc.y < 0.0 || gc.z < 0.0
-                    || gc.x > max_c || gc.y > max_c || gc.z > max_c;
-                let disp = if outside { 0.0 } else { voxel_grid.sample(local_p) };
+                let outside = gc.x < 0.0
+                    || gc.y < 0.0
+                    || gc.z < 0.0
+                    || gc.x > max_c
+                    || gc.y > max_c
+                    || gc.z > max_c;
+                let disp = if outside {
+                    0.0
+                } else {
+                    voxel_grid.sample(local_p)
+                };
                 analytical + disp * layer_intensity
             } else {
                 // Standalone: grid IS the total SDF (unchanged)
                 voxel_grid.sample(local_p)
             }
         }
-        NodeData::Transform { input, translation, rotation, scale } => {
+        NodeData::Transform {
+            input,
+            translation,
+            rotation,
+            scale,
+        } => {
             let Some(child_id) = input else {
                 return FAR_DISTANCE;
             };
@@ -577,7 +616,12 @@ pub fn evaluate_sdf_tree(scene: &Scene, node_id: NodeId, p: Vec3) -> f32 {
             // Scale distance correction
             d * scale.min_element()
         }
-        NodeData::Modifier { kind, input, value, extra } => {
+        NodeData::Modifier {
+            kind,
+            input,
+            value,
+            extra,
+        } => {
             let Some(child_id) = input else {
                 return FAR_DISTANCE;
             };
@@ -621,18 +665,30 @@ pub fn evaluate_sdf_tree(scene: &Scene, node_id: NodeId, p: Vec3) -> f32 {
                 ModifierKind::Repeat => {
                     let s = *value;
                     let mut q = p;
-                    if s.x > 0.0 { q.x -= s.x * (q.x / s.x).round(); }
-                    if s.y > 0.0 { q.y -= s.y * (q.y / s.y).round(); }
-                    if s.z > 0.0 { q.z -= s.z * (q.z / s.z).round(); }
+                    if s.x > 0.0 {
+                        q.x -= s.x * (q.x / s.x).round();
+                    }
+                    if s.y > 0.0 {
+                        q.y -= s.y * (q.y / s.y).round();
+                    }
+                    if s.z > 0.0 {
+                        q.z -= s.z * (q.z / s.z).round();
+                    }
                     evaluate_sdf_tree(scene, *child_id, q)
                 }
                 ModifierKind::FiniteRepeat => {
                     let s = *value;
                     let c = *extra;
                     let mut q = p;
-                    if s.x > 0.0 { q.x -= s.x * (q.x / s.x).round().clamp(-c.x, c.x); }
-                    if s.y > 0.0 { q.y -= s.y * (q.y / s.y).round().clamp(-c.y, c.y); }
-                    if s.z > 0.0 { q.z -= s.z * (q.z / s.z).round().clamp(-c.z, c.z); }
+                    if s.x > 0.0 {
+                        q.x -= s.x * (q.x / s.x).round().clamp(-c.x, c.x);
+                    }
+                    if s.y > 0.0 {
+                        q.y -= s.y * (q.y / s.y).round().clamp(-c.y, c.y);
+                    }
+                    if s.z > 0.0 {
+                        q.z -= s.z * (q.z / s.z).round().clamp(-c.z, c.z);
+                    }
                     evaluate_sdf_tree(scene, *child_id, q)
                 }
                 ModifierKind::RadialRepeat => {
@@ -705,8 +761,12 @@ fn collect_bounds(scene: &Scene, id: NodeId, all_min: &mut Vec3, all_max: &mut V
             *all_max = all_max.max(*position + extent);
         }
         NodeData::Operation { left, right, .. } => {
-            if let Some(l) = left { collect_bounds(scene, *l, all_min, all_max); }
-            if let Some(r) = right { collect_bounds(scene, *r, all_min, all_max); }
+            if let Some(l) = left {
+                collect_bounds(scene, *l, all_min, all_max);
+            }
+            if let Some(r) = right {
+                collect_bounds(scene, *r, all_min, all_max);
+            }
         }
         NodeData::Sculpt {
             position,
@@ -717,7 +777,9 @@ fn collect_bounds(scene: &Scene, id: NodeId, all_min: &mut Vec3, all_max: &mut V
             *all_max = all_max.max(*position + voxel_grid.bounds_max);
         }
         NodeData::Transform { input, .. } | NodeData::Modifier { input, .. } => {
-            if let Some(i) = input { collect_bounds(scene, *i, all_min, all_max); }
+            if let Some(i) = input {
+                collect_bounds(scene, *i, all_min, all_max);
+            }
         }
         NodeData::Light { .. } => {
             // Light nodes have no geometric bounds
@@ -785,7 +847,13 @@ pub fn bake_subtree_with_progress(
         })
         .collect();
 
-    let grid = VoxelGrid { resolution, bounds_min: local_min, bounds_max: local_max, is_displacement: false, data };
+    let grid = VoxelGrid {
+        resolution,
+        bounds_min: local_min,
+        bounds_max: local_max,
+        is_displacement: false,
+        data,
+    };
     (grid, center)
 }
 
@@ -815,19 +883,22 @@ mod tests {
     fn scene_with_sphere() -> (Scene, NodeId) {
         let mut scene = empty_scene();
         let name = scene.next_name("Sphere");
-        let id = scene.add_node(name, NodeData::Primitive {
-            kind: SdfPrimitive::Sphere,
-            position: Vec3::ZERO,
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-            color: Vec3::ONE,
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            voxel_grid: None,
-        });
+        let id = scene.add_node(
+            name,
+            NodeData::Primitive {
+                kind: SdfPrimitive::Sphere,
+                position: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
         (scene, id)
     }
 
@@ -835,19 +906,22 @@ mod tests {
     fn scene_with_box() -> (Scene, NodeId) {
         let mut scene = empty_scene();
         let name = scene.next_name("Box");
-        let id = scene.add_node(name, NodeData::Primitive {
-            kind: SdfPrimitive::Box,
-            position: Vec3::ZERO,
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-            color: Vec3::ONE,
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            voxel_grid: None,
-        });
+        let id = scene.add_node(
+            name,
+            NodeData::Primitive {
+                kind: SdfPrimitive::Box,
+                position: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
         (scene, id)
     }
 
@@ -892,16 +966,21 @@ mod tests {
 
     #[test]
     fn grid_to_world_roundtrip() {
-        let grid = VoxelGrid::new_displacement(8, Vec3::new(-1.0, -2.0, -3.0), Vec3::new(1.0, 2.0, 3.0));
+        let grid =
+            VoxelGrid::new_displacement(8, Vec3::new(-1.0, -2.0, -3.0), Vec3::new(1.0, 2.0, 3.0));
         let original = Vec3::new(0.5, -1.0, 2.0);
         let gc = grid.world_to_grid(original);
         let back = grid.grid_to_world(gc.x, gc.y, gc.z);
-        assert!((back - original).length() < 1e-4, "roundtrip failed: {back} != {original}");
+        assert!(
+            (back - original).length() < 1e-4,
+            "roundtrip failed: {back} != {original}"
+        );
     }
 
     #[test]
     fn grid_to_world_maps_edges_to_bounds() {
-        let grid = VoxelGrid::new_displacement(4, Vec3::new(-1.0, -2.0, -3.0), Vec3::new(1.0, 2.0, 3.0));
+        let grid =
+            VoxelGrid::new_displacement(4, Vec3::new(-1.0, -2.0, -3.0), Vec3::new(1.0, 2.0, 3.0));
         let min = grid.grid_to_world(0.0, 0.0, 0.0);
         let max = grid.grid_to_world(3.0, 3.0, 3.0);
         assert!((min - grid.bounds_min).length() < 1e-5);
@@ -938,7 +1017,10 @@ mod tests {
         grid.data[VoxelGrid::index(1, 0, 0, 2)] = 7.0;
         // Sample well outside bounds — should clamp to edge
         let outside_low = grid.sample(Vec3::new(-10.0, 0.0, 0.0));
-        assert!((outside_low - 3.0).abs() < 1e-4, "expected clamped to 3.0, got {outside_low}");
+        assert!(
+            (outside_low - 3.0).abs() < 1e-4,
+            "expected clamped to 3.0, got {outside_low}"
+        );
     }
 
     #[test]
@@ -1126,19 +1208,22 @@ mod tests {
     #[test]
     fn evaluate_sdf_tree_translated_primitive() {
         let mut scene = empty_scene();
-        let id = scene.add_node("Sphere".into(), NodeData::Primitive {
-            kind: SdfPrimitive::Sphere,
-            position: Vec3::new(5.0, 0.0, 0.0),
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-            color: Vec3::ONE,
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            voxel_grid: None,
-        });
+        let id = scene.add_node(
+            "Sphere".into(),
+            NodeData::Primitive {
+                kind: SdfPrimitive::Sphere,
+                position: Vec3::new(5.0, 0.0, 0.0),
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
         // At (5,0,0) should be on surface
         let dist = evaluate_sdf_tree(&scene, id, Vec3::new(6.0, 0.0, 0.0));
         assert!(dist.abs() < 1e-4, "on translated sphere surface: {dist}");
@@ -1147,40 +1232,49 @@ mod tests {
     #[test]
     fn evaluate_sdf_tree_csg_union() {
         let mut scene = empty_scene();
-        let sphere_a = scene.add_node("A".into(), NodeData::Primitive {
-            kind: SdfPrimitive::Sphere,
-            position: Vec3::new(-1.0, 0.0, 0.0),
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-            color: Vec3::ONE,
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            voxel_grid: None,
-        });
-        let sphere_b = scene.add_node("B".into(), NodeData::Primitive {
-            kind: SdfPrimitive::Sphere,
-            position: Vec3::new(1.0, 0.0, 0.0),
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-            color: Vec3::ONE,
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            voxel_grid: None,
-        });
-        let union_id = scene.add_node("Union".into(), NodeData::Operation {
-            op: CsgOp::Union,
-            smooth_k: 0.0,
-            steps: 0.0,
-            color_blend: -1.0,
-            left: Some(sphere_a),
-            right: Some(sphere_b),
-        });
+        let sphere_a = scene.add_node(
+            "A".into(),
+            NodeData::Primitive {
+                kind: SdfPrimitive::Sphere,
+                position: Vec3::new(-1.0, 0.0, 0.0),
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
+        let sphere_b = scene.add_node(
+            "B".into(),
+            NodeData::Primitive {
+                kind: SdfPrimitive::Sphere,
+                position: Vec3::new(1.0, 0.0, 0.0),
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
+        let union_id = scene.add_node(
+            "Union".into(),
+            NodeData::Operation {
+                op: CsgOp::Union,
+                smooth_k: 0.0,
+                steps: 0.0,
+                color_blend: -1.0,
+                left: Some(sphere_a),
+                right: Some(sphere_b),
+            },
+        );
         // At origin, both unit spheres at ±1 just touch (dist=0). Should be <= 0.
         let dist = evaluate_sdf_tree(&scene, union_id, Vec3::ZERO);
         assert!(dist <= 0.0, "at union boundary: {dist}");
@@ -1189,69 +1283,87 @@ mod tests {
     #[test]
     fn evaluate_sdf_tree_csg_subtract() {
         let mut scene = empty_scene();
-        let sphere_a = scene.add_node("A".into(), NodeData::Primitive {
-            kind: SdfPrimitive::Sphere,
-            position: Vec3::ZERO,
-            rotation: Vec3::ZERO,
-            scale: Vec3::splat(2.0),
-            color: Vec3::ONE,
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            voxel_grid: None,
-        });
-        let sphere_b = scene.add_node("B".into(), NodeData::Primitive {
-            kind: SdfPrimitive::Sphere,
-            position: Vec3::ZERO,
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-            color: Vec3::ONE,
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            voxel_grid: None,
-        });
-        let sub_id = scene.add_node("Sub".into(), NodeData::Operation {
-            op: CsgOp::Subtract,
-            smooth_k: 0.0,
-            steps: 0.0,
-            color_blend: -1.0,
-            left: Some(sphere_a),
-            right: Some(sphere_b),
-        });
+        let sphere_a = scene.add_node(
+            "A".into(),
+            NodeData::Primitive {
+                kind: SdfPrimitive::Sphere,
+                position: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                scale: Vec3::splat(2.0),
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
+        let sphere_b = scene.add_node(
+            "B".into(),
+            NodeData::Primitive {
+                kind: SdfPrimitive::Sphere,
+                position: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
+        let sub_id = scene.add_node(
+            "Sub".into(),
+            NodeData::Operation {
+                op: CsgOp::Subtract,
+                smooth_k: 0.0,
+                steps: 0.0,
+                color_blend: -1.0,
+                left: Some(sphere_a),
+                right: Some(sphere_b),
+            },
+        );
         // At origin: A dist=-2, B dist=-1. Subtract = max(-2, -(-1)) = max(-2, 1) = 1 (outside)
         let dist = evaluate_sdf_tree(&scene, sub_id, Vec3::ZERO);
-        assert!((dist - 1.0).abs() < 1e-5, "subtracted region at origin: {dist}");
+        assert!(
+            (dist - 1.0).abs() < 1e-5,
+            "subtracted region at origin: {dist}"
+        );
     }
 
     #[test]
     fn evaluate_sdf_tree_operation_single_child() {
         let mut scene = empty_scene();
-        let sphere = scene.add_node("S".into(), NodeData::Primitive {
-            kind: SdfPrimitive::Sphere,
-            position: Vec3::ZERO,
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-            color: Vec3::ONE,
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            voxel_grid: None,
-        });
-        let op_id = scene.add_node("Op".into(), NodeData::Operation {
-            op: CsgOp::Union,
-            smooth_k: 0.0,
-            steps: 0.0,
-            color_blend: -1.0,
-            left: Some(sphere),
-            right: None,
-        });
+        let sphere = scene.add_node(
+            "S".into(),
+            NodeData::Primitive {
+                kind: SdfPrimitive::Sphere,
+                position: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
+        let op_id = scene.add_node(
+            "Op".into(),
+            NodeData::Operation {
+                op: CsgOp::Union,
+                smooth_k: 0.0,
+                steps: 0.0,
+                color_blend: -1.0,
+                left: Some(sphere),
+                right: None,
+            },
+        );
         // With one child, result should be same as child
         let dist = evaluate_sdf_tree(&scene, op_id, Vec3::ZERO);
         assert!((dist - (-1.0)).abs() < 1e-5);
@@ -1260,14 +1372,17 @@ mod tests {
     #[test]
     fn evaluate_sdf_tree_operation_no_children() {
         let mut scene = empty_scene();
-        let op_id = scene.add_node("Op".into(), NodeData::Operation {
-            op: CsgOp::Union,
-            smooth_k: 0.0,
-            steps: 0.0,
-            color_blend: -1.0,
-            left: None,
-            right: None,
-        });
+        let op_id = scene.add_node(
+            "Op".into(),
+            NodeData::Operation {
+                op: CsgOp::Union,
+                smooth_k: 0.0,
+                steps: 0.0,
+                color_blend: -1.0,
+                left: None,
+                right: None,
+            },
+        );
         let dist = evaluate_sdf_tree(&scene, op_id, Vec3::ZERO);
         assert_eq!(dist, f32::MAX);
     }
@@ -1275,52 +1390,67 @@ mod tests {
     #[test]
     fn evaluate_sdf_tree_transform_translation() {
         let mut scene = empty_scene();
-        let sphere = scene.add_node("S".into(), NodeData::Primitive {
-            kind: SdfPrimitive::Sphere,
-            position: Vec3::ZERO,
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-            color: Vec3::ONE,
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            voxel_grid: None,
-        });
-        let transform_id = scene.add_node("T".into(), NodeData::Transform {
-            input: Some(sphere),
-            translation: Vec3::new(3.0, 0.0, 0.0),
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-        });
+        let sphere = scene.add_node(
+            "S".into(),
+            NodeData::Primitive {
+                kind: SdfPrimitive::Sphere,
+                position: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
+        let transform_id = scene.add_node(
+            "T".into(),
+            NodeData::Transform {
+                input: Some(sphere),
+                translation: Vec3::new(3.0, 0.0, 0.0),
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+            },
+        );
         // Sphere should be centered at (3,0,0) after transform
         let dist_at_center = evaluate_sdf_tree(&scene, transform_id, Vec3::new(3.0, 0.0, 0.0));
-        assert!((dist_at_center - (-1.0)).abs() < 1e-4, "sphere center via transform: {dist_at_center}");
+        assert!(
+            (dist_at_center - (-1.0)).abs() < 1e-4,
+            "sphere center via transform: {dist_at_center}"
+        );
     }
 
     #[test]
     fn evaluate_sdf_tree_transform_uniform_scale() {
         let mut scene = empty_scene();
-        let sphere = scene.add_node("S".into(), NodeData::Primitive {
-            kind: SdfPrimitive::Sphere,
-            position: Vec3::ZERO,
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-            color: Vec3::ONE,
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            voxel_grid: None,
-        });
-        let transform_id = scene.add_node("T".into(), NodeData::Transform {
-            input: Some(sphere),
-            translation: Vec3::ZERO,
-            rotation: Vec3::ZERO,
-            scale: Vec3::splat(2.0),
-        });
+        let sphere = scene.add_node(
+            "S".into(),
+            NodeData::Primitive {
+                kind: SdfPrimitive::Sphere,
+                position: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
+        let transform_id = scene.add_node(
+            "T".into(),
+            NodeData::Transform {
+                input: Some(sphere),
+                translation: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                scale: Vec3::splat(2.0),
+            },
+        );
         // At distance 2.0 from origin should be on surface of scaled sphere
         let dist = evaluate_sdf_tree(&scene, transform_id, Vec3::new(2.0, 0.0, 0.0));
         assert!(dist.abs() < 1e-4, "on scaled sphere surface: {dist}");
@@ -1329,12 +1459,15 @@ mod tests {
     #[test]
     fn evaluate_sdf_tree_transform_empty_returns_far() {
         let mut scene = empty_scene();
-        let transform_id = scene.add_node("T".into(), NodeData::Transform {
-            input: None,
-            translation: Vec3::ZERO,
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-        });
+        let transform_id = scene.add_node(
+            "T".into(),
+            NodeData::Transform {
+                input: None,
+                translation: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+            },
+        );
         let dist = evaluate_sdf_tree(&scene, transform_id, Vec3::ZERO);
         assert_eq!(dist, FAR_DISTANCE);
     }
@@ -1356,7 +1489,10 @@ mod tests {
         let rotated = rotate_euler(p, Vec3::new(0.0, std::f32::consts::FRAC_PI_2, 0.0));
         // 90° around Y should send X → -Z
         let expected = Vec3::new(0.0, 0.0, -1.0);
-        assert!((rotated - expected).length() < 1e-5, "got {rotated}, expected {expected}");
+        assert!(
+            (rotated - expected).length() < 1e-5,
+            "got {rotated}, expected {expected}"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -1375,19 +1511,22 @@ mod tests {
     #[test]
     fn bounds_for_subtree_translated_sphere() {
         let mut scene = empty_scene();
-        let id = scene.add_node("S".into(), NodeData::Primitive {
-            kind: SdfPrimitive::Sphere,
-            position: Vec3::new(5.0, 0.0, 0.0),
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-            color: Vec3::ONE,
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            voxel_grid: None,
-        });
+        let id = scene.add_node(
+            "S".into(),
+            NodeData::Primitive {
+                kind: SdfPrimitive::Sphere,
+                position: Vec3::new(5.0, 0.0, 0.0),
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
         let (bmin, bmax) = bounds_for_subtree(&scene, id);
         // center=5, extent=1.5, pad=0.5 → min=3.0, max=7.0 on x
         assert!((bmin.x - 3.0).abs() < 1e-5, "bmin.x: {}", bmin.x);
@@ -1397,44 +1536,61 @@ mod tests {
     #[test]
     fn bounds_for_subtree_operation_encloses_both_children() {
         let mut scene = empty_scene();
-        let left = scene.add_node("L".into(), NodeData::Primitive {
-            kind: SdfPrimitive::Sphere,
-            position: Vec3::new(-5.0, 0.0, 0.0),
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-            color: Vec3::ONE,
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            voxel_grid: None,
-        });
-        let right = scene.add_node("R".into(), NodeData::Primitive {
-            kind: SdfPrimitive::Sphere,
-            position: Vec3::new(5.0, 0.0, 0.0),
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-            color: Vec3::ONE,
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            voxel_grid: None,
-        });
-        let op = scene.add_node("U".into(), NodeData::Operation {
-            op: CsgOp::Union,
-            smooth_k: 0.0,
-            steps: 0.0,
-            color_blend: -1.0,
-            left: Some(left),
-            right: Some(right),
-        });
+        let left = scene.add_node(
+            "L".into(),
+            NodeData::Primitive {
+                kind: SdfPrimitive::Sphere,
+                position: Vec3::new(-5.0, 0.0, 0.0),
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
+        let right = scene.add_node(
+            "R".into(),
+            NodeData::Primitive {
+                kind: SdfPrimitive::Sphere,
+                position: Vec3::new(5.0, 0.0, 0.0),
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
+        let op = scene.add_node(
+            "U".into(),
+            NodeData::Operation {
+                op: CsgOp::Union,
+                smooth_k: 0.0,
+                steps: 0.0,
+                color_blend: -1.0,
+                left: Some(left),
+                right: Some(right),
+            },
+        );
         let (bmin, bmax) = bounds_for_subtree(&scene, op);
         // Left: -5-1.5-0.5=-7, Right: 5+1.5+0.5=7
-        assert!(bmin.x <= -7.0 + 1e-5, "bmin.x should cover left sphere: {}", bmin.x);
-        assert!(bmax.x >= 7.0 - 1e-5, "bmax.x should cover right sphere: {}", bmax.x);
+        assert!(
+            bmin.x <= -7.0 + 1e-5,
+            "bmin.x should cover left sphere: {}",
+            bmin.x
+        );
+        assert!(
+            bmax.x >= 7.0 - 1e-5,
+            "bmax.x should cover right sphere: {}",
+            bmax.x
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -1470,11 +1626,17 @@ mod tests {
 
         // Sample at center of grid (origin in world space) — should be inside sphere
         let center_val = grid.sample(Vec3::ZERO);
-        assert!(center_val < 0.0, "center of sphere should be negative: {center_val}");
+        assert!(
+            center_val < 0.0,
+            "center of sphere should be negative: {center_val}"
+        );
 
         // Sample at a corner of the grid — should be outside sphere
         let corner_val = grid.sample(grid.bounds_max);
-        assert!(corner_val > 0.0, "corner of grid should be positive: {corner_val}");
+        assert!(
+            corner_val > 0.0,
+            "corner of grid should be positive: {corner_val}"
+        );
 
         // Progress should have been incremented once per z-slice
         assert_eq!(progress.load(Ordering::Relaxed), 16);
@@ -1486,7 +1648,10 @@ mod tests {
         let progress = Arc::new(AtomicU32::new(0));
         let (grid, _center) = bake_subtree_with_progress(&scene, id, 8, progress);
         let center_val = grid.sample(Vec3::ZERO);
-        assert!(center_val < 0.0, "center of box should be negative: {center_val}");
+        assert!(
+            center_val < 0.0,
+            "center of box should be negative: {center_val}"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -1504,20 +1669,23 @@ mod tests {
     fn max_subtree_resolution_finds_sculpt_node() {
         let mut scene = empty_scene();
         let grid = VoxelGrid::new_displacement(64, Vec3::splat(-1.0), Vec3::splat(1.0));
-        let sculpt_id = scene.add_node("Sculpt".into(), NodeData::Sculpt {
-            input: None,
-            position: Vec3::ZERO,
-            rotation: Vec3::ZERO,
-            color: Vec3::ONE,
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            layer_intensity: 1.0,
-            voxel_grid: grid,
-            desired_resolution: 64,
-        });
+        let sculpt_id = scene.add_node(
+            "Sculpt".into(),
+            NodeData::Sculpt {
+                input: None,
+                position: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                layer_intensity: 1.0,
+                voxel_grid: grid,
+                desired_resolution: 64,
+            },
+        );
         let res = max_subtree_resolution(&scene, sculpt_id);
         assert_eq!(res, 64);
     }
@@ -1536,25 +1704,29 @@ mod tests {
             for y in 0..32 {
                 for x in 0..32 {
                     let pos = grid.grid_to_world(x as f32, y as f32, z as f32);
-                    grid.data[VoxelGrid::index(x, y, z, 32)] = pos.length() - 1.0; // unit sphere SDF
+                    grid.data[VoxelGrid::index(x, y, z, 32)] = pos.length() - 1.0;
+                    // unit sphere SDF
                 }
             }
         }
         let mut scene = empty_scene();
-        let sculpt_id = scene.add_node("Sculpt".into(), NodeData::Sculpt {
-            input: None,
-            position: Vec3::ZERO,
-            rotation: Vec3::ZERO,
-            color: Vec3::ONE,
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            layer_intensity: 1.0,
-            voxel_grid: grid,
-            desired_resolution: 32,
-        });
+        let sculpt_id = scene.add_node(
+            "Sculpt".into(),
+            NodeData::Sculpt {
+                input: None,
+                position: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                layer_intensity: 1.0,
+                voxel_grid: grid,
+                desired_resolution: 32,
+            },
+        );
         let dist = evaluate_sdf_tree(&scene, sculpt_id, Vec3::ZERO);
         assert!(dist < 0.0, "inside sculpt sphere: {dist}");
     }
@@ -1562,41 +1734,50 @@ mod tests {
     #[test]
     fn evaluate_sdf_tree_sculpt_with_child_adds_displacement() {
         let mut scene = empty_scene();
-        let sphere = scene.add_node("S".into(), NodeData::Primitive {
-            kind: SdfPrimitive::Sphere,
-            position: Vec3::ZERO,
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-            color: Vec3::ONE,
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            voxel_grid: None,
-        });
+        let sphere = scene.add_node(
+            "S".into(),
+            NodeData::Primitive {
+                kind: SdfPrimitive::Sphere,
+                position: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
         // Displacement grid with uniform +0.5 displacement
         let mut grid = VoxelGrid::new_displacement(4, Vec3::splat(-2.0), Vec3::splat(2.0));
         for v in grid.data.iter_mut() {
             *v = 0.5;
         }
-        let sculpt_id = scene.add_node("Sculpt".into(), NodeData::Sculpt {
-            input: Some(sphere),
-            position: Vec3::ZERO,
-            rotation: Vec3::ZERO,
-            color: Vec3::ONE,
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            layer_intensity: 1.0,
-            voxel_grid: grid,
-            desired_resolution: 4,
-        });
+        let sculpt_id = scene.add_node(
+            "Sculpt".into(),
+            NodeData::Sculpt {
+                input: Some(sphere),
+                position: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                layer_intensity: 1.0,
+                voxel_grid: grid,
+                desired_resolution: 4,
+            },
+        );
         // At origin, sphere SDF = -1.0, displacement = 0.5*1.0 → total = -0.5
         let dist = evaluate_sdf_tree(&scene, sculpt_id, Vec3::ZERO);
-        assert!((dist - (-0.5)).abs() < 1e-4, "sculpt with displacement: {dist}");
+        assert!(
+            (dist - (-0.5)).abs() < 1e-4,
+            "sculpt with displacement: {dist}"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -1606,55 +1787,70 @@ mod tests {
     #[test]
     fn evaluate_sdf_tree_modifier_round() {
         let mut scene = empty_scene();
-        let box_id = scene.add_node("B".into(), NodeData::Primitive {
-            kind: SdfPrimitive::Box,
-            position: Vec3::ZERO,
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-            color: Vec3::ONE,
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            voxel_grid: None,
-        });
+        let box_id = scene.add_node(
+            "B".into(),
+            NodeData::Primitive {
+                kind: SdfPrimitive::Box,
+                position: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
         use crate::graph::scene::ModifierKind;
-        let round_id = scene.add_node("Round".into(), NodeData::Modifier {
-            kind: ModifierKind::Round,
-            input: Some(box_id),
-            value: Vec3::new(0.1, 0.0, 0.0),
-            extra: Vec3::ZERO,
-        });
+        let round_id = scene.add_node(
+            "Round".into(),
+            NodeData::Modifier {
+                kind: ModifierKind::Round,
+                input: Some(box_id),
+                value: Vec3::new(0.1, 0.0, 0.0),
+                extra: Vec3::ZERO,
+            },
+        );
         // Round subtracts the radius from the SDF
         let dist_box = evaluate_sdf_tree(&scene, box_id, Vec3::new(1.0, 0.0, 0.0));
         let dist_round = evaluate_sdf_tree(&scene, round_id, Vec3::new(1.0, 0.0, 0.0));
-        assert!((dist_round - (dist_box - 0.1)).abs() < 1e-5, "round modifier: {dist_round}");
+        assert!(
+            (dist_round - (dist_box - 0.1)).abs() < 1e-5,
+            "round modifier: {dist_round}"
+        );
     }
 
     #[test]
     fn evaluate_sdf_tree_modifier_onion() {
         let mut scene = empty_scene();
-        let sphere = scene.add_node("S".into(), NodeData::Primitive {
-            kind: SdfPrimitive::Sphere,
-            position: Vec3::ZERO,
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-            color: Vec3::ONE,
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            voxel_grid: None,
-        });
+        let sphere = scene.add_node(
+            "S".into(),
+            NodeData::Primitive {
+                kind: SdfPrimitive::Sphere,
+                position: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
         use crate::graph::scene::ModifierKind;
-        let onion_id = scene.add_node("Onion".into(), NodeData::Modifier {
-            kind: ModifierKind::Onion,
-            input: Some(sphere),
-            value: Vec3::new(0.1, 0.0, 0.0),
-            extra: Vec3::ZERO,
-        });
+        let onion_id = scene.add_node(
+            "Onion".into(),
+            NodeData::Modifier {
+                kind: ModifierKind::Onion,
+                input: Some(sphere),
+                value: Vec3::new(0.1, 0.0, 0.0),
+                extra: Vec3::ZERO,
+            },
+        );
         // At origin, sphere = -1.0, onion = |−1.0| − 0.1 = 0.9 (outside the shell)
         let dist = evaluate_sdf_tree(&scene, onion_id, Vec3::ZERO);
         assert!((dist - 0.9).abs() < 1e-5, "onion at center: {dist}");
@@ -1663,86 +1859,113 @@ mod tests {
     #[test]
     fn evaluate_sdf_tree_modifier_offset() {
         let mut scene = empty_scene();
-        let sphere = scene.add_node("S".into(), NodeData::Primitive {
-            kind: SdfPrimitive::Sphere,
-            position: Vec3::ZERO,
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-            color: Vec3::ONE,
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            voxel_grid: None,
-        });
+        let sphere = scene.add_node(
+            "S".into(),
+            NodeData::Primitive {
+                kind: SdfPrimitive::Sphere,
+                position: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
         use crate::graph::scene::ModifierKind;
-        let offset_id = scene.add_node("Offset".into(), NodeData::Modifier {
-            kind: ModifierKind::Offset,
-            input: Some(sphere),
-            value: Vec3::new(0.5, 0.0, 0.0),
-            extra: Vec3::ZERO,
-        });
+        let offset_id = scene.add_node(
+            "Offset".into(),
+            NodeData::Modifier {
+                kind: ModifierKind::Offset,
+                input: Some(sphere),
+                value: Vec3::new(0.5, 0.0, 0.0),
+                extra: Vec3::ZERO,
+            },
+        );
         // Offset adds the value to the distance
         let dist_sphere = evaluate_sdf_tree(&scene, sphere, Vec3::new(2.0, 0.0, 0.0));
         let dist_offset = evaluate_sdf_tree(&scene, offset_id, Vec3::new(2.0, 0.0, 0.0));
-        assert!((dist_offset - (dist_sphere + 0.5)).abs() < 1e-5, "offset modifier: {dist_offset}");
+        assert!(
+            (dist_offset - (dist_sphere + 0.5)).abs() < 1e-5,
+            "offset modifier: {dist_offset}"
+        );
     }
 
     #[test]
     fn evaluate_sdf_tree_modifier_mirror_x() {
         let mut scene = empty_scene();
-        let sphere = scene.add_node("S".into(), NodeData::Primitive {
-            kind: SdfPrimitive::Sphere,
-            position: Vec3::new(2.0, 0.0, 0.0),
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-            color: Vec3::ONE,
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            voxel_grid: None,
-        });
+        let sphere = scene.add_node(
+            "S".into(),
+            NodeData::Primitive {
+                kind: SdfPrimitive::Sphere,
+                position: Vec3::new(2.0, 0.0, 0.0),
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
         use crate::graph::scene::ModifierKind;
-        let mirror_id = scene.add_node("Mirror".into(), NodeData::Modifier {
-            kind: ModifierKind::Mirror,
-            input: Some(sphere),
-            value: Vec3::new(1.0, 0.0, 0.0), // mirror X
-            extra: Vec3::ZERO,
-        });
+        let mirror_id = scene.add_node(
+            "Mirror".into(),
+            NodeData::Modifier {
+                kind: ModifierKind::Mirror,
+                input: Some(sphere),
+                value: Vec3::new(1.0, 0.0, 0.0), // mirror X
+                extra: Vec3::ZERO,
+            },
+        );
         // Sphere at (2,0,0). Mirror X: p.x = |p.x|
         // At (-3,0,0): mirrored to (3,0,0) → dist to sphere center = 1 → on surface
         let dist = evaluate_sdf_tree(&scene, mirror_id, Vec3::new(-3.0, 0.0, 0.0));
         let dist_pos = evaluate_sdf_tree(&scene, mirror_id, Vec3::new(3.0, 0.0, 0.0));
-        assert!(dist.abs() < 1e-4, "mirrored point should be on surface: {dist}");
-        assert!((dist - dist_pos).abs() < 1e-4, "mirrored should match positive: {dist} vs {dist_pos}");
+        assert!(
+            dist.abs() < 1e-4,
+            "mirrored point should be on surface: {dist}"
+        );
+        assert!(
+            (dist - dist_pos).abs() < 1e-4,
+            "mirrored should match positive: {dist} vs {dist_pos}"
+        );
     }
 
     #[test]
     fn evaluate_sdf_tree_modifier_noise_displaces_point() {
         let mut scene = empty_scene();
-        let sphere = scene.add_node("S".into(), NodeData::Primitive {
-            kind: SdfPrimitive::Sphere,
-            position: Vec3::ZERO,
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-            color: Vec3::ONE,
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            voxel_grid: None,
-        });
+        let sphere = scene.add_node(
+            "S".into(),
+            NodeData::Primitive {
+                kind: SdfPrimitive::Sphere,
+                position: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
         use crate::graph::scene::ModifierKind;
-        let noise_id = scene.add_node("Noise".into(), NodeData::Modifier {
-            kind: ModifierKind::Noise,
-            input: Some(sphere),
-            value: Vec3::new(2.0, 0.5, 3.0), // frequency=2, amplitude=0.5, octaves=3
-            extra: Vec3::ZERO,
-        });
+        let noise_id = scene.add_node(
+            "Noise".into(),
+            NodeData::Modifier {
+                kind: ModifierKind::Noise,
+                input: Some(sphere),
+                value: Vec3::new(2.0, 0.5, 3.0), // frequency=2, amplitude=0.5, octaves=3
+                extra: Vec3::ZERO,
+            },
+        );
         // With non-zero amplitude, the noise modifier should change the SDF distance
         // compared to evaluating without it
         let dist_plain = evaluate_sdf_tree(&scene, sphere, Vec3::new(1.5, 0.3, 0.7));
@@ -1756,26 +1979,32 @@ mod tests {
     #[test]
     fn noise_modifier_zero_amplitude_is_identity() {
         let mut scene = empty_scene();
-        let sphere = scene.add_node("S".into(), NodeData::Primitive {
-            kind: SdfPrimitive::Sphere,
-            position: Vec3::ZERO,
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-            color: Vec3::ONE,
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            voxel_grid: None,
-        });
+        let sphere = scene.add_node(
+            "S".into(),
+            NodeData::Primitive {
+                kind: SdfPrimitive::Sphere,
+                position: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
         use crate::graph::scene::ModifierKind;
-        let noise_id = scene.add_node("Noise".into(), NodeData::Modifier {
-            kind: ModifierKind::Noise,
-            input: Some(sphere),
-            value: Vec3::new(2.0, 0.0, 3.0), // amplitude=0 → no displacement
-            extra: Vec3::ZERO,
-        });
+        let noise_id = scene.add_node(
+            "Noise".into(),
+            NodeData::Modifier {
+                kind: ModifierKind::Noise,
+                input: Some(sphere),
+                value: Vec3::new(2.0, 0.0, 3.0), // amplitude=0 → no displacement
+                extra: Vec3::ZERO,
+            },
+        );
         let dist_plain = evaluate_sdf_tree(&scene, sphere, Vec3::new(1.5, 0.3, 0.7));
         let dist_noise = evaluate_sdf_tree(&scene, noise_id, Vec3::new(1.5, 0.3, 0.7));
         assert!(
@@ -1788,12 +2017,15 @@ mod tests {
     fn evaluate_sdf_tree_modifier_empty_returns_far() {
         let mut scene = empty_scene();
         use crate::graph::scene::ModifierKind;
-        let mod_id = scene.add_node("M".into(), NodeData::Modifier {
-            kind: ModifierKind::Round,
-            input: None,
-            value: Vec3::new(0.1, 0.0, 0.0),
-            extra: Vec3::ZERO,
-        });
+        let mod_id = scene.add_node(
+            "M".into(),
+            NodeData::Modifier {
+                kind: ModifierKind::Round,
+                input: None,
+                value: Vec3::new(0.1, 0.0, 0.0),
+                extra: Vec3::ZERO,
+            },
+        );
         let dist = evaluate_sdf_tree(&scene, mod_id, Vec3::ZERO);
         assert_eq!(dist, FAR_DISTANCE);
     }
@@ -1845,7 +2077,10 @@ mod tests {
         let hard = csg_union(0.1, 0.1);
         let chamfer = csg_chamfer_union(0.1, 0.1, 0.3);
         // Chamfer union should create a 45° bevel at the boundary
-        assert!(chamfer <= hard, "chamfer={chamfer} should be <= hard={hard}");
+        assert!(
+            chamfer <= hard,
+            "chamfer={chamfer} should be <= hard={hard}"
+        );
     }
 
     #[test]
@@ -1853,7 +2088,10 @@ mod tests {
         // Far from the boundary, chamfer should behave like hard union
         let chamfer = csg_chamfer_union(-5.0, 3.0, 0.2);
         let hard = csg_union(-5.0, 3.0);
-        assert!((chamfer - hard).abs() < 1e-3, "chamfer={chamfer}, hard={hard}");
+        assert!(
+            (chamfer - hard).abs() < 1e-3,
+            "chamfer={chamfer}, hard={hard}"
+        );
     }
 
     #[test]
@@ -1861,7 +2099,10 @@ mod tests {
         let hard = csg_subtract(0.05, -0.05);
         let chamfer = csg_chamfer_subtract(0.05, -0.05, 0.3);
         // Chamfer changes the boundary shape
-        assert!((hard - chamfer).abs() > 1e-4, "chamfer={chamfer}, hard={hard}");
+        assert!(
+            (hard - chamfer).abs() > 1e-4,
+            "chamfer={chamfer}, hard={hard}"
+        );
     }
 
     #[test]
@@ -1883,7 +2124,10 @@ mod tests {
         let smooth = csg_smooth_union(0.05, 0.05, 0.3);
         let stairs = csg_stairs_union(0.05, 0.05, 0.3, 4.0);
         // Stairs should produce a different (stepped) profile than smooth union
-        assert!((smooth - stairs).abs() > 1e-4, "stairs={stairs}, smooth={smooth}");
+        assert!(
+            (smooth - stairs).abs() > 1e-4,
+            "stairs={stairs}, smooth={smooth}"
+        );
     }
 
     #[test]
@@ -1898,14 +2142,20 @@ mod tests {
         let hard = csg_union(0.05, 0.05);
         let columns = csg_columns_union(0.05, 0.05, 0.3, 4.0);
         // Columns union should create a different profile near the boundary
-        assert!((hard - columns).abs() > 1e-4, "columns={columns}, hard={hard}");
+        assert!(
+            (hard - columns).abs() > 1e-4,
+            "columns={columns}, hard={hard}"
+        );
     }
 
     #[test]
     fn csg_columns_subtract_creates_pattern() {
         let hard = csg_subtract(0.1, -0.1);
         let columns = csg_columns_subtract(0.1, -0.1, 0.3, 4.0);
-        assert!((hard - columns).abs() > 1e-4, "columns={columns}, hard={hard}");
+        assert!(
+            (hard - columns).abs() > 1e-4,
+            "columns={columns}, hard={hard}"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -1915,126 +2165,162 @@ mod tests {
     #[test]
     fn evaluate_sdf_tree_smooth_subtract() {
         let mut scene = empty_scene();
-        let sphere_a = scene.add_node("A".into(), NodeData::Primitive {
-            kind: SdfPrimitive::Sphere,
-            position: Vec3::ZERO,
-            rotation: Vec3::ZERO,
-            scale: Vec3::splat(2.0),
-            color: Vec3::ONE,
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            voxel_grid: None,
-        });
-        let sphere_b = scene.add_node("B".into(), NodeData::Primitive {
-            kind: SdfPrimitive::Sphere,
-            position: Vec3::ZERO,
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-            color: Vec3::ONE,
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            voxel_grid: None,
-        });
-        let op_id = scene.add_node("SmoothSub".into(), NodeData::Operation {
-            op: CsgOp::SmoothSubtract,
-            smooth_k: 0.3,
-            steps: 0.0,
-            color_blend: -1.0,
-            left: Some(sphere_a),
-            right: Some(sphere_b),
-        });
+        let sphere_a = scene.add_node(
+            "A".into(),
+            NodeData::Primitive {
+                kind: SdfPrimitive::Sphere,
+                position: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                scale: Vec3::splat(2.0),
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
+        let sphere_b = scene.add_node(
+            "B".into(),
+            NodeData::Primitive {
+                kind: SdfPrimitive::Sphere,
+                position: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
+        let op_id = scene.add_node(
+            "SmoothSub".into(),
+            NodeData::Operation {
+                op: CsgOp::SmoothSubtract,
+                smooth_k: 0.3,
+                steps: 0.0,
+                color_blend: -1.0,
+                left: Some(sphere_a),
+                right: Some(sphere_b),
+            },
+        );
         // Near the carve boundary, smooth subtract should differ from hard subtract
         let smooth_dist = evaluate_sdf_tree(&scene, op_id, Vec3::new(0.8, 0.0, 0.0));
-        assert!(smooth_dist.is_finite(), "smooth subtract should produce valid distance: {smooth_dist}");
+        assert!(
+            smooth_dist.is_finite(),
+            "smooth subtract should produce valid distance: {smooth_dist}"
+        );
     }
 
     #[test]
     fn evaluate_sdf_tree_chamfer_union() {
         let mut scene = empty_scene();
-        let sphere_a = scene.add_node("A".into(), NodeData::Primitive {
-            kind: SdfPrimitive::Sphere,
-            position: Vec3::new(-0.5, 0.0, 0.0),
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-            color: Vec3::ONE,
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            voxel_grid: None,
-        });
-        let sphere_b = scene.add_node("B".into(), NodeData::Primitive {
-            kind: SdfPrimitive::Sphere,
-            position: Vec3::new(0.5, 0.0, 0.0),
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-            color: Vec3::ONE,
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            voxel_grid: None,
-        });
-        let op_id = scene.add_node("ChamferU".into(), NodeData::Operation {
-            op: CsgOp::ChamferUnion,
-            smooth_k: 0.2,
-            steps: 0.0,
-            color_blend: -1.0,
-            left: Some(sphere_a),
-            right: Some(sphere_b),
-        });
+        let sphere_a = scene.add_node(
+            "A".into(),
+            NodeData::Primitive {
+                kind: SdfPrimitive::Sphere,
+                position: Vec3::new(-0.5, 0.0, 0.0),
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
+        let sphere_b = scene.add_node(
+            "B".into(),
+            NodeData::Primitive {
+                kind: SdfPrimitive::Sphere,
+                position: Vec3::new(0.5, 0.0, 0.0),
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
+        let op_id = scene.add_node(
+            "ChamferU".into(),
+            NodeData::Operation {
+                op: CsgOp::ChamferUnion,
+                smooth_k: 0.2,
+                steps: 0.0,
+                color_blend: -1.0,
+                left: Some(sphere_a),
+                right: Some(sphere_b),
+            },
+        );
         // At the boundary the chamfer union should be inside (negative distance)
         let dist = evaluate_sdf_tree(&scene, op_id, Vec3::ZERO);
-        assert!(dist < 0.0, "chamfer union at overlap center should be inside: {dist}");
+        assert!(
+            dist < 0.0,
+            "chamfer union at overlap center should be inside: {dist}"
+        );
     }
 
     #[test]
     fn evaluate_sdf_tree_stairs_union() {
         let mut scene = empty_scene();
-        let sphere_a = scene.add_node("A".into(), NodeData::Primitive {
-            kind: SdfPrimitive::Sphere,
-            position: Vec3::new(-0.5, 0.0, 0.0),
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-            color: Vec3::ONE,
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            voxel_grid: None,
-        });
-        let sphere_b = scene.add_node("B".into(), NodeData::Primitive {
-            kind: SdfPrimitive::Sphere,
-            position: Vec3::new(0.5, 0.0, 0.0),
-            rotation: Vec3::ZERO,
-            scale: Vec3::ONE,
-            color: Vec3::ONE,
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
-            voxel_grid: None,
-        });
-        let op_id = scene.add_node("StairsU".into(), NodeData::Operation {
-            op: CsgOp::StairsUnion,
-            smooth_k: 0.2,
-            steps: 4.0,
-            color_blend: -1.0,
-            left: Some(sphere_a),
-            right: Some(sphere_b),
-        });
+        let sphere_a = scene.add_node(
+            "A".into(),
+            NodeData::Primitive {
+                kind: SdfPrimitive::Sphere,
+                position: Vec3::new(-0.5, 0.0, 0.0),
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
+        let sphere_b = scene.add_node(
+            "B".into(),
+            NodeData::Primitive {
+                kind: SdfPrimitive::Sphere,
+                position: Vec3::new(0.5, 0.0, 0.0),
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                color: Vec3::ONE,
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                voxel_grid: None,
+            },
+        );
+        let op_id = scene.add_node(
+            "StairsU".into(),
+            NodeData::Operation {
+                op: CsgOp::StairsUnion,
+                smooth_k: 0.2,
+                steps: 4.0,
+                color_blend: -1.0,
+                left: Some(sphere_a),
+                right: Some(sphere_b),
+            },
+        );
         let dist = evaluate_sdf_tree(&scene, op_id, Vec3::ZERO);
-        assert!(dist < 0.0, "stairs union at overlap center should be inside: {dist}");
+        assert!(
+            dist < 0.0,
+            "stairs union at overlap center should be inside: {dist}"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -2044,13 +2330,19 @@ mod tests {
     #[test]
     fn fbm_noise_returns_nonzero_for_nonzero_amplitude() {
         let result = fbm_noise(Vec3::new(1.5, 0.3, 0.7), 2.0, 0.5, 3);
-        assert!(result.length() > 1e-6, "fbm_noise with non-zero amplitude should produce displacement: {result}");
+        assert!(
+            result.length() > 1e-6,
+            "fbm_noise with non-zero amplitude should produce displacement: {result}"
+        );
     }
 
     #[test]
     fn fbm_noise_returns_zero_for_zero_amplitude() {
         let result = fbm_noise(Vec3::new(1.5, 0.3, 0.7), 2.0, 0.0, 3);
-        assert!(result.length() < 1e-10, "fbm_noise with zero amplitude should produce no displacement: {result}");
+        assert!(
+            result.length() < 1e-10,
+            "fbm_noise with zero amplitude should produce no displacement: {result}"
+        );
     }
 
     #[test]

@@ -2,8 +2,8 @@ use std::collections::HashSet;
 
 use eframe::egui;
 
-use crate::app::BakeRequest;
 use crate::app::actions::{Action, ActionSink};
+use crate::app::BakeRequest;
 use crate::graph::scene::{CsgOp, ModifierKind, NodeData, NodeId, Scene, SdfPrimitive};
 use crate::graph::voxel;
 use crate::material_preset::{self, MaterialLibrary};
@@ -35,15 +35,13 @@ fn color_presets_row(ui: &mut egui::Ui, color: &mut [f32; 3]) {
             let is_match = (color[0] - preset[0]).abs() < 0.02
                 && (color[1] - preset[1]).abs() < 0.02
                 && (color[2] - preset[2]).abs() < 0.02;
-            let btn = egui::Button::new(
-                egui::RichText::new(label).small().color(
-                    if preset[0] + preset[1] + preset[2] > 1.5 {
-                        egui::Color32::BLACK
-                    } else {
-                        egui::Color32::WHITE
-                    },
-                ),
-            )
+            let btn = egui::Button::new(egui::RichText::new(label).small().color(
+                if preset[0] + preset[1] + preset[2] > 1.5 {
+                    egui::Color32::BLACK
+                } else {
+                    egui::Color32::WHITE
+                },
+            ))
             .fill(c32)
             .min_size(egui::vec2(20.0, 16.0))
             .stroke(if is_match {
@@ -68,7 +66,11 @@ fn vec3_editor(
 ) {
     ui.label(label);
     ui.horizontal(|ui| {
-        for (axis_label, component) in [("X:", &mut value.x), ("Y:", &mut value.y), ("Z:", &mut value.z)] {
+        for (axis_label, component) in [
+            ("X:", &mut value.x),
+            ("Y:", &mut value.y),
+            ("Z:", &mut value.z),
+        ] {
             ui.label(axis_label);
             let mut drag = egui::DragValue::new(component).speed(speed);
             if !suffix.is_empty() {
@@ -213,10 +215,16 @@ fn draw_multi_properties(
     // Determine which property groups are available across all selected nodes
     let ids: Vec<NodeId> = selected_set.iter().copied().collect();
     let all_have_position = ids.iter().all(|id| {
-        scene.nodes.get(id).is_some_and(|n| get_node_position(&n.data).is_some())
+        scene
+            .nodes
+            .get(id)
+            .is_some_and(|n| get_node_position(&n.data).is_some())
     });
     let all_have_color = ids.iter().all(|id| {
-        scene.nodes.get(id).is_some_and(|n| get_node_color(&n.data).is_some())
+        scene
+            .nodes
+            .get(id)
+            .is_some_and(|n| get_node_color(&n.data).is_some())
     });
 
     // --- Transform (delta-based) ---
@@ -228,9 +236,11 @@ fn draw_multi_properties(
                 let mut pos_delta = glam::Vec3::ZERO;
                 ui.label("Position (delta)");
                 ui.horizontal(|ui| {
-                    for (axis_label, component) in
-                        [("X:", &mut pos_delta.x), ("Y:", &mut pos_delta.y), ("Z:", &mut pos_delta.z)]
-                    {
+                    for (axis_label, component) in [
+                        ("X:", &mut pos_delta.x),
+                        ("Y:", &mut pos_delta.y),
+                        ("Z:", &mut pos_delta.z),
+                    ] {
                         ui.label(axis_label);
                         ui.add(egui::DragValue::new(component).speed(0.05));
                     }
@@ -247,11 +257,17 @@ fn draw_multi_properties(
                 let mut rot_delta_deg = glam::Vec3::ZERO;
                 ui.label("Rotation (delta)");
                 ui.horizontal(|ui| {
-                    for (axis_label, component) in
-                        [("X:", &mut rot_delta_deg.x), ("Y:", &mut rot_delta_deg.y), ("Z:", &mut rot_delta_deg.z)]
-                    {
+                    for (axis_label, component) in [
+                        ("X:", &mut rot_delta_deg.x),
+                        ("Y:", &mut rot_delta_deg.y),
+                        ("Z:", &mut rot_delta_deg.z),
+                    ] {
                         ui.label(axis_label);
-                        ui.add(egui::DragValue::new(component).speed(1.0).suffix("\u{00B0}"));
+                        ui.add(
+                            egui::DragValue::new(component)
+                                .speed(1.0)
+                                .suffix("\u{00B0}"),
+                        );
                     }
                 });
                 if rot_delta_deg != glam::Vec3::ZERO {
@@ -275,7 +291,8 @@ fn draw_multi_properties(
             .default_open(true)
             .show(ui, |ui| {
                 // Color — use first selected node's color as starting value
-                let first_color = ids.iter()
+                let first_color = ids
+                    .iter()
                     .find_map(|id| scene.nodes.get(id).and_then(|n| get_node_color(&n.data)))
                     .unwrap_or(glam::Vec3::new(0.5, 0.5, 0.5));
                 let mut color_arr = [first_color.x, first_color.y, first_color.z];
@@ -295,8 +312,14 @@ fn draw_multi_properties(
                 }
 
                 // Roughness — use first node's value
-                let first_roughness = ids.iter()
-                    .find_map(|id| scene.nodes.get(id).and_then(|n| get_node_roughness(&n.data)))
+                let first_roughness = ids
+                    .iter()
+                    .find_map(|id| {
+                        scene
+                            .nodes
+                            .get(id)
+                            .and_then(|n| get_node_roughness(&n.data))
+                    })
                     .unwrap_or(0.5);
                 let mut roughness = first_roughness;
                 ui.horizontal(|ui| {
@@ -312,7 +335,8 @@ fn draw_multi_properties(
                 }
 
                 // Metallic — use first node's value
-                let first_metallic = ids.iter()
+                let first_metallic = ids
+                    .iter()
                     .find_map(|id| scene.nodes.get(id).and_then(|n| get_node_metallic(&n.data)))
                     .unwrap_or(0.0);
                 let mut metallic = first_metallic;
@@ -329,7 +353,8 @@ fn draw_multi_properties(
                 }
 
                 // Fresnel — use first node's value
-                let first_fresnel = ids.iter()
+                let first_fresnel = ids
+                    .iter()
                     .find_map(|id| scene.nodes.get(id).and_then(|n| get_node_fresnel(&n.data)))
                     .unwrap_or(0.04);
                 let mut fresnel = first_fresnel;
@@ -502,24 +527,28 @@ pub fn draw(
                             .selected_text("Apply...")
                             .width(120.0)
                             .show_ui(ui, |ui| {
-                                let mut apply_preset = |preset: &material_preset::MaterialPreset| {
-                                    if let Some(c) = preset.color {
-                                        color = glam::Vec3::new(c[0], c[1], c[2]);
-                                    }
-                                    metallic = preset.metallic;
-                                    roughness = preset.roughness;
-                                    fresnel = preset.fresnel;
-                                    emissive_intensity = preset.emissive_intensity;
-                                    if preset.emissive_intensity > 0.0 && emissive == glam::Vec3::ZERO {
-                                        emissive = color;
-                                    }
-                                };
+                                let mut apply_preset =
+                                    |preset: &material_preset::MaterialPreset| {
+                                        if let Some(c) = preset.color {
+                                            color = glam::Vec3::new(c[0], c[1], c[2]);
+                                        }
+                                        metallic = preset.metallic;
+                                        roughness = preset.roughness;
+                                        fresnel = preset.fresnel;
+                                        emissive_intensity = preset.emissive_intensity;
+                                        if preset.emissive_intensity > 0.0
+                                            && emissive == glam::Vec3::ZERO
+                                        {
+                                            emissive = color;
+                                        }
+                                    };
                                 // Built-in categories
                                 for category in material_preset::CATEGORIES {
                                     if *category == material_preset::CATEGORY_USER {
                                         continue; // user presets shown separately below
                                     }
-                                    let in_category: Vec<_> = built_in.iter()
+                                    let in_category: Vec<_> = built_in
+                                        .iter()
                                         .filter(|p| p.category == *category)
                                         .collect();
                                     if in_category.is_empty() {
@@ -537,12 +566,18 @@ pub fn draw(
                                 if !material_library.user_presets.is_empty() {
                                     ui.label(egui::RichText::new("User").strong().small());
                                     let mut remove_index = None;
-                                    for (idx, preset) in material_library.user_presets.iter().enumerate() {
+                                    for (idx, preset) in
+                                        material_library.user_presets.iter().enumerate()
+                                    {
                                         ui.horizontal(|ui| {
                                             if ui.selectable_label(false, &preset.name).clicked() {
                                                 apply_preset(preset);
                                             }
-                                            if ui.small_button("\u{2715}").on_hover_text("Delete preset").clicked() {
+                                            if ui
+                                                .small_button("\u{2715}")
+                                                .on_hover_text("Delete preset")
+                                                .clicked()
+                                            {
                                                 remove_index = Some(idx);
                                             }
                                         });
@@ -554,8 +589,13 @@ pub fn draw(
                                 }
                             });
                         // Save as Preset button
-                        if ui.small_button("\u{1F4BE}").on_hover_text("Save current material as preset").clicked() {
-                            let preset_name = format!("Custom {}", material_library.user_presets.len() + 1);
+                        if ui
+                            .small_button("\u{1F4BE}")
+                            .on_hover_text("Save current material as preset")
+                            .clicked()
+                        {
+                            let preset_name =
+                                format!("Custom {}", material_library.user_presets.len() + 1);
                             let preset = material_preset::MaterialPreset::from_node_material(
                                 &preset_name,
                                 [color.x, color.y, color.z],
@@ -595,7 +635,11 @@ pub fn draw(
                     let mut emissive_arr = [emissive.x, emissive.y, emissive.z];
                     ui.horizontal(|ui| {
                         ui.color_edit_button_rgb(&mut emissive_arr);
-                        if ui.small_button("= Color").on_hover_text("Set emissive to object color").clicked() {
+                        if ui
+                            .small_button("= Color")
+                            .on_hover_text("Set emissive to object color")
+                            .clicked()
+                        {
                             emissive_arr = [color.x, color.y, color.z];
                         }
                     });
@@ -610,7 +654,9 @@ pub fn draw(
             ui.separator();
             if let Some((done, total)) = bake_progress {
                 let frac = done as f32 / total.max(1) as f32;
-                ui.add(egui::ProgressBar::new(frac).text(format!("Baking... {:.0}%", frac * 100.0)));
+                ui.add(
+                    egui::ProgressBar::new(frac).text(format!("Baking... {:.0}%", frac * 100.0)),
+                );
             } else {
                 ui.horizontal(|ui| {
                     if ui.button("Add Sculpt Modifier").clicked() {
@@ -626,7 +672,11 @@ pub fn draw(
                         }
                         return;
                     }
-                    if ui.button("Delete Node").on_hover_text("Remove this node from the scene").clicked() {
+                    if ui
+                        .button("Delete Node")
+                        .on_hover_text("Remove this node from the scene")
+                        .clicked()
+                    {
                         actions.push(Action::DeleteNode(id));
                     }
                 });
@@ -719,17 +769,29 @@ pub fn draw(
             ui.separator();
             match left {
                 Some(lid) => {
-                    let left_name = scene.nodes.get(&lid).map(|n| n.name.as_str()).unwrap_or("???");
+                    let left_name = scene
+                        .nodes
+                        .get(&lid)
+                        .map(|n| n.name.as_str())
+                        .unwrap_or("???");
                     ui.label(format!("Left: {} (#{})", left_name, lid));
                 }
-                None => { ui.label("Left: (empty)"); }
+                None => {
+                    ui.label("Left: (empty)");
+                }
             }
             match right {
                 Some(rid) => {
-                    let right_name = scene.nodes.get(&rid).map(|n| n.name.as_str()).unwrap_or("???");
+                    let right_name = scene
+                        .nodes
+                        .get(&rid)
+                        .map(|n| n.name.as_str())
+                        .unwrap_or("???");
                     ui.label(format!("Right: {} (#{})", right_name, rid));
                 }
-                None => { ui.label("Right: (empty)"); }
+                None => {
+                    ui.label("Right: (empty)");
+                }
             }
             if left.is_some() && right.is_some() && ui.button("Swap Inputs").clicked() {
                 actions.push(Action::SwapChildren(id));
@@ -739,7 +801,9 @@ pub fn draw(
             ui.separator();
             if let Some((done, total)) = bake_progress {
                 let frac = done as f32 / total.max(1) as f32;
-                ui.add(egui::ProgressBar::new(frac).text(format!("Baking... {:.0}%", frac * 100.0)));
+                ui.add(
+                    egui::ProgressBar::new(frac).text(format!("Baking... {:.0}%", frac * 100.0)),
+                );
             } else {
                 ui.horizontal(|ui| {
                     if ui.button("Add Sculpt Modifier").clicked() {
@@ -765,7 +829,11 @@ pub fn draw(
                         }));
                     }
                 });
-                if ui.button("Delete Node").on_hover_text("Remove this node from the scene").clicked() {
+                if ui
+                    .button("Delete Node")
+                    .on_hover_text("Remove this node from the scene")
+                    .clicked()
+                {
                     actions.push(Action::DeleteNode(id));
                     return;
                 }
@@ -807,10 +875,16 @@ pub fn draw(
 
             match input {
                 Some(iid) => {
-                    let input_name = scene.nodes.get(&iid).map(|n| n.name.as_str()).unwrap_or("???");
+                    let input_name = scene
+                        .nodes
+                        .get(&iid)
+                        .map(|n| n.name.as_str())
+                        .unwrap_or("???");
                     ui.label(format!("Input: {} (#{})", input_name, iid));
                 }
-                None => { ui.label("Input: (empty)"); }
+                None => {
+                    ui.label("Input: (empty)");
+                }
             }
             ui.separator();
 
@@ -852,23 +926,27 @@ pub fn draw(
                             .selected_text("Apply...")
                             .width(120.0)
                             .show_ui(ui, |ui| {
-                                let mut apply_preset = |preset: &material_preset::MaterialPreset| {
-                                    if let Some(c) = preset.color {
-                                        color = glam::Vec3::new(c[0], c[1], c[2]);
-                                    }
-                                    metallic = preset.metallic;
-                                    roughness = preset.roughness;
-                                    fresnel = preset.fresnel;
-                                    emissive_intensity = preset.emissive_intensity;
-                                    if preset.emissive_intensity > 0.0 && emissive == glam::Vec3::ZERO {
-                                        emissive = color;
-                                    }
-                                };
+                                let mut apply_preset =
+                                    |preset: &material_preset::MaterialPreset| {
+                                        if let Some(c) = preset.color {
+                                            color = glam::Vec3::new(c[0], c[1], c[2]);
+                                        }
+                                        metallic = preset.metallic;
+                                        roughness = preset.roughness;
+                                        fresnel = preset.fresnel;
+                                        emissive_intensity = preset.emissive_intensity;
+                                        if preset.emissive_intensity > 0.0
+                                            && emissive == glam::Vec3::ZERO
+                                        {
+                                            emissive = color;
+                                        }
+                                    };
                                 for category in material_preset::CATEGORIES {
                                     if *category == material_preset::CATEGORY_USER {
                                         continue;
                                     }
-                                    let in_category: Vec<_> = built_in_sculpt.iter()
+                                    let in_category: Vec<_> = built_in_sculpt
+                                        .iter()
                                         .filter(|p| p.category == *category)
                                         .collect();
                                     if in_category.is_empty() {
@@ -891,8 +969,13 @@ pub fn draw(
                                     }
                                 }
                             });
-                        if ui.small_button("\u{1F4BE}").on_hover_text("Save current material as preset").clicked() {
-                            let preset_name = format!("Custom {}", material_library.user_presets.len() + 1);
+                        if ui
+                            .small_button("\u{1F4BE}")
+                            .on_hover_text("Save current material as preset")
+                            .clicked()
+                        {
+                            let preset_name =
+                                format!("Custom {}", material_library.user_presets.len() + 1);
                             let preset = material_preset::MaterialPreset::from_node_material(
                                 &preset_name,
                                 [color.x, color.y, color.z],
@@ -932,7 +1015,11 @@ pub fn draw(
                     let mut emissive_arr = [emissive.x, emissive.y, emissive.z];
                     ui.horizontal(|ui| {
                         ui.color_edit_button_rgb(&mut emissive_arr);
-                        if ui.small_button("= Color").on_hover_text("Set emissive to object color").clicked() {
+                        if ui
+                            .small_button("= Color")
+                            .on_hover_text("Set emissive to object color")
+                            .clicked()
+                        {
                             emissive_arr = [color.x, color.y, color.z];
                         }
                     });
@@ -949,8 +1036,17 @@ pub fn draw(
                     // Resolution presets
                     ui.horizontal(|ui| {
                         ui.label("Resolution:");
-                        for &(label, res) in &[("Low", 32u32), ("Med", 64), ("High", 96), ("Ultra", 128), ("Max", 256)] {
-                            if ui.selectable_label(desired_resolution == res, label).clicked() {
+                        for &(label, res) in &[
+                            ("Low", 32u32),
+                            ("Med", 64),
+                            ("High", 96),
+                            ("Ultra", 128),
+                            ("Max", 256),
+                        ] {
+                            if ui
+                                .selectable_label(desired_resolution == res, label)
+                                .clicked()
+                            {
                                 desired_resolution = res;
                             }
                         }
@@ -960,25 +1056,38 @@ pub fn draw(
                     ui.horizontal(|ui| {
                         ui.label("Custom:");
                         let mut res_i32 = desired_resolution as i32;
-                        if ui.add(
-                            egui::DragValue::new(&mut res_i32)
-                                .speed(1)
-                                .range(16..=max_res as i32)
-                                .suffix("^3"),
-                        ).changed() {
+                        if ui
+                            .add(
+                                egui::DragValue::new(&mut res_i32)
+                                    .speed(1)
+                                    .range(16..=max_res as i32)
+                                    .suffix("^3"),
+                            )
+                            .changed()
+                        {
                             desired_resolution = (res_i32 as u32).clamp(16, max_res);
                         }
                     });
                     let voxels = (desired_resolution as u64).pow(3);
                     let mem_mb = (voxels as f64 * 4.0) / (1024.0 * 1024.0);
-                    ui.weak(format!("{} voxels ({:.1} MB)", format_voxel_count(voxels), mem_mb));
+                    ui.weak(format!(
+                        "{} voxels ({:.1} MB)",
+                        format_voxel_count(voxels),
+                        mem_mb
+                    ));
                     if desired_resolution > 256 {
                         ui.colored_label(
                             egui::Color32::from_rgb(255, 100, 100),
-                            format!("Warning: {:.0} MB RAM — may cause slowdowns or crashes", mem_mb),
+                            format!(
+                                "Warning: {:.0} MB RAM — may cause slowdowns or crashes",
+                                mem_mb
+                            ),
                         );
                     } else if desired_resolution > 128 {
-                        ui.colored_label(egui::Color32::YELLOW, "High resolution — sculpting may be slower");
+                        ui.colored_label(
+                            egui::Color32::YELLOW,
+                            "High resolution — sculpting may be slower",
+                        );
                     }
                 });
 
@@ -987,7 +1096,10 @@ pub fn draw(
             if sculpt_active {
                 if let Some((done, total)) = bake_progress {
                     let frac = done as f32 / total.max(1) as f32;
-                    ui.add(egui::ProgressBar::new(frac).text(format!("Baking... {:.0}%", frac * 100.0)));
+                    ui.add(
+                        egui::ProgressBar::new(frac)
+                            .text(format!("Baking... {:.0}%", frac * 100.0)),
+                    );
                 } else {
                     ui.horizontal(|ui| {
                         if ui.button("Exit Sculpt Mode").clicked() {
@@ -1008,7 +1120,9 @@ pub fn draw(
                 }
             } else if let Some((done, total)) = bake_progress {
                 let frac = done as f32 / total.max(1) as f32;
-                ui.add(egui::ProgressBar::new(frac).text(format!("Baking... {:.0}%", frac * 100.0)));
+                ui.add(
+                    egui::ProgressBar::new(frac).text(format!("Baking... {:.0}%", frac * 100.0)),
+                );
             } else {
                 ui.horizontal(|ui| {
                     if ui.button("Resume Sculpting").clicked() {
@@ -1075,10 +1189,16 @@ pub fn draw(
 
             match input {
                 Some(iid) => {
-                    let input_name = scene.nodes.get(&iid).map(|n| n.name.as_str()).unwrap_or("???");
+                    let input_name = scene
+                        .nodes
+                        .get(&iid)
+                        .map(|n| n.name.as_str())
+                        .unwrap_or("???");
                     ui.label(format!("Input: {} (#{})", input_name, iid));
                 }
-                None => { ui.label("Input: (empty)"); }
+                None => {
+                    ui.label("Input: (empty)");
+                }
             }
             ui.separator();
 
@@ -1096,10 +1216,21 @@ pub fn draw(
                 rot_deg.z.to_radians(),
             );
 
-            vec3_editor(ui, "Scale", &mut scale, 0.05, Some(SCALE_MIN..=SCALE_MAX), "");
+            vec3_editor(
+                ui,
+                "Scale",
+                &mut scale,
+                0.05,
+                Some(SCALE_MIN..=SCALE_MAX),
+                "",
+            );
 
             ui.separator();
-            if ui.button("Delete Node").on_hover_text("Remove this node from the scene").clicked() {
+            if ui
+                .button("Delete Node")
+                .on_hover_text("Remove this node from the scene")
+                .clicked()
+            {
                 actions.push(Action::DeleteNode(id));
                 return;
             }
@@ -1109,8 +1240,10 @@ pub fn draw(
                 if let NodeData::Transform {
                     translation: ref mut t,
                     rotation: ref mut r,
-                    scale: ref mut s, ..
-                } = node.data {
+                    scale: ref mut s,
+                    ..
+                } = node.data
+                {
                     *t = translation;
                     *r = rotation;
                     *s = scale;
@@ -1140,10 +1273,16 @@ pub fn draw(
 
             match input {
                 Some(iid) => {
-                    let input_name = scene.nodes.get(&iid).map(|n| n.name.as_str()).unwrap_or("???");
+                    let input_name = scene
+                        .nodes
+                        .get(&iid)
+                        .map(|n| n.name.as_str())
+                        .unwrap_or("???");
                     ui.label(format!("Input: {} (#{})", input_name, iid));
                 }
-                None => { ui.label("Input: (empty)"); }
+                None => {
+                    ui.label("Input: (empty)");
+                }
             }
             ui.separator();
 
@@ -1169,13 +1308,21 @@ pub fn draw(
                 ModifierKind::Round => {
                     ui.horizontal(|ui| {
                         ui.label("Radius");
-                        ui.add(egui::DragValue::new(&mut value.x).speed(0.01).range(0.0..=5.0));
+                        ui.add(
+                            egui::DragValue::new(&mut value.x)
+                                .speed(0.01)
+                                .range(0.0..=5.0),
+                        );
                     });
                 }
                 ModifierKind::Onion => {
                     ui.horizontal(|ui| {
                         ui.label("Thickness");
-                        ui.add(egui::DragValue::new(&mut value.x).speed(0.01).range(0.001..=5.0));
+                        ui.add(
+                            egui::DragValue::new(&mut value.x)
+                                .speed(0.01)
+                                .range(0.001..=5.0),
+                        );
                     });
                 }
                 ModifierKind::Elongate => {
@@ -1204,7 +1351,11 @@ pub fn draw(
                 ModifierKind::RadialRepeat => {
                     ui.horizontal(|ui| {
                         ui.label("Count:");
-                        ui.add(egui::DragValue::new(&mut value.x).speed(1.0).range(1.0..=64.0));
+                        ui.add(
+                            egui::DragValue::new(&mut value.x)
+                                .speed(1.0)
+                                .range(1.0..=64.0),
+                        );
                     });
                     ui.horizontal(|ui| {
                         ui.label("Axis:");
@@ -1218,17 +1369,29 @@ pub fn draw(
                 ModifierKind::Offset => {
                     ui.horizontal(|ui| {
                         ui.label("Offset");
-                        ui.add(egui::DragValue::new(&mut value.x).speed(0.01).range(-1.0..=1.0));
+                        ui.add(
+                            egui::DragValue::new(&mut value.x)
+                                .speed(0.01)
+                                .range(-1.0..=1.0),
+                        );
                     });
                 }
                 ModifierKind::Noise => {
                     ui.horizontal(|ui| {
                         ui.label("Frequency");
-                        ui.add(egui::DragValue::new(&mut value.x).speed(0.1).range(0.1..=20.0));
+                        ui.add(
+                            egui::DragValue::new(&mut value.x)
+                                .speed(0.1)
+                                .range(0.1..=20.0),
+                        );
                     });
                     ui.horizontal(|ui| {
                         ui.label("Amplitude");
-                        ui.add(egui::DragValue::new(&mut value.y).speed(0.01).range(0.0..=2.0));
+                        ui.add(
+                            egui::DragValue::new(&mut value.y)
+                                .speed(0.01)
+                                .range(0.0..=2.0),
+                        );
                     });
                     ui.horizontal(|ui| {
                         ui.label("Octaves");
@@ -1240,14 +1403,24 @@ pub fn draw(
             }
 
             ui.separator();
-            if ui.button("Delete Node").on_hover_text("Remove this node from the scene").clicked() {
+            if ui
+                .button("Delete Node")
+                .on_hover_text("Remove this node from the scene")
+                .clicked()
+            {
                 actions.push(Action::DeleteNode(id));
                 return;
             }
 
             // Write back
             if let Some(node) = scene.nodes.get_mut(&id) {
-                if let NodeData::Modifier { kind: ref mut k, value: ref mut v, extra: ref mut e, .. } = node.data {
+                if let NodeData::Modifier {
+                    kind: ref mut k,
+                    value: ref mut v,
+                    extra: ref mut e,
+                    ..
+                } = node.data
+                {
                     *k = kind;
                     *v = value;
                     *e = extra;
@@ -1276,9 +1449,7 @@ pub fn draw(
                 ui.label("Type: Light");
                 let is_soloed = soloed_light == Some(id);
                 let solo_text = if is_soloed { "Unsolo" } else { "Solo" };
-                let btn = egui::Button::new(
-                    egui::RichText::new(solo_text).small()
-                );
+                let btn = egui::Button::new(egui::RichText::new(solo_text).small());
                 let btn = if is_soloed {
                     btn.fill(egui::Color32::from_rgb(80, 60, 10))
                 } else {
@@ -1313,7 +1484,8 @@ pub fn draw(
             if std::mem::discriminant(&new_lt) != std::mem::discriminant(&light_type) {
                 light_type = new_lt.clone();
                 // Initialize array_config when switching to Array type
-                if matches!(new_lt, crate::graph::scene::LightType::Array) && array_config.is_none() {
+                if matches!(new_lt, crate::graph::scene::LightType::Array) && array_config.is_none()
+                {
                     array_config = Some(crate::graph::scene::LightArrayConfig::default());
                 }
             }
@@ -1367,7 +1539,12 @@ pub fn draw(
             });
 
             // Range: relevant for Point, Spot, and Array
-            if matches!(light_type, crate::graph::scene::LightType::Point | crate::graph::scene::LightType::Spot | crate::graph::scene::LightType::Array) {
+            if matches!(
+                light_type,
+                crate::graph::scene::LightType::Point
+                    | crate::graph::scene::LightType::Spot
+                    | crate::graph::scene::LightType::Array
+            ) {
                 ui.horizontal(|ui| {
                     ui.label("Range:");
                     ui.add(egui::Slider::new(&mut range, 0.1..=50.0));
@@ -1383,15 +1560,19 @@ pub fn draw(
             }
 
             // Shadow controls (not shown for Ambient or Array lights)
-            if !matches!(light_type, crate::graph::scene::LightType::Ambient | crate::graph::scene::LightType::Array) {
+            if !matches!(
+                light_type,
+                crate::graph::scene::LightType::Ambient | crate::graph::scene::LightType::Array
+            ) {
                 ui.separator();
                 ui.label(egui::RichText::new("Shadows").strong());
                 ui.checkbox(&mut cast_shadows, "Cast Shadows");
                 if cast_shadows {
                     ui.horizontal(|ui| {
                         ui.label("Softness:");
-                        ui.add(egui::Slider::new(&mut shadow_softness, 1.0..=64.0)
-                            .logarithmic(true));
+                        ui.add(
+                            egui::Slider::new(&mut shadow_softness, 1.0..=64.0).logarithmic(true),
+                        );
                     });
                     ui.horizontal(|ui| {
                         ui.label("Shadow Color:");
@@ -1403,7 +1584,10 @@ pub fn draw(
             }
 
             // Volumetric scattering (Point and Spot only)
-            if matches!(light_type, crate::graph::scene::LightType::Point | crate::graph::scene::LightType::Spot) {
+            if matches!(
+                light_type,
+                crate::graph::scene::LightType::Point | crate::graph::scene::LightType::Spot
+            ) {
                 ui.separator();
                 ui.label(egui::RichText::new("Volumetric").strong());
                 ui.checkbox(&mut volumetric, "Enable Volumetric")
@@ -1411,14 +1595,19 @@ pub fn draw(
                 if volumetric {
                     ui.horizontal(|ui| {
                         ui.label("Density:");
-                        ui.add(egui::Slider::new(&mut volumetric_density, 0.01..=1.0)
-                            .logarithmic(true));
+                        ui.add(
+                            egui::Slider::new(&mut volumetric_density, 0.01..=1.0)
+                                .logarithmic(true),
+                        );
                     });
                 }
             }
 
             // Proximity modulation (Point and Spot only — position-dependent)
-            if matches!(light_type, crate::graph::scene::LightType::Point | crate::graph::scene::LightType::Spot) {
+            if matches!(
+                light_type,
+                crate::graph::scene::LightType::Point | crate::graph::scene::LightType::Spot
+            ) {
                 ui.separator();
                 ui.label(egui::RichText::new("Proximity").strong());
                 ui.label(
@@ -1446,7 +1635,10 @@ pub fn draw(
             }
 
             // Cookie shape (Point and Spot only — Directional/Ambient don't benefit)
-            if matches!(light_type, crate::graph::scene::LightType::Point | crate::graph::scene::LightType::Spot) {
+            if matches!(
+                light_type,
+                crate::graph::scene::LightType::Point | crate::graph::scene::LightType::Spot
+            ) {
                 ui.separator();
                 ui.label(egui::RichText::new("Cookie Shape").strong());
                 ui.label(
@@ -1500,15 +1692,20 @@ pub fn draw(
             }
 
             // Expressions section (not for Ambient or Array)
-            if !matches!(light_type, crate::graph::scene::LightType::Ambient | crate::graph::scene::LightType::Array) {
+            if !matches!(
+                light_type,
+                crate::graph::scene::LightType::Ambient | crate::graph::scene::LightType::Array
+            ) {
                 ui.separator();
                 egui::CollapsingHeader::new(egui::RichText::new("Expressions").strong())
                     .default_open(intensity_expr.is_some() || color_hue_expr.is_some())
                     .show(ui, |ui| {
                         ui.label(
-                            egui::RichText::new("Animate properties with math expressions using t (time)")
-                                .weak()
-                                .small(),
+                            egui::RichText::new(
+                                "Animate properties with math expressions using t (time)",
+                            )
+                            .weak()
+                            .small(),
                         );
 
                         // Preset dropdown
@@ -1518,10 +1715,12 @@ pub fn draw(
                                 for preset in crate::expression::EXPRESSION_PRESETS {
                                     if ui.selectable_label(false, preset.name).clicked() {
                                         if !preset.intensity_expr.is_empty() {
-                                            intensity_expr = Some(preset.intensity_expr.to_string());
+                                            intensity_expr =
+                                                Some(preset.intensity_expr.to_string());
                                         }
                                         if !preset.color_hue_expr.is_empty() {
-                                            color_hue_expr = Some(preset.color_hue_expr.to_string());
+                                            color_hue_expr =
+                                                Some(preset.color_hue_expr.to_string());
                                         }
                                     }
                                 }
@@ -1608,7 +1807,11 @@ pub fn draw(
             }
 
             ui.separator();
-            if ui.button("Delete Node").on_hover_text("Remove this light from the scene").clicked() {
+            if ui
+                .button("Delete Node")
+                .on_hover_text("Remove this light from the scene")
+                .clicked()
+            {
                 actions.push(Action::DeleteNode(id));
                 return;
             }
@@ -1632,7 +1835,8 @@ pub fn draw(
                     intensity_expr: ref mut ie,
                     color_hue_expr: ref mut ce,
                     ..
-                } = node.data {
+                } = node.data
+                {
                     *lt = light_type;
                     *c = color;
                     *int = intensity;
@@ -1654,9 +1858,10 @@ pub fn draw(
     }
 
     // --- Modifier Stack (for Primitive and Sculpt nodes) ---
-    let show_stack = scene.nodes.get(&id).is_some_and(|n| {
-        matches!(n.data, NodeData::Primitive { .. } | NodeData::Sculpt { .. })
-    });
+    let show_stack = scene
+        .nodes
+        .get(&id)
+        .is_some_and(|n| matches!(n.data, NodeData::Primitive { .. } | NodeData::Sculpt { .. }));
     if show_stack {
         let chain = collect_modifier_chain(scene, id);
         ui.separator();
@@ -1679,7 +1884,11 @@ pub fn draw(
                                     egui::RichText::new(format!("{} {}", badge, mod_node.name))
                                         .small(),
                                 );
-                                if ui.small_button("X").on_hover_text("Remove modifier").clicked() {
+                                if ui
+                                    .small_button("X")
+                                    .on_hover_text("Remove modifier")
+                                    .clicked()
+                                {
                                     to_delete = Some(mod_id);
                                 }
                             });
@@ -1693,25 +1902,49 @@ pub fn draw(
                 ui.horizontal(|ui| {
                     ui.menu_button("+ Modifier", |ui| {
                         ui.label("Deform");
-                        for kind in &[ModifierKind::Twist, ModifierKind::Bend, ModifierKind::Taper, ModifierKind::Noise] {
+                        for kind in &[
+                            ModifierKind::Twist,
+                            ModifierKind::Bend,
+                            ModifierKind::Taper,
+                            ModifierKind::Noise,
+                        ] {
                             if ui.button(kind.base_name()).clicked() {
-                                actions.push(Action::InsertModifierAbove { target: id, kind: kind.clone() });
+                                actions.push(Action::InsertModifierAbove {
+                                    target: id,
+                                    kind: kind.clone(),
+                                });
                                 ui.close_menu();
                             }
                         }
                         ui.separator();
                         ui.label("Shape");
-                        for kind in &[ModifierKind::Round, ModifierKind::Onion, ModifierKind::Elongate, ModifierKind::Offset] {
+                        for kind in &[
+                            ModifierKind::Round,
+                            ModifierKind::Onion,
+                            ModifierKind::Elongate,
+                            ModifierKind::Offset,
+                        ] {
                             if ui.button(kind.base_name()).clicked() {
-                                actions.push(Action::InsertModifierAbove { target: id, kind: kind.clone() });
+                                actions.push(Action::InsertModifierAbove {
+                                    target: id,
+                                    kind: kind.clone(),
+                                });
                                 ui.close_menu();
                             }
                         }
                         ui.separator();
                         ui.label("Repeat");
-                        for kind in &[ModifierKind::Mirror, ModifierKind::Repeat, ModifierKind::FiniteRepeat, ModifierKind::RadialRepeat] {
+                        for kind in &[
+                            ModifierKind::Mirror,
+                            ModifierKind::Repeat,
+                            ModifierKind::FiniteRepeat,
+                            ModifierKind::RadialRepeat,
+                        ] {
                             if ui.button(kind.base_name()).clicked() {
-                                actions.push(Action::InsertModifierAbove { target: id, kind: kind.clone() });
+                                actions.push(Action::InsertModifierAbove {
+                                    target: id,
+                                    kind: kind.clone(),
+                                });
                                 ui.close_menu();
                             }
                         }
@@ -1777,10 +2010,8 @@ fn draw_light_linking_section(
                         (light_color.y * 255.0) as u8,
                         (light_color.z * 255.0) as u8,
                     );
-                    let (swatch_rect, _) = ui.allocate_exact_size(
-                        egui::vec2(12.0, 12.0),
-                        egui::Sense::hover(),
-                    );
+                    let (swatch_rect, _) =
+                        ui.allocate_exact_size(egui::vec2(12.0, 12.0), egui::Sense::hover());
                     ui.painter().rect_filled(swatch_rect, 2.0, swatch_color);
 
                     if ui.checkbox(&mut linked, light_name).changed() {

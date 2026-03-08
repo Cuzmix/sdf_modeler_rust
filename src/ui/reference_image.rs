@@ -286,8 +286,14 @@ pub fn draw_overlay(
                     uv: egui::pos2(u0, v1),
                     color: tint,
                 });
-                mesh.indices
-                    .extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
+                mesh.indices.extend_from_slice(&[
+                    base,
+                    base + 1,
+                    base + 2,
+                    base,
+                    base + 2,
+                    base + 3,
+                ]);
             }
         }
 

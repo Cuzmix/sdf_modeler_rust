@@ -32,25 +32,49 @@ fn tokenize(input: &str) -> Result<Vec<Token>, String> {
             ' ' | '\t' | '\n' | '\r' => {
                 pos += 1;
             }
-            '+' => { tokens.push(Token::Plus); pos += 1; }
-            '-' => { tokens.push(Token::Minus); pos += 1; }
-            '*' => { tokens.push(Token::Star); pos += 1; }
-            '/' => { tokens.push(Token::Slash); pos += 1; }
-            '(' => { tokens.push(Token::LParen); pos += 1; }
-            ')' => { tokens.push(Token::RParen); pos += 1; }
-            ',' => { tokens.push(Token::Comma); pos += 1; }
+            '+' => {
+                tokens.push(Token::Plus);
+                pos += 1;
+            }
+            '-' => {
+                tokens.push(Token::Minus);
+                pos += 1;
+            }
+            '*' => {
+                tokens.push(Token::Star);
+                pos += 1;
+            }
+            '/' => {
+                tokens.push(Token::Slash);
+                pos += 1;
+            }
+            '(' => {
+                tokens.push(Token::LParen);
+                pos += 1;
+            }
+            ')' => {
+                tokens.push(Token::RParen);
+                pos += 1;
+            }
+            ',' => {
+                tokens.push(Token::Comma);
+                pos += 1;
+            }
             '0'..='9' | '.' => {
                 let start = pos;
                 while pos < chars.len() && (chars[pos].is_ascii_digit() || chars[pos] == '.') {
                     pos += 1;
                 }
                 let num_str: String = chars[start..pos].iter().collect();
-                let value = num_str.parse::<f32>().map_err(|_| format!("Invalid number: {num_str}"))?;
+                let value = num_str
+                    .parse::<f32>()
+                    .map_err(|_| format!("Invalid number: {num_str}"))?;
                 tokens.push(Token::Number(value));
             }
             'a'..='z' | 'A'..='Z' | '_' => {
                 let start = pos;
-                while pos < chars.len() && (chars[pos].is_ascii_alphanumeric() || chars[pos] == '_') {
+                while pos < chars.len() && (chars[pos].is_ascii_alphanumeric() || chars[pos] == '_')
+                {
                     pos += 1;
                 }
                 let ident: String = chars[start..pos].iter().collect();
@@ -235,7 +259,10 @@ impl Parser {
                                 args.len()
                             ));
                         }
-                        Ok(Expression::Call { function: func, args })
+                        Ok(Expression::Call {
+                            function: func,
+                            args,
+                        })
                     }
                 }
             }
@@ -315,7 +342,11 @@ pub fn evaluate(expr: &Expression, t: f32) -> f32 {
                 }
                 FunctionKind::Step => {
                     let x = evaluate(&args[1], t);
-                    if x < a { 0.0 } else { 1.0 }
+                    if x < a {
+                        0.0
+                    } else {
+                        1.0
+                    }
                 }
                 FunctionKind::Smoothstep => {
                     let edge1 = evaluate(&args[1], t);

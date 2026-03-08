@@ -76,7 +76,11 @@ impl GizmoAxis {
 
 const ALL_AXES: [GizmoAxis; 3] = [GizmoAxis::X, GizmoAxis::Y, GizmoAxis::Z];
 
-fn axis_color(axis: &GizmoAxis, active: &Option<GizmoAxis>, hovered: &Option<GizmoAxis>) -> Color32 {
+fn axis_color(
+    axis: &GizmoAxis,
+    active: &Option<GizmoAxis>,
+    hovered: &Option<GizmoAxis>,
+) -> Color32 {
     if active.as_ref() == Some(axis) || hovered.as_ref() == Some(axis) {
         axis.hover_color()
     } else {
@@ -148,13 +152,21 @@ fn quat_to_euler_stable(q: Quat, prev: Vec3) -> Vec3 {
 
     fn wrap_near(angle: f32, reference: f32) -> f32 {
         let mut a = angle;
-        while a - reference > PI { a -= TAU; }
-        while a - reference < -PI { a += TAU; }
+        while a - reference > PI {
+            a -= TAU;
+        }
+        while a - reference < -PI {
+            a += TAU;
+        }
         a
     }
 
     fn normalize_near(v: Vec3, prev: Vec3) -> Vec3 {
-        Vec3::new(wrap_near(v.x, prev.x), wrap_near(v.y, prev.y), wrap_near(v.z, prev.z))
+        Vec3::new(
+            wrap_near(v.x, prev.x),
+            wrap_near(v.y, prev.y),
+            wrap_near(v.z, prev.z),
+        )
     }
 
     let (rz, ry, rx) = q.to_euler(glam::EulerRot::ZYX);
@@ -163,7 +175,11 @@ fn quat_to_euler_stable(q: Quat, prev: Vec3) -> Vec3 {
     // Alternative Euler representation for the same rotation
     let b = normalize_near(Vec3::new(rx + PI, PI - ry, rz + PI), prev);
 
-    if (a - prev).length_squared() <= (b - prev).length_squared() { a } else { b }
+    if (a - prev).length_squared() <= (b - prev).length_squared() {
+        a
+    } else {
+        b
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -193,11 +209,21 @@ fn point_to_segment_dist(point: Pos2, seg_start: Pos2, seg_end: Pos2) -> f32 {
     point.distance(closest)
 }
 
-fn screen_axis_dir(origin: Vec3, axis_dir: Vec3, origin_screen: Pos2, vp: &Mat4, rect: Rect) -> Vec2 {
+fn screen_axis_dir(
+    origin: Vec3,
+    axis_dir: Vec3,
+    origin_screen: Pos2,
+    vp: &Mat4,
+    rect: Rect,
+) -> Vec2 {
     let end = world_to_screen(origin + axis_dir, vp, rect).unwrap_or(origin_screen);
     let dir = end - origin_screen;
     let len = dir.length();
-    if len > 0.1 { dir / len } else { Vec2::ZERO }
+    if len > 0.1 {
+        dir / len
+    } else {
+        Vec2::ZERO
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -213,19 +239,31 @@ struct NodeTransform {
 
 fn extract_node_transform(scene: &Scene, node_id: NodeId) -> Option<NodeTransform> {
     match scene.nodes.get(&node_id).map(|n| &n.data) {
-        Some(NodeData::Primitive { position, rotation, scale, .. }) => Some(NodeTransform {
+        Some(NodeData::Primitive {
+            position,
+            rotation,
+            scale,
+            ..
+        }) => Some(NodeTransform {
             position: *position,
             rotation: *rotation,
             scale: *scale,
             has_scale: true,
         }),
-        Some(NodeData::Sculpt { position, rotation, .. }) => Some(NodeTransform {
+        Some(NodeData::Sculpt {
+            position, rotation, ..
+        }) => Some(NodeTransform {
             position: *position,
             rotation: *rotation,
             scale: Vec3::ONE,
             has_scale: false,
         }),
-        Some(NodeData::Transform { translation, rotation, scale, .. }) => Some(NodeTransform {
+        Some(NodeData::Transform {
+            translation,
+            rotation,
+            scale,
+            ..
+        }) => Some(NodeTransform {
             position: *translation,
             rotation: *rotation,
             scale: *scale,
@@ -276,7 +314,11 @@ fn hit_test_axes(
 }
 
 fn ring_tangent_bitangent(axis_dir: Vec3) -> (Vec3, Vec3) {
-    let up = if axis_dir.y.abs() > 0.99 { Vec3::X } else { Vec3::Y };
+    let up = if axis_dir.y.abs() > 0.99 {
+        Vec3::X
+    } else {
+        Vec3::Y
+    };
     let tangent = axis_dir.cross(up).normalize();
     let bitangent = axis_dir.cross(tangent).normalize();
     (tangent, bitangent)
@@ -300,7 +342,11 @@ fn hit_test_rings(
         }
     }
 
-    if best_dist > RING_HIT_THRESHOLD { None } else { best_axis }
+    if best_dist > RING_HIT_THRESHOLD {
+        None
+    } else {
+        best_axis
+    }
 }
 
 fn ring_distance_to_point(
@@ -425,10 +471,7 @@ fn draw_rotation_ring(
         let world_pt = center + (tangent * angle.cos() + bitangent * angle.sin()) * RING_RADIUS;
         if let Some(screen_pt) = world_to_screen(world_pt, vp, rect) {
             if let Some(prev) = prev_screen {
-                painter.line_segment(
-                    [prev, screen_pt],
-                    Stroke::new(AXIS_STROKE_WIDTH, color),
-                );
+                painter.line_segment([prev, screen_pt], Stroke::new(AXIS_STROKE_WIDTH, color));
             }
             prev_screen = Some(screen_pt);
         } else {
@@ -490,8 +533,16 @@ fn handle_scale_drag(
 
     if let Some(node) = scene.nodes.get_mut(&drag_node) {
         let (scale, position) = match &mut node.data {
-            NodeData::Primitive { ref mut scale, ref mut position, .. } => (scale, position),
-            NodeData::Transform { ref mut scale, ref mut translation, .. } => (scale, translation),
+            NodeData::Primitive {
+                ref mut scale,
+                ref mut position,
+                ..
+            } => (scale, position),
+            NodeData::Transform {
+                ref mut scale,
+                ref mut translation,
+                ..
+            } => (scale, translation),
             _ => return,
         };
         // When pivot is offset, scaling around pivot shifts position
@@ -540,16 +591,32 @@ fn handle_rotate_drag(
     let projected = delta.dot(tangent_dir);
 
     // Flip sign when the ring axis faces away from camera (right-hand rule)
-    let sign = if axis_dir.dot(view_dir) >= 0.0 { 1.0 } else { -1.0 };
+    let sign = if axis_dir.dot(view_dir) >= 0.0 {
+        1.0
+    } else {
+        -1.0
+    };
     let angle_delta = projected * ROTATE_SENSITIVITY * sign;
 
     let delta_quat = Quat::from_axis_angle(axis_dir, angle_delta);
 
     if let Some(node) = scene.nodes.get_mut(&drag_node) {
         let (rotation, position) = match &mut node.data {
-            NodeData::Primitive { ref mut rotation, ref mut position, .. } => (rotation, position),
-            NodeData::Sculpt { ref mut rotation, ref mut position, .. } => (rotation, position),
-            NodeData::Transform { ref mut rotation, ref mut translation, .. } => (rotation, translation),
+            NodeData::Primitive {
+                ref mut rotation,
+                ref mut position,
+                ..
+            } => (rotation, position),
+            NodeData::Sculpt {
+                ref mut rotation,
+                ref mut position,
+                ..
+            } => (rotation, position),
+            NodeData::Transform {
+                ref mut rotation,
+                ref mut translation,
+                ..
+            } => (rotation, translation),
             _ => return,
         };
         if pivot_offset.length_squared() > 1e-6 {
@@ -583,9 +650,16 @@ fn apply_rotation_delta(
 fn apply_position_delta(scene: &mut Scene, node_id: NodeId, delta: Vec3) {
     if let Some(node) = scene.nodes.get_mut(&node_id) {
         match &mut node.data {
-            NodeData::Primitive { ref mut position, .. } => *position += delta,
-            NodeData::Sculpt { ref mut position, .. } => *position += delta,
-            NodeData::Transform { ref mut translation, .. } => *translation += delta,
+            NodeData::Primitive {
+                ref mut position, ..
+            } => *position += delta,
+            NodeData::Sculpt {
+                ref mut position, ..
+            } => *position += delta,
+            NodeData::Transform {
+                ref mut translation,
+                ..
+            } => *translation += delta,
             _ => {}
         }
     }
@@ -700,9 +774,7 @@ pub fn draw_and_interact(
         GizmoMode::Translate | GizmoMode::Scale => {
             hit_test_axes(pos, origin_screen, &axis_screens, HIT_THRESHOLD)
         }
-        GizmoMode::Rotate => {
-            hit_test_rings(pos, gizmo_center, &axes, &vp, rect)
-        }
+        GizmoMode::Rotate => hit_test_rings(pos, gizmo_center, &axes, &vp, rect),
     });
 
     // Determine colors
@@ -718,7 +790,9 @@ pub fn draw_and_interact(
 
     // Draw
     match gizmo_mode {
-        GizmoMode::Translate => draw_translate_gizmo(painter, origin_screen, &axis_screens, &colors),
+        GizmoMode::Translate => {
+            draw_translate_gizmo(painter, origin_screen, &axis_screens, &colors)
+        }
         GizmoMode::Scale => draw_scale_gizmo(painter, origin_screen, &axis_screens, &colors),
         GizmoMode::Rotate => draw_rotate_gizmo(painter, gizmo_center, &axes, &colors, &vp, rect),
     }
@@ -740,80 +814,118 @@ pub fn draw_and_interact(
 
     // Start dragging
     if response.drag_started_by(egui::PointerButton::Primary) {
-      if let Some(ref axis) = hovered_axis {
-        *gizmo_state = GizmoState::Dragging {
-            axis: axis.clone(),
-            node_id,
-            _start_screen_pos: hover_pos.unwrap_or(origin_screen),
-            _start_world_pos: nt.position,
-            _start_rotation: nt.rotation,
-            _start_scale: nt.scale,
-        };
-        consumed = true;
-      }
+        if let Some(ref axis) = hovered_axis {
+            *gizmo_state = GizmoState::Dragging {
+                axis: axis.clone(),
+                node_id,
+                _start_screen_pos: hover_pos.unwrap_or(origin_screen),
+                _start_world_pos: nt.position,
+                _start_rotation: nt.rotation,
+                _start_scale: nt.scale,
+            };
+            consumed = true;
+        }
     }
 
     // During drag
     if response.dragged_by(egui::PointerButton::Primary) {
-      if let GizmoState::Dragging {
-        ref axis,
-        node_id: drag_node,
-        ..
-    } = gizmo_state
-    {
-        let drag_node = *drag_node;
-        let axis_idx = axis.euler_index();
-        let axis_dir = axes[axis_idx];
-        let axis_clone = axis.clone();
+        if let GizmoState::Dragging {
+            ref axis,
+            node_id: drag_node,
+            ..
+        } = gizmo_state
+        {
+            let drag_node = *drag_node;
+            let axis_idx = axis.euler_index();
+            let axis_dir = axes[axis_idx];
+            let axis_clone = axis.clone();
 
-        if alt_held {
-            // Alt+drag: move pivot
-            handle_pivot_drag(
-                response, axis_dir, gizmo_center, origin_screen,
-                camera, &vp, rect, pivot_offset, nt.rotation,
-            );
-        } else {
-            let ctrl_held = response.ctx.input(|i| i.modifiers.ctrl);
-            match gizmo_mode {
-                GizmoMode::Translate => {
-                    handle_translate_drag(
-                        response, axis_dir, gizmo_center, origin_screen,
-                        camera, &vp, rect, scene, drag_node,
-                        pivot_offset, nt.rotation,
-                    );
-                    if ctrl_held {
-                        snap_position(scene, drag_node, axis_idx, snap_config.translate_snap);
+            if alt_held {
+                // Alt+drag: move pivot
+                handle_pivot_drag(
+                    response,
+                    axis_dir,
+                    gizmo_center,
+                    origin_screen,
+                    camera,
+                    &vp,
+                    rect,
+                    pivot_offset,
+                    nt.rotation,
+                );
+            } else {
+                let ctrl_held = response.ctx.input(|i| i.modifiers.ctrl);
+                match gizmo_mode {
+                    GizmoMode::Translate => {
+                        handle_translate_drag(
+                            response,
+                            axis_dir,
+                            gizmo_center,
+                            origin_screen,
+                            camera,
+                            &vp,
+                            rect,
+                            scene,
+                            drag_node,
+                            pivot_offset,
+                            nt.rotation,
+                        );
+                        if ctrl_held {
+                            snap_position(scene, drag_node, axis_idx, snap_config.translate_snap);
+                        }
                     }
-                }
-                GizmoMode::Scale => {
-                    handle_scale_drag(
-                        response, &axis_clone, axis_dir, gizmo_center, origin_screen,
-                        camera, &vp, rect, scene, drag_node,
-                        pivot_offset, nt.rotation,
-                    );
-                    if ctrl_held {
-                        snap_scale(scene, drag_node, axis_idx, snap_config.scale_snap);
+                    GizmoMode::Scale => {
+                        handle_scale_drag(
+                            response,
+                            &axis_clone,
+                            axis_dir,
+                            gizmo_center,
+                            origin_screen,
+                            camera,
+                            &vp,
+                            rect,
+                            scene,
+                            drag_node,
+                            pivot_offset,
+                            nt.rotation,
+                        );
+                        if ctrl_held {
+                            snap_scale(scene, drag_node, axis_idx, snap_config.scale_snap);
+                        }
                     }
-                }
-                GizmoMode::Rotate => {
-                    let view_dir = camera.eye() - gizmo_center;
-                    handle_rotate_drag(
-                        response, &axis_clone, axis_dir, origin_screen,
-                        scene, drag_node, pivot_offset, nt.rotation, gizmo_space,
-                        view_dir,
-                    );
-                    if ctrl_held {
-                        snap_rotation(scene, drag_node, axis_idx, snap_config.rotate_snap.to_radians());
+                    GizmoMode::Rotate => {
+                        let view_dir = camera.eye() - gizmo_center;
+                        handle_rotate_drag(
+                            response,
+                            &axis_clone,
+                            axis_dir,
+                            origin_screen,
+                            scene,
+                            drag_node,
+                            pivot_offset,
+                            nt.rotation,
+                            gizmo_space,
+                            view_dir,
+                        );
+                        if ctrl_held {
+                            snap_rotation(
+                                scene,
+                                drag_node,
+                                axis_idx,
+                                snap_config.rotate_snap.to_radians(),
+                            );
+                        }
                     }
                 }
             }
+            consumed = true;
         }
-        consumed = true;
-      }
     }
 
     // End drag
-    if response.drag_stopped_by(egui::PointerButton::Primary) && matches!(gizmo_state, GizmoState::Dragging { .. }) {
+    if response.drag_stopped_by(egui::PointerButton::Primary)
+        && matches!(gizmo_state, GizmoState::Dragging { .. })
+    {
         *gizmo_state = GizmoState::Idle;
         consumed = true;
     }
@@ -832,9 +944,16 @@ fn snap_value(val: f32, snap: f32) -> f32 {
 fn snap_position(scene: &mut Scene, node_id: NodeId, axis_idx: usize, snap: f32) {
     if let Some(node) = scene.nodes.get_mut(&node_id) {
         let pos = match &mut node.data {
-            NodeData::Primitive { ref mut position, .. } => position,
-            NodeData::Sculpt { ref mut position, .. } => position,
-            NodeData::Transform { ref mut translation, .. } => translation,
+            NodeData::Primitive {
+                ref mut position, ..
+            } => position,
+            NodeData::Sculpt {
+                ref mut position, ..
+            } => position,
+            NodeData::Transform {
+                ref mut translation,
+                ..
+            } => translation,
             _ => return,
         };
         match axis_idx {
@@ -848,9 +967,15 @@ fn snap_position(scene: &mut Scene, node_id: NodeId, axis_idx: usize, snap: f32)
 fn snap_rotation(scene: &mut Scene, node_id: NodeId, axis_idx: usize, snap_rad: f32) {
     if let Some(node) = scene.nodes.get_mut(&node_id) {
         let rot = match &mut node.data {
-            NodeData::Primitive { ref mut rotation, .. } => rotation,
-            NodeData::Sculpt { ref mut rotation, .. } => rotation,
-            NodeData::Transform { ref mut rotation, .. } => rotation,
+            NodeData::Primitive {
+                ref mut rotation, ..
+            } => rotation,
+            NodeData::Sculpt {
+                ref mut rotation, ..
+            } => rotation,
+            NodeData::Transform {
+                ref mut rotation, ..
+            } => rotation,
             _ => return,
         };
         match axis_idx {

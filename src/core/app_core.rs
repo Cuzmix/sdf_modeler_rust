@@ -83,7 +83,8 @@ impl AppCore {
     }
 
     fn handle_with_history(&mut self, command: CoreCommand) -> CoreCommandResult {
-        self.history.begin_frame(&self.scene, self.selection.primary);
+        self.history
+            .begin_frame(&self.scene, self.selection.primary);
         let result = self.handle_non_history_command(command);
         self.history
             .end_frame(&self.scene, self.selection.primary, false);
@@ -142,14 +143,22 @@ impl AppCore {
                 self.show_debug = !self.show_debug;
                 result.toast_message = Some(format!(
                     "Debug {}",
-                    if self.show_debug { "enabled" } else { "disabled" }
+                    if self.show_debug {
+                        "enabled"
+                    } else {
+                        "disabled"
+                    }
                 ));
             }
             CoreCommand::ToggleSettings => {
                 self.show_settings = !self.show_settings;
                 result.toast_message = Some(format!(
                     "Settings {}",
-                    if self.show_settings { "opened" } else { "closed" }
+                    if self.show_settings {
+                        "opened"
+                    } else {
+                        "closed"
+                    }
                 ));
             }
             CoreCommand::CreatePrimitive(prim) => {
@@ -222,9 +231,8 @@ impl AppCore {
                     }
                     result.buffer_dirty = true;
                 } else {
-                    result.toast_message = Some(
-                        "Select a light or its transform to toggle solo".to_string(),
-                    );
+                    result.toast_message =
+                        Some("Select a light or its transform to toggle solo".to_string());
                 }
             }
             CoreCommand::ClearSoloLight => {
@@ -236,15 +244,14 @@ impl AppCore {
             }
             CoreCommand::DeleteSelected => {
                 if let Some(sel) = self.selection.primary {
-                    let locked = self
-                        .scene
-                        .nodes
-                        .get(&sel)
-                        .is_some_and(|node| node.locked);
+                    let locked = self.scene.nodes.get(&sel).is_some_and(|node| node.locked);
                     if !locked {
                         self.scene.remove_node(sel);
                         self.selection.clear();
-                        if self.soloed_light.is_some_and(|light_id| !self.scene.nodes.contains_key(&light_id)) {
+                        if self
+                            .soloed_light
+                            .is_some_and(|light_id| !self.scene.nodes.contains_key(&light_id))
+                        {
                             self.soloed_light = None;
                         }
                         result.buffer_dirty = true;
@@ -254,15 +261,14 @@ impl AppCore {
                 }
             }
             CoreCommand::DeleteNode(id) => {
-                let locked = self
-                    .scene
-                    .nodes
-                    .get(&id)
-                    .is_some_and(|node| node.locked);
+                let locked = self.scene.nodes.get(&id).is_some_and(|node| node.locked);
                 if !locked {
                     self.scene.remove_node(id);
                     self.selection.remove(id);
-                    if self.soloed_light.is_some_and(|light_id| !self.scene.nodes.contains_key(&light_id)) {
+                    if self
+                        .soloed_light
+                        .is_some_and(|light_id| !self.scene.nodes.contains_key(&light_id))
+                    {
                         self.soloed_light = None;
                     }
                     result.buffer_dirty = true;
@@ -300,7 +306,8 @@ impl AppCore {
             CoreCommand::FocusSelected => {
                 if let Some(selected_id) = self.selection.primary {
                     let parent_map = self.scene.build_parent_map();
-                    let (center, radius) = self.scene.compute_subtree_sphere(selected_id, &parent_map);
+                    let (center, radius) =
+                        self.scene.compute_subtree_sphere(selected_id, &parent_map);
                     self.camera.focus_on(
                         glam::Vec3::new(center[0], center[1], center[2]),
                         radius.max(0.5),
@@ -524,7 +531,6 @@ mod tests {
         assert!(core.selection.set.contains(&id));
     }
 
-
     #[test]
     fn toggle_select_adds_and_removes_node() {
         let mut core = new_core();
@@ -626,7 +632,13 @@ mod tests {
         assert!(result.handled);
         assert!(result.buffer_dirty);
 
-        let light_id = match &core.scene.nodes.get(&transform_id).expect("transform exists").data {
+        let light_id = match &core
+            .scene
+            .nodes
+            .get(&transform_id)
+            .expect("transform exists")
+            .data
+        {
             NodeData::Transform {
                 input: Some(light_id),
                 ..
@@ -669,7 +681,11 @@ mod tests {
         assert!(result.handled);
         assert!(result.buffer_dirty);
 
-        let node = core.scene.nodes.get(&transform_id).expect("transform exists");
+        let node = core
+            .scene
+            .nodes
+            .get(&transform_id)
+            .expect("transform exists");
         match &node.data {
             NodeData::Transform { translation, .. } => {
                 assert_eq!(*translation, glam::Vec3::new(1.5, 1.5, 4.0));
@@ -678,16 +694,3 @@ mod tests {
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -39,8 +39,8 @@ pub enum BrushMode {
 impl BrushMode {
     pub fn sign(&self) -> f32 {
         match self {
-            Self::Add => -1.0,   // decrease distance = add material
-            Self::Carve => 1.0,  // increase distance = remove material
+            Self::Add => -1.0,  // decrease distance = add material
+            Self::Carve => 1.0, // increase distance = remove material
             Self::Smooth => 0.0,
             Self::Flatten => 0.0,
             Self::Inflate => -1.0,
@@ -56,7 +56,7 @@ impl BrushMode {
             Self::Smooth => 2.0,
             Self::Flatten => 3.0,
             Self::Inflate => 4.0,
-            Self::Grab => 5.0,  // CPU-only, never dispatched to GPU
+            Self::Grab => 5.0, // CPU-only, never dispatched to GPU
         }
     }
 }
@@ -115,15 +115,27 @@ impl BrushShape {
         match self {
             Self::Sphere => {
                 let dist = offset.length();
-                if dist < radius { Some(dist / radius) } else { None }
+                if dist < radius {
+                    Some(dist / radius)
+                } else {
+                    None
+                }
             }
             Self::Cube => {
                 let nt = offset.abs().max_element() / radius;
-                if nt < 1.0 { Some(nt) } else { None }
+                if nt < 1.0 {
+                    Some(nt)
+                } else {
+                    None
+                }
             }
             Self::Diamond => {
                 let nt = (offset.x.abs() + offset.y.abs() + offset.z.abs()) / radius;
-                if nt < 1.0 { Some(nt) } else { None }
+                if nt < 1.0 {
+                    Some(nt)
+                } else {
+                    None
+                }
             }
             Self::Ring => {
                 let dist = offset.length();
@@ -141,11 +153,14 @@ impl BrushShape {
                 let dist_xz = (offset.x * offset.x + offset.z * offset.z).sqrt();
                 let nt_xz = dist_xz / radius;
                 let nt_y = offset.y.abs() / radius;
-                if nt_xz < 1.0 && nt_y < 1.0 { Some(nt_xz) } else { None }
+                if nt_xz < 1.0 && nt_y < 1.0 {
+                    Some(nt_xz)
+                } else {
+                    None
+                }
             }
         }
     }
-
 }
 
 // ---------------------------------------------------------------------------
@@ -635,14 +650,20 @@ pub fn apply_grab_to_grid_differential_scene(
 ) -> Option<(u32, u32)> {
     // Extract VoxelGrid from the scene node temporarily
     let node = scene.nodes.get_mut(&node_id)?;
-    let mut grid = if let NodeData::Sculpt { ref mut voxel_grid, .. } = node.data {
-        std::mem::replace(voxel_grid, VoxelGrid {
-            resolution: 1,
-            bounds_min: Vec3::ZERO,
-            bounds_max: Vec3::ONE,
-            is_displacement: true,
-            data: vec![0.0],
-        })
+    let mut grid = if let NodeData::Sculpt {
+        ref mut voxel_grid, ..
+    } = node.data
+    {
+        std::mem::replace(
+            voxel_grid,
+            VoxelGrid {
+                resolution: 1,
+                bounds_min: Vec3::ZERO,
+                bounds_max: Vec3::ONE,
+                is_displacement: true,
+                data: vec![0.0],
+            },
+        )
     } else {
         return None;
     };
@@ -664,7 +685,10 @@ pub fn apply_grab_to_grid_differential_scene(
 
     // Put the grid back
     if let Some(node) = scene.nodes.get_mut(&node_id) {
-        if let NodeData::Sculpt { ref mut voxel_grid, .. } = node.data {
+        if let NodeData::Sculpt {
+            ref mut voxel_grid, ..
+        } = node.data
+        {
             *voxel_grid = grid;
         }
     }

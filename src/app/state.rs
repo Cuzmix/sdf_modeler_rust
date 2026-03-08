@@ -281,7 +281,10 @@ mod tests {
             vertices.push(Vec3::new(0.0, 1.0, 0.0));
             triangles.push([base, base + 1, base + 2]);
         }
-        TriMesh { vertices, triangles }
+        TriMesh {
+            vertices,
+            triangles,
+        }
     }
 
     #[test]

@@ -8,13 +8,12 @@ mod sculpting;
 pub(crate) mod state;
 mod ui_panels;
 
+use crate::compat::{Duration, Instant};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
-use crate::compat::{Duration, Instant};
 
 use eframe::egui;
-use eframe::wgpu;
 use glam::Vec3;
 
 use crate::gpu::buffers;
@@ -195,9 +194,7 @@ impl SdfApp {
             .and_then(|m| m.project_path.as_deref())
             .map(|path| format!("\nSource project: {path}"))
             .unwrap_or_default();
-        format!(
-            "Recovered unsaved work found from UNIX timestamp {timestamp}.{project_hint}"
-        )
+        format!("Recovered unsaved work found from UNIX timestamp {timestamp}.{project_hint}")
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -398,7 +395,8 @@ impl eframe::App for SdfApp {
             self.doc.camera.yaw += dt as f32 * 0.5; // ~0.5 rad/s
         }
 
-        self.doc.history
+        self.doc
+            .history
             .begin_frame(&self.doc.scene, self.ui.node_graph_state.selected);
 
         // ── 2. Async polling ───────────────────────────────────────────
@@ -411,9 +409,7 @@ impl eframe::App for SdfApp {
         // Detect sculpt drag end: LMB released while sculpt_dragging was true.
         // Must happen here (before draw) because hover picks immediately fill
         // pending_pick, preventing reset_sculpt_stroke_if_idle from ever firing.
-        if self.async_state.sculpt_dragging
-            && !ctx.input(|i| i.pointer.primary_down())
-        {
+        if self.async_state.sculpt_dragging && !ctx.input(|i| i.pointer.primary_down()) {
             if self.async_state.last_sculpt_hit.is_some() {
                 self.doc.sculpt_history.end_stroke();
             }
@@ -542,9 +538,9 @@ impl eframe::App for SdfApp {
 
         let t_ui = Instant::now();
         let bake_progress = match &self.async_state.bake_status {
-            BakeStatus::InProgress { progress, total, .. } => {
-                Some((progress.load(Ordering::Relaxed), *total))
-            }
+            BakeStatus::InProgress {
+                progress, total, ..
+            } => Some((progress.load(Ordering::Relaxed), *total)),
             BakeStatus::Idle => None,
         };
 
@@ -555,11 +551,16 @@ impl eframe::App for SdfApp {
         let mut is_hover_pick = false;
         let sculpt_count = self.gpu.sculpt_tex_indices.len();
         let isolation_label: Option<String> = self.ui.isolation_state.as_ref().and_then(|iso| {
-            self.doc.scene.nodes.get(&iso.isolated_node).map(|n| n.name.clone())
+            self.doc
+                .scene
+                .nodes
+                .get(&iso.isolated_node)
+                .map(|n| n.name.clone())
         });
-        let solo_label: Option<String> = self.doc.soloed_light.and_then(|id| {
-            self.doc.scene.nodes.get(&id).map(|n| n.name.clone())
-        });
+        let solo_label: Option<String> = self
+            .doc
+            .soloed_light
+            .and_then(|id| self.doc.scene.nodes.get(&id).map(|n| n.name.clone()));
         let fps_info = if self.settings.show_fps_overlay {
             Some((self.perf.timings.avg_fps, self.perf.timings.avg_frame_ms))
         } else {
@@ -567,10 +568,8 @@ impl eframe::App for SdfApp {
         };
         // Compute active light set for this frame (used by scene tree + properties)
         {
-            let (active_ids, total_count) = crate::gpu::buffers::identify_active_lights(
-                &self.doc.scene,
-                self.doc.camera.eye(),
-            );
+            let (active_ids, total_count) =
+                crate::gpu::buffers::identify_active_lights(&self.doc.scene, self.doc.camera.eye());
             self.ui.active_light_ids = active_ids;
             self.ui.total_light_count = total_count;
 
@@ -605,7 +604,7 @@ impl eframe::App for SdfApp {
             settings: &mut self.settings,
             time: now as f32,
             bake_progress,
-                viewport: ViewportContext {
+            viewport: ViewportContext {
                 gizmo_state: &mut self.gizmo.state,
                 gizmo_mode: &self.gizmo.mode,
                 gizmo_space: &self.gizmo.space,
@@ -621,14 +620,14 @@ impl eframe::App for SdfApp {
                 isolation_label: isolation_label.clone(),
                 turntable_active: self.ui.turntable_active,
                 is_hover_pick: &mut is_hover_pick,
-                    hover_world_pos: self.async_state.hover_world_pos,
-                    cursor_over_geometry: self.async_state.cursor_over_geometry,
-                    soloed_light: self.doc.soloed_light,
-                    solo_label: solo_label.clone(),
-                    show_distance_readout: &mut self.ui.show_distance_readout,
-                    measurement_mode: &mut self.ui.measurement_mode,
-                    measurement_points: &mut self.ui.measurement_points,
-                },
+                hover_world_pos: self.async_state.hover_world_pos,
+                cursor_over_geometry: self.async_state.cursor_over_geometry,
+                soloed_light: self.doc.soloed_light,
+                solo_label: solo_label.clone(),
+                show_distance_readout: &mut self.ui.show_distance_readout,
+                measurement_mode: &mut self.ui.measurement_mode,
+                measurement_points: &mut self.ui.measurement_points,
+            },
             scene_tree: SceneTreeContext {
                 renaming_node: &mut self.ui.renaming_node,
                 rename_buf: &mut self.ui.rename_buf,
@@ -646,8 +645,7 @@ impl eframe::App for SdfApp {
         egui::CentralPanel::default()
             .frame(egui::Frame::none())
             .show(ctx, |ui| {
-                egui_dock::DockArea::new(&mut self.ui.dock_state)
-                    .show_inside(ui, &mut tab_viewer);
+                egui_dock::DockArea::new(&mut self.ui.dock_state).show_inside(ui, &mut tab_viewer);
             });
 
         // Command palette (drawn after dock, on top of everything)
@@ -706,10 +704,16 @@ impl eframe::App for SdfApp {
 
         // Track unsaved changes and update window title
         let now_dirty = fp != self.persistence.saved_fingerprint
-            || self.doc.scene.structure_key() != 0 && self.persistence.saved_fingerprint == 0 && !self.doc.scene.nodes.is_empty();
+            || self.doc.scene.structure_key() != 0
+                && self.persistence.saved_fingerprint == 0
+                && !self.doc.scene.nodes.is_empty();
         if now_dirty != self.persistence.scene_dirty {
             self.persistence.scene_dirty = now_dirty;
-            let title = if now_dirty { "SDF Modeler *" } else { "SDF Modeler" };
+            let title = if now_dirty {
+                "SDF Modeler *"
+            } else {
+                "SDF Modeler"
+            };
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.into()));
         }
 
@@ -717,14 +721,17 @@ impl eframe::App for SdfApp {
         #[cfg(not(target_arch = "wasm32"))]
         if self.settings.auto_save_enabled
             && self.persistence.scene_dirty
-            && self.persistence.last_auto_save.elapsed() >= Duration::from_secs(self.settings.auto_save_interval_secs as u64)
+            && self.persistence.last_auto_save.elapsed()
+                >= Duration::from_secs(self.settings.auto_save_interval_secs as u64)
         {
             self.persistence.last_auto_save = Instant::now();
             let path = crate::io::auto_save_path();
             if let Err(e) = crate::io::save_project(&self.doc.scene, &self.doc.camera, &path) {
                 log::error!("Auto-save failed: {}", e);
             } else {
-                if let Err(e) = crate::io::write_recovery_meta(self.persistence.current_file_path.as_deref()) {
+                if let Err(e) =
+                    crate::io::write_recovery_meta(self.persistence.current_file_path.as_deref())
+                {
                     log::error!("Auto-save metadata write failed: {}", e);
                 }
                 log::info!("Auto-saved to {}", path.display());
@@ -793,4 +800,3 @@ impl eframe::App for SdfApp {
         self.settings.save();
     }
 }
-

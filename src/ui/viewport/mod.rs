@@ -1,14 +1,16 @@
 mod composite;
+#[cfg(feature = "legacy-egui-ui")]
 mod draw;
 mod gpu_ops;
 mod pipelines;
 mod textures;
 
 pub use composite::CompositeResources;
+#[cfg(feature = "legacy-egui-ui")]
 pub use draw::draw;
 
 use bytemuck::{Pod, Zeroable};
-use eframe::wgpu;
+use wgpu;
 
 use crate::gpu::buffers::SdfNodeGpu;
 use crate::gpu::camera::CameraUniform;
@@ -186,12 +188,16 @@ impl ViewportResources {
             ..Default::default()
         });
         let voxel_tex_bgl = Self::create_voxel_tex_bgl(device, 0);
-        let voxel_tex_bind_group = Self::create_voxel_tex_bind_group(
-            device, &voxel_tex_bgl, &voxel_sampler, &[],
-        );
+        let voxel_tex_bind_group =
+            Self::create_voxel_tex_bind_group(device, &voxel_tex_bgl, &voxel_sampler, &[]);
 
         let pipeline = Self::create_render_pipeline(
-            device, shader_src, &camera_bgl, &scene_bgl, &voxel_tex_bgl, target_format,
+            device,
+            shader_src,
+            &camera_bgl,
+            &scene_bgl,
+            &voxel_tex_bgl,
+            target_format,
         );
 
         // --- Pick compute resources ---
@@ -257,9 +263,8 @@ impl ViewportResources {
             ],
         });
 
-        let pick_pipeline = Self::create_pick_pipeline(
-            device, pick_shader_src, &camera_bgl, &scene_bgl, &pick_bgl,
-        );
+        let pick_pipeline =
+            Self::create_pick_pipeline(device, pick_shader_src, &camera_bgl, &scene_bgl, &pick_bgl);
 
         // --- Brush compute resources ---
         let brush_bgl = Self::create_brush_bgl(device);
@@ -354,11 +359,19 @@ impl ViewportResources {
             self.rebuild_voxel_textures(device, sculpt_count);
         }
         self.pipeline = Self::create_render_pipeline(
-            device, shader_src, &self.camera_bgl, &self.scene_bgl,
-            &self.voxel_tex_bgl, self.target_format,
+            device,
+            shader_src,
+            &self.camera_bgl,
+            &self.scene_bgl,
+            &self.voxel_tex_bgl,
+            self.target_format,
         );
         self.pick_pipeline = Self::create_pick_pipeline(
-            device, pick_shader_src, &self.camera_bgl, &self.scene_bgl, &self.pick_bgl,
+            device,
+            pick_shader_src,
+            &self.camera_bgl,
+            &self.scene_bgl,
+            &self.pick_bgl,
         );
     }
 
@@ -367,20 +380,24 @@ impl ViewportResources {
     pub fn ensure_offscreen_texture(&mut self, device: &wgpu::Device, width: u32, height: u32) {
         let width = width.max(1);
         let height = height.max(1);
-        if self.render_width == width && self.render_height == height
+        if self.render_width == width
+            && self.render_height == height
             && self.offscreen_texture.is_some()
         {
             return;
         }
         let tex = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Offscreen RT"),
-            size: wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: self.target_format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                 | wgpu::TextureUsages::TEXTURE_BINDING,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         });
         let view = tex.create_view(&wgpu::TextureViewDescriptor::default());

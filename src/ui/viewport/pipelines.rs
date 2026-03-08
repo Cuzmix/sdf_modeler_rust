@@ -1,4 +1,4 @@
-use eframe::wgpu;
+use wgpu;
 
 use super::{ViewportResources, BLIT_SHADER_SRC};
 
@@ -142,7 +142,9 @@ impl ViewportResources {
     ) -> wgpu::ComputePipeline {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Brush Compute Shader"),
-            source: wgpu::ShaderSource::Wgsl(crate::gpu::shader_templates::BRUSH_COMPUTE_SHADER.into()),
+            source: wgpu::ShaderSource::Wgsl(
+                crate::gpu::shader_templates::BRUSH_COMPUTE_SHADER.into(),
+            ),
         });
 
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {

@@ -61,10 +61,11 @@ pub fn draw(
             ui.label("Voxel Resolution:");
             ui.add_space(4.0);
 
-            ui.radio_value(&mut state.use_auto, true, format!(
-                "Auto-calculate ({}^3)",
-                state.auto_resolution
-            ));
+            ui.radio_value(
+                &mut state.use_auto,
+                true,
+                format!("Auto-calculate ({}^3)", state.auto_resolution),
+            );
             ui.radio_value(&mut state.use_auto, false, "Manual");
 
             if state.use_auto {

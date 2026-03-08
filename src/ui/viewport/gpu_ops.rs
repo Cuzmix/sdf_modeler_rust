@@ -1,4 +1,4 @@
-use eframe::wgpu;
+use wgpu;
 
 use crate::gpu::buffers::SdfNodeGpu;
 use crate::gpu::camera::CameraUniform;
@@ -108,7 +108,11 @@ impl ViewportResources {
 
         // Write pick input (mouse_pos + padding)
         let pick_input: [f32; 4] = [pending.mouse_pos[0], pending.mouse_pos[1], 0.0, 0.0];
-        queue.write_buffer(&self.pick_input_buffer, 0, bytemuck::cast_slice(&pick_input));
+        queue.write_buffer(
+            &self.pick_input_buffer,
+            0,
+            bytemuck::cast_slice(&pick_input),
+        );
 
         // Encode compute dispatch + copy
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -127,7 +131,13 @@ impl ViewportResources {
             pass.dispatch_workgroups(1, 1, 1);
         }
 
-        encoder.copy_buffer_to_buffer(&self.pick_output_buffer, 0, &self.pick_staging_buffer, 0, 32);
+        encoder.copy_buffer_to_buffer(
+            &self.pick_output_buffer,
+            0,
+            &self.pick_staging_buffer,
+            0,
+            32,
+        );
 
         queue.submit(std::iter::once(encoder.finish()));
 
@@ -151,7 +161,7 @@ impl ViewportResources {
                 let result = Self::read_pick_from_staging(&self.pick_staging_buffer);
                 Some(result)
             }
-            Ok(Err(_)) => Some(None), // Map failed
+            Ok(Err(_)) => Some(None),                          // Map failed
             Err(std::sync::mpsc::TryRecvError::Empty) => None, // Not ready yet
             Err(std::sync::mpsc::TryRecvError::Disconnected) => Some(None),
         }
@@ -234,7 +244,11 @@ impl ViewportResources {
         // Create offscreen texture
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Screenshot Texture"),
-            size: wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -301,7 +315,11 @@ impl ViewportResources {
                     rows_per_image: Some(height),
                 },
             },
-            wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
         );
 
         queue.submit(std::iter::once(encoder.finish()));

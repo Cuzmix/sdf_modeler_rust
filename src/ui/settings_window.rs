@@ -249,7 +249,10 @@ pub fn draw(
             });
         });
 
-    if imported || settings.render != before_render || settings.preferred_frontend != before_frontend {
+    if imported
+        || settings.render != before_render
+        || settings.preferred_frontend != before_frontend
+    {
         actions.push(Action::SettingsChanged);
     }
 }
@@ -268,17 +271,29 @@ fn draw_keybindings_section(
         .show(ui, |ui| {
             // Toolbar: Reset / Export / Import
             ui.horizontal(|ui| {
-                if ui.button("Reset to Defaults").on_hover_text("Restore all keybindings to defaults").clicked() {
+                if ui
+                    .button("Reset to Defaults")
+                    .on_hover_text("Restore all keybindings to defaults")
+                    .clicked()
+                {
                     keymap.reset_to_defaults();
                     *rebinding_action = None;
                 }
                 #[cfg(not(target_arch = "wasm32"))]
                 {
                     ui.separator();
-                    if ui.button("Export...").on_hover_text("Save keybindings to a JSON file").clicked() {
+                    if ui
+                        .button("Export...")
+                        .on_hover_text("Save keybindings to a JSON file")
+                        .clicked()
+                    {
                         export_keymap_dialog(keymap);
                     }
-                    if ui.button("Import...").on_hover_text("Load keybindings from a JSON file").clicked() {
+                    if ui
+                        .button("Import...")
+                        .on_hover_text("Load keybindings from a JSON file")
+                        .clicked()
+                    {
                         import_keymap_dialog(keymap);
                         *rebinding_action = None;
                     }
@@ -328,7 +343,8 @@ fn draw_binding_row(
     if is_rebinding_this {
         ui.colored_label(egui::Color32::YELLOW, "Press key...");
     } else {
-        let shortcut_text = keymap.format_shortcut(action)
+        let shortcut_text = keymap
+            .format_shortcut(action)
             .unwrap_or_else(|| "--".to_string());
         ui.monospace(&shortcut_text);
     }
@@ -354,9 +370,16 @@ fn capture_rebind_key(
     // Check for any key press events this frame
     let events = ui.input(|input| input.events.clone());
     for event in &events {
-        if let egui::Event::Key { key, pressed: true, modifiers, .. } = event {
+        if let egui::Event::Key {
+            key,
+            pressed: true,
+            modifiers,
+            ..
+        } = event
+        {
             // Skip bare modifier keys (Ctrl/Shift/Alt alone)
-            if matches!(key,
+            if matches!(
+                key,
                 egui::Key::Backspace | egui::Key::Insert | egui::Key::PageUp | egui::Key::PageDown
             ) {
                 continue;
@@ -382,7 +405,9 @@ fn capture_rebind_key(
                     // Remove the conflicting binding to resolve the conflict
                     log::warn!(
                         "Keybinding conflict: {} was bound to {}. Unbound {}.",
-                        new_combo, conflicting.label(), conflicting.label()
+                        new_combo,
+                        conflicting.label(),
+                        conflicting.label()
                     );
                     keymap.remove_binding(conflicting);
                 }
@@ -453,4 +478,3 @@ fn labeled_slider(
         ui.add(slider);
     });
 }
-

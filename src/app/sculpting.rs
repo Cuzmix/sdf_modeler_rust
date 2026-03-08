@@ -1,4 +1,3 @@
-use eframe::wgpu;
 use glam::Vec3;
 
 use crate::gpu::picking::PickResult;
@@ -92,7 +91,10 @@ impl SdfApp {
 
         // Per-stroke undo: snapshot grid data at the start of each stroke
         if self.async_state.last_sculpt_hit.is_none() {
-            if let SculptState::Active { node_id: active_id, .. } = self.doc.sculpt_state {
+            if let SculptState::Active {
+                node_id: active_id, ..
+            } = self.doc.sculpt_state
+            {
                 self.doc.sculpt_history.set_node(active_id);
                 if let Some(node) = self.doc.scene.nodes.get(&active_id) {
                     if let NodeData::Sculpt { ref voxel_grid, .. } = node.data {
@@ -149,7 +151,9 @@ impl SdfApp {
                     } else {
                         // Check if the hit node has a sculpt parent
                         let parent_map = self.doc.scene.build_parent_map();
-                        if let Some(sculpt_id) = self.doc.scene.find_sculpt_parent(hit_node_id, &parent_map) {
+                        if let Some(sculpt_id) =
+                            self.doc.scene.find_sculpt_parent(hit_node_id, &parent_map)
+                        {
                             // Switch to the sculpt parent
                             self.doc.sculpt_state = SculptState::new_active(sculpt_id);
                             self.doc.sculpt_history.set_node(sculpt_id);
@@ -168,7 +172,11 @@ impl SdfApp {
             // Fall through: hit_node_id is a child of the active sculpt — apply brush normally
         }
 
-        let hit_world = Vec3::new(result.world_pos[0], result.world_pos[1], result.world_pos[2]);
+        let hit_world = Vec3::new(
+            result.world_pos[0],
+            result.world_pos[1],
+            result.world_pos[2],
+        );
         // Apply Ctrl/Shift modifier overrides (ZBrush/Blender convention)
         let brush_mode = if self.async_state.sculpt_shift_held {
             BrushMode::Smooth
@@ -189,7 +197,14 @@ impl SdfApp {
         let is_grab = brush_mode == BrushMode::Grab;
         if is_grab && grab_snapshot.is_none() {
             if let Some(node) = self.doc.scene.nodes.get(&node_id) {
-                if let NodeData::Sculpt { input, ref voxel_grid, position, rotation, .. } = node.data {
+                if let NodeData::Sculpt {
+                    input,
+                    ref voxel_grid,
+                    position,
+                    rotation,
+                    ..
+                } = node.data
+                {
                     if let Some(child_id) = input {
                         // Differential sculpt: build total-SDF snapshot (analytical + displacement)
                         let res = voxel_grid.resolution;
@@ -197,9 +212,15 @@ impl SdfApp {
                         for z in 0..res {
                             for y in 0..res {
                                 for x in 0..res {
-                                    let local_pos = voxel_grid.grid_to_world(x as f32, y as f32, z as f32);
-                                    let world_pos = position + sculpt::inverse_rotate_euler(local_pos, rotation);
-                                    let analytical = voxel::evaluate_sdf_tree(&self.doc.scene, child_id, world_pos);
+                                    let local_pos =
+                                        voxel_grid.grid_to_world(x as f32, y as f32, z as f32);
+                                    let world_pos = position
+                                        + sculpt::inverse_rotate_euler(local_pos, rotation);
+                                    let analytical = voxel::evaluate_sdf_tree(
+                                        &self.doc.scene,
+                                        child_id,
+                                        world_pos,
+                                    );
                                     let idx = voxel::VoxelGrid::index(x, y, z, res);
                                     total_snap[idx] += analytical;
                                 }
@@ -273,7 +294,9 @@ impl SdfApp {
                     hit_world - origin
                 };
                 let (spos, srot) = match self.doc.scene.nodes.get(&node_id).map(|n| &n.data) {
-                    Some(NodeData::Sculpt { position, rotation, .. }) => (*position, *rotation),
+                    Some(NodeData::Sculpt {
+                        position, rotation, ..
+                    }) => (*position, *rotation),
                     _ => return,
                 };
                 // Center at grab start position, not current mouse
@@ -298,7 +321,10 @@ impl SdfApp {
                 } else {
                     // Standalone sculpt: grid is total SDF, write directly
                     if let Some(node) = self.doc.scene.nodes.get_mut(&node_id) {
-                        if let NodeData::Sculpt { ref mut voxel_grid, .. } = node.data {
+                        if let NodeData::Sculpt {
+                            ref mut voxel_grid, ..
+                        } = node.data
+                        {
                             Some(sculpt::apply_grab_to_grid(
                                 voxel_grid,
                                 snap,
@@ -308,8 +334,12 @@ impl SdfApp {
                                 local_delta,
                                 &falloff_mode,
                             ))
-                        } else { None }
-                    } else { None }
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
                 };
 
                 if let Some((z0, z1)) = dirty {
@@ -344,42 +374,42 @@ impl SdfApp {
 
         for &pos in &all_hits {
             // Standard brush modes (Add/Carve/Smooth/Flatten/Inflate)
-                let dirty_range = sculpt::apply_brush(
-                    &mut self.doc.scene,
+            let dirty_range = sculpt::apply_brush(
+                &mut self.doc.scene,
+                node_id,
+                pos,
+                &brush_mode,
+                brush_radius,
+                brush_strength,
+                &falloff_mode,
+                &brush_shape,
+                smooth_iterations,
+                flatten_ref_val,
+                surface_constraint,
+            );
+
+            // GPU brush for non-Smooth modes (instant visual update on storage buffer)
+            if brush_mode != BrushMode::Smooth {
+                self.dispatch_gpu_brush(
                     node_id,
                     pos,
                     &brush_mode,
                     brush_radius,
                     brush_strength,
                     &falloff_mode,
-                    &brush_shape,
-                    smooth_iterations,
                     flatten_ref_val,
                     surface_constraint,
                 );
+            }
 
-                // GPU brush for non-Smooth modes (instant visual update on storage buffer)
-                if brush_mode != BrushMode::Smooth {
-                    self.dispatch_gpu_brush(
-                        node_id,
-                        pos,
-                        &brush_mode,
-                        brush_radius,
-                        brush_strength,
-                        &falloff_mode,
-                        flatten_ref_val,
-                        surface_constraint,
-                    );
+            if let Some((z0, z1)) = dirty_range {
+                // Smooth mode: upload CPU data to GPU storage buffer (no GPU compute)
+                if brush_mode == BrushMode::Smooth {
+                    self.try_incremental_voxel_upload(node_id, z0, z1);
                 }
-
-                if let Some((z0, z1)) = dirty_range {
-                    // Smooth mode: upload CPU data to GPU storage buffer (no GPU compute)
-                    if brush_mode == BrushMode::Smooth {
-                        self.try_incremental_voxel_upload(node_id, z0, z1);
-                    }
-                    // Update voxel texture region (keeps texture3D in sync)
-                    self.upload_voxel_texture_region(node_id, z0, z1);
-                }
+                // Update voxel texture region (keeps texture3D in sync)
+                self.upload_voxel_texture_region(node_id, z0, z1);
+            }
         }
 
         // Incremental composite volume update for the brush-affected region
@@ -475,16 +505,16 @@ impl SdfApp {
                 surface_constraint,
                 _pad3: [0.0; 3],
             },
-            workgroups: [
-                (x1 - x0 + 4) / 4,
-                (y1 - y0 + 4) / 4,
-                (z1 - z0 + 4) / 4,
-            ],
+            workgroups: [(x1 - x0 + 4) / 4, (y1 - y0 + 4) / 4, (z1 - z0 + 4) / 4],
         };
 
         let renderer = self.gpu.render_state.renderer.read();
         if let Some(vr) = renderer.callback_resources.get::<ViewportResources>() {
-            vr.dispatch_brush(&self.gpu.render_state.device, &self.gpu.render_state.queue, &dispatch);
+            vr.dispatch_brush(
+                &self.gpu.render_state.device,
+                &self.gpu.render_state.queue,
+                &dispatch,
+            );
         }
     }
 
@@ -569,7 +599,13 @@ impl SdfApp {
                 if sel != active {
                     // Selection changed — try to activate on new node
                     if let Some(id) = sel {
-                        if self.doc.scene.nodes.get(&id).is_some_and(|n| matches!(n.data, NodeData::Sculpt { .. })) {
+                        if self
+                            .doc
+                            .scene
+                            .nodes
+                            .get(&id)
+                            .is_some_and(|n| matches!(n.data, NodeData::Sculpt { .. }))
+                        {
                             self.doc.sculpt_state = SculptState::new_active(id);
                         } else {
                             self.doc.sculpt_state = SculptState::Inactive;
@@ -599,5 +635,4 @@ impl SdfApp {
         }
         self.async_state.pick_state = PickState::Idle;
     }
-
 }

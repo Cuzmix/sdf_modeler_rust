@@ -4,8 +4,8 @@ use crate::keymap::KeymapConfig;
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum FrontendKind {
-    #[default]
     Egui,
+    #[default]
     Slint,
 }
 
@@ -118,10 +118,22 @@ pub struct ExportPreset {
 
 fn default_export_presets() -> Vec<ExportPreset> {
     vec![
-        ExportPreset { name: "Low".into(), resolution: 64 },
-        ExportPreset { name: "Medium".into(), resolution: 128 },
-        ExportPreset { name: "High".into(), resolution: 256 },
-        ExportPreset { name: "Ultra".into(), resolution: 512 },
+        ExportPreset {
+            name: "Low".into(),
+            resolution: 64,
+        },
+        ExportPreset {
+            name: "Medium".into(),
+            resolution: 128,
+        },
+        ExportPreset {
+            name: "High".into(),
+            resolution: 256,
+        },
+        ExportPreset {
+            name: "Ultra".into(),
+            resolution: 512,
+        },
     ]
 }
 
@@ -170,7 +182,7 @@ pub struct Settings {
     pub export_presets: Vec<ExportPreset>,
     #[serde(default)]
     pub keymap: KeymapConfig,
-    #[serde(default)]
+    #[serde(default = "default_preferred_frontend")]
     pub preferred_frontend: FrontendKind,
     #[serde(default = "default_true")]
     pub last_clean_exit: bool,
@@ -194,7 +206,7 @@ impl Default for Settings {
             bookmarks: default_bookmarks(),
             export_presets: default_export_presets(),
             keymap: KeymapConfig::default(),
-            preferred_frontend: FrontendKind::Egui,
+            preferred_frontend: default_preferred_frontend(),
             last_clean_exit: true,
         }
     }
@@ -279,9 +291,10 @@ impl Settings {
     const STORAGE_KEY: &'static str = "sdf_modeler_settings";
 
     pub fn load() -> Self {
-        let storage = web_sys::window()
-            .and_then(|w| w.local_storage().ok().flatten());
-        let Some(storage) = storage else { return Self::default() };
+        let storage = web_sys::window().and_then(|w| w.local_storage().ok().flatten());
+        let Some(storage) = storage else {
+            return Self::default();
+        };
         match storage.get_item(Self::STORAGE_KEY) {
             Ok(Some(json)) => serde_json::from_str(&json).unwrap_or_default(),
             _ => Self::default(),
@@ -289,8 +302,7 @@ impl Settings {
     }
 
     pub fn save(&self) {
-        let storage = web_sys::window()
-            .and_then(|w| w.local_storage().ok().flatten());
+        let storage = web_sys::window().and_then(|w| w.local_storage().ok().flatten());
         let Some(storage) = storage else { return };
         if let Ok(json) = serde_json::to_string_pretty(self) {
             if let Err(e) = storage.set_item(Self::STORAGE_KEY, &json) {
@@ -457,30 +469,81 @@ pub struct RenderConfig {
     pub sculpt_safety_border: f32,
 }
 
-fn default_true() -> bool { true }
-fn default_auto_save_interval() -> u32 { 120 }
-fn default_export_resolution() -> u32 { 128 }
-fn default_max_export_resolution() -> u32 { 2048 }
-fn default_max_sculpt_resolution() -> u32 { 320 }
-fn default_bg_solid_color() -> [f32; 3] { [0.12, 0.12, 0.15] }
-fn default_interaction_scale() -> f32 { 0.5 }
-fn default_rest_scale() -> f32 { 1.0 }
-fn default_composite_resolution() -> u32 { 128 }
-fn default_outline_color() -> [f32; 3] { [1.0, 0.8, 0.2] }
-fn default_outline_thickness() -> f32 { 2.5 }
-fn default_touch_zoom_sensitivity() -> f32 { 500.0 }
-fn default_roll_sensitivity() -> f32 { 0.005 }
-fn default_white() -> [f32; 3] { [1.0, 1.0, 1.0] }
-fn default_sss_strength() -> f32 { 5.0 }
-fn default_sss_color() -> [f32; 3] { [1.0, 0.4, 0.2] }
-fn default_env_reflection_intensity() -> f32 { 0.3 }
-fn default_bloom_threshold() -> f32 { 0.8 }
-fn default_bloom_intensity() -> f32 { 0.3 }
-fn default_bloom_radius() -> f32 { 3.0 }
-fn default_volumetric_steps() -> u32 { 24 }
-fn default_safety_border() -> f32 { 0.05 }
-fn default_cross_section_axis() -> u8 { 1 }
-fn default_bookmarks() -> Vec<Option<CameraBookmark>> { vec![None; 9] }
+fn default_true() -> bool {
+    true
+}
+fn default_auto_save_interval() -> u32 {
+    120
+}
+fn default_export_resolution() -> u32 {
+    128
+}
+fn default_preferred_frontend() -> FrontendKind {
+    FrontendKind::Slint
+}
+fn default_max_export_resolution() -> u32 {
+    2048
+}
+fn default_max_sculpt_resolution() -> u32 {
+    320
+}
+fn default_bg_solid_color() -> [f32; 3] {
+    [0.12, 0.12, 0.15]
+}
+fn default_interaction_scale() -> f32 {
+    0.5
+}
+fn default_rest_scale() -> f32 {
+    1.0
+}
+fn default_composite_resolution() -> u32 {
+    128
+}
+fn default_outline_color() -> [f32; 3] {
+    [1.0, 0.8, 0.2]
+}
+fn default_outline_thickness() -> f32 {
+    2.5
+}
+fn default_touch_zoom_sensitivity() -> f32 {
+    500.0
+}
+fn default_roll_sensitivity() -> f32 {
+    0.005
+}
+fn default_white() -> [f32; 3] {
+    [1.0, 1.0, 1.0]
+}
+fn default_sss_strength() -> f32 {
+    5.0
+}
+fn default_sss_color() -> [f32; 3] {
+    [1.0, 0.4, 0.2]
+}
+fn default_env_reflection_intensity() -> f32 {
+    0.3
+}
+fn default_bloom_threshold() -> f32 {
+    0.8
+}
+fn default_bloom_intensity() -> f32 {
+    0.3
+}
+fn default_bloom_radius() -> f32 {
+    3.0
+}
+fn default_volumetric_steps() -> u32 {
+    24
+}
+fn default_safety_border() -> f32 {
+    0.05
+}
+fn default_cross_section_axis() -> u8 {
+    1
+}
+fn default_bookmarks() -> Vec<Option<CameraBookmark>> {
+    vec![None; 9]
+}
 
 impl Default for RenderConfig {
     fn default() -> Self {
@@ -677,6 +740,3 @@ impl RenderConfig {
             || self.outline_thickness != other.outline_thickness
     }
 }
-
-
-

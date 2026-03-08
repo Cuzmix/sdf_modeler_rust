@@ -358,7 +358,10 @@ impl NodeDataTrait for SdfNodeData {
 
                 if op.has_color_blend_param() {
                     let mut independent = *color_blend >= 0.0;
-                    if ui.checkbox(&mut independent, egui::RichText::new("Color Blend").small()).changed() {
+                    if ui
+                        .checkbox(&mut independent, egui::RichText::new("Color Blend").small())
+                        .changed()
+                    {
                         if independent {
                             *color_blend = *smooth_k;
                         } else {
@@ -444,9 +447,7 @@ impl NodeDataTrait for SdfNodeData {
                         });
                         c
                     }
-                    ModifierKind::Repeat => {
-                        compact_vec3(ui, "Space", value, 0.1, Some(0.0..=20.0))
-                    }
+                    ModifierKind::Repeat => compact_vec3(ui, "Space", value, 0.1, Some(0.0..=20.0)),
                     ModifierKind::FiniteRepeat => {
                         let c1 = compact_vec3(ui, "Space", value, 0.1, Some(0.0..=20.0));
                         let c2 = compact_vec3(ui, "Count", extra, 1.0, Some(0.0..=50.0));
@@ -528,7 +529,14 @@ impl NodeDataTrait for SdfNodeData {
                         .selected_text(light_type.label())
                         .show_ui(ui, |ui| {
                             for lt in crate::graph::scene::LightType::ALL {
-                                if ui.selectable_label(std::mem::discriminant(light_type) == std::mem::discriminant(lt), lt.label()).clicked() {
+                                if ui
+                                    .selectable_label(
+                                        std::mem::discriminant(light_type)
+                                            == std::mem::discriminant(lt),
+                                        lt.label(),
+                                    )
+                                    .clicked()
+                                {
                                     *light_type = lt.clone();
                                     changed = true;
                                 }
@@ -577,10 +585,7 @@ impl NodeTemplateTrait for SdfNodeTemplate {
         }
     }
 
-    fn node_finder_categories(
-        &self,
-        _user_state: &mut Self::UserState,
-    ) -> Vec<Self::CategoryType> {
+    fn node_finder_categories(&self, _user_state: &mut Self::UserState) -> Vec<Self::CategoryType> {
         match self {
             Self::Primitive(_) => vec![SdfCategory::Primitive],
             Self::Operation(_) => vec![SdfCategory::Operation],
@@ -652,9 +657,7 @@ impl NodeTemplateTrait for SdfNodeTemplate {
         }
 
         // Record so the sync layer can create the scene node
-        user_state
-            .created_via_finder
-            .push((node_id, self.clone()));
+        user_state.created_via_finder.push((node_id, self.clone()));
     }
 }
 
@@ -811,51 +814,51 @@ fn rebuild_graph_from_scene_impl(
         let Some(node) = scene.nodes.get(&sid) else {
             continue;
         };
-        let user_data = SdfNodeData {
-            scene_node_id: sid,
-        };
+        let user_data = SdfNodeData { scene_node_id: sid };
         let label = node.name.clone();
 
-        let graph_node_id = graph_state.graph.add_node(label, user_data, |graph, node_id| {
-            // Add ports based on node type
-            match &node.data {
-                NodeData::Primitive { .. } | NodeData::Light { .. } => {
-                    graph.add_output_param(node_id, "out".to_string(), SdfDataType::Sdf);
+        let graph_node_id = graph_state
+            .graph
+            .add_node(label, user_data, |graph, node_id| {
+                // Add ports based on node type
+                match &node.data {
+                    NodeData::Primitive { .. } | NodeData::Light { .. } => {
+                        graph.add_output_param(node_id, "out".to_string(), SdfDataType::Sdf);
+                    }
+                    NodeData::Operation { .. } => {
+                        graph.add_input_param(
+                            node_id,
+                            "left".to_string(),
+                            SdfDataType::Sdf,
+                            SdfValueType::None,
+                            InputParamKind::ConnectionOnly,
+                            true,
+                        );
+                        graph.add_input_param(
+                            node_id,
+                            "right".to_string(),
+                            SdfDataType::Sdf,
+                            SdfValueType::None,
+                            InputParamKind::ConnectionOnly,
+                            true,
+                        );
+                        graph.add_output_param(node_id, "out".to_string(), SdfDataType::Sdf);
+                    }
+                    NodeData::Sculpt { .. }
+                    | NodeData::Transform { .. }
+                    | NodeData::Modifier { .. } => {
+                        graph.add_input_param(
+                            node_id,
+                            "input".to_string(),
+                            SdfDataType::Sdf,
+                            SdfValueType::None,
+                            InputParamKind::ConnectionOnly,
+                            true,
+                        );
+                        graph.add_output_param(node_id, "out".to_string(), SdfDataType::Sdf);
+                    }
                 }
-                NodeData::Operation { .. } => {
-                    graph.add_input_param(
-                        node_id,
-                        "left".to_string(),
-                        SdfDataType::Sdf,
-                        SdfValueType::None,
-                        InputParamKind::ConnectionOnly,
-                        true,
-                    );
-                    graph.add_input_param(
-                        node_id,
-                        "right".to_string(),
-                        SdfDataType::Sdf,
-                        SdfValueType::None,
-                        InputParamKind::ConnectionOnly,
-                        true,
-                    );
-                    graph.add_output_param(node_id, "out".to_string(), SdfDataType::Sdf);
-                }
-                NodeData::Sculpt { .. }
-                | NodeData::Transform { .. }
-                | NodeData::Modifier { .. } => {
-                    graph.add_input_param(
-                        node_id,
-                        "input".to_string(),
-                        SdfDataType::Sdf,
-                        SdfValueType::None,
-                        InputParamKind::ConnectionOnly,
-                        true,
-                    );
-                    graph.add_output_param(node_id, "out".to_string(), SdfDataType::Sdf);
-                }
-            }
-        });
+            });
 
         graph_state.node_order.push(graph_node_id);
         id_map.insert(sid, graph_node_id);
@@ -1113,13 +1116,7 @@ fn build_layered_layout(scene: &Scene, id_map: &NodeIdMap) -> HashMap<SceneNodeI
     let mut level_cache = HashMap::new();
     let mut visiting = HashSet::new();
     for sid in &included {
-        let _ = compute_longest_path_level(
-            scene,
-            *sid,
-            &included,
-            &mut level_cache,
-            &mut visiting,
-        );
+        let _ = compute_longest_path_level(scene, *sid, &included, &mut level_cache, &mut visiting);
     }
 
     let mut layers: BTreeMap<u32, Vec<SceneNodeId>> = BTreeMap::new();
@@ -1188,13 +1185,10 @@ fn place_unpositioned_nodes(
         .scene_to_graph
         .iter()
         .filter_map(|(sid, graph_id)| {
-            graph_state
-                .node_positions
-                .get(*graph_id)
-                .map(|pos| {
-                    egui::Rect::from_min_size(*pos, node_size_for_scene(scene, *sid))
-                        .expand(NODE_PADDING)
-                })
+            graph_state.node_positions.get(*graph_id).map(|pos| {
+                egui::Rect::from_min_size(*pos, node_size_for_scene(scene, *sid))
+                    .expand(NODE_PADDING)
+            })
         })
         .collect();
 
@@ -1280,8 +1274,7 @@ fn organize_graph(scene: &Scene, graph_state: &mut SdfGraphState, id_map: &NodeI
     ids.sort_by(|a, b| {
         let pa = layout.get(a).copied().unwrap_or_default();
         let pb = layout.get(b).copied().unwrap_or_default();
-        pa.x
-            .partial_cmp(&pb.x)
+        pa.x.partial_cmp(&pb.x)
             .unwrap_or(std::cmp::Ordering::Equal)
             .then_with(|| pa.y.partial_cmp(&pb.y).unwrap_or(std::cmp::Ordering::Equal))
     });
@@ -1312,9 +1305,7 @@ fn process_graph_responses(
 ) {
     for response in &responses.node_responses {
         match response {
-            NodeResponse::ConnectEventEnded {
-                output, input, ..
-            } => {
+            NodeResponse::ConnectEventEnded { output, input, .. } => {
                 // Find which scene nodes are involved
                 let output_graph_node = graph_state.graph.get_output(*output).node;
                 let input_graph_node = graph_state.graph.get_input(*input).node;
@@ -1334,9 +1325,18 @@ fn process_graph_responses(
                     .map(|(name, _)| name.as_str());
 
                 match input_name {
-                    Some("left") => actions.push(Action::SetLeftChild { parent: target_scene_id, child: Some(source_scene_id) }),
-                    Some("right") => actions.push(Action::SetRightChild { parent: target_scene_id, child: Some(source_scene_id) }),
-                    Some("input") => actions.push(Action::SetSculptInput { parent: target_scene_id, child: Some(source_scene_id) }),
+                    Some("left") => actions.push(Action::SetLeftChild {
+                        parent: target_scene_id,
+                        child: Some(source_scene_id),
+                    }),
+                    Some("right") => actions.push(Action::SetRightChild {
+                        parent: target_scene_id,
+                        child: Some(source_scene_id),
+                    }),
+                    Some("input") => actions.push(Action::SetSculptInput {
+                        parent: target_scene_id,
+                        child: Some(source_scene_id),
+                    }),
                     _ => {}
                 }
             }
@@ -1359,9 +1359,18 @@ fn process_graph_responses(
                     .map(|(name, _)| name.as_str());
 
                 match input_name {
-                    Some("left") => actions.push(Action::SetLeftChild { parent: target_scene_id, child: None }),
-                    Some("right") => actions.push(Action::SetRightChild { parent: target_scene_id, child: None }),
-                    Some("input") => actions.push(Action::SetSculptInput { parent: target_scene_id, child: None }),
+                    Some("left") => actions.push(Action::SetLeftChild {
+                        parent: target_scene_id,
+                        child: None,
+                    }),
+                    Some("right") => actions.push(Action::SetRightChild {
+                        parent: target_scene_id,
+                        child: None,
+                    }),
+                    Some("input") => actions.push(Action::SetSculptInput {
+                        parent: target_scene_id,
+                        child: None,
+                    }),
                     _ => {}
                 }
             }
@@ -1392,12 +1401,10 @@ fn process_graph_responses(
     }
 }
 
-
 fn is_reroute_transform(scene: &Scene, node_id: SceneNodeId) -> bool {
-    scene
-        .nodes
-        .get(&node_id)
-        .is_some_and(|n| matches!(n.data, NodeData::Transform { .. }) && n.name.starts_with("Reroute"))
+    scene.nodes.get(&node_id).is_some_and(|n| {
+        matches!(n.data, NodeData::Transform { .. }) && n.name.starts_with("Reroute")
+    })
 }
 
 fn is_insertable_passthrough(scene: &Scene, node_id: SceneNodeId) -> bool {
@@ -1406,10 +1413,7 @@ fn is_insertable_passthrough(scene: &Scene, node_id: SceneNodeId) -> bool {
     })
 }
 
-fn graph_node_has_any_connections(
-    graph: &SdfGraphState,
-    graph_node_id: NodeId,
-) -> bool {
+fn graph_node_has_any_connections(graph: &SdfGraphState, graph_node_id: NodeId) -> bool {
     let node = &graph.graph[graph_node_id];
 
     let has_input = node
@@ -1420,12 +1424,9 @@ fn graph_node_has_any_connections(
         return true;
     }
 
-    node.outputs.iter().any(|(_, oid)| {
-        graph
-            .graph
-            .iter_connections()
-            .any(|(_, out)| out == *oid)
-    })
+    node.outputs
+        .iter()
+        .any(|(_, oid)| graph.graph.iter_connections().any(|(_, out)| out == *oid))
 }
 
 fn try_auto_insert_candidates_on_hovered_connection(
@@ -1541,7 +1542,6 @@ fn center_view_on_node(
     );
 }
 
-
 fn compute_spawn_anchor(
     state: &NodeGraphState,
     selected_visible: Option<SceneNodeId>,
@@ -1558,7 +1558,11 @@ fn compute_spawn_anchor(
 
     if let Some(pointer) = ctx.input(|i| i.pointer.hover_pos()) {
         if graph_rect.contains(pointer) {
-            return snap_to_grid(screen_to_graph_space(graph_rect, &state.graph_state.pan_zoom, pointer));
+            return snap_to_grid(screen_to_graph_space(
+                graph_rect,
+                &state.graph_state.pan_zoom,
+                pointer,
+            ));
         }
     }
 
@@ -1839,7 +1843,10 @@ mod multi_select_tests {
         let light_state = NodeGraphState::new();
         assert_ne!(sdf_state.graph_state.instance_id, 0);
         assert_ne!(light_state.graph_state.instance_id, 0);
-        assert_ne!(sdf_state.graph_state.instance_id, light_state.graph_state.instance_id);
+        assert_ne!(
+            sdf_state.graph_state.instance_id,
+            light_state.graph_state.instance_id
+        );
     }
 }
 #[cfg(test)]
@@ -1871,8 +1878,12 @@ mod auto_insert_tests {
         let target_graph = *state.id_map.scene_to_graph.get(&target).unwrap();
         let insert_graph = *state.id_map.scene_to_graph.get(&insert).unwrap();
 
-        let target_input = state.graph_state.graph[target_graph].get_input("left").unwrap();
-        let source_output = state.graph_state.graph[source_graph].get_output("out").unwrap();
+        let target_input = state.graph_state.graph[target_graph]
+            .get_input("left")
+            .unwrap();
+        let source_output = state.graph_state.graph[source_graph]
+            .get_output("out")
+            .unwrap();
 
         let mut responses: GraphResponse<SdfResponse, SdfNodeData> = GraphResponse::default();
         responses.connection_under_cursor = Some((target_input, source_output));
@@ -1909,8 +1920,12 @@ mod auto_insert_tests {
         let target_graph = *state.id_map.scene_to_graph.get(&target).unwrap();
         let transform_graph = *state.id_map.scene_to_graph.get(&plain_transform).unwrap();
 
-        let target_input = state.graph_state.graph[target_graph].get_input("left").unwrap();
-        let source_output = state.graph_state.graph[source_graph].get_output("out").unwrap();
+        let target_input = state.graph_state.graph[target_graph]
+            .get_input("left")
+            .unwrap();
+        let source_output = state.graph_state.graph[source_graph]
+            .get_output("out")
+            .unwrap();
 
         let mut responses: GraphResponse<SdfResponse, SdfNodeData> = GraphResponse::default();
         responses.connection_under_cursor = Some((target_input, source_output));
@@ -1937,8 +1952,12 @@ mod auto_insert_tests {
         let target_graph = *state.id_map.scene_to_graph.get(&target).unwrap();
         let reroute_graph = *state.id_map.scene_to_graph.get(&reroute).unwrap();
 
-        let target_input = state.graph_state.graph[target_graph].get_input("left").unwrap();
-        let source_output = state.graph_state.graph[source_graph].get_output("out").unwrap();
+        let target_input = state.graph_state.graph[target_graph]
+            .get_input("left")
+            .unwrap();
+        let source_output = state.graph_state.graph[source_graph]
+            .get_output("out")
+            .unwrap();
 
         let mut responses: GraphResponse<SdfResponse, SdfNodeData> = GraphResponse::default();
         responses.connection_under_cursor = Some((target_input, source_output));
@@ -1972,10 +1991,18 @@ mod auto_insert_tests {
         let mut state = build_graph_state(&scene);
         let source_graph = *state.id_map.scene_to_graph.get(&source).unwrap();
         let target_graph = *state.id_map.scene_to_graph.get(&target).unwrap();
-        let modifier_graph = *state.id_map.scene_to_graph.get(&connected_modifier).unwrap();
+        let modifier_graph = *state
+            .id_map
+            .scene_to_graph
+            .get(&connected_modifier)
+            .unwrap();
 
-        let target_input = state.graph_state.graph[target_graph].get_input("left").unwrap();
-        let source_output = state.graph_state.graph[source_graph].get_output("out").unwrap();
+        let target_input = state.graph_state.graph[target_graph]
+            .get_input("left")
+            .unwrap();
+        let source_output = state.graph_state.graph[source_graph]
+            .get_output("out")
+            .unwrap();
 
         let mut responses: GraphResponse<SdfResponse, SdfNodeData> = GraphResponse::default();
         responses.connection_under_cursor = Some((target_input, source_output));
@@ -2042,12 +2069,17 @@ mod layout_and_disconnect_tests {
                 .node_positions
                 .get(gid)
                 .expect("position should be assigned");
-            rects.push(egui::Rect::from_min_size(pos, node_size_for_scene(&scene, sid)));
+            rects.push(egui::Rect::from_min_size(
+                pos,
+                node_size_for_scene(&scene, sid),
+            ));
         }
 
         for i in 0..rects.len() {
             for j in (i + 1)..rects.len() {
-                assert!(!rects[i].expand(NODE_PADDING).intersects(rects[j].expand(NODE_PADDING)));
+                assert!(!rects[i]
+                    .expand(NODE_PADDING)
+                    .intersects(rects[j].expand(NODE_PADDING)));
             }
         }
     }
@@ -2091,7 +2123,12 @@ mod layout_and_disconnect_tests {
         }
     }
 }
-pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState, actions: &mut ActionSink) {
+pub fn draw(
+    ui: &mut egui::Ui,
+    scene: &mut Scene,
+    state: &mut NodeGraphState,
+    actions: &mut ActionSink,
+) {
     ui.push_id("sdf_node_graph_panel", |ui| {
         draw_with_filter(ui, scene, state, actions, GraphFilterMode::SdfOnly);
     });
@@ -2193,21 +2230,19 @@ fn draw_with_filter(
     }
     state.user_state.zoom = state.graph_state.pan_zoom.zoom;
     let responses = ui
-        .allocate_ui(graph_rect.size(), |ui| {
-            match filter_mode {
-                GraphFilterMode::SdfOnly => state.graph_state.draw_graph_editor(
-                    ui,
-                    AllSdfTemplates,
-                    &mut state.user_state,
-                    vec![],
-                ),
-                GraphFilterMode::LightsOnly => state.graph_state.draw_graph_editor(
-                    ui,
-                    LightSdfTemplates,
-                    &mut state.user_state,
-                    vec![],
-                ),
-            }
+        .allocate_ui(graph_rect.size(), |ui| match filter_mode {
+            GraphFilterMode::SdfOnly => state.graph_state.draw_graph_editor(
+                ui,
+                AllSdfTemplates,
+                &mut state.user_state,
+                vec![],
+            ),
+            GraphFilterMode::LightsOnly => state.graph_state.draw_graph_editor(
+                ui,
+                LightSdfTemplates,
+                &mut state.user_state,
+                vec![],
+            ),
         })
         .inner;
 
@@ -2329,7 +2364,9 @@ fn draw_with_filter(
             .selected
             .and_then(|sid| state.id_map.scene_to_graph.get(&sid).copied())
             .is_some();
-        if state.graph_state.selected_nodes.is_empty() && (selected_is_visible || state.selected.is_none()) {
+        if state.graph_state.selected_nodes.is_empty()
+            && (selected_is_visible || state.selected.is_none())
+        {
             state.clear_selection();
         }
     }
@@ -2385,139 +2422,200 @@ fn draw_toolbar(
     egui::Frame::none()
         .fill(Color32::from_rgb(30, 30, 35))
         .inner_margin(egui::Margin::symmetric(6.0, 4.0))
-        .show(ui, |ui| { ui.horizontal(|ui| {
-        let selected_visible = state
-            .selected
-            .filter(|sid| state.id_map.scene_to_graph.contains_key(sid));
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                let selected_visible = state
+                    .selected
+                    .filter(|sid| state.id_map.scene_to_graph.contains_key(sid));
 
-        match filter_mode {
-            GraphFilterMode::SdfOnly => {
-                ui.menu_button("+ Primitive", |ui| {
-                    for kind in SdfPrimitive::ALL {
-                        if ui.button(kind.base_name()).clicked() {
-                            state.pending_spawn_anchor = Some(compute_spawn_anchor(state, selected_visible, graph_rect, ui.ctx()));
-                            actions.push(Action::CreatePrimitive(kind.clone()));
-                            ui.close_menu();
+                match filter_mode {
+                    GraphFilterMode::SdfOnly => {
+                        ui.menu_button("+ Primitive", |ui| {
+                            for kind in SdfPrimitive::ALL {
+                                if ui.button(kind.base_name()).clicked() {
+                                    state.pending_spawn_anchor = Some(compute_spawn_anchor(
+                                        state,
+                                        selected_visible,
+                                        graph_rect,
+                                        ui.ctx(),
+                                    ));
+                                    actions.push(Action::CreatePrimitive(kind.clone()));
+                                    ui.close_menu();
+                                }
+                            }
+                        });
+
+                        ui.menu_button("+ Operation", |ui| {
+                            for op in CsgOp::ALL {
+                                if ui.button(op.base_name()).clicked() {
+                                    state.pending_spawn_anchor = Some(compute_spawn_anchor(
+                                        state,
+                                        selected_visible,
+                                        graph_rect,
+                                        ui.ctx(),
+                                    ));
+                                    create_op_from_selection_filtered(
+                                        scene,
+                                        op.clone(),
+                                        actions,
+                                        |id| state.id_map.scene_to_graph.contains_key(&id),
+                                    );
+                                    ui.close_menu();
+                                }
+                            }
+                        });
+
+                        ui.menu_button("+ Transform", |ui| {
+                            if ui.button("Transform").clicked() {
+                                if let Some(sel) = selected_visible {
+                                    actions.push(Action::InsertTransformAbove { target: sel });
+                                } else {
+                                    state.pending_spawn_anchor = Some(compute_spawn_anchor(
+                                        state,
+                                        selected_visible,
+                                        graph_rect,
+                                        ui.ctx(),
+                                    ));
+                                    actions.push(Action::CreateTransform { input: None });
+                                }
+                                ui.close_menu();
+                            }
+                        });
+
+                        ui.menu_button("+ Utility", |ui| {
+                            if ui.button("Reroute").clicked() {
+                                state.pending_spawn_anchor = Some(compute_spawn_anchor(
+                                    state,
+                                    selected_visible,
+                                    graph_rect,
+                                    ui.ctx(),
+                                ));
+                                actions.push(Action::CreateReroute { input: None });
+                                ui.close_menu();
+                            }
+                        });
+
+                        ui.menu_button("+ Modifier", |ui| {
+                            ui.label("Deform");
+                            for kind in [
+                                ModifierKind::Twist,
+                                ModifierKind::Bend,
+                                ModifierKind::Taper,
+                                ModifierKind::Noise,
+                            ] {
+                                if ui.button(kind.base_name()).clicked() {
+                                    toolbar_add_modifier(
+                                        state,
+                                        selected_visible,
+                                        kind,
+                                        actions,
+                                        graph_rect,
+                                        ui.ctx(),
+                                    );
+                                    ui.close_menu();
+                                }
+                            }
+                            ui.separator();
+                            ui.label("Shape");
+                            for kind in [
+                                ModifierKind::Round,
+                                ModifierKind::Onion,
+                                ModifierKind::Elongate,
+                            ] {
+                                if ui.button(kind.base_name()).clicked() {
+                                    toolbar_add_modifier(
+                                        state,
+                                        selected_visible,
+                                        kind,
+                                        actions,
+                                        graph_rect,
+                                        ui.ctx(),
+                                    );
+                                    ui.close_menu();
+                                }
+                            }
+                            ui.separator();
+                            ui.label("Repeat");
+                            for kind in [
+                                ModifierKind::Mirror,
+                                ModifierKind::Repeat,
+                                ModifierKind::FiniteRepeat,
+                            ] {
+                                if ui.button(kind.base_name()).clicked() {
+                                    toolbar_add_modifier(
+                                        state,
+                                        selected_visible,
+                                        kind,
+                                        actions,
+                                        graph_rect,
+                                        ui.ctx(),
+                                    );
+                                    ui.close_menu();
+                                }
+                            }
+                        });
+
+                        if ui.button("Load Preset").clicked() {
+                            actions.push(Action::LoadNodePreset);
                         }
                     }
-                });
-
-                ui.menu_button("+ Operation", |ui| {
-                    for op in CsgOp::ALL {
-                        if ui.button(op.base_name()).clicked() {
-                            state.pending_spawn_anchor = Some(compute_spawn_anchor(state, selected_visible, graph_rect, ui.ctx()));
-                            create_op_from_selection_filtered(
-                                scene,
-                                op.clone(),
-                                actions,
-                                |id| state.id_map.scene_to_graph.contains_key(&id),
-                            );
-                            ui.close_menu();
-                        }
+                    GraphFilterMode::LightsOnly => {
+                        ui.menu_button("+ Light", |ui| {
+                            for light_type in LightType::ALL {
+                                if ui.button(light_type.label()).clicked() {
+                                    state.pending_spawn_anchor = Some(compute_spawn_anchor(
+                                        state,
+                                        selected_visible,
+                                        graph_rect,
+                                        ui.ctx(),
+                                    ));
+                                    actions.push(Action::CreateLight(light_type.clone()));
+                                    ui.close_menu();
+                                }
+                            }
+                        });
                     }
-                });
-
-                ui.menu_button("+ Transform", |ui| {
-                    if ui.button("Transform").clicked() {
-                        if let Some(sel) = selected_visible {
-                            actions.push(Action::InsertTransformAbove { target: sel });
-                        } else {
-                            state.pending_spawn_anchor = Some(compute_spawn_anchor(state, selected_visible, graph_rect, ui.ctx()));
-                            actions.push(Action::CreateTransform { input: None });
-                        }
-                        ui.close_menu();
-                    }
-                });
-
-                ui.menu_button("+ Utility", |ui| {
-                    if ui.button("Reroute").clicked() {
-                        state.pending_spawn_anchor = Some(compute_spawn_anchor(state, selected_visible, graph_rect, ui.ctx()));
-                        actions.push(Action::CreateReroute { input: None });
-                        ui.close_menu();
-                    }
-                });
-
-                ui.menu_button("+ Modifier", |ui| {
-                    ui.label("Deform");
-                    for kind in [ModifierKind::Twist, ModifierKind::Bend, ModifierKind::Taper, ModifierKind::Noise] {
-                        if ui.button(kind.base_name()).clicked() {
-                            toolbar_add_modifier(state, selected_visible, kind, actions, graph_rect, ui.ctx());
-                            ui.close_menu();
-                        }
-                    }
-                    ui.separator();
-                    ui.label("Shape");
-                    for kind in [ModifierKind::Round, ModifierKind::Onion, ModifierKind::Elongate] {
-                        if ui.button(kind.base_name()).clicked() {
-                            toolbar_add_modifier(state, selected_visible, kind, actions, graph_rect, ui.ctx());
-                            ui.close_menu();
-                        }
-                    }
-                    ui.separator();
-                    ui.label("Repeat");
-                    for kind in [ModifierKind::Mirror, ModifierKind::Repeat, ModifierKind::FiniteRepeat] {
-                        if ui.button(kind.base_name()).clicked() {
-                            toolbar_add_modifier(state, selected_visible, kind, actions, graph_rect, ui.ctx());
-                            ui.close_menu();
-                        }
-                    }
-                });
-
-                if ui.button("Load Preset").clicked() {
-                    actions.push(Action::LoadNodePreset);
                 }
-            }
-            GraphFilterMode::LightsOnly => {
-                ui.menu_button("+ Light", |ui| {
-                    for light_type in LightType::ALL {
-                        if ui.button(light_type.label()).clicked() {
-                            state.pending_spawn_anchor = Some(compute_spawn_anchor(state, selected_visible, graph_rect, ui.ctx()));
-                            actions.push(Action::CreateLight(light_type.clone()));
-                            ui.close_menu();
-                        }
+
+                if matches!(filter_mode, GraphFilterMode::SdfOnly) {
+                    if ui
+                        .add_enabled(selected_visible.is_some(), egui::Button::new("+ Sculpt"))
+                        .on_hover_text("Add sculpt modifier to selected node (Ctrl+R)")
+                        .clicked()
+                    {
+                        actions.push(Action::EnterSculptMode);
                     }
-                });
-            }
-        }
 
-        if matches!(filter_mode, GraphFilterMode::SdfOnly) {
-            if ui
-                .add_enabled(selected_visible.is_some(), egui::Button::new("+ Sculpt"))
-                .on_hover_text("Add sculpt modifier to selected node (Ctrl+R)")
-                .clicked()
-            {
-                actions.push(Action::EnterSculptMode);
-            }
+                    ui.separator();
+                }
 
-            ui.separator();
-        }
+                let has_selection = selected_visible.is_some();
+                if ui
+                    .add_enabled(has_selection, egui::Button::new("Delete"))
+                    .clicked()
+                {
+                    if let Some(sel) = selected_visible {
+                        actions.push(Action::DeleteNode(sel));
+                    }
+                }
 
-        let has_selection = selected_visible.is_some();
-        if ui
-            .add_enabled(has_selection, egui::Button::new("Delete"))
-            .clicked()
-        {
-            if let Some(sel) = selected_visible {
-                actions.push(Action::DeleteNode(sel));
-            }
-        }
+                ui.separator();
 
-        ui.separator();
+                if ui
+                    .add_enabled(has_selection, egui::Button::new("Focus Selected"))
+                    .clicked()
+                {
+                    if let Some(sel) = selected_visible {
+                        center_view_on_node(scene, state, graph_rect, sel);
+                    }
+                }
 
-        if ui
-            .add_enabled(has_selection, egui::Button::new("Focus Selected"))
-            .clicked()
-        {
-            if let Some(sel) = selected_visible {
-                center_view_on_node(scene, state, graph_rect, sel);
-            }
-        }
-
-        if ui.button("Organize").clicked() {
-            organize_graph(scene, &mut state.graph_state, &state.id_map);
-            center_view_on_nodes(state, graph_rect);
-        }
-    }); });
+                if ui.button("Organize").clicked() {
+                    organize_graph(scene, &mut state.graph_state, &state.id_map);
+                    center_view_on_nodes(state, graph_rect);
+                }
+            });
+        });
 }
 // ---------------------------------------------------------------------------
 // Minimap
@@ -2683,8 +2781,7 @@ fn draw_minimap(
             let node_h = MINIMAP_NODE_H.min(60.0 * scale);
             for &(pos, color, is_selected) in &nodes_info {
                 let tl = to_minimap(pos.x, pos.y);
-                let node_rect =
-                    egui::Rect::from_min_size(tl, egui::Vec2::new(node_w, node_h));
+                let node_rect = egui::Rect::from_min_size(tl, egui::Vec2::new(node_w, node_h));
 
                 if !minimap_rect.intersects(node_rect) {
                     continue;
@@ -2692,11 +2789,7 @@ fn draw_minimap(
 
                 painter.rect_filled(node_rect, 2.0, color);
                 if is_selected {
-                    painter.rect_stroke(
-                        node_rect,
-                        2.0,
-                        egui::Stroke::new(1.5, Color32::WHITE),
-                    );
+                    painter.rect_stroke(node_rect, 2.0, egui::Stroke::new(1.5, Color32::WHITE));
                 }
             }
 
@@ -2707,10 +2800,8 @@ fn draw_minimap(
     // Click-to-pan: clicking/dragging on the minimap centers the viewport
     if resp.clicked() || resp.dragged() {
         if let Some(pointer) = ui.ctx().input(|i| i.pointer.interact_pos()) {
-            let minimap_rect = egui::Rect::from_min_size(
-                minimap_pos,
-                egui::Vec2::new(MINIMAP_W, MINIMAP_H),
-            );
+            let minimap_rect =
+                egui::Rect::from_min_size(minimap_pos, egui::Vec2::new(MINIMAP_W, MINIMAP_H));
             if minimap_rect.contains(pointer) {
                 let inner_origin = minimap_rect.min + egui::Vec2::new(4.0, 4.0);
                 let content_w = world_w * scale;
@@ -2726,10 +2817,8 @@ fn draw_minimap(
                 // Target: center viewport directly on clicked/dragged world position.
                 let half_vp_w = graph_rect.width() / zoom * 0.5;
                 let half_vp_h = graph_rect.height() / zoom * 0.5;
-                state.graph_state.pan_zoom.pan = egui::Vec2::new(
-                    -(world_x - half_vp_w) * zoom,
-                    -(world_y - half_vp_h) * zoom,
-                );
+                state.graph_state.pan_zoom.pan =
+                    egui::Vec2::new(-(world_x - half_vp_w) * zoom, -(world_y - half_vp_h) * zoom);
                 if resp.dragged() {
                     ui.ctx().request_repaint();
                 }
@@ -2848,11 +2937,7 @@ fn compact_rotation(ui: &mut egui::Ui, label: &str, value: &mut glam::Vec3) -> b
         value.z.to_degrees(),
     );
     let changed = compact_vec3(ui, label, &mut deg, 1.0, None);
-    *value = glam::Vec3::new(
-        deg.x.to_radians(),
-        deg.y.to_radians(),
-        deg.z.to_radians(),
-    );
+    *value = glam::Vec3::new(deg.x.to_radians(), deg.y.to_radians(), deg.z.to_radians());
     changed
 }
 
@@ -2876,75 +2961,3 @@ fn scalar_drag(
     });
     changed
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
