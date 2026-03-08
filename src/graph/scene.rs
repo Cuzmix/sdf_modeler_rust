@@ -933,6 +933,16 @@ impl Scene {
         })
     }
 
+    pub fn create_reroute(&mut self, input: Option<NodeId>) -> NodeId {
+        let name = self.next_name("Reroute");
+        self.add_node(name, NodeData::Transform {
+            input,
+            translation: Vec3::ZERO,
+            rotation: Vec3::ZERO,
+            scale: Vec3::ONE,
+        })
+    }
+
     pub fn create_modifier(&mut self, kind: ModifierKind, input: Option<NodeId>) -> NodeId {
         let name = self.next_name(kind.base_name());
         let value = kind.default_value();
@@ -2393,6 +2403,18 @@ mod tests {
         }
     }
 
+
+    #[test]
+    fn create_reroute_links_input() {
+        let mut scene = empty_scene();
+        let prim = scene.create_primitive(SdfPrimitive::Sphere);
+        let reroute = scene.create_reroute(Some(prim));
+        match &scene.nodes[&reroute].data {
+            NodeData::Transform { input, .. } => assert_eq!(*input, Some(prim)),
+            _ => panic!("expected Transform"),
+        }
+        assert!(scene.nodes[&reroute].name.starts_with("Reroute"));
+    }
     // ── next_name ───────────────────────────────────────────────────
 
     #[test]
@@ -3669,3 +3691,5 @@ mod tests {
         assert!(complexity <= counts.total - counts.lights);
     }
 }
+
+

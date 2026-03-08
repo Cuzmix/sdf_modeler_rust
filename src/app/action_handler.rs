@@ -547,6 +547,13 @@ impl SdfApp {
                     self.ui.node_graph_state.pending_center_node = Some(id);
                     self.gpu.buffer_dirty = true;
                 }
+                Action::CreateReroute { input } => {
+                    let id = self.doc.scene.create_reroute(input);
+                    self.ui.node_graph_state.select_single(id);
+                    self.ui.node_graph_state.needs_initial_rebuild = true;
+                    self.ui.node_graph_state.pending_center_node = Some(id);
+                    self.gpu.buffer_dirty = true;
+                }
                 Action::CreateModifier { kind, input } => {
                     let id = self.doc.scene.create_modifier(kind, input);
                     self.ui.node_graph_state.select_single(id);
@@ -1161,3 +1168,5 @@ fn find_parent_transform(
         None
     })
 }
+
+

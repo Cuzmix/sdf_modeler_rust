@@ -62,6 +62,8 @@ pub enum NodeResponse<UserResponse: UserResponseTrait, NodeData: NodeDataTrait> 
         node: NodeId,
         drag_delta: Vec2,
     },
+    /// Emitted once when a node drag interaction stops.
+    MoveNodeEnded(NodeId),
     User(UserResponse),
 }
 
@@ -78,6 +80,8 @@ pub struct GraphResponse<UserResponse: UserResponseTrait, NodeData: NodeDataTrai
     pub cursor_in_editor: bool,
     /// Is the mouse currently hovering the node finder?
     pub cursor_in_finder: bool,
+    /// Existing connection currently under the cursor (if any).
+    pub connection_under_cursor: Option<(InputId, OutputId)>,
 }
 impl<UserResponse: UserResponseTrait, NodeData: NodeDataTrait> Default
     for GraphResponse<UserResponse, NodeData>
@@ -87,6 +91,7 @@ impl<UserResponse: UserResponseTrait, NodeData: NodeDataTrait> Default
             node_responses: Default::default(),
             cursor_in_editor: false,
             cursor_in_finder: false,
+            connection_under_cursor: None,
         }
     }
 }
@@ -390,8 +395,9 @@ where
                 connection_color,
             );
         }
-
         // draw existing connections
+        let mut connection_segments: Vec<((InputId, OutputId), Pos2, Pos2, Color32)> = Vec::new();
+        let mut connection_under_cursor: Option<((InputId, OutputId), f32)> = None;
         for (input, outputs) in self.graph.iter_connection_groups() {
             for (hook_n, &output) in outputs.iter().enumerate() {
                 let port_type = self
@@ -408,6 +414,32 @@ where
                     src_pos,
                     dst_pos,
                     connection_color,
+                );
+                connection_segments.push(((input, output), src_pos, dst_pos, connection_color));
+
+                let distance = connection_distance_to_pos(&self.pan_zoom, src_pos, dst_pos, cursor_pos);
+                let hover_threshold = 12.0 * self.pan_zoom.zoom;
+                if distance <= hover_threshold {
+                    match connection_under_cursor {
+                        Some((_, best)) if distance >= best => {}
+                        _ => {
+                            connection_under_cursor = Some(((input, output), distance));
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(((hover_input, hover_output), _)) = connection_under_cursor {
+            if let Some((_, src_pos, dst_pos, color)) = connection_segments
+                .iter()
+                .find(|(conn, _, _, _)| *conn == (hover_input, hover_output))
+            {
+                draw_connection_hover(
+                    &self.pan_zoom,
+                    ui.painter(),
+                    *src_pos,
+                    *dst_pos,
+                    *color,
                 );
             }
         }
@@ -481,6 +513,7 @@ where
                         }
                     }
                 }
+                NodeResponse::MoveNodeEnded(_) => {}
                 NodeResponse::User(_) => {
                     // These are handled by the user code.
                 }
@@ -503,10 +536,10 @@ where
             );
 
             self.selected_nodes = node_rects
-                .into_iter()
+                .iter()
                 .filter_map(|(node_id, rect)| {
-                    if selection_rect.intersects(rect) {
-                        Some(node_id)
+                    if selection_rect.intersects(*rect) {
+                        Some(*node_id)
                     } else {
                         None
                     }
@@ -560,10 +593,42 @@ where
             self.ongoing_box_selection = None;
         }
 
+        // Fallback for auto-insert workflows:
+        // if the cursor itself isn't close enough to a wire on drop,
+        // use the dropped node's rect against nearby wires.
+        if connection_under_cursor.is_none() {
+            if let Some(ended_node_id) = delayed_responses.iter().rev().find_map(|r| {
+                if let NodeResponse::MoveNodeEnded(id) = r {
+                    Some(*id)
+                } else {
+                    None
+                }
+            }) {
+                if let Some(node_rect) = node_rects.get(&ended_node_id) {
+                    let mut best: Option<((InputId, OutputId), f32)> = None;
+                    for (conn, src_pos, dst_pos, _) in connection_segments.iter().copied() {
+                        let distance =
+                            connection_distance_to_rect(&self.pan_zoom, src_pos, dst_pos, *node_rect);
+                        match best {
+                            Some((_, best_dist)) if distance >= best_dist => {}
+                            _ => best = Some((conn, distance)),
+                        }
+                    }
+                    let node_hover_threshold = 20.0 * self.pan_zoom.zoom;
+                    if let Some((conn, distance)) = best {
+                        if distance <= node_hover_threshold {
+                            connection_under_cursor = Some((conn, distance));
+                        }
+                    }
+                }
+            }
+        }
+
         GraphResponse {
             node_responses: delayed_responses,
             cursor_in_editor,
             cursor_in_finder,
+            connection_under_cursor: connection_under_cursor.map(|(conn, _)| conn),
         }
     }
 }
@@ -594,6 +659,104 @@ fn draw_connection(
     painter.add(bezier);
 }
 
+fn draw_connection_hover(
+    pan_zoom: &PanZoom,
+    painter: &Painter,
+    src_pos: Pos2,
+    dst_pos: Pos2,
+    color: Color32,
+) {
+    let glow = Color32::from_rgba_unmultiplied(255, 255, 255, 90);
+    let stroke_outer = egui::Stroke {
+        width: 9.0 * pan_zoom.zoom,
+        color: glow,
+    };
+    let stroke_inner = egui::Stroke {
+        width: 6.0 * pan_zoom.zoom,
+        color,
+    };
+
+    let control_scale = ((dst_pos.x - src_pos.x) * pan_zoom.zoom / 2.0).max(30.0 * pan_zoom.zoom);
+    let src_control = src_pos + Vec2::X * control_scale;
+    let dst_control = dst_pos - Vec2::X * control_scale;
+
+    let outer = CubicBezierShape::from_points_stroke(
+        [src_pos, src_control, dst_control, dst_pos],
+        false,
+        Color32::TRANSPARENT,
+        stroke_outer,
+    );
+    let inner = CubicBezierShape::from_points_stroke(
+        [src_pos, src_control, dst_control, dst_pos],
+        false,
+        Color32::TRANSPARENT,
+        stroke_inner,
+    );
+    painter.add(outer);
+    painter.add(inner);
+}
+fn connection_distance_to_pos(pan_zoom: &PanZoom, src_pos: Pos2, dst_pos: Pos2, point: Pos2) -> f32 {
+    let control_scale = ((dst_pos.x - src_pos.x) * pan_zoom.zoom / 2.0).max(30.0 * pan_zoom.zoom);
+    let src_control = src_pos + Vec2::X * control_scale;
+    let dst_control = dst_pos - Vec2::X * control_scale;
+
+    let mut min_dist = f32::MAX;
+    let mut prev = src_pos;
+    const SAMPLES: usize = 24;
+    for i in 1..=SAMPLES {
+        let t = i as f32 / SAMPLES as f32;
+        let curr = cubic_bezier_point(src_pos, src_control, dst_control, dst_pos, t);
+        let d = distance_to_segment(point, prev, curr);
+        if d < min_dist {
+            min_dist = d;
+        }
+        prev = curr;
+    }
+    min_dist
+}
+
+
+fn connection_distance_to_rect(pan_zoom: &PanZoom, src_pos: Pos2, dst_pos: Pos2, rect: Rect) -> f32 {
+    let control_scale = ((dst_pos.x - src_pos.x) * pan_zoom.zoom / 2.0).max(30.0 * pan_zoom.zoom);
+    let src_control = src_pos + Vec2::X * control_scale;
+    let dst_control = dst_pos - Vec2::X * control_scale;
+
+    let mut min_dist = f32::MAX;
+    let steps = 24;
+    for i in 0..=steps {
+        let t = i as f32 / steps as f32;
+        let p = cubic_bezier_point(src_pos, src_control, dst_control, dst_pos, t);
+        min_dist = min_dist.min(rect.distance_to_pos(p));
+    }
+    min_dist
+}
+
+fn cubic_bezier_point(p0: Pos2, p1: Pos2, p2: Pos2, p3: Pos2, t: f32) -> Pos2 {
+    let u = 1.0 - t;
+    let uu = u * u;
+    let tt = t * t;
+    let uuu = uu * u;
+    let ttt = tt * t;
+
+    let p = p0.to_vec2() * uuu
+        + p1.to_vec2() * (3.0 * uu * t)
+        + p2.to_vec2() * (3.0 * u * tt)
+        + p3.to_vec2() * ttt;
+    Pos2::new(p.x, p.y)
+}
+
+fn distance_to_segment(p: Pos2, a: Pos2, b: Pos2) -> f32 {
+    let ab = b - a;
+    let ap = p - a;
+    let len2 = ab.length_sq();
+    if len2 <= f32::EPSILON {
+        return ap.length();
+    }
+    let t = (ap.dot(ab) / len2).clamp(0.0, 1.0);
+    let proj = a + ab * t;
+    p.distance(proj)
+}
+
 #[derive(Clone, Copy, Debug)]
 struct OuterRectMemory(Rect);
 
@@ -619,11 +782,11 @@ where
         ui: &mut Ui,
         user_state: &mut UserState,
     ) -> Vec<NodeResponse<UserResponse, NodeData>> {
-        let mut child_ui = ui.child_ui_with_id_source(
-            Rect::from_min_size(*self.position + self.pan, Self::MAX_NODE_SIZE.into()),
-            Layout::default(),
-            (self.graph_instance_id, self.node_id),
-            None,
+        let mut child_ui = ui.new_child(
+            UiBuilder::new()
+                .max_rect(Rect::from_min_size(*self.position + self.pan, Self::MAX_NODE_SIZE.into()))
+                .layout(Layout::default())
+                .id_salt((self.graph_instance_id, self.node_id)),
         );
 
         Self::show_graph_node(self, pan_zoom, &mut child_ui, user_state)
@@ -668,7 +831,11 @@ where
         inner_rect.max.x = inner_rect.max.x.max(inner_rect.min.x);
         inner_rect.max.y = inner_rect.max.y.max(inner_rect.min.y);
 
-        let mut child_ui = ui.child_ui(inner_rect, *ui.layout(), None);
+        let mut child_ui = ui.new_child(
+            UiBuilder::new()
+                .max_rect(inner_rect)
+                .layout(ui.layout().clone()),
+        );
 
         // Get interaction rect from memory, it may expand after the window response on resize.
         let interaction_rect = ui
@@ -1159,6 +1326,9 @@ where
             });
             responses.push(NodeResponse::RaiseNode(self.node_id));
         }
+        if window_response.drag_stopped() {
+            responses.push(NodeResponse::MoveNodeEnded(self.node_id));
+        }
 
         // Node selection
         //
@@ -1217,6 +1387,17 @@ where
         resp
     }
 }
+
+
+
+
+
+
+
+
+
+
+
 
 
 
