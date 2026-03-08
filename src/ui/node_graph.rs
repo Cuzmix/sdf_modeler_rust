@@ -1376,6 +1376,158 @@ mod multi_select_tests {
         assert_ne!(sdf_state.graph_state.instance_id, light_state.graph_state.instance_id);
     }
 }
+#[cfg(test)]
+mod auto_insert_tests {
+    use super::*;
+    use egui_node_graph2::GraphResponse;
+
+    fn build_graph_state(scene: &Scene) -> NodeGraphState {
+        let mut state = NodeGraphState::new();
+        rebuild_graph_from_scene_with_filter(
+            scene,
+            &mut state.graph_state,
+            &mut state.id_map,
+            GraphFilterMode::SdfOnly,
+        );
+        state
+    }
+
+    #[test]
+    fn auto_insert_rewires_modifier_between_connected_nodes() {
+        let mut scene = Scene::new();
+        let source = scene.create_primitive(SdfPrimitive::Sphere);
+        let right = scene.create_primitive(SdfPrimitive::Box);
+        let target = scene.create_operation(CsgOp::Union, Some(source), Some(right));
+        let insert = scene.create_modifier(ModifierKind::Round, None);
+
+        let mut state = build_graph_state(&scene);
+        let source_graph = *state.id_map.scene_to_graph.get(&source).unwrap();
+        let target_graph = *state.id_map.scene_to_graph.get(&target).unwrap();
+        let insert_graph = *state.id_map.scene_to_graph.get(&insert).unwrap();
+
+        let target_input = state.graph_state.graph[target_graph].get_input("left").unwrap();
+        let source_output = state.graph_state.graph[source_graph].get_output("out").unwrap();
+
+        let mut responses: GraphResponse<SdfResponse, SdfNodeData> = GraphResponse::default();
+        responses.connection_under_cursor = Some((target_input, source_output));
+
+        let rewired = try_auto_insert_candidates_on_hovered_connection(
+            &mut scene,
+            &mut state,
+            &responses,
+            &[insert_graph],
+        );
+        assert!(rewired);
+
+        match &scene.nodes.get(&insert).unwrap().data {
+            NodeData::Modifier { input, .. } => assert_eq!(*input, Some(source)),
+            _ => panic!("expected inserted node to be a modifier"),
+        }
+        match &scene.nodes.get(&target).unwrap().data {
+            NodeData::Operation { left, right: _, .. } => assert_eq!(*left, Some(insert)),
+            _ => panic!("expected target node to be an operation"),
+        }
+        assert!(state.needs_initial_rebuild);
+    }
+
+    #[test]
+    fn auto_insert_rejects_non_reroute_transform() {
+        let mut scene = Scene::new();
+        let source = scene.create_primitive(SdfPrimitive::Sphere);
+        let right = scene.create_primitive(SdfPrimitive::Box);
+        let target = scene.create_operation(CsgOp::Union, Some(source), Some(right));
+        let plain_transform = scene.create_transform(None);
+
+        let mut state = build_graph_state(&scene);
+        let source_graph = *state.id_map.scene_to_graph.get(&source).unwrap();
+        let target_graph = *state.id_map.scene_to_graph.get(&target).unwrap();
+        let transform_graph = *state.id_map.scene_to_graph.get(&plain_transform).unwrap();
+
+        let target_input = state.graph_state.graph[target_graph].get_input("left").unwrap();
+        let source_output = state.graph_state.graph[source_graph].get_output("out").unwrap();
+
+        let mut responses: GraphResponse<SdfResponse, SdfNodeData> = GraphResponse::default();
+        responses.connection_under_cursor = Some((target_input, source_output));
+
+        let rewired = try_auto_insert_candidates_on_hovered_connection(
+            &mut scene,
+            &mut state,
+            &responses,
+            &[transform_graph],
+        );
+        assert!(!rewired);
+    }
+
+    #[test]
+    fn auto_insert_accepts_reroute_transform() {
+        let mut scene = Scene::new();
+        let source = scene.create_primitive(SdfPrimitive::Sphere);
+        let right = scene.create_primitive(SdfPrimitive::Box);
+        let target = scene.create_operation(CsgOp::Union, Some(source), Some(right));
+        let reroute = scene.create_reroute(None);
+
+        let mut state = build_graph_state(&scene);
+        let source_graph = *state.id_map.scene_to_graph.get(&source).unwrap();
+        let target_graph = *state.id_map.scene_to_graph.get(&target).unwrap();
+        let reroute_graph = *state.id_map.scene_to_graph.get(&reroute).unwrap();
+
+        let target_input = state.graph_state.graph[target_graph].get_input("left").unwrap();
+        let source_output = state.graph_state.graph[source_graph].get_output("out").unwrap();
+
+        let mut responses: GraphResponse<SdfResponse, SdfNodeData> = GraphResponse::default();
+        responses.connection_under_cursor = Some((target_input, source_output));
+
+        let rewired = try_auto_insert_candidates_on_hovered_connection(
+            &mut scene,
+            &mut state,
+            &responses,
+            &[reroute_graph],
+        );
+        assert!(rewired);
+
+        match &scene.nodes.get(&reroute).unwrap().data {
+            NodeData::Transform { input, .. } => assert_eq!(*input, Some(source)),
+            _ => panic!("expected inserted node to be a transform"),
+        }
+        match &scene.nodes.get(&target).unwrap().data {
+            NodeData::Operation { left, .. } => assert_eq!(*left, Some(reroute)),
+            _ => panic!("expected target node to be an operation"),
+        }
+    }
+
+    #[test]
+    fn auto_insert_rejects_already_connected_candidate() {
+        let mut scene = Scene::new();
+        let source = scene.create_primitive(SdfPrimitive::Sphere);
+        let right = scene.create_primitive(SdfPrimitive::Box);
+        let target = scene.create_operation(CsgOp::Union, Some(source), Some(right));
+        let connected_modifier = scene.create_modifier(ModifierKind::Round, Some(source));
+
+        let mut state = build_graph_state(&scene);
+        let source_graph = *state.id_map.scene_to_graph.get(&source).unwrap();
+        let target_graph = *state.id_map.scene_to_graph.get(&target).unwrap();
+        let modifier_graph = *state.id_map.scene_to_graph.get(&connected_modifier).unwrap();
+
+        let target_input = state.graph_state.graph[target_graph].get_input("left").unwrap();
+        let source_output = state.graph_state.graph[source_graph].get_output("out").unwrap();
+
+        let mut responses: GraphResponse<SdfResponse, SdfNodeData> = GraphResponse::default();
+        responses.connection_under_cursor = Some((target_input, source_output));
+
+        let rewired = try_auto_insert_candidates_on_hovered_connection(
+            &mut scene,
+            &mut state,
+            &responses,
+            &[modifier_graph],
+        );
+        assert!(!rewired);
+
+        match &scene.nodes.get(&target).unwrap().data {
+            NodeData::Operation { left, .. } => assert_eq!(*left, Some(source)),
+            _ => panic!("expected target node to be an operation"),
+        }
+    }
+}
 pub fn draw(ui: &mut egui::Ui, scene: &mut Scene, state: &mut NodeGraphState, actions: &mut ActionSink) {
     ui.push_id("sdf_node_graph_panel", |ui| {
         draw_with_filter(ui, scene, state, actions, GraphFilterMode::SdfOnly);
@@ -1579,15 +1731,16 @@ fn draw_with_filter(
         state.last_structure_key = scene.structure_key();
     }
 
-    if matches!(filter_mode, GraphFilterMode::SdfOnly) && !auto_insert_candidates.is_empty() {
-        if try_auto_insert_candidates_on_hovered_connection(
+    if matches!(filter_mode, GraphFilterMode::SdfOnly)
+        && !auto_insert_candidates.is_empty()
+        && try_auto_insert_candidates_on_hovered_connection(
             scene,
             state,
             &responses,
             &auto_insert_candidates,
-        ) {
-            state.layout_dirty = true;
-        }
+        )
+    {
+        state.layout_dirty = true;
     }
     // Consume layout_dirty: run auto-layout for any new/repositioned nodes
     if state.layout_dirty {
