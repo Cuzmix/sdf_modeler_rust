@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "[pre-commit] cargo check"
+cargo check
+
+echo "[pre-commit] cargo clippy -- -D warnings"
+cargo clippy -- -D warnings
+
+echo "[pre-commit] cargo test"
+cargo test
+
+echo "[pre-commit] cargo build"
+cargo build
+
+echo "[pre-commit] validation complete"
