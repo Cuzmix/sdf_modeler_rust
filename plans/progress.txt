@@ -1846,3 +1846,32 @@ Manual verification pending:
 - Click `Open Viewport 3D` again; confirm no duplicate window spawn and status remains running.
 - Click `Close Viewport 3D`; confirm viewport window closes and shell status changes to stopped.
 - Close shell while viewport is open; confirm viewport host is terminated.
+
+--- Iteration 48: Slint embedded viewport stabilization + migration status doc ---
+COMPLETED. Switched Slint shell embedded viewport from unstable Slint WGPU feature path to a stable software image bridge, and documented full cutover plan.
+
+Changes:
+- src/ui_slint/embedded_viewport.rs (new)
+  - Added `EmbeddedViewportRenderer` using `slint::SharedPixelBuffer<Rgba8Pixel>`.
+  - Renders a lightweight animated preview frame into `slint::Image::from_rgba8`.
+- src/ui_slint/mod.rs
+  - Removed unstable `require_wgpu_28` runtime dependency path.
+  - Added embedded viewport image initialization and 33ms timer updates.
+  - Preserved external viewport process lifecycle controls.
+- src/ui_slint/app_shell.slint
+  - Center panel now renders `viewportImage`.
+  - Kept embedded status text overlays and existing shell controls.
+- Cargo.toml
+  - Removed `slint` unstable feature flag (`unstable-wgpu-28`).
+- docs/slint_migration/full_slint_embed_slices.md
+  - Rewritten as migration status + immediate next steps + full end-to-end migration checklist.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS (485 passed)
+- cargo build: PASS
+
+Manual verification pending:
+- Launch `--frontend slint` and confirm center panel shows embedded animated viewport image.
+- Confirm `Open Viewport 3D` / `Close Viewport 3D` still function while embedded panel remains responsive.

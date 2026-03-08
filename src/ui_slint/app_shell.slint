@@ -24,11 +24,17 @@ export component AppShell inherits Window {
     in-out property <string> renameSelectedInput: "";
     in-out property <string> viewportStatusText: "Viewport window: stopped";
     in-out property <bool> viewportWindowRunning: false;
+    in-out property <image> viewportImage;
 
     callback fileNew();
     callback fileOpen();
     callback fileSave();
     callback addSphere();
+    callback addBox();
+    callback addUnionOp();
+    callback addSmoothUnionOp();
+    callback addTransformNode();
+    callback addRoundModifier();
     callback addPointLight();
     callback addSpotLight();
     callback addDirectionalLight();
@@ -70,6 +76,11 @@ export component AppShell inherits Window {
                     Button { text: "Save"; clicked => { root.fileSave(); } }
                     Rectangle { width: 12px; }
                     Button { text: "Add Sphere"; clicked => { root.addSphere(); } }
+                    Button { text: "Add Box"; clicked => { root.addBox(); } }
+                    Button { text: "+Union"; clicked => { root.addUnionOp(); } }
+                    Button { text: "+Smooth"; clicked => { root.addSmoothUnionOp(); } }
+                    Button { text: "+Transform"; clicked => { root.addTransformNode(); } }
+                    Button { text: "+Round"; clicked => { root.addRoundModifier(); } }
                     Button { text: "Undo"; clicked => { root.editUndo(); } }
                     Button { text: "Redo"; clicked => { root.editRedo(); } }
                     Button { text: "Delete"; clicked => { root.deleteSelected(); } }
@@ -159,25 +170,26 @@ export component AppShell inherits Window {
                     background: #12151d;
                     border-color: #30374a;
                     border-width: 1px;
-                    HorizontalLayout {
+
+                    Image {
+                        source: root.viewportImage;
+                        width: parent.width;
+                        height: parent.height;
+                        image-fit: fill;
+                    }
+
+                    VerticalLayout {
                         padding: 10px;
-                        VerticalLayout {
-                            spacing: 8px;
-                            Text {
-                                text: "Viewport Placeholder (Slint shell stage)";
-                                color: #7f89a3;
-                                font-size: 18px;
-                            }
-                            Text {
-                                text: root.viewportStatusText;
-                                color: #a7b1cc;
-                                font-size: 14px;
-                            }
-                            Text {
-                                text: "Use 'Open Viewport 3D' to launch the active viewport host window.";
-                                color: #7f89a3;
-                                font-size: 13px;
-                            }
+                        spacing: 6px;
+                        Text {
+                            text: "Embedded Viewport (Slint shell stage)";
+                            color: #9da8c3;
+                            font-size: 16px;
+                        }
+                        Text {
+                            text: root.viewportStatusText;
+                            color: #c2cbe0;
+                            font-size: 12px;
                         }
                     }
                 }

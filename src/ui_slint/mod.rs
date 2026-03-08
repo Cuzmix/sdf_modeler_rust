@@ -2,6 +2,8 @@
 mod winit_host;
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "slint-ui", not(doc)))]
+mod embedded_viewport;
+#[cfg(all(not(target_arch = "wasm32"), feature = "slint-ui", not(doc)))]
 mod panels;
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "slint-ui", not(doc)))]
@@ -15,9 +17,10 @@ mod imp {
     use crate::core::{AppCore, AppCoreInit, CoreAsyncState, CoreCommand, CoreSelection};
     use crate::gpu::camera::Camera;
     use crate::graph::history::History;
-    use crate::graph::scene::{LightType, Scene, SdfPrimitive};
+    use crate::graph::scene::{CsgOp, LightType, ModifierKind, Scene, SdfPrimitive};
     use crate::sculpt::{ActiveTool, SculptState};
     use crate::settings::Settings;
+    use crate::ui_slint::embedded_viewport::EmbeddedViewportRenderer;
     use crate::ui_slint::panels::build_panel_read_model;
 
     slint::include_modules!();
@@ -114,9 +117,9 @@ mod imp {
         app.set_viewportWindowRunning(viewport_running);
         app.set_viewportStatusText(
             if viewport_running {
-                "Viewport window: running (external host)"
+                "Embedded viewport active (external host also running)"
             } else {
-                "Viewport window: stopped"
+                "Embedded viewport active (external host stopped)"
             }
             .into(),
         );
@@ -161,7 +164,9 @@ mod imp {
         if use_viewport_host {
             return crate::ui_slint::winit_host::run(settings);
         }
-        slint::BackendSelector::new().backend_name("winit".into()).select()?;
+        slint::BackendSelector::new()
+            .backend_name("winit".into())
+            .select()?;
 
         let app = AppShell::new()?;
         let app_weak = app.as_weak();
@@ -189,6 +194,32 @@ mod imp {
             let core_ref = core.borrow();
             let viewport_running = viewport_controller.borrow_mut().poll_running();
             apply_snapshot(&app, &core_ref, &shell_settings, 0.0, viewport_running);
+        }
+
+        let embedded_renderer = Rc::new(RefCell::new(EmbeddedViewportRenderer::new(1280, 700)));
+        {
+            let initial_image = embedded_renderer
+                .borrow()
+                .render(started.elapsed().as_secs_f32());
+            app.set_viewportImage(initial_image);
+        }
+
+        let viewport_timer = slint::Timer::default();
+        {
+            let app_weak = app_weak.clone();
+            let embedded_renderer = embedded_renderer.clone();
+            viewport_timer.start(
+                slint::TimerMode::Repeated,
+                Duration::from_millis(33),
+                move || {
+                    if let Some(app_instance) = app_weak.upgrade() {
+                        let image = embedded_renderer
+                            .borrow()
+                            .render(started.elapsed().as_secs_f32());
+                        app_instance.set_viewportImage(image);
+                    }
+                },
+            );
         }
 
         let dispatch: Rc<dyn Fn(CoreCommand)> = {
@@ -222,19 +253,76 @@ mod imp {
             let app_weak = app_weak.clone();
             let hide_timer = hide_timer.clone();
             app.on_fileOpen(move || {
-                show_toast(&app_weak, &hide_timer, "Open project is pending Slint shell integration");
+                show_toast(
+                    &app_weak,
+                    &hide_timer,
+                    "Open project is pending Slint shell integration",
+                );
             });
         }
         {
             let app_weak = app_weak.clone();
             let hide_timer = hide_timer.clone();
             app.on_fileSave(move || {
-                show_toast(&app_weak, &hide_timer, "Save project is pending Slint shell integration");
+                show_toast(
+                    &app_weak,
+                    &hide_timer,
+                    "Save project is pending Slint shell integration",
+                );
             });
         }
         {
             let dispatch = dispatch.clone();
             app.on_addSphere(move || dispatch(CoreCommand::CreatePrimitive(SdfPrimitive::Sphere)));
+        }
+        {
+            let dispatch = dispatch.clone();
+            app.on_addBox(move || dispatch(CoreCommand::CreatePrimitive(SdfPrimitive::Box)));
+        }
+        {
+            let dispatch = dispatch.clone();
+            let core = core.clone();
+            app.on_addUnionOp(move || {
+                let selected_primary = core.borrow().selection.primary;
+                dispatch(CoreCommand::CreateOperation {
+                    op: CsgOp::Union,
+                    left: selected_primary,
+                    right: None,
+                });
+            });
+        }
+        {
+            let dispatch = dispatch.clone();
+            let core = core.clone();
+            app.on_addSmoothUnionOp(move || {
+                let selected_primary = core.borrow().selection.primary;
+                dispatch(CoreCommand::CreateOperation {
+                    op: CsgOp::SmoothUnion,
+                    left: selected_primary,
+                    right: None,
+                });
+            });
+        }
+        {
+            let dispatch = dispatch.clone();
+            let core = core.clone();
+            app.on_addTransformNode(move || {
+                let selected_primary = core.borrow().selection.primary;
+                dispatch(CoreCommand::CreateTransform {
+                    input: selected_primary,
+                });
+            });
+        }
+        {
+            let dispatch = dispatch.clone();
+            let core = core.clone();
+            app.on_addRoundModifier(move || {
+                let selected_primary = core.borrow().selection.primary;
+                dispatch(CoreCommand::CreateModifier {
+                    kind: ModifierKind::Round,
+                    input: selected_primary,
+                });
+            });
         }
         {
             let dispatch = dispatch.clone();
@@ -268,7 +356,9 @@ mod imp {
         }
         {
             let dispatch = dispatch.clone();
-            app.on_toggleSelectedVisibility(move || dispatch(CoreCommand::ToggleSelectedVisibility));
+            app.on_toggleSelectedVisibility(move || {
+                dispatch(CoreCommand::ToggleSelectedVisibility)
+            });
         }
         {
             let dispatch = dispatch.clone();
@@ -379,11 +469,12 @@ mod imp {
 pub use imp::run as run_slint_shell;
 
 #[cfg(not(all(not(target_arch = "wasm32"), feature = "slint-ui", not(doc))))]
-pub fn run_slint_shell(_settings: &crate::settings::Settings) -> Result<(), Box<dyn std::error::Error>> {
+pub fn run_slint_shell(
+    _settings: &crate::settings::Settings,
+) -> Result<(), Box<dyn std::error::Error>> {
     Err(std::io::Error::new(
         std::io::ErrorKind::Unsupported,
         "slint-ui feature is not enabled",
     )
     .into())
 }
-
