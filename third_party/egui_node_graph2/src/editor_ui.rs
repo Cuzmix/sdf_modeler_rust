@@ -396,7 +396,7 @@ where
             );
         }
         // draw existing connections
-        let mut connection_segments: Vec<((InputId, OutputId), Pos2, Pos2)> = Vec::new();
+        let mut connection_segments: Vec<((InputId, OutputId), Pos2, Pos2, Color32)> = Vec::new();
         let mut connection_under_cursor: Option<((InputId, OutputId), f32)> = None;
         for (input, outputs) in self.graph.iter_connection_groups() {
             for (hook_n, &output) in outputs.iter().enumerate() {
@@ -415,7 +415,7 @@ where
                     dst_pos,
                     connection_color,
                 );
-                connection_segments.push(((input, output), src_pos, dst_pos));
+                connection_segments.push(((input, output), src_pos, dst_pos, connection_color));
 
                 let distance = connection_distance_to_pos(&self.pan_zoom, src_pos, dst_pos, cursor_pos);
                 let hover_threshold = 12.0 * self.pan_zoom.zoom;
@@ -427,6 +427,20 @@ where
                         }
                     }
                 }
+            }
+        }
+        if let Some(((hover_input, hover_output), _)) = connection_under_cursor {
+            if let Some((_, src_pos, dst_pos, color)) = connection_segments
+                .iter()
+                .find(|(conn, _, _, _)| *conn == (hover_input, hover_output))
+            {
+                draw_connection_hover(
+                    &self.pan_zoom,
+                    ui.painter(),
+                    *src_pos,
+                    *dst_pos,
+                    *color,
+                );
             }
         }
 
@@ -592,7 +606,7 @@ where
             }) {
                 if let Some(node_rect) = node_rects.get(&ended_node_id) {
                     let mut best: Option<((InputId, OutputId), f32)> = None;
-                    for (conn, src_pos, dst_pos) in connection_segments.iter().copied() {
+                    for (conn, src_pos, dst_pos, _) in connection_segments.iter().copied() {
                         let distance =
                             connection_distance_to_rect(&self.pan_zoom, src_pos, dst_pos, *node_rect);
                         match best {
@@ -643,6 +657,43 @@ fn draw_connection(
     );
 
     painter.add(bezier);
+}
+
+fn draw_connection_hover(
+    pan_zoom: &PanZoom,
+    painter: &Painter,
+    src_pos: Pos2,
+    dst_pos: Pos2,
+    color: Color32,
+) {
+    let glow = Color32::from_rgba_unmultiplied(255, 255, 255, 90);
+    let stroke_outer = egui::Stroke {
+        width: 9.0 * pan_zoom.zoom,
+        color: glow,
+    };
+    let stroke_inner = egui::Stroke {
+        width: 6.0 * pan_zoom.zoom,
+        color,
+    };
+
+    let control_scale = ((dst_pos.x - src_pos.x) * pan_zoom.zoom / 2.0).max(30.0 * pan_zoom.zoom);
+    let src_control = src_pos + Vec2::X * control_scale;
+    let dst_control = dst_pos - Vec2::X * control_scale;
+
+    let outer = CubicBezierShape::from_points_stroke(
+        [src_pos, src_control, dst_control, dst_pos],
+        false,
+        Color32::TRANSPARENT,
+        stroke_outer,
+    );
+    let inner = CubicBezierShape::from_points_stroke(
+        [src_pos, src_control, dst_control, dst_pos],
+        false,
+        Color32::TRANSPARENT,
+        stroke_inner,
+    );
+    painter.add(outer);
+    painter.add(inner);
 }
 fn connection_distance_to_pos(pan_zoom: &PanZoom, src_pos: Pos2, dst_pos: Pos2, point: Pos2) -> f32 {
     let control_scale = ((dst_pos.x - src_pos.x) * pan_zoom.zoom / 2.0).max(30.0 * pan_zoom.zoom);
@@ -731,11 +782,11 @@ where
         ui: &mut Ui,
         user_state: &mut UserState,
     ) -> Vec<NodeResponse<UserResponse, NodeData>> {
-        let mut child_ui = ui.child_ui_with_id_source(
-            Rect::from_min_size(*self.position + self.pan, Self::MAX_NODE_SIZE.into()),
-            Layout::default(),
-            (self.graph_instance_id, self.node_id),
-            None,
+        let mut child_ui = ui.new_child(
+            UiBuilder::new()
+                .max_rect(Rect::from_min_size(*self.position + self.pan, Self::MAX_NODE_SIZE.into()))
+                .layout(Layout::default())
+                .id_salt((self.graph_instance_id, self.node_id)),
         );
 
         Self::show_graph_node(self, pan_zoom, &mut child_ui, user_state)
@@ -780,7 +831,11 @@ where
         inner_rect.max.x = inner_rect.max.x.max(inner_rect.min.x);
         inner_rect.max.y = inner_rect.max.y.max(inner_rect.min.y);
 
-        let mut child_ui = ui.child_ui(inner_rect, *ui.layout(), None);
+        let mut child_ui = ui.new_child(
+            UiBuilder::new()
+                .max_rect(inner_rect)
+                .layout(ui.layout().clone()),
+        );
 
         // Get interaction rect from memory, it may expand after the window response on resize.
         let interaction_rect = ui
