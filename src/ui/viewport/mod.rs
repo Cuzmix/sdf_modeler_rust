@@ -16,7 +16,7 @@ use crate::gpu::camera::CameraUniform;
 const INITIAL_SCENE_CAPACITY: usize = 16;
 const INITIAL_VOXEL_CAPACITY: usize = 4; // in f32 elements (minimum valid buffer)
 
-/// GPU-side brush parameters. Matches the WGSL `BrushParams` struct layout (112 bytes).
+/// GPU-side brush parameters. Matches the WGSL `BrushParams` struct layout (128 bytes).
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]
 pub struct BrushGpuParams {
@@ -42,9 +42,11 @@ pub struct BrushGpuParams {
     pub falloff_mode: f32,
     pub smooth_iterations: u32,
     pub flatten_ref: f32,
-    // f32 surface_constraint + padding to 112 bytes (16-byte aligned)
+    // f32 surface_constraint + pad + vec3f view_dir_local + pad (128-byte struct)
     pub surface_constraint: f32,
     pub _pad3: [f32; 3],
+    pub view_dir_local: [f32; 3],
+    pub _pad4: f32,
 }
 
 /// CPU-side brush dispatch info (wraps GPU params + workgroup counts).
@@ -444,3 +446,4 @@ impl ViewportResources {
         self.rebuild_brush_bind_group(device);
     }
 }
+

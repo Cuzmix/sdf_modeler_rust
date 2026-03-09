@@ -149,11 +149,21 @@ pub struct Toast {
     pub duration: Duration,
 }
 
+/// Minimal data needed to reconstruct a cursor ray for sculpt interaction.
+#[derive(Clone, Copy)]
+pub(super) struct PickRayInputs {
+    pub mouse_pos: [f32; 2],
+    pub inv_view_proj: [f32; 16],
+    pub eye: [f32; 3],
+    pub viewport_size: [f32; 2],
+}
+
 /// Async pick state for sculpt mode (1-frame delay, eliminates GPU stall).
 pub(super) enum PickState {
     Idle,
     Pending {
         receiver: std::sync::mpsc::Receiver<Result<(), wgpu::BufferAsyncError>>,
+        ray_inputs: PickRayInputs,
     },
 }
 

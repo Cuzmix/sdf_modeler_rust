@@ -19,6 +19,8 @@ struct BrushParams {
     _pad3x: f32,
     _pad3y: f32,
     _pad3z: f32,
+    view_dir_local: vec3f,
+    _pad4: f32,
 }
 
 @group(0) @binding(0) var<uniform> brush: BrushParams;
@@ -33,7 +35,8 @@ fn cs_brush(@builtin(global_invocation_id) gid: vec3<u32>) {
     let res_f = f32(res - 1u);
     let norm = vec3f(grid_pos) / res_f;
     let world_pos = brush.bounds_min + norm * (brush.bounds_max - brush.bounds_min);
-    let dist = length(world_pos - brush.center_local);
+    let offset = world_pos - brush.center_local;
+    let dist = length(offset);
 
     if dist >= brush.radius { return; }
 
@@ -45,10 +48,19 @@ fn cs_brush(@builtin(global_invocation_id) gid: vec3<u32>) {
     let isFlat   = step(2.5, fm);
     let isSmooth = 1.0 - isLinear - isSharp - isFlat;
 
-    let falloff = (1.0 - nt * nt * (3.0 - 2.0 * nt)) * isSmooth
+    // Front-face attenuation (disabled when view_dir_local is zero).
+    let view_len2 = dot(brush.view_dir_local, brush.view_dir_local);
+    let has_front_face = view_len2 > 1e-6 && dist > 1e-6;
+    let offset_dir = offset * (1.0 / max(dist, 1e-6));
+    let view_dir = brush.view_dir_local * inverseSqrt(max(view_len2, 1e-6));
+    let ndotv = dot(offset_dir, view_dir);
+    let hemi = clamp(0.5 - 0.5 * ndotv, 0.0, 1.0);
+    let front_face = select(1.0, hemi * hemi, has_front_face);
+
+    let falloff = ((1.0 - nt * nt * (3.0 - 2.0 * nt)) * isSmooth
                 + (1.0 - nt) * isLinear
                 + (1.0 - nt) * (1.0 - nt) * isSharp
-                + 1.0 * isFlat;
+                + 1.0 * isFlat) * front_face;
 
     let idx = brush.grid_offset + grid_pos.z * res * res + grid_pos.y * res + grid_pos.x;
     let cur = voxel_data[idx];
@@ -74,3 +86,4 @@ fn cs_brush(@builtin(global_invocation_id) gid: vec3<u32>) {
 
     voxel_data[idx] += add_delta * isAdd + carve_delta * isCarve + flatten_delta * isFlatten + inflate_delta * isInflate;
 }
+

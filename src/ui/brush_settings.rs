@@ -17,7 +17,9 @@ pub fn draw(ui: &mut egui::Ui, sculpt_state: &mut SculptState) {
         ref mut brush_shape,
         ref mut smooth_iterations,
         ref mut lazy_radius,
+        ref mut stroke_spacing,
         ref mut surface_constraint,
+        ref mut front_faces_only,
         ref mut symmetry_axis,
         ..
     } = sculpt_state
@@ -31,7 +33,9 @@ pub fn draw(ui: &mut egui::Ui, sculpt_state: &mut SculptState) {
             brush_shape,
             smooth_iterations,
             lazy_radius,
+            stroke_spacing,
             surface_constraint,
+            front_faces_only,
             symmetry_axis,
         );
     } else {
@@ -55,7 +59,9 @@ fn draw_active_brush_controls(
     brush_shape: &mut BrushShape,
     smooth_iterations: &mut u32,
     lazy_radius: &mut f32,
+    stroke_spacing: &mut f32,
     surface_constraint: &mut f32,
+    front_faces_only: &mut bool,
     symmetry_axis: &mut Option<u8>,
 ) {
     // Brush mode
@@ -141,11 +147,20 @@ fn draw_active_brush_controls(
         ui.add(egui::Slider::new(lazy_radius, 0.0..=0.5));
     });
 
+    // Stroke spacing (fraction of radius)
+    ui.horizontal(|ui| {
+        ui.label("Spacing:");
+        ui.add(egui::Slider::new(stroke_spacing, 0.05..=0.6));
+    });
+
     // Surface constraint
     ui.horizontal(|ui| {
         ui.label("Surface:");
         ui.add(egui::Slider::new(surface_constraint, 0.0..=1.0));
     });
+
+    ui.checkbox(front_faces_only, "Front Faces")
+        .on_hover_text("Attenuate brush influence on back-facing voxels");
 
     ui.add_space(6.0);
     ui.separator();
