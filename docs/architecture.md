@@ -121,6 +121,27 @@ The `eframe::App::update()` method in `src/app/mod.rs` runs every frame in 8 pha
 
 ---
 
+### 1.5 Sculpt Responsiveness Pipeline (Critical)
+
+Sculpt interaction quality depends on latency, not only frame rate. The app now uses a hybrid path to keep strokes smooth:
+
+- Async GPU pick for accurate surface hits (`poll_sculpt_pick` and `submit_sculpt_pick`).
+- Predictive drag fallback while pick readback is still pending (projects the current cursor ray to the drag depth plane and applies a temporary hit).
+- Off-mesh Grab continuation so Grab keeps moving until mouse release.
+
+Recent brush behavior upgrades:
+- Grab uses Kelvinlet backward warp from a stroke snapshot for stable large moves.
+- Smooth uses Taubin-style smoothing (lambda/mu passes) for better volume preservation.
+- Add/Carve/Flatten/Inflate clamp per-sample SDF delta to avoid stepping artifacts.
+- Stroke interpolation spacing adapts to voxel size to reduce rubber-banding during fast drags.
+- GPU brush compute (`brush.wgsl`) mirrors CPU delta clamp logic to keep behavior consistent.
+
+Non-regression requirement:
+- Any change touching sculpt input, picking, brush math, or per-frame update order must be manually checked for visual smoothness under active drag, including shadows/AO enabled.
+- Detailed notes and regression checklist: docs/sculpt_responsiveness_findings.md.
+
+---
+
 ## 2. Module-by-Module Documentation
 
 ### 2.1 Entry Points

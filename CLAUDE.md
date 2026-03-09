@@ -155,6 +155,34 @@ src/
 
 ---
 
+## Sculpt Responsiveness Non-Regression (MANDATORY)
+
+Sculpt smoothness is a hard quality bar. "60 FPS" is not sufficient if brush motion looks delayed or stepped.
+
+Required guardrails for sculpt changes:
+- Do not block active sculpt strokes on GPU pick readback.
+- Keep async pick non-blocking; never add `Maintain::Wait` in active sculpt drag paths.
+- Preserve predictive sculpt fallback while async pick is pending.
+- Preserve off-mesh Grab continuation until mouse release.
+- Preserve voxel-aware stroke interpolation density.
+- Preserve per-sample delta clamping for Add/Carve/Flatten/Inflate.
+- Preserve Taubin smoothing for Smooth brush (volume-friendly behavior).
+
+Manual verification for any sculpt input/render change:
+1. Hold LMB and sculpt fast circles on a low-resolution Sculpt node. Stroke must look continuous.
+2. Use Grab and drag quickly, including leaving geometry. Motion must continue until release.
+3. Toggle Shadows/AO while sculpting. Brush motion must stay smooth without visible stepping.
+4. Confirm no obvious latency spikes at stroke start or during continuous drag.
+
+Reference implementation files:
+- `src/app/sculpting.rs`
+- `src/app/mod.rs`
+- `src/sculpt.rs`
+- `src/shaders/brush.wgsl`
+- `docs/sculpt_responsiveness_findings.md` (detailed findings and test matrix)
+
+---
+
 ## Build & Run
 
 ```bash

@@ -1,7 +1,7 @@
 use eframe::wgpu;
 use glam::{Mat4, Vec3, Vec4};
 
-use crate::gpu::picking::PickResult;
+use crate::gpu::picking::{PendingPick, PickResult};
 use crate::graph::scene::{NodeData, NodeId};
 use crate::graph::voxel;
 use crate::sculpt::{self, ActiveTool, BrushMode, FalloffMode, SculptState};
@@ -36,6 +36,91 @@ impl SdfApp {
         }
 
         Some((eye, ray_dir))
+    }
+
+    /// Convert a pending pick payload into lightweight ray inputs.
+    fn ray_inputs_from_pending(pending: &PendingPick) -> PickRayInputs {
+        PickRayInputs {
+            mouse_pos: pending.mouse_pos,
+            inv_view_proj: pending.camera_uniform.inv_view_proj,
+            eye: [
+                pending.camera_uniform.eye[0],
+                pending.camera_uniform.eye[1],
+                pending.camera_uniform.eye[2],
+            ],
+            viewport_size: [
+                pending.camera_uniform.viewport[2],
+                pending.camera_uniform.viewport[3],
+            ],
+        }
+    }
+
+    /// Predict and apply a sculpt hit from the latest cursor ray when async
+    /// pick readback is still pending.
+    pub(super) fn predict_sculpt_from_pending_pick(&mut self, pending: &PendingPick) -> bool {
+        if !self.async_state.sculpt_dragging {
+            return false;
+        }
+
+        let active_node = match self.doc.sculpt_state {
+            SculptState::Active { node_id, .. } => node_id,
+            _ => return false,
+        };
+
+        let mut anchor = match self.async_state.last_sculpt_hit {
+            Some(hit) => hit,
+            None => return false,
+        };
+        if let SculptState::Active {
+            ref brush_mode,
+            grab_start: Some(origin),
+            ..
+        } = self.doc.sculpt_state
+        {
+            if *brush_mode == BrushMode::Grab {
+                anchor = origin;
+            }
+        }
+
+        let topo_order = self.doc.scene.visible_topo_order();
+        let Some(material_id) = topo_order
+            .iter()
+            .position(|&id| id == active_node)
+            .map(|i| i as i32)
+        else {
+            return false;
+        };
+
+        let Some((ray_origin, ray_dir)) =
+            Self::pick_ray_from_pending(Self::ray_inputs_from_pending(pending))
+        else {
+            return false;
+        };
+
+        let eye = self.doc.camera.eye();
+        let forward = (self.doc.camera.target - eye).normalize_or_zero();
+        if forward.length_squared() <= 1e-8 {
+            return false;
+        }
+        let denom = ray_dir.dot(forward);
+        if denom.abs() <= 1e-6 {
+            return false;
+        }
+
+        let t = (anchor - ray_origin).dot(forward) / denom;
+        if !t.is_finite() || t <= 0.0 {
+            return false;
+        }
+
+        let projected = ray_origin + ray_dir * t;
+        self.async_state.hover_world_pos = Some(projected);
+        self.async_state.cursor_over_geometry = true;
+        self.handle_sculpt_hit(PickResult {
+            material_id,
+            distance: 0.0,
+            world_pos: projected.to_array(),
+        });
+        true
     }
 
     /// Continue Grab strokes when the cursor leaves geometry by projecting the
@@ -680,19 +765,7 @@ impl SdfApp {
 
         self.async_state.pick_state = PickState::Pending {
             receiver: rx,
-            ray_inputs: PickRayInputs {
-                mouse_pos: pending.mouse_pos,
-                inv_view_proj: pending.camera_uniform.inv_view_proj,
-                eye: [
-                    pending.camera_uniform.eye[0],
-                    pending.camera_uniform.eye[1],
-                    pending.camera_uniform.eye[2],
-                ],
-                viewport_size: [
-                    pending.camera_uniform.viewport[2],
-                    pending.camera_uniform.viewport[3],
-                ],
-            },
+            ray_inputs: Self::ray_inputs_from_pending(&pending),
         };
     }
 

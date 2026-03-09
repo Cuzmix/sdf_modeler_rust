@@ -687,15 +687,23 @@ impl eframe::App for SdfApp {
             }
         }
 
-        if pending_pick.is_some() {
-            self.async_state.pending_pick = pending_pick;
+        if let Some(ref pending) = pending_pick {
             self.async_state.sculpt_dragging = !is_hover_pick;
             if !is_hover_pick {
                 // Only copy modifier keys for sculpt drag picks
                 self.async_state.sculpt_ctrl_held = sculpt_ctrl_held;
                 self.async_state.sculpt_shift_held = sculpt_shift_held;
                 self.async_state.sculpt_pressure = sculpt_pressure;
+
+                // Keep strokes smooth while async pick readback is still in flight.
+                if matches!(self.async_state.pick_state, PickState::Pending { .. }) {
+                    let _ = self.predict_sculpt_from_pending_pick(pending);
+                }
             }
+        }
+
+        if pending_pick.is_some() {
+            self.async_state.pending_pick = pending_pick;
         }
 
         // Sculpt mode: submit async pick for next frame's poll_sculpt_pick
