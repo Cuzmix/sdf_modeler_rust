@@ -22,7 +22,7 @@ const AO_DECAY: f32 = /*AO_DECAY*/;
 var<private> debug_step_count: f32;
 
 // PERFORMANCE CRITICAL: keep simple, avoid branches.
-// This is the inner loop of the renderer — runs per-pixel, up to MARCH_MAX_STEPS iterations.
+// This is the inner loop of the renderer - runs per-pixel, up to MARCH_MAX_STEPS iterations.
 fn ray_march(ro: vec3f, rd: vec3f) -> vec4f {
     let fast = camera.quality_mode > 0.5;
     let eff_steps = select(/*MARCH_MAX_STEPS*/, /*MARCH_MAX_STEPS*/ / 2, fast);
@@ -94,20 +94,34 @@ fn calc_normal(p: vec3f, t: f32) -> vec3f {
 }
 
 fn soft_shadow(ro: vec3f, rd: vec3f, mint: f32, maxt: f32, k: f32) -> f32 {
-    // iq's improved soft shadows with triangulation (reduced light leaking)
+    // iq's improved soft shadows with triangulation + seam guard for voxel sculpt regions.
     var res = 1.0;
-    var t = mint;
+    let shadow_eps = max(0.0005, SHADOW_BIAS * 0.08);
+    var t = max(mint, shadow_eps * 2.0);
     var ph = 1e20;
     for (var i = 0; i < SHADOW_STEPS; i++) {
-        let h = scene_sdf(ro + rd * t).x;
-        if h < 0.005 {
+        let h_raw = scene_sdf(ro + rd * t).x;
+
+        // Only treat clearly negative distances as hard blockers.
+        if h_raw < -shadow_eps * 2.0 {
             return 0.0;
         }
-        let y = h * h / (2.0 * ph);
-        let d = sqrt(h * h - y * y);
-        res = min(res, k * d / max(0.0001, t - y));
-        ph = h;
-        t += h;
+
+        // Collapse guard: noisy near-surface samples should not instantly black out.
+        if h_raw < shadow_eps {
+            let near_factor = clamp((shadow_eps - h_raw) / (shadow_eps * 3.0), 0.0, 1.0);
+            res = min(res, 1.0 - near_factor * 0.7);
+            ph = shadow_eps;
+            t += shadow_eps * 2.0;
+            if t > maxt { break; }
+            continue;
+        }
+
+        let y = h_raw * h_raw / (2.0 * ph);
+        let d = sqrt(max(h_raw * h_raw - y * y, 0.0));
+        res = min(res, k * d / max(0.001, t - y));
+        ph = h_raw;
+        t += max(h_raw, shadow_eps * 2.0);
         if t > maxt { break; }
     }
     return clamp(res, 0.0, 1.0);
@@ -280,7 +294,7 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
                 let world_pos = ro + rd * plane_t;
                 let d = scene_sdf(world_pos).x;
 
-                // Color by distance: blue (inside, d<0), red (outside, d>0), white (surface, d≈0)
+                // Color by distance: blue (inside, d<0), red (outside, d>0), white (surface, d~0)
                 let surface_band = smoothstep(0.0, 0.02, abs(d));
                 let inside_color = vec3f(0.1, 0.2, 0.8);  // blue
                 let outside_color = vec3f(0.8, 0.15, 0.1); // red
@@ -490,8 +504,14 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
             // Per-light shadow (budget: max 2 shadow-casting lights for performance)
             var sl_shadow_factor = vec3f(1.0);
             if SHADOWS_ENABLED && sl_cast_shadows && shadow_budget < 2 && camera.quality_mode < 0.5 {
-                let sl_shadow = soft_shadow(p + n * SHADOW_BIAS, sl_light_dir, SHADOW_MINT, SHADOW_MAXT, sl_shadow_softness);
-                // Apply shadow color: mix shadow_color → white by shadow factor
+                // Stronger slope-scaled offset helps stabilize voxel/sculpt seams at grazing angles.
+                let sl_grazing = 1.0 - sl_NoL;
+                let sl_normal_bias = SHADOW_BIAS * (1.0 + sl_grazing * 1.5);
+                let sl_slope_bias = SHADOW_BIAS * (0.5 + sl_grazing * 2.0);
+                let sl_shadow_origin = p + n * sl_normal_bias + sl_light_dir * sl_slope_bias;
+                let sl_shadow_mint = max(SHADOW_MINT, sl_normal_bias + sl_slope_bias);
+                let sl_shadow = soft_shadow(sl_shadow_origin, sl_light_dir, sl_shadow_mint, SHADOW_MAXT, sl_shadow_softness);
+                // Apply shadow color: mix shadow_color -> white by shadow factor
                 sl_shadow_factor = mix(sl_shadow_color, vec3f(1.0), sl_shadow);
                 shadow_budget += 1;
             }

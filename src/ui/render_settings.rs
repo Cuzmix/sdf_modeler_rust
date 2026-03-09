@@ -1,7 +1,7 @@
 use eframe::egui;
 
 use crate::app::actions::{Action, ActionSink, LightingPreset};
-use crate::settings::{BackgroundMode, ShadingMode, Settings};
+use crate::settings::{BackgroundMode, Settings, ShadingMode};
 
 /// Draw the Render Settings panel. Pushes `Action::SettingsChanged` if a shader-affecting
 /// setting changed.
@@ -16,13 +16,25 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
         }
         ui.separator();
         ui.label("Presets:");
-        if ui.small_button("Fast").on_hover_text("Low quality, high performance").clicked() {
+        if ui
+            .small_button("Fast")
+            .on_hover_text("Low quality, high performance")
+            .clicked()
+        {
             apply_preset_fast(&mut settings.render);
         }
-        if ui.small_button("Balanced").on_hover_text("Good balance of quality and speed").clicked() {
+        if ui
+            .small_button("Balanced")
+            .on_hover_text("Good balance of quality and speed")
+            .clicked()
+        {
             apply_preset_balanced(&mut settings.render);
         }
-        if ui.small_button("Quality").on_hover_text("Maximum visual quality (slower)").clicked() {
+        if ui
+            .small_button("Quality")
+            .on_hover_text("Maximum visual quality (slower)")
+            .clicked()
+        {
             apply_preset_quality(&mut settings.render);
         }
     });
@@ -38,16 +50,45 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
             ui.checkbox(&mut config.shadows_enabled, "Enable Shadows")
                 .on_hover_text("Soft shadows from key light (expensive)");
             ui.add_enabled_ui(config.shadows_enabled, |ui| {
-                labeled_slider_i32(ui, "Steps", &mut config.shadow_steps, 8..=128,
-                    "Ray steps for shadow evaluation. More = sharper but slower");
-                labeled_slider(ui, "Penumbra K", &mut config.shadow_penumbra_k, 1.0..=32.0, false,
-                    "Shadow softness. Higher = harder shadows");
-                labeled_slider(ui, "Bias", &mut config.shadow_bias, 0.001..=0.2, true,
-                    "Offset to prevent self-shadowing artifacts");
-                labeled_slider(ui, "Min T", &mut config.shadow_mint, 0.01..=0.5, false,
-                    "Shadow ray start distance (avoids self-intersection)");
-                labeled_slider(ui, "Max T", &mut config.shadow_maxt, 5.0..=100.0, false,
-                    "Maximum shadow ray distance");
+                labeled_slider_i32(
+                    ui,
+                    "Steps",
+                    &mut config.shadow_steps,
+                    8..=128,
+                    "Ray steps for shadow evaluation. More = sharper but slower",
+                );
+                labeled_slider(
+                    ui,
+                    "Penumbra K",
+                    &mut config.shadow_penumbra_k,
+                    1.0..=32.0,
+                    false,
+                    "Shadow softness. Higher = harder shadows",
+                );
+                labeled_slider(
+                    ui,
+                    "Bias",
+                    &mut config.shadow_bias,
+                    0.001..=0.2,
+                    true,
+                    "Offset to prevent self-shadowing artifacts",
+                );
+                labeled_slider(
+                    ui,
+                    "Min T",
+                    &mut config.shadow_mint,
+                    0.01..=0.5,
+                    false,
+                    "Shadow ray start distance (avoids self-intersection)",
+                );
+                labeled_slider(
+                    ui,
+                    "Max T",
+                    &mut config.shadow_maxt,
+                    5.0..=100.0,
+                    false,
+                    "Maximum shadow ray distance",
+                );
             });
             if ui.small_button("Reset").clicked() {
                 config.reset_shadows();
@@ -61,14 +102,37 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
             ui.checkbox(&mut config.ao_enabled, "Enable AO")
                 .on_hover_text("Ambient occlusion darkens crevices and corners");
             ui.add_enabled_ui(config.ao_enabled, |ui| {
-                labeled_slider_i32(ui, "Samples", &mut config.ao_samples, 1..=16,
-                    "Number of AO sample steps. More = smoother but slower");
-                labeled_slider(ui, "Step Size", &mut config.ao_step, 0.01..=0.5, false,
-                    "Distance between AO samples. Larger = wider darkening");
-                labeled_slider(ui, "Decay", &mut config.ao_decay, 0.5..=1.0, false,
-                    "How quickly AO fades with distance (closer to 1.0 = slower fade)");
-                labeled_slider(ui, "Intensity", &mut config.ao_intensity, 0.5..=10.0, false,
-                    "Strength of the AO effect. Higher = darker crevices");
+                labeled_slider_i32(
+                    ui,
+                    "Samples",
+                    &mut config.ao_samples,
+                    1..=16,
+                    "Number of AO sample steps. More = smoother but slower",
+                );
+                labeled_slider(
+                    ui,
+                    "Step Size",
+                    &mut config.ao_step,
+                    0.01..=0.5,
+                    false,
+                    "Distance between AO samples. Larger = wider darkening",
+                );
+                labeled_slider(
+                    ui,
+                    "Decay",
+                    &mut config.ao_decay,
+                    0.5..=1.0,
+                    false,
+                    "How quickly AO fades with distance (closer to 1.0 = slower fade)",
+                );
+                labeled_slider(
+                    ui,
+                    "Intensity",
+                    &mut config.ao_intensity,
+                    0.5..=10.0,
+                    false,
+                    "Strength of the AO effect. Higher = darker crevices",
+                );
             });
             if ui.small_button("Reset").clicked() {
                 config.reset_ao();
@@ -79,14 +143,37 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
     egui::CollapsingHeader::new("Raymarching")
         .default_open(false)
         .show(ui, |ui| {
-            labeled_slider_i32(ui, "Max Steps", &mut config.march_max_steps, 32..=512,
-                "Maximum ray march iterations. More = higher quality but slower");
-            labeled_slider(ui, "Epsilon", &mut config.march_epsilon, 0.0001..=0.01, true,
-                "Surface hit threshold. Smaller = more precise but needs more steps");
-            labeled_slider(ui, "Step Multiplier", &mut config.march_step_multiplier, 0.5..=1.0, false,
-                "Conservative step factor (<1.0 prevents artifacts on thin features)");
-            labeled_slider(ui, "Max Distance", &mut config.march_max_distance, 10.0..=200.0, false,
-                "Far plane distance. Rays beyond this are considered misses");
+            labeled_slider_i32(
+                ui,
+                "Max Steps",
+                &mut config.march_max_steps,
+                32..=512,
+                "Maximum ray march iterations. More = higher quality but slower",
+            );
+            labeled_slider(
+                ui,
+                "Epsilon",
+                &mut config.march_epsilon,
+                0.0001..=0.01,
+                true,
+                "Surface hit threshold. Smaller = more precise but needs more steps",
+            );
+            labeled_slider(
+                ui,
+                "Step Multiplier",
+                &mut config.march_step_multiplier,
+                0.01..=1.0,
+                false,
+                "Conservative step factor (<1.0 prevents artifacts on thin features)",
+            );
+            labeled_slider(
+                ui,
+                "Max Distance",
+                &mut config.march_max_distance,
+                10.0..=200.0,
+                false,
+                "Far plane distance. Rays beyond this are considered misses",
+            );
             if ui.small_button("Reset").clicked() {
                 config.reset_raymarching();
             }
@@ -99,22 +186,44 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
             ui.weak("Key/Fill lights are scene Directional nodes.");
             ui.horizontal(|ui| {
                 ui.label("Presets:");
-                if ui.small_button("Studio").on_hover_text("Classic warm key + cool fill studio setup").clicked() {
+                if ui
+                    .small_button("Studio")
+                    .on_hover_text("Classic warm key + cool fill studio setup")
+                    .clicked()
+                {
                     actions.push(Action::ApplyLightingPreset(LightingPreset::Studio));
                 }
-                if ui.small_button("Outdoor").on_hover_text("Bright sunlight with blue sky fill").clicked() {
+                if ui
+                    .small_button("Outdoor")
+                    .on_hover_text("Bright sunlight with blue sky fill")
+                    .clicked()
+                {
                     actions.push(Action::ApplyLightingPreset(LightingPreset::Outdoor));
                 }
-                if ui.small_button("Dramatic").on_hover_text("High-contrast cinematic lighting").clicked() {
+                if ui
+                    .small_button("Dramatic")
+                    .on_hover_text("High-contrast cinematic lighting")
+                    .clicked()
+                {
                     actions.push(Action::ApplyLightingPreset(LightingPreset::Dramatic));
                 }
-                if ui.small_button("Flat").on_hover_text("Even, shadowless illumination").clicked() {
+                if ui
+                    .small_button("Flat")
+                    .on_hover_text("Even, shadowless illumination")
+                    .clicked()
+                {
                     actions.push(Action::ApplyLightingPreset(LightingPreset::Flat));
                 }
             });
             ui.separator();
-            labeled_slider(ui, "Ambient", &mut config.ambient, 0.0..=0.5, false,
-                "Minimum base lighting (prevents fully black areas)");
+            labeled_slider(
+                ui,
+                "Ambient",
+                &mut config.ambient,
+                0.0..=0.5,
+                false,
+                "Minimum base lighting (prevents fully black areas)",
+            );
             if ui.small_button("Reset").clicked() {
                 config.reset_lighting();
             }
@@ -127,8 +236,14 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
             ui.checkbox(&mut config.env_reflection_enabled, "Enable Env Reflection")
                 .on_hover_text("Reflect the sky gradient on glossy/metallic surfaces");
             ui.add_enabled_ui(config.env_reflection_enabled, |ui| {
-                labeled_slider(ui, "Intensity", &mut config.env_reflection_intensity, 0.0..=2.0, false,
-                    "Strength of environment reflections");
+                labeled_slider(
+                    ui,
+                    "Intensity",
+                    &mut config.env_reflection_intensity,
+                    0.0..=2.0,
+                    false,
+                    "Strength of environment reflections",
+                );
             });
         });
 
@@ -137,8 +252,16 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
         .default_open(false)
         .show(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.selectable_value(&mut config.background_mode, BackgroundMode::SkyGradient, "Sky Gradient");
-                ui.selectable_value(&mut config.background_mode, BackgroundMode::SolidColor, "Solid Color");
+                ui.selectable_value(
+                    &mut config.background_mode,
+                    BackgroundMode::SkyGradient,
+                    "Sky Gradient",
+                );
+                ui.selectable_value(
+                    &mut config.background_mode,
+                    BackgroundMode::SolidColor,
+                    "Solid Color",
+                );
             });
             match config.background_mode {
                 BackgroundMode::SkyGradient => {
@@ -189,8 +312,14 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
             ui.checkbox(&mut config.fog_enabled, "Enable Fog")
                 .on_hover_text("Distance-based exponential fog with sun scattering");
             ui.add_enabled_ui(config.fog_enabled, |ui| {
-                labeled_slider(ui, "Density", &mut config.fog_density, 0.001..=0.2, true,
-                    "Fog thickness. Higher = objects fade sooner");
+                labeled_slider(
+                    ui,
+                    "Density",
+                    &mut config.fog_density,
+                    0.001..=0.2,
+                    true,
+                    "Fog thickness. Higher = objects fade sooner",
+                );
                 ui.horizontal(|ui| {
                     ui.label("Color:");
                     ui.color_edit_button_rgb(&mut config.fog_color);
@@ -209,9 +338,12 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
             ui.horizontal(|ui| {
                 ui.label("Steps:");
                 let mut steps = config.volumetric_steps as f32;
-                if ui.add(egui::Slider::new(&mut steps, 8.0..=48.0)
-                    .step_by(1.0)
-                    .suffix(" steps"))
+                if ui
+                    .add(
+                        egui::Slider::new(&mut steps, 8.0..=48.0)
+                            .step_by(1.0)
+                            .suffix(" steps"),
+                    )
                     .on_hover_text("Fewer steps = faster but more banding. 24 is a good default.")
                     .changed()
                 {
@@ -227,12 +359,30 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
             ui.checkbox(&mut config.bloom_enabled, "Enable Bloom")
                 .on_hover_text("Glow effect on bright areas (post-process star pattern)");
             ui.add_enabled_ui(config.bloom_enabled, |ui| {
-                labeled_slider(ui, "Threshold", &mut config.bloom_threshold, 0.1..=2.0, false,
-                    "Brightness cutoff for bloom. Lower = more glow");
-                labeled_slider(ui, "Intensity", &mut config.bloom_intensity, 0.05..=2.0, false,
-                    "Strength of the bloom glow");
-                labeled_slider(ui, "Radius", &mut config.bloom_radius, 1.0..=8.0, false,
-                    "Spread of the bloom in pixels per step");
+                labeled_slider(
+                    ui,
+                    "Threshold",
+                    &mut config.bloom_threshold,
+                    0.1..=2.0,
+                    false,
+                    "Brightness cutoff for bloom. Lower = more glow",
+                );
+                labeled_slider(
+                    ui,
+                    "Intensity",
+                    &mut config.bloom_intensity,
+                    0.05..=2.0,
+                    false,
+                    "Strength of the bloom glow",
+                );
+                labeled_slider(
+                    ui,
+                    "Radius",
+                    &mut config.bloom_radius,
+                    1.0..=8.0,
+                    false,
+                    "Spread of the bloom in pixels per step",
+                );
             });
         });
 
@@ -257,8 +407,14 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
                 ui.label("Color:");
                 ui.color_edit_button_rgb(&mut config.outline_color);
             });
-            labeled_slider(ui, "Thickness", &mut config.outline_thickness, 1.0..=8.0, false,
-                "Outline width in screen pixels");
+            labeled_slider(
+                ui,
+                "Thickness",
+                &mut config.outline_thickness,
+                1.0..=8.0,
+                false,
+                "Outline width in screen pixels",
+            );
             if ui.small_button("Reset").clicked() {
                 config.reset_outline();
             }
@@ -275,8 +431,14 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
                     ui.selectable_value(&mut config.cross_section_axis, 1, "Y");
                     ui.selectable_value(&mut config.cross_section_axis, 2, "Z");
                 });
-                labeled_slider(ui, "Position", &mut config.cross_section_position, -5.0..=5.0, false,
-                    "Slice plane position along the selected axis");
+                labeled_slider(
+                    ui,
+                    "Position",
+                    &mut config.cross_section_position,
+                    -5.0..=5.0,
+                    false,
+                    "Slice plane position along the selected axis",
+                );
             });
     }
 
@@ -342,7 +504,6 @@ fn labeled_slider_i32(
     });
 }
 
-
 fn apply_preset_fast(config: &mut crate::settings::RenderConfig) {
     config.shadows_enabled = false;
     config.ao_enabled = false;
@@ -387,4 +548,3 @@ fn apply_preset_quality(config: &mut crate::settings::RenderConfig) {
     config.interaction_render_scale = 0.5;
     config.rest_render_scale = 1.0;
 }
-
