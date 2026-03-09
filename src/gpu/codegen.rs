@@ -41,18 +41,25 @@ fn generate_voxel_texture_decls(scene: &Scene) -> (String, HashMap<NodeId, usize
         let i = info.tex_idx;
         if info.has_input {
             // Differential sculpt: displacement-only sampling (returns 0 outside grid)
-            lines.push(format!("fn disp_voxel_tex_{i}(local_p: vec3f, node_idx: u32) -> f32 {{"));
+            lines.push(format!(
+                "fn disp_voxel_tex_{i}(local_p: vec3f, node_idx: u32) -> f32 {{"
+            ));
             lines.push("    let bmin = nodes[node_idx].extra1.xyz;".to_string());
             lines.push("    let bmax = nodes[node_idx].extra2.xyz;".to_string());
             lines.push("    let norm = (local_p - bmin) / (bmax - bmin);".to_string());
-            lines.push("    if any(norm < vec3f(0.0)) || any(norm > vec3f(1.0)) { return 0.0; }".to_string());
+            lines.push(
+                "    if any(norm < vec3f(0.0)) || any(norm > vec3f(1.0)) { return 0.0; }"
+                    .to_string(),
+            );
             lines.push(format!(
                 "    return textureSampleLevel(voxel_tex_{i}, voxel_sampler, norm, 0.0).x;"
             ));
             lines.push("}".to_string());
         } else {
             // Standalone sculpt: total-SDF sampling (clamp to edge + box_dist)
-            lines.push(format!("fn sdf_voxel_tex_{i}(local_p: vec3f, node_idx: u32) -> f32 {{"));
+            lines.push(format!(
+                "fn sdf_voxel_tex_{i}(local_p: vec3f, node_idx: u32) -> f32 {{"
+            ));
             lines.push("    let bmin = nodes[node_idx].extra1.xyz;".to_string());
             lines.push("    let bmax = nodes[node_idx].extra2.xyz;".to_string());
             lines.push("    let clamped = clamp(local_p, bmin, bmax);".to_string());
@@ -73,12 +80,13 @@ fn generate_voxel_texture_decls(scene: &Scene) -> (String, HashMap<NodeId, usize
 // Shader generation (public API)
 // ---------------------------------------------------------------------------
 
-pub fn generate_shader(
-    scene: &Scene,
-    config: &RenderConfig,
-) -> String {
+pub fn generate_shader(scene: &Scene, config: &RenderConfig) -> String {
     let (tex_decls, sculpt_tex_map) = generate_voxel_texture_decls(scene);
-    let tex_map = if sculpt_tex_map.is_empty() { None } else { Some(&sculpt_tex_map) };
+    let tex_map = if sculpt_tex_map.is_empty() {
+        None
+    } else {
+        Some(&sculpt_tex_map)
+    };
     let scene_sdf = generate_scene_sdf(scene, tex_map);
     let cookie_sdfs = generate_cookie_sdf_functions(scene, tex_map);
     let postlude = build_postlude(config);
@@ -102,9 +110,19 @@ pub fn generate_pick_shader(scene: &Scene, config: &RenderConfig) -> String {
 /// in a 3D grid and writes SDF + material ID to storage textures.
 pub fn generate_composite_shader(scene: &Scene, _config: &RenderConfig) -> String {
     let (tex_decls, sculpt_tex_map) = generate_voxel_texture_decls(scene);
-    let tex_map = if sculpt_tex_map.is_empty() { None } else { Some(&sculpt_tex_map) };
+    let tex_map = if sculpt_tex_map.is_empty() {
+        None
+    } else {
+        Some(&sculpt_tex_map)
+    };
     let scene_sdf = generate_scene_sdf(scene, tex_map);
-    format!("{}\n{}\n{}\n{}", compute_prelude(), tex_decls, scene_sdf, COMPOSITE_COMPUTE_ENTRY)
+    format!(
+        "{}\n{}\n{}\n{}",
+        compute_prelude(),
+        tex_decls,
+        scene_sdf,
+        COMPOSITE_COMPUTE_ENTRY
+    )
 }
 
 /// Generate the composite render shader that reads the pre-composited scene volume.
@@ -293,7 +311,9 @@ fn emit_transform_chain(
                 ));
             }
             // Round/Onion/Offset are distance modifiers, not in chain
-            ChainEntry::Modifier(ModifierKind::Round | ModifierKind::Onion | ModifierKind::Offset) => unreachable!(),
+            ChainEntry::Modifier(
+                ModifierKind::Round | ModifierKind::Onion | ModifierKind::Offset,
+            ) => unreachable!(),
         }
         current_var = new_var;
     }
@@ -330,7 +350,9 @@ fn emit_node_wgsl(
                 "    let n{i} = vec4f({sdf_fn}(lp{i}, nodes[{i}].scale.xyz), f32({i}), -1.0, 0.0);"
             ));
         }
-        NodeData::Operation { op, left, right, .. } => {
+        NodeData::Operation {
+            op, left, right, ..
+        } => {
             let li = left.and_then(|id| idx_map.get(&id).copied());
             let ri = right.and_then(|id| idx_map.get(&id).copied());
             match (li, ri) {
@@ -450,17 +472,15 @@ fn emit_node_wgsl(
 // Scene SDF generation
 // ---------------------------------------------------------------------------
 
-fn generate_scene_sdf(
-    scene: &Scene,
-    sculpt_tex_map: Option<&HashMap<NodeId, usize>>,
-) -> String {
+fn generate_scene_sdf(scene: &Scene, sculpt_tex_map: Option<&HashMap<NodeId, usize>>) -> String {
     let order = scene.visible_topo_order();
     if order.is_empty() {
         return "fn scene_sdf(p: vec3f) -> vec4f {\n    return vec4f(1e10, -1.0, -1.0, 0.0);\n}"
             .to_string();
     }
 
-    let idx_map: HashMap<NodeId, usize> = order.iter().enumerate().map(|(i, &id)| (id, i)).collect();
+    let idx_map: HashMap<NodeId, usize> =
+        order.iter().enumerate().map(|(i, &id)| (id, i)).collect();
     let parent_map = scene.build_parent_map();
     let tops = scene.top_level_nodes();
 
@@ -477,12 +497,26 @@ fn generate_scene_sdf(
 
     // No sculpts at all: use flat codegen (no bounding skip needed)
     if expensive_tops.is_empty() {
-        return generate_scene_sdf_flat(scene, &order, &idx_map, &parent_map, &tops, sculpt_tex_map);
+        return generate_scene_sdf_flat(
+            scene,
+            &order,
+            &idx_map,
+            &parent_map,
+            &tops,
+            sculpt_tex_map,
+        );
     }
 
     // Only one expensive subtree and no cheap tops: flat codegen (no skip benefit)
     if expensive_tops.len() == 1 && cheap_tops.is_empty() {
-        return generate_scene_sdf_flat(scene, &order, &idx_map, &parent_map, &tops, sculpt_tex_map);
+        return generate_scene_sdf_flat(
+            scene,
+            &order,
+            &idx_map,
+            &parent_map,
+            &tops,
+            sculpt_tex_map,
+        );
     }
 
     // Two-phase codegen with bounding skip for expensive subtrees
@@ -490,18 +524,33 @@ fn generate_scene_sdf(
     lines.push("fn scene_sdf(p: vec3f) -> vec4f {".to_string());
 
     // Phase 1: Emit all cheap subtree nodes unconditionally
-    let cheap_node_set: HashSet<NodeId> = cheap_tops.iter()
+    let cheap_node_set: HashSet<NodeId> = cheap_tops
+        .iter()
         .flat_map(|&id| scene.collect_subtree(id))
         .collect();
 
     for (i, &node_id) in order.iter().enumerate() {
-        if !cheap_node_set.contains(&node_id) { continue; }
-        let Some(node) = scene.nodes.get(&node_id) else { continue; };
-        emit_node_wgsl(&mut lines, i, node_id, node, &parent_map, scene, &idx_map, sculpt_tex_map);
+        if !cheap_node_set.contains(&node_id) {
+            continue;
+        }
+        let Some(node) = scene.nodes.get(&node_id) else {
+            continue;
+        };
+        emit_node_wgsl(
+            &mut lines,
+            i,
+            node_id,
+            node,
+            &parent_map,
+            scene,
+            &idx_map,
+            sculpt_tex_map,
+        );
     }
 
     // Initialize result from cheap tops
-    let cheap_indices: Vec<usize> = cheap_tops.iter()
+    let cheap_indices: Vec<usize> = cheap_tops
+        .iter()
         .filter_map(|id| idx_map.get(id).copied())
         .collect();
     if cheap_indices.is_empty() {
@@ -520,21 +569,38 @@ fn generate_scene_sdf(
 
         lines.push(format!(
             "    {{ let _bd = length(p - vec3f({}, {}, {})) - {};",
-            format_f32(center[0]), format_f32(center[1]), format_f32(center[2]),
+            format_f32(center[0]),
+            format_f32(center[1]),
+            format_f32(center[2]),
             format_f32(radius),
         ));
         lines.push("    if _bd < result.x {".to_string());
 
         // Emit all nodes in this subtree (preserving topo order)
         for (i, &node_id) in order.iter().enumerate() {
-            if !subtree_nodes.contains(&node_id) { continue; }
-            let Some(node) = scene.nodes.get(&node_id) else { continue; };
-            emit_node_wgsl(&mut lines, i, node_id, node, &parent_map, scene, &idx_map, sculpt_tex_map);
+            if !subtree_nodes.contains(&node_id) {
+                continue;
+            }
+            let Some(node) = scene.nodes.get(&node_id) else {
+                continue;
+            };
+            emit_node_wgsl(
+                &mut lines,
+                i,
+                node_id,
+                node,
+                &parent_map,
+                scene,
+                &idx_map,
+                sculpt_tex_map,
+            );
         }
 
         // Union this subtree's root with the result
         if let Some(&top_idx) = idx_map.get(&top_id) {
-            lines.push(format!("        result = op_union(result, n{top_idx}, 0.0);"));
+            lines.push(format!(
+                "        result = op_union(result, n{top_idx}, 0.0);"
+            ));
         }
         lines.push("    } }".to_string());
     }
@@ -558,8 +624,19 @@ fn generate_scene_sdf_flat(
     lines.push("fn scene_sdf(p: vec3f) -> vec4f {".to_string());
 
     for (i, &node_id) in order.iter().enumerate() {
-        let Some(node) = scene.nodes.get(&node_id) else { continue; };
-        emit_node_wgsl(&mut lines, i, node_id, node, parent_map, scene, idx_map, sculpt_tex_map);
+        let Some(node) = scene.nodes.get(&node_id) else {
+            continue;
+        };
+        emit_node_wgsl(
+            &mut lines,
+            i,
+            node_id,
+            node,
+            parent_map,
+            scene,
+            idx_map,
+            sculpt_tex_map,
+        );
     }
 
     let top_indices: Vec<usize> = tops
@@ -634,11 +711,8 @@ fn generate_cookie_sdf_functions(
     }
 
     let order = scene.visible_topo_order();
-    let idx_map: HashMap<NodeId, usize> = order
-        .iter()
-        .enumerate()
-        .map(|(i, &id)| (id, i))
-        .collect();
+    let idx_map: HashMap<NodeId, usize> =
+        order.iter().enumerate().map(|(i, &id)| (id, i)).collect();
     let parent_map = scene.build_parent_map();
 
     // Collect (light_id, cookie_node_id) sorted by cookie index
@@ -660,12 +734,11 @@ fn generate_cookie_sdf_functions(
 
     for (cookie_idx, _light_id, cookie_id) in &cookies {
         // Collect the cookie subtree nodes
-        let subtree_nodes: HashSet<NodeId> = scene.collect_subtree(*cookie_id).into_iter().collect();
+        let subtree_nodes: HashSet<NodeId> =
+            scene.collect_subtree(*cookie_id).into_iter().collect();
 
         let mut lines = Vec::new();
-        lines.push(format!(
-            "fn cookie_sdf_{cookie_idx}(p: vec3f) -> f32 {{"
-        ));
+        lines.push(format!("fn cookie_sdf_{cookie_idx}(p: vec3f) -> f32 {{"));
 
         // Emit all subtree nodes in topo order
         for (i, &node_id) in order.iter().enumerate() {
@@ -897,8 +970,16 @@ mod tests {
         let left = scene.create_primitive(SdfPrimitive::Sphere);
         let op = scene.create_operation(CsgOp::Union, Some(left), None);
         let wgsl = generate_scene_sdf(&scene, None);
-        let op_idx = scene.visible_topo_order().iter().position(|&id| id == op).unwrap();
-        let left_idx = scene.visible_topo_order().iter().position(|&id| id == left).unwrap();
+        let op_idx = scene
+            .visible_topo_order()
+            .iter()
+            .position(|&id| id == op)
+            .unwrap();
+        let left_idx = scene
+            .visible_topo_order()
+            .iter()
+            .position(|&id| id == left)
+            .unwrap();
         assert!(wgsl.contains(&format!("let n{op_idx} = n{left_idx};")));
     }
 
@@ -907,7 +988,11 @@ mod tests {
         let mut scene = empty_scene();
         let op = scene.create_operation(CsgOp::Union, None, None);
         let wgsl = generate_scene_sdf(&scene, None);
-        let op_idx = scene.visible_topo_order().iter().position(|&id| id == op).unwrap();
+        let op_idx = scene
+            .visible_topo_order()
+            .iter()
+            .position(|&id| id == op)
+            .unwrap();
         assert!(wgsl.contains(&format!("let n{op_idx} = vec4f(1e10, -1.0, -1.0, 0.0);")));
     }
 
@@ -918,8 +1003,14 @@ mod tests {
         let right = scene.create_primitive(SdfPrimitive::Box);
         scene.create_operation(CsgOp::SmoothUnion, Some(left), Some(right));
         let wgsl = generate_scene_sdf(&scene, None);
-        assert!(wgsl.contains("type_op.y,"), "should use smooth_k from type_op.y");
-        assert!(wgsl.contains("type_op.w)"), "should use color_blend from type_op.w");
+        assert!(
+            wgsl.contains("type_op.y,"),
+            "should use smooth_k from type_op.y"
+        );
+        assert!(
+            wgsl.contains("type_op.w)"),
+            "should use color_blend from type_op.w"
+        );
     }
 
     #[test]
@@ -979,8 +1070,14 @@ mod tests {
         let right = scene.create_primitive(SdfPrimitive::Box);
         scene.create_operation(CsgOp::StairsUnion, Some(left), Some(right));
         let wgsl = generate_scene_sdf(&scene, None);
-        assert!(wgsl.contains("op_stairs_union(n"), "should emit op_stairs_union call");
-        assert!(wgsl.contains("type_op.z"), "should pass steps via type_op.z");
+        assert!(
+            wgsl.contains("op_stairs_union(n"),
+            "should emit op_stairs_union call"
+        );
+        assert!(
+            wgsl.contains("type_op.z"),
+            "should pass steps via type_op.z"
+        );
     }
 
     #[test]
@@ -990,8 +1087,14 @@ mod tests {
         let right = scene.create_primitive(SdfPrimitive::Box);
         scene.create_operation(CsgOp::StairsSubtract, Some(left), Some(right));
         let wgsl = generate_scene_sdf(&scene, None);
-        assert!(wgsl.contains("op_stairs_subtract(n"), "should emit op_stairs_subtract call");
-        assert!(wgsl.contains("type_op.z"), "should pass steps via type_op.z");
+        assert!(
+            wgsl.contains("op_stairs_subtract(n"),
+            "should emit op_stairs_subtract call"
+        );
+        assert!(
+            wgsl.contains("type_op.z"),
+            "should pass steps via type_op.z"
+        );
     }
 
     #[test]
@@ -1001,8 +1104,14 @@ mod tests {
         let right = scene.create_primitive(SdfPrimitive::Box);
         scene.create_operation(CsgOp::ColumnsUnion, Some(left), Some(right));
         let wgsl = generate_scene_sdf(&scene, None);
-        assert!(wgsl.contains("op_columns_union(n"), "should emit op_columns_union call");
-        assert!(wgsl.contains("type_op.z"), "should pass steps via type_op.z");
+        assert!(
+            wgsl.contains("op_columns_union(n"),
+            "should emit op_columns_union call"
+        );
+        assert!(
+            wgsl.contains("type_op.z"),
+            "should pass steps via type_op.z"
+        );
     }
 
     #[test]
@@ -1012,8 +1121,14 @@ mod tests {
         let right = scene.create_primitive(SdfPrimitive::Box);
         scene.create_operation(CsgOp::ColumnsSubtract, Some(left), Some(right));
         let wgsl = generate_scene_sdf(&scene, None);
-        assert!(wgsl.contains("op_columns_subtract(n"), "should emit op_columns_subtract call");
-        assert!(wgsl.contains("type_op.z"), "should pass steps via type_op.z");
+        assert!(
+            wgsl.contains("op_columns_subtract(n"),
+            "should emit op_columns_subtract call"
+        );
+        assert!(
+            wgsl.contains("type_op.z"),
+            "should pass steps via type_op.z"
+        );
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -1135,7 +1250,9 @@ mod tests {
         let mod_idx = order.iter().position(|&id| id == modifier).unwrap();
         let sph_idx = order.iter().position(|&id| id == sphere).unwrap();
         // Round: n<mod> = vec2f(n<child>.x - nodes[<mod>].position.x, n<child>.y)
-        assert!(wgsl.contains(&format!("let n{mod_idx} = vec4f(n{sph_idx}.x - nodes[{mod_idx}].position.x")));
+        assert!(wgsl.contains(&format!(
+            "let n{mod_idx} = vec4f(n{sph_idx}.x - nodes[{mod_idx}].position.x"
+        )));
     }
 
     #[test]
@@ -1159,7 +1276,9 @@ mod tests {
         let order = scene.visible_topo_order();
         let mod_idx = order.iter().position(|&id| id == modifier).unwrap();
         let sph_idx = order.iter().position(|&id| id == sphere).unwrap();
-        assert!(wgsl.contains(&format!("let n{mod_idx} = vec4f(n{sph_idx}.x + nodes[{mod_idx}].position.x")));
+        assert!(wgsl.contains(&format!(
+            "let n{mod_idx} = vec4f(n{sph_idx}.x + nodes[{mod_idx}].position.x"
+        )));
     }
 
     #[test]
@@ -1280,7 +1399,8 @@ mod tests {
         let sphere = scene.create_primitive(SdfPrimitive::Sphere);
         let parent_map = scene.build_parent_map();
         let order = scene.visible_topo_order();
-        let idx_map: HashMap<NodeId, usize> = order.iter().enumerate().map(|(i, &id)| (id, i)).collect();
+        let idx_map: HashMap<NodeId, usize> =
+            order.iter().enumerate().map(|(i, &id)| (id, i)).collect();
         let chain = get_transform_chain(sphere, &parent_map, &scene, &idx_map);
         assert!(chain.is_empty());
     }
@@ -1292,7 +1412,8 @@ mod tests {
         scene.create_transform(Some(sphere));
         let parent_map = scene.build_parent_map();
         let order = scene.visible_topo_order();
-        let idx_map: HashMap<NodeId, usize> = order.iter().enumerate().map(|(i, &id)| (id, i)).collect();
+        let idx_map: HashMap<NodeId, usize> =
+            order.iter().enumerate().map(|(i, &id)| (id, i)).collect();
         let chain = get_transform_chain(sphere, &parent_map, &scene, &idx_map);
         assert_eq!(chain.len(), 1);
         assert!(matches!(chain[0].1, ChainEntry::Transform));
@@ -1305,10 +1426,14 @@ mod tests {
         scene.create_modifier(ModifierKind::Twist, Some(sphere));
         let parent_map = scene.build_parent_map();
         let order = scene.visible_topo_order();
-        let idx_map: HashMap<NodeId, usize> = order.iter().enumerate().map(|(i, &id)| (id, i)).collect();
+        let idx_map: HashMap<NodeId, usize> =
+            order.iter().enumerate().map(|(i, &id)| (id, i)).collect();
         let chain = get_transform_chain(sphere, &parent_map, &scene, &idx_map);
         assert_eq!(chain.len(), 1);
-        assert!(matches!(chain[0].1, ChainEntry::Modifier(ModifierKind::Twist)));
+        assert!(matches!(
+            chain[0].1,
+            ChainEntry::Modifier(ModifierKind::Twist)
+        ));
     }
 
     #[test]
@@ -1318,7 +1443,8 @@ mod tests {
         scene.create_modifier(ModifierKind::Round, Some(sphere));
         let parent_map = scene.build_parent_map();
         let order = scene.visible_topo_order();
-        let idx_map: HashMap<NodeId, usize> = order.iter().enumerate().map(|(i, &id)| (id, i)).collect();
+        let idx_map: HashMap<NodeId, usize> =
+            order.iter().enumerate().map(|(i, &id)| (id, i)).collect();
         let chain = get_transform_chain(sphere, &parent_map, &scene, &idx_map);
         assert!(chain.is_empty());
     }
@@ -1331,11 +1457,15 @@ mod tests {
         scene.create_transform(Some(twist));
         let parent_map = scene.build_parent_map();
         let order = scene.visible_topo_order();
-        let idx_map: HashMap<NodeId, usize> = order.iter().enumerate().map(|(i, &id)| (id, i)).collect();
+        let idx_map: HashMap<NodeId, usize> =
+            order.iter().enumerate().map(|(i, &id)| (id, i)).collect();
         let chain = get_transform_chain(sphere, &parent_map, &scene, &idx_map);
         assert_eq!(chain.len(), 2);
         // First entry is innermost (Twist), second is outermost (Transform)
-        assert!(matches!(chain[0].1, ChainEntry::Modifier(ModifierKind::Twist)));
+        assert!(matches!(
+            chain[0].1,
+            ChainEntry::Modifier(ModifierKind::Twist)
+        ));
         assert!(matches!(chain[1].1, ChainEntry::Transform));
     }
 
@@ -1805,7 +1935,10 @@ mod tests {
         // Primitive should emit vec4f(distance, mat_id, -1.0, 0.0) format
         assert!(wgsl.contains("vec4f("), "should use vec4f format");
         assert!(wgsl.contains("f32(0)"), "material ID should be node index");
-        assert!(wgsl.contains("-1.0"), "mat_b should be -1.0 for single primitive");
+        assert!(
+            wgsl.contains("-1.0"),
+            "mat_b should be -1.0 for single primitive"
+        );
     }
 
     #[test]
@@ -1821,25 +1954,37 @@ mod tests {
         let mut scene = empty_scene();
         let a = scene.create_primitive(SdfPrimitive::Sphere);
         let b = scene.create_primitive(SdfPrimitive::Box);
-        scene.add_node("SmoothU".into(), NodeData::Operation {
-            op: CsgOp::SmoothUnion,
-            smooth_k: 0.5,
-            steps: 0.0,
-            color_blend: -1.0,
-            left: Some(a),
-            right: Some(b),
-        });
+        scene.add_node(
+            "SmoothU".into(),
+            NodeData::Operation {
+                op: CsgOp::SmoothUnion,
+                smooth_k: 0.5,
+                steps: 0.0,
+                color_blend: -1.0,
+                left: Some(a),
+                right: Some(b),
+            },
+        );
         let wgsl = generate_scene_sdf(&scene, None);
         // Smooth union should call op_smooth_union which carries blend factor
-        assert!(wgsl.contains("op_smooth_union("), "should emit smooth union call");
-        assert!(wgsl.contains("type_op.y"), "should use smooth_k from uniform buffer");
+        assert!(
+            wgsl.contains("op_smooth_union("),
+            "should emit smooth union call"
+        );
+        assert!(
+            wgsl.contains("type_op.y"),
+            "should use smooth_k from uniform buffer"
+        );
     }
 
     #[test]
     fn empty_scene_returns_vec4f_far_sentinel() {
         let scene = empty_scene();
         let wgsl = generate_scene_sdf(&scene, None);
-        assert!(wgsl.contains("vec4f(1e10, -1.0, -1.0, 0.0)"), "empty scene should return far sentinel vec4f");
+        assert!(
+            wgsl.contains("vec4f(1e10, -1.0, -1.0, 0.0)"),
+            "empty scene should return far sentinel vec4f"
+        );
     }
 
     #[test]
@@ -1848,7 +1993,10 @@ mod tests {
         scene.create_light(LightType::Point);
         let wgsl = generate_scene_sdf(&scene, None);
         // Light nodes should emit infinite distance (no SDF contribution)
-        assert!(wgsl.contains("1e10"), "light node should emit infinite distance");
+        assert!(
+            wgsl.contains("1e10"),
+            "light node should emit infinite distance"
+        );
     }
 
     #[test]
@@ -1856,16 +2004,22 @@ mod tests {
         let mut scene = empty_scene();
         let a = scene.create_primitive(SdfPrimitive::Sphere);
         let b = scene.create_primitive(SdfPrimitive::Box);
-        scene.add_node("SmoothSub".into(), NodeData::Operation {
-            op: CsgOp::SmoothSubtract,
-            smooth_k: 0.3,
-            steps: 0.0,
-            color_blend: -1.0,
-            left: Some(a),
-            right: Some(b),
-        });
+        scene.add_node(
+            "SmoothSub".into(),
+            NodeData::Operation {
+                op: CsgOp::SmoothSubtract,
+                smooth_k: 0.3,
+                steps: 0.0,
+                color_blend: -1.0,
+                left: Some(a),
+                right: Some(b),
+            },
+        );
         let wgsl = generate_scene_sdf(&scene, None);
-        assert!(wgsl.contains("op_subtract("), "smooth subtract uses op_subtract WGSL function");
+        assert!(
+            wgsl.contains("op_subtract("),
+            "smooth subtract uses op_subtract WGSL function"
+        );
     }
 
     #[test]
@@ -1873,16 +2027,22 @@ mod tests {
         let mut scene = empty_scene();
         let a = scene.create_primitive(SdfPrimitive::Sphere);
         let b = scene.create_primitive(SdfPrimitive::Box);
-        scene.add_node("SmoothInt".into(), NodeData::Operation {
-            op: CsgOp::SmoothIntersect,
-            smooth_k: 0.3,
-            steps: 0.0,
-            color_blend: -1.0,
-            left: Some(a),
-            right: Some(b),
-        });
+        scene.add_node(
+            "SmoothInt".into(),
+            NodeData::Operation {
+                op: CsgOp::SmoothIntersect,
+                smooth_k: 0.3,
+                steps: 0.0,
+                color_blend: -1.0,
+                left: Some(a),
+                right: Some(b),
+            },
+        );
         let wgsl = generate_scene_sdf(&scene, None);
-        assert!(wgsl.contains("op_intersect("), "smooth intersect uses op_intersect WGSL function");
+        assert!(
+            wgsl.contains("op_intersect("),
+            "smooth intersect uses op_intersect WGSL function"
+        );
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -2039,7 +2199,10 @@ mod tests {
         scene.create_transform(Some(op));
         let config = RenderConfig::default();
         let shader = generate_shader(&scene, &config);
-        validate_wgsl(&shader, "complex scene (transform > smooth_union > [twist>sphere, box])");
+        validate_wgsl(
+            &shader,
+            "complex scene (transform > smooth_union > [twist>sphere, box])",
+        );
     }
 
     #[test]
@@ -2077,7 +2240,11 @@ mod tests {
         let prim_id = scene.create_primitive(SdfPrimitive::Torus);
         let (light_id, _) = scene.create_light(LightType::Spot);
         // Set the torus as the light's cookie
-        if let NodeData::Light { ref mut cookie_node, .. } = scene.nodes.get_mut(&light_id).unwrap().data {
+        if let NodeData::Light {
+            ref mut cookie_node,
+            ..
+        } = scene.nodes.get_mut(&light_id).unwrap().data
+        {
             *cookie_node = Some(prim_id);
         }
         let wgsl = generate_cookie_sdf_functions(&scene, None);
@@ -2094,10 +2261,18 @@ mod tests {
         let (light_a, _) = scene.create_light(LightType::Point);
         let (light_b, _) = scene.create_light(LightType::Spot);
         // Both lights get cookies
-        if let NodeData::Light { ref mut cookie_node, .. } = scene.nodes.get_mut(&light_a).unwrap().data {
+        if let NodeData::Light {
+            ref mut cookie_node,
+            ..
+        } = scene.nodes.get_mut(&light_a).unwrap().data
+        {
             *cookie_node = Some(prim_id);
         }
-        if let NodeData::Light { ref mut cookie_node, .. } = scene.nodes.get_mut(&light_b).unwrap().data {
+        if let NodeData::Light {
+            ref mut cookie_node,
+            ..
+        } = scene.nodes.get_mut(&light_b).unwrap().data
+        {
             *cookie_node = Some(prim_id);
         }
         let mapping = build_cookie_mapping(&scene);
@@ -2112,7 +2287,11 @@ mod tests {
         let mut scene = empty_scene();
         let prim_id = scene.create_primitive(SdfPrimitive::Sphere);
         let (light_id, _) = scene.create_light(LightType::Spot);
-        if let NodeData::Light { ref mut cookie_node, .. } = scene.nodes.get_mut(&light_id).unwrap().data {
+        if let NodeData::Light {
+            ref mut cookie_node,
+            ..
+        } = scene.nodes.get_mut(&light_id).unwrap().data
+        {
             *cookie_node = Some(prim_id);
         }
         let config = RenderConfig::default();

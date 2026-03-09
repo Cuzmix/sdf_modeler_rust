@@ -11,20 +11,18 @@ impl SdfApp {
     pub(super) fn sync_gpu_pipeline(&mut self) {
         let new_key = self.doc.scene.structure_key();
         if new_key != self.gpu.current_structure_key {
-            let shader_src = codegen::generate_shader(
-                &self.doc.scene,
-                &self.settings.render,
-            );
-            let pick_shader_src = codegen::generate_pick_shader(&self.doc.scene, &self.settings.render);
+            let shader_src = codegen::generate_shader(&self.doc.scene, &self.settings.render);
+            let pick_shader_src =
+                codegen::generate_pick_shader(&self.doc.scene, &self.settings.render);
             let sculpt_count = buffers::collect_sculpt_tex_info(&self.doc.scene).len();
             let mut renderer = self.gpu.render_state.renderer.write();
-            if let Some(res) = renderer
-                .callback_resources
-                .get_mut::<ViewportResources>()
-            {
+            if let Some(res) = renderer.callback_resources.get_mut::<ViewportResources>() {
                 // Always rebuild the normal + pick pipelines
                 res.rebuild_pipeline(
-                    &self.gpu.render_state.device, &shader_src, &pick_shader_src, sculpt_count,
+                    &self.gpu.render_state.device,
+                    &shader_src,
+                    &pick_shader_src,
+                    sculpt_count,
                 );
 
                 // Rebuild composite pipelines if enabled and there are sculpt nodes.
@@ -56,11 +54,12 @@ impl SdfApp {
                         bounds_max[0], bounds_max[1], bounds_max[2],
                     );
 
-                    let comp_compute_src = codegen::generate_composite_shader(
-                        &self.doc.scene, &self.settings.render,
-                    );
+                    let comp_compute_src =
+                        codegen::generate_composite_shader(&self.doc.scene, &self.settings.render);
                     let comp_render_src = codegen::generate_composite_render_shader(
-                        &self.settings.render, bounds_min, bounds_max,
+                        &self.settings.render,
+                        bounds_min,
+                        bounds_max,
                     );
 
                     res.rebuild_composite(
@@ -71,7 +70,10 @@ impl SdfApp {
                         bounds_min,
                         bounds_max,
                     );
-                    log::info!("Composite: pipelines built, use_composite={}", res.use_composite);
+                    log::info!(
+                        "Composite: pipelines built, use_composite={}",
+                        res.use_composite
+                    );
                     self.perf.composite_full_update_needed = true;
                 } else {
                     res.use_composite = false;
@@ -85,16 +87,19 @@ impl SdfApp {
 
     pub(super) fn upload_scene_buffer(&mut self) {
         let (voxel_data, voxel_offsets) = buffers::build_voxel_buffer(&self.doc.scene);
-        let node_data =
-            buffers::build_node_buffer(&self.doc.scene, &self.ui.node_graph_state.selected_set, &voxel_offsets);
+        let node_data = buffers::build_node_buffer(
+            &self.doc.scene,
+            &self.ui.node_graph_state.selected_set,
+            &voxel_offsets,
+        );
         let sculpt_infos = buffers::collect_sculpt_tex_info(&self.doc.scene);
         self.gpu.voxel_gpu_offsets = voxel_offsets;
-        self.gpu.sculpt_tex_indices = sculpt_infos.iter().map(|i| (i.node_id, i.tex_idx)).collect();
+        self.gpu.sculpt_tex_indices = sculpt_infos
+            .iter()
+            .map(|i| (i.node_id, i.tex_idx))
+            .collect();
         let mut renderer = self.gpu.render_state.renderer.write();
-        if let Some(res) = renderer
-            .callback_resources
-            .get_mut::<ViewportResources>()
-        {
+        if let Some(res) = renderer.callback_resources.get_mut::<ViewportResources>() {
             res.update_scene_buffer(
                 &self.gpu.render_state.device,
                 &self.gpu.render_state.queue,
@@ -180,8 +185,12 @@ impl SdfApp {
     /// Dispatch a full composite volume update (all voxels).
     pub(super) fn dispatch_composite_full(&self) {
         let renderer = self.gpu.render_state.renderer.read();
-        let Some(res) = renderer.callback_resources.get::<ViewportResources>() else { return; };
-        let Some(ref comp) = res.composite else { return; };
+        let Some(res) = renderer.callback_resources.get::<ViewportResources>() else {
+            return;
+        };
+        let Some(ref comp) = res.composite else {
+            return;
+        };
         let r = comp.resolution;
         res.dispatch_composite(
             &self.gpu.render_state.device,
@@ -194,8 +203,12 @@ impl SdfApp {
     /// Dispatch an incremental composite update for the brush-affected region.
     pub(super) fn dispatch_composite_region(&self, center: Vec3, radius: f32) {
         let renderer = self.gpu.render_state.renderer.read();
-        let Some(res) = renderer.callback_resources.get::<ViewportResources>() else { return; };
-        let Some(ref comp) = res.composite else { return; };
+        let Some(res) = renderer.callback_resources.get::<ViewportResources>() else {
+            return;
+        };
+        let Some(ref comp) = res.composite else {
+            return;
+        };
 
         let pad = 3i32;
         let r = comp.resolution;
@@ -213,9 +226,12 @@ impl SdfApp {
             (((brush_min[2] - bmin[2]) / size[2] * rf).floor() as i32 - pad).max(0) as u32,
         ];
         let umax = [
-            (((brush_max[0] - bmin[0]) / size[0] * rf).ceil() as i32 + pad).min(r as i32 - 1) as u32,
-            (((brush_max[1] - bmin[1]) / size[1] * rf).ceil() as i32 + pad).min(r as i32 - 1) as u32,
-            (((brush_max[2] - bmin[2]) / size[2] * rf).ceil() as i32 + pad).min(r as i32 - 1) as u32,
+            (((brush_max[0] - bmin[0]) / size[0] * rf).ceil() as i32 + pad).min(r as i32 - 1)
+                as u32,
+            (((brush_max[1] - bmin[1]) / size[1] * rf).ceil() as i32 + pad).min(r as i32 - 1)
+                as u32,
+            (((brush_max[2] - bmin[2]) / size[2] * rf).ceil() as i32 + pad).min(r as i32 - 1)
+                as u32,
         ];
 
         res.dispatch_composite(
@@ -264,5 +280,4 @@ impl SdfApp {
             self.gpu.buffer_dirty = true;
         }
     }
-
 }

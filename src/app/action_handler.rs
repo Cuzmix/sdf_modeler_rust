@@ -38,7 +38,8 @@ impl SdfApp {
                     self.persistence.scene_dirty = false;
                     self.persistence.current_file_path = None;
                 }
-                Action::OpenProject => {
+                Action::OpenProject =>
+                {
                     #[cfg(not(target_arch = "wasm32"))]
                     if let Some(path) = crate::io::open_dialog() {
                         self.load_project_from_path(&path);
@@ -63,11 +64,14 @@ impl SdfApp {
                             crate::io::save_dialog()
                         };
                         if let Some(path) = path {
-                            if let Err(e) = crate::io::save_project(&self.doc.scene, &self.doc.camera, &path) {
+                            if let Err(e) =
+                                crate::io::save_project(&self.doc.scene, &self.doc.camera, &path)
+                            {
                                 log::error!("Failed to save project: {}", e);
                             } else {
                                 self.persistence.current_file_path = Some(path.clone());
-                                self.persistence.saved_fingerprint = self.doc.scene.data_fingerprint();
+                                self.persistence.saved_fingerprint =
+                                    self.doc.scene.data_fingerprint();
                                 self.persistence.scene_dirty = false;
                                 self.settings.add_recent_file(&path.to_string_lossy());
                             }
@@ -182,7 +186,10 @@ impl SdfApp {
                             match self.ui.reference_images.add_from_path(ctx, &path) {
                                 Ok(()) => {
                                     self.ui.toasts.push(super::Toast {
-                                        message: format!("Loaded reference image: {}", path.display()),
+                                        message: format!(
+                                            "Loaded reference image: {}",
+                                            path.display()
+                                        ),
                                         is_error: false,
                                         created: crate::compat::Instant::now(),
                                         duration: crate::compat::Duration::from_secs(4),
@@ -228,7 +235,10 @@ impl SdfApp {
                     self.gpu.buffer_dirty = true;
                 }
                 Action::DeleteSelected => {
-                    let locked = self.ui.node_graph_state.selected
+                    let locked = self
+                        .ui
+                        .node_graph_state
+                        .selected
                         .and_then(|id| self.doc.scene.nodes.get(&id))
                         .is_some_and(|n| n.locked);
                     if !locked {
@@ -270,8 +280,10 @@ impl SdfApp {
 
                 // ── History ──────────────────────────────────────────
                 Action::Undo => {
-                    if let Some((restored_scene, restored_sel)) =
-                        self.doc.history.undo(&self.doc.scene, self.ui.node_graph_state.selected)
+                    if let Some((restored_scene, restored_sel)) = self
+                        .doc
+                        .history
+                        .undo(&self.doc.scene, self.ui.node_graph_state.selected)
                     {
                         self.doc.scene = restored_scene;
                         if let Some(id) = restored_sel {
@@ -285,8 +297,10 @@ impl SdfApp {
                     }
                 }
                 Action::Redo => {
-                    if let Some((restored_scene, restored_sel)) =
-                        self.doc.history.redo(&self.doc.scene, self.ui.node_graph_state.selected)
+                    if let Some((restored_scene, restored_sel)) = self
+                        .doc
+                        .history
+                        .redo(&self.doc.scene, self.ui.node_graph_state.selected)
                     {
                         self.doc.scene = restored_scene;
                         if let Some(id) = restored_sel {
@@ -301,15 +315,24 @@ impl SdfApp {
                 }
                 Action::SculptUndo => {
                     if let SculptState::Active { node_id, .. } = self.doc.sculpt_state {
-                        let current_data = self.doc.scene.nodes.get(&node_id)
-                            .and_then(|n| match &n.data {
-                                NodeData::Sculpt { voxel_grid, .. } => Some(voxel_grid.data.clone()),
-                                _ => None,
-                            });
+                        let current_data =
+                            self.doc
+                                .scene
+                                .nodes
+                                .get(&node_id)
+                                .and_then(|n| match &n.data {
+                                    NodeData::Sculpt { voxel_grid, .. } => {
+                                        Some(voxel_grid.data.clone())
+                                    }
+                                    _ => None,
+                                });
                         if let Some(current) = current_data {
                             if let Some(restored) = self.doc.sculpt_history.undo(&current) {
                                 if let Some(node) = self.doc.scene.nodes.get_mut(&node_id) {
-                                    if let NodeData::Sculpt { ref mut voxel_grid, .. } = node.data {
+                                    if let NodeData::Sculpt {
+                                        ref mut voxel_grid, ..
+                                    } = node.data
+                                    {
                                         voxel_grid.data = restored;
                                     }
                                 }
@@ -320,15 +343,24 @@ impl SdfApp {
                 }
                 Action::SculptRedo => {
                     if let SculptState::Active { node_id, .. } = self.doc.sculpt_state {
-                        let current_data = self.doc.scene.nodes.get(&node_id)
-                            .and_then(|n| match &n.data {
-                                NodeData::Sculpt { voxel_grid, .. } => Some(voxel_grid.data.clone()),
-                                _ => None,
-                            });
+                        let current_data =
+                            self.doc
+                                .scene
+                                .nodes
+                                .get(&node_id)
+                                .and_then(|n| match &n.data {
+                                    NodeData::Sculpt { voxel_grid, .. } => {
+                                        Some(voxel_grid.data.clone())
+                                    }
+                                    _ => None,
+                                });
                         if let Some(current) = current_data {
                             if let Some(restored) = self.doc.sculpt_history.redo(&current) {
                                 if let Some(node) = self.doc.scene.nodes.get_mut(&node_id) {
-                                    if let NodeData::Sculpt { ref mut voxel_grid, .. } = node.data {
+                                    if let NodeData::Sculpt {
+                                        ref mut voxel_grid, ..
+                                    } = node.data
+                                    {
                                         voxel_grid.data = restored;
                                     }
                                 }
@@ -342,11 +374,11 @@ impl SdfApp {
                 Action::FocusSelected => {
                     if let Some(sel) = self.ui.node_graph_state.selected {
                         let parent_map = self.doc.scene.build_parent_map();
-                        let (center, radius) = self.doc.scene.compute_subtree_sphere(sel, &parent_map);
-                        self.doc.camera.focus_on(
-                            Vec3::new(center[0], center[1], center[2]),
-                            radius.max(0.5),
-                        );
+                        let (center, radius) =
+                            self.doc.scene.compute_subtree_sphere(sel, &parent_map);
+                        self.doc
+                            .camera
+                            .focus_on(Vec3::new(center[0], center[1], center[2]), radius.max(0.5));
                     }
                 }
                 Action::FrameAll => {
@@ -364,11 +396,31 @@ impl SdfApp {
                     self.doc.camera.focus_on(center, half.length().max(0.5));
                 }
                 Action::CameraFront => self.doc.camera.start_transition(0.0, 0.0, 0.0),
-                Action::CameraTop => self.doc.camera.start_transition(0.0, std::f32::consts::FRAC_PI_2, 0.0),
-                Action::CameraRight => self.doc.camera.start_transition(std::f32::consts::FRAC_PI_2, 0.0, 0.0),
-                Action::CameraBack => self.doc.camera.start_transition(std::f32::consts::PI, 0.0, 0.0),
-                Action::CameraLeft => self.doc.camera.start_transition(-std::f32::consts::FRAC_PI_2, 0.0, 0.0),
-                Action::CameraBottom => self.doc.camera.start_transition(0.0, -std::f32::consts::FRAC_PI_2, 0.0),
+                Action::CameraTop => {
+                    self.doc
+                        .camera
+                        .start_transition(0.0, std::f32::consts::FRAC_PI_2, 0.0)
+                }
+                Action::CameraRight => {
+                    self.doc
+                        .camera
+                        .start_transition(std::f32::consts::FRAC_PI_2, 0.0, 0.0)
+                }
+                Action::CameraBack => {
+                    self.doc
+                        .camera
+                        .start_transition(std::f32::consts::PI, 0.0, 0.0)
+                }
+                Action::CameraLeft => {
+                    self.doc
+                        .camera
+                        .start_transition(-std::f32::consts::FRAC_PI_2, 0.0, 0.0)
+                }
+                Action::CameraBottom => {
+                    self.doc
+                        .camera
+                        .start_transition(0.0, -std::f32::consts::FRAC_PI_2, 0.0)
+                }
                 Action::ToggleOrtho => self.doc.camera.toggle_ortho(),
 
                 // ── Tools ────────────────────────────────────────────
@@ -382,11 +434,16 @@ impl SdfApp {
                         }
                         crate::sculpt::ActiveTool::Sculpt => {
                             if let Some(sel) = self.ui.node_graph_state.selected {
-                                if self.doc.scene.nodes.get(&sel).is_some_and(|n| {
-                                    matches!(n.data, NodeData::Sculpt { .. })
-                                }) {
+                                if self
+                                    .doc
+                                    .scene
+                                    .nodes
+                                    .get(&sel)
+                                    .is_some_and(|n| matches!(n.data, NodeData::Sculpt { .. }))
+                                {
                                     let extent = self.scene_avg_extent();
-                                    self.doc.sculpt_state = SculptState::new_active_with_radius(sel, extent);
+                                    self.doc.sculpt_state =
+                                        SculptState::new_active_with_radius(sel, extent);
                                     self.ensure_brush_settings_tab();
                                 }
                             }
@@ -419,20 +476,25 @@ impl SdfApp {
                                 // Case 1: already a sculpt node — activate immediately
                                 let extent = self.scene_avg_extent();
                                 self.doc.active_tool = crate::sculpt::ActiveTool::Sculpt;
-                                self.doc.sculpt_state = SculptState::new_active_with_radius(sel, extent);
+                                self.doc.sculpt_state =
+                                    SculptState::new_active_with_radius(sel, extent);
                                 self.ensure_brush_settings_tab();
                             } else {
                                 // Case 2: check for sculpt parent
                                 let parent_map = self.doc.scene.build_parent_map();
-                                if let Some(sculpt_id) = self.doc.scene.find_sculpt_parent(sel, &parent_map) {
+                                if let Some(sculpt_id) =
+                                    self.doc.scene.find_sculpt_parent(sel, &parent_map)
+                                {
                                     let extent = self.scene_avg_extent();
                                     self.doc.active_tool = crate::sculpt::ActiveTool::Sculpt;
-                                    self.doc.sculpt_state = SculptState::new_active_with_radius(sculpt_id, extent);
+                                    self.doc.sculpt_state =
+                                        SculptState::new_active_with_radius(sculpt_id, extent);
                                     self.ui.node_graph_state.select_single(sculpt_id);
                                     self.ensure_brush_settings_tab();
                                 } else {
                                     // Case 3: non-sculpt node — open convert dialog
-                                    self.ui.sculpt_convert_dialog = Some(SculptConvertDialog::new(sel));
+                                    self.ui.sculpt_convert_dialog =
+                                        Some(SculptConvertDialog::new(sel));
                                 }
                             }
                         }
@@ -449,7 +511,11 @@ impl SdfApp {
                 Action::ShowSculptConvertDialog { target } => {
                     self.ui.sculpt_convert_dialog = Some(SculptConvertDialog::new(target));
                 }
-                Action::CommitSculptConvert { target, mode, resolution } => {
+                Action::CommitSculptConvert {
+                    target,
+                    mode,
+                    resolution,
+                } => {
                     self.ui.sculpt_convert_dialog = None;
                     let baking = !matches!(self.async_state.bake_status, super::BakeStatus::Idle);
                     if baking {
@@ -481,12 +547,14 @@ impl SdfApp {
                                 }
                                 (root, true)
                             }
-                            SculptConvertMode::BakeActiveNode => {
-                                (target, false)
-                            }
+                            SculptConvertMode::BakeActiveNode => (target, false),
                         };
                         // Get color from the target node (or default white)
-                        let color = self.doc.scene.nodes.get(&subtree_root)
+                        let color = self
+                            .doc
+                            .scene
+                            .nodes
+                            .get(&subtree_root)
                             .map(|n| match &n.data {
                                 NodeData::Primitive { color, .. } => *color,
                                 _ => Vec3::new(0.8, 0.8, 0.8),
@@ -509,12 +577,17 @@ impl SdfApp {
                             // The bake created a sculpt node above subtree_root — find it
                             let parent_map = self.doc.scene.build_parent_map();
                             if let Some(&sculpt_id) = parent_map.get(&subtree_root) {
-                                if self.doc.scene.nodes.get(&sculpt_id).is_some_and(|n| {
-                                    matches!(n.data, NodeData::Sculpt { .. })
-                                }) {
+                                if self
+                                    .doc
+                                    .scene
+                                    .nodes
+                                    .get(&sculpt_id)
+                                    .is_some_and(|n| matches!(n.data, NodeData::Sculpt { .. }))
+                                {
                                     let extent = self.scene_avg_extent();
                                     self.doc.active_tool = crate::sculpt::ActiveTool::Sculpt;
-                                    self.doc.sculpt_state = SculptState::new_active_with_radius(sculpt_id, extent);
+                                    self.doc.sculpt_state =
+                                        SculptState::new_active_with_radius(sculpt_id, extent);
                                     self.ui.node_graph_state.select_single(sculpt_id);
                                     self.ensure_brush_settings_tab();
                                 }
@@ -595,7 +668,10 @@ impl SdfApp {
                     self.doc.scene.swap_children(id);
                     self.gpu.buffer_dirty = true;
                 }
-                Action::ReparentNode { dragged, new_parent } => {
+                Action::ReparentNode {
+                    dragged,
+                    new_parent,
+                } => {
                     self.doc.scene.reparent(dragged, new_parent);
                     self.ui.node_graph_state.needs_initial_rebuild = true;
                     self.gpu.buffer_dirty = true;
@@ -640,13 +716,15 @@ impl SdfApp {
                     self.ui.show_export_dialog = true;
                 }
                 Action::ImportMesh => {
-                    let importing = !matches!(self.async_state.import_status, super::ImportStatus::Idle);
+                    let importing =
+                        !matches!(self.async_state.import_status, super::ImportStatus::Idle);
                     if !importing && self.ui.import_dialog.is_none() {
                         self.open_import_dialog();
                     }
                 }
                 Action::CommitImport { resolution } => {
-                    let importing = !matches!(self.async_state.import_status, super::ImportStatus::Idle);
+                    let importing =
+                        !matches!(self.async_state.import_status, super::ImportStatus::Idle);
                     if !importing {
                         if !self.validate_sculpt_resolution(resolution) {
                             // Resolution too high — toast already shown, clear dialog
@@ -717,7 +795,13 @@ impl SdfApp {
                         if let Some(node) = self.doc.scene.nodes.get(&sel) {
                             let clip = match &node.data {
                                 crate::graph::scene::NodeData::Primitive {
-                                    color, roughness, metallic, emissive, emissive_intensity, fresnel, ..
+                                    color,
+                                    roughness,
+                                    metallic,
+                                    emissive,
+                                    emissive_intensity,
+                                    fresnel,
+                                    ..
                                 } => Some(super::state::PropertyClipboard {
                                     color: [color.x, color.y, color.z],
                                     roughness: *roughness,
@@ -727,7 +811,13 @@ impl SdfApp {
                                     fresnel: *fresnel,
                                 }),
                                 crate::graph::scene::NodeData::Sculpt {
-                                    color, roughness, metallic, emissive, emissive_intensity, fresnel, ..
+                                    color,
+                                    roughness,
+                                    metallic,
+                                    emissive,
+                                    emissive_intensity,
+                                    fresnel,
+                                    ..
                                 } => Some(super::state::PropertyClipboard {
                                     color: [color.x, color.y, color.z],
                                     roughness: *roughness,
@@ -756,23 +846,45 @@ impl SdfApp {
                             if let Some(node) = self.doc.scene.nodes.get_mut(&sel) {
                                 let applied = match &mut node.data {
                                     crate::graph::scene::NodeData::Primitive {
-                                        color, roughness, metallic, emissive, emissive_intensity, fresnel, ..
+                                        color,
+                                        roughness,
+                                        metallic,
+                                        emissive,
+                                        emissive_intensity,
+                                        fresnel,
+                                        ..
                                     } => {
-                                        *color = Vec3::new(clip.color[0], clip.color[1], clip.color[2]);
+                                        *color =
+                                            Vec3::new(clip.color[0], clip.color[1], clip.color[2]);
                                         *roughness = clip.roughness;
                                         *metallic = clip.metallic;
-                                        *emissive = Vec3::new(clip.emissive[0], clip.emissive[1], clip.emissive[2]);
+                                        *emissive = Vec3::new(
+                                            clip.emissive[0],
+                                            clip.emissive[1],
+                                            clip.emissive[2],
+                                        );
                                         *emissive_intensity = clip.emissive_intensity;
                                         *fresnel = clip.fresnel;
                                         true
                                     }
                                     crate::graph::scene::NodeData::Sculpt {
-                                        color, roughness, metallic, emissive, emissive_intensity, fresnel, ..
+                                        color,
+                                        roughness,
+                                        metallic,
+                                        emissive,
+                                        emissive_intensity,
+                                        fresnel,
+                                        ..
                                     } => {
-                                        *color = Vec3::new(clip.color[0], clip.color[1], clip.color[2]);
+                                        *color =
+                                            Vec3::new(clip.color[0], clip.color[1], clip.color[2]);
                                         *roughness = clip.roughness;
                                         *metallic = clip.metallic;
-                                        *emissive = Vec3::new(clip.emissive[0], clip.emissive[1], clip.emissive[2]);
+                                        *emissive = Vec3::new(
+                                            clip.emissive[0],
+                                            clip.emissive[1],
+                                            clip.emissive[2],
+                                        );
                                         *emissive_intensity = clip.emissive_intensity;
                                         *fresnel = clip.fresnel;
                                         true
@@ -827,7 +939,8 @@ impl SdfApp {
                             self.doc.camera.pitch = bm.pitch;
                             self.doc.camera.roll = bm.roll;
                             self.doc.camera.distance = bm.distance;
-                            self.doc.camera.target = Vec3::new(bm.target[0], bm.target[1], bm.target[2]);
+                            self.doc.camera.target =
+                                Vec3::new(bm.target[0], bm.target[1], bm.target[2]);
                             self.doc.camera.orthographic = bm.orthographic;
                             self.ui.toasts.push(super::Toast {
                                 message: format!("Bookmark {} restored", slot + 1),
@@ -885,7 +998,11 @@ impl SdfApp {
                     self.doc.scene.set_light_mask(node_id, mask);
                     self.gpu.buffer_dirty = true;
                 }
-                Action::ToggleLightMaskBit { node_id, light_slot, enabled } => {
+                Action::ToggleLightMaskBit {
+                    node_id,
+                    light_slot,
+                    enabled,
+                } => {
                     if light_slot < 8 {
                         let current = self.doc.scene.get_light_mask(node_id);
                         let new_mask = if enabled {
@@ -921,12 +1038,19 @@ impl SdfApp {
                     // Validate: cookie must be a Primitive or Operation node (not Light/Transform/etc.)
                     let valid = cookie.is_none_or(|cookie_id| {
                         self.doc.scene.nodes.get(&cookie_id).is_some_and(|n| {
-                            matches!(n.data, NodeData::Primitive { .. } | NodeData::Operation { .. })
+                            matches!(
+                                n.data,
+                                NodeData::Primitive { .. } | NodeData::Operation { .. }
+                            )
                         })
                     });
                     if valid {
                         if let Some(node) = self.doc.scene.nodes.get_mut(&light_id) {
-                            if let NodeData::Light { ref mut cookie_node, .. } = node.data {
+                            if let NodeData::Light {
+                                ref mut cookie_node,
+                                ..
+                            } = node.data
+                            {
                                 *cookie_node = cookie;
                             }
                         }
@@ -991,14 +1115,16 @@ impl SdfApp {
         use crate::ui::dock::Tab;
         if self.ui.dock_state.find_tab(&Tab::BrushSettings).is_none() {
             // Add BrushSettings as a sibling tab next to Properties (not into the viewport).
-            if let Some((surface_idx, node_idx, _tab_idx)) = self.ui.dock_state.find_tab(&Tab::Properties) {
-                self.ui.dock_state[surface_idx][node_idx]
-                    .append_tab(Tab::BrushSettings);
+            if let Some((surface_idx, node_idx, _tab_idx)) =
+                self.ui.dock_state.find_tab(&Tab::Properties)
+            {
+                self.ui.dock_state[surface_idx][node_idx].append_tab(Tab::BrushSettings);
             } else {
                 // Fallback: no Properties tab found, add next to SceneTree
-                if let Some((surface_idx, node_idx, _tab_idx)) = self.ui.dock_state.find_tab(&Tab::SceneTree) {
-                    self.ui.dock_state[surface_idx][node_idx]
-                        .append_tab(Tab::BrushSettings);
+                if let Some((surface_idx, node_idx, _tab_idx)) =
+                    self.ui.dock_state.find_tab(&Tab::SceneTree)
+                {
+                    self.ui.dock_state[surface_idx][node_idx].append_tab(Tab::BrushSettings);
                 } else {
                     self.ui.dock_state.push_to_focused_leaf(Tab::BrushSettings);
                 }
@@ -1039,8 +1165,12 @@ impl SdfApp {
         if let Some(new_id) = self.doc.scene.duplicate_subtree(source_id) {
             if let Some(node) = self.doc.scene.nodes.get_mut(&new_id) {
                 match &mut node.data {
-                    NodeData::Primitive { ref mut position, .. }
-                    | NodeData::Sculpt { ref mut position, .. } => {
+                    NodeData::Primitive {
+                        ref mut position, ..
+                    }
+                    | NodeData::Sculpt {
+                        ref mut position, ..
+                    } => {
                         position.x += 1.0;
                     }
                     _ => {}
@@ -1061,53 +1191,62 @@ fn apply_lighting_preset_to_scene(
     preset: LightingPreset,
 ) {
     // Preset definitions: (key_color, key_intensity, key_dir, fill_color, fill_intensity, fill_dir, ambient, sky_horizon, sky_zenith)
-    let (key_color, key_intensity, key_dir, fill_color, fill_intensity, fill_dir, ambient, sky_horizon, sky_zenith) =
-        match preset {
-            LightingPreset::Studio => (
-                Vec3::new(1.0, 0.98, 0.95),   // warm white key
-                1.5,
-                Vec3::new(0.9593, 0.5990, 0.8957),
-                Vec3::new(0.85, 0.9, 1.0),    // cool blue-white fill
-                0.4,
-                Vec3::new(-0.5400, 0.2128, -0.7362),
-                0.05,
-                [0.7, 0.8, 0.95],
-                [0.2, 0.3, 0.6],
-            ),
-            LightingPreset::Outdoor => (
-                Vec3::new(1.0, 0.95, 0.85),   // warm sunlight
-                2.0,
-                Vec3::new(0.8221, 0.7508, 0.7608),
-                Vec3::new(0.6, 0.75, 1.0),    // sky blue fill
-                0.6,
-                Vec3::new(-0.3228, 0.1596, -0.5564),
-                0.08,
-                [0.85, 0.9, 1.0],
-                [0.35, 0.55, 0.9],
-            ),
-            LightingPreset::Dramatic => (
-                Vec3::new(1.0, 0.85, 0.7),    // warm amber key
-                2.5,
-                Vec3::new(0.8623, 0.4871, 0.6877),
-                Vec3::new(0.4, 0.5, 0.7),     // dim cool fill
-                0.15,
-                Vec3::new(-0.5669, -0.1107, -0.7449),
-                0.02,
-                [0.15, 0.1, 0.1],
-                [0.05, 0.05, 0.15],
-            ),
-            LightingPreset::Flat => (
-                Vec3::new(1.0, 1.0, 1.0),     // neutral white key
-                1.0,
-                Vec3::new(0.7163, 0.8171, 0.6860),
-                Vec3::new(1.0, 1.0, 1.0),     // neutral white fill
-                0.8,
-                Vec3::new(-0.5190, 0.2633, -0.6474),
-                0.15,
-                [0.9, 0.9, 0.9],
-                [0.7, 0.7, 0.8],
-            ),
-        };
+    let (
+        key_color,
+        key_intensity,
+        key_dir,
+        fill_color,
+        fill_intensity,
+        fill_dir,
+        ambient,
+        sky_horizon,
+        sky_zenith,
+    ) = match preset {
+        LightingPreset::Studio => (
+            Vec3::new(1.0, 0.98, 0.95), // warm white key
+            1.5,
+            Vec3::new(0.9593, 0.5990, 0.8957),
+            Vec3::new(0.85, 0.9, 1.0), // cool blue-white fill
+            0.4,
+            Vec3::new(-0.5400, 0.2128, -0.7362),
+            0.05,
+            [0.7, 0.8, 0.95],
+            [0.2, 0.3, 0.6],
+        ),
+        LightingPreset::Outdoor => (
+            Vec3::new(1.0, 0.95, 0.85), // warm sunlight
+            2.0,
+            Vec3::new(0.8221, 0.7508, 0.7608),
+            Vec3::new(0.6, 0.75, 1.0), // sky blue fill
+            0.6,
+            Vec3::new(-0.3228, 0.1596, -0.5564),
+            0.08,
+            [0.85, 0.9, 1.0],
+            [0.35, 0.55, 0.9],
+        ),
+        LightingPreset::Dramatic => (
+            Vec3::new(1.0, 0.85, 0.7), // warm amber key
+            2.5,
+            Vec3::new(0.8623, 0.4871, 0.6877),
+            Vec3::new(0.4, 0.5, 0.7), // dim cool fill
+            0.15,
+            Vec3::new(-0.5669, -0.1107, -0.7449),
+            0.02,
+            [0.15, 0.1, 0.1],
+            [0.05, 0.05, 0.15],
+        ),
+        LightingPreset::Flat => (
+            Vec3::new(1.0, 1.0, 1.0), // neutral white key
+            1.0,
+            Vec3::new(0.7163, 0.8171, 0.6860),
+            Vec3::new(1.0, 1.0, 1.0), // neutral white fill
+            0.8,
+            Vec3::new(-0.5190, 0.2633, -0.6474),
+            0.15,
+            [0.9, 0.9, 0.9],
+            [0.7, 0.7, 0.8],
+        ),
+    };
 
     // Update sky colors (ambient is now controlled by scene Ambient Light node)
     render_config.sky_horizon = sky_horizon;
@@ -1119,7 +1258,12 @@ fn apply_lighting_preset_to_scene(
         let name = scene.nodes.get(&id).map(|n| n.name.as_str()).unwrap_or("");
         if name == "Key Light" {
             if let Some(node) = scene.nodes.get_mut(&id) {
-                if let NodeData::Light { ref mut color, ref mut intensity, .. } = &mut node.data {
+                if let NodeData::Light {
+                    ref mut color,
+                    ref mut intensity,
+                    ..
+                } = &mut node.data
+                {
                     *color = key_color;
                     *intensity = key_intensity;
                 }
@@ -1127,28 +1271,42 @@ fn apply_lighting_preset_to_scene(
             // Update the Key Light Transform's rotation (direction)
             if let Some(transform_id) = find_parent_transform(scene, id) {
                 if let Some(t_node) = scene.nodes.get_mut(&transform_id) {
-                    if let NodeData::Transform { ref mut rotation, .. } = &mut t_node.data {
+                    if let NodeData::Transform {
+                        ref mut rotation, ..
+                    } = &mut t_node.data
+                    {
                         *rotation = key_dir;
                     }
                 }
             }
         } else if name == "Fill Light" {
             if let Some(node) = scene.nodes.get_mut(&id) {
-                if let NodeData::Light { ref mut color, ref mut intensity, .. } = &mut node.data {
+                if let NodeData::Light {
+                    ref mut color,
+                    ref mut intensity,
+                    ..
+                } = &mut node.data
+                {
                     *color = fill_color;
                     *intensity = fill_intensity;
                 }
             }
             if let Some(transform_id) = find_parent_transform(scene, id) {
                 if let Some(t_node) = scene.nodes.get_mut(&transform_id) {
-                    if let NodeData::Transform { ref mut rotation, .. } = &mut t_node.data {
+                    if let NodeData::Transform {
+                        ref mut rotation, ..
+                    } = &mut t_node.data
+                    {
                         *rotation = fill_dir;
                     }
                 }
             }
         } else if name == "Ambient Light" {
             if let Some(node) = scene.nodes.get_mut(&id) {
-                if let NodeData::Light { ref mut intensity, .. } = &mut node.data {
+                if let NodeData::Light {
+                    ref mut intensity, ..
+                } = &mut node.data
+                {
                     *intensity = ambient;
                 }
             }
@@ -1162,11 +1320,14 @@ fn find_parent_transform(
     child_id: crate::graph::scene::NodeId,
 ) -> Option<crate::graph::scene::NodeId> {
     scene.nodes.iter().find_map(|(&id, node)| {
-        if let NodeData::Transform { input: Some(inp), .. } = &node.data {
-            if *inp == child_id { return Some(id); }
+        if let NodeData::Transform {
+            input: Some(inp), ..
+        } = &node.data
+        {
+            if *inp == child_id {
+                return Some(id);
+            }
         }
         None
     })
 }
-
-

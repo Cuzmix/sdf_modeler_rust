@@ -91,7 +91,11 @@ pub fn draw(
                     }
 
                     // Visibility toggle (eye icon)
-                    let eye_label = if is_hidden { "\u{1F441}\u{FE0F}" } else { "\u{1F441}" };
+                    let eye_label = if is_hidden {
+                        "\u{1F441}\u{FE0F}"
+                    } else {
+                        "\u{1F441}"
+                    };
                     let eye_text = if is_hidden {
                         egui::RichText::new(eye_label).color(egui::Color32::from_gray(80))
                     } else {
@@ -107,11 +111,10 @@ pub fn draw(
                     } else {
                         egui::Color32::from_rgb(50, 200, 50)
                     };
-                    let (dot_rect, _) = ui.allocate_exact_size(
-                        egui::vec2(8.0, 8.0),
-                        egui::Sense::hover(),
-                    );
-                    ui.painter().circle_filled(dot_rect.center(), 3.5, dot_color);
+                    let (dot_rect, _) =
+                        ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
+                    ui.painter()
+                        .circle_filled(dot_rect.center(), 3.5, dot_color);
 
                     // Color swatch
                     let mut rgb = [color.x, color.y, color.z];

@@ -23,15 +23,32 @@ pub(crate) const PICK: &str = include_str!("../shaders/pick.wgsl");
 /// Prelude for render (vertex+fragment) shader: all SDF library + vertex shader.
 /// Vertex shader is included here but NOT in compute_prelude().
 pub(crate) fn render_prelude() -> String {
-    [BINDINGS, VOXEL_SAMPLING, VERTEX, TRANSFORMS, PRIMITIVES, MODIFIERS, NOISE, OPERATIONS]
-        .join("\n")
+    [
+        BINDINGS,
+        VOXEL_SAMPLING,
+        VERTEX,
+        TRANSFORMS,
+        PRIMITIVES,
+        MODIFIERS,
+        NOISE,
+        OPERATIONS,
+    ]
+    .join("\n")
 }
 
 /// Prelude for compute shaders (pick, composite): SDF library without vertex shader.
 /// Compute shaders would error with an orphan @vertex entry point.
 pub(crate) fn compute_prelude() -> String {
-    [BINDINGS, VOXEL_SAMPLING, TRANSFORMS, PRIMITIVES, MODIFIERS, NOISE, OPERATIONS]
-        .join("\n")
+    [
+        BINDINGS,
+        VOXEL_SAMPLING,
+        TRANSFORMS,
+        PRIMITIVES,
+        MODIFIERS,
+        NOISE,
+        OPERATIONS,
+    ]
+    .join("\n")
 }
 
 // ---------------------------------------------------------------------------
@@ -53,19 +70,31 @@ pub(crate) const COMPOSITE_COMPUTE_ENTRY: &str = include_str!("../shaders/compos
 /// Format f32 as a WGSL literal (always includes decimal point).
 pub(crate) fn format_f32(v: f32) -> String {
     let s = format!("{}", v);
-    if s.contains('.') { s } else { format!("{}.0", s) }
+    if s.contains('.') {
+        s
+    } else {
+        format!("{}.0", s)
+    }
 }
 
 /// Format [f32; 3] as WGSL vec3 components: "x, y, z".
 pub(crate) fn format_vec3(v: [f32; 3]) -> String {
-    format!("{}, {}, {}", format_f32(v[0]), format_f32(v[1]), format_f32(v[2]))
+    format!(
+        "{}, {}, {}",
+        format_f32(v[0]),
+        format_f32(v[1]),
+        format_f32(v[2])
+    )
 }
 
 /// Apply the 4 raymarching placeholders shared by render and pick shaders.
 pub(crate) fn apply_march_placeholders(src: &str, config: &RenderConfig) -> String {
     src.replace("/*MARCH_MAX_STEPS*/", &config.march_max_steps.to_string())
         .replace("/*MARCH_EPSILON*/", &format_f32(config.march_epsilon))
-        .replace("/*MARCH_STEP_MULT*/", &format_f32(config.march_step_multiplier))
+        .replace(
+            "/*MARCH_STEP_MULT*/",
+            &format_f32(config.march_step_multiplier),
+        )
         .replace("/*MARCH_MAX_DIST*/", &format_f32(config.march_max_distance))
 }
 

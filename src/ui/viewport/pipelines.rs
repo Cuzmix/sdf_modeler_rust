@@ -1,3 +1,5 @@
+use std::num::NonZeroU64;
+
 use eframe::wgpu;
 
 use super::{ViewportResources, BLIT_SHADER_SRC};
@@ -117,8 +119,11 @@ impl ViewportResources {
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+                        has_dynamic_offset: true,
+                        min_binding_size: Some(
+                            NonZeroU64::new(Self::brush_param_size())
+                                .expect("BrushGpuParams size must be non-zero"),
+                        ),
                     },
                     count: None,
                 },
@@ -142,7 +147,9 @@ impl ViewportResources {
     ) -> wgpu::ComputePipeline {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Brush Compute Shader"),
-            source: wgpu::ShaderSource::Wgsl(crate::gpu::shader_templates::BRUSH_COMPUTE_SHADER.into()),
+            source: wgpu::ShaderSource::Wgsl(
+                crate::gpu::shader_templates::BRUSH_COMPUTE_SHADER.into(),
+            ),
         });
 
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {

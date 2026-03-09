@@ -8,9 +8,9 @@ use crate::graph::scene::NodeData;
 use crate::graph::voxel;
 use crate::sculpt::SculptState;
 
+use super::{BakeRequest, SdfApp};
 #[cfg(not(target_arch = "wasm32"))]
 use super::{BakeStatus, ExportStatus, ImportStatus};
-use super::{BakeRequest, SdfApp};
 
 impl SdfApp {
     // ── Bake ─────────────────────────────────────────────────────────────
@@ -56,14 +56,23 @@ impl SdfApp {
             req.resolution,
             progress,
         );
-        self.apply_bake_result(grid, center, req.existing_sculpt, req.subtree_root, req.color, req.flatten);
+        self.apply_bake_result(
+            grid,
+            center,
+            req.existing_sculpt,
+            req.subtree_root,
+            req.color,
+            req.flatten,
+        );
     }
 
     /// Instantly create a displacement grid for a non-flatten bake request.
     /// No async thread needed — displacement grids start at 0.0 (O(1)).
     pub(super) fn apply_instant_displacement_bake(&mut self, req: BakeRequest) {
         let (grid, center) = voxel::create_displacement_grid_for_subtree(
-            &self.doc.scene, req.subtree_root, req.resolution,
+            &self.doc.scene,
+            req.subtree_root,
+            req.resolution,
         );
 
         if let Some(sculpt_id) = req.existing_sculpt {
@@ -80,7 +89,11 @@ impl SdfApp {
             }
         } else {
             let sculpt_id = self.doc.scene.insert_sculpt_above(
-                req.subtree_root, center, Vec3::ZERO, req.color, grid,
+                req.subtree_root,
+                center,
+                Vec3::ZERO,
+                req.color,
+                grid,
             );
             self.ui.node_graph_state.select_single(sculpt_id);
             let extent = self.scene_avg_extent();
@@ -93,19 +106,25 @@ impl SdfApp {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn poll_async_bake(&mut self) {
-        let completed = if let BakeStatus::InProgress { ref receiver, .. } = self.async_state.bake_status {
-            receiver.try_recv().ok()
-        } else {
-            None
-        };
+        let completed =
+            if let BakeStatus::InProgress { ref receiver, .. } = self.async_state.bake_status {
+                receiver.try_recv().ok()
+            } else {
+                None
+            };
 
         if let Some((grid, center)) = completed {
-            let (existing_sculpt, subtree_root, color, flatten) = match &self.async_state.bake_status {
-                BakeStatus::InProgress {
-                    existing_sculpt, subtree_root, color, flatten, ..
-                } => (*existing_sculpt, *subtree_root, *color, *flatten),
-                _ => unreachable!(),
-            };
+            let (existing_sculpt, subtree_root, color, flatten) =
+                match &self.async_state.bake_status {
+                    BakeStatus::InProgress {
+                        existing_sculpt,
+                        subtree_root,
+                        color,
+                        flatten,
+                        ..
+                    } => (*existing_sculpt, *subtree_root, *color, *flatten),
+                    _ => unreachable!(),
+                };
 
             self.apply_bake_result(grid, center, existing_sculpt, subtree_root, color, flatten);
             self.async_state.bake_status = BakeStatus::Idle;
@@ -127,7 +146,10 @@ impl SdfApp {
         flatten: bool,
     ) {
         if flatten {
-            let new_id = self.doc.scene.flatten_subtree(subtree_root, grid, center, color);
+            let new_id = self
+                .doc
+                .scene
+                .flatten_subtree(subtree_root, grid, center, color);
             self.ui.node_graph_state.select_single(new_id);
             self.ui.node_graph_state.needs_initial_rebuild = true;
             let extent = self.scene_avg_extent();
@@ -147,9 +169,10 @@ impl SdfApp {
                 }
             }
         } else {
-            let sculpt_id = self.doc.scene.insert_sculpt_above(
-                subtree_root, center, Vec3::ZERO, color, grid,
-            );
+            let sculpt_id =
+                self.doc
+                    .scene
+                    .insert_sculpt_above(subtree_root, center, Vec3::ZERO, color, grid);
             self.ui.node_graph_state.select_single(sculpt_id);
             let extent = self.scene_avg_extent();
             self.doc.active_tool = crate::sculpt::ActiveTool::Sculpt;
@@ -184,10 +207,23 @@ impl SdfApp {
         let scene_bounds = self.doc.scene.compute_bounds();
         let viewport = [0.0, 0.0, width as f32, height as f32];
         let (scene_light_count, scene_light_list, scene_ambient) =
-            crate::gpu::buffers::collect_scene_lights(&self.doc.scene, self.doc.camera.eye(), self.doc.soloed_light, self.last_time as f32);
-        let volumetric_count = scene_light_list.iter().filter(|l| l.volumetric[0] > 0.5).count() as f32;
+            crate::gpu::buffers::collect_scene_lights(
+                &self.doc.scene,
+                self.doc.camera.eye(),
+                self.doc.soloed_light,
+                self.last_time as f32,
+            );
+        let volumetric_count = scene_light_list
+            .iter()
+            .filter(|l| l.volumetric[0] > 0.5)
+            .count() as f32;
         let volumetric_steps = self.settings.render.volumetric_steps as f32;
-        let scene_light_info = [scene_light_count as f32, volumetric_count, volumetric_steps, 0.0];
+        let scene_light_info = [
+            scene_light_count as f32,
+            volumetric_count,
+            volumetric_steps,
+            0.0,
+        ];
         let mut scene_lights_flat = [[0.0_f32; 4]; 32];
         let mut scene_light_vol = [[0.0_f32; 4]; 8];
         for (i, light) in scene_light_list.iter().enumerate() {
@@ -197,9 +233,29 @@ impl SdfApp {
             scene_lights_flat[i * 4 + 3] = light.params;
             scene_light_vol[i] = light.volumetric;
         }
-        let ambient_luminance = scene_ambient.color.dot(glam::Vec3::new(0.2126, 0.7152, 0.0722));
-        let effective_ambient = if ambient_luminance > 0.0 { ambient_luminance } else { self.settings.render.ambient };
-        let uniform = self.doc.camera.to_uniform(viewport, 0.0, 0.0, false, scene_bounds, -1.0, 0.0, [0.0; 4], [0.0; 4], effective_ambient, scene_light_info, scene_lights_flat, scene_light_vol);
+        let ambient_luminance = scene_ambient
+            .color
+            .dot(glam::Vec3::new(0.2126, 0.7152, 0.0722));
+        let effective_ambient = if ambient_luminance > 0.0 {
+            ambient_luminance
+        } else {
+            self.settings.render.ambient
+        };
+        let uniform = self.doc.camera.to_uniform(
+            viewport,
+            0.0,
+            0.0,
+            false,
+            scene_bounds,
+            -1.0,
+            0.0,
+            [0.0; 4],
+            [0.0; 4],
+            effective_ambient,
+            scene_light_info,
+            scene_lights_flat,
+            scene_light_vol,
+        );
 
         let pixels = resources.screenshot(
             &self.gpu.render_state.device,
@@ -209,13 +265,7 @@ impl SdfApp {
             height,
         );
 
-        if let Err(e) = image::save_buffer(
-            &path,
-            &pixels,
-            width,
-            height,
-            image::ColorType::Rgba8,
-        ) {
+        if let Err(e) = image::save_buffer(&path, &pixels, width, height, image::ColorType::Rgba8) {
             log::error!("Failed to save screenshot: {}", e);
         } else {
             log::info!("Screenshot saved to {:?}", path);
@@ -316,7 +366,8 @@ impl SdfApp {
 
         let msg = format!(
             "Exported OBJ ({} verts, {} tris)",
-            mesh.vertices.len(), mesh.triangles.len(),
+            mesh.vertices.len(),
+            mesh.triangles.len(),
         );
         crate::io::web_download("export.obj", &buf.into_inner(), "model/obj");
         self.ui.toasts.push(super::Toast {
@@ -329,50 +380,56 @@ impl SdfApp {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn poll_export(&mut self) {
-        let result = if let ExportStatus::InProgress { ref receiver, .. } = self.async_state.export_status {
-            receiver.try_recv().ok()
-        } else {
-            None
-        };
+        let result =
+            if let ExportStatus::InProgress { ref receiver, .. } = self.async_state.export_status {
+                receiver.try_recv().ok()
+            } else {
+                None
+            };
 
         let Some(maybe_mesh) = result else {
             return;
         };
 
-        let path = if let ExportStatus::InProgress { ref path, .. } = self.async_state.export_status {
+        let path = if let ExportStatus::InProgress { ref path, .. } = self.async_state.export_status
+        {
             path.clone()
         } else {
             unreachable!()
         };
 
         match maybe_mesh {
-            Some(mesh) => {
-                match crate::export::write_mesh(&mesh, &path) {
-                    Ok(()) => {
-                        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("obj").to_uppercase();
-                        let msg = format!(
-                            "Exported {} ({} verts, {} tris)",
-                            ext, mesh.vertices.len(), mesh.triangles.len(),
-                        );
-                        log::info!("{} to {:?}", msg, path);
-                        self.ui.toasts.push(super::Toast {
-                            message: msg,
-                            is_error: false,
-                            created: crate::compat::Instant::now(),
-                            duration: crate::compat::Duration::from_secs(4),
-                        });
-                    }
-                    Err(e) => {
-                        log::error!("Failed to write mesh: {}", e);
-                        self.ui.toasts.push(super::Toast {
-                            message: format!("Export failed: {}", e),
-                            is_error: true,
-                            created: crate::compat::Instant::now(),
-                            duration: crate::compat::Duration::from_secs(6),
-                        });
-                    }
+            Some(mesh) => match crate::export::write_mesh(&mesh, &path) {
+                Ok(()) => {
+                    let ext = path
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .unwrap_or("obj")
+                        .to_uppercase();
+                    let msg = format!(
+                        "Exported {} ({} verts, {} tris)",
+                        ext,
+                        mesh.vertices.len(),
+                        mesh.triangles.len(),
+                    );
+                    log::info!("{} to {:?}", msg, path);
+                    self.ui.toasts.push(super::Toast {
+                        message: msg,
+                        is_error: false,
+                        created: crate::compat::Instant::now(),
+                        duration: crate::compat::Duration::from_secs(4),
+                    });
                 }
-            }
+                Err(e) => {
+                    log::error!("Failed to write mesh: {}", e);
+                    self.ui.toasts.push(super::Toast {
+                        message: format!("Export failed: {}", e),
+                        is_error: true,
+                        created: crate::compat::Instant::now(),
+                        duration: crate::compat::Duration::from_secs(6),
+                    });
+                }
+            },
             None => {
                 // Export was cancelled
                 self.ui.toasts.push(super::Toast {
@@ -421,15 +478,14 @@ impl SdfApp {
             }
         };
 
-        let filename = path.file_name()
+        let filename = path
+            .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("mesh")
             .to_string();
 
         let max_res = self.settings.max_sculpt_resolution;
-        self.ui.import_dialog = Some(
-            super::state::ImportDialog::new(mesh, filename, max_res)
-        );
+        self.ui.import_dialog = Some(super::state::ImportDialog::new(mesh, filename, max_res));
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -480,7 +536,12 @@ impl SdfApp {
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn poll_import(&mut self) {
         // Check if cancelled — if so, reset immediately without waiting for result
-        if let ImportStatus::InProgress { ref cancelled, ref receiver, .. } = self.async_state.import_status {
+        if let ImportStatus::InProgress {
+            ref cancelled,
+            ref receiver,
+            ..
+        } = self.async_state.import_status
+        {
             if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
                 // Try to drain the channel (thread may have already sent)
                 let _ = receiver.try_recv();
@@ -495,11 +556,12 @@ impl SdfApp {
             }
         }
 
-        let completed = if let ImportStatus::InProgress { ref receiver, .. } = self.async_state.import_status {
-            receiver.try_recv().ok()
-        } else {
-            None
-        };
+        let completed =
+            if let ImportStatus::InProgress { ref receiver, .. } = self.async_state.import_status {
+                receiver.try_recv().ok()
+            } else {
+                None
+            };
 
         if let Some((grid, center)) = completed {
             let desired_resolution = grid.resolution;

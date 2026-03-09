@@ -1,4 +1,5 @@
 use glam::Vec3;
+use std::sync::Arc;
 
 use crate::graph::scene::{NodeData, NodeId, Scene};
 use crate::graph::voxel::{self, VoxelGrid};
@@ -194,8 +195,12 @@ pub enum SculptState {
         /// Mirror axis: None = off, Some(0) = X, Some(1) = Y, Some(2) = Z.
         symmetry_axis: Option<u8>,
         /// Snapshot of grid data for grab brush (cloned on grab start).
-        /// For differential sculpts, this is the total SDF (analytical + displacement).
-        grab_snapshot: Option<Vec<f32>>,
+        /// For differential sculpts this stores displacement only; analytical
+        /// SDF is sampled on demand during warp write-back.
+        grab_snapshot: Option<Arc<[f32]>>,
+        /// Optional analytical child SDF snapshot for differential grab.
+        /// Cached once at stroke start to avoid per-voxel tree evals per frame.
+        grab_analytical_snapshot: Option<Arc<[f32]>>,
         /// World position where grab stroke started.
         grab_start: Option<Vec3>,
         /// Child input node for differential grab (used to subtract analytical SDF on write-back).
@@ -221,6 +226,7 @@ impl SculptState {
             front_faces_only: true,
             symmetry_axis: None,
             grab_snapshot: None,
+            grab_analytical_snapshot: None,
             grab_start: None,
             grab_child_input: None,
         }
@@ -245,6 +251,7 @@ impl SculptState {
             front_faces_only: true,
             symmetry_axis: None,
             grab_snapshot: None,
+            grab_analytical_snapshot: None,
             grab_start: None,
             grab_child_input: None,
         }
@@ -273,14 +280,12 @@ impl SculptState {
 // Brush application
 // ---------------------------------------------------------------------------
 
-/// Apply a spherical brush stroke at `hit_world` position.
-/// Returns the (z0, z1) inclusive dirty z-slab range for incremental GPU upload.
+/// Apply brush directly in sculpt-local space.
 #[allow(clippy::too_many_arguments)]
-pub fn apply_brush(
-    scene: &mut Scene,
-    node_id: NodeId,
-    hit_world: Vec3,
-    view_dir_world: Vec3,
+pub fn apply_brush_local(
+    voxel_grid: &mut VoxelGrid,
+    local_hit: Vec3,
+    local_view_dir: Vec3,
     brush_mode: &BrushMode,
     brush_radius: f32,
     brush_strength: f32,
@@ -289,56 +294,31 @@ pub fn apply_brush(
     smooth_iterations: u32,
     flatten_ref: f32,
     surface_constraint: f32,
-    front_faces_only: bool,
-) -> Option<(u32, u32)> {
-    // Read transform to convert hit point to local space
-    let (position, rotation) = match scene.nodes.get(&node_id).map(|n| &n.data) {
-        Some(NodeData::Sculpt {
-            position, rotation, ..
-        }) => (*position, *rotation),
-        _ => return None,
-    };
-
-    let local_hit = inverse_rotate_euler(hit_world - position, rotation);
-    let local_view_dir = if front_faces_only {
-        inverse_rotate_euler(view_dir_world, rotation).normalize_or_zero()
-    } else {
-        Vec3::ZERO
-    };
-
-    // Get mutable reference to grid and apply brush
-    let node = scene.nodes.get_mut(&node_id)?;
-    if let NodeData::Sculpt {
-        ref mut voxel_grid, ..
-    } = node.data
-    {
-        match brush_mode {
-            BrushMode::Smooth => Some(apply_smooth_to_grid(
-                voxel_grid,
-                local_hit,
-                brush_radius,
-                brush_strength,
-                falloff_mode,
-                brush_shape,
-                smooth_iterations,
-                surface_constraint,
-                local_view_dir,
-            )),
-            _ => Some(apply_brush_to_grid(
-                voxel_grid,
-                local_hit,
-                brush_mode,
-                brush_radius,
-                brush_strength,
-                falloff_mode,
-                brush_shape,
-                flatten_ref,
-                surface_constraint,
-                local_view_dir,
-            )),
-        }
-    } else {
-        None
+) -> (u32, u32) {
+    match brush_mode {
+        BrushMode::Smooth => apply_smooth_to_grid(
+            voxel_grid,
+            local_hit,
+            brush_radius,
+            brush_strength,
+            falloff_mode,
+            brush_shape,
+            smooth_iterations,
+            surface_constraint,
+            local_view_dir,
+        ),
+        _ => apply_brush_to_grid(
+            voxel_grid,
+            local_hit,
+            brush_mode,
+            brush_radius,
+            brush_strength,
+            falloff_mode,
+            brush_shape,
+            flatten_ref,
+            surface_constraint,
+            local_view_dir,
+        ),
     }
 }
 
@@ -414,6 +394,47 @@ fn sample_from_data(grid: &VoxelGrid, data: &[f32], local_pos: Vec3) -> f32 {
     c0 + (c1 - c0) * fz
 }
 
+#[allow(clippy::too_many_arguments)]
+fn smooth_region_index(
+    x: u32,
+    y: u32,
+    z: u32,
+    x0: u32,
+    y0: u32,
+    z0: u32,
+    size_x: usize,
+    size_y: usize,
+) -> usize {
+    let lx = (x - x0) as usize;
+    let ly = (y - y0) as usize;
+    let lz = (z - z0) as usize;
+    (lz * size_y + ly) * size_x + lx
+}
+
+#[allow(clippy::too_many_arguments)]
+fn sample_smooth_pass_value(
+    snapshot: &[f32],
+    grid_data: &[f32],
+    x: u32,
+    y: u32,
+    z: u32,
+    res: u32,
+    x0: u32,
+    y0: u32,
+    z0: u32,
+    x1: u32,
+    y1: u32,
+    z1: u32,
+    size_x: usize,
+    size_y: usize,
+) -> f32 {
+    if x >= x0 && x <= x1 && y >= y0 && y <= y1 && z >= z0 && z <= z1 {
+        let ridx = smooth_region_index(x, y, z, x0, y0, z0, size_x, size_y);
+        snapshot[ridx]
+    } else {
+        grid_data[VoxelGrid::index(x, y, z, res)]
+    }
+}
 /// Incompressible Kelvinlet displacement used by the grab/move brush.
 /// This gives smoother, Blender-like move behavior without a hard support edge.
 fn kelvinlet_displacement(offset: Vec3, displacement: Vec3, eps: f32) -> Vec3 {
@@ -445,6 +466,7 @@ fn kelvinlet_effect_radius(eps: f32, disp_len: f32, min_displacement: f32) -> f3
         (k * k - eps * eps).sqrt().max(eps)
     }
 }
+
 /// Returns (z0, z1) inclusive range of z-slabs that were modified.
 #[allow(clippy::too_many_arguments)]
 fn apply_brush_to_grid(
@@ -550,13 +572,27 @@ fn apply_smooth_to_grid(
     let y1 = (g_max.y.ceil().max(0.0) as u32).min(res - 1);
     let z1 = (g_max.z.ceil().max(0.0) as u32).min(res - 1);
 
+    let size_x = (x1 - x0 + 1) as usize;
+    let size_y = (y1 - y0 + 1) as usize;
+    let size_z = (z1 - z0 + 1) as usize;
+    let mut snapshot = vec![0.0f32; size_x * size_y * size_z];
+
     // Taubin smoothing (lambda/mu) preserves volume better than pure Laplacian.
     // A single "iteration" is two passes.
     const LAMBDA: f32 = 0.5;
     const MU: f32 = -0.53;
+
     for _ in 0..iterations {
         for pass_scale in [LAMBDA, MU] {
-            let snapshot = grid.data.clone();
+            // Snapshot only the brush AABB region instead of cloning the full grid.
+            for z in z0..=z1 {
+                for y in y0..=y1 {
+                    for x in x0..=x1 {
+                        let ridx = smooth_region_index(x, y, z, x0, y0, z0, size_x, size_y);
+                        snapshot[ridx] = grid.data[VoxelGrid::index(x, y, z, res)];
+                    }
+                }
+            }
 
             for z in z0..=z1 {
                 for y in y0..=y1 {
@@ -572,7 +608,7 @@ fn apply_smooth_to_grid(
                         }
                         let falloff = falloff_mode.evaluate(nt) * front;
 
-                        // 6-neighbor Laplacian average (clamped at grid edges)
+                        // 6-neighbor Laplacian average (clamped at grid edges).
                         let xm = if x > 0 { x - 1 } else { x };
                         let xp = if x < res - 1 { x + 1 } else { x };
                         let ym = if y > 0 { y - 1 } else { y };
@@ -580,16 +616,29 @@ fn apply_smooth_to_grid(
                         let zm = if z > 0 { z - 1 } else { z };
                         let zp = if z < res - 1 { z + 1 } else { z };
 
-                        let avg = (snapshot[VoxelGrid::index(xm, y, z, res)]
-                            + snapshot[VoxelGrid::index(xp, y, z, res)]
-                            + snapshot[VoxelGrid::index(x, ym, z, res)]
-                            + snapshot[VoxelGrid::index(x, yp, z, res)]
-                            + snapshot[VoxelGrid::index(x, y, zm, res)]
-                            + snapshot[VoxelGrid::index(x, y, zp, res)])
-                            / 6.0;
+                        let avg = (sample_smooth_pass_value(
+                            &snapshot, &grid.data, xm, y, z, res, x0, y0, z0, x1, y1, z1, size_x,
+                            size_y,
+                        ) + sample_smooth_pass_value(
+                            &snapshot, &grid.data, xp, y, z, res, x0, y0, z0, x1, y1, z1, size_x,
+                            size_y,
+                        ) + sample_smooth_pass_value(
+                            &snapshot, &grid.data, x, ym, z, res, x0, y0, z0, x1, y1, z1, size_x,
+                            size_y,
+                        ) + sample_smooth_pass_value(
+                            &snapshot, &grid.data, x, yp, z, res, x0, y0, z0, x1, y1, z1, size_x,
+                            size_y,
+                        ) + sample_smooth_pass_value(
+                            &snapshot, &grid.data, x, y, zm, res, x0, y0, z0, x1, y1, z1, size_x,
+                            size_y,
+                        ) + sample_smooth_pass_value(
+                            &snapshot, &grid.data, x, y, zp, res, x0, y0, z0, x1, y1, z1, size_x,
+                            size_y,
+                        )) / 6.0;
 
                         let idx = VoxelGrid::index(x, y, z, res);
-                        let current = snapshot[idx];
+                        let current =
+                            snapshot[smooth_region_index(x, y, z, x0, y0, z0, size_x, size_y)];
                         let sf = surface_factor(current, radius, surface_constraint);
                         let blend = (falloff * strength * sf * pass_scale).clamp(-1.0, 1.0);
                         grid.data[idx] = current + (avg - current) * blend;
@@ -660,8 +709,9 @@ pub fn apply_grab_to_grid(
 
     (z0, z1)
 }
-/// Apply grab brush for differential sculpts: snapshot is total SDF, write back as displacement.
-/// Subtracts the analytical child SDF at each voxel to convert total -> displacement.
+/// Apply grab brush for differential sculpts using a displacement snapshot.
+/// Reconstructs total SDF on demand: displacement(sample) + analytical(sample).
+/// Uses cached analytical snapshot when available.
 #[allow(clippy::too_many_arguments)]
 pub fn apply_grab_to_grid_differential(
     grid: &mut VoxelGrid,
@@ -673,12 +723,14 @@ pub fn apply_grab_to_grid_differential(
     _falloff_mode: &FalloffMode,
     _surface_constraint: f32,
     _view_dir_local: Vec3,
+    analytical_snapshot: Option<&[f32]>,
     scene: &Scene,
     child_id: NodeId,
     sculpt_position: Vec3,
     sculpt_rotation: Vec3,
 ) -> (u32, u32) {
     let res = grid.resolution;
+    let analytical_snapshot = analytical_snapshot.filter(|data| data.len() == grid.data.len());
     let displacement = grab_delta * strength;
     let disp_len = displacement.length();
     if disp_len <= 1e-6 || radius <= 1e-6 {
@@ -715,12 +767,26 @@ pub fn apply_grab_to_grid_differential(
 
                 let idx = VoxelGrid::index(x, y, z, res);
                 let sample_pos = local_pos - warp;
-                let total_sampled = sample_from_data(grid, snapshot, sample_pos);
+                let displacement_sampled = sample_from_data(grid, snapshot, sample_pos);
 
-                // Subtract analytical child SDF to get back to displacement.
-                let world_pos = sculpt_position + inverse_rotate_euler(local_pos, sculpt_rotation);
-                let analytical = voxel::evaluate_sdf_tree(scene, child_id, world_pos);
-                grid.data[idx] = total_sampled - analytical;
+                let analytical_sample = if let Some(snapshot) = analytical_snapshot {
+                    sample_from_data(grid, snapshot, sample_pos)
+                } else {
+                    let sample_world =
+                        sculpt_position + inverse_rotate_euler(sample_pos, sculpt_rotation);
+                    voxel::evaluate_sdf_tree(scene, child_id, sample_world)
+                };
+                let total_sampled = displacement_sampled + analytical_sample;
+
+                // Subtract analytical child SDF at destination to write back displacement.
+                let analytical_dest = if let Some(snapshot) = analytical_snapshot {
+                    snapshot[idx]
+                } else {
+                    let world_pos =
+                        sculpt_position + inverse_rotate_euler(local_pos, sculpt_rotation);
+                    voxel::evaluate_sdf_tree(scene, child_id, world_pos)
+                };
+                grid.data[idx] = total_sampled - analytical_dest;
             }
         }
     }
@@ -734,6 +800,7 @@ pub fn apply_grab_to_grid_differential_scene(
     scene: &mut Scene,
     node_id: NodeId,
     snapshot: &[f32],
+    analytical_snapshot: Option<&[f32]>,
     center: Vec3,
     radius: f32,
     strength: f32,
@@ -776,6 +843,7 @@ pub fn apply_grab_to_grid_differential_scene(
         falloff_mode,
         surface_constraint,
         view_dir_local,
+        analytical_snapshot,
         scene,
         child_id,
         sculpt_position,
@@ -795,6 +863,29 @@ pub fn apply_grab_to_grid_differential_scene(
     Some(result)
 }
 
+/// Build an analytical child-SDF snapshot in sculpt-local voxel space.
+/// Used to amortize differential grab cost over the whole stroke.
+pub fn build_analytical_snapshot(
+    grid: &VoxelGrid,
+    scene: &Scene,
+    child_id: NodeId,
+    sculpt_position: Vec3,
+    sculpt_rotation: Vec3,
+) -> Vec<f32> {
+    let res = grid.resolution;
+    let mut snapshot = vec![0.0f32; grid.data.len()];
+    for z in 0..res {
+        for y in 0..res {
+            for x in 0..res {
+                let idx = VoxelGrid::index(x, y, z, res);
+                let local_pos = grid.grid_to_world(x as f32, y as f32, z as f32);
+                let world_pos = sculpt_position + inverse_rotate_euler(local_pos, sculpt_rotation);
+                snapshot[idx] = voxel::evaluate_sdf_tree(scene, child_id, world_pos);
+            }
+        }
+    }
+    snapshot
+}
 /// Inverse of rotate_euler: undo Z rotation, then Y, then X.
 pub fn inverse_rotate_euler(p: Vec3, r: Vec3) -> Vec3 {
     let mut q = p;

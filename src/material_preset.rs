@@ -336,13 +336,23 @@ mod tests {
     #[test]
     fn built_in_presets_has_expected_count() {
         let presets = built_in_presets();
-        assert!(presets.len() >= 20, "Expected at least 20 built-in presets, got {}", presets.len());
+        assert!(
+            presets.len() >= 20,
+            "Expected at least 20 built-in presets, got {}",
+            presets.len()
+        );
     }
 
     #[test]
     fn built_in_presets_cover_all_categories() {
         let presets = built_in_presets();
-        for category in &[CATEGORY_METALS, CATEGORY_PLASTICS, CATEGORY_STONE, CATEGORY_ORGANIC, CATEGORY_SPECIAL] {
+        for category in &[
+            CATEGORY_METALS,
+            CATEGORY_PLASTICS,
+            CATEGORY_STONE,
+            CATEGORY_ORGANIC,
+            CATEGORY_SPECIAL,
+        ] {
             let count = presets.iter().filter(|p| p.category == *category).count();
             assert!(count > 0, "Category '{}' has no presets", category);
         }
@@ -369,22 +379,32 @@ mod tests {
     #[test]
     fn library_save_preset_replaces_duplicate_name() {
         let mut library = MaterialLibrary::default();
-        let preset_a = MaterialPreset::from_node_material("Shiny", [1.0, 0.0, 0.0], 0.1, 1.0, 0.9, 0.0);
-        let preset_b = MaterialPreset::from_node_material("Shiny", [0.0, 1.0, 0.0], 0.2, 0.5, 0.5, 0.0);
+        let preset_a =
+            MaterialPreset::from_node_material("Shiny", [1.0, 0.0, 0.0], 0.1, 1.0, 0.9, 0.0);
+        let preset_b =
+            MaterialPreset::from_node_material("Shiny", [0.0, 1.0, 0.0], 0.2, 0.5, 0.5, 0.0);
 
         library.save_preset(preset_a);
         assert_eq!(library.user_presets.len(), 1);
 
         library.save_preset(preset_b);
-        assert_eq!(library.user_presets.len(), 1, "Duplicate name should replace, not append");
+        assert_eq!(
+            library.user_presets.len(),
+            1,
+            "Duplicate name should replace, not append"
+        );
         assert!((library.user_presets[0].roughness - 0.2).abs() < 0.001);
     }
 
     #[test]
     fn library_remove_preset() {
         let mut library = MaterialLibrary::default();
-        library.save_preset(MaterialPreset::from_node_material("A", [1.0; 3], 0.5, 0.0, 0.04, 0.0));
-        library.save_preset(MaterialPreset::from_node_material("B", [0.0; 3], 0.5, 0.0, 0.04, 0.0));
+        library.save_preset(MaterialPreset::from_node_material(
+            "A", [1.0; 3], 0.5, 0.0, 0.04, 0.0,
+        ));
+        library.save_preset(MaterialPreset::from_node_material(
+            "B", [0.0; 3], 0.5, 0.0, 0.04, 0.0,
+        ));
         assert_eq!(library.user_presets.len(), 2);
 
         library.remove_preset(0);
@@ -395,8 +415,22 @@ mod tests {
     #[test]
     fn library_serialization_roundtrip() {
         let mut library = MaterialLibrary::default();
-        library.save_preset(MaterialPreset::from_node_material("Custom Gold", [1.0, 0.8, 0.3], 0.3, 1.0, 0.95, 0.0));
-        library.save_preset(MaterialPreset::from_node_material("Neon", [0.0, 1.0, 0.5], 0.5, 0.0, 0.04, 3.0));
+        library.save_preset(MaterialPreset::from_node_material(
+            "Custom Gold",
+            [1.0, 0.8, 0.3],
+            0.3,
+            1.0,
+            0.95,
+            0.0,
+        ));
+        library.save_preset(MaterialPreset::from_node_material(
+            "Neon",
+            [0.0, 1.0, 0.5],
+            0.5,
+            0.0,
+            0.04,
+            3.0,
+        ));
 
         let json = serde_json::to_string_pretty(&library).unwrap();
         let loaded: MaterialLibrary = serde_json::from_str(&json).unwrap();

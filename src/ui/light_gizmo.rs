@@ -93,14 +93,18 @@ fn collect_lights(scene: &Scene, parent_map: &HashMap<NodeId, NodeId>) -> Vec<Li
             // Compute array instance positions and colors for Array lights
             let (array_positions, array_colors) = if *light_type == LightType::Array {
                 if let Some(cfg) = array_config {
-                    let local_positions = compute_array_positions(&cfg.pattern, cfg.count, cfg.radius);
-                    let world_positions: Vec<Vec3> = local_positions.iter()
+                    let local_positions =
+                        compute_array_positions(&cfg.pattern, cfg.count, cfg.radius);
+                    let world_positions: Vec<Vec3> = local_positions
+                        .iter()
                         .map(|lp| *translation + *lp)
                         .collect();
                     let colors: Vec<Vec3> = (0..local_positions.len())
                         .map(|i| {
                             if cfg.color_variation > 0.0 {
-                                let hue_shift = (i as f32 / local_positions.len() as f32) * cfg.color_variation * 360.0;
+                                let hue_shift = (i as f32 / local_positions.len() as f32)
+                                    * cfg.color_variation
+                                    * 360.0;
                                 hue_rotate(*color, hue_shift)
                             } else {
                                 *color
@@ -169,7 +173,11 @@ fn compute_array_positions(
         ArrayPattern::Line => {
             let total_length = radius * 2.0;
             for i in 0..n {
-                let t = if n > 1 { i as f32 / (n - 1) as f32 } else { 0.5 };
+                let t = if n > 1 {
+                    i as f32 / (n - 1) as f32
+                } else {
+                    0.5
+                };
                 positions.push(Vec3::new(-radius + t * total_length, 0.0, 0.0));
             }
         }
@@ -178,10 +186,24 @@ fn compute_array_positions(
             let mut placed = 0;
             for row in 0..side {
                 for col in 0..side {
-                    if placed >= n { break; }
-                    let tx = if side > 1 { col as f32 / (side - 1) as f32 } else { 0.5 };
-                    let tz = if side > 1 { row as f32 / (side - 1) as f32 } else { 0.5 };
-                    positions.push(Vec3::new(-radius + tx * radius * 2.0, 0.0, -radius + tz * radius * 2.0));
+                    if placed >= n {
+                        break;
+                    }
+                    let tx = if side > 1 {
+                        col as f32 / (side - 1) as f32
+                    } else {
+                        0.5
+                    };
+                    let tz = if side > 1 {
+                        row as f32 / (side - 1) as f32
+                    } else {
+                        0.5
+                    };
+                    positions.push(Vec3::new(
+                        -radius + tx * radius * 2.0,
+                        0.0,
+                        -radius + tz * radius * 2.0,
+                    ));
                     placed += 1;
                 }
             }
@@ -221,12 +243,19 @@ fn hue_rotate(color: Vec3, degrees: f32) -> Vec3 {
     let c = value * saturation;
     let x = c * (1.0 - ((new_hue / 60.0) % 2.0 - 1.0).abs());
     let m = value - c;
-    let (r1, g1, b1) = if new_hue < 60.0 { (c, x, 0.0) }
-        else if new_hue < 120.0 { (x, c, 0.0) }
-        else if new_hue < 180.0 { (0.0, c, x) }
-        else if new_hue < 240.0 { (0.0, x, c) }
-        else if new_hue < 300.0 { (x, 0.0, c) }
-        else { (c, 0.0, x) };
+    let (r1, g1, b1) = if new_hue < 60.0 {
+        (c, x, 0.0)
+    } else if new_hue < 120.0 {
+        (x, c, 0.0)
+    } else if new_hue < 180.0 {
+        (0.0, c, x)
+    } else if new_hue < 240.0 {
+        (0.0, x, c)
+    } else if new_hue < 300.0 {
+        (x, 0.0, c)
+    } else {
+        (c, 0.0, x)
+    };
     Vec3::new(r1 + m, g1 + m, b1 + m)
 }
 
@@ -298,12 +327,7 @@ fn draw_spot_light_icon(painter: &egui::Painter, center: Pos2, size: f32, color:
 }
 
 /// Draw a directional light billboard: sun icon (circle with parallel ray lines).
-fn draw_directional_light_icon(
-    painter: &egui::Painter,
-    center: Pos2,
-    size: f32,
-    color: Color32,
-) {
+fn draw_directional_light_icon(painter: &egui::Painter, center: Pos2, size: f32, color: Color32) {
     let core_radius = size * 0.25;
     let ray_inner = size * 0.35;
     let ray_outer = size * 0.65;
@@ -371,7 +395,11 @@ fn draw_wireframe_circle(
     rect: Rect,
     stroke: Stroke,
 ) {
-    let up = if axis.y.abs() > 0.99 { Vec3::X } else { Vec3::Y };
+    let up = if axis.y.abs() > 0.99 {
+        Vec3::X
+    } else {
+        Vec3::Y
+    };
     let tangent = axis.cross(up).normalize();
     let bitangent = axis.cross(tangent).normalize();
 
@@ -430,9 +458,25 @@ fn draw_spot_light_wireframe(
     let base_center = center + direction * range;
 
     // Draw outer circle at cone base
-    draw_wireframe_circle(painter, base_center, direction, cone_base_radius, vp, rect, outer_stroke);
+    draw_wireframe_circle(
+        painter,
+        base_center,
+        direction,
+        cone_base_radius,
+        vp,
+        rect,
+        outer_stroke,
+    );
     // Draw inner circle at cone base (dimmer)
-    draw_wireframe_circle(painter, base_center, direction, inner_cone_radius, vp, rect, inner_stroke);
+    draw_wireframe_circle(
+        painter,
+        base_center,
+        direction,
+        inner_cone_radius,
+        vp,
+        rect,
+        inner_stroke,
+    );
 
     // Draw cone lines from tip to base edge
     let up = if direction.y.abs() > 0.99 {
@@ -447,7 +491,8 @@ fn draw_spot_light_wireframe(
     for i in 0..line_count {
         let angle = (i as f32 / line_count as f32) * std::f32::consts::TAU;
         // Outer cone silhouette lines
-        let edge = base_center + (tangent * angle.cos() + bitangent * angle.sin()) * cone_base_radius;
+        let edge =
+            base_center + (tangent * angle.cos() + bitangent * angle.sin()) * cone_base_radius;
         if let (Some(tip_screen), Some(edge_screen)) = (
             world_to_screen(center, vp, rect),
             world_to_screen(edge, vp, rect),
@@ -456,7 +501,8 @@ fn draw_spot_light_wireframe(
         }
         // Inner cone silhouette lines (dimmer, every other line)
         if i % 2 == 0 {
-            let inner_edge = base_center + (tangent * angle.cos() + bitangent * angle.sin()) * inner_cone_radius;
+            let inner_edge =
+                base_center + (tangent * angle.cos() + bitangent * angle.sin()) * inner_cone_radius;
             if let (Some(tip_screen), Some(edge_screen)) = (
                 world_to_screen(center, vp, rect),
                 world_to_screen(inner_edge, vp, rect),
@@ -500,9 +546,10 @@ fn draw_directional_light_wireframe(
     for offset in &offsets {
         let start = center + *offset;
         let end = start + direction * arrow_length;
-        if let (Some(s), Some(e)) =
-            (world_to_screen(start, vp, rect), world_to_screen(end, vp, rect))
-        {
+        if let (Some(s), Some(e)) = (
+            world_to_screen(start, vp, rect),
+            world_to_screen(end, vp, rect),
+        ) {
             painter.line_segment([s, e], stroke);
             // Small arrowhead
             let dir_2d = e - s;
@@ -625,8 +672,7 @@ pub fn draw_and_interact(
         };
 
         // Check if this light (or its transform) is selected
-        let is_selected =
-            selected == Some(light.light_id) || selected == Some(light.transform_id);
+        let is_selected = selected == Some(light.light_id) || selected == Some(light.transform_id);
 
         // Draw highlight ring when selected
         if is_selected {
@@ -679,7 +725,10 @@ pub fn draw_and_interact(
             // Dashed circle to indicate subtractive nature
             let dash_radius = size * 0.75;
             let dash_count = 12;
-            let dash_stroke = Stroke::new(1.5, Color32::from_rgba_unmultiplied(255, 60, 60, (alpha * 200.0) as u8));
+            let dash_stroke = Stroke::new(
+                1.5,
+                Color32::from_rgba_unmultiplied(255, 60, 60, (alpha * 200.0) as u8),
+            );
             for i in 0..dash_count {
                 let a0 = (i as f32 / dash_count as f32) * std::f32::consts::TAU;
                 let a1 = ((i as f32 + 0.5) / dash_count as f32) * std::f32::consts::TAU;
@@ -695,7 +744,8 @@ pub fn draw_and_interact(
             let badge_center = screen_pos + badge_offset;
             let badge_radius = size * 0.25;
             let badge_bg = Color32::from_rgba_unmultiplied(40, 120, 200, (alpha * 220.0) as u8);
-            let badge_text_col = Color32::from_rgba_unmultiplied(255, 255, 255, (alpha * 255.0) as u8);
+            let badge_text_col =
+                Color32::from_rgba_unmultiplied(255, 255, 255, (alpha * 255.0) as u8);
             painter.circle_filled(badge_center, badge_radius + 1.0, badge_bg);
             painter.text(
                 badge_center,
@@ -711,11 +761,17 @@ pub fn draw_and_interact(
             let x_size = size * 0.3;
             let x_stroke = Stroke::new(2.0, Color32::from_rgb(255, 80, 80));
             painter.line_segment(
-                [screen_pos + egui::vec2(-x_size, -x_size), screen_pos + egui::vec2(x_size, x_size)],
+                [
+                    screen_pos + egui::vec2(-x_size, -x_size),
+                    screen_pos + egui::vec2(x_size, x_size),
+                ],
                 x_stroke,
             );
             painter.line_segment(
-                [screen_pos + egui::vec2(x_size, -x_size), screen_pos + egui::vec2(-x_size, x_size)],
+                [
+                    screen_pos + egui::vec2(x_size, -x_size),
+                    screen_pos + egui::vec2(-x_size, x_size),
+                ],
                 x_stroke,
             );
         }
@@ -782,8 +838,7 @@ pub fn draw_and_interact(
         if mouse_clicked {
             if let Some(mp) = mouse_pos {
                 let click_dist = mp.distance(screen_pos);
-                if click_dist < ICON_HIT_RADIUS.max(size * 0.5) && click_dist < closest_click_dist
-                {
+                if click_dist < ICON_HIT_RADIUS.max(size * 0.5) && click_dist < closest_click_dist {
                     closest_click_dist = click_dist;
                     // Return the transform_id since that's what gets selected
                     // (industry standard: select the positionable parent)

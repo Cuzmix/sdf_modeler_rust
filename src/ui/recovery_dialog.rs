@@ -45,10 +45,8 @@ pub fn draw(
                 if ui.button("Discard").clicked() {
                     action = Some(RecoveryDialogAction::Discard);
                 }
-                let open_last = ui.add_enabled(
-                    has_recent_project,
-                    egui::Button::new("Open Last Project"),
-                );
+                let open_last =
+                    ui.add_enabled(has_recent_project, egui::Button::new("Open Last Project"));
                 if open_last.clicked() {
                     action = Some(RecoveryDialogAction::OpenLastProject);
                 }

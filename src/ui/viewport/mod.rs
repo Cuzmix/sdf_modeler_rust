@@ -7,6 +7,8 @@ mod textures;
 pub use composite::CompositeResources;
 pub use draw::draw;
 
+use std::num::NonZeroU64;
+
 use bytemuck::{Pod, Zeroable};
 use eframe::wgpu;
 
@@ -87,6 +89,8 @@ pub struct ViewportResources {
     // --- Brush compute pipeline ---
     pub brush_pipeline: wgpu::ComputePipeline,
     pub brush_uniform_buffer: wgpu::Buffer,
+    pub brush_uniform_stride: u64,
+    pub brush_uniform_capacity: u32,
     pub brush_bind_group: wgpu::BindGroup,
     pub brush_bgl: wgpu::BindGroupLayout,
 
@@ -109,6 +113,19 @@ pub struct ViewportResources {
 pub(crate) const BLIT_SHADER_SRC: &str = include_str!("../../shaders/blit.wgsl");
 
 impl ViewportResources {
+    fn brush_param_size() -> u64 {
+        std::mem::size_of::<BrushGpuParams>() as u64
+    }
+
+    fn brush_binding_size() -> NonZeroU64 {
+        NonZeroU64::new(Self::brush_param_size()).expect("BrushGpuParams size must be non-zero")
+    }
+
+    fn brush_uniform_stride(device: &wgpu::Device) -> u64 {
+        let align = device.limits().min_uniform_buffer_offset_alignment.max(1) as u64;
+        Self::brush_param_size().div_ceil(align) * align
+    }
+
     pub fn new(
         device: &wgpu::Device,
         target_format: wgpu::TextureFormat,
@@ -188,12 +205,16 @@ impl ViewportResources {
             ..Default::default()
         });
         let voxel_tex_bgl = Self::create_voxel_tex_bgl(device, 0);
-        let voxel_tex_bind_group = Self::create_voxel_tex_bind_group(
-            device, &voxel_tex_bgl, &voxel_sampler, &[],
-        );
+        let voxel_tex_bind_group =
+            Self::create_voxel_tex_bind_group(device, &voxel_tex_bgl, &voxel_sampler, &[]);
 
         let pipeline = Self::create_render_pipeline(
-            device, shader_src, &camera_bgl, &scene_bgl, &voxel_tex_bgl, target_format,
+            device,
+            shader_src,
+            &camera_bgl,
+            &scene_bgl,
+            &voxel_tex_bgl,
+            target_format,
         );
 
         // --- Pick compute resources ---
@@ -259,15 +280,16 @@ impl ViewportResources {
             ],
         });
 
-        let pick_pipeline = Self::create_pick_pipeline(
-            device, pick_shader_src, &camera_bgl, &scene_bgl, &pick_bgl,
-        );
+        let pick_pipeline =
+            Self::create_pick_pipeline(device, pick_shader_src, &camera_bgl, &scene_bgl, &pick_bgl);
 
         // --- Brush compute resources ---
         let brush_bgl = Self::create_brush_bgl(device);
+        let brush_uniform_stride = Self::brush_uniform_stride(device);
+        let brush_uniform_capacity = 1;
         let brush_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Brush Uniform"),
-            size: std::mem::size_of::<BrushGpuParams>() as u64,
+            size: brush_uniform_stride,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -277,7 +299,11 @@ impl ViewportResources {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: brush_uniform_buffer.as_entire_binding(),
+                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                        buffer: &brush_uniform_buffer,
+                        offset: 0,
+                        size: Some(Self::brush_binding_size()),
+                    }),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -328,6 +354,8 @@ impl ViewportResources {
             pick_bgl,
             brush_pipeline,
             brush_uniform_buffer,
+            brush_uniform_stride,
+            brush_uniform_capacity,
             brush_bind_group,
             brush_bgl,
             offscreen_texture: None,
@@ -356,11 +384,19 @@ impl ViewportResources {
             self.rebuild_voxel_textures(device, sculpt_count);
         }
         self.pipeline = Self::create_render_pipeline(
-            device, shader_src, &self.camera_bgl, &self.scene_bgl,
-            &self.voxel_tex_bgl, self.target_format,
+            device,
+            shader_src,
+            &self.camera_bgl,
+            &self.scene_bgl,
+            &self.voxel_tex_bgl,
+            self.target_format,
         );
         self.pick_pipeline = Self::create_pick_pipeline(
-            device, pick_shader_src, &self.camera_bgl, &self.scene_bgl, &self.pick_bgl,
+            device,
+            pick_shader_src,
+            &self.camera_bgl,
+            &self.scene_bgl,
+            &self.pick_bgl,
         );
     }
 
@@ -369,20 +405,24 @@ impl ViewportResources {
     pub fn ensure_offscreen_texture(&mut self, device: &wgpu::Device, width: u32, height: u32) {
         let width = width.max(1);
         let height = height.max(1);
-        if self.render_width == width && self.render_height == height
+        if self.render_width == width
+            && self.render_height == height
             && self.offscreen_texture.is_some()
         {
             return;
         }
         let tex = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Offscreen RT"),
-            size: wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: self.target_format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                 | wgpu::TextureUsages::TEXTURE_BINDING,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         });
         let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
@@ -417,7 +457,11 @@ impl ViewportResources {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: self.brush_uniform_buffer.as_entire_binding(),
+                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                        buffer: &self.brush_uniform_buffer,
+                        offset: 0,
+                        size: Some(Self::brush_binding_size()),
+                    }),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -425,6 +469,23 @@ impl ViewportResources {
                 },
             ],
         });
+    }
+
+    pub(super) fn ensure_brush_uniform_capacity(&mut self, device: &wgpu::Device, needed: u32) {
+        let needed = needed.max(1);
+        if needed <= self.brush_uniform_capacity {
+            return;
+        }
+
+        let new_capacity = needed.next_power_of_two();
+        self.brush_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Brush Uniform"),
+            size: self.brush_uniform_stride * new_capacity as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        self.brush_uniform_capacity = new_capacity;
+        self.rebuild_brush_bind_group(device);
     }
 
     pub(super) fn rebuild_scene_bind_group(&mut self, device: &wgpu::Device) {
@@ -446,4 +507,3 @@ impl ViewportResources {
         self.rebuild_brush_bind_group(device);
     }
 }
-

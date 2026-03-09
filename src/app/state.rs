@@ -67,6 +67,18 @@ pub struct GpuSyncState {
 // Async task tracking (bake, export, sculpt pick).
 // ---------------------------------------------------------------------------
 
+#[derive(Clone, Copy, Debug)]
+pub struct SculptRuntimeCache {
+    pub node_id: NodeId,
+    pub structure_key: u64,
+    pub material_id: i32,
+    pub position: Vec3,
+    pub rotation: Vec3,
+    pub gpu_offset: Option<u32>,
+    pub grid_resolution: u32,
+    pub bounds_min: Vec3,
+    pub bounds_max: Vec3,
+}
 pub struct AsyncState {
     pub bake_status: BakeStatus,
     pub export_status: ExportStatus,
@@ -88,6 +100,8 @@ pub struct AsyncState {
     pub cursor_over_geometry: bool,
     /// Whether a sculpt drag is actively in progress (LMB held on geometry).
     pub sculpt_dragging: bool,
+    /// Per-stroke cached node metadata to avoid repeated topo/transform lookups.
+    pub sculpt_runtime_cache: Option<SculptRuntimeCache>,
 }
 
 // ---------------------------------------------------------------------------
@@ -281,7 +295,10 @@ mod tests {
             vertices.push(Vec3::new(0.0, 1.0, 0.0));
             triangles.push([base, base + 1, base + 2]);
         }
-        TriMesh { vertices, triangles }
+        TriMesh {
+            vertices,
+            triangles,
+        }
     }
 
     #[test]

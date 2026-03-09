@@ -128,10 +128,8 @@ pub fn draw(
                         };
 
                         ui.horizontal(|ui| {
-                            let (dot_rect, _) = ui.allocate_exact_size(
-                                egui::vec2(8.0, 8.0),
-                                egui::Sense::hover(),
-                            );
+                            let (dot_rect, _) =
+                                ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
                             ui.painter()
                                 .circle_filled(dot_rect.center(), 3.5, type_color);
 
@@ -176,11 +174,9 @@ pub fn draw(
                     ui.weak("All");
                     for &(light_slot, _, _) in &active_lights {
                         let slot_u8 = light_slot as u8;
-                        let all_geo_linked = geometry_nodes
-                            .iter()
-                            .all(|&(geo_id, _)| {
-                                (scene.get_light_mask(geo_id) & (1 << slot_u8)) != 0
-                            });
+                        let all_geo_linked = geometry_nodes.iter().all(|&(geo_id, _)| {
+                            (scene.get_light_mask(geo_id) & (1 << slot_u8)) != 0
+                        });
                         let mut col_all = all_geo_linked;
                         if ui.checkbox(&mut col_all, "").changed() {
                             for &(geo_id, _) in &geometry_nodes {

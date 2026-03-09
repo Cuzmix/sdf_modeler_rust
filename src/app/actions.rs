@@ -1,4 +1,4 @@
-use crate::graph::scene::{LightType, ModifierKind, NodeId, SdfPrimitive, CsgOp};
+use crate::graph::scene::{CsgOp, LightType, ModifierKind, NodeId, SdfPrimitive};
 use crate::sculpt::ActiveTool;
 use crate::ui::gizmo::GizmoMode;
 
@@ -101,7 +101,9 @@ pub enum Action {
     /// Otherwise opens the convert dialog.
     EnterSculptMode,
     /// Open the convert-to-sculpt dialog for the given node.
-    ShowSculptConvertDialog { target: NodeId },
+    ShowSculptConvertDialog {
+        target: NodeId,
+    },
     /// User confirmed the convert dialog — bake and enter sculpt.
     CommitSculptConvert {
         target: NodeId,
@@ -111,30 +113,63 @@ pub enum Action {
 
     // ── Scene mutations (structural) ─────────────────────────────────
     CreatePrimitive(SdfPrimitive),
-    CreateOperation { op: CsgOp, left: Option<NodeId>, right: Option<NodeId> },
-    CreateTransform { input: Option<NodeId> },
-    CreateReroute { input: Option<NodeId> },
-    CreateModifier { kind: ModifierKind, input: Option<NodeId> },
+    CreateOperation {
+        op: CsgOp,
+        left: Option<NodeId>,
+        right: Option<NodeId>,
+    },
+    CreateTransform {
+        input: Option<NodeId>,
+    },
+    CreateReroute {
+        input: Option<NodeId>,
+    },
+    CreateModifier {
+        kind: ModifierKind,
+        input: Option<NodeId>,
+    },
     CreateLight(LightType),
-    InsertModifierAbove { target: NodeId, kind: ModifierKind },
-    InsertTransformAbove { target: NodeId },
-    ReparentNode { dragged: NodeId, new_parent: NodeId },
-    RenameNode { id: NodeId, name: String },
+    InsertModifierAbove {
+        target: NodeId,
+        kind: ModifierKind,
+    },
+    InsertTransformAbove {
+        target: NodeId,
+    },
+    ReparentNode {
+        dragged: NodeId,
+        new_parent: NodeId,
+    },
+    RenameNode {
+        id: NodeId,
+        name: String,
+    },
     ToggleVisibility(NodeId),
     ToggleLock(NodeId),
     SwapChildren(NodeId),
 
     // ── Graph connections ────────────────────────────────────────────
-    SetLeftChild { parent: NodeId, child: Option<NodeId> },
-    SetRightChild { parent: NodeId, child: Option<NodeId> },
-    SetSculptInput { parent: NodeId, child: Option<NodeId> },
+    SetLeftChild {
+        parent: NodeId,
+        child: Option<NodeId>,
+    },
+    SetRightChild {
+        parent: NodeId,
+        child: Option<NodeId>,
+    },
+    SetSculptInput {
+        parent: NodeId,
+        child: Option<NodeId>,
+    },
 
     // ── Bake / Export / Import ───────────────────────────────────────
     RequestBake(BakeRequest),
     ShowExportDialog,
     ImportMesh,
     /// User confirmed the import dialog — start voxelization with chosen resolution.
-    CommitImport { resolution: u32 },
+    CommitImport {
+        resolution: u32,
+    },
     TakeScreenshot,
 
     // ── Viewport ────────────────────────────────────────────────────
@@ -160,13 +195,23 @@ pub enum Action {
     ToggleHelp,
     ToggleSettings,
     ToggleCommandPalette,
-    ShowToast { message: String, is_error: bool },
+    ShowToast {
+        message: String,
+        is_error: bool,
+    },
 
     // ── Light linking ─────────────────────────────────────────────────
     /// Set the full light mask for a geometry node (8-bit bitmask).
-    SetLightMask { node_id: NodeId, mask: u8 },
+    SetLightMask {
+        node_id: NodeId,
+        mask: u8,
+    },
     /// Toggle a single light slot bit in a geometry node's light mask.
-    ToggleLightMaskBit { node_id: NodeId, light_slot: u8, enabled: bool },
+    ToggleLightMaskBit {
+        node_id: NodeId,
+        light_slot: u8,
+        enabled: bool,
+    },
 
     // ── Light Solo ───────────────────────────────────────────────────
     /// Toggle light solo mode. Some(id) = solo that light (or unsolo if already soloed).
@@ -176,7 +221,10 @@ pub enum Action {
     // ── Light Cookie ──────────────────────────────────────────────────
     /// Set or clear a light's SDF cookie shape. The cookie node must be a Primitive
     /// or Operation subtree whose SDF shapes the light's beam.
-    SetLightCookie { light_id: NodeId, cookie: Option<NodeId> },
+    SetLightCookie {
+        light_id: NodeId,
+        cookie: Option<NodeId>,
+    },
 
     // ── Lighting presets ─────────────────────────────────────────────
     /// Apply a lighting preset to scene Key/Fill lights and ambient.
@@ -186,5 +234,3 @@ pub enum Action {
     SettingsChanged,
     MarkBufferDirty,
 }
-
-

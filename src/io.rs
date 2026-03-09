@@ -69,9 +69,7 @@ pub fn json_to_project(json: &str) -> Result<ProjectFile, String> {
     // Parse as raw JSON first to check version and do pre-deserialization migrations
     let mut raw: serde_json::Value = serde_json::from_str(json).map_err(|e| e.to_string())?;
 
-    let version = raw.get("version")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(1) as u32;
+    let version = raw.get("version").and_then(|v| v.as_u64()).unwrap_or(1) as u32;
 
     if version > CURRENT_VERSION {
         return Err(format!(
@@ -322,7 +320,11 @@ pub fn load_subtree_preset(scene: &mut Scene, path: &std::path::Path) -> Result<
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub fn save_project(scene: &Scene, camera: &Camera, path: &std::path::PathBuf) -> Result<(), String> {
+pub fn save_project(
+    scene: &Scene,
+    camera: &Camera,
+    path: &std::path::PathBuf,
+) -> Result<(), String> {
     let json = project_to_json(scene, camera)?;
     std::fs::write(path, json).map_err(|e| e.to_string())?;
     Ok(())
@@ -355,8 +357,12 @@ pub fn open_dialog() -> Option<std::path::PathBuf> {
 #[cfg(target_arch = "wasm32")]
 pub fn web_download(filename: &str, data: &[u8], mime: &str) {
     use wasm_bindgen::JsCast;
-    let Some(window) = web_sys::window() else { return };
-    let Some(document) = window.document() else { return };
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    let Some(document) = window.document() else {
+        return;
+    };
 
     let array = js_sys::Uint8Array::new_with_length(data.len() as u32);
     array.copy_from(data);
@@ -364,8 +370,12 @@ pub fn web_download(filename: &str, data: &[u8], mime: &str) {
     parts.push(&array.buffer());
     let mut opts = web_sys::BlobPropertyBag::new();
     opts.set_type(mime);
-    let Ok(blob) = web_sys::Blob::new_with_buffer_source_sequence_and_options(&parts, &opts) else { return };
-    let Ok(url) = web_sys::Url::create_object_url_with_blob(&blob) else { return };
+    let Ok(blob) = web_sys::Blob::new_with_buffer_source_sequence_and_options(&parts, &opts) else {
+        return;
+    };
+    let Ok(url) = web_sys::Url::create_object_url_with_blob(&blob) else {
+        return;
+    };
 
     if let Ok(a) = document.create_element("a") {
         let a: web_sys::HtmlAnchorElement = a.unchecked_into();
@@ -387,28 +397,36 @@ pub fn web_save_project(scene: &Scene, camera: &Camera) {
 /// Migrate v4→v5 at the raw JSON level (before deserialization).
 /// Transform nodes changed from `{kind, value}` to `{translation, rotation, scale}`.
 fn migrate_v4_to_v5_json(root: &mut serde_json::Value) {
-    let Some(nodes) = root
-        .get_mut("scene")
-        .and_then(|s| s.get_mut("nodes"))
-    else {
+    let Some(nodes) = root.get_mut("scene").and_then(|s| s.get_mut("nodes")) else {
         return;
     };
 
     // nodes is a JSON map of id → node object
-    let Some(nodes_map) = nodes.as_object_mut() else { return };
+    let Some(nodes_map) = nodes.as_object_mut() else {
+        return;
+    };
 
     for (_id, node) in nodes_map.iter_mut() {
-        let Some(data) = node.get_mut("data") else { continue };
-        let Some(transform) = data.get_mut("Transform") else { continue };
+        let Some(data) = node.get_mut("data") else {
+            continue;
+        };
+        let Some(transform) = data.get_mut("Transform") else {
+            continue;
+        };
 
         // Read old fields
-        let kind = transform.get("kind")
+        let kind = transform
+            .get("kind")
             .and_then(|k| k.as_str())
             .unwrap_or("")
             .to_string();
-        let value = transform.get("value").cloned()
+        let value = transform
+            .get("value")
+            .cloned()
             .unwrap_or(serde_json::json!([0.0, 0.0, 0.0]));
-        let input = transform.get("input").cloned()
+        let input = transform
+            .get("input")
+            .cloned()
             .unwrap_or(serde_json::Value::Null);
 
         // Convert based on old kind
@@ -479,7 +497,7 @@ fn migrate_v2_to_v3(project: &mut ProjectFile) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graph::scene::{SdfPrimitive, NodeData};
+    use crate::graph::scene::{NodeData, SdfPrimitive};
     use std::collections::{HashMap, HashSet};
 
     fn empty_scene() -> Scene {
@@ -500,14 +518,26 @@ mod tests {
         let root = source.create_transform(Some(sphere));
 
         if let Some(node) = source.nodes.get_mut(&root) {
-            if let NodeData::Transform { translation, rotation, scale, .. } = &mut node.data {
+            if let NodeData::Transform {
+                translation,
+                rotation,
+                scale,
+                ..
+            } = &mut node.data
+            {
                 *translation = Vec3::new(1.5, 2.0, -0.25);
                 *rotation = Vec3::new(0.1, 0.2, 0.3);
                 *scale = Vec3::new(1.1, 0.9, 1.2);
             }
         }
         if let Some(node) = source.nodes.get_mut(&sphere) {
-            if let NodeData::Primitive { color, roughness, metallic, .. } = &mut node.data {
+            if let NodeData::Primitive {
+                color,
+                roughness,
+                metallic,
+                ..
+            } = &mut node.data
+            {
                 *color = Vec3::new(0.2, 0.8, 0.4);
                 *roughness = 0.32;
                 *metallic = 0.65;
@@ -529,12 +559,21 @@ mod tests {
         save_subtree_preset(&source, root, &preset_path).expect("save subtree preset");
 
         let mut target = empty_scene();
-        let loaded_root = load_subtree_preset(&mut target, &preset_path).expect("load subtree preset");
+        let loaded_root =
+            load_subtree_preset(&mut target, &preset_path).expect("load subtree preset");
         let _ = std::fs::remove_file(&preset_path);
 
-        assert!(target.nodes.contains_key(&loaded_root), "loaded root should exist");
+        assert!(
+            target.nodes.contains_key(&loaded_root),
+            "loaded root should exist"
+        );
         let loaded_child = match &target.nodes[&loaded_root].data {
-            NodeData::Transform { input, translation, rotation, scale } => {
+            NodeData::Transform {
+                input,
+                translation,
+                rotation,
+                scale,
+            } => {
                 assert_eq!(*translation, Vec3::new(1.5, 2.0, -0.25));
                 assert_eq!(*rotation, Vec3::new(0.1, 0.2, 0.3));
                 assert_eq!(*scale, Vec3::new(1.1, 0.9, 1.2));
@@ -544,14 +583,26 @@ mod tests {
         };
 
         match &target.nodes[&loaded_child].data {
-            NodeData::Primitive { color, roughness, metallic, .. } => {
+            NodeData::Primitive {
+                color,
+                roughness,
+                metallic,
+                ..
+            } => {
                 assert_eq!(*color, Vec3::new(0.2, 0.8, 0.4));
                 assert!((*roughness - 0.32).abs() < 1e-6);
                 assert!((*metallic - 0.65).abs() < 1e-6);
             }
             _ => panic!("loaded child should be Primitive"),
         }
-        assert!(target.hidden_nodes.contains(&loaded_child), "hidden state should roundtrip");
-        assert_eq!(target.get_light_mask(loaded_child), 0b0000_0011, "light mask should roundtrip");
+        assert!(
+            target.hidden_nodes.contains(&loaded_child),
+            "hidden state should roundtrip"
+        );
+        assert_eq!(
+            target.get_light_mask(loaded_child),
+            0b0000_0011,
+            "light mask should roundtrip"
+        );
     }
 }

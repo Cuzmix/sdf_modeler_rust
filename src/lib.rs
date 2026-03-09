@@ -1,7 +1,7 @@
 mod app;
 mod compat;
-pub mod expression;
 mod export;
+pub mod expression;
 mod gpu;
 mod graph;
 mod io;
@@ -17,9 +17,9 @@ mod ui;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn run_native() -> eframe::Result<()> {
-    use std::sync::Arc;
     use eframe::egui;
     use eframe::wgpu;
+    use std::sync::Arc;
 
     env_logger::init();
 
@@ -94,8 +94,8 @@ impl WebHandle {
 
     #[wasm_bindgen]
     pub async fn start(&self, canvas_id: &str) -> Result<(), JsValue> {
-        use std::sync::Arc;
         use eframe::wgpu;
+        use std::sync::Arc;
         use wasm_bindgen::JsCast;
 
         let document = web_sys::window()

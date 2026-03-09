@@ -10,14 +10,14 @@ use crate::graph::voxel::evaluate_scene_sdf_at_point;
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]
 pub struct SdfNodeGpu {
-    pub type_op: [f32; 4],   // [type_val, smooth_k, metallic, roughness]
-    pub position: [f32; 4],  // [x, y, z, 0]
-    pub rotation: [f32; 4],  // [rx, ry, rz, 0] (radians)
-    pub scale: [f32; 4],     // [sx, sy, sz, 0]
-    pub color: [f32; 4],     // [r, g, b, is_selected]
-    pub extra0: [f32; 4],    // prim: [0,0,0,0]; sculpt: [voxel_offset, resolution, emissive.x, emissive.y]
-    pub extra1: [f32; 4],    // prim: [emissive.xyz, emissive_intensity]; sculpt: [bounds_min.xyz, emissive.z]
-    pub extra2: [f32; 4],    // prim: [fresnel,0,0,0]; sculpt: [bounds_max.xyz, fresnel]
+    pub type_op: [f32; 4],  // [type_val, smooth_k, metallic, roughness]
+    pub position: [f32; 4], // [x, y, z, 0]
+    pub rotation: [f32; 4], // [rx, ry, rz, 0] (radians)
+    pub scale: [f32; 4],    // [sx, sy, sz, 0]
+    pub color: [f32; 4],    // [r, g, b, is_selected]
+    pub extra0: [f32; 4], // prim: [0,0,0,0]; sculpt: [voxel_offset, resolution, emissive.x, emissive.y]
+    pub extra1: [f32; 4], // prim: [emissive.xyz, emissive_intensity]; sculpt: [bounds_min.xyz, emissive.z]
+    pub extra2: [f32; 4], // prim: [fresnel,0,0,0]; sculpt: [bounds_max.xyz, fresnel]
 }
 
 /// Info about sculpt nodes for texture binding.
@@ -79,7 +79,11 @@ pub fn build_node_buffer(
             buffer.push(SdfNodeGpu::zeroed());
             continue;
         };
-        let is_sel = if selected_set.contains(&node_id) { 1.0 } else { 0.0 };
+        let is_sel = if selected_set.contains(&node_id) {
+            1.0
+        } else {
+            0.0
+        };
         let light_mask = scene.get_light_mask(node_id) as f32;
 
         match &node.data {
@@ -107,7 +111,13 @@ pub fn build_node_buffer(
                     extra2: [*fresnel, 0.0, 0.0, 0.0],
                 });
             }
-            NodeData::Operation { op, smooth_k, steps, color_blend, .. } => {
+            NodeData::Operation {
+                op,
+                smooth_k,
+                steps,
+                color_blend,
+                ..
+            } => {
                 buffer.push(SdfNodeGpu {
                     type_op: [op.gpu_op_id(), *smooth_k, *steps, *color_blend],
                     position: [0.0; 4],
@@ -139,12 +149,32 @@ pub fn build_node_buffer(
                     rotation: [rotation.x, rotation.y, rotation.z, 0.0],
                     scale: [1.0, 1.0, 1.0, light_mask],
                     color: [color.x, color.y, color.z, is_sel],
-                    extra0: [offset as f32, voxel_grid.resolution as f32, emissive.x, emissive.y],
-                    extra1: [voxel_grid.bounds_min.x, voxel_grid.bounds_min.y, voxel_grid.bounds_min.z, emissive.z],
-                    extra2: [voxel_grid.bounds_max.x, voxel_grid.bounds_max.y, voxel_grid.bounds_max.z, *fresnel],
+                    extra0: [
+                        offset as f32,
+                        voxel_grid.resolution as f32,
+                        emissive.x,
+                        emissive.y,
+                    ],
+                    extra1: [
+                        voxel_grid.bounds_min.x,
+                        voxel_grid.bounds_min.y,
+                        voxel_grid.bounds_min.z,
+                        emissive.z,
+                    ],
+                    extra2: [
+                        voxel_grid.bounds_max.x,
+                        voxel_grid.bounds_max.y,
+                        voxel_grid.bounds_max.z,
+                        *fresnel,
+                    ],
                 });
             }
-            NodeData::Transform { translation, rotation, scale, .. } => {
+            NodeData::Transform {
+                translation,
+                rotation,
+                scale,
+                ..
+            } => {
                 buffer.push(SdfNodeGpu {
                     type_op: [21.0, 0.0, 0.0, 0.0],
                     position: [translation.x, translation.y, translation.z, 0.0],
@@ -156,7 +186,9 @@ pub fn build_node_buffer(
                     extra2: [0.0; 4],
                 });
             }
-            NodeData::Modifier { kind, value, extra, .. } => {
+            NodeData::Modifier {
+                kind, value, extra, ..
+            } => {
                 buffer.push(SdfNodeGpu {
                     type_op: [kind.gpu_type_id(), 0.0, 0.0, 0.0],
                     position: [value.x, value.y, value.z, 0.0],
@@ -168,7 +200,14 @@ pub fn build_node_buffer(
                     extra2: [0.0; 4],
                 });
             }
-            NodeData::Light { color, intensity, range, spot_angle, light_type, .. } => {
+            NodeData::Light {
+                color,
+                intensity,
+                range,
+                spot_angle,
+                light_type,
+                ..
+            } => {
                 let type_val = match light_type {
                     crate::graph::scene::LightType::Point => 50.0,
                     crate::graph::scene::LightType::Spot => 51.0,
@@ -247,12 +286,12 @@ fn expand_array_pattern(
         ArrayPattern::Line => {
             let total_length = radius * 2.0;
             for i in 0..n {
-                let t = if n > 1 { i as f32 / (n - 1) as f32 } else { 0.5 };
-                positions.push(glam::Vec3::new(
-                    -radius + t * total_length,
-                    0.0,
-                    0.0,
-                ));
+                let t = if n > 1 {
+                    i as f32 / (n - 1) as f32
+                } else {
+                    0.5
+                };
+                positions.push(glam::Vec3::new(-radius + t * total_length, 0.0, 0.0));
             }
         }
         ArrayPattern::Grid => {
@@ -263,8 +302,16 @@ fn expand_array_pattern(
                     if placed >= n {
                         break;
                     }
-                    let tx = if side > 1 { col as f32 / (side - 1) as f32 } else { 0.5 };
-                    let tz = if side > 1 { row as f32 / (side - 1) as f32 } else { 0.5 };
+                    let tx = if side > 1 {
+                        col as f32 / (side - 1) as f32
+                    } else {
+                        0.5
+                    };
+                    let tz = if side > 1 {
+                        row as f32 / (side - 1) as f32
+                    } else {
+                        0.5
+                    };
                     positions.push(glam::Vec3::new(
                         -radius + tx * radius * 2.0,
                         0.0,
@@ -279,11 +326,7 @@ fn expand_array_pattern(
                 let t = i as f32 / n.max(1) as f32;
                 let angle = t * std::f32::consts::TAU * 2.0; // 2 full revolutions
                 let r = t * radius;
-                positions.push(glam::Vec3::new(
-                    angle.cos() * r,
-                    0.0,
-                    angle.sin() * r,
-                ));
+                positions.push(glam::Vec3::new(angle.cos() * r, 0.0, angle.sin() * r));
             }
         }
     }
@@ -434,7 +477,8 @@ pub fn collect_scene_lights(
                         let dist_to_camera = (world_pos - camera_pos).length();
                         // Apply hue variation across instances
                         let instance_color = if cfg.color_variation > 0.0 {
-                            let hue_shift = (instance_index as f32 / positions.len() as f32) * cfg.color_variation;
+                            let hue_shift = (instance_index as f32 / positions.len() as f32)
+                                * cfg.color_variation;
                             hue_rotate_color(effective_color, hue_shift * 360.0)
                         } else {
                             effective_color
@@ -444,7 +488,12 @@ pub fn collect_scene_lights(
                             SceneLightGpu {
                                 position_type: [world_pos.x, world_pos.y, world_pos.z, 0.0], // Point type
                                 direction_intensity: [0.0, -1.0, 0.0, effective_base_intensity],
-                                color_range: [instance_color.x, instance_color.y, instance_color.z, *range],
+                                color_range: [
+                                    instance_color.x,
+                                    instance_color.y,
+                                    instance_color.z,
+                                    *range,
+                                ],
                                 params: [1.0, 0.0, 8.0, 0.0], // No shadows, no cookie
                                 volumetric: [0.0, 0.0, 0.0, -1.0],
                             },
@@ -484,7 +533,9 @@ pub fn collect_scene_lights(
                     let smooth_t = t * t * (3.0 - 2.0 * t);
                     match proximity_mode {
                         // Brighten: factor = 1.0 + (1.0 - smooth_t), so max 2x at surface
-                        ProximityMode::Brighten => effective_base_intensity * (1.0 + (1.0 - smooth_t)),
+                        ProximityMode::Brighten => {
+                            effective_base_intensity * (1.0 + (1.0 - smooth_t))
+                        }
                         // Dim: factor = smooth_t, so 0 at surface, 1 at range
                         ProximityMode::Dim => effective_base_intensity * smooth_t,
                         ProximityMode::Off => unreachable!(),
@@ -498,8 +549,18 @@ pub fn collect_scene_lights(
                 dist_to_camera,
                 SceneLightGpu {
                     position_type: [translation.x, translation.y, translation.z, type_val],
-                    direction_intensity: [direction.x, direction.y, direction.z, effective_intensity],
-                    color_range: [effective_color.x, effective_color.y, effective_color.z, *range],
+                    direction_intensity: [
+                        direction.x,
+                        direction.y,
+                        direction.z,
+                        effective_intensity,
+                    ],
+                    color_range: [
+                        effective_color.x,
+                        effective_color.y,
+                        effective_color.z,
+                        *range,
+                    ],
                     params: [
                         cos_half_angle,
                         if *cast_shadows { 1.0 } else { 0.0 },
@@ -509,7 +570,11 @@ pub fn collect_scene_lights(
                     volumetric: [
                         if *volumetric { 1.0 } else { 0.0 },
                         *volumetric_density,
-                        if cookie_map.contains_key(&id) { 1.0 } else { 0.0 },
+                        if cookie_map.contains_key(&id) {
+                            1.0
+                        } else {
+                            0.0
+                        },
                         cookie_map.get(&id).map(|&idx| idx as f32).unwrap_or(-1.0),
                     ],
                 },
@@ -693,11 +758,17 @@ mod tests {
         let (count, lights, _ambient) = collect_scene_lights(&scene, camera_pos, None, 0.0);
         assert_eq!(count, 2);
         // First light should be the nearest one (at x=1)
-        assert!((lights[0].position_type[0] - 1.0).abs() < 1e-5,
-            "nearest light should be first, got x={}", lights[0].position_type[0]);
+        assert!(
+            (lights[0].position_type[0] - 1.0).abs() < 1e-5,
+            "nearest light should be first, got x={}",
+            lights[0].position_type[0]
+        );
         // Second light should be farther (at x=10)
-        assert!((lights[1].position_type[0] - 10.0).abs() < 1e-5,
-            "farther light should be second, got x={}", lights[1].position_type[0]);
+        assert!(
+            (lights[1].position_type[0] - 10.0).abs() < 1e-5,
+            "farther light should be second, got x={}",
+            lights[1].position_type[0]
+        );
     }
 
     #[test]
@@ -716,7 +787,12 @@ mod tests {
         scene.create_light(LightType::Ambient);
         // Set intensity on the ambient light
         for node in scene.nodes.values_mut() {
-            if let NodeData::Light { light_type, intensity, .. } = &mut node.data {
+            if let NodeData::Light {
+                light_type,
+                intensity,
+                ..
+            } = &mut node.data
+            {
                 if *light_type == LightType::Ambient {
                     *intensity = 0.1;
                 }
@@ -788,8 +864,11 @@ mod tests {
         let (_, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
         // cos(90/2 degrees) = cos(45 degrees) = sqrt(2)/2 ≈ 0.7071
         let expected_cos = (45.0_f32.to_radians()).cos();
-        assert!((lights[0].params[0] - expected_cos).abs() < 1e-3,
-            "spot angle cosine encoding: expected {expected_cos}, got {}", lights[0].params[0]);
+        assert!(
+            (lights[0].params[0] - expected_cos).abs() < 1e-3,
+            "spot angle cosine encoding: expected {expected_cos}, got {}",
+            lights[0].params[0]
+        );
     }
 
     #[test]
@@ -805,8 +884,11 @@ mod tests {
         let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
         assert_eq!(count, 1);
         // Negative intensity must be preserved in the GPU buffer (direction_intensity.w)
-        assert!((lights[0].direction_intensity[3] - (-3.5)).abs() < 1e-5,
-            "negative intensity must be preserved: expected -3.5, got {}", lights[0].direction_intensity[3]);
+        assert!(
+            (lights[0].direction_intensity[3] - (-3.5)).abs() < 1e-5,
+            "negative intensity must be preserved: expected -3.5, got {}",
+            lights[0].direction_intensity[3]
+        );
     }
 
     #[test]
@@ -842,7 +924,10 @@ mod tests {
         let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
         assert_eq!(count, 1);
         // Point lights default to cast_shadows=false
-        assert!(lights[0].params[1] < 0.5, "point light should default to no shadows");
+        assert!(
+            lights[0].params[1] < 0.5,
+            "point light should default to no shadows"
+        );
     }
 
     #[test]
@@ -875,7 +960,12 @@ mod tests {
         let (ambient_id, _) = scene.create_light(LightType::Ambient);
         // Set ambient color
         if let Some(node) = scene.nodes.get_mut(&ambient_id) {
-            if let NodeData::Light { ref mut color, ref mut intensity, .. } = node.data {
+            if let NodeData::Light {
+                ref mut color,
+                ref mut intensity,
+                ..
+            } = node.data
+            {
                 *color = Vec3::new(1.0, 0.5, 0.2);
                 *intensity = 2.0;
             }
@@ -923,7 +1013,7 @@ mod tests {
 
     #[test]
     fn proximity_brighten_increases_intensity_near_surface() {
-        use crate::graph::scene::{SdfPrimitive, ProximityMode};
+        use crate::graph::scene::{ProximityMode, SdfPrimitive};
         let mut scene = empty_scene();
         // Create a sphere at origin with scale 1.0
         let _sphere_id = scene.add_node(
@@ -981,7 +1071,7 @@ mod tests {
 
     #[test]
     fn proximity_dim_decreases_intensity_near_surface() {
-        use crate::graph::scene::{SdfPrimitive, ProximityMode};
+        use crate::graph::scene::{ProximityMode, SdfPrimitive};
         let mut scene = empty_scene();
         let _sphere_id = scene.add_node(
             "Sphere".to_string(),
@@ -1038,7 +1128,7 @@ mod tests {
 
     #[test]
     fn light_array_ring_expands_to_n_point_lights() {
-        use crate::graph::scene::{LightArrayConfig, ArrayPattern};
+        use crate::graph::scene::{ArrayPattern, LightArrayConfig};
         let mut scene = empty_scene();
         let light_id = scene.add_node(
             "Array".to_string(),
@@ -1079,15 +1169,21 @@ mod tests {
         assert_eq!(count, 4, "Ring with 4 should produce 4 point lights");
         // All should be point type (0.0)
         for light in &lights {
-            assert!((light.position_type[3] - 0.0).abs() < 1e-5, "Array instances are point lights");
-            assert!((light.direction_intensity[3] - 2.0).abs() < 1e-5, "Intensity preserved");
+            assert!(
+                (light.position_type[3] - 0.0).abs() < 1e-5,
+                "Array instances are point lights"
+            );
+            assert!(
+                (light.direction_intensity[3] - 2.0).abs() < 1e-5,
+                "Intensity preserved"
+            );
             assert!((light.color_range[3] - 5.0).abs() < 1e-5, "Range preserved");
         }
     }
 
     #[test]
     fn light_array_respects_max_lights() {
-        use crate::graph::scene::{LightArrayConfig, ArrayPattern};
+        use crate::graph::scene::{ArrayPattern, LightArrayConfig};
         let mut scene = empty_scene();
         let light_id = scene.add_node(
             "Array".to_string(),
@@ -1125,13 +1221,16 @@ mod tests {
             },
         );
         let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
-        assert_eq!(count as usize, MAX_SCENE_LIGHTS, "Should cap at MAX_SCENE_LIGHTS");
+        assert_eq!(
+            count as usize, MAX_SCENE_LIGHTS,
+            "Should cap at MAX_SCENE_LIGHTS"
+        );
         assert_eq!(lights.len(), MAX_SCENE_LIGHTS);
     }
 
     #[test]
     fn light_array_color_variation_shifts_hue() {
-        use crate::graph::scene::{LightArrayConfig, ArrayPattern};
+        use crate::graph::scene::{ArrayPattern, LightArrayConfig};
         let mut scene = empty_scene();
         let light_id = scene.add_node(
             "Array".to_string(),
@@ -1171,11 +1270,17 @@ mod tests {
         let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
         assert_eq!(count, 3);
         // First light should still be red-ish (hue shift 0)
-        assert!(lights[0].color_range[0] > 0.8, "First instance should be red");
+        assert!(
+            lights[0].color_range[0] > 0.8,
+            "First instance should be red"
+        );
         // Second light should be shifted significantly (hue shift ~120°)
         let second_is_different = (lights[1].color_range[0] - lights[0].color_range[0]).abs() > 0.3
             || (lights[1].color_range[1] - lights[0].color_range[1]).abs() > 0.3;
-        assert!(second_is_different, "Color variation should shift hue for different instances");
+        assert!(
+            second_is_different,
+            "Color variation should shift hue for different instances"
+        );
     }
 
     #[test]
@@ -1225,9 +1330,15 @@ mod tests {
         let (count, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
         assert_eq!(count, 1);
         // volumetric.x = 1.0 (enabled)
-        assert!((lights[0].volumetric[0] - 1.0).abs() < 1e-5, "volumetric flag should be 1.0");
+        assert!(
+            (lights[0].volumetric[0] - 1.0).abs() < 1e-5,
+            "volumetric flag should be 1.0"
+        );
         // volumetric.y = density
-        assert!((lights[0].volumetric[1] - 0.42).abs() < 1e-5, "volumetric density should be 0.42");
+        assert!(
+            (lights[0].volumetric[1] - 0.42).abs() < 1e-5,
+            "volumetric density should be 0.42"
+        );
     }
 
     #[test]
@@ -1236,7 +1347,10 @@ mod tests {
         let (_light_id, _) = scene.create_light(LightType::Point);
         // Default: volumetric = false
         let (_, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
-        assert!((lights[0].volumetric[0]).abs() < 1e-5, "volumetric flag should be 0.0 by default");
+        assert!(
+            (lights[0].volumetric[0]).abs() < 1e-5,
+            "volumetric flag should be 0.0 by default"
+        );
     }
 
     #[test]
@@ -1247,10 +1361,16 @@ mod tests {
         let (l2, _) = scene.create_light(LightType::Spot);
         let (_l3, _) = scene.create_light(LightType::Point);
 
-        if let NodeData::Light { ref mut volumetric, .. } = scene.nodes.get_mut(&l1).unwrap().data {
+        if let NodeData::Light {
+            ref mut volumetric, ..
+        } = scene.nodes.get_mut(&l1).unwrap().data
+        {
             *volumetric = true;
         }
-        if let NodeData::Light { ref mut volumetric, .. } = scene.nodes.get_mut(&l2).unwrap().data {
+        if let NodeData::Light {
+            ref mut volumetric, ..
+        } = scene.nodes.get_mut(&l2).unwrap().data
+        {
             *volumetric = true;
         }
         // l3 stays default (volumetric=false)
@@ -1270,15 +1390,25 @@ mod tests {
         let mut scene = empty_scene();
         let prim_id = scene.create_primitive(SdfPrimitive::Sphere);
         let (light_id, _) = scene.create_light(LightType::Spot);
-        if let NodeData::Light { ref mut cookie_node, .. } = scene.nodes.get_mut(&light_id).unwrap().data {
+        if let NodeData::Light {
+            ref mut cookie_node,
+            ..
+        } = scene.nodes.get_mut(&light_id).unwrap().data
+        {
             *cookie_node = Some(prim_id);
         }
         let (_, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
         assert_eq!(lights.len(), 1);
         // volumetric.z = has_cookie = 1.0
-        assert!((lights[0].volumetric[2] - 1.0).abs() < 1e-5, "has_cookie should be 1.0");
+        assert!(
+            (lights[0].volumetric[2] - 1.0).abs() < 1e-5,
+            "has_cookie should be 1.0"
+        );
         // volumetric.w = cookie index >= 0
-        assert!(lights[0].volumetric[3] >= 0.0, "cookie index should be >= 0");
+        assert!(
+            lights[0].volumetric[3] >= 0.0,
+            "cookie index should be >= 0"
+        );
     }
 
     #[test]
@@ -1287,9 +1417,15 @@ mod tests {
         let (_light_id, _) = scene.create_light(LightType::Point);
         let (_, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
         // volumetric.z = has_cookie = 0.0
-        assert!((lights[0].volumetric[2]).abs() < 1e-5, "has_cookie should be 0.0");
+        assert!(
+            (lights[0].volumetric[2]).abs() < 1e-5,
+            "has_cookie should be 0.0"
+        );
         // volumetric.w = cookie index = -1.0
-        assert!((lights[0].volumetric[3] - (-1.0)).abs() < 1e-5, "cookie index should be -1.0");
+        assert!(
+            (lights[0].volumetric[3] - (-1.0)).abs() < 1e-5,
+            "cookie index should be -1.0"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -1305,7 +1441,11 @@ mod tests {
 
         // Enable shadows on all 3
         for lid in [l1, l2, l3] {
-            if let NodeData::Light { ref mut cast_shadows, .. } = scene.nodes.get_mut(&lid).unwrap().data {
+            if let NodeData::Light {
+                ref mut cast_shadows,
+                ..
+            } = scene.nodes.get_mut(&lid).unwrap().data
+            {
                 *cast_shadows = true;
             }
         }
@@ -1314,21 +1454,30 @@ mod tests {
         // All 3 lights should have cast_shadows=1.0 in the buffer
         // (the shader-side budget of max 2 is enforced in WGSL, not in Rust)
         let shadow_count = lights.iter().filter(|l| l.params[1] > 0.5).count();
-        assert_eq!(shadow_count, 3, "all 3 lights should have cast_shadows=1.0 in buffer");
+        assert_eq!(
+            shadow_count, 3,
+            "all 3 lights should have cast_shadows=1.0 in buffer"
+        );
     }
 
     #[test]
     fn shadow_softness_packed_correctly() {
         let mut scene = empty_scene();
         let (light_id, _) = scene.create_light(LightType::Spot);
-        if let NodeData::Light { ref mut cast_shadows, ref mut shadow_softness, .. } =
-            scene.nodes.get_mut(&light_id).unwrap().data
+        if let NodeData::Light {
+            ref mut cast_shadows,
+            ref mut shadow_softness,
+            ..
+        } = scene.nodes.get_mut(&light_id).unwrap().data
         {
             *cast_shadows = true;
             *shadow_softness = 32.5;
         }
         let (_, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
-        assert!((lights[0].params[2] - 32.5).abs() < 1e-5, "shadow softness should be 32.5");
+        assert!(
+            (lights[0].params[2] - 32.5).abs() < 1e-5,
+            "shadow softness should be 32.5"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -1339,24 +1488,33 @@ mod tests {
     fn expression_overrides_intensity_at_time() {
         let mut scene = empty_scene();
         let (light_id, _) = scene.create_light(LightType::Point);
-        if let NodeData::Light { ref mut intensity_expr, ref mut intensity, .. } =
-            scene.nodes.get_mut(&light_id).unwrap().data
+        if let NodeData::Light {
+            ref mut intensity_expr,
+            ref mut intensity,
+            ..
+        } = scene.nodes.get_mut(&light_id).unwrap().data
         {
             *intensity = 5.0; // static value (should be overridden)
             *intensity_expr = Some("sin(t * 3.0) * 0.5 + 0.5".to_string());
         }
         // At t=0: sin(0)*0.5+0.5 = 0.5
         let (_, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
-        assert!((lights[0].direction_intensity[3] - 0.5).abs() < 1e-3,
-            "intensity at t=0 should be 0.5, got {}", lights[0].direction_intensity[3]);
+        assert!(
+            (lights[0].direction_intensity[3] - 0.5).abs() < 1e-3,
+            "intensity at t=0 should be 0.5, got {}",
+            lights[0].direction_intensity[3]
+        );
     }
 
     #[test]
     fn expression_color_hue_rotates_at_time() {
         let mut scene = empty_scene();
         let (light_id, _) = scene.create_light(LightType::Point);
-        if let NodeData::Light { ref mut color, ref mut color_hue_expr, .. } =
-            scene.nodes.get_mut(&light_id).unwrap().data
+        if let NodeData::Light {
+            ref mut color,
+            ref mut color_hue_expr,
+            ..
+        } = scene.nodes.get_mut(&light_id).unwrap().data
         {
             *color = Vec3::new(1.0, 0.0, 0.0); // Red
             *color_hue_expr = Some("120.0".to_string()); // Constant 120° hue shift
@@ -1365,21 +1523,29 @@ mod tests {
         // Red shifted 120° → should be approximately green
         let r = lights[0].color_range[0];
         let g = lights[0].color_range[1];
-        assert!(g > r, "120° hue shift of red should be more green than red, r={r}, g={g}");
+        assert!(
+            g > r,
+            "120° hue shift of red should be more green than red, r={r}, g={g}"
+        );
     }
 
     #[test]
     fn invalid_expression_falls_back_to_static_intensity() {
         let mut scene = empty_scene();
         let (light_id, _) = scene.create_light(LightType::Point);
-        if let NodeData::Light { ref mut intensity_expr, ref mut intensity, .. } =
-            scene.nodes.get_mut(&light_id).unwrap().data
+        if let NodeData::Light {
+            ref mut intensity_expr,
+            ref mut intensity,
+            ..
+        } = scene.nodes.get_mut(&light_id).unwrap().data
         {
             *intensity = 7.0;
             *intensity_expr = Some("invalid+++".to_string()); // Bad expression
         }
         let (_, lights, _) = collect_scene_lights(&scene, Vec3::ZERO, None, 0.0);
-        assert!((lights[0].direction_intensity[3] - 7.0).abs() < 1e-3,
-            "invalid expression should fall back to static intensity 7.0");
+        assert!(
+            (lights[0].direction_intensity[3] - 7.0).abs() < 1e-3,
+            "invalid expression should fall back to static intensity 7.0"
+        );
     }
 }

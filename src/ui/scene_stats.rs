@@ -22,21 +22,43 @@ pub fn draw(ui: &mut egui::Ui, scene: &Scene, timings: &FrameTimings) {
             ui.separator();
 
             let type_rows = [
-                ("Primitives", counts.primitives, egui::Color32::from_rgb(100, 149, 237)),
-                ("Operations", counts.operations, egui::Color32::from_rgb(100, 200, 100)),
-                ("Transforms", counts.transforms, egui::Color32::from_rgb(180, 130, 255)),
-                ("Modifiers", counts.modifiers, egui::Color32::from_rgb(255, 200, 80)),
-                ("Sculpts", counts.sculpts, egui::Color32::from_rgb(255, 160, 80)),
-                ("Lights", counts.lights, egui::Color32::from_rgb(255, 220, 50)),
+                (
+                    "Primitives",
+                    counts.primitives,
+                    egui::Color32::from_rgb(100, 149, 237),
+                ),
+                (
+                    "Operations",
+                    counts.operations,
+                    egui::Color32::from_rgb(100, 200, 100),
+                ),
+                (
+                    "Transforms",
+                    counts.transforms,
+                    egui::Color32::from_rgb(180, 130, 255),
+                ),
+                (
+                    "Modifiers",
+                    counts.modifiers,
+                    egui::Color32::from_rgb(255, 200, 80),
+                ),
+                (
+                    "Sculpts",
+                    counts.sculpts,
+                    egui::Color32::from_rgb(255, 160, 80),
+                ),
+                (
+                    "Lights",
+                    counts.lights,
+                    egui::Color32::from_rgb(255, 220, 50),
+                ),
             ];
 
             for (label, count, color) in &type_rows {
                 if *count > 0 {
                     ui.horizontal(|ui| {
-                        let (rect, _) = ui.allocate_exact_size(
-                            egui::vec2(8.0, 8.0),
-                            egui::Sense::hover(),
-                        );
+                        let (rect, _) =
+                            ui.allocate_exact_size(egui::vec2(8.0, 8.0), egui::Sense::hover());
                         ui.painter().circle_filled(rect.center(), 4.0, *color);
                         ui.monospace(format!("{count:>4}"));
                         ui.label(*label);

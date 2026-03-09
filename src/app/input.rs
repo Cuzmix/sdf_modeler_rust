@@ -9,7 +9,12 @@ use super::{ExportStatus, SdfApp};
 
 /// Switch brush mode, resetting grab-specific strength if leaving Grab mode.
 fn set_brush_mode(sculpt_state: &mut SculptState, target: BrushMode) {
-    if let SculptState::Active { brush_mode, brush_strength, .. } = sculpt_state {
+    if let SculptState::Active {
+        brush_mode,
+        brush_strength,
+        ..
+    } = sculpt_state
+    {
         if *brush_mode == BrushMode::Grab && *brush_strength > 0.5 {
             *brush_strength = DEFAULT_BRUSH_STRENGTH;
         }
@@ -30,7 +35,11 @@ impl SdfApp {
 
     /// Collect keyboard-triggered actions into the action sink.
     /// Iterates over the configurable keymap instead of hardcoded if-chains.
-    pub(super) fn collect_keyboard_actions(&mut self, ctx: &egui::Context, actions: &mut ActionSink) {
+    pub(super) fn collect_keyboard_actions(
+        &mut self,
+        ctx: &egui::Context,
+        actions: &mut ActionSink,
+    ) {
         let is_sculpt = self.doc.sculpt_state.is_active();
 
         // Phase 1: detect which bindings were pressed (immutable self access).
@@ -81,9 +90,8 @@ impl SdfApp {
                 | ActionBinding::ToggleCommandPalette => {
                     ctx.input_mut(|i| i.consume_key(combo.egui_modifiers(), combo.egui_key()))
                 }
-                _ => ctx.input(|i| {
-                    i.key_pressed(combo.egui_key()) && combo.matches_egui(&i.modifiers)
-                }),
+                _ => ctx
+                    .input(|i| i.key_pressed(combo.egui_key()) && combo.matches_egui(&i.modifiers)),
             };
 
             if pressed {
@@ -99,9 +107,15 @@ impl SdfApp {
         // Camera bookmarks (Ctrl+1-9) — not in the keymap, kept inline
         if !is_sculpt {
             for (idx, key) in [
-                egui::Key::Num1, egui::Key::Num2, egui::Key::Num3,
-                egui::Key::Num4, egui::Key::Num5, egui::Key::Num6,
-                egui::Key::Num7, egui::Key::Num8, egui::Key::Num9,
+                egui::Key::Num1,
+                egui::Key::Num2,
+                egui::Key::Num3,
+                egui::Key::Num4,
+                egui::Key::Num5,
+                egui::Key::Num6,
+                egui::Key::Num7,
+                egui::Key::Num8,
+                egui::Key::Num9,
             ]
             .iter()
             .enumerate()
@@ -244,7 +258,11 @@ impl SdfApp {
                     ..
                 } = self.doc.sculpt_state
                 {
-                    *symmetry_axis = if *symmetry_axis == Some(0) { None } else { Some(0) };
+                    *symmetry_axis = if *symmetry_axis == Some(0) {
+                        None
+                    } else {
+                        Some(0)
+                    };
                 }
             }
             ActionBinding::SculptSymmetryY => {
@@ -253,7 +271,11 @@ impl SdfApp {
                     ..
                 } = self.doc.sculpt_state
                 {
-                    *symmetry_axis = if *symmetry_axis == Some(1) { None } else { Some(1) };
+                    *symmetry_axis = if *symmetry_axis == Some(1) {
+                        None
+                    } else {
+                        Some(1)
+                    };
                 }
             }
             ActionBinding::SculptSymmetryZ => {
@@ -262,7 +284,11 @@ impl SdfApp {
                     ..
                 } = self.doc.sculpt_state
                 {
-                    *symmetry_axis = if *symmetry_axis == Some(2) { None } else { Some(2) };
+                    *symmetry_axis = if *symmetry_axis == Some(2) {
+                        None
+                    } else {
+                        Some(2)
+                    };
                 }
             }
         }

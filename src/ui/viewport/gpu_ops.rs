@@ -108,7 +108,11 @@ impl ViewportResources {
 
         // Write pick input (mouse_pos + padding)
         let pick_input: [f32; 4] = [pending.mouse_pos[0], pending.mouse_pos[1], 0.0, 0.0];
-        queue.write_buffer(&self.pick_input_buffer, 0, bytemuck::cast_slice(&pick_input));
+        queue.write_buffer(
+            &self.pick_input_buffer,
+            0,
+            bytemuck::cast_slice(&pick_input),
+        );
 
         // Encode compute dispatch + copy
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -127,11 +131,17 @@ impl ViewportResources {
             pass.dispatch_workgroups(1, 1, 1);
         }
 
-        encoder.copy_buffer_to_buffer(&self.pick_output_buffer, 0, &self.pick_staging_buffer, 0, 32);
+        encoder.copy_buffer_to_buffer(
+            &self.pick_output_buffer,
+            0,
+            &self.pick_staging_buffer,
+            0,
+            32,
+        );
 
         queue.submit(std::iter::once(encoder.finish()));
 
-        // Request async map — caller polls with device.poll(Poll)
+        // Request async map Ã¢â‚¬â€ caller polls with device.poll(Poll)
         let buffer_slice = self.pick_staging_buffer.slice(..);
         let (tx, rx) = std::sync::mpsc::channel();
         buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
@@ -151,7 +161,7 @@ impl ViewportResources {
                 let result = Self::read_pick_from_staging(&self.pick_staging_buffer);
                 Some(result)
             }
-            Ok(Err(_)) => Some(None), // Map failed
+            Ok(Err(_)) => Some(None),                          // Map failed
             Err(std::sync::mpsc::TryRecvError::Empty) => None, // Not ready yet
             Err(std::sync::mpsc::TryRecvError::Disconnected) => Some(None),
         }
@@ -185,38 +195,53 @@ impl ViewportResources {
         Some(result)
     }
 
-    /// Dispatch brush compute shader to modify voxel data directly on GPU.
-    pub fn dispatch_brush(
-        &self,
+    /// Dispatch brush compute shaders in one submit to reduce CPU overhead.
+    /// Returns true when a submit was issued.
+    pub fn dispatch_brush_batch(
+        &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        dispatch: &BrushDispatch,
-    ) {
-        queue.write_buffer(
-            &self.brush_uniform_buffer,
-            0,
-            bytemuck::bytes_of(&dispatch.params),
-        );
+        dispatches: &[BrushDispatch],
+    ) -> bool {
+        if dispatches.is_empty() {
+            return false;
+        }
+
+        self.ensure_brush_uniform_capacity(device, dispatches.len() as u32);
+
+        for (index, dispatch) in dispatches.iter().enumerate() {
+            let offset = self.brush_uniform_stride * index as u64;
+            queue.write_buffer(
+                &self.brush_uniform_buffer,
+                offset,
+                bytemuck::bytes_of(&dispatch.params),
+            );
+        }
 
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Brush Encoder"),
+            label: Some("Brush Batch Encoder"),
         });
 
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("Brush Pass"),
+                label: Some("Brush Batch Pass"),
                 timestamp_writes: None,
             });
             pass.set_pipeline(&self.brush_pipeline);
-            pass.set_bind_group(0, &self.brush_bind_group, &[]);
-            pass.dispatch_workgroups(
-                dispatch.workgroups[0],
-                dispatch.workgroups[1],
-                dispatch.workgroups[2],
-            );
+
+            for (index, dispatch) in dispatches.iter().enumerate() {
+                let dynamic_offset = (self.brush_uniform_stride * index as u64) as u32;
+                pass.set_bind_group(0, &self.brush_bind_group, &[dynamic_offset]);
+                pass.dispatch_workgroups(
+                    dispatch.workgroups[0],
+                    dispatch.workgroups[1],
+                    dispatch.workgroups[2],
+                );
+            }
         }
 
         queue.submit(std::iter::once(encoder.finish()));
+        true
     }
 
     /// Render the viewport to an offscreen texture and return RGBA pixel data.
@@ -234,7 +259,11 @@ impl ViewportResources {
         // Create offscreen texture
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Screenshot Texture"),
-            size: wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -301,7 +330,11 @@ impl ViewportResources {
                     rows_per_image: Some(height),
                 },
             },
-            wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
         );
 
         queue.submit(std::iter::once(encoder.finish()));

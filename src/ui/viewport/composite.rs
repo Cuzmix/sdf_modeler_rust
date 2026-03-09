@@ -150,7 +150,11 @@ impl ViewportResources {
         // Create 3D textures (STORAGE_BINDING for compute write + TEXTURE_BINDING for render read)
         let sdf_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Comp SDF Tex"),
-            size: wgpu::Extent3d { width: res, height: res, depth_or_array_layers: res },
+            size: wgpu::Extent3d {
+                width: res,
+                height: res,
+                depth_or_array_layers: res,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D3,
@@ -160,7 +164,11 @@ impl ViewportResources {
         });
         let mat_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Comp Mat Tex"),
-            size: wgpu::Extent3d { width: res, height: res, depth_or_array_layers: res },
+            size: wgpu::Extent3d {
+                width: res,
+                height: res,
+                depth_or_array_layers: res,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D3,
@@ -170,7 +178,11 @@ impl ViewportResources {
         });
         let normal_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Comp Normal Tex"),
-            size: wgpu::Extent3d { width: res, height: res, depth_or_array_layers: res },
+            size: wgpu::Extent3d {
+                width: res,
+                height: res,
+                depth_or_array_layers: res,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D3,
@@ -207,10 +219,22 @@ impl ViewportResources {
             label: Some("Comp Compute BG"),
             layout: &compute_bgl,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: params_buffer.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&sdf_view) },
-                wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(&mat_view) },
-                wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(&normal_view) },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: params_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&sdf_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&mat_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(&normal_view),
+                },
             ],
         });
 
@@ -220,7 +244,12 @@ impl ViewportResources {
         });
         let compute_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Comp Compute Layout"),
-            bind_group_layouts: &[&self.camera_bgl, &self.scene_bgl, &self.voxel_tex_bgl, &compute_bgl],
+            bind_group_layouts: &[
+                &self.camera_bgl,
+                &self.scene_bgl,
+                &self.voxel_tex_bgl,
+                &compute_bgl,
+            ],
             push_constant_ranges: &[],
         });
         let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -238,10 +267,22 @@ impl ViewportResources {
             label: Some("Comp Render BG"),
             layout: &render_bgl,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::Sampler(&sampler) },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&sdf_view) },
-                wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::TextureView(&mat_view) },
-                wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(&normal_view) },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&sdf_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&mat_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::TextureView(&normal_view),
+                },
             ],
         });
 
@@ -313,11 +354,23 @@ impl ViewportResources {
         update_min: [u32; 3],
         update_max: [u32; 3],
     ) {
-        let Some(ref comp) = self.composite else { return; };
+        let Some(ref comp) = self.composite else {
+            return;
+        };
 
         let params = CompositeParams {
-            bounds_min: [comp.bounds_min[0], comp.bounds_min[1], comp.bounds_min[2], 0.0],
-            bounds_max: [comp.bounds_max[0], comp.bounds_max[1], comp.bounds_max[2], 0.0],
+            bounds_min: [
+                comp.bounds_min[0],
+                comp.bounds_min[1],
+                comp.bounds_min[2],
+                0.0,
+            ],
+            bounds_max: [
+                comp.bounds_max[0],
+                comp.bounds_max[1],
+                comp.bounds_max[2],
+                0.0,
+            ],
             resolution: comp.resolution,
             update_min,
             update_max,

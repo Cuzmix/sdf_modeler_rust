@@ -33,11 +33,19 @@ impl History {
 
     /// Get labels of the redo stack (next-to-redo first).
     pub fn redo_labels(&self) -> Vec<String> {
-        self.redo_stack.iter().rev().map(|s| s.label.clone()).collect()
+        self.redo_stack
+            .iter()
+            .rev()
+            .map(|s| s.label.clone())
+            .collect()
     }
 
-    pub fn undo_count(&self) -> usize { self.undo_stack.len() }
-    pub fn redo_count(&self) -> usize { self.redo_stack.len() }
+    pub fn undo_count(&self) -> usize {
+        self.undo_stack.len()
+    }
+    pub fn redo_count(&self) -> usize {
+        self.redo_stack.len()
+    }
 
     /// Call at the START of each frame. Captures the "before" state.
     pub fn begin_frame(&mut self, scene: &Scene, selected: Option<NodeId>) {
@@ -62,12 +70,12 @@ impl History {
         self.was_dragging = is_anything_dragged;
 
         if let Some(ref snapshot) = self.pending_snapshot {
-            let changed =
-                !scene.content_eq(&snapshot.scene) || selected != snapshot.selected;
+            let changed = !scene.content_eq(&snapshot.scene) || selected != snapshot.selected;
 
             if changed && (!is_anything_dragged || drag_just_ended) {
                 // Auto-detect a label based on what changed
-                let label = Self::detect_change_label(&snapshot.scene, scene, snapshot.selected, selected);
+                let label =
+                    Self::detect_change_label(&snapshot.scene, scene, snapshot.selected, selected);
                 let mut snap = snapshot.clone();
                 snap.label = label;
                 self.push_undo(snap);
@@ -120,7 +128,12 @@ impl History {
     }
 
     /// Detect what kind of change happened between two scenes.
-    fn detect_change_label(old: &Scene, new: &Scene, old_sel: Option<NodeId>, new_sel: Option<NodeId>) -> String {
+    fn detect_change_label(
+        old: &Scene,
+        new: &Scene,
+        old_sel: Option<NodeId>,
+        new_sel: Option<NodeId>,
+    ) -> String {
         let old_count = old.nodes.len();
         let new_count = new.nodes.len();
 
@@ -165,7 +178,9 @@ mod tests {
 
     /// Find the first Primitive node ID in a scene.
     fn find_primitive_id(scene: &Scene) -> u64 {
-        *scene.nodes.iter()
+        *scene
+            .nodes
+            .iter()
             .find(|(_, n)| matches!(n.data, NodeData::Primitive { .. }))
             .expect("scene should have a primitive")
             .0
@@ -470,7 +485,10 @@ mod tests {
         history.begin_frame(&original_scene, Some(node_id));
         let mut scene_mid_drag = original_scene.clone();
         if let Some(n) = scene_mid_drag.nodes.get_mut(&node_id) {
-            if let NodeData::Primitive { ref mut position, .. } = n.data {
+            if let NodeData::Primitive {
+                ref mut position, ..
+            } = n.data
+            {
                 position.x = 1.0;
             }
         }
@@ -482,7 +500,10 @@ mod tests {
         history.begin_frame(&scene_mid_drag, Some(node_id));
         let mut scene_drag_2 = scene_mid_drag.clone();
         if let Some(n) = scene_drag_2.nodes.get_mut(&node_id) {
-            if let NodeData::Primitive { ref mut position, .. } = n.data {
+            if let NodeData::Primitive {
+                ref mut position, ..
+            } = n.data
+            {
                 position.x = 3.0;
             }
         }
@@ -492,7 +513,11 @@ mod tests {
         // Frame 3: drag ends — mouse released, position stays at 3.0
         history.begin_frame(&scene_drag_2, Some(node_id));
         history.end_frame(&scene_drag_2, Some(node_id), false);
-        assert_eq!(history.undo_count(), 1, "should commit exactly one entry on drag end");
+        assert_eq!(
+            history.undo_count(),
+            1,
+            "should commit exactly one entry on drag end"
+        );
 
         // Undo should restore to original position (0.0)
         let (restored, _) = history.undo(&scene_drag_2, Some(node_id)).unwrap();
@@ -524,7 +549,10 @@ mod tests {
         for frame in 1..=5 {
             history.begin_frame(&scene, Some(node_id));
             if let Some(n) = scene.nodes.get_mut(&node_id) {
-                if let NodeData::Primitive { ref mut position, .. } = n.data {
+                if let NodeData::Primitive {
+                    ref mut position, ..
+                } = n.data
+                {
                     position.y = frame as f32 * 0.5;
                 }
             }
@@ -536,7 +564,11 @@ mod tests {
         // Frame 6: drag ends
         history.begin_frame(&scene, Some(node_id));
         history.end_frame(&scene, Some(node_id), false);
-        assert_eq!(history.undo_count(), 1, "exactly one entry after gizmo drag");
+        assert_eq!(
+            history.undo_count(),
+            1,
+            "exactly one entry after gizmo drag"
+        );
 
         // Undo restores to original
         let (restored, _) = history.undo(&scene, Some(node_id)).unwrap();
@@ -601,7 +633,10 @@ mod tests {
         history.begin_frame(&original_scene, Some(node_id));
         let mut scene_after_drag1 = original_scene.clone();
         if let Some(n) = scene_after_drag1.nodes.get_mut(&node_id) {
-            if let NodeData::Primitive { ref mut position, .. } = n.data {
+            if let NodeData::Primitive {
+                ref mut position, ..
+            } = n.data
+            {
                 position.x = 2.0;
             }
         }
@@ -615,7 +650,10 @@ mod tests {
         history.begin_frame(&scene_after_drag1, Some(node_id));
         let mut scene_after_drag2 = scene_after_drag1.clone();
         if let Some(n) = scene_after_drag2.nodes.get_mut(&node_id) {
-            if let NodeData::Primitive { ref mut position, .. } = n.data {
+            if let NodeData::Primitive {
+                ref mut position, ..
+            } = n.data
+            {
                 position.y = 5.0;
             }
         }
@@ -631,7 +669,10 @@ mod tests {
             NodeData::Primitive { position, .. } => *position,
             _ => panic!("expected primitive"),
         };
-        assert!((pos1.x - 2.0).abs() < 0.001, "first undo restores drag1 state");
+        assert!(
+            (pos1.x - 2.0).abs() < 0.001,
+            "first undo restores drag1 state"
+        );
         assert!(pos1.y.abs() < 0.001, "first undo restores drag1 state");
 
         let (s0, _) = history.undo(&s1, Some(node_id)).unwrap();

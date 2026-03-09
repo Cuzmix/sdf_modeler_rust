@@ -7,10 +7,10 @@ mod sculpting;
 pub(crate) mod state;
 mod ui_panels;
 
+use crate::compat::{Duration, Instant};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
-use crate::compat::{Duration, Instant};
 
 use eframe::egui;
 use eframe::wgpu;
@@ -45,6 +45,13 @@ pub struct FrameTimings {
     pub ui_draw_s: f64,
     pub total_cpu_s: f64,
 
+    /// Sculpt interaction counters (updated every frame).
+    pub sculpt_brush_samples: u32,
+    pub sculpt_gpu_dispatches: u32,
+    pub sculpt_gpu_submits: u32,
+    pub sculpt_pick_latency_ms: f64,
+    pub sculpt_pick_latency_avg_ms: f64,
+
     /// Smoothed (EMA) values for display stability.
     pub avg_frame_ms: f64,
     pub avg_fps: f64,
@@ -62,6 +69,11 @@ impl FrameTimings {
             composite_dispatch_s: 0.0,
             ui_draw_s: 0.0,
             total_cpu_s: 0.0,
+            sculpt_brush_samples: 0,
+            sculpt_gpu_dispatches: 0,
+            sculpt_gpu_submits: 0,
+            sculpt_pick_latency_ms: 0.0,
+            sculpt_pick_latency_avg_ms: 0.0,
             avg_frame_ms: 16.0,
             avg_fps: 60.0,
             history: vec![0.0; TIMING_HISTORY_LEN],
@@ -83,6 +95,30 @@ impl FrameTimings {
         // Ring buffer history
         self.history[self.history_idx] = dt_ms as f32;
         self.history_idx = (self.history_idx + 1) % TIMING_HISTORY_LEN;
+    }
+
+    fn begin_frame(&mut self) {
+        self.sculpt_brush_samples = 0;
+        self.sculpt_gpu_dispatches = 0;
+        self.sculpt_gpu_submits = 0;
+    }
+
+    fn record_sculpt_brush_batch(
+        &mut self,
+        sample_count: u32,
+        dispatch_count: u32,
+        submit_count: u32,
+    ) {
+        self.sculpt_brush_samples = self.sculpt_brush_samples.saturating_add(sample_count);
+        self.sculpt_gpu_dispatches = self.sculpt_gpu_dispatches.saturating_add(dispatch_count);
+        self.sculpt_gpu_submits = self.sculpt_gpu_submits.saturating_add(submit_count);
+    }
+
+    fn record_sculpt_pick_latency(&mut self, latency_ms: f64) {
+        self.sculpt_pick_latency_ms = latency_ms;
+        let alpha = 0.2;
+        self.sculpt_pick_latency_avg_ms =
+            self.sculpt_pick_latency_avg_ms * (1.0 - alpha) + latency_ms * alpha;
     }
 }
 
@@ -164,6 +200,7 @@ pub(super) enum PickState {
     Pending {
         receiver: std::sync::mpsc::Receiver<Result<(), wgpu::BufferAsyncError>>,
         ray_inputs: PickRayInputs,
+        submitted_at: Instant,
     },
 }
 
@@ -204,9 +241,7 @@ impl SdfApp {
             .and_then(|m| m.project_path.as_deref())
             .map(|path| format!("\nSource project: {path}"))
             .unwrap_or_default();
-        format!(
-            "Recovered unsaved work found from UNIX timestamp {timestamp}.{project_hint}"
-        )
+        format!("Recovered unsaved work found from UNIX timestamp {timestamp}.{project_hint}")
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -336,6 +371,7 @@ impl SdfApp {
                 hover_world_pos: None,
                 cursor_over_geometry: false,
                 sculpt_dragging: false,
+                sculpt_runtime_cache: None,
             },
             ui: UiState {
                 dock_state: dock::create_dock_state(),
@@ -398,6 +434,7 @@ impl eframe::App for SdfApp {
         let dt = now - self.last_time;
         self.last_time = now;
         self.perf.timings.push_frame(dt);
+        self.perf.timings.begin_frame();
 
         // Tick camera view transition animation
         let camera_animating = self.doc.camera.tick_transition(dt);
@@ -407,7 +444,8 @@ impl eframe::App for SdfApp {
             self.doc.camera.yaw += dt as f32 * 0.5; // ~0.5 rad/s
         }
 
-        self.doc.history
+        self.doc
+            .history
             .begin_frame(&self.doc.scene, self.ui.node_graph_state.selected);
 
         // ── 2. Async polling ───────────────────────────────────────────
@@ -420,19 +458,19 @@ impl eframe::App for SdfApp {
         // Detect sculpt drag end: LMB released while sculpt_dragging was true.
         // Must happen here (before draw) because hover picks immediately fill
         // pending_pick, preventing reset_sculpt_stroke_if_idle from ever firing.
-        if self.async_state.sculpt_dragging
-            && !ctx.input(|i| i.pointer.primary_down())
-        {
+        if self.async_state.sculpt_dragging && !ctx.input(|i| i.pointer.primary_down()) {
             if self.async_state.last_sculpt_hit.is_some() {
                 self.doc.sculpt_history.end_stroke();
             }
             self.async_state.last_sculpt_hit = None;
             self.async_state.lazy_brush_pos = None;
+            self.async_state.sculpt_runtime_cache = None;
             self.async_state.sculpt_dragging = false;
             self.async_state.cursor_over_geometry = false;
             if let SculptState::Active {
                 ref mut flatten_reference,
                 ref mut grab_snapshot,
+                ref mut grab_analytical_snapshot,
                 ref mut grab_start,
                 ref mut grab_child_input,
                 ..
@@ -440,6 +478,7 @@ impl eframe::App for SdfApp {
             {
                 *flatten_reference = None;
                 *grab_snapshot = None;
+                *grab_analytical_snapshot = None;
                 *grab_start = None;
                 *grab_child_input = None;
             }
@@ -551,9 +590,9 @@ impl eframe::App for SdfApp {
 
         let t_ui = Instant::now();
         let bake_progress = match &self.async_state.bake_status {
-            BakeStatus::InProgress { progress, total, .. } => {
-                Some((progress.load(Ordering::Relaxed), *total))
-            }
+            BakeStatus::InProgress {
+                progress, total, ..
+            } => Some((progress.load(Ordering::Relaxed), *total)),
             BakeStatus::Idle => None,
         };
 
@@ -564,11 +603,16 @@ impl eframe::App for SdfApp {
         let mut is_hover_pick = false;
         let sculpt_count = self.gpu.sculpt_tex_indices.len();
         let isolation_label: Option<String> = self.ui.isolation_state.as_ref().and_then(|iso| {
-            self.doc.scene.nodes.get(&iso.isolated_node).map(|n| n.name.clone())
+            self.doc
+                .scene
+                .nodes
+                .get(&iso.isolated_node)
+                .map(|n| n.name.clone())
         });
-        let solo_label: Option<String> = self.doc.soloed_light.and_then(|id| {
-            self.doc.scene.nodes.get(&id).map(|n| n.name.clone())
-        });
+        let solo_label: Option<String> = self
+            .doc
+            .soloed_light
+            .and_then(|id| self.doc.scene.nodes.get(&id).map(|n| n.name.clone()));
         let fps_info = if self.settings.show_fps_overlay {
             Some((self.perf.timings.avg_fps, self.perf.timings.avg_frame_ms))
         } else {
@@ -576,10 +620,8 @@ impl eframe::App for SdfApp {
         };
         // Compute active light set for this frame (used by scene tree + properties)
         {
-            let (active_ids, total_count) = crate::gpu::buffers::identify_active_lights(
-                &self.doc.scene,
-                self.doc.camera.eye(),
-            );
+            let (active_ids, total_count) =
+                crate::gpu::buffers::identify_active_lights(&self.doc.scene, self.doc.camera.eye());
             self.ui.active_light_ids = active_ids;
             self.ui.total_light_count = total_count;
 
@@ -614,7 +656,7 @@ impl eframe::App for SdfApp {
             settings: &mut self.settings,
             time: now as f32,
             bake_progress,
-                viewport: ViewportContext {
+            viewport: ViewportContext {
                 gizmo_state: &mut self.gizmo.state,
                 gizmo_mode: &self.gizmo.mode,
                 gizmo_space: &self.gizmo.space,
@@ -630,14 +672,14 @@ impl eframe::App for SdfApp {
                 isolation_label: isolation_label.clone(),
                 turntable_active: self.ui.turntable_active,
                 is_hover_pick: &mut is_hover_pick,
-                    hover_world_pos: self.async_state.hover_world_pos,
-                    cursor_over_geometry: self.async_state.cursor_over_geometry,
-                    soloed_light: self.doc.soloed_light,
-                    solo_label: solo_label.clone(),
-                    show_distance_readout: &mut self.ui.show_distance_readout,
-                    measurement_mode: &mut self.ui.measurement_mode,
-                    measurement_points: &mut self.ui.measurement_points,
-                },
+                hover_world_pos: self.async_state.hover_world_pos,
+                cursor_over_geometry: self.async_state.cursor_over_geometry,
+                soloed_light: self.doc.soloed_light,
+                solo_label: solo_label.clone(),
+                show_distance_readout: &mut self.ui.show_distance_readout,
+                measurement_mode: &mut self.ui.measurement_mode,
+                measurement_points: &mut self.ui.measurement_points,
+            },
             scene_tree: SceneTreeContext {
                 renaming_node: &mut self.ui.renaming_node,
                 rename_buf: &mut self.ui.rename_buf,
@@ -655,8 +697,7 @@ impl eframe::App for SdfApp {
         egui::CentralPanel::default()
             .frame(egui::Frame::none())
             .show(ctx, |ui| {
-                egui_dock::DockArea::new(&mut self.ui.dock_state)
-                    .show_inside(ui, &mut tab_viewer);
+                egui_dock::DockArea::new(&mut self.ui.dock_state).show_inside(ui, &mut tab_viewer);
             });
 
         // Command palette (drawn after dock, on top of everything)
@@ -723,10 +764,16 @@ impl eframe::App for SdfApp {
 
         // Track unsaved changes and update window title
         let now_dirty = fp != self.persistence.saved_fingerprint
-            || self.doc.scene.structure_key() != 0 && self.persistence.saved_fingerprint == 0 && !self.doc.scene.nodes.is_empty();
+            || self.doc.scene.structure_key() != 0
+                && self.persistence.saved_fingerprint == 0
+                && !self.doc.scene.nodes.is_empty();
         if now_dirty != self.persistence.scene_dirty {
             self.persistence.scene_dirty = now_dirty;
-            let title = if now_dirty { "SDF Modeler *" } else { "SDF Modeler" };
+            let title = if now_dirty {
+                "SDF Modeler *"
+            } else {
+                "SDF Modeler"
+            };
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.into()));
         }
 
@@ -734,14 +781,17 @@ impl eframe::App for SdfApp {
         #[cfg(not(target_arch = "wasm32"))]
         if self.settings.auto_save_enabled
             && self.persistence.scene_dirty
-            && self.persistence.last_auto_save.elapsed() >= Duration::from_secs(self.settings.auto_save_interval_secs as u64)
+            && self.persistence.last_auto_save.elapsed()
+                >= Duration::from_secs(self.settings.auto_save_interval_secs as u64)
         {
             self.persistence.last_auto_save = Instant::now();
             let path = crate::io::auto_save_path();
             if let Err(e) = crate::io::save_project(&self.doc.scene, &self.doc.camera, &path) {
                 log::error!("Auto-save failed: {}", e);
             } else {
-                if let Err(e) = crate::io::write_recovery_meta(self.persistence.current_file_path.as_deref()) {
+                if let Err(e) =
+                    crate::io::write_recovery_meta(self.persistence.current_file_path.as_deref())
+                {
                     log::error!("Auto-save metadata write failed: {}", e);
                 }
                 log::info!("Auto-saved to {}", path.display());

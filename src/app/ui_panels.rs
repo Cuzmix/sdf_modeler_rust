@@ -23,12 +23,22 @@ impl SdfApp {
                         ui.close_menu();
                     }
                     ui.separator();
-                    if ui.add(egui::Button::new("Open...").shortcut_text("Ctrl+O")).clicked() {
+                    if ui
+                        .add(egui::Button::new("Open...").shortcut_text("Ctrl+O"))
+                        .clicked()
+                    {
                         actions.push(Action::OpenProject);
                         ui.close_menu();
                     }
-                    let save_label = if self.persistence.current_file_path.is_some() { "Save" } else { "Save As..." };
-                    if ui.add(egui::Button::new(save_label).shortcut_text("Ctrl+S")).clicked() {
+                    let save_label = if self.persistence.current_file_path.is_some() {
+                        "Save"
+                    } else {
+                        "Save As..."
+                    };
+                    if ui
+                        .add(egui::Button::new(save_label).shortcut_text("Ctrl+S"))
+                        .clicked()
+                    {
                         actions.push(Action::SaveProject);
                         ui.close_menu();
                     }
@@ -52,17 +62,29 @@ impl SdfApp {
                         ui.separator();
                     }
 
-                    if ui.add(egui::Button::new("Screenshot...").shortcut_text("Ctrl+P")).clicked() {
+                    if ui
+                        .add(egui::Button::new("Screenshot...").shortcut_text("Ctrl+P"))
+                        .clicked()
+                    {
                         actions.push(Action::TakeScreenshot);
                         ui.close_menu();
                     }
                     let import_idle = matches!(self.async_state.import_status, ImportStatus::Idle);
-                    if ui.add_enabled(import_idle, egui::Button::new("Import Mesh...")).clicked() {
+                    if ui
+                        .add_enabled(import_idle, egui::Button::new("Import Mesh..."))
+                        .clicked()
+                    {
                         actions.push(Action::ImportMesh);
                         ui.close_menu();
                     }
                     let export_idle = matches!(self.async_state.export_status, ExportStatus::Idle);
-                    if ui.add_enabled(export_idle, egui::Button::new("Export Mesh...").shortcut_text("Ctrl+E")).clicked() {
+                    if ui
+                        .add_enabled(
+                            export_idle,
+                            egui::Button::new("Export Mesh...").shortcut_text("Ctrl+E"),
+                        )
+                        .clicked()
+                    {
                         actions.push(Action::ShowExportDialog);
                         ui.close_menu();
                     }
@@ -70,31 +92,55 @@ impl SdfApp {
 
                 // --- Edit ---
                 ui.menu_button("Edit", |ui| {
-                    if ui.add(egui::Button::new("Undo").shortcut_text("Ctrl+Z")).clicked() {
+                    if ui
+                        .add(egui::Button::new("Undo").shortcut_text("Ctrl+Z"))
+                        .clicked()
+                    {
                         actions.push(Action::Undo);
                         ui.close_menu();
                     }
-                    if ui.add(egui::Button::new("Redo").shortcut_text("Ctrl+Y")).clicked() {
+                    if ui
+                        .add(egui::Button::new("Redo").shortcut_text("Ctrl+Y"))
+                        .clicked()
+                    {
                         actions.push(Action::Redo);
                         ui.close_menu();
                     }
                     ui.separator();
                     let has_sel = self.ui.node_graph_state.selected.is_some();
-                    if ui.add_enabled(has_sel, egui::Button::new("Copy").shortcut_text("Ctrl+C")).clicked() {
+                    if ui
+                        .add_enabled(has_sel, egui::Button::new("Copy").shortcut_text("Ctrl+C"))
+                        .clicked()
+                    {
                         actions.push(Action::Copy);
                         ui.close_menu();
                     }
-                    let has_clip = self.doc.clipboard_node.is_some_and(|id| self.doc.scene.nodes.contains_key(&id));
-                    if ui.add_enabled(has_clip, egui::Button::new("Paste").shortcut_text("Ctrl+V")).clicked() {
+                    let has_clip = self
+                        .doc
+                        .clipboard_node
+                        .is_some_and(|id| self.doc.scene.nodes.contains_key(&id));
+                    if ui
+                        .add_enabled(has_clip, egui::Button::new("Paste").shortcut_text("Ctrl+V"))
+                        .clicked()
+                    {
                         actions.push(Action::Paste);
                         ui.close_menu();
                     }
-                    if ui.add_enabled(has_sel, egui::Button::new("Duplicate").shortcut_text("Ctrl+D")).clicked() {
+                    if ui
+                        .add_enabled(
+                            has_sel,
+                            egui::Button::new("Duplicate").shortcut_text("Ctrl+D"),
+                        )
+                        .clicked()
+                    {
                         actions.push(Action::Duplicate);
                         ui.close_menu();
                     }
                     ui.separator();
-                    if ui.add_enabled(has_sel, egui::Button::new("Delete").shortcut_text("Del")).clicked() {
+                    if ui
+                        .add_enabled(has_sel, egui::Button::new("Delete").shortcut_text("Del"))
+                        .clicked()
+                    {
                         actions.push(Action::DeleteSelected);
                         ui.close_menu();
                     }
@@ -103,27 +149,49 @@ impl SdfApp {
                 // --- View ---
                 ui.menu_button("View", |ui| {
                     let has_sel = self.ui.node_graph_state.selected.is_some();
-                    if ui.add_enabled(has_sel, egui::Button::new("Focus Selected").shortcut_text("F")).clicked() {
+                    if ui
+                        .add_enabled(
+                            has_sel,
+                            egui::Button::new("Focus Selected").shortcut_text("F"),
+                        )
+                        .clicked()
+                    {
                         actions.push(Action::FocusSelected);
                         ui.close_menu();
                     }
                     ui.separator();
-                    let profiler_label = if self.ui.show_debug { "Hide Profiler" } else { "Show Profiler" };
-                    if ui.add(egui::Button::new(profiler_label).shortcut_text("F4")).clicked() {
+                    let profiler_label = if self.ui.show_debug {
+                        "Hide Profiler"
+                    } else {
+                        "Show Profiler"
+                    };
+                    if ui
+                        .add(egui::Button::new(profiler_label).shortcut_text("F4"))
+                        .clicked()
+                    {
                         actions.push(Action::ToggleDebug);
                         ui.close_menu();
                     }
                     ui.separator();
                     ui.label("Camera Presets");
-                    if ui.add(egui::Button::new("Front").shortcut_text("F5")).clicked() {
+                    if ui
+                        .add(egui::Button::new("Front").shortcut_text("F5"))
+                        .clicked()
+                    {
                         actions.push(Action::CameraFront);
                         ui.close_menu();
                     }
-                    if ui.add(egui::Button::new("Top").shortcut_text("F6")).clicked() {
+                    if ui
+                        .add(egui::Button::new("Top").shortcut_text("F6"))
+                        .clicked()
+                    {
                         actions.push(Action::CameraTop);
                         ui.close_menu();
                     }
-                    if ui.add(egui::Button::new("Right").shortcut_text("F7")).clicked() {
+                    if ui
+                        .add(egui::Button::new("Right").shortcut_text("F7"))
+                        .clicked()
+                    {
                         actions.push(Action::CameraRight);
                         ui.close_menu();
                     }
@@ -141,7 +209,10 @@ impl SdfApp {
                             };
                             let has_bookmark = i < self.settings.bookmarks.len()
                                 && self.settings.bookmarks[i].is_some();
-                            if ui.add_enabled(has_bookmark, egui::Button::new(&label)).clicked() {
+                            if ui
+                                .add_enabled(has_bookmark, egui::Button::new(&label))
+                                .clicked()
+                            {
                                 actions.push(Action::RestoreBookmark(i));
                                 ui.close_menu();
                             }
@@ -171,15 +242,27 @@ impl SdfApp {
                     });
                     ui.menu_button("Workspace", |ui| {
                         use crate::app::actions::WorkspacePreset;
-                        if ui.button("Modeling").on_hover_text("Balanced layout with all panels").clicked() {
+                        if ui
+                            .button("Modeling")
+                            .on_hover_text("Balanced layout with all panels")
+                            .clicked()
+                        {
                             actions.push(Action::SetWorkspace(WorkspacePreset::Modeling));
                             ui.close_menu();
                         }
-                        if ui.button("Sculpting").on_hover_text("Large viewport with properties sidebar").clicked() {
+                        if ui
+                            .button("Sculpting")
+                            .on_hover_text("Large viewport with properties sidebar")
+                            .clicked()
+                        {
                             actions.push(Action::SetWorkspace(WorkspacePreset::Sculpting));
                             ui.close_menu();
                         }
-                        if ui.button("Rendering").on_hover_text("Viewport with render settings sidebar").clicked() {
+                        if ui
+                            .button("Rendering")
+                            .on_hover_text("Viewport with render settings sidebar")
+                            .clicked()
+                        {
                             actions.push(Action::SetWorkspace(WorkspacePreset::Rendering));
                             ui.close_menu();
                         }
@@ -193,17 +276,24 @@ impl SdfApp {
 
                 // --- Help ---
                 ui.menu_button("Help", |ui| {
-                    if ui.add(egui::Button::new("Keyboard Shortcuts").shortcut_text("F1")).clicked() {
+                    if ui
+                        .add(egui::Button::new("Keyboard Shortcuts").shortcut_text("F1"))
+                        .clicked()
+                    {
                         actions.push(Action::ToggleHelp);
                         ui.close_menu();
                     }
                 });
 
-
                 // Progress indicators (right-aligned)
                 // Export and Import progress are shown in dedicated modals (export_progress.rs)
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if let BakeStatus::InProgress { ref progress, total, .. } = self.async_state.bake_status {
+                    if let BakeStatus::InProgress {
+                        ref progress,
+                        total,
+                        ..
+                    } = self.async_state.bake_status
+                    {
                         let done = progress.load(Ordering::Relaxed);
                         let frac = done as f32 / total.max(1) as f32;
                         ui.add(
@@ -229,7 +319,11 @@ impl SdfApp {
                 ui.horizontal_centered(|ui| {
                     // Mode indicator
                     match &self.doc.sculpt_state {
-                        SculptState::Active { brush_mode, symmetry_axis, .. } => {
+                        SculptState::Active {
+                            brush_mode,
+                            symmetry_axis,
+                            ..
+                        } => {
                             let mode_name = match brush_mode {
                                 BrushMode::Add => "Add",
                                 BrushMode::Carve => "Carve",
