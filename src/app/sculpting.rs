@@ -315,23 +315,41 @@ impl SdfApp {
         self.async_state.pick_state = PickState::Idle;
 
         if self.async_state.sculpt_dragging {
-            match pick_result {
-                Some(result) => {
-                    // Drag on geometry: apply brush + update preview.
-                    self.async_state.hover_world_pos = Some(Vec3::new(
-                        result.world_pos[0],
-                        result.world_pos[1],
-                        result.world_pos[2],
-                    ));
-                    self.async_state.cursor_over_geometry = true;
-                    self.handle_sculpt_hit(result);
+            let live_grab_drag = matches!(
+                self.doc.sculpt_state,
+                SculptState::Active {
+                    ref brush_mode,
+                    grab_start: Some(_),
+                    ..
+                } if *brush_mode == BrushMode::Grab
+            );
+
+            if live_grab_drag {
+                // Once Grab has an anchor, drive it from the current cursor ray
+                // and ignore delayed pick hits to avoid visible jitter/rubber-banding.
+                if !self.continue_grab_on_pick_miss(pending_ray_inputs) {
+                    self.async_state.cursor_over_geometry = false;
+                    self.async_state.hover_world_pos = None;
                 }
-                None => {
-                    // Miss while dragging: keep Grab/Move alive from cursor ray.
-                    if !self.continue_grab_on_pick_miss(pending_ray_inputs) {
-                        // Non-grab brushes stop when leaving geometry.
-                        self.async_state.cursor_over_geometry = false;
-                        self.async_state.hover_world_pos = None;
+            } else {
+                match pick_result {
+                    Some(result) => {
+                        // Drag on geometry: apply brush + update preview.
+                        self.async_state.hover_world_pos = Some(Vec3::new(
+                            result.world_pos[0],
+                            result.world_pos[1],
+                            result.world_pos[2],
+                        ));
+                        self.async_state.cursor_over_geometry = true;
+                        self.handle_sculpt_hit(result);
+                    }
+                    None => {
+                        // Miss while dragging: keep Grab/Move alive from cursor ray.
+                        if !self.continue_grab_on_pick_miss(pending_ray_inputs) {
+                            // Non-grab brushes stop when leaving geometry.
+                            self.async_state.cursor_over_geometry = false;
+                            self.async_state.hover_world_pos = None;
+                        }
                     }
                 }
             }

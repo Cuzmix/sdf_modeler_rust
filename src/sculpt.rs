@@ -466,7 +466,6 @@ fn kelvinlet_effect_radius(eps: f32, disp_len: f32, min_displacement: f32) -> f3
         (k * k - eps * eps).sqrt().max(eps)
     }
 }
-
 /// Returns (z0, z1) inclusive range of z-slabs that were modified.
 #[allow(clippy::too_many_arguments)]
 fn apply_brush_to_grid(

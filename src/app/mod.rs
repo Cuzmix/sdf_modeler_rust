@@ -728,27 +728,47 @@ impl eframe::App for SdfApp {
             }
         }
 
-        if let Some(ref pending) = pending_pick {
+        if pending_pick.is_some() {
             self.async_state.sculpt_dragging = !is_hover_pick;
             if !is_hover_pick {
                 // Only copy modifier keys for sculpt drag picks
                 self.async_state.sculpt_ctrl_held = sculpt_ctrl_held;
                 self.async_state.sculpt_shift_held = sculpt_shift_held;
                 self.async_state.sculpt_pressure = sculpt_pressure;
+            }
+        }
 
-                // Keep strokes smooth while async pick readback is still in flight.
-                if matches!(self.async_state.pick_state, PickState::Pending { .. }) {
+        let live_grab_drag = self.async_state.sculpt_dragging
+            && matches!(
+                self.doc.sculpt_state,
+                SculptState::Active {
+                    ref brush_mode,
+                    grab_start: Some(_),
+                    ..
+                } if *brush_mode == crate::sculpt::BrushMode::Grab
+            );
+
+        if let Some(ref pending) = pending_pick {
+            if !is_hover_pick {
+                // During active Grab drags, drive sculpt from the current cursor ray
+                // each frame and avoid waiting for delayed pick readback.
+                if live_grab_drag
+                    || matches!(self.async_state.pick_state, PickState::Pending { .. })
+                {
                     let _ = self.predict_sculpt_from_pending_pick(pending);
                 }
             }
         }
 
-        if pending_pick.is_some() {
+        if pending_pick.is_some() && !live_grab_drag {
             self.async_state.pending_pick = pending_pick;
         }
 
-        // Sculpt mode: submit async pick for next frame's poll_sculpt_pick
-        self.submit_sculpt_pick();
+        // Sculpt mode: submit async pick for next frame's poll_sculpt_pick.
+        // Skip while Grab is actively dragging from live cursor rays.
+        if !live_grab_drag {
+            self.submit_sculpt_pick();
+        }
 
         // Reset stroke interpolation and flatten reference when mouse is released during sculpting
         self.reset_sculpt_stroke_if_idle();
@@ -860,3 +880,5 @@ impl eframe::App for SdfApp {
         self.settings.save();
     }
 }
+
+
