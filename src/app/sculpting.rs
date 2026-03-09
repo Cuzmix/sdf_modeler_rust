@@ -541,11 +541,25 @@ impl SdfApp {
         };
         let dist = (current - last).length();
         let spacing = stroke_spacing.clamp(0.05, 1.0);
-        let step = (brush_radius * spacing).max(0.005);
+        let mut step = (brush_radius * spacing).max(0.005);
+
+        // Keep stroke sampling dense enough relative to voxel size to reduce
+        // staircase/rubber-banding artifacts during fast drags.
+        if let SculptState::Active { node_id, .. } = self.doc.sculpt_state {
+            if let Some(NodeData::Sculpt { ref voxel_grid, .. }) =
+                self.doc.scene.nodes.get(&node_id).map(|n| &n.data)
+            {
+                let extent = voxel_grid.bounds_max - voxel_grid.bounds_min;
+                let denom = voxel_grid.resolution.saturating_sub(1).max(1) as f32;
+                let voxel_step = (extent.max_element() / denom).max(0.001);
+                step = step.min((voxel_step * 0.75).max(0.002));
+            }
+        }
+
         if dist <= step {
             return vec![current];
         }
-        let n = (dist / step).ceil() as usize;
+        let n = ((dist / step).ceil() as usize).clamp(1, 96);
         let mut hits = Vec::with_capacity(n);
         for i in 1..=n {
             let t = i as f32 / n as f32;
@@ -775,4 +789,3 @@ impl SdfApp {
         self.async_state.pick_state = PickState::Idle;
     }
 }
-

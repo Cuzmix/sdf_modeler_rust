@@ -352,6 +352,19 @@ fn surface_factor(voxel_val: f32, radius: f32, constraint: f32) -> f32 {
     }
 }
 
+/// Estimate the largest world-space voxel step for the grid.
+fn max_voxel_step(grid: &VoxelGrid) -> f32 {
+    let extent = grid.bounds_max - grid.bounds_min;
+    let denom = grid.resolution.saturating_sub(1).max(1) as f32;
+    (extent.max_element() / denom).max(1e-6)
+}
+
+/// Clamp per-sample signed SDF delta to avoid aggressive stepping artifacts.
+fn clamp_brush_delta(delta: f32, radius: f32, voxel_step: f32) -> f32 {
+    let max_delta = (voxel_step * 2.0).min(radius * 0.35).max(0.01);
+    delta.clamp(-max_delta, max_delta)
+}
+
 /// Attenuate influence for back-facing voxels relative to camera view direction.
 /// `view_dir_local = Vec3::ZERO` disables this term.
 fn front_face_factor(offset: Vec3, view_dir_local: Vec3) -> f32 {
@@ -447,6 +460,7 @@ fn apply_brush_to_grid(
     view_dir_local: Vec3,
 ) -> (u32, u32) {
     let res = grid.resolution;
+    let voxel_step = max_voxel_step(grid);
 
     // Compute grid-space bounding box of the brush region
     let brush_min = center - Vec3::splat(radius);
@@ -476,17 +490,28 @@ fn apply_brush_to_grid(
                     match brush_mode {
                         BrushMode::Add | BrushMode::Carve => {
                             let sf = surface_factor(grid.data[idx], radius, surface_constraint);
-                            grid.data[idx] += brush_mode.sign() * strength * falloff * sf;
+                            let delta = clamp_brush_delta(
+                                brush_mode.sign() * strength * falloff * sf,
+                                radius,
+                                voxel_step,
+                            );
+                            grid.data[idx] += delta;
                         }
                         BrushMode::Flatten => {
                             let sf = surface_factor(grid.data[idx], radius, surface_constraint);
-                            grid.data[idx] +=
-                                (flatten_ref - grid.data[idx]) * falloff * strength * sf;
+                            let delta = clamp_brush_delta(
+                                (flatten_ref - grid.data[idx]) * falloff * strength * sf,
+                                radius,
+                                voxel_step,
+                            );
+                            grid.data[idx] += delta;
                         }
                         BrushMode::Inflate => {
                             let threshold = radius * 0.5;
                             let sf = 1.0 - (grid.data[idx].abs() / threshold).clamp(0.0, 1.0);
-                            grid.data[idx] += -strength * falloff * sf;
+                            let delta =
+                                clamp_brush_delta(-strength * falloff * sf, radius, voxel_step);
+                            grid.data[idx] += delta;
                         }
                         BrushMode::Smooth | BrushMode::Grab => unreachable!(),
                     }
@@ -525,43 +550,50 @@ fn apply_smooth_to_grid(
     let y1 = (g_max.y.ceil().max(0.0) as u32).min(res - 1);
     let z1 = (g_max.z.ceil().max(0.0) as u32).min(res - 1);
 
+    // Taubin smoothing (lambda/mu) preserves volume better than pure Laplacian.
+    // A single "iteration" is two passes.
+    const LAMBDA: f32 = 0.5;
+    const MU: f32 = -0.53;
     for _ in 0..iterations {
-        let snapshot = grid.data.clone();
+        for pass_scale in [LAMBDA, MU] {
+            let snapshot = grid.data.clone();
 
-        for z in z0..=z1 {
-            for y in y0..=y1 {
-                for x in x0..=x1 {
-                    let world_pos = grid.grid_to_world(x as f32, y as f32, z as f32);
-                    let offset = world_pos - center;
-                    let Some(nt) = brush_shape.normalized_distance(offset, radius) else {
-                        continue;
-                    };
-                    let front = front_face_factor(offset, view_dir_local);
-                    if front <= 0.0 {
-                        continue;
+            for z in z0..=z1 {
+                for y in y0..=y1 {
+                    for x in x0..=x1 {
+                        let world_pos = grid.grid_to_world(x as f32, y as f32, z as f32);
+                        let offset = world_pos - center;
+                        let Some(nt) = brush_shape.normalized_distance(offset, radius) else {
+                            continue;
+                        };
+                        let front = front_face_factor(offset, view_dir_local);
+                        if front <= 0.0 {
+                            continue;
+                        }
+                        let falloff = falloff_mode.evaluate(nt) * front;
+
+                        // 6-neighbor Laplacian average (clamped at grid edges)
+                        let xm = if x > 0 { x - 1 } else { x };
+                        let xp = if x < res - 1 { x + 1 } else { x };
+                        let ym = if y > 0 { y - 1 } else { y };
+                        let yp = if y < res - 1 { y + 1 } else { y };
+                        let zm = if z > 0 { z - 1 } else { z };
+                        let zp = if z < res - 1 { z + 1 } else { z };
+
+                        let avg = (snapshot[VoxelGrid::index(xm, y, z, res)]
+                            + snapshot[VoxelGrid::index(xp, y, z, res)]
+                            + snapshot[VoxelGrid::index(x, ym, z, res)]
+                            + snapshot[VoxelGrid::index(x, yp, z, res)]
+                            + snapshot[VoxelGrid::index(x, y, zm, res)]
+                            + snapshot[VoxelGrid::index(x, y, zp, res)])
+                            / 6.0;
+
+                        let idx = VoxelGrid::index(x, y, z, res);
+                        let current = snapshot[idx];
+                        let sf = surface_factor(current, radius, surface_constraint);
+                        let blend = (falloff * strength * sf * pass_scale).clamp(-1.0, 1.0);
+                        grid.data[idx] = current + (avg - current) * blend;
                     }
-                    let falloff = falloff_mode.evaluate(nt) * front;
-
-                    // 6-neighbor Laplacian average (clamped at grid edges)
-                    let xm = if x > 0 { x - 1 } else { x };
-                    let xp = if x < res - 1 { x + 1 } else { x };
-                    let ym = if y > 0 { y - 1 } else { y };
-                    let yp = if y < res - 1 { y + 1 } else { y };
-                    let zm = if z > 0 { z - 1 } else { z };
-                    let zp = if z < res - 1 { z + 1 } else { z };
-
-                    let avg = (snapshot[VoxelGrid::index(xm, y, z, res)]
-                        + snapshot[VoxelGrid::index(xp, y, z, res)]
-                        + snapshot[VoxelGrid::index(x, ym, z, res)]
-                        + snapshot[VoxelGrid::index(x, yp, z, res)]
-                        + snapshot[VoxelGrid::index(x, y, zm, res)]
-                        + snapshot[VoxelGrid::index(x, y, zp, res)])
-                        / 6.0;
-
-                    let idx = VoxelGrid::index(x, y, z, res);
-                    let current = snapshot[idx];
-                    let sf = surface_factor(current, radius, surface_constraint);
-                    grid.data[idx] = current + (avg - current) * falloff * strength * sf;
                 }
             }
         }
@@ -777,7 +809,3 @@ pub fn inverse_rotate_euler(p: Vec3, r: Vec3) -> Vec3 {
     q = Vec3::new(q.x, cx * q.y + sx * q.z, -sx * q.y + cx * q.z);
     q
 }
-
-
-
-

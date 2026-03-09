@@ -77,12 +77,22 @@ fn cs_brush(@builtin(global_invocation_id) gid: vec3<u32>) {
     let isFlatten = step(2.5, bm) * (1.0 - step(3.5, bm));
     let isInflate = step(3.5, bm) * (1.0 - step(4.5, bm));
 
-    let add_delta     = -1.0 * brush.strength * falloff * sf;
-    let carve_delta   =  1.0 * brush.strength * falloff * sf;
-    let flatten_delta = (brush.flatten_ref - cur) * falloff * brush.strength * sf;
+    let extent = brush.bounds_max - brush.bounds_min;
+    let denom = max(f32(res - 1u), 1.0);
+    let voxel_step = max(max(extent.x, extent.y), extent.z) / denom;
+    let max_delta = max(0.01, min(voxel_step * 2.0, brush.radius * 0.35));
+
+    let add_delta_raw     = -1.0 * brush.strength * falloff * sf;
+    let carve_delta_raw   =  1.0 * brush.strength * falloff * sf;
+    let flatten_delta_raw = (brush.flatten_ref - cur) * falloff * brush.strength * sf;
     // Inflate: Add with implicit surface constraint (only near-surface voxels)
     let inflate_sf = 1.0 - clamp(abs(cur) / (brush.radius * 0.5), 0.0, 1.0);
-    let inflate_delta = -1.0 * brush.strength * falloff * inflate_sf;
+    let inflate_delta_raw = -1.0 * brush.strength * falloff * inflate_sf;
+
+    let add_delta = clamp(add_delta_raw, -max_delta, max_delta);
+    let carve_delta = clamp(carve_delta_raw, -max_delta, max_delta);
+    let flatten_delta = clamp(flatten_delta_raw, -max_delta, max_delta);
+    let inflate_delta = clamp(inflate_delta_raw, -max_delta, max_delta);
 
     voxel_data[idx] += add_delta * isAdd + carve_delta * isCarve + flatten_delta * isFlatten + inflate_delta * isInflate;
 }
