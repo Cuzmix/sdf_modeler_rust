@@ -153,6 +153,20 @@ src/
 - **State decomposition**: `SdfApp` has 7 sub-structs (doc, gizmo, gpu, async_state, ui, persistence, perf).
 - **Scene graph**: Binary tree with `HashMap<NodeId, SceneNode>`. Codegen flattens to WGSL via post-order traversal.
 
+## UI/Backend Separation (MANDATORY)
+
+The app update loop is intentionally split so backend logic can outlive any one UI toolkit.
+
+- Keep toolkit-agnostic frame logic in `src/app/backend_frame.rs`.
+- Keep egui-specific drawing in `src/app/egui_frontend.rs`.
+- Keep `egui::Context` input/command mapping in `src/app/frontend_bridge.rs`.
+- Keep `src/app/mod.rs` orchestration-only (wire backend pre-ui, frontend draw, action processing, backend post-ui).
+- Keep `process_actions()` as the structural mutation gate; UI emits `Action` values.
+
+When adding another UI toolkit (for example Slint or Iced), add a parallel frontend adapter and bridge instead of moving toolkit types into backend modules.
+
+Reference: `docs/ui_backend_boundary.md`.
+
 ---
 
 ## Sculpt Responsiveness Non-Regression (MANDATORY)
