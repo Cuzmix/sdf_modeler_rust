@@ -101,6 +101,28 @@ src/
 | `dev` | `opt-level = 2` | Fast iteration with near-release performance |
 | `release` | `debug = true` | Full optimization with symbols for profiling |
 
+## Flutter Migration Bootstrap
+
+Flutter host work lives in `apps/flutter` and uses FVM pinning from `.fvmrc`.
+
+```bash
+# Install FVM (one-time)
+dart pub global activate fvm
+
+# Verify repo-pinned Flutter SDK
+fvm flutter --version
+
+# Run the Flutter host app
+cd apps/flutter
+fvm flutter pub get
+fvm flutter run
+```
+
+Migration guardrails:
+- Keep toolkit-neutral frame logic in `src/app/backend_frame.rs`.
+- Keep toolkit adapters in frontend-specific modules.
+- Do not introduce new egui features during migration (critical bug fixes only).
+- Keep structural mutations gated through `Action` + `process_actions()`.
 ## Contributing
 
 - Follow the coding standards in [CLAUDE.md](CLAUDE.md)
@@ -112,3 +134,4 @@ src/
 ## License
 
 All rights reserved.
+
