@@ -6,6 +6,18 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+// These functions are ignored because they are not marked as `pub`: `add`, `cross`, `dot`, `estimate_normal`, `length`, `normalize`, `rotate_y`, `scale`, `sdf_box`, `sdf_scene`, `shade_scene`, `sub`
+
 String ping() => RustLib.instance.api.crateApiSimplePing();
 
 String bridgeVersion() => RustLib.instance.api.crateApiSimpleBridgeVersion();
+
+Uint8List renderPreviewFrame({
+  required int width,
+  required int height,
+  required double timeSeconds,
+}) => RustLib.instance.api.crateApiSimpleRenderPreviewFrame(
+  width: width,
+  height: height,
+  timeSeconds: timeSeconds,
+);

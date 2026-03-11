@@ -2,7 +2,10 @@
 
 #include <optional>
 
+#include <flutter/plugin_registrar_windows.h>
+
 #include "flutter/generated_plugin_registrant.h"
+#include "texture_bridge.h"
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
@@ -24,6 +27,16 @@ bool FlutterWindow::OnCreate() {
   if (!flutter_controller_->engine() || !flutter_controller_->view()) {
     return false;
   }
+
+  auto* texture_registrar =
+      flutter::PluginRegistrarManager::GetInstance()
+          ->GetRegistrar<flutter::PluginRegistrarWindows>(
+              flutter_controller_->engine()->GetRegistrarForPlugin(
+                  "sdf_modeler_texture_bridge"))
+          ->texture_registrar();
+  texture_bridge_ = std::make_unique<TextureBridge>(
+      flutter_controller_->engine()->messenger(), texture_registrar);
+
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
@@ -40,6 +53,10 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  if (texture_bridge_) {
+    texture_bridge_ = nullptr;
+  }
+
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }
@@ -69,3 +86,4 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
 
   return Win32Window::MessageHandler(hwnd, message, wparam, lparam);
 }
+

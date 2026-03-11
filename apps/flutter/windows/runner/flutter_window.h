@@ -8,6 +8,8 @@
 
 #include "win32_window.h"
 
+class TextureBridge;
+
 // A window that does nothing but host a Flutter view.
 class FlutterWindow : public Win32Window {
  public:
@@ -28,6 +30,10 @@ class FlutterWindow : public Win32Window {
 
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
+
+  // Native texture channel bridge used by the Flutter Texture widget spike.
+  std::unique_ptr<TextureBridge> texture_bridge_;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_
+
