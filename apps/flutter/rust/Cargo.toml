@@ -8,6 +8,11 @@ crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
 flutter_rust_bridge = "=2.11.1"
+sdf_modeler = { path = "../../.." }
+serde_json = "1"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }
+
+[patch.crates-io]
+egui_node_graph2 = { path = "../../../third_party/egui_node_graph2" }

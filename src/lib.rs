@@ -1,4 +1,6 @@
 mod app;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod app_bridge;
 mod compat;
 mod export;
 pub mod expression;

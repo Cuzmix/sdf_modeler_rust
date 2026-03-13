@@ -6,13 +6,16 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `add`, `cross`, `dot`, `estimate_normal`, `length`, `normalize`, `rotate_y`, `scale`, `sdf_box`, `sdf_scene`, `shade_scene`, `sub`
+// These functions are ignored because they are not marked as `pub`: `app_bridge`, `snapshot_json`
 
 String ping() => RustLib.instance.api.crateApiSimplePing();
 
 String bridgeVersion() => RustLib.instance.api.crateApiSimpleBridgeVersion();
 
-Uint8List renderPreviewFrame({
+String sceneSnapshotJson() =>
+    RustLib.instance.api.crateApiSimpleSceneSnapshotJson();
+
+Future<Uint8List> renderPreviewFrame({
   required int width,
   required int height,
   required double timeSeconds,
@@ -21,3 +24,36 @@ Uint8List renderPreviewFrame({
   height: height,
   timeSeconds: timeSeconds,
 );
+
+void orbitCamera({required double deltaX, required double deltaY}) => RustLib
+    .instance
+    .api
+    .crateApiSimpleOrbitCamera(deltaX: deltaX, deltaY: deltaY);
+
+void panCamera({required double deltaX, required double deltaY}) => RustLib
+    .instance
+    .api
+    .crateApiSimplePanCamera(deltaX: deltaX, deltaY: deltaY);
+
+void zoomCamera({required double delta}) =>
+    RustLib.instance.api.crateApiSimpleZoomCamera(delta: delta);
+
+String selectNodeAtViewport({
+  required double mouseX,
+  required double mouseY,
+  required int width,
+  required int height,
+  required double timeSeconds,
+}) => RustLib.instance.api.crateApiSimpleSelectNodeAtViewport(
+  mouseX: mouseX,
+  mouseY: mouseY,
+  width: width,
+  height: height,
+  timeSeconds: timeSeconds,
+);
+
+String frameAll() => RustLib.instance.api.crateApiSimpleFrameAll();
+
+String addSphere() => RustLib.instance.api.crateApiSimpleAddSphere();
+
+String resetScene() => RustLib.instance.api.crateApiSimpleResetScene();

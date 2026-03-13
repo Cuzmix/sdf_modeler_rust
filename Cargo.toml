@@ -31,6 +31,7 @@ naga = { version = "22.1", features = ["wgsl-in"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rfd = "0.15"
+pollster = "0.4"
 env_logger = "0.11"
 rayon = "1.11.0"
 image = "0.25"

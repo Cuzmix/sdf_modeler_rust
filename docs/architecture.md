@@ -1139,3 +1139,4 @@ src/shaders/
 For ongoing UI migration safety rules, see `docs/ui_backend_boundary.md`.
 
 This contract defines which app modules stay toolkit-agnostic (`src/app/backend_frame.rs`) and which are toolkit adapters (`src/app/egui_frontend.rs`, `src/app/frontend_bridge.rs`).
+
