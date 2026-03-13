@@ -3,6 +3,7 @@ use eframe::wgpu;
 use crate::gpu::buffers::SdfNodeGpu;
 use crate::gpu::camera::CameraUniform;
 use crate::gpu::picking::{PendingPick, PickResult};
+use crate::settings::RenderConfig;
 
 use super::{BrushDispatch, ViewportResources, INITIAL_VOXEL_CAPACITY};
 
@@ -141,7 +142,7 @@ impl ViewportResources {
 
         queue.submit(std::iter::once(encoder.finish()));
 
-        // Request async map Ã¢â‚¬â€ caller polls with device.poll(Poll)
+        // Request async map ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â caller polls with device.poll(Poll)
         let buffer_slice = self.pick_staging_buffer.slice(..);
         let (tx, rx) = std::sync::mpsc::channel();
         buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
@@ -250,15 +251,33 @@ impl ViewportResources {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         uniform: &CameraUniform,
+        render_config: &RenderConfig,
         width: u32,
         height: u32,
     ) -> Vec<u8> {
         // Write camera uniform
         queue.write_buffer(&self.camera_buffer, 0, bytemuck::bytes_of(uniform));
 
-        // Create offscreen texture
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Screenshot Texture"),
+        // Render to an intermediate scene texture so the shared blit pipeline can
+        // apply outline and bloom before readback.
+        let scene_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Screenshot Scene Texture"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: self.target_format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let scene_view = scene_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let output_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Screenshot Output Texture"),
             size: wgpu::Extent3d {
                 width,
                 height,
@@ -271,7 +290,7 @@ impl ViewportResources {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
         });
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let output_view = output_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         // Row alignment for buffer copy
         let bytes_per_pixel = 4u32;
@@ -287,16 +306,57 @@ impl ViewportResources {
             mapped_at_creation: false,
         });
 
+        let blit_params_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Screenshot Blit Params"),
+            size: 48,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let blit_data: [f32; 12] = [
+            0.0,
+            0.0,
+            width as f32,
+            height as f32,
+            render_config.outline_color[0],
+            render_config.outline_color[1],
+            render_config.outline_color[2],
+            render_config.outline_thickness,
+            render_config.bloom_threshold,
+            render_config.bloom_intensity,
+            render_config.bloom_radius,
+            if render_config.bloom_enabled { 1.0 } else { 0.0 },
+        ];
+        queue.write_buffer(&blit_params_buffer, 0, bytemuck::cast_slice(&blit_data));
+
+        let blit_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Screenshot Blit BG"),
+            layout: &self.blit_bgl,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: blit_params_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.blit_sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&scene_view),
+                },
+            ],
+        });
+
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Screenshot Encoder"),
         });
 
-        // Render pass
+        // Scene render pass
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Screenshot Pass"),
+                label: Some("Screenshot Scene Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
+                    view: &scene_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
@@ -307,17 +367,47 @@ impl ViewportResources {
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
-            pass.set_pipeline(&self.pipeline);
-            pass.set_bind_group(0, &self.camera_bind_group, &[]);
-            pass.set_bind_group(1, &self.scene_bind_group, &[]);
-            pass.set_bind_group(2, &self.voxel_tex_bind_group, &[]);
+            if self.use_composite {
+                if let Some(ref composite) = self.composite {
+                    pass.set_pipeline(&composite.render_pipeline);
+                    pass.set_bind_group(0, &self.camera_bind_group, &[]);
+                    pass.set_bind_group(1, &self.scene_bind_group, &[]);
+                    pass.set_bind_group(2, &composite.render_bg, &[]);
+                }
+            } else {
+                pass.set_pipeline(&self.pipeline);
+                pass.set_bind_group(0, &self.camera_bind_group, &[]);
+                pass.set_bind_group(1, &self.scene_bind_group, &[]);
+                pass.set_bind_group(2, &self.voxel_tex_bind_group, &[]);
+            }
+            pass.draw(0..3, 0..1);
+        }
+
+        // Shared post-process blit pass.
+        {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Screenshot Blit Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &output_view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+            pass.set_pipeline(&self.blit_pipeline);
+            pass.set_bind_group(0, &blit_bind_group, &[]);
             pass.draw(0..3, 0..1);
         }
 
         // Copy texture to staging buffer
         encoder.copy_texture_to_buffer(
             wgpu::ImageCopyTexture {
-                texture: &texture,
+                texture: &output_texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,

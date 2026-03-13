@@ -579,7 +579,7 @@ impl Default for RenderConfig {
 
             sculpt_fast_mode: false,
             auto_reduce_steps: true,
-            interaction_render_scale: 0.5,
+            interaction_render_scale: 1.0,
             rest_render_scale: 1.0,
             composite_volume_enabled: false,
             composite_volume_resolution: 128,

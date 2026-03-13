@@ -13,7 +13,7 @@ use super::{BakeRequest, SdfApp};
 use super::{BakeStatus, ExportStatus, ImportStatus};
 
 impl SdfApp {
-    // ── Bake ─────────────────────────────────────────────────────────────
+    // â”€â”€ Bake â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn start_async_bake(&mut self, req: BakeRequest, ctx: &egui::Context) {
@@ -67,7 +67,7 @@ impl SdfApp {
     }
 
     /// Instantly create a displacement grid for a non-flatten bake request.
-    /// No async thread needed — displacement grids start at 0.0 (O(1)).
+    /// No async thread needed â€” displacement grids start at 0.0 (O(1)).
     pub(super) fn apply_instant_displacement_bake(&mut self, req: BakeRequest) {
         let (grid, center) = voxel::create_displacement_grid_for_subtree(
             &self.doc.scene,
@@ -133,7 +133,7 @@ impl SdfApp {
 
     #[cfg(target_arch = "wasm32")]
     pub(super) fn poll_async_bake(&mut self) {
-        // Bake runs synchronously on WASM — nothing to poll.
+        // Bake runs synchronously on WASM â€” nothing to poll.
     }
 
     fn apply_bake_result(
@@ -182,7 +182,7 @@ impl SdfApp {
         self.gpu.buffer_dirty = true;
     }
 
-    // ── Screenshot ───────────────────────────────────────────────────────
+    // â”€â”€ Screenshot â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn take_screenshot(&self) {
@@ -261,6 +261,7 @@ impl SdfApp {
             &self.gpu.render_state.device,
             &self.gpu.render_state.queue,
             &uniform,
+            &self.settings.render,
             width,
             height,
         );
@@ -277,7 +278,7 @@ impl SdfApp {
         log::warn!("Screenshot is not supported on web");
     }
 
-    // ── Export ────────────────────────────────────────────────────────────
+    // â”€â”€ Export â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn start_export(&mut self, ctx: &egui::Context) {
@@ -446,10 +447,10 @@ impl SdfApp {
 
     #[cfg(target_arch = "wasm32")]
     pub(super) fn poll_export(&mut self) {
-        // Export runs synchronously on WASM — nothing to poll.
+        // Export runs synchronously on WASM â€” nothing to poll.
     }
 
-    // ── Import Mesh ──────────────────────────────────────────────────────
+    // â”€â”€ Import Mesh â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /// Open a file picker, load the mesh, and show the import settings dialog.
     #[cfg(not(target_arch = "wasm32"))]
@@ -535,7 +536,7 @@ impl SdfApp {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn poll_import(&mut self) {
-        // Check if cancelled — if so, reset immediately without waiting for result
+        // Check if cancelled â€” if so, reset immediately without waiting for result
         if let ImportStatus::InProgress {
             ref cancelled,
             ref receiver,

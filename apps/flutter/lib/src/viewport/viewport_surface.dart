@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 const double _viewportAspectRatio = 16.0 / 9.0;
 const double _tapSlop = 6.0;
+const double _hoverSlop = 4.0;
 
 typedef ViewportSizeChanged = void Function(
   Size logicalViewportSize,
@@ -10,6 +11,10 @@ typedef ViewportSizeChanged = void Function(
 );
 typedef ViewportDragCallback = void Function(Offset delta);
 typedef ViewportTapCallback = void Function(
+  Offset localPosition,
+  Size logicalViewportSize,
+);
+typedef ViewportHoverCallback = void Function(
   Offset localPosition,
   Size logicalViewportSize,
 );
@@ -23,8 +28,11 @@ class ViewportSurface extends StatefulWidget {
     required this.onOrbitDrag,
     required this.onPanDrag,
     required this.onPrimaryTap,
+    required this.onHover,
+    required this.onHoverExit,
     required this.onScroll,
     required this.onInteractionEnd,
+    this.overlay,
   });
 
   final int? textureId;
@@ -32,8 +40,11 @@ class ViewportSurface extends StatefulWidget {
   final ViewportDragCallback onOrbitDrag;
   final ViewportDragCallback onPanDrag;
   final ViewportTapCallback onPrimaryTap;
+  final ViewportHoverCallback onHover;
+  final VoidCallback onHoverExit;
   final ViewportScrollCallback onScroll;
   final VoidCallback onInteractionEnd;
+  final Widget? overlay;
 
   @override
   State<ViewportSurface> createState() => _ViewportSurfaceState();
@@ -41,12 +52,14 @@ class ViewportSurface extends StatefulWidget {
 
 class _ViewportSurfaceState extends State<ViewportSurface> {
   Offset? _pressLocalPosition;
+  Offset? _lastHoverLocalPosition;
   int _pressButtons = 0;
   bool _tapCanceled = false;
   Size _currentViewportSize = const Size(1, 1);
 
   void _handlePointerDown(PointerDownEvent event) {
     _pressLocalPosition = event.localPosition;
+    _lastHoverLocalPosition = event.localPosition;
     _pressButtons = event.buttons;
     _tapCanceled = false;
   }
@@ -77,6 +90,7 @@ class _ViewportSurfaceState extends State<ViewportSurface> {
     _pressLocalPosition = null;
     _pressButtons = 0;
     _tapCanceled = false;
+    _lastHoverLocalPosition = null;
 
     if (shouldSelect) {
       widget.onPrimaryTap(event.localPosition, _currentViewportSize);
@@ -89,6 +103,7 @@ class _ViewportSurfaceState extends State<ViewportSurface> {
     _pressLocalPosition = null;
     _pressButtons = 0;
     _tapCanceled = false;
+    _lastHoverLocalPosition = null;
     widget.onInteractionEnd();
   }
 
@@ -99,6 +114,30 @@ class _ViewportSurfaceState extends State<ViewportSurface> {
 
     widget.onScroll(-event.scrollDelta.dy);
     widget.onInteractionEnd();
+  }
+
+  void _handleMouseHover(PointerHoverEvent event) {
+    if (_pressButtons != 0) {
+      return;
+    }
+
+    final previousHoverPosition = _lastHoverLocalPosition;
+    if (previousHoverPosition != null &&
+        (event.localPosition - previousHoverPosition).distance < _hoverSlop) {
+      return;
+    }
+
+    _lastHoverLocalPosition = event.localPosition;
+    widget.onHover(event.localPosition, _currentViewportSize);
+  }
+
+  void _handleMouseExit(PointerExitEvent event) {
+    _lastHoverLocalPosition = null;
+    if (_pressButtons != 0) {
+      return;
+    }
+
+    widget.onHoverExit();
   }
 
   @override
@@ -129,23 +168,32 @@ class _ViewportSurfaceState extends State<ViewportSurface> {
               child: SizedBox(
                 width: viewportSize.width,
                 height: viewportSize.height,
-                child: Listener(
-                  behavior: HitTestBehavior.opaque,
-                  onPointerDown: _handlePointerDown,
-                  onPointerMove: _handlePointerMove,
-                  onPointerUp: _handlePointerUp,
-                  onPointerCancel: _handlePointerCancel,
-                  onPointerSignal: _handlePointerSignal,
-                  child: MouseRegion(
-                    cursor: SystemMouseCursors.precise,
-                    child: widget.textureId == null
-                        ? const Center(
-                            child: Text(
-                              'Preparing real viewport...',
-                              style: TextStyle(color: Colors.white70),
-                            ),
-                          )
-                        : Texture(textureId: widget.textureId!),
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.precise,
+                  onHover: _handleMouseHover,
+                  onExit: _handleMouseExit,
+                  child: Listener(
+                    behavior: HitTestBehavior.opaque,
+                    onPointerDown: _handlePointerDown,
+                    onPointerMove: _handlePointerMove,
+                    onPointerUp: _handlePointerUp,
+                    onPointerCancel: _handlePointerCancel,
+                    onPointerSignal: _handlePointerSignal,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        widget.textureId == null
+                            ? const Center(
+                                child: Text(
+                                  'Preparing real viewport...',
+                                  style: TextStyle(color: Colors.white70),
+                                ),
+                              )
+                            : Texture(textureId: widget.textureId!),
+                        if (widget.overlay != null)
+                          IgnorePointer(child: widget.overlay!),
+                      ],
+                    ),
                   ),
                 ),
               ),

@@ -6,8 +6,6 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `app_bridge`, `snapshot_json`
-
 String ping() => RustLib.instance.api.crateApiSimplePing();
 
 String bridgeVersion() => RustLib.instance.api.crateApiSimpleBridgeVersion();
@@ -52,7 +50,24 @@ String selectNodeAtViewport({
   timeSeconds: timeSeconds,
 );
 
+String focusSelected() => RustLib.instance.api.crateApiSimpleFocusSelected();
+
 String frameAll() => RustLib.instance.api.crateApiSimpleFrameAll();
+
+String cameraFront() => RustLib.instance.api.crateApiSimpleCameraFront();
+
+String cameraTop() => RustLib.instance.api.crateApiSimpleCameraTop();
+
+String cameraRight() => RustLib.instance.api.crateApiSimpleCameraRight();
+
+String cameraBack() => RustLib.instance.api.crateApiSimpleCameraBack();
+
+String cameraLeft() => RustLib.instance.api.crateApiSimpleCameraLeft();
+
+String cameraBottom() => RustLib.instance.api.crateApiSimpleCameraBottom();
+
+String toggleOrthographic() =>
+    RustLib.instance.api.crateApiSimpleToggleOrthographic();
 
 String addSphere() => RustLib.instance.api.crateApiSimpleAddSphere();
 

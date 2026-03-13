@@ -1,4 +1,4 @@
-﻿use std::collections::HashSet;
+use std::collections::HashSet;
 
 use eframe::wgpu;
 
@@ -94,6 +94,7 @@ impl HeadlessViewportRenderer {
             &self.device,
             &self.queue,
             &render_uniform,
+            request.render_config,
             request.width.max(1),
             request.height.max(1),
         )

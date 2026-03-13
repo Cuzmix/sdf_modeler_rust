@@ -1,15 +1,4 @@
-﻿use std::sync::{Mutex, OnceLock};
-
-use sdf_modeler::app_bridge::AppBridge;
-
-fn app_bridge() -> &'static Mutex<AppBridge> {
-    static APP_BRIDGE: OnceLock<Mutex<AppBridge>> = OnceLock::new();
-    APP_BRIDGE.get_or_init(|| Mutex::new(AppBridge::new()))
-}
-
-fn snapshot_json(bridge: &AppBridge) -> String {
-    serde_json::to_string(&bridge.scene_snapshot()).expect("scene snapshot json")
-}
+use crate::bridge_state::{app_bridge, snapshot_json};
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn ping() -> String {
@@ -31,7 +20,7 @@ pub fn render_preview_frame(width: u32, height: u32, time_seconds: f32) -> Vec<u
     app_bridge()
         .lock()
         .expect("app bridge mutex")
-        .render_viewport_frame(width, height, time_seconds)
+        .render_viewport_frame(width, height, time_seconds).pixels
 }
 
 #[flutter_rust_bridge::frb(sync)]
@@ -66,9 +55,65 @@ pub fn select_node_at_viewport(
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn focus_selected() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.focus_selected();
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn frame_all() -> String {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.frame_all();
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn camera_front() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.camera_front();
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn camera_top() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.camera_top();
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn camera_right() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.camera_right();
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn camera_back() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.camera_back();
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn camera_left() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.camera_left();
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn camera_bottom() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.camera_bottom();
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn toggle_orthographic() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.toggle_orthographic();
     snapshot_json(&bridge)
 }
 

@@ -6,6 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:sdf_modeler_flutter/src/rust/api/simple.dart';
 import 'package:sdf_modeler_flutter/src/scene/scene_snapshot.dart';
 import 'package:sdf_modeler_flutter/src/texture/texture_bridge.dart';
+import 'package:sdf_modeler_flutter/src/texture/texture_viewport_event.dart';
+import 'package:sdf_modeler_flutter/src/texture/texture_viewport_feedback.dart';
+import 'package:sdf_modeler_flutter/src/viewport/viewport_feedback_overlay.dart';
 import 'package:sdf_modeler_flutter/src/viewport/viewport_surface.dart';
 
 class SdfModelerApp extends StatelessWidget {
@@ -29,45 +32,48 @@ class BridgeStatusPage extends StatefulWidget {
 }
 
 class _BridgeStatusPageState extends State<BridgeStatusPage> {
-  static const Duration _targetFrameInterval = Duration(milliseconds: 41);
-  static const Duration _snapshotRefreshDelay = Duration(milliseconds: 120);
+  static const Duration _interactionSharpnessDelay = Duration(milliseconds: 180);
   static const int _defaultFrameWidth = 640;
   static const int _defaultFrameHeight = 360;
   static const int _minimumFrameWidth = 320;
   static const int _minimumFrameHeight = 180;
   static const int _maximumFrameDimension = 4096;
   static const int _frameDimensionAlignment = 8;
-  static const double _minimumRenderScale = 0.6;
-  static const double _maximumRenderScale = 1.0;
-  static const double _renderScaleIncreaseStep = 0.05;
-  static const double _renderScaleDecreaseStep = 0.1;
-  static const int _minimumFramesBetweenScaleAdjustments = 12;
-  static const double _scaleUpFrameLoadRatio = 0.6;
-  static const double _scaleDownFrameLoadRatio = 0.95;
+  static const double _steadyStateRenderScale = 1.0;
+  static const double _interactionRenderScaleCap = 0.65;
+  static const double _frameRateSmoothingFactor = 0.18;
 
   String _statusLine = 'Checking Rust bridge...';
   String _versionLine = '';
   String _previewLine = 'Initializing viewport texture...';
 
   AppSceneSnapshot? _sceneSnapshot;
+  TextureViewportFeedback? _viewportFeedback;
   int? _textureId;
-  Timer? _renderTimer;
-  Timer? _snapshotRefreshTimer;
-  final Stopwatch _elapsed = Stopwatch();
-  bool _renderInFlight = false;
+  StreamSubscription<TextureViewportEvent>? _textureEventSubscription;
+  Timer? _interactionCooldownTimer;
   bool _commandInFlight = false;
-  int _renderedFrames = 0;
-  double _averageRenderMs = 0.0;
+  bool _adaptiveInteractionResolutionEnabled = false;
+  bool _viewportInteractionActive = false;
   int _frameWidth = _defaultFrameWidth;
   int _frameHeight = _defaultFrameHeight;
-  double _renderScale = _maximumRenderScale;
-  int _framesSinceScaleAdjustment = 0;
+  int _nativeFrameWidth = 0;
+  int _nativeFrameHeight = 0;
+  int _nativeFrameCount = 0;
+  int _droppedFrameCount = 0;
+  double? _lastNativeFrameTimeMs;
+  double? _smoothedFramesPerSecond;
+  String _interactionPhase = 'idle';
   Size _lastLogicalViewportSize = Size.zero;
   double _lastDevicePixelRatio = 1.0;
 
   @override
   void initState() {
     super.initState();
+    _textureEventSubscription = TextureBridge.instance.events.listen(
+      _handleTextureEvent,
+      onError: _handleTextureEventError,
+    );
     _initializeBridge();
   }
 
@@ -80,8 +86,10 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
         height: _frameHeight,
       );
       final snapshot = _decodeSnapshot(sceneSnapshotJson());
+      final viewportFeedback = TextureViewportFeedback.fromSceneSnapshot(snapshot);
 
       if (!mounted) {
+        await TextureBridge.instance.disposeTexture(createdTextureId);
         return;
       }
 
@@ -90,11 +98,11 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
         _versionLine = 'Bridge crate version: $versionValue';
         _textureId = createdTextureId;
         _sceneSnapshot = snapshot;
+        _viewportFeedback = viewportFeedback;
         _previewLine = _buildPreviewLine();
       });
 
-      _elapsed.start();
-      _startRenderLoop();
+      _requestNativeFrame(textureId: createdTextureId);
     } catch (error) {
       if (!mounted) {
         return;
@@ -112,95 +120,95 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     return AppSceneSnapshot.fromJson(decoded);
   }
 
+  double get _effectiveRenderScale {
+    if (_adaptiveInteractionResolutionEnabled && _viewportInteractionActive) {
+      return math.min(_steadyStateRenderScale, _interactionRenderScaleCap);
+    }
+
+    return _steadyStateRenderScale;
+  }
+
   String _buildPreviewLine() {
-    final scalePercent = (_renderScale * 100).round();
+    final scalePercent = (_effectiveRenderScale * 100).round();
+    final interactionLabel = _viewportInteractionActive ? ' interactive' : '';
     final base =
-        'Viewport render target: ${_frameWidth}x$_frameHeight at $scalePercent% scale';
-    if (_renderedFrames == 0) {
-      return '$base (real renderer).';
+        'Viewport render target: ${_frameWidth}x$_frameHeight at $scalePercent% scale$interactionLabel';
+    if (_nativeFrameCount == 0 || _lastNativeFrameTimeMs == null) {
+      return '$base (native host render loop, phase $_interactionPhase).';
     }
 
-    return '$base ($_renderedFrames frames, ${_averageRenderMs.toStringAsFixed(1)} ms render).';
+    final nativeSize = _nativeFrameWidth > 0 && _nativeFrameHeight > 0
+        ? '${_nativeFrameWidth}x$_nativeFrameHeight'
+        : '${_frameWidth}x$_frameHeight';
+    final fpsSegment = _smoothedFramesPerSecond != null
+        ? '${_smoothedFramesPerSecond!.toStringAsFixed(1)} FPS, '
+        : '';
+    return '$base (native $nativeSize, $fpsSegment${_lastNativeFrameTimeMs!.toStringAsFixed(1)} ms, $_nativeFrameCount frames, dropped $_droppedFrameCount, phase $_interactionPhase).';
   }
 
-  void _startRenderLoop() {
-    _scheduleNextFrame(Duration.zero);
-  }
-
-  void _scheduleNextFrame(Duration delay) {
-    _renderTimer?.cancel();
-    _renderTimer = Timer(delay, () {
-      unawaited(_renderFrame());
-    });
-  }
-
-  Duration _computeNextFrameDelay(Stopwatch frameStopwatch) {
-    final remainingMicros =
-        _targetFrameInterval.inMicroseconds -
-        frameStopwatch.elapsedMicroseconds;
-    if (remainingMicros <= 0) {
-      return Duration.zero;
-    }
-
-    return Duration(microseconds: remainingMicros);
-  }
-
-  Future<void> _renderFrame() async {
+  void _handleTextureEvent(TextureViewportEvent event) {
     final activeTextureId = _textureId;
-    if (_renderInFlight || activeTextureId == null) {
+    if (activeTextureId == null || event.textureId != activeTextureId) {
       return;
     }
 
-    _renderInFlight = true;
-    final frameStopwatch = Stopwatch()..start();
-    var shouldScheduleNextFrame = false;
-
-    try {
-      final elapsedSeconds = _elapsed.elapsedMicroseconds / 1000000.0;
-      final pixels = await renderPreviewFrame(
-        width: _frameWidth,
-        height: _frameHeight,
-        timeSeconds: elapsedSeconds,
-      );
-
-      if (!mounted || _textureId != activeTextureId) {
-        return;
-      }
-
-      await TextureBridge.instance.updateTexture(
-        textureId: activeTextureId,
-        width: _frameWidth,
-        height: _frameHeight,
-        pixels: pixels,
-      );
-
-      _renderedFrames += 1;
-      final renderMs = frameStopwatch.elapsedMicroseconds / 1000.0;
-      _averageRenderMs = _renderedFrames == 1
-          ? renderMs
-          : (_averageRenderMs * 0.85) + (renderMs * 0.15);
-      _framesSinceScaleAdjustment += 1;
-      _updateAdaptiveRenderScale();
-      shouldScheduleNextFrame = true;
-
-      if (mounted && _renderedFrames % 10 == 0) {
-        setState(() {
-          _previewLine = _buildPreviewLine();
-        });
-      }
-    } catch (error) {
-      _renderTimer?.cancel();
-      if (mounted) {
-        setState(() {
-          _previewLine = 'Viewport update error: $error';
-        });
-      }
-    } finally {
-      _renderInFlight = false;
-      if (shouldScheduleNextFrame && mounted && _textureId == activeTextureId) {
-        _scheduleNextFrame(_computeNextFrameDelay(frameStopwatch));
-      }
+    if (!mounted) {
+      return;
     }
+
+    final instantaneousFramesPerSecond = _framesPerSecondFromFrameTime(
+      event.frameTimeMs,
+    );
+
+    setState(() {
+      _nativeFrameWidth = event.frameWidth;
+      _nativeFrameHeight = event.frameHeight;
+      _nativeFrameCount = event.frameCount;
+      _droppedFrameCount = event.droppedFrameCount;
+      _lastNativeFrameTimeMs = event.frameTimeMs;
+      _smoothedFramesPerSecond = _nextSmoothedFramesPerSecond(
+        _smoothedFramesPerSecond,
+        instantaneousFramesPerSecond,
+      );
+      _interactionPhase = event.interactionPhase;
+      if (event.feedback != null) {
+        _viewportFeedback = event.feedback;
+      }
+      _previewLine = _buildPreviewLine();
+    });
+  }
+
+  double? _framesPerSecondFromFrameTime(double frameTimeMs) {
+    if (frameTimeMs <= 0.0) {
+      return null;
+    }
+
+    return 1000.0 / frameTimeMs;
+  }
+
+  double? _nextSmoothedFramesPerSecond(
+    double? currentFramesPerSecond,
+    double? nextFramesPerSecond,
+  ) {
+    if (nextFramesPerSecond == null) {
+      return currentFramesPerSecond;
+    }
+    if (currentFramesPerSecond == null) {
+      return nextFramesPerSecond;
+    }
+
+    return (currentFramesPerSecond * (1.0 - _frameRateSmoothingFactor)) +
+        (nextFramesPerSecond * _frameRateSmoothingFactor);
+  }
+
+  void _handleTextureEventError(Object error) {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _previewLine = 'Viewport event error: $error';
+    });
   }
 
   void _refreshBridgeStatus() {
@@ -212,6 +220,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
         _statusLine = 'Rust ping: $pingValue';
         _versionLine = 'Bridge crate version: $versionValue';
         _sceneSnapshot = snapshot;
+        _viewportFeedback = TextureViewportFeedback.fromSceneSnapshot(snapshot);
       });
     } catch (error) {
       setState(() {
@@ -221,117 +230,222 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     }
   }
 
-  void _refreshSceneSnapshot() {
-    try {
-      final snapshot = _decodeSnapshot(sceneSnapshotJson());
-      if (!mounted) {
-        return;
+  void _beginViewportInteraction() {
+    _interactionCooldownTimer?.cancel();
+
+    if (!_viewportInteractionActive) {
+      _viewportInteractionActive = true;
+      final renderTargetChanged = _updateRenderTargetSize();
+      if (!renderTargetChanged && mounted) {
+        setState(() {
+          _previewLine = _buildPreviewLine();
+        });
       }
+    }
+
+    _interactionCooldownTimer = Timer(
+      _interactionSharpnessDelay,
+      _endViewportInteraction,
+    );
+  }
+
+  void _endViewportInteraction() {
+    _interactionCooldownTimer?.cancel();
+    _interactionCooldownTimer = null;
+
+    if (!_viewportInteractionActive) {
+      return;
+    }
+
+    _viewportInteractionActive = false;
+    final renderTargetChanged = _updateRenderTargetSize();
+    if (!renderTargetChanged && mounted) {
       setState(() {
-        _sceneSnapshot = snapshot;
+        _previewLine = _buildPreviewLine();
       });
+    }
+  }
+
+  void _toggleAdaptiveInteractionResolution(bool enabled) {
+    if (_adaptiveInteractionResolutionEnabled == enabled) {
+      return;
+    }
+
+    setState(() {
+      _adaptiveInteractionResolutionEnabled = enabled;
+    });
+
+    final renderTargetChanged = _updateRenderTargetSize();
+    if (!renderTargetChanged && mounted) {
+      setState(() {
+        _previewLine = _buildPreviewLine();
+      });
+    }
+  }
+
+  void _dispatchTextureCommand({
+    required Future<void> Function(int textureId) command,
+    required String errorPrefix,
+    int? textureId,
+  }) {
+    final activeTextureId = textureId ?? _textureId;
+    if (activeTextureId == null) {
+      return;
+    }
+
+    unawaited(_performTextureCommand(activeTextureId, command, errorPrefix));
+  }
+
+  Future<void> _performTextureCommand(
+    int textureId,
+    Future<void> Function(int textureId) command,
+    String errorPrefix,
+  ) async {
+    try {
+      await command(textureId);
     } catch (error) {
       if (!mounted) {
         return;
       }
       setState(() {
-        _previewLine = 'Scene snapshot error: $error';
+        _previewLine = '$errorPrefix: $error';
       });
     }
   }
 
-  void _scheduleSceneSnapshotRefresh() {
-    _snapshotRefreshTimer?.cancel();
-    _snapshotRefreshTimer = Timer(_snapshotRefreshDelay, _refreshSceneSnapshot);
+  void _requestNativeFrame({int? textureId}) {
+    _dispatchTextureCommand(
+      textureId: textureId,
+      errorPrefix: 'Viewport request error',
+      command: (activeTextureId) =>
+          TextureBridge.instance.requestFrame(textureId: activeTextureId),
+    );
   }
 
-  void _runViewportCommand(VoidCallback command) {
-    try {
-      command();
-      _scheduleSceneSnapshotRefresh();
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _previewLine = 'Viewport input error: $error';
-      });
+  void _syncNativeViewportSize() {
+    final activeTextureId = _textureId;
+    if (activeTextureId == null) {
+      return;
     }
+
+    final targetWidth = _frameWidth;
+    final targetHeight = _frameHeight;
+    _dispatchTextureCommand(
+      textureId: activeTextureId,
+      errorPrefix: 'Viewport resize error',
+      command: (textureId) async {
+        await TextureBridge.instance.setTextureSize(
+          textureId: textureId,
+          width: targetWidth,
+          height: targetHeight,
+        );
+        await TextureBridge.instance.requestFrame(textureId: textureId);
+      },
+    );
   }
 
   void _handleViewportOrbitDrag(Offset delta) {
-    _runViewportCommand(() {
-      orbitCamera(deltaX: delta.dx, deltaY: delta.dy);
-    });
+    _beginViewportInteraction();
+    _dispatchTextureCommand(
+      errorPrefix: 'Viewport orbit error',
+      command: (textureId) => TextureBridge.instance.orbitCamera(
+        textureId: textureId,
+        deltaX: delta.dx,
+        deltaY: delta.dy,
+      ),
+    );
   }
 
   void _handleViewportPanDrag(Offset delta) {
-    _runViewportCommand(() {
-      panCamera(deltaX: delta.dx, deltaY: delta.dy);
-    });
+    _beginViewportInteraction();
+    _dispatchTextureCommand(
+      errorPrefix: 'Viewport pan error',
+      command: (textureId) => TextureBridge.instance.panCamera(
+        textureId: textureId,
+        deltaX: delta.dx,
+        deltaY: delta.dy,
+      ),
+    );
   }
 
   void _handleViewportScroll(double deltaY) {
-    _runViewportCommand(() {
-      zoomCamera(delta: deltaY);
-    });
+    _beginViewportInteraction();
+    _dispatchTextureCommand(
+      errorPrefix: 'Viewport zoom error',
+      command: (textureId) => TextureBridge.instance.zoomCamera(
+        textureId: textureId,
+        delta: deltaY,
+      ),
+    );
   }
 
   void _handleViewportPrimaryTap(
     Offset localPosition,
     Size logicalViewportSize,
   ) {
-    try {
-      final snapshot = _decodeSnapshot(
-        selectNodeAtViewport(
-          mouseX: _mapViewportCoordinate(
-            localPosition.dx,
-            logicalViewportSize.width,
-            _frameWidth,
-          ),
-          mouseY: _mapViewportCoordinate(
-            localPosition.dy,
-            logicalViewportSize.height,
-            _frameHeight,
-          ),
-          width: _frameWidth,
-          height: _frameHeight,
-          timeSeconds: _elapsed.elapsedMicroseconds / 1000000.0,
-        ),
-      );
+    final normalizedX = _normalizeViewportCoordinate(
+      localPosition.dx,
+      logicalViewportSize.width,
+    );
+    final normalizedY = _normalizeViewportCoordinate(
+      localPosition.dy,
+      logicalViewportSize.height,
+    );
 
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _sceneSnapshot = snapshot;
-      });
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _previewLine = 'Viewport pick error: $error';
-      });
-    }
+    _dispatchTextureCommand(
+      errorPrefix: 'Viewport pick error',
+      command: (textureId) => TextureBridge.instance.pickNode(
+        textureId: textureId,
+        normalizedX: normalizedX,
+        normalizedY: normalizedY,
+      ),
+    );
   }
 
-  void _handleViewportInteractionEnd() {
-    _scheduleSceneSnapshotRefresh();
+  void _handleViewportHover(
+    Offset localPosition,
+    Size logicalViewportSize,
+  ) {
+    final normalizedX = _normalizeViewportCoordinate(
+      localPosition.dx,
+      logicalViewportSize.width,
+    );
+    final normalizedY = _normalizeViewportCoordinate(
+      localPosition.dy,
+      logicalViewportSize.height,
+    );
+
+    _dispatchTextureCommand(
+      errorPrefix: 'Viewport hover error',
+      command: (textureId) => TextureBridge.instance.hoverNode(
+        textureId: textureId,
+        normalizedX: normalizedX,
+        normalizedY: normalizedY,
+      ),
+    );
   }
 
-  double _mapViewportCoordinate(
+  void _handleViewportHoverExit() {
+    _dispatchTextureCommand(
+      errorPrefix: 'Viewport hover clear error',
+      command: (textureId) => TextureBridge.instance.clearHover(
+        textureId: textureId,
+      ),
+    );
+  }
+
+  void _handleViewportInteractionEnd() {}
+
+  double _normalizeViewportCoordinate(
     double logicalCoordinate,
     double logicalExtent,
-    int renderExtent,
   ) {
-    if (logicalExtent <= 0 || renderExtent <= 1) {
+    if (logicalExtent <= 0) {
       return 0.0;
     }
 
-    final clampedCoordinate = logicalCoordinate.clamp(0.0, logicalExtent);
-    return (clampedCoordinate / logicalExtent) * (renderExtent - 1);
+    final normalizedCoordinate = logicalCoordinate / logicalExtent;
+    return math.max(0.0, math.min(1.0, normalizedCoordinate));
   }
 
   void _handleViewportSizeChanged(
@@ -351,7 +465,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     Size logicalViewportSize,
     double devicePixelRatio,
   ) {
-    final scaledDevicePixelRatio = devicePixelRatio * _renderScale;
+    final scaledDevicePixelRatio = devicePixelRatio * _effectiveRenderScale;
     var targetWidth = math.max(
       _minimumFrameWidth,
       (logicalViewportSize.width * scaledDevicePixelRatio).round(),
@@ -397,48 +511,8 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
       _frameHeight = nextRenderSize.height;
       _previewLine = _buildPreviewLine();
     });
+    _syncNativeViewportSize();
     return true;
-  }
-
-  void _updateAdaptiveRenderScale() {
-    if (_framesSinceScaleAdjustment < _minimumFramesBetweenScaleAdjustments) {
-      return;
-    }
-
-    final targetFrameMs = _targetFrameInterval.inMicroseconds / 1000.0;
-    double? nextRenderScale;
-
-    if (_averageRenderMs > targetFrameMs * _scaleDownFrameLoadRatio &&
-        _renderScale > _minimumRenderScale) {
-      nextRenderScale = math.max(
-        _minimumRenderScale,
-        _renderScale - _renderScaleDecreaseStep,
-      );
-    } else if (_averageRenderMs < targetFrameMs * _scaleUpFrameLoadRatio &&
-        _renderScale < _maximumRenderScale) {
-      nextRenderScale = math.min(
-        _maximumRenderScale,
-        _renderScale + _renderScaleIncreaseStep,
-      );
-    }
-
-    if (nextRenderScale == null || nextRenderScale == _renderScale) {
-      return;
-    }
-
-    _renderScale = nextRenderScale;
-    _framesSinceScaleAdjustment = 0;
-    final renderTargetChanged = _updateRenderTargetSize();
-    if (!renderTargetChanged) {
-      if (!mounted) {
-        _previewLine = _buildPreviewLine();
-        return;
-      }
-
-      setState(() {
-        _previewLine = _buildPreviewLine();
-      });
-    }
   }
 
   int _alignFrameDimension(int value, int minimumValue) {
@@ -446,8 +520,8 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
       return minimumValue;
     }
 
-    final alignedValue = (value ~/ _frameDimensionAlignment) *
-        _frameDimensionAlignment;
+    final alignedValue =
+        (value ~/ _frameDimensionAlignment) * _frameDimensionAlignment;
     return math.max(minimumValue, alignedValue);
   }
 
@@ -467,7 +541,9 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
       }
       setState(() {
         _sceneSnapshot = snapshot;
+        _viewportFeedback = TextureViewportFeedback.fromSceneSnapshot(snapshot);
       });
+      _requestNativeFrame();
     } catch (error) {
       if (!mounted) {
         return;
@@ -486,8 +562,8 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
 
   @override
   void dispose() {
-    _renderTimer?.cancel();
-    _snapshotRefreshTimer?.cancel();
+    _textureEventSubscription?.cancel();
+    _interactionCooldownTimer?.cancel();
     final activeTextureId = _textureId;
     if (activeTextureId != null) {
       unawaited(TextureBridge.instance.disposeTexture(activeTextureId));
@@ -513,19 +589,41 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
               onOrbitDrag: _handleViewportOrbitDrag,
               onPanDrag: _handleViewportPanDrag,
               onPrimaryTap: _handleViewportPrimaryTap,
+              onHover: _handleViewportHover,
+              onHoverExit: _handleViewportHoverExit,
               onScroll: _handleViewportScroll,
               onInteractionEnd: _handleViewportInteractionEnd,
+              overlay: ViewportFeedbackOverlay(
+                feedback: _viewportFeedback,
+                interactionPhase: _interactionPhase,
+                frameTimeMs: _lastNativeFrameTimeMs,
+                framesPerSecond: _smoothedFramesPerSecond,
+                droppedFrameCount: _droppedFrameCount,
+              ),
             );
             final inspectorPanel = _InspectorPanel(
               snapshot: snapshot,
+              viewportFeedback: _viewportFeedback,
               statusLine: _statusLine,
               versionLine: _versionLine,
               previewLine: _previewLine,
               commandInFlight: _commandInFlight,
+              adaptiveInteractionResolutionEnabled:
+                  _adaptiveInteractionResolutionEnabled,
+              onToggleAdaptiveInteractionResolution:
+                  _toggleAdaptiveInteractionResolution,
               onRefresh: _refreshBridgeStatus,
               onAddSphere: () => _runSceneCommand(addSphere),
               onFrameAll: () => _runSceneCommand(frameAll),
               onResetScene: () => _runSceneCommand(resetScene),
+              onFocusSelected: () => _runSceneCommand(focusSelected),
+              onCameraFront: () => _runSceneCommand(cameraFront),
+              onCameraTop: () => _runSceneCommand(cameraTop),
+              onCameraRight: () => _runSceneCommand(cameraRight),
+              onCameraBack: () => _runSceneCommand(cameraBack),
+              onCameraLeft: () => _runSceneCommand(cameraLeft),
+              onCameraBottom: () => _runSceneCommand(cameraBottom),
+              onToggleProjection: () => _runSceneCommand(toggleOrthographic),
             );
 
             if (useSidePanel) {
@@ -557,28 +655,59 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
 class _InspectorPanel extends StatelessWidget {
   const _InspectorPanel({
     required this.snapshot,
+    required this.viewportFeedback,
     required this.statusLine,
     required this.versionLine,
     required this.previewLine,
     required this.commandInFlight,
+    required this.adaptiveInteractionResolutionEnabled,
+    required this.onToggleAdaptiveInteractionResolution,
     required this.onRefresh,
     required this.onAddSphere,
     required this.onFrameAll,
     required this.onResetScene,
+    required this.onFocusSelected,
+    required this.onCameraFront,
+    required this.onCameraTop,
+    required this.onCameraRight,
+    required this.onCameraBack,
+    required this.onCameraLeft,
+    required this.onCameraBottom,
+    required this.onToggleProjection,
   });
 
   final AppSceneSnapshot? snapshot;
+  final TextureViewportFeedback? viewportFeedback;
   final String statusLine;
   final String versionLine;
   final String previewLine;
   final bool commandInFlight;
+  final bool adaptiveInteractionResolutionEnabled;
+  final ValueChanged<bool> onToggleAdaptiveInteractionResolution;
   final VoidCallback onRefresh;
   final VoidCallback onAddSphere;
   final VoidCallback onFrameAll;
   final VoidCallback onResetScene;
+  final VoidCallback onFocusSelected;
+  final VoidCallback onCameraFront;
+  final VoidCallback onCameraTop;
+  final VoidCallback onCameraRight;
+  final VoidCallback onCameraBack;
+  final VoidCallback onCameraLeft;
+  final VoidCallback onCameraBottom;
+  final VoidCallback onToggleProjection;
 
   @override
   Widget build(BuildContext context) {
+    final currentCamera = viewportFeedback?.camera ?? snapshot?.camera;
+    final selectedNode = viewportFeedback?.selectedNode ?? snapshot?.selectedNode;
+    final hoveredNode = viewportFeedback?.hoveredNode;
+    final cameraControlsEnabled = !commandInFlight && currentCamera != null;
+    final focusSelectedEnabled = !commandInFlight && selectedNode != null;
+    final projectionButtonLabel = currentCamera?.orthographic ?? false
+        ? 'Use Perspective'
+        : 'Use Ortho';
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -592,6 +721,16 @@ class _InspectorPanel extends StatelessWidget {
             const SizedBox(height: 4),
             Text(previewLine),
             const SizedBox(height: 16),
+            SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
+              value: adaptiveInteractionResolutionEnabled,
+              onChanged: onToggleAdaptiveInteractionResolution,
+              title: const Text('Adaptive Interaction Resolution'),
+              subtitle: const Text(
+                'Lower the viewport render scale while navigating.',
+              ),
+            ),
+            const SizedBox(height: 8),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -613,6 +752,50 @@ class _InspectorPanel extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
+              'Camera',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton(
+                  onPressed: focusSelectedEnabled ? onFocusSelected : null,
+                  child: const Text('Focus Selected'),
+                ),
+                OutlinedButton(
+                  onPressed: cameraControlsEnabled ? onToggleProjection : null,
+                  child: Text(projectionButtonLabel),
+                ),
+                OutlinedButton(
+                  onPressed: cameraControlsEnabled ? onCameraFront : null,
+                  child: const Text('Front'),
+                ),
+                OutlinedButton(
+                  onPressed: cameraControlsEnabled ? onCameraTop : null,
+                  child: const Text('Top'),
+                ),
+                OutlinedButton(
+                  onPressed: cameraControlsEnabled ? onCameraRight : null,
+                  child: const Text('Right'),
+                ),
+                OutlinedButton(
+                  onPressed: cameraControlsEnabled ? onCameraBack : null,
+                  child: const Text('Back'),
+                ),
+                OutlinedButton(
+                  onPressed: cameraControlsEnabled ? onCameraLeft : null,
+                  child: const Text('Left'),
+                ),
+                OutlinedButton(
+                  onPressed: cameraControlsEnabled ? onCameraBottom : null,
+                  child: const Text('Bottom'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
               'Viewport Status',
               style: Theme.of(context).textTheme.titleMedium,
             ),
@@ -620,18 +803,20 @@ class _InspectorPanel extends StatelessWidget {
             if (snapshot == null)
               const Text('Scene snapshot is still loading.')
             else ...[
-              Text('Selected: ${snapshot!.selectedNode?.name ?? 'None'}'),
+              Text('Selected: ${selectedNode?.name ?? 'None'}'),
+              Text('Hovered: ${hoveredNode?.name ?? 'None'}'),
               Text(
-                'Tool: ${snapshot!.tool.activeToolLabel} • ${snapshot!.tool.shadingModeLabel}',
+                'Tool: ${snapshot!.tool.activeToolLabel} - ${snapshot!.tool.shadingModeLabel}',
+              ),
+              if (currentCamera != null)
+                Text(
+                  'Camera distance: ${currentCamera.distance.toStringAsFixed(2)} - ${currentCamera.orthographic ? 'Ortho' : 'Perspective'}',
+                ),
+              Text(
+                'Scene nodes: ${snapshot!.stats.totalNodes} total - ${snapshot!.stats.visibleNodes} visible - ${snapshot!.stats.topLevelNodes} roots',
               ),
               Text(
-                'Camera distance: ${snapshot!.camera.distance.toStringAsFixed(2)} • ${snapshot!.camera.orthographic ? 'Ortho' : 'Perspective'}',
-              ),
-              Text(
-                'Scene nodes: ${snapshot!.stats.totalNodes} total • ${snapshot!.stats.visibleNodes} visible • ${snapshot!.stats.topLevelNodes} roots',
-              ),
-              Text(
-                'SDF complexity: ${snapshot!.stats.sdfEvalComplexity} • Voxel memory: ${snapshot!.stats.voxelMemoryBytes} bytes',
+                'SDF complexity: ${snapshot!.stats.sdfEvalComplexity} - Voxel memory: ${snapshot!.stats.voxelMemoryBytes} bytes',
               ),
               const SizedBox(height: 16),
               Text(
@@ -648,7 +833,7 @@ class _InspectorPanel extends StatelessWidget {
                   children: snapshot!.topLevelNodes
                       .map(
                         (node) => Chip(
-                          label: Text('${node.name} • ${node.kindLabel}'),
+                          label: Text('${node.name} - ${node.kindLabel}'),
                         ),
                       )
                       .toList(growable: false),

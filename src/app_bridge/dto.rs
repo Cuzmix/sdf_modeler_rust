@@ -68,3 +68,10 @@ pub struct AppSceneSnapshot {
     pub stats: AppSceneStatsSnapshot,
     pub tool: AppToolSnapshot,
 }
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppViewportFeedbackSnapshot {
+    pub camera: AppCameraSnapshot,
+    pub selected_node: Option<AppNodeSnapshot>,
+    pub hovered_node: Option<AppNodeSnapshot>,
+}
