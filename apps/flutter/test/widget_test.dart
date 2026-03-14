@@ -14,6 +14,7 @@ import 'package:sdf_modeler_flutter/src/viewport/viewport_surface.dart';
 
 class _MockRustApi extends RustLibApi {
   static const String _baseSnapshot = '''{"selected_node":null,"top_level_nodes":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false}],"history":{"can_undo":false,"can_redo":false},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":7,"visible_nodes":7,"top_level_nodes":1,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":1,"structure_key":11,"data_fingerprint":22,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
+  static const String _documentSnapshot = '''{"selected_node":null,"top_level_nodes":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false}],"history":{"can_undo":false,"can_redo":false},"document":{"current_file_path":"C:\\\\Scenes\\\\hero.sdf","current_file_name":"hero.sdf","has_unsaved_changes":true,"recent_files":["C:\\\\Scenes\\\\hero.sdf","C:\\\\Scenes\\\\blockout.sdf"],"recovery_available":true,"recovery_summary":"Recovered unsaved work found."},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":7,"visible_nodes":7,"top_level_nodes":1,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":1,"structure_key":11,"data_fingerprint":22,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
   static const String _selectedSnapshot = '''{"selected_node":{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false},"top_level_nodes":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false}],"history":{"can_undo":false,"can_redo":false},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":7,"visible_nodes":7,"top_level_nodes":1,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":1,"structure_key":11,"data_fingerprint":22,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
   static const String _selectedPropertySnapshot = '''{"selected_node":{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false},"selected_node_properties":{"node_id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false,"transform":{"position_label":"Position","position":{"x":0.0,"y":0.0,"z":0.0},"rotation_degrees":{"x":0.0,"y":0.0,"z":0.0},"scale":null},"primitive":{"primitive_kind":"Sphere","parameters":[{"key":"radius","label":"Radius","value":1.0}]},"material":{"color":{"x":0.8,"y":0.3,"z":0.2},"roughness":0.5,"metallic":0.0,"emissive":{"x":0.0,"y":0.0,"z":0.0},"emissive_intensity":0.0,"fresnel":0.04}},"top_level_nodes":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false}],"history":{"can_undo":true,"can_redo":false},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":7,"visible_nodes":7,"top_level_nodes":1,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":1,"structure_key":11,"data_fingerprint":22,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
   static const String _selectedPropertyHiddenSnapshot = '''{"selected_node":{"id":1,"name":"Sphere","kind_label":"Sphere","visible":false,"locked":false},"selected_node_properties":{"node_id":1,"name":"Sphere","kind_label":"Sphere","visible":false,"locked":false,"transform":{"position_label":"Position","position":{"x":0.0,"y":0.0,"z":0.0},"rotation_degrees":{"x":0.0,"y":0.0,"z":0.0},"scale":null},"primitive":{"primitive_kind":"Sphere","parameters":[{"key":"radius","label":"Radius","value":1.0}]},"material":{"color":{"x":0.8,"y":0.3,"z":0.2},"roughness":0.5,"metallic":0.0,"emissive":{"x":0.0,"y":0.0,"z":0.0},"emissive_intensity":0.0,"fresnel":0.04}},"top_level_nodes":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":false,"locked":false}],"history":{"can_undo":true,"can_redo":false},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":7,"visible_nodes":6,"top_level_nodes":1,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":1,"structure_key":11,"data_fingerprint":23,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
@@ -50,6 +51,13 @@ class _MockRustApi extends RustLibApi {
   int createLightCalls = 0;
   int createSculptCalls = 0;
   int duplicateSelectedCalls = 0;
+  int newSceneCalls = 0;
+  int openSceneCalls = 0;
+  int openRecentSceneCalls = 0;
+  int saveSceneCalls = 0;
+  int saveSceneAsCalls = 0;
+  int recoverAutosaveCalls = 0;
+  int discardRecoveryCalls = 0;
   int renameNodeCalls = 0;
   int setSelectedPrimitiveParameterCalls = 0;
   int setSelectedMaterialFloatCalls = 0;
@@ -83,6 +91,13 @@ class _MockRustApi extends RustLibApi {
     createLightCalls = 0;
     createSculptCalls = 0;
     duplicateSelectedCalls = 0;
+    newSceneCalls = 0;
+    openSceneCalls = 0;
+    openRecentSceneCalls = 0;
+    saveSceneCalls = 0;
+    saveSceneAsCalls = 0;
+    recoverAutosaveCalls = 0;
+    discardRecoveryCalls = 0;
     renameNodeCalls = 0;
     setSelectedPrimitiveParameterCalls = 0;
     setSelectedMaterialFloatCalls = 0;
@@ -129,6 +144,12 @@ class _MockRustApi extends RustLibApi {
 
   @override
   String crateApiSimpleBridgeVersion() => '0.1.0-test';
+
+  @override
+  String crateApiSimpleDiscardRecovery() {
+    discardRecoveryCalls += 1;
+    return currentSnapshot;
+  }
 
   @override
   String crateApiSimpleCameraBack() => currentSnapshot;
@@ -190,6 +211,24 @@ class _MockRustApi extends RustLibApi {
   String crateApiSimpleDeleteSelected() {
     deleteSelectedCalls += 1;
     currentSnapshot = _baseUndoSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleNewScene() {
+    newSceneCalls += 1;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleOpenRecentScene({required String path}) {
+    openRecentSceneCalls += 1;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleOpenScene() {
+    openSceneCalls += 1;
     return currentSnapshot;
   }
 
@@ -371,6 +410,12 @@ class _MockRustApi extends RustLibApi {
   String crateApiSimplePing() => 'pong-test';
 
   @override
+  String crateApiSimpleRecoverAutosave() {
+    recoverAutosaveCalls += 1;
+    return currentSnapshot;
+  }
+
+  @override
   Future<Uint8List> crateApiSimpleRenderPreviewFrame({
     required int width,
     required int height,
@@ -382,6 +427,18 @@ class _MockRustApi extends RustLibApi {
   @override
   String crateApiSimpleResetScene() {
     currentSnapshot = _baseSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSaveScene() {
+    saveSceneCalls += 1;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSaveSceneAs() {
+    saveSceneAsCalls += 1;
     return currentSnapshot;
   }
 
@@ -791,6 +848,58 @@ void main() {
       commandButtonSize.height,
       greaterThanOrEqualTo(ShellTokens.minimumTouchTarget),
     );
+  });
+
+  testWidgets('routes document lifecycle commands through the Rust facade', (
+    WidgetTester tester,
+  ) async {
+    mockApi.currentSnapshot = _MockRustApi._documentSnapshot;
+
+    await pumpApp(tester, logicalSize: const Size(1400, 900));
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('document-new-command')),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('document-new-command')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('document-open-command')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('document-save-command')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('document-save-as-command')));
+    await tester.pump();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('document-recover-command')),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('document-recover-command')));
+    await tester.pump();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('document-discard-recovery-command')),
+    );
+    await tester.pump();
+    await tester.tap(
+      find.byKey(const ValueKey('document-discard-recovery-command')),
+    );
+    await tester.pump();
+    await tester.ensureVisible(find.text('blockout.sdf'));
+    await tester.pump();
+    await tester.tap(find.text('blockout.sdf'));
+    await tester.pump();
+
+    expect(mockApi.newSceneCalls, 1);
+    expect(mockApi.openSceneCalls, 1);
+    expect(mockApi.saveSceneCalls, 1);
+    expect(mockApi.saveSceneAsCalls, 1);
+    expect(mockApi.recoverAutosaveCalls, 1);
+    expect(mockApi.discardRecoveryCalls, 1);
+    expect(mockApi.openRecentSceneCalls, 1);
+    expect(requestFrameCalls, greaterThan(0));
   });
 
   testWidgets('routes scene tree commands through the Rust facade', (

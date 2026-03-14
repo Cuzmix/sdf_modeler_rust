@@ -15,6 +15,23 @@ String bridgeVersion() => RustLib.instance.api.crateApiSimpleBridgeVersion();
 String sceneSnapshotJson() =>
     RustLib.instance.api.crateApiSimpleSceneSnapshotJson();
 
+String newScene() => RustLib.instance.api.crateApiSimpleNewScene();
+
+String openScene() => RustLib.instance.api.crateApiSimpleOpenScene();
+
+String openRecentScene({required String path}) =>
+    RustLib.instance.api.crateApiSimpleOpenRecentScene(path: path);
+
+String saveScene() => RustLib.instance.api.crateApiSimpleSaveScene();
+
+String saveSceneAs() => RustLib.instance.api.crateApiSimpleSaveSceneAs();
+
+String recoverAutosave() =>
+    RustLib.instance.api.crateApiSimpleRecoverAutosave();
+
+String discardRecovery() =>
+    RustLib.instance.api.crateApiSimpleDiscardRecovery();
+
 Future<Uint8List> renderPreviewFrame({
   required int width,
   required int height,

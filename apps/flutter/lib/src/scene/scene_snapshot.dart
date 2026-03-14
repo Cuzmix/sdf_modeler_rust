@@ -237,6 +237,37 @@ class AppHistorySnapshot {
   }
 }
 
+class AppDocumentSnapshot {
+  const AppDocumentSnapshot({
+    required this.currentFilePath,
+    required this.currentFileName,
+    required this.hasUnsavedChanges,
+    required this.recentFiles,
+    required this.recoveryAvailable,
+    required this.recoverySummary,
+  });
+
+  final String? currentFilePath;
+  final String? currentFileName;
+  final bool hasUnsavedChanges;
+  final List<String> recentFiles;
+  final bool recoveryAvailable;
+  final String? recoverySummary;
+
+  factory AppDocumentSnapshot.fromJson(Map<String, dynamic> json) {
+    return AppDocumentSnapshot(
+      currentFilePath: json['current_file_path'] as String?,
+      currentFileName: json['current_file_name'] as String?,
+      hasUnsavedChanges: json['has_unsaved_changes'] as bool? ?? false,
+      recentFiles: (json['recent_files'] as List<dynamic>? ?? const [])
+          .map((item) => item as String)
+          .toList(growable: false),
+      recoveryAvailable: json['recovery_available'] as bool? ?? false,
+      recoverySummary: json['recovery_summary'] as String?,
+    );
+  }
+}
+
 class AppScalarPropertySnapshot {
   const AppScalarPropertySnapshot({
     required this.key,
@@ -390,6 +421,7 @@ class AppSceneSnapshot {
     required this.topLevelNodes,
     required this.sceneTreeRoots,
     required this.history,
+    required this.document,
     required this.camera,
     required this.stats,
     required this.tool,
@@ -400,6 +432,7 @@ class AppSceneSnapshot {
   final List<AppNodeSnapshot> topLevelNodes;
   final List<AppSceneTreeNodeSnapshot> sceneTreeRoots;
   final AppHistorySnapshot history;
+  final AppDocumentSnapshot document;
   final AppCameraSnapshot camera;
   final AppSceneStatsSnapshot stats;
   final AppToolSnapshot tool;
@@ -436,6 +469,16 @@ class AppSceneSnapshot {
       history: json['history'] == null
           ? const AppHistorySnapshot(canUndo: false, canRedo: false)
           : AppHistorySnapshot.fromJson(json['history'] as Map<String, dynamic>),
+      document: json['document'] == null
+          ? const AppDocumentSnapshot(
+              currentFilePath: null,
+              currentFileName: null,
+              hasUnsavedChanges: false,
+              recentFiles: <String>[],
+              recoveryAvailable: false,
+              recoverySummary: null,
+            )
+          : AppDocumentSnapshot.fromJson(json['document'] as Map<String, dynamic>),
       camera: AppCameraSnapshot.fromJson(json['camera'] as Map<String, dynamic>),
       stats: AppSceneStatsSnapshot.fromJson(
         json['stats'] as Map<String, dynamic>,

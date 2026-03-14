@@ -2347,3 +2347,48 @@ Manual verification:
 Result:
 - PRD #23 is fully verified and complete.
 
+--- Migration Iteration 16: PRD #24 - Persistence lifecycle flows ---
+COMPLETED. Ported backend-owned document lifecycle commands plus Flutter document session UI for new/open/save/save-as, recent files, unsaved state, autosave, and startup recovery prompts.
+
+Changes:
+- src/app_bridge/dto.rs
+- src/app_bridge/mod.rs
+- src/app_bridge/session.rs
+  - Added a toolkit-neutral document snapshot carrying current file path/name, unsaved state, recent files, and recovery prompt metadata.
+  - Added backend-owned document commands for `new_scene`, `open_scene`, `open_recent_scene`, `save_scene`, `save_scene_as`, `recover_autosave`, and `discard_recovery`.
+  - Reused existing Rust serialization, native file picker, settings, autosave, and recovery metadata behavior so Flutter continues to act only as the shell.
+  - Hooked document mutations, undo/redo restores, and reset flows into autosave/dirty tracking inside the bridge state.
+- apps/flutter/rust/src/api/simple.rs
+- apps/flutter/rust/src/frb_generated.rs
+- apps/flutter/lib/src/rust/api/simple.dart
+- apps/flutter/lib/src/rust/frb_generated.dart
+  - Exposed the document lifecycle commands through FRB and regenerated bindings.
+- apps/flutter/lib/src/scene/scene_snapshot.dart
+  - Added Dart parsing for the backend-owned document snapshot with backward-compatible defaults for older snapshots.
+- apps/flutter/lib/src/session/document_session_panel.dart
+- apps/flutter/lib/app.dart
+  - Added a reusable Flutter document session panel that renders file status, recovery actions, and recent files from backend snapshots.
+  - Wired the desktop inspector and tablet command sheet into the backend document commands without moving persistence logic into Dart.
+- apps/flutter/test/widget_test.dart
+  - Added widget coverage for the document lifecycle command routing path.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS (500 passed)
+- cargo build: PASS
+- apps/flutter/rust cargo check: PASS
+- apps/flutter/rust cargo clippy -- -D warnings: PASS
+- apps/flutter/rust cargo test: PASS
+- apps/flutter/rust cargo build: PASS
+- apps/flutter/scripts/frb_codegen.ps1: PASS
+- Flutter analyze: PASS
+- Flutter test: PASS
+- Flutter build windows --debug: PASS
+
+Manual verification:
+- Skipped by current workflow instruction. This slice was validated with automated Rust and Flutter coverage only.
+
+Result:
+- PRD #24 is fully verified and complete.
+

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:sdf_modeler_flutter/src/rust/api/simple.dart';
 import 'package:sdf_modeler_flutter/src/scene/scene_snapshot.dart';
 import 'package:sdf_modeler_flutter/src/scene/scene_tree_panel.dart';
+import 'package:sdf_modeler_flutter/src/session/document_session_panel.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_command_strip.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_contract.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_desktop_side_panel.dart';
@@ -683,6 +684,34 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     }
   }
 
+  Future<void> _newScene() {
+    return _runSceneCommand(newScene);
+  }
+
+  Future<void> _openScene() {
+    return _runSceneCommand(openScene);
+  }
+
+  Future<void> _openRecentScene(String path) {
+    return _runSceneCommand(() => openRecentScene(path: path));
+  }
+
+  Future<void> _saveScene() {
+    return _runSceneCommand(saveScene);
+  }
+
+  Future<void> _saveSceneAs() {
+    return _runSceneCommand(saveSceneAs);
+  }
+
+  Future<void> _recoverAutosave() {
+    return _runSceneCommand(recoverAutosave);
+  }
+
+  Future<void> _discardRecovery() {
+    return _runSceneCommand(discardRecovery);
+  }
+
   Future<void> _setManipulatorMode(String modeId) {
     return _runSceneCommand(() => setManipulatorMode(modeId: modeId));
   }
@@ -989,6 +1018,13 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                       onToggleSceneNodeLock: (nodeId) => _runSceneCommand(
                         () => toggleNodeLock(nodeId: BigInt.from(nodeId)),
                       ),
+                      onNewScene: _newScene,
+                      onOpenScene: _openScene,
+                      onSaveScene: _saveScene,
+                      onSaveSceneAs: _saveSceneAs,
+                      onOpenRecentScene: _openRecentScene,
+                      onRecoverAutosave: _recoverAutosave,
+                      onDiscardRecovery: _discardRecovery,
                       onFrameAll: () => _runSceneCommand(frameAll),
                       onResetScene: () => _runSceneCommand(resetScene),
                       onFocusSelected: () => _runSceneCommand(focusSelected),
@@ -1035,6 +1071,16 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                         onRedo: () => _runModalSceneCommand(redo),
                         onDeleteSelected: () =>
                             _runModalSceneCommand(deleteSelected),
+                        onNewScene: () => _runModalSceneCommand(newScene),
+                        onOpenScene: () => _runModalSceneCommand(openScene),
+                        onSaveScene: () => _runModalSceneCommand(saveScene),
+                        onSaveSceneAs: () => _runModalSceneCommand(saveSceneAs),
+                        onOpenRecentScene: (path) =>
+                            _runModalSceneCommand(() => openRecentScene(path: path)),
+                        onRecoverAutosave: () =>
+                            _runModalSceneCommand(recoverAutosave),
+                        onDiscardRecovery: () =>
+                            _runModalSceneCommand(discardRecovery),
                         onFrameAll: () => _runModalSceneCommand(frameAll),
                         onResetScene: () => _runModalSceneCommand(resetScene),
                         onFocusSelected: () =>
@@ -1130,6 +1176,13 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                   onToggleSceneNodeLock: (nodeId) => _runSceneCommand(
                     () => toggleNodeLock(nodeId: BigInt.from(nodeId)),
                   ),
+                  onNewScene: _newScene,
+                  onOpenScene: _openScene,
+                  onSaveScene: _saveScene,
+                  onSaveSceneAs: _saveSceneAs,
+                  onOpenRecentScene: _openRecentScene,
+                  onRecoverAutosave: _recoverAutosave,
+                  onDiscardRecovery: _discardRecovery,
                   onFrameAll: () => _runSceneCommand(frameAll),
                   onResetScene: () => _runSceneCommand(resetScene),
                   onFocusSelected: () => _runSceneCommand(focusSelected),
@@ -1285,6 +1338,13 @@ class _InspectorPanel extends StatelessWidget {
     required this.onSelectSceneNode,
     required this.onToggleSceneNodeVisibility,
     required this.onToggleSceneNodeLock,
+    required this.onNewScene,
+    required this.onOpenScene,
+    required this.onSaveScene,
+    required this.onSaveSceneAs,
+    required this.onOpenRecentScene,
+    required this.onRecoverAutosave,
+    required this.onDiscardRecovery,
     required this.onFrameAll,
     required this.onResetScene,
     required this.onFocusSelected,
@@ -1334,6 +1394,13 @@ class _InspectorPanel extends StatelessWidget {
   final ValueChanged<int> onSelectSceneNode;
   final ValueChanged<int> onToggleSceneNodeVisibility;
   final ValueChanged<int> onToggleSceneNodeLock;
+  final VoidCallback onNewScene;
+  final VoidCallback onOpenScene;
+  final VoidCallback onSaveScene;
+  final VoidCallback onSaveSceneAs;
+  final ValueChanged<String> onOpenRecentScene;
+  final VoidCallback onRecoverAutosave;
+  final VoidCallback onDiscardRecovery;
   final VoidCallback onFrameAll;
   final VoidCallback onResetScene;
   final VoidCallback onFocusSelected;
@@ -1530,6 +1597,18 @@ class _InspectorPanel extends StatelessWidget {
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
+          const SizedBox(height: ShellTokens.sectionGap),
+          DocumentSessionPanel(
+            document: snapshot?.document,
+            enabled: !commandInFlight,
+            onNewScene: onNewScene,
+            onOpenScene: onOpenScene,
+            onSaveScene: onSaveScene,
+            onSaveSceneAs: onSaveSceneAs,
+            onOpenRecentScene: onOpenRecentScene,
+            onRecoverAutosave: onRecoverAutosave,
+            onDiscardRecovery: onDiscardRecovery,
+          ),
           const SizedBox(height: ShellTokens.sectionGap),
           Text(
             'Viewport Status',
@@ -2416,6 +2495,13 @@ class _CommandSheetContent extends StatelessWidget {
     required this.onUndo,
     required this.onRedo,
     required this.onDeleteSelected,
+    required this.onNewScene,
+    required this.onOpenScene,
+    required this.onSaveScene,
+    required this.onSaveSceneAs,
+    required this.onOpenRecentScene,
+    required this.onRecoverAutosave,
+    required this.onDiscardRecovery,
     required this.onFrameAll,
     required this.onResetScene,
     required this.onFocusSelected,
@@ -2446,6 +2532,13 @@ class _CommandSheetContent extends StatelessWidget {
   final VoidCallback onUndo;
   final VoidCallback onRedo;
   final VoidCallback onDeleteSelected;
+  final VoidCallback onNewScene;
+  final VoidCallback onOpenScene;
+  final VoidCallback onSaveScene;
+  final VoidCallback onSaveSceneAs;
+  final ValueChanged<String> onOpenRecentScene;
+  final VoidCallback onRecoverAutosave;
+  final VoidCallback onDiscardRecovery;
   final VoidCallback onFrameAll;
   final VoidCallback onResetScene;
   final VoidCallback onFocusSelected;
@@ -2527,11 +2620,18 @@ class _CommandSheetContent extends StatelessWidget {
           onCameraBottom: onCameraBottom,
         ),
         const SizedBox(height: ShellTokens.sectionGap),
-        Text(
-          'Session',
-          style: Theme.of(context).textTheme.titleMedium,
+        DocumentSessionPanel(
+          document: snapshot?.document,
+          enabled: sceneCommandsEnabled,
+          onNewScene: onNewScene,
+          onOpenScene: onOpenScene,
+          onSaveScene: onSaveScene,
+          onSaveSceneAs: onSaveSceneAs,
+          onOpenRecentScene: onOpenRecentScene,
+          onRecoverAutosave: onRecoverAutosave,
+          onDiscardRecovery: onDiscardRecovery,
         ),
-        const SizedBox(height: ShellTokens.controlGap),
+        const SizedBox(height: ShellTokens.sectionGap),
         Wrap(
           spacing: ShellTokens.controlGap,
           runSpacing: ShellTokens.controlGap,

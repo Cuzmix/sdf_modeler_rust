@@ -17,6 +17,55 @@ pub fn scene_snapshot_json() -> String {
     snapshot_json(&bridge)
 }
 
+#[flutter_rust_bridge::frb(sync)]
+pub fn new_scene() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.new_scene();
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn open_scene() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.open_scene();
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn open_recent_scene(path: String) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.open_recent_scene(&path);
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn save_scene() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.save_scene();
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn save_scene_as() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.save_scene_as();
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn recover_autosave() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.recover_autosave();
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn discard_recovery() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.discard_recovery();
+    snapshot_json(&bridge)
+}
+
 pub fn render_preview_frame(width: u32, height: u32, time_seconds: f32) -> Vec<u8> {
     app_bridge()
         .lock()

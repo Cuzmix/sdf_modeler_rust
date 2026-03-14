@@ -1,20 +1,23 @@
 use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 
 use glam::Vec3;
 
+use crate::compat::{Duration, Instant};
 use crate::gpu::camera::Camera;
 use crate::graph::history::History;
 use crate::graph::scene::{
     CsgOp, LightType, ModifierKind, NodeData, NodeId, Scene, SceneNode, SdfPrimitive,
 };
 use crate::graph::voxel::create_displacement_grid_for_subtree;
-use crate::settings::RenderConfig;
+use crate::settings::{RenderConfig, Settings};
 
 use super::dto::{
-    AppCameraSnapshot, AppHistorySnapshot, AppMaterialPropertiesSnapshot, AppNodeSnapshot,
-    AppPrimitivePropertiesSnapshot, AppScalarPropertySnapshot, AppSceneSnapshot,
-    AppSceneStatsSnapshot, AppSceneTreeNodeSnapshot, AppSelectedNodePropertiesSnapshot,
-    AppToolSnapshot, AppTransformPropertiesSnapshot, AppVec3, AppViewportFeedbackSnapshot,
+    AppCameraSnapshot, AppDocumentSnapshot, AppHistorySnapshot,
+    AppMaterialPropertiesSnapshot, AppNodeSnapshot, AppPrimitivePropertiesSnapshot,
+    AppScalarPropertySnapshot, AppSceneSnapshot, AppSceneStatsSnapshot,
+    AppSceneTreeNodeSnapshot, AppSelectedNodePropertiesSnapshot, AppToolSnapshot,
+    AppTransformPropertiesSnapshot, AppVec3, AppViewportFeedbackSnapshot,
 };
 use super::renderer::{HeadlessPickRequest, HeadlessRenderRequest, HeadlessViewportRenderer};
 
@@ -27,7 +30,9 @@ pub struct AppBridge {
     scene: Scene,
     camera: Camera,
     render_config: RenderConfig,
+    settings: Settings,
     history: History,
+    persistence: DocumentPersistence,
     selected_node: Option<NodeId>,
     hovered_node: Option<NodeId>,
     active_tool_label: String,
@@ -36,6 +41,15 @@ pub struct AppBridge {
     pivot_offset: Vec3,
     renderer: HeadlessViewportRenderer,
     last_viewport_time_seconds: Option<f32>,
+}
+
+struct DocumentPersistence {
+    current_file_path: Option<PathBuf>,
+    saved_fingerprint: u64,
+    scene_dirty: bool,
+    last_auto_save: Instant,
+    recovery_prompt_visible: bool,
+    recovery_summary: Option<String>,
 }
 
 const DEFAULT_SCULPT_ENTRY_RESOLUTION: u32 = 64;
@@ -118,14 +132,30 @@ impl AppBridge {
     pub fn new() -> Self {
         let scene = Scene::new();
         let camera = Camera::default();
+        let settings = Settings::load();
         let render_config = RenderConfig::default();
         let renderer = HeadlessViewportRenderer::new(&scene, &render_config);
+        let initial_saved_fingerprint = scene.data_fingerprint();
+        let recovery_summary = if crate::io::has_recovery_file() {
+            Some(Self::recovery_summary_from_meta(crate::io::read_recovery_meta().as_ref()))
+        } else {
+            None
+        };
 
         Self {
             scene,
             camera,
             render_config,
+            settings,
             history: History::new(),
+            persistence: DocumentPersistence {
+                current_file_path: None,
+                saved_fingerprint: initial_saved_fingerprint,
+                scene_dirty: false,
+                last_auto_save: Instant::now(),
+                recovery_prompt_visible: recovery_summary.is_some(),
+                recovery_summary,
+            },
             selected_node: None,
             hovered_node: None,
             active_tool_label: "Select".to_string(),
@@ -158,6 +188,7 @@ impl AppBridge {
                 can_undo: self.history.undo_count() > 0,
                 can_redo: self.history.redo_count() > 0,
             },
+            document: self.document_snapshot(),
             camera: self.camera_snapshot(),
             stats: AppSceneStatsSnapshot {
                 total_nodes: node_counts.total as u32,
@@ -363,6 +394,87 @@ impl AppBridge {
 
     pub fn reset_manipulator_pivot(&mut self) {
         self.pivot_offset = Vec3::ZERO;
+    }
+
+    pub fn new_scene(&mut self) {
+        self.scene = Scene::new();
+        self.camera = Camera::default();
+        self.history = History::new();
+        self.selected_node = None;
+        self.hovered_node = None;
+        self.last_viewport_time_seconds = None;
+        self.persistence.current_file_path = None;
+        self.persistence.saved_fingerprint = self.scene.data_fingerprint();
+        self.persistence.scene_dirty = false;
+        self.clear_recovery_prompt();
+    }
+
+    pub fn open_scene(&mut self) -> bool {
+        let Some(path) = crate::io::open_dialog() else {
+            return false;
+        };
+
+        self.open_scene_from_path(&path)
+    }
+
+    pub fn open_recent_scene(&mut self, recent_path: &str) -> bool {
+        let path = PathBuf::from(recent_path);
+        if self.open_scene_from_path(&path) {
+            true
+        } else {
+            self.settings.recent_files.retain(|path_entry| path_entry != recent_path);
+            self.settings.save();
+            false
+        }
+    }
+
+    pub fn save_scene(&mut self) -> bool {
+        let Some(path) = self
+            .persistence
+            .current_file_path
+            .clone()
+            .or_else(crate::io::save_dialog)
+        else {
+            return false;
+        };
+
+        self.save_scene_to_path(&path)
+    }
+
+    pub fn save_scene_as(&mut self) -> bool {
+        let Some(path) = crate::io::save_dialog() else {
+            return false;
+        };
+
+        self.save_scene_to_path(&path)
+    }
+
+    pub fn recover_autosave(&mut self) -> bool {
+        let autosave_path = crate::io::auto_save_path();
+        let Ok(project) = crate::io::load_project(&autosave_path) else {
+            return false;
+        };
+
+        self.scene = project.scene;
+        self.camera = project.camera;
+        self.history = History::new();
+        self.selected_node = None;
+        self.hovered_node = None;
+        self.last_viewport_time_seconds = None;
+        self.persistence.current_file_path = None;
+        self.persistence.saved_fingerprint = 0;
+        self.persistence.scene_dirty = true;
+        self.clear_recovery_prompt();
+        true
+    }
+
+    pub fn discard_recovery(&mut self) -> bool {
+        if crate::io::remove_recovery_files().is_err() {
+            return false;
+        }
+
+        self.clear_recovery_prompt();
+        true
     }
 
     pub fn add_sphere(&mut self) -> u64 {
@@ -797,6 +909,7 @@ impl AppBridge {
         self.selected_node = None;
         self.hovered_node = None;
         self.last_viewport_time_seconds = None;
+        self.sync_document_persistence();
     }
 
     pub fn undo(&mut self) {
@@ -837,6 +950,7 @@ impl AppBridge {
         let result = command(self);
         self.history
             .end_frame(&self.scene, self.selected_node, false);
+        self.sync_document_persistence();
         result
     }
 
@@ -845,6 +959,76 @@ impl AppBridge {
         self.selected_node =
             restored_selected.filter(|node_id| self.scene.nodes.contains_key(node_id));
         self.hovered_node = self.selected_node;
+        self.sync_document_persistence();
+    }
+
+    fn recovery_summary_from_meta(meta: Option<&crate::io::RecoveryMeta>) -> String {
+        let timestamp = meta.map(|recovery_meta| recovery_meta.autosave_unix_secs).unwrap_or(0);
+        let project_hint = meta
+            .and_then(|recovery_meta| recovery_meta.project_path.as_deref())
+            .map(|path| format!("\nSource project: {path}"))
+            .unwrap_or_default();
+        format!("Recovered unsaved work found from UNIX timestamp {timestamp}.{project_hint}")
+    }
+
+    fn open_scene_from_path(&mut self, path: &Path) -> bool {
+        let Ok(project) = crate::io::load_project(&path.to_path_buf()) else {
+            return false;
+        };
+
+        self.scene = project.scene;
+        self.camera = project.camera;
+        self.history = History::new();
+        self.selected_node = None;
+        self.hovered_node = None;
+        self.last_viewport_time_seconds = None;
+        self.persistence.current_file_path = Some(path.to_path_buf());
+        self.persistence.saved_fingerprint = self.scene.data_fingerprint();
+        self.persistence.scene_dirty = false;
+        self.settings.add_recent_file(&path.to_string_lossy());
+        self.clear_recovery_prompt();
+        true
+    }
+
+    fn save_scene_to_path(&mut self, path: &Path) -> bool {
+        let save_path = path.to_path_buf();
+        if crate::io::save_project(&self.scene, &self.camera, &save_path).is_err() {
+            return false;
+        }
+
+        self.persistence.current_file_path = Some(save_path.clone());
+        self.persistence.saved_fingerprint = self.scene.data_fingerprint();
+        self.persistence.scene_dirty = false;
+        self.settings.add_recent_file(&save_path.to_string_lossy());
+        let _ = crate::io::remove_recovery_files();
+        self.clear_recovery_prompt();
+        true
+    }
+
+    fn sync_document_persistence(&mut self) {
+        let current_fingerprint = self.scene.data_fingerprint();
+        self.persistence.scene_dirty = current_fingerprint != self.persistence.saved_fingerprint;
+
+        if !self.settings.auto_save_enabled
+            || !self.persistence.scene_dirty
+            || self.persistence.last_auto_save.elapsed()
+                < Duration::from_secs(self.settings.auto_save_interval_secs as u64)
+        {
+            return;
+        }
+
+        self.persistence.last_auto_save = Instant::now();
+        let autosave_path = crate::io::auto_save_path();
+        if crate::io::save_project(&self.scene, &self.camera, &autosave_path).is_err() {
+            return;
+        }
+
+        let _ = crate::io::write_recovery_meta(self.persistence.current_file_path.as_deref());
+    }
+
+    fn clear_recovery_prompt(&mut self) {
+        self.persistence.recovery_prompt_visible = false;
+        self.persistence.recovery_summary = None;
     }
 
     fn offset_duplicated_root(&mut self, node_id: NodeId) {
@@ -919,6 +1103,29 @@ impl AppBridge {
             locked: node.locked,
             children,
         })
+    }
+
+    fn document_snapshot(&self) -> AppDocumentSnapshot {
+        let current_file_path = self
+            .persistence
+            .current_file_path
+            .as_ref()
+            .map(|path| path.to_string_lossy().to_string());
+        let current_file_name = self
+            .persistence
+            .current_file_path
+            .as_ref()
+            .and_then(|path| path.file_name())
+            .map(|file_name| file_name.to_string_lossy().to_string());
+
+        AppDocumentSnapshot {
+            current_file_path,
+            current_file_name,
+            has_unsaved_changes: self.persistence.scene_dirty,
+            recent_files: self.settings.recent_files.clone(),
+            recovery_available: self.persistence.recovery_prompt_visible,
+            recovery_summary: self.persistence.recovery_summary.clone(),
+        }
     }
 
     fn node_is_locked(&self, node_id: NodeId) -> bool {

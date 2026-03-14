@@ -165,7 +165,7 @@
     "category": "persistence",
     "description": "Port file, session, autosave, and recovery lifecycle flows.\n\nSteps:\n1. Port `new scene`, `open`, `save`, `save as`, and recent files through backend-owned commands.\n2. Port unsaved-state and autosave/recovery UX while keeping persistence semantics in Rust.\n3. Decide where platform file pickers belong per platform while preserving backend ownership of serialization and recovery rules.\n4. Keep Flutter as the shell that invokes lifecycle intents rather than owning persistence logic.",
     "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build`. If the bridge API changes, run `apps/flutter/scripts/frb_codegen.ps1`. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, `fvm flutter build windows --debug`, and `fvm flutter test integration_test -d windows` if file/session flows touch the Windows host. Manual: create, open, save, and reopen scenes from Flutter and verify unsaved-state, autosave, and recovery behavior remain correct.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 25,

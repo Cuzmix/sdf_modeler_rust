@@ -84,6 +84,16 @@ pub struct AppHistorySnapshot {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppDocumentSnapshot {
+    pub current_file_path: Option<String>,
+    pub current_file_name: Option<String>,
+    pub has_unsaved_changes: bool,
+    pub recent_files: Vec<String>,
+    pub recovery_available: bool,
+    pub recovery_summary: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AppScalarPropertySnapshot {
     pub key: String,
     pub label: String,
@@ -133,6 +143,7 @@ pub struct AppSceneSnapshot {
     pub top_level_nodes: Vec<AppNodeSnapshot>,
     pub scene_tree_roots: Vec<AppSceneTreeNodeSnapshot>,
     pub history: AppHistorySnapshot,
+    pub document: AppDocumentSnapshot,
     pub camera: AppCameraSnapshot,
     pub stats: AppSceneStatsSnapshot,
     pub tool: AppToolSnapshot,
