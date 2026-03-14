@@ -6,6 +6,8 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+// These functions are ignored because they are not marked as `pub`: `parse_modifier_id`, `parse_operation_id`
+
 String ping() => RustLib.instance.api.crateApiSimplePing();
 
 String bridgeVersion() => RustLib.instance.api.crateApiSimpleBridgeVersion();
@@ -66,6 +68,15 @@ String duplicateSelected() =>
 
 String renameNode({required BigInt nodeId, required String name}) =>
     RustLib.instance.api.crateApiSimpleRenameNode(nodeId: nodeId, name: name);
+
+String createOperation({required String operationId}) => RustLib.instance.api
+    .crateApiSimpleCreateOperation(operationId: operationId);
+
+String createTransform() =>
+    RustLib.instance.api.crateApiSimpleCreateTransform();
+
+String createModifier({required String modifierId}) =>
+    RustLib.instance.api.crateApiSimpleCreateModifier(modifierId: modifierId);
 
 String undo() => RustLib.instance.api.crateApiSimpleUndo();
 

@@ -20,6 +20,44 @@ import 'package:sdf_modeler_flutter/src/viewport/viewport_surface.dart';
 
 enum _BridgeModalPanel { commands }
 
+class _CreateNodeOption {
+  const _CreateNodeOption({required this.id, required this.label});
+
+  final String id;
+  final String label;
+}
+
+const List<_CreateNodeOption> _operationOptions = <_CreateNodeOption>[
+  _CreateNodeOption(id: 'union', label: 'Union'),
+  _CreateNodeOption(id: 'smooth_union', label: 'Smooth Union'),
+  _CreateNodeOption(id: 'subtract', label: 'Subtract'),
+  _CreateNodeOption(id: 'intersect', label: 'Intersect'),
+  _CreateNodeOption(id: 'smooth_subtract', label: 'Smooth Subtract'),
+  _CreateNodeOption(id: 'smooth_intersect', label: 'Smooth Intersect'),
+  _CreateNodeOption(id: 'chamfer_union', label: 'Chamfer Union'),
+  _CreateNodeOption(id: 'chamfer_subtract', label: 'Chamfer Subtract'),
+  _CreateNodeOption(id: 'chamfer_intersect', label: 'Chamfer Intersect'),
+  _CreateNodeOption(id: 'stairs_union', label: 'Stairs Union'),
+  _CreateNodeOption(id: 'stairs_subtract', label: 'Stairs Subtract'),
+  _CreateNodeOption(id: 'columns_union', label: 'Columns Union'),
+  _CreateNodeOption(id: 'columns_subtract', label: 'Columns Subtract'),
+];
+
+const List<_CreateNodeOption> _modifierOptions = <_CreateNodeOption>[
+  _CreateNodeOption(id: 'twist', label: 'Twist'),
+  _CreateNodeOption(id: 'bend', label: 'Bend'),
+  _CreateNodeOption(id: 'taper', label: 'Taper'),
+  _CreateNodeOption(id: 'round', label: 'Round'),
+  _CreateNodeOption(id: 'onion', label: 'Onion'),
+  _CreateNodeOption(id: 'elongate', label: 'Elongate'),
+  _CreateNodeOption(id: 'mirror', label: 'Mirror'),
+  _CreateNodeOption(id: 'repeat', label: 'Repeat'),
+  _CreateNodeOption(id: 'finite_repeat', label: 'Finite Repeat'),
+  _CreateNodeOption(id: 'radial_repeat', label: 'Radial Repeat'),
+  _CreateNodeOption(id: 'offset', label: 'Offset'),
+  _CreateNodeOption(id: 'noise', label: 'Noise'),
+];
+
 class SdfModelerApp extends StatelessWidget {
   const SdfModelerApp({super.key});
 
@@ -625,6 +663,59 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     );
   }
 
+  Future<void> _promptCreateOperation() async {
+    final selectedOperation = await _promptCreateNodeOption(
+      title: 'Create Operation',
+      optionKeyPrefix: 'operation-option',
+      options: _operationOptions,
+    );
+
+    if (!mounted || selectedOperation == null) {
+      return;
+    }
+
+    await _runSceneCommand(
+      () => createOperation(operationId: selectedOperation.id),
+    );
+  }
+
+  Future<void> _promptCreateModifier() async {
+    final selectedModifier = await _promptCreateNodeOption(
+      title: 'Create Modifier',
+      optionKeyPrefix: 'modifier-option',
+      options: _modifierOptions,
+    );
+
+    if (!mounted || selectedModifier == null) {
+      return;
+    }
+
+    await _runSceneCommand(
+      () => createModifier(modifierId: selectedModifier.id),
+    );
+  }
+
+  Future<_CreateNodeOption?> _promptCreateNodeOption({
+    required String title,
+    required String optionKeyPrefix,
+    required List<_CreateNodeOption> options,
+  }) async {
+    if (_commandInFlight || !mounted) {
+      return null;
+    }
+
+    return showDialog<_CreateNodeOption>(
+      context: context,
+      builder: (dialogContext) {
+        return _CreateNodeDialog(
+          title: title,
+          optionKeyPrefix: optionKeyPrefix,
+          options: options,
+        );
+      },
+    );
+  }
+
   @override
   void dispose() {
     _textureEventSubscription?.cancel();
@@ -694,6 +785,9 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                       onAddBox: () => _runSceneCommand(addBox),
                       onAddCylinder: () => _runSceneCommand(addCylinder),
                       onAddTorus: () => _runSceneCommand(addTorus),
+                      onCreateOperation: _promptCreateOperation,
+                      onCreateTransform: () => _runSceneCommand(createTransform),
+                      onCreateModifier: _promptCreateModifier,
                       onRenameSelected: _promptRenameSelectedNode,
                       onDuplicateSelected: () =>
                           _runSceneCommand(duplicateSelected),
@@ -741,6 +835,10 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                         onAddCylinder: () =>
                             _runModalSceneCommand(addCylinder),
                         onAddTorus: () => _runModalSceneCommand(addTorus),
+                        onCreateOperation: _promptCreateOperation,
+                        onCreateTransform: () =>
+                            _runModalSceneCommand(createTransform),
+                        onCreateModifier: _promptCreateModifier,
                         onRenameSelected: _promptRenameSelectedNode,
                         onDuplicateSelected: () =>
                             _runModalSceneCommand(duplicateSelected),
@@ -789,6 +887,9 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                   onAddBox: () => _runSceneCommand(addBox),
                   onAddCylinder: () => _runSceneCommand(addCylinder),
                   onAddTorus: () => _runSceneCommand(addTorus),
+                  onCreateOperation: _promptCreateOperation,
+                  onCreateTransform: () => _runSceneCommand(createTransform),
+                  onCreateModifier: _promptCreateModifier,
                   onRenameSelected: _promptRenameSelectedNode,
                   onDuplicateSelected: () =>
                       _runSceneCommand(duplicateSelected),
@@ -876,6 +977,54 @@ class _RenameNodeDialogState extends State<_RenameNodeDialog> {
   }
 }
 
+class _CreateNodeDialog extends StatelessWidget {
+  const _CreateNodeDialog({
+    required this.title,
+    required this.optionKeyPrefix,
+    required this.options,
+  });
+
+  final String title;
+  final String optionKeyPrefix;
+  final List<_CreateNodeOption> options;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(title),
+      content: SizedBox(
+        width: 360,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 420),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final option in options) ...[
+                  OutlinedButton(
+                    key: ValueKey('$optionKeyPrefix-${option.id}'),
+                    onPressed: () => Navigator.of(context).pop(option),
+                    child: Text(option.label),
+                  ),
+                  if (option != options.last)
+                    const SizedBox(height: ShellTokens.controlGap),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+      ],
+    );
+  }
+}
+
 class _InspectorPanel extends StatelessWidget {
   const _InspectorPanel({
     required this.shellLayout,
@@ -892,6 +1041,9 @@ class _InspectorPanel extends StatelessWidget {
     required this.onAddBox,
     required this.onAddCylinder,
     required this.onAddTorus,
+    required this.onCreateOperation,
+    required this.onCreateTransform,
+    required this.onCreateModifier,
     required this.onRenameSelected,
     required this.onDuplicateSelected,
     required this.onUndo,
@@ -929,6 +1081,9 @@ class _InspectorPanel extends StatelessWidget {
   final VoidCallback onAddBox;
   final VoidCallback onAddCylinder;
   final VoidCallback onAddTorus;
+  final VoidCallback onCreateOperation;
+  final VoidCallback onCreateTransform;
+  final VoidCallback onCreateModifier;
   final VoidCallback onRenameSelected;
   final VoidCallback onDuplicateSelected;
   final VoidCallback onUndo;
@@ -1033,6 +1188,9 @@ class _InspectorPanel extends StatelessWidget {
               onAddBox: onAddBox,
               onAddCylinder: onAddCylinder,
               onAddTorus: onAddTorus,
+              onCreateOperation: onCreateOperation,
+              onCreateTransform: onCreateTransform,
+              onCreateModifier: onCreateModifier,
               renameSelectedEnabled: renameSelectedEnabled,
               onRenameSelected: onRenameSelected,
               duplicateSelectedEnabled: duplicateSelectedEnabled,
@@ -1141,6 +1299,9 @@ class _SceneCommandButtons extends StatelessWidget {
     required this.onAddBox,
     required this.onAddCylinder,
     required this.onAddTorus,
+    required this.onCreateOperation,
+    required this.onCreateTransform,
+    required this.onCreateModifier,
     required this.renameSelectedEnabled,
     required this.onRenameSelected,
     required this.duplicateSelectedEnabled,
@@ -1158,6 +1319,9 @@ class _SceneCommandButtons extends StatelessWidget {
   final VoidCallback onAddBox;
   final VoidCallback onAddCylinder;
   final VoidCallback onAddTorus;
+  final VoidCallback onCreateOperation;
+  final VoidCallback onCreateTransform;
+  final VoidCallback onCreateModifier;
   final bool renameSelectedEnabled;
   final VoidCallback onRenameSelected;
   final bool duplicateSelectedEnabled;
@@ -1187,6 +1351,21 @@ class _SceneCommandButtons extends StatelessWidget {
         OutlinedButton(
           onPressed: sceneCommandsEnabled ? onAddTorus : null,
           child: const Text('Torus'),
+        ),
+        OutlinedButton(
+          key: const ValueKey('create-operation-command'),
+          onPressed: sceneCommandsEnabled ? onCreateOperation : null,
+          child: const Text('Operation'),
+        ),
+        OutlinedButton(
+          key: const ValueKey('create-transform-command'),
+          onPressed: sceneCommandsEnabled ? onCreateTransform : null,
+          child: const Text('Transform'),
+        ),
+        OutlinedButton(
+          key: const ValueKey('create-modifier-command'),
+          onPressed: sceneCommandsEnabled ? onCreateModifier : null,
+          child: const Text('Modifier'),
         ),
         OutlinedButton(
           key: const ValueKey('rename-command'),
@@ -1302,6 +1481,9 @@ class _CommandSheetContent extends StatelessWidget {
     required this.onAddBox,
     required this.onAddCylinder,
     required this.onAddTorus,
+    required this.onCreateOperation,
+    required this.onCreateTransform,
+    required this.onCreateModifier,
     required this.onRenameSelected,
     required this.onDuplicateSelected,
     required this.onUndo,
@@ -1327,6 +1509,9 @@ class _CommandSheetContent extends StatelessWidget {
   final VoidCallback onAddBox;
   final VoidCallback onAddCylinder;
   final VoidCallback onAddTorus;
+  final VoidCallback onCreateOperation;
+  final VoidCallback onCreateTransform;
+  final VoidCallback onCreateModifier;
   final VoidCallback onRenameSelected;
   final VoidCallback onDuplicateSelected;
   final VoidCallback onUndo;
@@ -1375,6 +1560,9 @@ class _CommandSheetContent extends StatelessWidget {
           onAddBox: onAddBox,
           onAddCylinder: onAddCylinder,
           onAddTorus: onAddTorus,
+          onCreateOperation: onCreateOperation,
+          onCreateTransform: onCreateTransform,
+          onCreateModifier: onCreateModifier,
           renameSelectedEnabled: renameSelectedEnabled,
           onRenameSelected: onRenameSelected,
           duplicateSelectedEnabled: duplicateSelectedEnabled,

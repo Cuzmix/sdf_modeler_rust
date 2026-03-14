@@ -15,6 +15,8 @@ mod sculpt_history;
 mod settings;
 mod ui;
 
+pub use graph::scene::{CsgOp, ModifierKind};
+
 // ── Native entry point ──────────────────────────────────────────────────────
 
 #[cfg(not(target_arch = "wasm32"))]

@@ -4,7 +4,7 @@ use glam::Vec3;
 
 use crate::gpu::camera::Camera;
 use crate::graph::history::History;
-use crate::graph::scene::{NodeData, NodeId, Scene, SceneNode, SdfPrimitive};
+use crate::graph::scene::{CsgOp, ModifierKind, NodeData, NodeId, Scene, SceneNode, SdfPrimitive};
 use crate::settings::RenderConfig;
 
 use super::dto::{
@@ -315,6 +315,46 @@ impl AppBridge {
         })
     }
 
+    pub fn create_operation(&mut self, op: CsgOp) -> u64 {
+        self.run_document_command(|bridge| {
+            let geometry_roots = bridge.top_level_geometry_roots();
+            let left = geometry_roots
+                .get(geometry_roots.len().saturating_sub(2))
+                .copied();
+            let right = geometry_roots.last().copied();
+            let operation_id = bridge.scene.create_operation(op, left, right);
+            bridge.selected_node = Some(operation_id);
+            bridge.hovered_node = Some(operation_id);
+            operation_id
+        })
+    }
+
+    pub fn create_transform(&mut self) -> u64 {
+        self.run_document_command(|bridge| {
+            let transform_id = if let Some(selected_node) = bridge.selected_node {
+                bridge.scene.insert_transform_above(selected_node)
+            } else {
+                bridge.scene.create_transform(None)
+            };
+            bridge.selected_node = Some(transform_id);
+            bridge.hovered_node = Some(transform_id);
+            transform_id
+        })
+    }
+
+    pub fn create_modifier(&mut self, kind: ModifierKind) -> u64 {
+        self.run_document_command(|bridge| {
+            let modifier_id = if let Some(selected_node) = bridge.selected_node {
+                bridge.scene.insert_modifier_above(selected_node, kind)
+            } else {
+                bridge.scene.create_modifier(kind, None)
+            };
+            bridge.selected_node = Some(modifier_id);
+            bridge.hovered_node = Some(modifier_id);
+            modifier_id
+        })
+    }
+
     pub fn toggle_node_visibility(&mut self, node_id: u64) {
         self.run_document_command(|bridge| {
             if bridge.scene.nodes.contains_key(&node_id) {
@@ -415,6 +455,32 @@ impl AppBridge {
         }
     }
 
+    fn top_level_geometry_roots(&self) -> Vec<NodeId> {
+        self.scene
+            .top_level_nodes()
+            .into_iter()
+            .filter(|node_id| self.subtree_has_visible_geometry(*node_id, &mut HashSet::new()))
+            .collect()
+    }
+
+    fn subtree_has_visible_geometry(&self, node_id: NodeId, visited: &mut HashSet<NodeId>) -> bool {
+        if !visited.insert(node_id) || self.scene.is_hidden(node_id) {
+            return false;
+        }
+
+        let Some(node) = self.scene.nodes.get(&node_id) else {
+            return false;
+        };
+
+        if node.data.geometry_local_sphere().is_some() {
+            return true;
+        }
+
+        node.data
+            .children()
+            .any(|child_id| self.subtree_has_visible_geometry(child_id, visited))
+    }
+
     fn scene_tree_roots(&self) -> Vec<AppSceneTreeNodeSnapshot> {
         let mut visited = HashSet::new();
         self.scene
@@ -506,7 +572,7 @@ fn app_vec3(value: Vec3) -> AppVec3 {
 #[cfg(test)]
 mod tests {
     use super::AppBridge;
-    use crate::graph::scene::NodeData;
+    use crate::graph::scene::{CsgOp, ModifierKind, NodeData, SdfPrimitive};
 
     #[test]
     fn scene_snapshot_includes_recursive_scene_tree() {
@@ -636,7 +702,10 @@ mod tests {
         let snapshot = bridge.scene_snapshot();
         assert_eq!(bridge.scene.nodes[&node_id].name, "Hero Box");
         assert_eq!(
-            snapshot.selected_node.as_ref().map(|node| node.name.as_str()),
+            snapshot
+                .selected_node
+                .as_ref()
+                .map(|node| node.name.as_str()),
             Some("Hero Box")
         );
         assert_eq!(
@@ -662,6 +731,111 @@ mod tests {
         let snapshot = bridge.scene_snapshot();
         assert_eq!(bridge.scene.nodes[&node_id].name, original_name);
         assert_eq!(snapshot.history.can_undo, history_before_rename);
+    }
+
+    #[test]
+    fn create_transform_wraps_selected_node_and_selects_new_transform() {
+        let mut bridge = AppBridge::new();
+        let selected_node = bridge
+            .scene
+            .top_level_nodes()
+            .into_iter()
+            .find(|node_id| {
+                matches!(
+                    bridge.scene.nodes[node_id].data,
+                    NodeData::Primitive {
+                        kind: SdfPrimitive::Sphere,
+                        ..
+                    }
+                )
+            })
+            .expect("default sphere");
+        bridge.select_node(Some(selected_node));
+
+        let transform_id = bridge.create_transform();
+
+        assert_eq!(bridge.selected_node, Some(transform_id));
+        assert_eq!(bridge.hovered_node, Some(transform_id));
+        assert!(bridge.scene_snapshot().history.can_undo);
+        match &bridge.scene.nodes[&transform_id].data {
+            NodeData::Transform { input, .. } => assert_eq!(*input, Some(selected_node)),
+            _ => panic!("expected transform"),
+        }
+        assert!(bridge.scene.top_level_nodes().contains(&transform_id));
+        assert!(!bridge.scene.top_level_nodes().contains(&selected_node));
+    }
+
+    #[test]
+    fn create_modifier_wraps_selected_node_and_selects_new_modifier() {
+        let mut bridge = AppBridge::new();
+        let selected_node = bridge
+            .scene
+            .top_level_nodes()
+            .into_iter()
+            .find(|node_id| {
+                matches!(
+                    bridge.scene.nodes[node_id].data,
+                    NodeData::Primitive {
+                        kind: SdfPrimitive::Sphere,
+                        ..
+                    }
+                )
+            })
+            .expect("default sphere");
+        bridge.select_node(Some(selected_node));
+
+        let modifier_id = bridge.create_modifier(ModifierKind::Twist);
+
+        assert_eq!(bridge.selected_node, Some(modifier_id));
+        assert_eq!(bridge.hovered_node, Some(modifier_id));
+        assert!(bridge.scene_snapshot().history.can_undo);
+        match &bridge.scene.nodes[&modifier_id].data {
+            NodeData::Modifier { kind, input, .. } => {
+                assert_eq!(*kind, ModifierKind::Twist);
+                assert_eq!(*input, Some(selected_node));
+            }
+            _ => panic!("expected modifier"),
+        }
+        assert!(bridge.scene.top_level_nodes().contains(&modifier_id));
+        assert!(!bridge.scene.top_level_nodes().contains(&selected_node));
+    }
+
+    #[test]
+    fn create_operation_uses_last_two_visible_geometry_roots() {
+        let mut bridge = AppBridge::new();
+        let sphere_id = bridge
+            .scene
+            .top_level_nodes()
+            .into_iter()
+            .find(|node_id| {
+                matches!(
+                    bridge.scene.nodes[node_id].data,
+                    NodeData::Primitive {
+                        kind: SdfPrimitive::Sphere,
+                        ..
+                    }
+                )
+            })
+            .expect("default sphere");
+        let hidden_box_id = bridge.add_box();
+        bridge.toggle_node_visibility(hidden_box_id);
+        let torus_id = bridge.add_torus();
+
+        let operation_id = bridge.create_operation(CsgOp::Union);
+
+        assert_eq!(bridge.selected_node, Some(operation_id));
+        assert_eq!(bridge.hovered_node, Some(operation_id));
+        assert!(bridge.scene_snapshot().history.can_undo);
+        match &bridge.scene.nodes[&operation_id].data {
+            NodeData::Operation {
+                op, left, right, ..
+            } => {
+                assert_eq!(*op, CsgOp::Union);
+                assert_eq!(*left, Some(sphere_id));
+                assert_eq!(*right, Some(torus_id));
+            }
+            _ => panic!("expected operation"),
+        }
     }
 
     #[test]

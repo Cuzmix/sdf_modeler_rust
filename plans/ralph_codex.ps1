@@ -16,10 +16,46 @@ if ($WorkingDirectory) {
     Set-Location -LiteralPath $WorkingDirectory
 }
 
+function Resolve-ExistingFilePath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$LiteralPath
+    )
+
+    try {
+        if (Test-Path -LiteralPath $LiteralPath -PathType Leaf -ErrorAction Stop) {
+            return (Resolve-Path -LiteralPath $LiteralPath -ErrorAction Stop).Path
+        }
+    } catch {
+        return $null
+    }
+
+    return $null
+}
+
+function Get-WhereMatches {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$CommandName
+    )
+
+    try {
+        $whereOutput = & cmd.exe /d /c "where $CommandName 2>nul"
+        if ($LASTEXITCODE -eq 0) {
+            return @($whereOutput | Where-Object { $_ })
+        }
+    } catch {
+        return @()
+    }
+
+    return @()
+}
+
 function Resolve-CodexPath {
     if ($env:RALPH_CODEX_EXE) {
-        if (Test-Path -LiteralPath $env:RALPH_CODEX_EXE) {
-            return (Resolve-Path -LiteralPath $env:RALPH_CODEX_EXE).Path
+        $resolvedConfiguredPath = Resolve-ExistingFilePath -LiteralPath $env:RALPH_CODEX_EXE
+        if ($resolvedConfiguredPath) {
+            return $resolvedConfiguredPath
         }
 
         throw "RALPH_CODEX_EXE is set but does not exist: $env:RALPH_CODEX_EXE"
@@ -32,8 +68,9 @@ function Resolve-CodexPath {
     )
 
     foreach ($candidatePath in $npmShimCandidates) {
-        if (Test-Path -LiteralPath $candidatePath) {
-            return (Resolve-Path -LiteralPath $candidatePath).Path
+        $resolvedCandidatePath = Resolve-ExistingFilePath -LiteralPath $candidatePath
+        if ($resolvedCandidatePath) {
+            return $resolvedCandidatePath
         }
     }
 
@@ -45,17 +82,22 @@ function Resolve-CodexPath {
     }
 
     $whereResults = @(
-        where.exe codex.cmd 2>$null
-        where.exe codex.ps1 2>$null
-        where.exe codex.exe 2>$null
+        Get-WhereMatches -CommandName "codex.cmd"
+        Get-WhereMatches -CommandName "codex.ps1"
+        Get-WhereMatches -CommandName "codex.exe"
     ) | Where-Object { $_ }
-    if ($whereResults.Count -gt 0) {
-        return $whereResults[0]
+
+    foreach ($whereResult in @($whereResults)) {
+        $resolvedWherePath = Resolve-ExistingFilePath -LiteralPath $whereResult
+        if ($resolvedWherePath) {
+            return $resolvedWherePath
+        }
     }
 
     $localAliasPath = Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps\codex.exe"
-    if (Test-Path -LiteralPath $localAliasPath) {
-        return $localAliasPath
+    $resolvedAliasPath = Resolve-ExistingFilePath -LiteralPath $localAliasPath
+    if ($resolvedAliasPath) {
+        return $resolvedAliasPath
     }
 
     $windowsAppsRoot = Join-Path $env:ProgramFiles "WindowsApps"
@@ -68,8 +110,9 @@ function Resolve-CodexPath {
 
     foreach ($installDirectory in $codexInstallDirectories) {
         $candidatePath = Join-Path $installDirectory.FullName "app\resources\codex.exe"
-        if (Test-Path -LiteralPath $candidatePath) {
-            return $candidatePath
+        $resolvedInstallPath = Resolve-ExistingFilePath -LiteralPath $candidatePath
+        if ($resolvedInstallPath) {
+            return $resolvedInstallPath
         }
     }
 
@@ -79,14 +122,35 @@ function Resolve-CodexPath {
 $promptText = Get-Content -LiteralPath $PromptFile -Raw
 
 $codexPath = Resolve-CodexPath
+$executionDirectory = (Get-Location).Path
 
 switch ($Mode) {
     "Interactive" {
-        & $codexPath $promptText
+        & $codexPath -C $executionDirectory $promptText
         exit $LASTEXITCODE
     }
     "Headless" {
-        & $codexPath exec $promptText
-        exit $LASTEXITCODE
+        $lastMessageFile = New-TemporaryFile
+        try {
+            $headlessArguments = @(
+                "exec",
+                "--full-auto",
+                "--color", "never",
+                "-C", $executionDirectory,
+                "--output-last-message", $lastMessageFile.FullName,
+                "-"
+            )
+
+            $promptText | & $codexPath @headlessArguments
+            $exitCode = $LASTEXITCODE
+
+            if (Test-Path -LiteralPath $lastMessageFile.FullName -PathType Leaf) {
+                Get-Content -LiteralPath $lastMessageFile.FullName -Raw
+            }
+
+            exit $exitCode
+        } finally {
+            Remove-Item -LiteralPath $lastMessageFile.FullName -Force -ErrorAction SilentlyContinue
+        }
     }
 }

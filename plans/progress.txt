@@ -2002,3 +2002,51 @@ Manual verification:
 Result:
 - PRD #14 is fully verified and complete.
 
+--- Migration Iteration 7: PRD #15 - Create-node flows for operations, transforms, and modifiers ---
+COMPLETED. Added backend-owned create commands for operations, transforms, and modifiers, kept the graph semantics in Rust, and exposed touch-usable Flutter command surfaces that refresh entirely from backend snapshots.
+
+Changes:
+- src/app_bridge/session.rs:
+  - Added backend `create_operation(op)`, `create_transform()`, and `create_modifier(kind)` commands.
+  - Matched native create-above semantics for transforms and modifiers by wrapping the current selection when one exists, otherwise creating a free root node.
+  - Added a bridge-local geometry-root helper so operation creation seeds its operands from visible top-level geometry roots and skips the default light transform roots.
+  - Added bridge tests covering transform wrapping, modifier wrapping, and operation operand seeding.
+- src/lib.rs:
+  - Re-exported `CsgOp` and `ModifierKind` so the Flutter bridge crate can consume the backend-owned enums without widening the whole `graph` module surface.
+- apps/flutter/rust/src/api/simple.rs:
+  - Added FRB-exposed synchronous `create_operation`, `create_transform`, and `create_modifier` commands.
+  - Added stable string-to-enum parsing for operation and modifier IDs at the bridge boundary.
+- apps/flutter/lib/src/rust/api/simple.dart
+- apps/flutter/lib/src/rust/frb_generated.dart
+- apps/flutter/rust/src/frb_generated.rs
+  - Regenerated the FRB bindings for the expanded create-node API surface.
+- apps/flutter/lib/app.dart:
+  - Added Flutter command surfaces for `Operation`, `Transform`, and `Modifier`.
+  - Added touch-usable chooser dialogs for operation and modifier kinds while keeping all naming, parenting, and parameter defaults in Rust.
+- apps/flutter/test/widget_test.dart:
+  - Added mock bridge support and widget coverage for create transform, create operation, and create modifier flows.
+  - Updated the older command-button tests to scroll the larger command strip into view before tapping.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS (484 passed)
+- cargo build: PASS
+- apps/flutter/rust cargo check: PASS
+- apps/flutter/rust cargo clippy -- -D warnings: PASS
+- apps/flutter/rust cargo test: PASS
+- apps/flutter/rust cargo build: PASS
+- apps/flutter/scripts/frb_codegen.ps1: PASS
+- Flutter analyze: PASS
+- Flutter test: PASS
+- Flutter build windows --debug: PASS
+
+Manual verification:
+- Flutter Windows host transform flow: PASS. Selected the default `Sphere` from the real Flutter host and invoked `Transform`; the selected-node badge switched to `Transform`, confirming the backend inserted a transform above the selected node and made it the active selection.
+- Flutter Windows host modifier flow: PASS. With the inserted transform selected, opened the `Modifier` chooser, selected `Twist`, and observed the selected-node badge switch to `Twist`, confirming the modifier create-above path stayed backend-owned.
+- Flutter Windows host operation flow: PASS. Added a `Box`, opened the operation chooser, selected `Chamfer Union`, and observed the selected-node badge switch to `Chamfer Union` while the viewport rendered the combined box-plus-sphere result.
+- Scene-tree hierarchy update: PASS. After resizing the host taller and dragging the tree region into view, the Flutter runner showed `Chamfer Union` selected with `Twist -> Transform -> Sphere` nested beneath it and `Box` as the sibling operand, confirming naming, parenting, selection, and tree refresh all came from backend state.
+
+Result:
+- PRD #15 is fully verified and complete.
+

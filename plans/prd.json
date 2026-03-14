@@ -102,7 +102,7 @@
     "category": "scene-creation",
     "description": "Port create-node flows for operations, transforms, and modifiers.\n\nSteps:\n1. Add backend commands for creating operations, transforms, and modifiers.\n2. Keep default naming, placement, parenting, and parameters backend-owned.\n3. Add Flutter command surfaces that invoke those commands without embedding graph semantics in Dart.\n4. Keep selection and scene-tree updates aligned with backend behavior.",
     "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build`. If the bridge API changes, run `apps/flutter/scripts/frb_codegen.ps1`. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, and `fvm flutter build windows --debug`. Manual: create each supported node type from Flutter and confirm naming, parenting, selection, and scene-tree updates are correct.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 16,

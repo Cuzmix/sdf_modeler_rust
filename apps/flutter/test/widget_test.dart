@@ -18,11 +18,17 @@ class _MockRustApi extends RustLibApi {
   static const String _selectedUndoSnapshot = '''{"selected_node":{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false},"top_level_nodes":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false}],"history":{"can_undo":true,"can_redo":false},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":7,"visible_nodes":7,"top_level_nodes":1,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":1,"structure_key":11,"data_fingerprint":22,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
   static const String _renamedSnapshot = '''{"selected_node":{"id":1,"name":"Hero Sphere","kind_label":"Sphere","visible":true,"locked":false},"top_level_nodes":[{"id":1,"name":"Hero Sphere","kind_label":"Sphere","visible":true,"locked":false}],"history":{"can_undo":true,"can_redo":false},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":7,"visible_nodes":7,"top_level_nodes":1,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":1,"structure_key":11,"data_fingerprint":23,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
   static const String _duplicatedSnapshot = '''{"selected_node":{"id":2,"name":"Sphere Copy","kind_label":"Sphere","visible":true,"locked":false},"top_level_nodes":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false},{"id":2,"name":"Sphere Copy","kind_label":"Sphere","visible":true,"locked":false}],"history":{"can_undo":true,"can_redo":false},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":8,"visible_nodes":8,"top_level_nodes":2,"primitive_nodes":2,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":2,"structure_key":12,"data_fingerprint":23,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":3.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
+  static const String _operationSnapshot = '''{"selected_node":{"id":8,"name":"Union","kind_label":"Union","visible":true,"locked":false},"top_level_nodes":[{"id":8,"name":"Union","kind_label":"Union","visible":true,"locked":false}],"scene_tree_roots":[{"id":8,"name":"Union","kind_label":"Union","visible":true,"locked":false,"children":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false,"children":[]},{"id":2,"name":"Box","kind_label":"Box","visible":true,"locked":false,"children":[]}]}],"history":{"can_undo":true,"can_redo":false},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":9,"visible_nodes":9,"top_level_nodes":4,"primitive_nodes":2,"operation_nodes":1,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":3,"structure_key":13,"data_fingerprint":24,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":3.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
+  static const String _transformSnapshot = '''{"selected_node":{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false},"top_level_nodes":[{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false}],"scene_tree_roots":[{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false,"children":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false,"children":[]}]}],"history":{"can_undo":true,"can_redo":false},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":8,"visible_nodes":8,"top_level_nodes":4,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":4,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":2,"structure_key":12,"data_fingerprint":24,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
+  static const String _modifierSnapshot = '''{"selected_node":{"id":8,"name":"Twist","kind_label":"Twist","visible":true,"locked":false},"top_level_nodes":[{"id":8,"name":"Twist","kind_label":"Twist","visible":true,"locked":false}],"scene_tree_roots":[{"id":8,"name":"Twist","kind_label":"Twist","visible":true,"locked":false,"children":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false,"children":[]}]}],"history":{"can_undo":true,"can_redo":false},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":8,"visible_nodes":8,"top_level_nodes":4,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":1,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":2,"structure_key":12,"data_fingerprint":24,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
   static const String _baseRedoSnapshot = '''{"selected_node":null,"top_level_nodes":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false}],"history":{"can_undo":false,"can_redo":true},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":7,"visible_nodes":7,"top_level_nodes":1,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":1,"structure_key":11,"data_fingerprint":22,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
   static const String _orthoSnapshot = '''{"selected_node":null,"top_level_nodes":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false}],"history":{"can_undo":false,"can_redo":false},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":true,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":7,"visible_nodes":7,"top_level_nodes":1,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":1,"structure_key":11,"data_fingerprint":22,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
 
   String currentSnapshot = _baseSnapshot;
   int addBoxCalls = 0;
+  int createOperationCalls = 0;
+  int createTransformCalls = 0;
+  int createModifierCalls = 0;
   int duplicateSelectedCalls = 0;
   int renameNodeCalls = 0;
   int deleteSelectedCalls = 0;
@@ -38,6 +44,9 @@ class _MockRustApi extends RustLibApi {
   void resetState() {
     currentSnapshot = _baseSnapshot;
     addBoxCalls = 0;
+    createOperationCalls = 0;
+    createTransformCalls = 0;
+    createModifierCalls = 0;
     duplicateSelectedCalls = 0;
     renameNodeCalls = 0;
     deleteSelectedCalls = 0;
@@ -93,6 +102,27 @@ class _MockRustApi extends RustLibApi {
 
   @override
   String crateApiSimpleCameraTop() => currentSnapshot;
+
+  @override
+  String crateApiSimpleCreateModifier({required String modifierId}) {
+    createModifierCalls += 1;
+    currentSnapshot = _modifierSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleCreateOperation({required String operationId}) {
+    createOperationCalls += 1;
+    currentSnapshot = _operationSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleCreateTransform() {
+    createTransformCalls += 1;
+    currentSnapshot = _transformSnapshot;
+    return currentSnapshot;
+  }
 
   @override
   String crateApiSimpleDeleteSelected() {
@@ -475,6 +505,12 @@ void main() {
 
     await tester.tap(find.text('Box'));
     await tester.pump();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('undo-command')),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('undo-command')));
     await tester.pump();
 
@@ -491,6 +527,12 @@ void main() {
 
       await pumpApp(tester, logicalSize: const Size(1400, 900));
 
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('rename-command')),
+        200,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.pump();
       await tester.tap(find.byKey(const ValueKey('rename-command')));
       await tester.pumpAndSettle();
       await tester.enterText(
@@ -503,7 +545,7 @@ void main() {
 
       expect(mockApi.renameNodeCalls, 1);
       expect(mockApi.currentSnapshot, _MockRustApi._renamedSnapshot);
-      expect(find.text('Hero Sphere'), findsOneWidget);
+      expect(find.text('Selected: Hero Sphere'), findsOneWidget);
       expect(requestFrameCalls, greaterThan(0));
     },
   );
@@ -515,11 +557,67 @@ void main() {
 
       await pumpApp(tester, logicalSize: const Size(1400, 900));
 
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('duplicate-command')),
+        200,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.pump();
       await tester.tap(find.byKey(const ValueKey('duplicate-command')));
       await tester.pump();
 
       expect(mockApi.duplicateSelectedCalls, 1);
       expect(mockApi.currentSnapshot, _MockRustApi._duplicatedSnapshot);
+      expect(requestFrameCalls, greaterThan(0));
+    },
+  );
+
+  testWidgets(
+    'routes create transform through the Rust facade and refreshes snapshot state',
+    (WidgetTester tester) async {
+      mockApi.currentSnapshot = _MockRustApi._selectedSnapshot;
+
+      await pumpApp(tester, logicalSize: const Size(1400, 900));
+
+      await tester.tap(find.byKey(const ValueKey('create-transform-command')));
+      await tester.pump();
+
+      expect(mockApi.createTransformCalls, 1);
+      expect(mockApi.currentSnapshot, _MockRustApi._transformSnapshot);
+      expect(requestFrameCalls, greaterThan(0));
+    },
+  );
+
+  testWidgets(
+    'routes create operation through the Rust facade and refreshes snapshot state',
+    (WidgetTester tester) async {
+      await pumpApp(tester, logicalSize: const Size(1400, 900));
+
+      await tester.tap(find.byKey(const ValueKey('create-operation-command')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('operation-option-union')));
+      await tester.pump();
+
+      expect(mockApi.createOperationCalls, 1);
+      expect(mockApi.currentSnapshot, _MockRustApi._operationSnapshot);
+      expect(requestFrameCalls, greaterThan(0));
+    },
+  );
+
+  testWidgets(
+    'routes create modifier through the Rust facade and refreshes snapshot state',
+    (WidgetTester tester) async {
+      mockApi.currentSnapshot = _MockRustApi._selectedSnapshot;
+
+      await pumpApp(tester, logicalSize: const Size(1400, 900));
+
+      await tester.tap(find.byKey(const ValueKey('create-modifier-command')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('modifier-option-twist')));
+      await tester.pump();
+
+      expect(mockApi.createModifierCalls, 1);
+      expect(mockApi.currentSnapshot, _MockRustApi._modifierSnapshot);
       expect(requestFrameCalls, greaterThan(0));
     },
   );
@@ -531,7 +629,19 @@ void main() {
 
     await tester.tap(find.text('Box'));
     await tester.pump();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('undo-command')),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('undo-command')));
+    await tester.pump();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('redo-command')),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('redo-command')));
     await tester.pump();

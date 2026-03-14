@@ -1,4 +1,5 @@
 use crate::bridge_state::{app_bridge, snapshot_json};
+use sdf_modeler::{CsgOp, ModifierKind};
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn ping() -> String {
@@ -94,6 +95,31 @@ pub fn duplicate_selected() -> String {
 pub fn rename_node(node_id: u64, name: String) -> String {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.rename_node(node_id, &name);
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn create_operation(operation_id: String) -> String {
+    let operation = parse_operation_id(&operation_id)
+        .unwrap_or_else(|| panic!("unknown operation id: {operation_id}"));
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.create_operation(operation);
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn create_transform() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.create_transform();
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn create_modifier(modifier_id: String) -> String {
+    let modifier = parse_modifier_id(&modifier_id)
+        .unwrap_or_else(|| panic!("unknown modifier id: {modifier_id}"));
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.create_modifier(modifier);
     snapshot_json(&bridge)
 }
 
@@ -213,4 +239,41 @@ pub fn reset_scene() -> String {
 pub fn init_app() {
     flutter_rust_bridge::setup_default_user_utils();
     let _ = app_bridge();
+}
+
+fn parse_operation_id(operation_id: &str) -> Option<CsgOp> {
+    Some(match operation_id {
+        "union" => CsgOp::Union,
+        "smooth_union" => CsgOp::SmoothUnion,
+        "subtract" => CsgOp::Subtract,
+        "intersect" => CsgOp::Intersect,
+        "smooth_subtract" => CsgOp::SmoothSubtract,
+        "smooth_intersect" => CsgOp::SmoothIntersect,
+        "chamfer_union" => CsgOp::ChamferUnion,
+        "chamfer_subtract" => CsgOp::ChamferSubtract,
+        "chamfer_intersect" => CsgOp::ChamferIntersect,
+        "stairs_union" => CsgOp::StairsUnion,
+        "stairs_subtract" => CsgOp::StairsSubtract,
+        "columns_union" => CsgOp::ColumnsUnion,
+        "columns_subtract" => CsgOp::ColumnsSubtract,
+        _ => return None,
+    })
+}
+
+fn parse_modifier_id(modifier_id: &str) -> Option<ModifierKind> {
+    Some(match modifier_id {
+        "twist" => ModifierKind::Twist,
+        "bend" => ModifierKind::Bend,
+        "taper" => ModifierKind::Taper,
+        "round" => ModifierKind::Round,
+        "onion" => ModifierKind::Onion,
+        "elongate" => ModifierKind::Elongate,
+        "mirror" => ModifierKind::Mirror,
+        "repeat" => ModifierKind::Repeat,
+        "finite_repeat" => ModifierKind::FiniteRepeat,
+        "radial_repeat" => ModifierKind::RadialRepeat,
+        "offset" => ModifierKind::Offset,
+        "noise" => ModifierKind::Noise,
+        _ => return None,
+    })
 }
