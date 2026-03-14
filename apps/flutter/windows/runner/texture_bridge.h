@@ -78,8 +78,9 @@ class TextureBridge {
                            int height,
                            double frame_time_ms,
                            const std::string& interaction_phase,
-                           bool viewport_state_changed,
-                           const std::string& feedback_json);
+                           bool scene_state_changed,
+                           const std::string& feedback_json,
+                           const std::string& host_error);
     void RenderLoop();
 
     flutter::TextureRegistrar* texture_registrar_;
@@ -106,7 +107,7 @@ class TextureBridge {
     bool force_frame_ = true;
     bool stop_requested_ = false;
     bool interaction_active_ = false;
-    bool viewport_state_changed_pending_ = false;
+    bool scene_snapshot_refresh_pending_ = false;
     bool render_in_progress_ = false;
     int64_t rendered_frame_count_ = 0;
     int64_t dropped_frame_count_ = 0;

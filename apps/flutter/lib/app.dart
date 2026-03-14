@@ -141,6 +141,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
   double? _lastNativeFrameTimeMs;
   double? _smoothedFramesPerSecond;
   String _interactionPhase = 'idle';
+  String? _lastViewportHostError;
   Size _lastLogicalViewportSize = Size.zero;
   double _lastDevicePixelRatio = 1.0;
   _BridgeModalPanel? _activeModalPanel;
@@ -239,6 +240,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     );
     AppSceneSnapshot? refreshedSnapshot;
     String? snapshotRefreshError;
+    final hostError = event.hostError;
 
     if (event.sceneStateChanged) {
       try {
@@ -259,6 +261,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
         instantaneousFramesPerSecond,
       );
       _interactionPhase = event.interactionPhase;
+      _lastViewportHostError = hostError;
       if (refreshedSnapshot != null) {
         _sceneSnapshot = refreshedSnapshot;
       }
@@ -271,10 +274,16 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
       }
       if (snapshotRefreshError != null) {
         _previewLine = snapshotRefreshError;
+      } else if (hostError != null) {
+        _previewLine = 'Viewport host error: $hostError';
       } else {
         _previewLine = _buildPreviewLine();
       }
     });
+  }
+
+  void debugHandleTextureEvent(TextureViewportEvent event) {
+    _handleTextureEvent(event);
   }
 
   double? _framesPerSecondFromFrameTime(double frameTimeMs) {
@@ -920,6 +929,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                 frameTimeMs: _lastNativeFrameTimeMs,
                 framesPerSecond: _smoothedFramesPerSecond,
                 droppedFrameCount: _droppedFrameCount,
+                hostError: _lastViewportHostError,
               ),
               controlsOverlay: ViewportToolOverlay(
                 tool: snapshot?.tool,

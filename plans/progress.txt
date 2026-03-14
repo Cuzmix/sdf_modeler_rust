@@ -2392,3 +2392,38 @@ Manual verification:
 Result:
 - PRD #24 is fully verified and complete.
 
+--- Migration Iteration 17: PRD #25 - Flutter host performance and diagnostics ---
+COMPLETED. Tightened the native Flutter viewport event path so camera and hover traffic stay feedback-only, while selection-changing pick events remain the only native path that triggers a full Rust scene snapshot refresh.
+
+Changes:
+- apps/flutter/windows/runner/texture_bridge.h
+- apps/flutter/windows/runner/texture_bridge.cpp
+  - Narrowed native `sceneStateChanged` publication to true scene snapshot refresh cases instead of orbit/pan/zoom/hover traffic.
+  - Stopped interaction-settling and camera-animation frames from forcing redundant `sceneSnapshotJson()` pulls back into Flutter.
+  - Added targeted native host error reporting on failed viewport frame renders so Flutter can surface host failures without a manual debugger session.
+- apps/flutter/lib/src/texture/texture_viewport_event.dart
+- apps/flutter/lib/src/viewport/viewport_feedback_overlay.dart
+- apps/flutter/lib/app.dart
+  - Parsed optional native `hostError` diagnostics and surfaced them in the Flutter shell and viewport overlay.
+  - Kept viewport feedback updates flowing from native events even when a full scene snapshot refresh is not required.
+- apps/flutter/test/widget_test.dart
+  - Added regression coverage proving feedback-only texture events do not refresh the full scene snapshot.
+  - Added coverage proving selection-changing texture events still refresh the full scene snapshot exactly once.
+  - Added coverage for surfaced native host error diagnostics.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS
+- cargo build: PASS
+- Flutter analyze: PASS
+- Flutter test: PASS
+- Flutter build windows --debug: PASS
+- Flutter test integration_test -d windows: PASS
+
+Manual verification:
+- Skipped by current workflow instruction. This slice was validated with automated Rust and Flutter coverage only.
+
+Result:
+- PRD #25 is fully verified and complete.
+

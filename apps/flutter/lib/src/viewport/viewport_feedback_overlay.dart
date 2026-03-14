@@ -10,6 +10,7 @@ class ViewportFeedbackOverlay extends StatelessWidget {
     required this.frameTimeMs,
     required this.framesPerSecond,
     required this.droppedFrameCount,
+    required this.hostError,
   });
 
   static const double _targetFramesPerSecond = 60.0;
@@ -20,6 +21,7 @@ class ViewportFeedbackOverlay extends StatelessWidget {
   final double? frameTimeMs;
   final double? framesPerSecond;
   final int droppedFrameCount;
+  final String? hostError;
 
   @override
   Widget build(BuildContext context) {
@@ -36,8 +38,12 @@ class ViewportFeedbackOverlay extends StatelessWidget {
             frameTimeMs != null ||
             droppedFrameCount > 0 ||
             interactionPhase != 'idle';
+        final shouldShowHostError = hostError != null && hostError!.isNotEmpty;
 
-        if (selectedNode == null && !shouldShowHoveredNode && !shouldShowStats) {
+        if (selectedNode == null &&
+            !shouldShowHoveredNode &&
+            !shouldShowStats &&
+            !shouldShowHostError) {
           return const SizedBox.shrink();
         }
 
@@ -72,16 +78,31 @@ class ViewportFeedbackOverlay extends StatelessWidget {
                   ),
                 ),
               ),
-              if (shouldShowStats)
+              if (shouldShowHostError || shouldShowStats)
                 Align(
                   alignment: Alignment.topRight,
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
                     alignment: Alignment.topRight,
-                    child: _OverlayChip(
-                      label: interactionPhase,
-                      value: _buildStatsLine(),
-                      accentColor: _statsAccentColor(),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        if (shouldShowHostError)
+                          _OverlayChip(
+                            label: 'Host',
+                            value: hostError!,
+                            accentColor: const Color(0xFFFFA18B),
+                          ),
+                        if (shouldShowHostError && shouldShowStats)
+                          const SizedBox(height: ShellTokens.compactGap),
+                        if (shouldShowStats)
+                          _OverlayChip(
+                            label: interactionPhase,
+                            value: _buildStatsLine(),
+                            accentColor: _statsAccentColor(),
+                          ),
+                      ],
                     ),
                   ),
                 ),

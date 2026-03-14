@@ -204,7 +204,6 @@ void TextureBridge::ManagedTexture::QueueOrbit(float delta_x, float delta_y) {
     pending_commands_.orbit_delta_x += delta_x;
     pending_commands_.orbit_delta_y += delta_y;
     interaction_active_ = true;
-    viewport_state_changed_pending_ = true;
     interaction_deadline_ = std::chrono::steady_clock::now() + kInteractionSharpnessDelay;
     force_frame_ = true;
   }
@@ -218,7 +217,6 @@ void TextureBridge::ManagedTexture::QueuePan(float delta_x, float delta_y) {
     pending_commands_.pan_delta_x += delta_x;
     pending_commands_.pan_delta_y += delta_y;
     interaction_active_ = true;
-    viewport_state_changed_pending_ = true;
     interaction_deadline_ = std::chrono::steady_clock::now() + kInteractionSharpnessDelay;
     force_frame_ = true;
   }
@@ -231,7 +229,6 @@ void TextureBridge::ManagedTexture::QueueZoom(float delta) {
     TrackCoalescedFrameRequest();
     pending_commands_.zoom_delta += delta;
     interaction_active_ = true;
-    viewport_state_changed_pending_ = true;
     interaction_deadline_ = std::chrono::steady_clock::now() + kInteractionSharpnessDelay;
     force_frame_ = true;
   }
@@ -246,7 +243,7 @@ void TextureBridge::ManagedTexture::QueuePick(float normalized_x, float normaliz
     pending_commands_.pick_normalized_x = std::clamp(normalized_x, 0.0f, 1.0f);
     pending_commands_.pick_normalized_y = std::clamp(normalized_y, 0.0f, 1.0f);
     pending_commands_.clear_hover_requested = false;
-    viewport_state_changed_pending_ = true;
+    scene_snapshot_refresh_pending_ = true;
     force_frame_ = true;
   }
   render_state_cv_.notify_all();
@@ -260,7 +257,6 @@ void TextureBridge::ManagedTexture::QueueHover(float normalized_x, float normali
     pending_commands_.hover_normalized_x = std::clamp(normalized_x, 0.0f, 1.0f);
     pending_commands_.hover_normalized_y = std::clamp(normalized_y, 0.0f, 1.0f);
     pending_commands_.clear_hover_requested = false;
-    viewport_state_changed_pending_ = true;
     force_frame_ = true;
   }
   render_state_cv_.notify_all();
@@ -272,7 +268,6 @@ void TextureBridge::ManagedTexture::ClearHover() {
     TrackCoalescedFrameRequest();
     pending_commands_.clear_hover_requested = true;
     pending_commands_.hover_requested = false;
-    viewport_state_changed_pending_ = true;
     force_frame_ = true;
   }
   render_state_cv_.notify_all();
@@ -282,8 +277,9 @@ void TextureBridge::ManagedTexture::PublishFrameEvent(int width,
                                                       int height,
                                                       double frame_time_ms,
                                                       const std::string& interaction_phase,
-                                                      bool viewport_state_changed,
-                                                      const std::string& feedback_json) {
+                                                      bool scene_state_changed,
+                                                      const std::string& feedback_json,
+                                                      const std::string& host_error) {
   if (!texture_id_.has_value()) {
     return;
   }
@@ -298,8 +294,11 @@ void TextureBridge::ManagedTexture::PublishFrameEvent(int width,
   InsertMapValue(event, "interactionPhase",
                  flutter::EncodableValue(interaction_phase));
   InsertMapValue(event, "sceneStateChanged",
-                 flutter::EncodableValue(viewport_state_changed));
+                 flutter::EncodableValue(scene_state_changed));
   InsertMapValue(event, "feedbackJson", flutter::EncodableValue(feedback_json));
+  if (!host_error.empty()) {
+    InsertMapValue(event, "hostError", flutter::EncodableValue(host_error));
+  }
   viewport_event_publisher_(std::move(event));
 }
 
@@ -308,7 +307,7 @@ void TextureBridge::ManagedTexture::RenderLoop() {
     NativeViewportCommands commands;
     int render_width = 1;
     int render_height = 1;
-    bool viewport_state_changed = false;
+    bool scene_snapshot_refresh_requested = false;
     std::string interaction_phase = "idle";
 
     {
@@ -343,8 +342,8 @@ void TextureBridge::ManagedTexture::RenderLoop() {
       pending_commands_.Reset();
       render_width = target_width_;
       render_height = target_height_;
-      viewport_state_changed = viewport_state_changed_pending_ || ended_interaction;
-      viewport_state_changed_pending_ = false;
+      scene_snapshot_refresh_requested = scene_snapshot_refresh_pending_;
+      scene_snapshot_refresh_pending_ = false;
       render_in_progress_ = true;
       if (interaction_active_) {
         interaction_phase = "interacting";
@@ -375,7 +374,17 @@ void TextureBridge::ManagedTexture::RenderLoop() {
       render_state_cv_.notify_all();
     }
 
+    const double frame_time_ms =
+        std::chrono::duration<double, std::milli>(frame_end_time - frame_start_time).count();
+
     if (!render_result.has_value()) {
+      PublishFrameEvent(render_width,
+                        render_height,
+                        frame_time_ms,
+                        interaction_phase,
+                        scene_snapshot_refresh_requested,
+                        "",
+                        "Native viewport frame render failed.");
       continue;
     }
 
@@ -383,17 +392,15 @@ void TextureBridge::ManagedTexture::RenderLoop() {
       interaction_phase = "animating";
     }
 
-    const bool publish_viewport_state_changed = viewport_state_changed || camera_animating;
     UpdateFrame(render_width, render_height, render_result->pixels);
     rendered_frame_count_ += 1;
-    const double frame_time_ms =
-        std::chrono::duration<double, std::milli>(frame_end_time - frame_start_time).count();
     PublishFrameEvent(render_width,
                       render_height,
                       frame_time_ms,
                       interaction_phase,
-                      publish_viewport_state_changed,
-                      render_result->feedback_json);
+                      scene_snapshot_refresh_requested,
+                      render_result->feedback_json,
+                      "");
   }
 }
 

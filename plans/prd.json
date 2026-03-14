@@ -172,7 +172,7 @@
     "category": "performance",
     "description": "Harden Flutter host performance, diagnostics, and platform behavior.\n\nSteps:\n1. Keep viewport rendering responsive on tablet-class and desktop-class window sizes.\n2. Expand native diagnostics only where they help ongoing migration work: frame time, dropped frames, interaction phase, and error reporting.\n3. Remove remaining avoidable overhead in the Flutter host and input path.\n4. Verify the touch-first shell does not introduce input latency or excessive layout work.\n5. Keep the current native viewport architecture as the baseline unless a measured improvement justifies a change.",
     "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build` if native viewport or backend instrumentation changes. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, `fvm flutter build windows --debug`, and `fvm flutter test integration_test -d windows` when host performance paths change. Manual: use the FPS and frame-time overlay during common interaction paths and confirm behavior stays smooth without a material regression from the current baseline.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 26,

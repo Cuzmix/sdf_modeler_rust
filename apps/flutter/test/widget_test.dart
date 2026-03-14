@@ -9,6 +9,7 @@ import 'package:sdf_modeler_flutter/src/shell/shell_contract.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_desktop_side_panel.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_modal_panel.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_stacked_panes.dart';
+import 'package:sdf_modeler_flutter/src/texture/texture_viewport_event.dart';
 import 'package:sdf_modeler_flutter/src/viewport/viewport_feedback_overlay.dart';
 import 'package:sdf_modeler_flutter/src/viewport/viewport_surface.dart';
 
@@ -44,6 +45,7 @@ class _MockRustApi extends RustLibApi {
   static const String _orthoSnapshot = '''{"selected_node":null,"top_level_nodes":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false}],"history":{"can_undo":false,"can_redo":false},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":true,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":7,"visible_nodes":7,"top_level_nodes":1,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":1,"structure_key":11,"data_fingerprint":22,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
 
   String currentSnapshot = _baseSnapshot;
+  int sceneSnapshotJsonCalls = 0;
   int addBoxCalls = 0;
   int createOperationCalls = 0;
   int createTransformCalls = 0;
@@ -84,6 +86,7 @@ class _MockRustApi extends RustLibApi {
 
   void resetState() {
     currentSnapshot = _baseSnapshot;
+    sceneSnapshotJsonCalls = 0;
     addBoxCalls = 0;
     createOperationCalls = 0;
     createTransformCalls = 0;
@@ -450,7 +453,10 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
-  String crateApiSimpleSceneSnapshotJson() => currentSnapshot;
+  String crateApiSimpleSceneSnapshotJson() {
+    sceneSnapshotJsonCalls += 1;
+    return currentSnapshot;
+  }
 
   @override
   String crateApiSimpleSelectNode({BigInt? nodeId}) {
@@ -571,6 +577,39 @@ void main() {
       scrollable: find.byType(Scrollable).last,
     );
     await tester.pumpAndSettle();
+  }
+
+  Future<void> dispatchTextureEvent(
+    WidgetTester tester,
+    Map<Object?, Object?> event,
+  ) async {
+    final dynamic state = tester.state(find.byType(BridgeStatusPage));
+    state.debugHandleTextureEvent(TextureViewportEvent.fromDynamic(event));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+  }
+
+  Map<Object?, Object?> buildTextureEvent({
+    int frameCount = 1,
+    double frameTimeMs = 16.0,
+    int droppedFrameCount = 0,
+    String interactionPhase = 'idle',
+    bool sceneStateChanged = false,
+    String feedbackJson = '',
+    String? hostError,
+  }) {
+    return <Object?, Object?>{
+      'textureId': 7,
+      'frameWidth': 640,
+      'frameHeight': 360,
+      'frameTimeMs': frameTimeMs,
+      'frameCount': frameCount,
+      'droppedFrameCount': droppedFrameCount,
+      'interactionPhase': interactionPhase,
+      'sceneStateChanged': sceneStateChanged,
+      'feedbackJson': feedbackJson,
+      if (hostError case final String error) 'hostError': error,
+    };
   }
 
   setUpAll(() {
@@ -801,6 +840,7 @@ void main() {
           frameTimeMs: 16.0,
           framesPerSecond: 62.5,
           droppedFrameCount: 0,
+          hostError: null,
         ),
       ),
     );
@@ -1311,6 +1351,68 @@ void main() {
     expect(orbitCalls, greaterThan(0));
     expect(panCalls, greaterThan(0));
     expect(zoomCalls, 1);
+  });
+
+  testWidgets(
+    'texture feedback-only events avoid full scene snapshot refreshes',
+    (WidgetTester tester) async {
+      await pumpApp(tester);
+
+      expect(mockApi.sceneSnapshotJsonCalls, 1);
+
+      await dispatchTextureEvent(
+        tester,
+        buildTextureEvent(
+          frameCount: 2,
+          interactionPhase: 'interacting',
+          feedbackJson:
+              '{"camera":{"yaw":0.9,"pitch":0.5,"roll":0.0,"distance":4.5,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.4,"y":2.1,"z":3.1}},"selected_node":null,"hovered_node":{"id":99,"name":"Hover Probe","kind_label":"Box","visible":true,"locked":false}}',
+        ),
+      );
+
+      expect(mockApi.sceneSnapshotJsonCalls, 1);
+      expect(find.textContaining('phase interacting'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'texture scene-change events refresh the full scene snapshot once',
+    (WidgetTester tester) async {
+      await pumpApp(tester);
+
+      mockApi.currentSnapshot = _MockRustApi._selectedSnapshot;
+
+      await dispatchTextureEvent(
+        tester,
+        buildTextureEvent(
+          frameCount: 2,
+          sceneStateChanged: true,
+          feedbackJson:
+              '{"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"selected_node":{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false},"hovered_node":null}',
+        ),
+      );
+
+      expect(mockApi.sceneSnapshotJsonCalls, 2);
+    },
+  );
+
+  testWidgets('surfaces native viewport host errors from texture events', (
+    WidgetTester tester,
+  ) async {
+    await pumpApp(tester);
+
+    await dispatchTextureEvent(
+      tester,
+      buildTextureEvent(
+        frameCount: 2,
+        hostError: 'Native viewport frame render failed.',
+      ),
+    );
+
+    expect(
+      find.textContaining('Viewport host error: Native viewport frame render failed.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('viewport gesture thresholds separate touch taps from drags', (

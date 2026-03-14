@@ -10,6 +10,7 @@ class TextureViewportEvent {
     required this.droppedFrameCount,
     required this.interactionPhase,
     required this.sceneStateChanged,
+    required this.hostError,
     required this.feedback,
   });
 
@@ -21,6 +22,7 @@ class TextureViewportEvent {
   final int droppedFrameCount;
   final String interactionPhase;
   final bool sceneStateChanged;
+  final String? hostError;
   final TextureViewportFeedback? feedback;
 
   bool get interactionActive => interactionPhase != 'idle';
@@ -40,6 +42,7 @@ class TextureViewportEvent {
       droppedFrameCount: _readInt(eventMap, 'droppedFrameCount'),
       interactionPhase: _readInteractionPhase(eventMap),
       sceneStateChanged: _readBool(eventMap, 'sceneStateChanged'),
+      hostError: _readOptionalString(eventMap, 'hostError'),
       feedback: _readFeedback(eventMap, 'feedbackJson'),
     );
   }
@@ -85,6 +88,17 @@ class TextureViewportEvent {
     throw FormatException(
       'Texture viewport event must contain interactionPhase or interactionActive.',
     );
+  }
+
+  static String? _readOptionalString(Map<Object?, Object?> map, String key) {
+    final value = map[key];
+    if (value == null) {
+      return null;
+    }
+    if (value is String) {
+      return value.isEmpty ? null : value;
+    }
+    throw FormatException('Texture viewport event key "$key" must be a string.');
   }
 
   static TextureViewportFeedback? _readFeedback(
