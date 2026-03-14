@@ -64,6 +64,9 @@ String deleteSelected() => RustLib.instance.api.crateApiSimpleDeleteSelected();
 String duplicateSelected() =>
     RustLib.instance.api.crateApiSimpleDuplicateSelected();
 
+String renameNode({required BigInt nodeId, required String name}) =>
+    RustLib.instance.api.crateApiSimpleRenameNode(nodeId: nodeId, name: name);
+
 String undo() => RustLib.instance.api.crateApiSimpleUndo();
 
 String redo() => RustLib.instance.api.crateApiSimpleRedo();

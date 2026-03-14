@@ -299,6 +299,22 @@ impl AppBridge {
         })
     }
 
+    pub fn rename_node(&mut self, node_id: u64, name: &str) -> bool {
+        let trimmed_name = name.trim();
+        if trimmed_name.is_empty() {
+            return false;
+        }
+
+        self.run_document_command(|bridge| {
+            let Some(node) = bridge.scene.nodes.get_mut(&node_id) else {
+                return false;
+            };
+
+            node.name = trimmed_name.to_string();
+            true
+        })
+    }
+
     pub fn toggle_node_visibility(&mut self, node_id: u64) {
         self.run_document_command(|bridge| {
             if bridge.scene.nodes.contains_key(&node_id) {
@@ -608,6 +624,44 @@ mod tests {
         assert_eq!(bridge.selected_node, Some(original_node));
         assert_eq!(bridge.hovered_node, Some(original_node));
         assert!(bridge.scene_snapshot().history.can_redo);
+    }
+
+    #[test]
+    fn rename_node_updates_snapshot_and_history() {
+        let mut bridge = AppBridge::new();
+        let node_id = bridge.add_box();
+
+        assert!(bridge.rename_node(node_id, "  Hero Box  "));
+
+        let snapshot = bridge.scene_snapshot();
+        assert_eq!(bridge.scene.nodes[&node_id].name, "Hero Box");
+        assert_eq!(
+            snapshot.selected_node.as_ref().map(|node| node.name.as_str()),
+            Some("Hero Box")
+        );
+        assert_eq!(
+            snapshot
+                .scene_tree_roots
+                .iter()
+                .find(|node| node.id == node_id)
+                .map(|node| node.name.as_str()),
+            Some("Hero Box")
+        );
+        assert!(snapshot.history.can_undo);
+    }
+
+    #[test]
+    fn rename_node_rejects_blank_names() {
+        let mut bridge = AppBridge::new();
+        let node_id = bridge.add_box();
+        let original_name = bridge.scene.nodes[&node_id].name.clone();
+        let history_before_rename = bridge.scene_snapshot().history.can_undo;
+
+        assert!(!bridge.rename_node(node_id, "   "));
+
+        let snapshot = bridge.scene_snapshot();
+        assert_eq!(bridge.scene.nodes[&node_id].name, original_name);
+        assert_eq!(snapshot.history.can_undo, history_before_rename);
     }
 
     #[test]

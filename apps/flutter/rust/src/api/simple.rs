@@ -91,6 +91,13 @@ pub fn duplicate_selected() -> String {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn rename_node(node_id: u64, name: String) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.rename_node(node_id, &name);
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn undo() -> String {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.undo();

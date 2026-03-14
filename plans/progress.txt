@@ -1961,3 +1961,44 @@ Manual verification:
 Result:
 - PRD #13 is fully verified and complete.
 
+--- Migration Iteration 6: PRD #14 - Backend-owned rename_node command through `src/app_bridge/` ---
+COMPLETED. Added a backend-owned rename command, exposed it through FRB, and wired a touch-usable Flutter rename flow that keeps naming semantics in Rust.
+
+Changes:
+- src/app_bridge/session.rs:
+  - Added backend `rename_node(node_id, name)` that trims the requested name, rejects blank results, and records the change through the existing history-tracked document command path.
+  - Added bridge tests covering rename snapshot/history updates and blank-name rejection.
+- apps/flutter/rust/src/api/simple.rs:
+  - Added the FRB-exposed synchronous `rename_node()` command.
+- apps/flutter/lib/src/rust/api/simple.dart
+- apps/flutter/lib/src/rust/frb_generated.dart
+- apps/flutter/rust/src/frb_generated.rs
+  - Regenerated the FRB bindings for the rename API surface.
+- apps/flutter/lib/app.dart:
+  - Added a touch-usable `Rename` command alongside the existing selected-node document actions.
+  - Added a backend-driven rename dialog that seeds the current node name, submits the edited value back to Rust, and refreshes Flutter from the returned snapshot.
+- apps/flutter/test/widget_test.dart:
+  - Added mock bridge support for rename.
+  - Added a widget test proving the Flutter shell opens the rename flow, calls the Rust facade, and refreshes the visible node label from backend snapshot state.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS (481 passed)
+- cargo build: PASS
+- apps/flutter/rust cargo check: PASS
+- apps/flutter/rust cargo clippy -- -D warnings: PASS
+- apps/flutter/rust cargo test: PASS
+- apps/flutter/rust cargo build: PASS
+- apps/flutter/scripts/frb_codegen.ps1: PASS
+- Flutter analyze: PASS
+- Flutter test: PASS
+- Flutter build windows --debug: PASS
+
+Manual verification:
+- Flutter Windows host rename flow: PASS. Selected the default sphere from the running Flutter host, opened the rename dialog from the Flutter command surface, submitted a non-default name, and confirmed the selected-node badge and scene-tree label updated to the renamed backend value.
+- Backend-owned update path: PASS. The rename only took effect after the backend command returned a refreshed snapshot; Flutter did not mutate the label locally.
+
+Result:
+- PRD #14 is fully verified and complete.
+

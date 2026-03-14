@@ -594,6 +594,37 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     }
   }
 
+  Future<void> _promptRenameSelectedNode() async {
+    if (_commandInFlight || !mounted) {
+      return;
+    }
+
+    final selectedNode = _viewportFeedback?.selectedNode ?? _sceneSnapshot?.selectedNode;
+    if (selectedNode == null) {
+      return;
+    }
+
+    final submittedName = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return _RenameNodeDialog(
+          initialName: selectedNode.name,
+        );
+      },
+    );
+
+    if (!mounted || submittedName == null) {
+      return;
+    }
+
+    await _runSceneCommand(
+      () => renameNode(
+        nodeId: BigInt.from(selectedNode.id),
+        name: submittedName,
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _textureEventSubscription?.cancel();
@@ -663,6 +694,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                       onAddBox: () => _runSceneCommand(addBox),
                       onAddCylinder: () => _runSceneCommand(addCylinder),
                       onAddTorus: () => _runSceneCommand(addTorus),
+                      onRenameSelected: _promptRenameSelectedNode,
                       onDuplicateSelected: () =>
                           _runSceneCommand(duplicateSelected),
                       onUndo: () => _runSceneCommand(undo),
@@ -709,6 +741,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                         onAddCylinder: () =>
                             _runModalSceneCommand(addCylinder),
                         onAddTorus: () => _runModalSceneCommand(addTorus),
+                        onRenameSelected: _promptRenameSelectedNode,
                         onDuplicateSelected: () =>
                             _runModalSceneCommand(duplicateSelected),
                         onUndo: () => _runModalSceneCommand(undo),
@@ -756,6 +789,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                   onAddBox: () => _runSceneCommand(addBox),
                   onAddCylinder: () => _runSceneCommand(addCylinder),
                   onAddTorus: () => _runSceneCommand(addTorus),
+                  onRenameSelected: _promptRenameSelectedNode,
                   onDuplicateSelected: () =>
                       _runSceneCommand(duplicateSelected),
                   onUndo: () => _runSceneCommand(undo),
@@ -792,6 +826,56 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
   }
 }
 
+class _RenameNodeDialog extends StatefulWidget {
+  const _RenameNodeDialog({required this.initialName});
+
+  final String initialName;
+
+  @override
+  State<_RenameNodeDialog> createState() => _RenameNodeDialogState();
+}
+
+class _RenameNodeDialogState extends State<_RenameNodeDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialName);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Rename Node'),
+      content: TextField(
+        key: const ValueKey('rename-node-field'),
+        controller: _controller,
+        autofocus: true,
+        textInputAction: TextInputAction.done,
+        onSubmitted: (value) => Navigator.of(context).pop(value),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          key: const ValueKey('rename-node-submit'),
+          onPressed: () => Navigator.of(context).pop(_controller.text),
+          child: const Text('Rename'),
+        ),
+      ],
+    );
+  }
+}
+
 class _InspectorPanel extends StatelessWidget {
   const _InspectorPanel({
     required this.shellLayout,
@@ -808,6 +892,7 @@ class _InspectorPanel extends StatelessWidget {
     required this.onAddBox,
     required this.onAddCylinder,
     required this.onAddTorus,
+    required this.onRenameSelected,
     required this.onDuplicateSelected,
     required this.onUndo,
     required this.onRedo,
@@ -844,6 +929,7 @@ class _InspectorPanel extends StatelessWidget {
   final VoidCallback onAddBox;
   final VoidCallback onAddCylinder;
   final VoidCallback onAddTorus;
+  final VoidCallback onRenameSelected;
   final VoidCallback onDuplicateSelected;
   final VoidCallback onUndo;
   final VoidCallback onRedo;
@@ -874,6 +960,7 @@ class _InspectorPanel extends StatelessWidget {
     final sceneCommandsEnabled = !commandInFlight;
     final undoEnabled = !commandInFlight && (snapshot?.history.canUndo ?? false);
     final redoEnabled = !commandInFlight && (snapshot?.history.canRedo ?? false);
+    final renameSelectedEnabled = !commandInFlight && selectedNode != null;
     final duplicateSelectedEnabled = !commandInFlight && selectedNode != null;
     final deleteSelectedEnabled = !commandInFlight && selectedNode != null;
     final projectionButtonLabel = currentCamera?.orthographic ?? false
@@ -946,6 +1033,8 @@ class _InspectorPanel extends StatelessWidget {
               onAddBox: onAddBox,
               onAddCylinder: onAddCylinder,
               onAddTorus: onAddTorus,
+              renameSelectedEnabled: renameSelectedEnabled,
+              onRenameSelected: onRenameSelected,
               duplicateSelectedEnabled: duplicateSelectedEnabled,
               onDuplicateSelected: onDuplicateSelected,
               undoEnabled: undoEnabled,
@@ -1052,6 +1141,8 @@ class _SceneCommandButtons extends StatelessWidget {
     required this.onAddBox,
     required this.onAddCylinder,
     required this.onAddTorus,
+    required this.renameSelectedEnabled,
+    required this.onRenameSelected,
     required this.duplicateSelectedEnabled,
     required this.onDuplicateSelected,
     required this.onUndo,
@@ -1067,6 +1158,8 @@ class _SceneCommandButtons extends StatelessWidget {
   final VoidCallback onAddBox;
   final VoidCallback onAddCylinder;
   final VoidCallback onAddTorus;
+  final bool renameSelectedEnabled;
+  final VoidCallback onRenameSelected;
   final bool duplicateSelectedEnabled;
   final VoidCallback onDuplicateSelected;
   final VoidCallback onUndo;
@@ -1094,6 +1187,11 @@ class _SceneCommandButtons extends StatelessWidget {
         OutlinedButton(
           onPressed: sceneCommandsEnabled ? onAddTorus : null,
           child: const Text('Torus'),
+        ),
+        OutlinedButton(
+          key: const ValueKey('rename-command'),
+          onPressed: renameSelectedEnabled ? onRenameSelected : null,
+          child: const Text('Rename'),
         ),
         OutlinedButton(
           key: const ValueKey('duplicate-command'),
@@ -1204,6 +1302,7 @@ class _CommandSheetContent extends StatelessWidget {
     required this.onAddBox,
     required this.onAddCylinder,
     required this.onAddTorus,
+    required this.onRenameSelected,
     required this.onDuplicateSelected,
     required this.onUndo,
     required this.onRedo,
@@ -1228,6 +1327,7 @@ class _CommandSheetContent extends StatelessWidget {
   final VoidCallback onAddBox;
   final VoidCallback onAddCylinder;
   final VoidCallback onAddTorus;
+  final VoidCallback onRenameSelected;
   final VoidCallback onDuplicateSelected;
   final VoidCallback onUndo;
   final VoidCallback onRedo;
@@ -1251,6 +1351,7 @@ class _CommandSheetContent extends StatelessWidget {
     final sceneCommandsEnabled = !commandInFlight;
     final undoEnabled = !commandInFlight && (snapshot?.history.canUndo ?? false);
     final redoEnabled = !commandInFlight && (snapshot?.history.canRedo ?? false);
+    final renameSelectedEnabled = !commandInFlight && selectedNode != null;
     final duplicateSelectedEnabled = !commandInFlight && selectedNode != null;
     final deleteSelectedEnabled = !commandInFlight && selectedNode != null;
     final cameraControlsEnabled = !commandInFlight && currentCamera != null;
@@ -1274,6 +1375,8 @@ class _CommandSheetContent extends StatelessWidget {
           onAddBox: onAddBox,
           onAddCylinder: onAddCylinder,
           onAddTorus: onAddTorus,
+          renameSelectedEnabled: renameSelectedEnabled,
+          onRenameSelected: onRenameSelected,
           duplicateSelectedEnabled: duplicateSelectedEnabled,
           onDuplicateSelected: onDuplicateSelected,
           undoEnabled: undoEnabled,

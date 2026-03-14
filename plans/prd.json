@@ -95,7 +95,7 @@
     "category": "document",
     "description": "Port the backend-owned `rename_node` command.\n\nSteps:\n1. Expose `rename_node` in `src/app_bridge/`.\n2. Keep naming validation and scene update semantics in Rust.\n3. Expose the command through FRB and add a touch-usable Flutter rename flow.\n4. Keep Flutter from mutating names directly.",
     "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build`. If the bridge API changes, run `apps/flutter/scripts/frb_codegen.ps1`. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, and `fvm flutter build windows --debug`. Manual: rename a node from Flutter and confirm the scene tree, selection status, and any property readouts update from backend state.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 15,
