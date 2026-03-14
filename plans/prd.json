@@ -193,7 +193,7 @@
     "category": "decommission",
     "description": "Remove duplicate egui menu ownership for document, history, and camera commands that Flutter already drives through `src/app_bridge/`.\n\nSteps:\n1. Remove egui-only menu wiring for backend-owned document lifecycle commands once parity is already present in Flutter.\n2. Remove duplicate egui menu triggers for undo/redo and camera commands that no longer own semantics.\n3. Keep any remaining egui-only workflows explicit rather than bundled into the same deletion.\n4. Keep the slice small enough that lost ownership is obvious in git history.",
     "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build` for the deletion slice.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 29,

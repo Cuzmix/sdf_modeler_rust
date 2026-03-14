@@ -12,56 +12,10 @@ impl SdfApp {
     /// The menu bar reads state to show enabled/disabled items, and emits
     /// actions for anything the user clicks — no direct state mutation.
     pub(super) fn show_menu_bar(&mut self, ctx: &egui::Context, actions: &mut ActionSink) {
-        let mut action_open_recent: Option<String> = None;
-
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 // --- File ---
                 ui.menu_button("File", |ui| {
-                    if ui.button("New Scene").clicked() {
-                        actions.push(Action::NewScene);
-                        ui.close_menu();
-                    }
-                    ui.separator();
-                    if ui
-                        .add(egui::Button::new("Open...").shortcut_text("Ctrl+O"))
-                        .clicked()
-                    {
-                        actions.push(Action::OpenProject);
-                        ui.close_menu();
-                    }
-                    let save_label = if self.persistence.current_file_path.is_some() {
-                        "Save"
-                    } else {
-                        "Save As..."
-                    };
-                    if ui
-                        .add(egui::Button::new(save_label).shortcut_text("Ctrl+S"))
-                        .clicked()
-                    {
-                        actions.push(Action::SaveProject);
-                        ui.close_menu();
-                    }
-                    ui.separator();
-
-                    // Recent files
-                    if !self.settings.recent_files.is_empty() {
-                        ui.menu_button("Recent Files", |ui| {
-                            let files = self.settings.recent_files.clone();
-                            for file_path in &files {
-                                let name = std::path::Path::new(file_path)
-                                    .file_name()
-                                    .map(|n| n.to_string_lossy().to_string())
-                                    .unwrap_or_else(|| file_path.clone());
-                                if ui.button(&name).on_hover_text(file_path).clicked() {
-                                    action_open_recent = Some(file_path.clone());
-                                    ui.close_menu();
-                                }
-                            }
-                        });
-                        ui.separator();
-                    }
-
                     if ui
                         .add(egui::Button::new("Screenshot...").shortcut_text("Ctrl+P"))
                         .clicked()
@@ -92,21 +46,6 @@ impl SdfApp {
 
                 // --- Edit ---
                 ui.menu_button("Edit", |ui| {
-                    if ui
-                        .add(egui::Button::new("Undo").shortcut_text("Ctrl+Z"))
-                        .clicked()
-                    {
-                        actions.push(Action::Undo);
-                        ui.close_menu();
-                    }
-                    if ui
-                        .add(egui::Button::new("Redo").shortcut_text("Ctrl+Y"))
-                        .clicked()
-                    {
-                        actions.push(Action::Redo);
-                        ui.close_menu();
-                    }
-                    ui.separator();
                     let has_sel = self.ui.node_graph_state.selected.is_some();
                     if ui
                         .add_enabled(has_sel, egui::Button::new("Copy").shortcut_text("Ctrl+C"))
@@ -126,40 +65,10 @@ impl SdfApp {
                         actions.push(Action::Paste);
                         ui.close_menu();
                     }
-                    if ui
-                        .add_enabled(
-                            has_sel,
-                            egui::Button::new("Duplicate").shortcut_text("Ctrl+D"),
-                        )
-                        .clicked()
-                    {
-                        actions.push(Action::Duplicate);
-                        ui.close_menu();
-                    }
-                    ui.separator();
-                    if ui
-                        .add_enabled(has_sel, egui::Button::new("Delete").shortcut_text("Del"))
-                        .clicked()
-                    {
-                        actions.push(Action::DeleteSelected);
-                        ui.close_menu();
-                    }
                 });
 
                 // --- View ---
                 ui.menu_button("View", |ui| {
-                    let has_sel = self.ui.node_graph_state.selected.is_some();
-                    if ui
-                        .add_enabled(
-                            has_sel,
-                            egui::Button::new("Focus Selected").shortcut_text("F"),
-                        )
-                        .clicked()
-                    {
-                        actions.push(Action::FocusSelected);
-                        ui.close_menu();
-                    }
-                    ui.separator();
                     let profiler_label = if self.ui.show_debug {
                         "Hide Profiler"
                     } else {
@@ -172,54 +81,6 @@ impl SdfApp {
                         actions.push(Action::ToggleDebug);
                         ui.close_menu();
                     }
-                    ui.separator();
-                    ui.label("Camera Presets");
-                    if ui
-                        .add(egui::Button::new("Front").shortcut_text("F5"))
-                        .clicked()
-                    {
-                        actions.push(Action::CameraFront);
-                        ui.close_menu();
-                    }
-                    if ui
-                        .add(egui::Button::new("Top").shortcut_text("F6"))
-                        .clicked()
-                    {
-                        actions.push(Action::CameraTop);
-                        ui.close_menu();
-                    }
-                    if ui
-                        .add(egui::Button::new("Right").shortcut_text("F7"))
-                        .clicked()
-                    {
-                        actions.push(Action::CameraRight);
-                        ui.close_menu();
-                    }
-                    ui.separator();
-                    ui.menu_button("Bookmarks", |ui| {
-                        for i in 0..9 {
-                            let label = if i < self.settings.bookmarks.len() {
-                                if self.settings.bookmarks[i].is_some() {
-                                    format!("Slot {} (saved)", i + 1)
-                                } else {
-                                    format!("Slot {} (empty)", i + 1)
-                                }
-                            } else {
-                                format!("Slot {} (empty)", i + 1)
-                            };
-                            let has_bookmark = i < self.settings.bookmarks.len()
-                                && self.settings.bookmarks[i].is_some();
-                            if ui
-                                .add_enabled(has_bookmark, egui::Button::new(&label))
-                                .clicked()
-                            {
-                                actions.push(Action::RestoreBookmark(i));
-                                ui.close_menu();
-                            }
-                        }
-                        ui.separator();
-                        ui.weak("Ctrl+1-9 to save current view");
-                    });
                     ui.separator();
                     ui.menu_button("Panels", |ui| {
                         use crate::ui::dock::Tab;
@@ -305,11 +166,6 @@ impl SdfApp {
                 });
             });
         });
-
-        // Recent file action must be pushed after the panel closure
-        if let Some(recent_path) = action_open_recent {
-            actions.push(Action::OpenRecentProject(recent_path));
-        }
     }
 
     pub(super) fn show_status_bar(&self, ctx: &egui::Context) {
