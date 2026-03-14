@@ -18,7 +18,6 @@ pub mod recovery_dialog;
 pub mod reference_image;
 pub mod render_settings;
 pub mod scene_stats;
-pub mod scene_tree;
 pub mod sculpt_convert_dialog;
 pub mod settings_window;
 pub mod toasts;

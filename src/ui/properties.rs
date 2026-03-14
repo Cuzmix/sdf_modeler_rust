@@ -4,13 +4,10 @@ use eframe::egui;
 
 use crate::app::actions::{Action, ActionSink};
 use crate::app::BakeRequest;
-use crate::graph::scene::{CsgOp, ModifierKind, NodeData, NodeId, Scene, SdfPrimitive};
+use crate::graph::scene::{CsgOp, ModifierKind, NodeData, NodeId, Scene};
 use crate::graph::voxel;
 use crate::material_preset::{self, MaterialLibrary};
 use crate::sculpt::SculptState;
-
-const SCALE_MIN: f32 = 0.01;
-const SCALE_MAX: f32 = 100.0;
 
 /// Common color presets as (name, [r, g, b]).
 const COLOR_PRESETS: &[(&str, [f32; 3])] = &[
@@ -392,6 +389,20 @@ fn format_voxel_count(voxels: u64) -> String {
     }
 }
 
+fn draw_flutter_owned_basics_notice(ui: &mut egui::Ui, message: &str) {
+    ui.group(|ui| {
+        ui.label(egui::RichText::new("Flutter-owned basics").strong());
+        ui.weak(message);
+    });
+}
+
+fn draw_read_only_vec3(ui: &mut egui::Ui, label: &str, value: glam::Vec3) {
+    ui.horizontal(|ui| {
+        ui.label(label);
+        ui.monospace(format!("{:.2}, {:.2}, {:.2}", value.x, value.y, value.z));
+    });
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn draw(
     ui: &mut egui::Ui,
@@ -432,7 +443,7 @@ pub fn draw(
     let is_locked = node.locked;
 
     // Clone data to avoid borrow conflicts with egui widgets
-    let mut name = node.name.clone();
+    let name = node.name.clone();
     let node_data = node.data.clone();
 
     ui.heading(format!("Node #{}", id));
@@ -443,211 +454,50 @@ pub fn draw(
 
     ui.horizontal(|ui| {
         ui.label("Name:");
-        ui.add_enabled(!is_locked, egui::TextEdit::singleline(&mut name));
+        ui.monospace(&name);
     });
 
     ui.separator();
 
     match node_data {
         NodeData::Primitive {
-            mut kind,
-            mut position,
-            mut rotation,
-            mut scale,
-            mut color,
-            mut roughness,
-            mut metallic,
-            mut emissive,
-            mut emissive_intensity,
-            mut fresnel,
+            kind,
+            position,
+            rotation,
+            scale,
+            color,
+            roughness,
+            metallic,
+            emissive,
+            emissive_intensity,
+            fresnel,
             ..
         } => {
-            let mut new_kind = kind.clone();
-            egui::ComboBox::from_id_salt("prop_prim_type")
-                .selected_text(new_kind.base_name())
-                .show_ui(ui, |ui| {
-                    for v in SdfPrimitive::ALL {
-                        ui.selectable_value(&mut new_kind, v.clone(), v.base_name());
-                    }
-                });
-            if new_kind != kind {
-                scale = new_kind.default_scale();
-                kind = new_kind;
-            }
-            ui.separator();
-
-            egui::CollapsingHeader::new("Transform")
+            egui::CollapsingHeader::new("Flutter-owned basics")
                 .default_open(true)
                 .show(ui, |ui| {
-                    vec3_editor(ui, "Position", &mut position, 0.05, None, "");
-
-                    // Rotation: display in degrees, store in radians
-                    let mut rot_deg = glam::Vec3::new(
-                        rotation.x.to_degrees(),
-                        rotation.y.to_degrees(),
-                        rotation.z.to_degrees(),
+                    draw_flutter_owned_basics_notice(
+                        ui,
+                        "Rename, primitive type, transform, and material edits are owned by Flutter through backend snapshots and commands.",
                     );
-                    vec3_editor(ui, "Rotation", &mut rot_deg, 1.0, None, "\u{00B0}");
-                    rotation = glam::Vec3::new(
-                        rot_deg.x.to_radians(),
-                        rot_deg.y.to_radians(),
-                        rot_deg.z.to_radians(),
+                    ui.label(format!("Type: {}", kind.base_name()));
+                    draw_read_only_vec3(ui, "Position:", position);
+                    draw_read_only_vec3(
+                        ui,
+                        "Rotation (deg):",
+                        glam::Vec3::new(
+                            rotation.x.to_degrees(),
+                            rotation.y.to_degrees(),
+                            rotation.z.to_degrees(),
+                        ),
                     );
-
-                    let params = kind.scale_params();
-                    if !params.is_empty() {
-                        ui.label("Size");
-                        ui.horizontal(|ui| {
-                            for &(label, axis) in params {
-                                ui.label(format!("{}:", label));
-                                let val = match axis {
-                                    0 => &mut scale.x,
-                                    1 => &mut scale.y,
-                                    _ => &mut scale.z,
-                                };
-                                ui.add(
-                                    egui::DragValue::new(val)
-                                        .speed(0.05)
-                                        .range(SCALE_MIN..=SCALE_MAX),
-                                );
-                            }
-                        });
-                    }
-                });
-
-            egui::CollapsingHeader::new("Material")
-                .default_open(true)
-                .show(ui, |ui| {
-                    // Material presets
-                    // Material preset dropdown (built-in + user presets)
-                    let built_in = material_preset::built_in_presets();
-                    ui.horizontal(|ui| {
-                        ui.label("Preset:");
-                        egui::ComboBox::from_id_salt("prim_mat_preset")
-                            .selected_text("Apply...")
-                            .width(120.0)
-                            .show_ui(ui, |ui| {
-                                let mut apply_preset =
-                                    |preset: &material_preset::MaterialPreset| {
-                                        if let Some(c) = preset.color {
-                                            color = glam::Vec3::new(c[0], c[1], c[2]);
-                                        }
-                                        metallic = preset.metallic;
-                                        roughness = preset.roughness;
-                                        fresnel = preset.fresnel;
-                                        emissive_intensity = preset.emissive_intensity;
-                                        if preset.emissive_intensity > 0.0
-                                            && emissive == glam::Vec3::ZERO
-                                        {
-                                            emissive = color;
-                                        }
-                                    };
-                                // Built-in categories
-                                for category in material_preset::CATEGORIES {
-                                    if *category == material_preset::CATEGORY_USER {
-                                        continue; // user presets shown separately below
-                                    }
-                                    let in_category: Vec<_> = built_in
-                                        .iter()
-                                        .filter(|p| p.category == *category)
-                                        .collect();
-                                    if in_category.is_empty() {
-                                        continue;
-                                    }
-                                    ui.label(egui::RichText::new(*category).strong().small());
-                                    for preset in &in_category {
-                                        if ui.selectable_label(false, &preset.name).clicked() {
-                                            apply_preset(preset);
-                                        }
-                                    }
-                                    ui.separator();
-                                }
-                                // User presets
-                                if !material_library.user_presets.is_empty() {
-                                    ui.label(egui::RichText::new("User").strong().small());
-                                    let mut remove_index = None;
-                                    for (idx, preset) in
-                                        material_library.user_presets.iter().enumerate()
-                                    {
-                                        ui.horizontal(|ui| {
-                                            if ui.selectable_label(false, &preset.name).clicked() {
-                                                apply_preset(preset);
-                                            }
-                                            if ui
-                                                .small_button("\u{2715}")
-                                                .on_hover_text("Delete preset")
-                                                .clicked()
-                                            {
-                                                remove_index = Some(idx);
-                                            }
-                                        });
-                                    }
-                                    if let Some(idx) = remove_index {
-                                        material_library.remove_preset(idx);
-                                        material_library.save();
-                                    }
-                                }
-                            });
-                        // Save as Preset button
-                        if ui
-                            .small_button("\u{1F4BE}")
-                            .on_hover_text("Save current material as preset")
-                            .clicked()
-                        {
-                            let preset_name =
-                                format!("Custom {}", material_library.user_presets.len() + 1);
-                            let preset = material_preset::MaterialPreset::from_node_material(
-                                &preset_name,
-                                [color.x, color.y, color.z],
-                                roughness,
-                                metallic,
-                                fresnel,
-                                emissive_intensity,
-                            );
-                            material_library.save_preset(preset);
-                            material_library.save();
-                        }
-                    });
-
-                    ui.label("Color");
-                    let mut color_arr = [color.x, color.y, color.z];
-                    ui.horizontal(|ui| {
-                        ui.color_edit_button_rgb(&mut color_arr);
-                        color_presets_row(ui, &mut color_arr);
-                    });
-                    color = glam::Vec3::new(color_arr[0], color_arr[1], color_arr[2]);
-
-                    ui.horizontal(|ui| {
-                        ui.label("Metallic:");
-                        ui.add(egui::Slider::new(&mut metallic, 0.0..=1.0));
-                    });
-                    ui.horizontal(|ui| {
-                        ui.label("Roughness:");
-                        ui.add(egui::Slider::new(&mut roughness, 0.0..=1.0));
-                    });
-                    ui.horizontal(|ui| {
-                        ui.label("Fresnel:");
-                        ui.add(egui::Slider::new(&mut fresnel, 0.0..=1.0));
-                    });
-
-                    ui.separator();
-                    ui.label("Emissive");
-                    let mut emissive_arr = [emissive.x, emissive.y, emissive.z];
-                    ui.horizontal(|ui| {
-                        ui.color_edit_button_rgb(&mut emissive_arr);
-                        if ui
-                            .small_button("= Color")
-                            .on_hover_text("Set emissive to object color")
-                            .clicked()
-                        {
-                            emissive_arr = [color.x, color.y, color.z];
-                        }
-                    });
-                    emissive = glam::Vec3::new(emissive_arr[0], emissive_arr[1], emissive_arr[2]);
-                    ui.horizontal(|ui| {
-                        ui.label("Intensity:");
-                        ui.add(egui::Slider::new(&mut emissive_intensity, 0.0..=5.0));
-                    });
+                    draw_read_only_vec3(ui, "Scale:", scale);
+                    draw_read_only_vec3(ui, "Color:", color);
+                    draw_read_only_vec3(ui, "Emissive:", emissive);
+                    ui.label(format!("Roughness: {:.2}", roughness));
+                    ui.label(format!("Metallic: {:.2}", metallic));
+                    ui.label(format!("Fresnel: {:.2}", fresnel));
+                    ui.label(format!("Emissive Intensity: {:.2}", emissive_intensity));
                 });
 
             // Add Sculpt Modifier button
@@ -667,9 +517,6 @@ pub fn draw(
                             existing_sculpt: None,
                             flatten: false,
                         }));
-                        if let Some(node) = scene.nodes.get_mut(&id) {
-                            node.name = name.clone();
-                        }
                         return;
                     }
                     if ui
@@ -684,35 +531,6 @@ pub fn draw(
 
             // Light Linking
             draw_light_linking_section(ui, scene, id, actions, active_light_ids);
-
-            // Write back
-            if let Some(node) = scene.nodes.get_mut(&id) {
-                if let NodeData::Primitive {
-                    kind: ref mut k,
-                    position: ref mut p,
-                    rotation: ref mut r,
-                    scale: ref mut s,
-                    color: ref mut c,
-                    metallic: ref mut m,
-                    roughness: ref mut rgh,
-                    emissive: ref mut em,
-                    emissive_intensity: ref mut ei,
-                    fresnel: ref mut fr,
-                    ..
-                } = node.data
-                {
-                    *k = kind;
-                    *p = position;
-                    *r = rotation;
-                    *s = scale;
-                    *c = color;
-                    *m = metallic;
-                    *rgh = roughness;
-                    *em = emissive;
-                    *ei = emissive_intensity;
-                    *fr = fresnel;
-                }
-            }
         }
         NodeData::Operation {
             mut op,
@@ -1181,11 +999,30 @@ pub fn draw(
         }
         NodeData::Transform {
             input,
-            mut translation,
-            mut rotation,
-            mut scale,
+            translation,
+            rotation,
+            scale,
         } => {
-            ui.label("Type: Transform");
+            egui::CollapsingHeader::new("Flutter-owned basics")
+                .default_open(true)
+                .show(ui, |ui| {
+                    draw_flutter_owned_basics_notice(
+                        ui,
+                        "Rename and direct transform edits are owned by Flutter through backend snapshots and commands.",
+                    );
+                    ui.label("Type: Transform");
+                    draw_read_only_vec3(ui, "Translation:", translation);
+                    draw_read_only_vec3(
+                        ui,
+                        "Rotation (deg):",
+                        glam::Vec3::new(
+                            rotation.x.to_degrees(),
+                            rotation.y.to_degrees(),
+                            rotation.z.to_degrees(),
+                        ),
+                    );
+                    draw_read_only_vec3(ui, "Scale:", scale);
+                });
 
             match input {
                 Some(iid) => {
@@ -1201,31 +1038,6 @@ pub fn draw(
                 }
             }
             ui.separator();
-
-            vec3_editor(ui, "Translation", &mut translation, 0.05, None, "");
-
-            let mut rot_deg = glam::Vec3::new(
-                rotation.x.to_degrees(),
-                rotation.y.to_degrees(),
-                rotation.z.to_degrees(),
-            );
-            vec3_editor(ui, "Rotation", &mut rot_deg, 1.0, None, "\u{00B0}");
-            rotation = glam::Vec3::new(
-                rot_deg.x.to_radians(),
-                rot_deg.y.to_radians(),
-                rot_deg.z.to_radians(),
-            );
-
-            vec3_editor(
-                ui,
-                "Scale",
-                &mut scale,
-                0.05,
-                Some(SCALE_MIN..=SCALE_MAX),
-                "",
-            );
-
-            ui.separator();
             if ui
                 .button("Delete Node")
                 .on_hover_text("Remove this node from the scene")
@@ -1233,21 +1045,6 @@ pub fn draw(
             {
                 actions.push(Action::DeleteNode(id));
                 return;
-            }
-
-            // Write back
-            if let Some(node) = scene.nodes.get_mut(&id) {
-                if let NodeData::Transform {
-                    translation: ref mut t,
-                    rotation: ref mut r,
-                    scale: ref mut s,
-                    ..
-                } = node.data
-                {
-                    *t = translation;
-                    *r = rotation;
-                    *s = scale;
-                }
             }
         }
         NodeData::Modifier {
@@ -1954,11 +1751,6 @@ pub fn draw(
                     }
                 });
             });
-    }
-
-    // Write name back
-    if let Some(node) = scene.nodes.get_mut(&id) {
-        node.name = name;
     }
 }
 

@@ -12,7 +12,7 @@ use crate::settings::Settings;
 use crate::ui::gizmo::{GizmoMode, GizmoSpace, GizmoState};
 use crate::ui::node_graph::{self, NodeGraphState};
 use crate::ui::{
-    brush_settings, history_panel, light_graph, properties, render_settings, scene_tree, viewport,
+    brush_settings, history_panel, light_graph, properties, render_settings, viewport,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -22,7 +22,6 @@ pub enum Tab {
     LightGraph,
     Properties,
     ReferenceImages,
-    SceneTree,
     RenderSettings,
     History,
     BrushSettings,
@@ -38,7 +37,6 @@ impl Tab {
         Tab::LightGraph,
         Tab::Properties,
         Tab::ReferenceImages,
-        Tab::SceneTree,
         Tab::RenderSettings,
         Tab::History,
         Tab::BrushSettings,
@@ -54,7 +52,6 @@ impl Tab {
             Tab::LightGraph => "Light Graph",
             Tab::Properties => "Properties",
             Tab::ReferenceImages => "Reference Images",
-            Tab::SceneTree => "Scene Tree",
             Tab::RenderSettings => "Render Settings",
             Tab::History => "History",
             Tab::BrushSettings => "Brush Settings",
@@ -85,7 +82,6 @@ pub fn create_dock_state() -> DockState<Tab> {
         Split::Below,
         0.5,
         Node::leaf_with(vec![
-            Tab::SceneTree,
             Tab::History,
             Tab::Lights,
             Tab::LightGraph,
@@ -102,7 +98,7 @@ pub fn create_dock_state() -> DockState<Tab> {
 pub fn create_dock_sculpting() -> DockState<Tab> {
     let mut state = DockState::new(vec![Tab::Viewport]);
     let surface = state.main_surface_mut();
-    let [_center, right] = surface.split(
+    let [_center, _right] = surface.split(
         NodeIndex::root(),
         Split::Right,
         0.82,
@@ -111,12 +107,6 @@ pub fn create_dock_sculpting() -> DockState<Tab> {
             Tab::Properties,
             Tab::ReferenceImages,
         ]),
-    );
-    let [_brush, _tree] = surface.split(
-        right,
-        Split::Below,
-        0.6,
-        Node::leaf_with(vec![Tab::SceneTree]),
     );
     state
 }
@@ -181,18 +171,6 @@ pub struct ViewportContext<'a> {
     pub measurement_points: &'a mut Vec<Vec3>,
 }
 
-/// Refs needed only by the scene tree tab.
-pub struct SceneTreeContext<'a> {
-    pub renaming_node: &'a mut Option<NodeId>,
-    pub rename_buf: &'a mut String,
-    pub drag_state: &'a mut Option<NodeId>,
-    pub search_filter: &'a mut String,
-}
-
-// ---------------------------------------------------------------------------
-// Tab viewer
-// ---------------------------------------------------------------------------
-
 pub struct SdfTabViewer<'a> {
     pub camera: &'a mut Camera,
     pub scene: &'a mut Scene,
@@ -206,9 +184,7 @@ pub struct SdfTabViewer<'a> {
     pub bake_progress: Option<(u32, u32)>,
     /// Viewport-specific refs (gizmo, pick, fps overlay).
     pub viewport: ViewportContext<'a>,
-    /// Scene tree-specific refs (rename, drag & drop).
-    pub scene_tree: SceneTreeContext<'a>,
-    /// Action sink — structural mutations flow through here.
+    /// Action sink - structural mutations flow through here.
     pub actions: &'a mut ActionSink,
     /// History reference for the history panel tab.
     pub history: &'a History,
@@ -232,7 +208,6 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
             Tab::LightGraph => "Light Graph".into(),
             Tab::Properties => "Properties".into(),
             Tab::ReferenceImages => "Reference Images".into(),
-            Tab::SceneTree => "Scene Tree".into(),
             Tab::RenderSettings => "Render Settings".into(),
             Tab::History => "History".into(),
             Tab::BrushSettings => "Brush Settings".into(),
@@ -316,35 +291,6 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.material_library,
                 );
                 // Defensive: clear selection if the node was deleted by properties panel
-                if let Some(sel) = self.node_graph_state.selected {
-                    if !self.scene.nodes.contains_key(&sel) {
-                        self.node_graph_state.clear_selection();
-                        self.node_graph_state.needs_initial_rebuild = true;
-                    }
-                }
-            }
-            Tab::SceneTree => {
-                let prev_selected = self.node_graph_state.selected;
-                scene_tree::draw(
-                    ui,
-                    self.scene,
-                    &mut self.node_graph_state.selected,
-                    &mut self.node_graph_state.selected_set,
-                    self.scene_tree.renaming_node,
-                    self.scene_tree.rename_buf,
-                    self.scene_tree.drag_state,
-                    self.actions,
-                    self.scene_tree.search_filter,
-                    self.active_light_ids,
-                    self.viewport.soloed_light,
-                );
-                // If scene tree changed selection, scroll graph to it
-                if self.node_graph_state.selected != prev_selected {
-                    if let Some(sel) = self.node_graph_state.selected {
-                        self.node_graph_state.pending_center_node = Some(sel);
-                    }
-                }
-                // Defensive: mark layout dirty if a node was deleted via context menu
                 if let Some(sel) = self.node_graph_state.selected {
                     if !self.scene.nodes.contains_key(&sel) {
                         self.node_graph_state.clear_selection();

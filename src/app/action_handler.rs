@@ -1114,20 +1114,13 @@ impl SdfApp {
     pub(super) fn ensure_brush_settings_tab(&mut self) {
         use crate::ui::dock::Tab;
         if self.ui.dock_state.find_tab(&Tab::BrushSettings).is_none() {
-            // Add BrushSettings as a sibling tab next to Properties (not into the viewport).
+            // Add BrushSettings as a sibling tab next to Properties when available.
             if let Some((surface_idx, node_idx, _tab_idx)) =
                 self.ui.dock_state.find_tab(&Tab::Properties)
             {
                 self.ui.dock_state[surface_idx][node_idx].append_tab(Tab::BrushSettings);
             } else {
-                // Fallback: no Properties tab found, add next to SceneTree
-                if let Some((surface_idx, node_idx, _tab_idx)) =
-                    self.ui.dock_state.find_tab(&Tab::SceneTree)
-                {
-                    self.ui.dock_state[surface_idx][node_idx].append_tab(Tab::BrushSettings);
-                } else {
-                    self.ui.dock_state.push_to_focused_leaf(Tab::BrushSettings);
-                }
+                self.ui.dock_state.push_to_focused_leaf(Tab::BrushSettings);
             }
         }
     }

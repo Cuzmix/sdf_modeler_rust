@@ -2508,3 +2508,34 @@ Manual verification:
 Result:
 - PRD #28 is fully verified and complete.
 
+--- Migration Iteration 21: PRD #29 - Remove duplicate egui scene-tree and basic-property ownership ---
+COMPLETED. Removed the egui scene-tree adapter that duplicated Flutter-owned hierarchy behavior and narrowed the egui properties panel so primitive and transform basics are no longer edited there.
+
+Changes:
+- src/ui/dock.rs
+- src/app/egui_frontend.rs
+- src/app/state.rs
+- src/app/mod.rs
+- src/app/action_handler.rs
+- src/ui/mod.rs
+- src/ui/properties.rs
+- src/material_preset.rs
+- Deleted `src/ui/scene_tree.rs`
+  - Removed the `SceneTree` tab from the egui dock model, default layouts, and panel registry.
+  - Removed the scene-tree-specific egui UI state and tab-viewer wiring that only existed to support rename, search, and drag/drop ownership in egui.
+  - Narrowed the egui properties panel so node naming is read-only and primitive/transform basics are displayed as Flutter-owned, read-only state instead of editable egui controls.
+  - Kept the still-egui-only advanced surfaces explicit, including operation, modifier, sculpt, light, light-linking, and modifier-stack editing.
+  - Removed the now-unused material preset deletion helper and its obsolete unit test coverage after primitive material preset management stopped living in egui basics.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS
+- cargo build: PASS
+
+Manual verification:
+- Skipped by current workflow instruction. This deletion slice was validated with automated Rust coverage only.
+
+Result:
+- PRD #29 is fully verified and complete.
+

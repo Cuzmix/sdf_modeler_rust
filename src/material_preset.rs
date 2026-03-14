@@ -282,13 +282,6 @@ impl MaterialLibrary {
         }
     }
 
-    /// Remove a user preset by index.
-    pub fn remove_preset(&mut self, index: usize) {
-        if index < self.user_presets.len() {
-            self.user_presets.remove(index);
-        }
-    }
-
     /// Returns the file path for persisting user presets.
     #[cfg(not(target_arch = "wasm32"))]
     fn library_path() -> std::path::PathBuf {
@@ -394,22 +387,6 @@ mod tests {
             "Duplicate name should replace, not append"
         );
         assert!((library.user_presets[0].roughness - 0.2).abs() < 0.001);
-    }
-
-    #[test]
-    fn library_remove_preset() {
-        let mut library = MaterialLibrary::default();
-        library.save_preset(MaterialPreset::from_node_material(
-            "A", [1.0; 3], 0.5, 0.0, 0.04, 0.0,
-        ));
-        library.save_preset(MaterialPreset::from_node_material(
-            "B", [0.0; 3], 0.5, 0.0, 0.04, 0.0,
-        ));
-        assert_eq!(library.user_presets.len(), 2);
-
-        library.remove_preset(0);
-        assert_eq!(library.user_presets.len(), 1);
-        assert_eq!(library.user_presets[0].name, "B");
     }
 
     #[test]

@@ -200,7 +200,7 @@
     "category": "decommission",
     "description": "Remove duplicate egui scene-tree and basic-property ownership where Flutter is already authoritative.\n\nSteps:\n1. Delete or narrow egui scene-tree behaviors that are already superseded by backend snapshots and Flutter surfaces.\n2. Delete or narrow egui basic property editing that duplicates backend-owned Flutter panels.\n3. Leave advanced light, sculpt, render, and settings sections explicit if they are still egui-only.\n4. Keep the slice narrow enough that remaining parity gaps stay visible.",
     "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build` for the deletion slice.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 30,

@@ -3,7 +3,7 @@ use std::sync::atomic::Ordering;
 use eframe::egui;
 
 use crate::compat::Instant;
-use crate::ui::dock::{SceneTreeContext, SdfTabViewer, ViewportContext};
+use crate::ui::dock::{SdfTabViewer, ViewportContext};
 
 use super::actions::ActionSink;
 use super::backend_frame::UiFrameFeedback;
@@ -157,12 +157,6 @@ impl SdfApp {
                 show_distance_readout: &mut self.ui.show_distance_readout,
                 measurement_mode: &mut self.ui.measurement_mode,
                 measurement_points: &mut self.ui.measurement_points,
-            },
-            scene_tree: SceneTreeContext {
-                renaming_node: &mut self.ui.renaming_node,
-                rename_buf: &mut self.ui.rename_buf,
-                drag_state: &mut self.ui.scene_tree_drag,
-                search_filter: &mut self.ui.scene_tree_search,
             },
             actions: action_sink,
             history: &self.doc.history,
