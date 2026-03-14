@@ -151,7 +151,7 @@
     "category": "viewport",
     "description": "Port the touch-first viewport navigation and selection model.\n\nSteps:\n1. Define the tablet-first viewport interaction model for navigation and selection.\n2. Implement Flutter-side gesture routing that works well for touch while remaining usable with mouse and keyboard on desktop.\n3. Preserve performance and avoid gesture conflicts with shell panels.\n4. Keep visual polish out of scope; focus on interaction correctness and portability.",
     "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build` if backend viewport commands or picking logic change. If the bridge API changes, run `apps/flutter/scripts/frb_codegen.ps1`. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, `fvm flutter build windows --debug`, and `fvm flutter test integration_test -d windows` when the Windows viewport host or interaction path changes. Manual: check tablet-sized and desktop-sized windows and confirm navigation and selection work without desktop-only assumptions.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 23,

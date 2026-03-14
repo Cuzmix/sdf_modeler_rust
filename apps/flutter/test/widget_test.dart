@@ -1104,6 +1104,41 @@ void main() {
     expect(pickCalls, 1);
   });
 
+  testWidgets('tablet touch gestures route pan and pinch without selecting', (
+    WidgetTester tester,
+  ) async {
+    await pumpApp(tester);
+
+    final viewportCenter = tester.getCenter(find.byType(ViewportSurface));
+    final firstTouch = await tester.createGesture(
+      kind: PointerDeviceKind.touch,
+    );
+    final secondTouch = await tester.createGesture(
+      pointer: 7,
+      kind: PointerDeviceKind.touch,
+    );
+
+    await firstTouch.down(viewportCenter - const Offset(40, 0));
+    await secondTouch.down(viewportCenter + const Offset(40, 0));
+    await tester.pump();
+
+    await firstTouch.moveTo(viewportCenter - const Offset(60, 0));
+    await secondTouch.moveTo(viewportCenter + const Offset(60, 0));
+    await tester.pump();
+
+    await firstTouch.moveBy(const Offset(20, 12));
+    await secondTouch.moveBy(const Offset(20, 12));
+    await tester.pump();
+
+    await firstTouch.up();
+    await secondTouch.up();
+    await tester.pump();
+
+    expect(zoomCalls, greaterThan(0));
+    expect(panCalls, greaterThan(0));
+    expect(pickCalls, 0);
+  });
+
   testWidgets('routes inspector camera commands through the Rust facade', (
     WidgetTester tester,
   ) async {

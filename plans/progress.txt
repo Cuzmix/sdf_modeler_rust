@@ -2272,3 +2272,34 @@ Manual verification:
 Result:
 - PRD #21 is fully verified and complete.
 
+--- Migration Iteration 14: PRD #22 - Touch-first viewport navigation and selection model ---
+COMPLETED. Extended the Flutter viewport input router so the tablet-first interaction model now covers one-finger orbit, tap selection, two-finger pan, and pinch zoom while preserving the existing mouse path.
+
+Changes:
+- apps/flutter/lib/src/viewport/viewport_surface.dart:
+  - Split touch-like pointer routing from mouse routing instead of treating touch as a primary-button mouse drag.
+  - Added touch gesture state for one-finger orbit, tap-to-select, two-finger pan, and pinch zoom using the existing native viewport command surface.
+  - Kept hover and mouse-button semantics desktop-specific while avoiding accidental node picks during multi-touch navigation sequences.
+- apps/flutter/test/widget_test.dart:
+  - Added widget coverage for the tablet-specific two-touch pan and pinch path.
+  - Kept the earlier touch tap-vs-drag coverage in place so selection and orbit thresholds still stay predictable.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS (497 passed)
+- cargo build: PASS
+- apps/flutter/rust cargo check: PASS
+- apps/flutter/rust cargo clippy -- -D warnings: PASS
+- apps/flutter/rust cargo test: PASS
+- apps/flutter/rust cargo build: PASS
+- Flutter analyze: PASS
+- Flutter test: PASS
+- Flutter build windows --debug: PASS
+
+Manual verification:
+- Skipped by current workflow instruction. This slice was validated with automated Rust and Flutter coverage only.
+
+Result:
+- PRD #22 is fully verified and complete.
+

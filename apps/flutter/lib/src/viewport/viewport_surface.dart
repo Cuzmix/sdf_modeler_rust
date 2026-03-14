@@ -58,8 +58,19 @@ class _ViewportSurfaceState extends State<ViewportSurface> {
   bool _dragGestureStarted = false;
   bool _tapCanceled = false;
   Size _currentViewportSize = const Size(1, 1);
+  final Map<int, Offset> _touchPositions = <int, Offset>{};
+  final Map<int, Offset> _touchStartPositions = <int, Offset>{};
+  Offset? _lastTouchCentroid;
+  double? _lastTouchSpan;
+  bool _touchGestureStarted = false;
+  bool _touchTapCanceled = false;
 
   void _handlePointerDown(PointerDownEvent event) {
+    if (ShellGestureContract.isTouchLike(event.kind)) {
+      _handleTouchPointerDown(event);
+      return;
+    }
+
     _pressLocalPosition = event.localPosition;
     _lastHoverLocalPosition = event.localPosition;
     _lastDragLocalPosition = event.localPosition;
@@ -70,6 +81,11 @@ class _ViewportSurfaceState extends State<ViewportSurface> {
   }
 
   void _handlePointerMove(PointerMoveEvent event) {
+    if (ShellGestureContract.isTouchLike(event.kind)) {
+      _handleTouchPointerMove(event);
+      return;
+    }
+
     final pressLocalPosition = _pressLocalPosition;
     final pointerKind = _pressPointerKind ?? event.kind;
 
@@ -127,6 +143,11 @@ class _ViewportSurfaceState extends State<ViewportSurface> {
   }
 
   void _handlePointerUp(PointerUpEvent event) {
+    if (ShellGestureContract.isTouchLike(event.kind)) {
+      _handleTouchPointerUp(event);
+      return;
+    }
+
     final pressedButtons = _pressButtons;
     final shouldSelect =
         !_tapCanceled && (pressedButtons & kPrimaryMouseButton) != 0;
@@ -147,6 +168,11 @@ class _ViewportSurfaceState extends State<ViewportSurface> {
   }
 
   void _handlePointerCancel(PointerCancelEvent event) {
+    if (ShellGestureContract.isTouchLike(event.kind)) {
+      _handleTouchPointerCancel(event);
+      return;
+    }
+
     _pressLocalPosition = null;
     _lastDragLocalPosition = null;
     _pressPointerKind = null;
@@ -189,6 +215,181 @@ class _ViewportSurfaceState extends State<ViewportSurface> {
     }
 
     widget.onHoverExit();
+  }
+
+  void _handleTouchPointerDown(PointerDownEvent event) {
+    _touchPositions[event.pointer] = event.localPosition;
+    _touchStartPositions[event.pointer] = event.localPosition;
+
+    if (_touchPositions.length == 1) {
+      _touchGestureStarted = false;
+      _touchTapCanceled = false;
+    } else {
+      _touchTapCanceled = true;
+    }
+
+    _lastTouchCentroid = _touchCentroid();
+    _lastTouchSpan = _touchSpan();
+  }
+
+  void _handleTouchPointerMove(PointerMoveEvent event) {
+    if (!_touchPositions.containsKey(event.pointer)) {
+      return;
+    }
+
+    _touchPositions[event.pointer] = event.localPosition;
+    final pointerCount = _touchPositions.length;
+    if (pointerCount == 0) {
+      return;
+    }
+
+    if (pointerCount == 1) {
+      final currentPosition = event.localPosition;
+      final startPosition =
+          _touchStartPositions[event.pointer] ?? currentPosition;
+      final dragDistance = (currentPosition - startPosition).distance;
+      if (!_touchGestureStarted) {
+        if (dragDistance < ShellGestureContract.dragStartSlopFor(event.kind)) {
+          return;
+        }
+
+        _touchGestureStarted = true;
+        _touchTapCanceled = true;
+        _lastTouchCentroid = currentPosition;
+      }
+
+      final previousPosition = _lastTouchCentroid ?? currentPosition;
+      final delta = currentPosition - previousPosition;
+      _lastTouchCentroid = currentPosition;
+      if (delta.distance == 0.0) {
+        return;
+      }
+
+      widget.onOrbitDrag(delta);
+      return;
+    }
+
+    final centroid = _touchCentroid();
+    final span = _touchSpan();
+    if (centroid == null || span == null) {
+      return;
+    }
+
+    if (!_touchGestureStarted) {
+      final maxTouchMovement = _touchStartPositions.entries.fold<double>(
+        0.0,
+        (maxDistance, entry) {
+          final currentPosition = _touchPositions[entry.key];
+          if (currentPosition == null) {
+            return maxDistance;
+          }
+
+          final distance = (currentPosition - entry.value).distance;
+          return distance > maxDistance ? distance : maxDistance;
+        },
+      );
+      final spanDelta = (span - (_lastTouchSpan ?? span)).abs();
+      final gestureSlop = ShellGestureContract.dragStartSlopFor(event.kind);
+      if (maxTouchMovement < gestureSlop && spanDelta < gestureSlop) {
+        return;
+      }
+
+      _touchGestureStarted = true;
+      _touchTapCanceled = true;
+    }
+
+    final previousCentroid = _lastTouchCentroid ?? centroid;
+    final previousSpan = _lastTouchSpan ?? span;
+    final panDelta = centroid - previousCentroid;
+    final zoomDelta = span - previousSpan;
+    _lastTouchCentroid = centroid;
+    _lastTouchSpan = span;
+
+    if (panDelta.distance != 0.0) {
+      widget.onPanDrag(panDelta);
+    }
+    if (zoomDelta != 0.0) {
+      widget.onScroll(zoomDelta);
+    }
+  }
+
+  void _handleTouchPointerUp(PointerUpEvent event) {
+    final shouldSelect =
+        !_touchTapCanceled &&
+        !_touchGestureStarted &&
+        _touchPositions.length == 1 &&
+        _touchPositions.containsKey(event.pointer);
+
+    _touchPositions.remove(event.pointer);
+    _touchStartPositions.remove(event.pointer);
+
+    if (shouldSelect) {
+      widget.onPrimaryTap(event.localPosition, _currentViewportSize);
+    }
+
+    if (_touchPositions.isEmpty) {
+      _resetTouchState();
+      widget.onInteractionEnd();
+      return;
+    }
+
+    _reseedTouchGesture();
+  }
+
+  void _handleTouchPointerCancel(PointerCancelEvent event) {
+    _touchPositions.remove(event.pointer);
+    _touchStartPositions.remove(event.pointer);
+    if (_touchPositions.isEmpty) {
+      _resetTouchState();
+      widget.onInteractionEnd();
+      return;
+    }
+
+    _reseedTouchGesture();
+  }
+
+  void _reseedTouchGesture() {
+    final currentPositions = Map<int, Offset>.from(_touchPositions);
+    _touchStartPositions
+      ..clear()
+      ..addAll(currentPositions);
+    _touchGestureStarted = false;
+    _touchTapCanceled = true;
+    _lastTouchCentroid = _touchCentroid();
+    _lastTouchSpan = _touchSpan();
+  }
+
+  void _resetTouchState() {
+    _touchPositions.clear();
+    _touchStartPositions.clear();
+    _lastTouchCentroid = null;
+    _lastTouchSpan = null;
+    _touchGestureStarted = false;
+    _touchTapCanceled = false;
+  }
+
+  Offset? _touchCentroid() {
+    if (_touchPositions.isEmpty) {
+      return null;
+    }
+
+    var sumX = 0.0;
+    var sumY = 0.0;
+    for (final position in _touchPositions.values) {
+      sumX += position.dx;
+      sumY += position.dy;
+    }
+
+    return Offset(sumX / _touchPositions.length, sumY / _touchPositions.length);
+  }
+
+  double? _touchSpan() {
+    if (_touchPositions.length < 2) {
+      return null;
+    }
+
+    final positions = _touchPositions.values.take(2).toList(growable: false);
+    return (positions[0] - positions[1]).distance;
   }
 
   @override
