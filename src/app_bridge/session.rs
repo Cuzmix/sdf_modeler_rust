@@ -288,6 +288,17 @@ impl AppBridge {
         });
     }
 
+    pub fn duplicate_selected(&mut self) -> Option<u64> {
+        self.run_document_command(|bridge| {
+            let selected_node = bridge.selected_node?;
+            let duplicated_node = bridge.scene.duplicate_subtree(selected_node)?;
+            bridge.offset_duplicated_root(duplicated_node);
+            bridge.selected_node = Some(duplicated_node);
+            bridge.hovered_node = Some(duplicated_node);
+            Some(duplicated_node)
+        })
+    }
+
     pub fn toggle_node_visibility(&mut self, node_id: u64) {
         self.run_document_command(|bridge| {
             if bridge.scene.nodes.contains_key(&node_id) {
@@ -373,6 +384,19 @@ impl AppBridge {
         self.selected_node =
             restored_selected.filter(|node_id| self.scene.nodes.contains_key(node_id));
         self.hovered_node = self.selected_node;
+    }
+
+    fn offset_duplicated_root(&mut self, node_id: NodeId) {
+        let Some(node) = self.scene.nodes.get_mut(&node_id) else {
+            return;
+        };
+
+        match &mut node.data {
+            NodeData::Primitive { position, .. } | NodeData::Sculpt { position, .. } => {
+                position.x += 1.0;
+            }
+            _ => {}
+        }
     }
 
     fn scene_tree_roots(&self) -> Vec<AppSceneTreeNodeSnapshot> {
@@ -466,6 +490,7 @@ fn app_vec3(value: Vec3) -> AppVec3 {
 #[cfg(test)]
 mod tests {
     use super::AppBridge;
+    use crate::graph::scene::NodeData;
 
     #[test]
     fn scene_snapshot_includes_recursive_scene_tree() {
@@ -541,6 +566,48 @@ mod tests {
         assert_eq!(bridge.hovered_node, Some(added_node));
         assert!(bridge.scene_snapshot().history.can_undo);
         assert!(!bridge.scene_snapshot().history.can_redo);
+    }
+
+    #[test]
+    fn duplicate_selected_creates_offset_copy_and_selects_it() {
+        let mut bridge = AppBridge::new();
+        let original_node = bridge.add_box();
+        let original_position = match &bridge.scene.nodes[&original_node].data {
+            NodeData::Primitive { position, .. } => *position,
+            _ => panic!("expected primitive"),
+        };
+
+        let duplicated_node = bridge.duplicate_selected().expect("duplicate node");
+
+        assert_ne!(duplicated_node, original_node);
+        assert_eq!(bridge.selected_node, Some(duplicated_node));
+        assert_eq!(bridge.hovered_node, Some(duplicated_node));
+        assert!(bridge.scene_snapshot().history.can_undo);
+        assert!(bridge.scene.nodes[&duplicated_node].name.ends_with(" Copy"));
+
+        match &bridge.scene.nodes[&duplicated_node].data {
+            NodeData::Primitive { position, .. } => {
+                assert_eq!(position.x, original_position.x + 1.0);
+                assert_eq!(position.y, original_position.y);
+                assert_eq!(position.z, original_position.z);
+            }
+            _ => panic!("expected duplicated primitive"),
+        }
+    }
+
+    #[test]
+    fn undo_removes_duplicated_selection() {
+        let mut bridge = AppBridge::new();
+        let original_node = bridge.add_box();
+        let duplicated_node = bridge.duplicate_selected().expect("duplicate node");
+
+        bridge.undo();
+
+        assert!(bridge.scene.nodes.contains_key(&original_node));
+        assert!(!bridge.scene.nodes.contains_key(&duplicated_node));
+        assert_eq!(bridge.selected_node, Some(original_node));
+        assert_eq!(bridge.hovered_node, Some(original_node));
+        assert!(bridge.scene_snapshot().history.can_redo);
     }
 
     #[test]

@@ -84,6 +84,13 @@ pub fn delete_selected() -> String {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn duplicate_selected() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.duplicate_selected();
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn undo() -> String {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.undo();

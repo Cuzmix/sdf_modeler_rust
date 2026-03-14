@@ -1854,3 +1854,110 @@ Manual verification:
 Result:
 - PRD #12 is fully verified and complete.
 
+--- Migration Iteration 5: PRD #13 - Backend-owned duplicate_selected command through `src/app_bridge/` ---
+IMPLEMENTED, but PRD #13 remains `passes: false` because Flutter/manual verification is blocked in this sandbox.
+
+Changes:
+- src/app_bridge/session.rs:
+  - Added backend `duplicate_selected()` that duplicates the selected subtree, applies the existing backend-owned root offset, and re-selects the duplicate.
+  - Added a private duplicate-offset helper so the bridge keeps placement semantics in Rust.
+  - Added bridge tests covering duplicate selection, backend-owned naming/offset behavior, and undo removing the duplicated subtree.
+- apps/flutter/rust/src/api/simple.rs:
+  - Added the FRB-exposed synchronous `duplicate_selected()` command.
+- apps/flutter/lib/app.dart:
+  - Added a touch-usable `Duplicate` trigger to the shared scene command surface used by the desktop side panel and tablet modal command sheet.
+  - Kept enable/disable state driven by backend selection state rather than Dart-side duplication rules.
+- apps/flutter/test/widget_test.dart:
+  - Added mock bridge support for the duplicate command.
+  - Added a widget test proving the Flutter shell routes duplicate through the Rust facade and refreshes snapshot state afterward.
+- apps/flutter/lib/src/rust/api/simple.dart
+- apps/flutter/lib/src/rust/frb_generated.dart
+- apps/flutter/rust/src/frb_generated.rs
+  - Updated the generated bridge entrypoints manually as a fallback because `apps/flutter/scripts/frb_codegen.ps1` hung in this sandbox before writing outputs.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS (479 passed)
+- cargo build: PASS
+- apps/flutter/rust cargo check: PASS
+- apps/flutter/rust cargo clippy -- -D warnings: PASS
+- apps/flutter/rust cargo test: PASS
+- apps/flutter/rust cargo build: PASS
+- apps/flutter/scripts/frb_codegen.ps1: BLOCKED. The generator hung in this sandbox after startup and never wrote outputs.
+- Flutter analyze: BLOCKED. The pinned FVM SDK resolves outside the writable sandbox and the toolchain failed when trying to mutate SDK cache files / launch helper processes.
+- Flutter test: NOT RUN for the same sandbox/toolchain reason.
+- Flutter build windows --debug: NOT RUN for the same sandbox/toolchain reason.
+
+Manual verification pending:
+- Run the Flutter Windows host, duplicate the selected node, and confirm the scene tree, selection state, backend-owned naming, and viewport all update to the duplicated subtree.
+
+Result:
+- PRD #13 is implemented on the Rust and Flutter source paths, but it is not yet marked complete in `plans/prd.json` because the required Flutter/manual verification could not be completed in this environment.
+
+--- Migration Iteration 5 Follow-up: PRD #13 verification retry ---
+Re-verified the existing `duplicate_selected` slice and confirmed the backend behavior matches the native egui duplication semantics.
+
+What I did:
+- Compared `src/app_bridge/session.rs` against the native `duplicate_and_offset()` logic in `src/app/action_handler.rs` to confirm the bridge keeps backend-owned naming, root offset, and reselection behavior aligned.
+- Re-ran the required Rust verification loop for the repo root in the mandated order.
+- Re-ran verification for the Flutter Rust bridge crate because this slice touches `apps/flutter/rust`.
+- Retried FRB codegen and the Flutter verification stack with a writable mirrored Flutter SDK and redirected cache directories to isolate the sandbox failures.
+
+Files changed in this slice:
+- src/app_bridge/session.rs
+- apps/flutter/rust/src/api/simple.rs
+- apps/flutter/rust/src/frb_generated.rs
+- apps/flutter/lib/src/rust/api/simple.dart
+- apps/flutter/lib/src/rust/frb_generated.dart
+- apps/flutter/lib/app.dart
+- apps/flutter/test/widget_test.dart
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS (479 passed)
+- cargo build: PASS
+- apps/flutter/rust cargo check: PASS
+- apps/flutter/rust cargo clippy -- -D warnings: PASS
+- apps/flutter/rust cargo test: PASS
+- apps/flutter/rust cargo build: PASS
+- flutter_rust_bridge_codegen --version: PASS (2.11.1)
+- apps/flutter/scripts/frb_codegen.ps1: BLOCKED. The generator started and then hung until timeout in this sandbox.
+- Flutter analyze: BLOCKED. Dart/Flutter child-process spawning fails in this sandbox once the tool reaches `dart pub`, `git`, or `analysis_server` subprocesses.
+- Flutter test: NOT RUN for the same Flutter subprocess restriction.
+- Flutter build windows --debug: NOT RUN for the same Flutter subprocess restriction.
+
+Manual verification:
+- BLOCKED. The Flutter Windows host could not be rebuilt and relaunched from this sandbox, so the required duplicate-node manual check is still pending.
+
+Notes for the next iteration:
+- Re-run `apps/flutter/scripts/frb_codegen.ps1` in an environment where Dart/Flutter subprocesses are allowed.
+- Then run Flutter `analyze`, `test`, and `build windows --debug`, followed by the manual duplicate-node check in the Windows host.
+- Leave PRD #13 as `passes: false` until those Flutter/manual verification steps complete.
+
+--- Migration Iteration 5 Manual Verification: PRD #13 complete ---
+Manual verification completed on 2026-03-14 for the backend-owned `duplicate_selected` slice.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS (479 passed)
+- cargo build: PASS
+- apps/flutter/rust cargo check: PASS
+- apps/flutter/rust cargo clippy -- -D warnings: PASS
+- apps/flutter/rust cargo test: PASS
+- apps/flutter/rust cargo build: PASS
+- apps/flutter/scripts/frb_codegen.ps1: PASS
+- Flutter analyze: PASS
+- Flutter test: PASS
+- Flutter build windows --debug: PASS
+
+Manual verification:
+- Flutter Windows host duplicate flow: PASS. Selected the default `Sphere` from the running Flutter host, confirmed `Duplicate` enabled, invoked `Duplicate`, and observed the host switch selection to `Sphere Copy`.
+- Backend-owned naming and selection behavior: PASS. The selected-node status changed from `Sphere` to `Sphere Copy` after duplication, confirming the duplicate kept backend-owned naming and became the active selection in the host.
+- Viewport feedback: PASS. The viewport outline/selection feedback updated with the duplicated node selected after the command completed.
+
+Result:
+- PRD #13 is fully verified and complete.
+

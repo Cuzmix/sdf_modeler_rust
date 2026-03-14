@@ -88,7 +88,7 @@
     "category": "document",
     "description": "Port the backend-owned `duplicate_selected` command.\n\nSteps:\n1. Expose `duplicate_selected` in `src/app_bridge/`.\n2. Keep naming, placement offset, and selection behavior backend-owned.\n3. Expose the command through FRB and add a Flutter trigger for it.\n4. Keep Flutter from reconstructing duplication semantics in Dart.",
     "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build`. If the bridge API changes, run `apps/flutter/scripts/frb_codegen.ps1`. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, and `fvm flutter build windows --debug`. Manual: duplicate the selected node from Flutter and confirm the new node appears in the scene tree with backend-owned naming, placement, and selection behavior.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 14,

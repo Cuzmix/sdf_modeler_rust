@@ -61,6 +61,9 @@ String toggleNodeLock({required BigInt nodeId}) =>
 
 String deleteSelected() => RustLib.instance.api.crateApiSimpleDeleteSelected();
 
+String duplicateSelected() =>
+    RustLib.instance.api.crateApiSimpleDuplicateSelected();
+
 String undo() => RustLib.instance.api.crateApiSimpleUndo();
 
 String redo() => RustLib.instance.api.crateApiSimpleRedo();

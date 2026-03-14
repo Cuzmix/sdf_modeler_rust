@@ -663,6 +663,8 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                       onAddBox: () => _runSceneCommand(addBox),
                       onAddCylinder: () => _runSceneCommand(addCylinder),
                       onAddTorus: () => _runSceneCommand(addTorus),
+                      onDuplicateSelected: () =>
+                          _runSceneCommand(duplicateSelected),
                       onUndo: () => _runSceneCommand(undo),
                       onRedo: () => _runSceneCommand(redo),
                       onDeleteSelected: () => _runSceneCommand(deleteSelected),
@@ -707,6 +709,8 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                         onAddCylinder: () =>
                             _runModalSceneCommand(addCylinder),
                         onAddTorus: () => _runModalSceneCommand(addTorus),
+                        onDuplicateSelected: () =>
+                            _runModalSceneCommand(duplicateSelected),
                         onUndo: () => _runModalSceneCommand(undo),
                         onRedo: () => _runModalSceneCommand(redo),
                         onDeleteSelected: () =>
@@ -752,6 +756,8 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                   onAddBox: () => _runSceneCommand(addBox),
                   onAddCylinder: () => _runSceneCommand(addCylinder),
                   onAddTorus: () => _runSceneCommand(addTorus),
+                  onDuplicateSelected: () =>
+                      _runSceneCommand(duplicateSelected),
                   onUndo: () => _runSceneCommand(undo),
                   onRedo: () => _runSceneCommand(redo),
                   onDeleteSelected: () => _runSceneCommand(deleteSelected),
@@ -802,6 +808,7 @@ class _InspectorPanel extends StatelessWidget {
     required this.onAddBox,
     required this.onAddCylinder,
     required this.onAddTorus,
+    required this.onDuplicateSelected,
     required this.onUndo,
     required this.onRedo,
     required this.onDeleteSelected,
@@ -837,6 +844,7 @@ class _InspectorPanel extends StatelessWidget {
   final VoidCallback onAddBox;
   final VoidCallback onAddCylinder;
   final VoidCallback onAddTorus;
+  final VoidCallback onDuplicateSelected;
   final VoidCallback onUndo;
   final VoidCallback onRedo;
   final VoidCallback onDeleteSelected;
@@ -866,6 +874,7 @@ class _InspectorPanel extends StatelessWidget {
     final sceneCommandsEnabled = !commandInFlight;
     final undoEnabled = !commandInFlight && (snapshot?.history.canUndo ?? false);
     final redoEnabled = !commandInFlight && (snapshot?.history.canRedo ?? false);
+    final duplicateSelectedEnabled = !commandInFlight && selectedNode != null;
     final deleteSelectedEnabled = !commandInFlight && selectedNode != null;
     final projectionButtonLabel = currentCamera?.orthographic ?? false
         ? 'Use Perspective'
@@ -937,6 +946,8 @@ class _InspectorPanel extends StatelessWidget {
               onAddBox: onAddBox,
               onAddCylinder: onAddCylinder,
               onAddTorus: onAddTorus,
+              duplicateSelectedEnabled: duplicateSelectedEnabled,
+              onDuplicateSelected: onDuplicateSelected,
               undoEnabled: undoEnabled,
               onUndo: onUndo,
               redoEnabled: redoEnabled,
@@ -1041,6 +1052,8 @@ class _SceneCommandButtons extends StatelessWidget {
     required this.onAddBox,
     required this.onAddCylinder,
     required this.onAddTorus,
+    required this.duplicateSelectedEnabled,
+    required this.onDuplicateSelected,
     required this.onUndo,
     required this.onRedo,
     required this.onDeleteSelected,
@@ -1054,6 +1067,8 @@ class _SceneCommandButtons extends StatelessWidget {
   final VoidCallback onAddBox;
   final VoidCallback onAddCylinder;
   final VoidCallback onAddTorus;
+  final bool duplicateSelectedEnabled;
+  final VoidCallback onDuplicateSelected;
   final VoidCallback onUndo;
   final VoidCallback onRedo;
   final VoidCallback onDeleteSelected;
@@ -1079,6 +1094,11 @@ class _SceneCommandButtons extends StatelessWidget {
         OutlinedButton(
           onPressed: sceneCommandsEnabled ? onAddTorus : null,
           child: const Text('Torus'),
+        ),
+        OutlinedButton(
+          key: const ValueKey('duplicate-command'),
+          onPressed: duplicateSelectedEnabled ? onDuplicateSelected : null,
+          child: const Text('Duplicate'),
         ),
         OutlinedButton(
           key: const ValueKey('undo-command'),
@@ -1184,6 +1204,7 @@ class _CommandSheetContent extends StatelessWidget {
     required this.onAddBox,
     required this.onAddCylinder,
     required this.onAddTorus,
+    required this.onDuplicateSelected,
     required this.onUndo,
     required this.onRedo,
     required this.onDeleteSelected,
@@ -1207,6 +1228,7 @@ class _CommandSheetContent extends StatelessWidget {
   final VoidCallback onAddBox;
   final VoidCallback onAddCylinder;
   final VoidCallback onAddTorus;
+  final VoidCallback onDuplicateSelected;
   final VoidCallback onUndo;
   final VoidCallback onRedo;
   final VoidCallback onDeleteSelected;
@@ -1229,6 +1251,7 @@ class _CommandSheetContent extends StatelessWidget {
     final sceneCommandsEnabled = !commandInFlight;
     final undoEnabled = !commandInFlight && (snapshot?.history.canUndo ?? false);
     final redoEnabled = !commandInFlight && (snapshot?.history.canRedo ?? false);
+    final duplicateSelectedEnabled = !commandInFlight && selectedNode != null;
     final deleteSelectedEnabled = !commandInFlight && selectedNode != null;
     final cameraControlsEnabled = !commandInFlight && currentCamera != null;
     final focusSelectedEnabled = !commandInFlight && selectedNode != null;
@@ -1251,6 +1274,8 @@ class _CommandSheetContent extends StatelessWidget {
           onAddBox: onAddBox,
           onAddCylinder: onAddCylinder,
           onAddTorus: onAddTorus,
+          duplicateSelectedEnabled: duplicateSelectedEnabled,
+          onDuplicateSelected: onDuplicateSelected,
           undoEnabled: undoEnabled,
           onUndo: onUndo,
           redoEnabled: redoEnabled,
