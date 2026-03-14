@@ -2242,3 +2242,33 @@ Manual verification:
 Result:
 - PRD #20 is fully verified and complete.
 
+--- Migration Iteration 13: PRD #21 - Touch-first transform inspector ---
+COMPLETED. Added a dedicated touch-first transform inspector in Flutter that routes translation, rotation, and scale edits through the backend-owned transform commands from the prior slice.
+
+Changes:
+- apps/flutter/lib/app.dart:
+  - Split direct transform editing into its own `Transform Inspector` section instead of keeping transform data as read-only node basics text.
+  - Added touch-sized per-axis controls for translation, rotation, and scale that keep temporary slider drafts in Flutter but commit through Rust on drag end.
+  - Kept scale editing limited to nodes whose backend snapshot exposes scale, and surfaced a backend-aligned note for node types that do not own scale directly.
+- apps/flutter/test/widget_test.dart:
+  - Added widget coverage that drives the transform inspector controls and confirms position, rotation, and scale edits all route through the Rust facade and refresh the snapshot state.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS (497 passed)
+- cargo build: PASS
+- apps/flutter/rust cargo check: PASS
+- apps/flutter/rust cargo clippy -- -D warnings: PASS
+- apps/flutter/rust cargo test: PASS
+- apps/flutter/rust cargo build: PASS
+- Flutter analyze: PASS
+- Flutter test: PASS
+- Flutter build windows --debug: PASS
+
+Manual verification:
+- Skipped by current workflow instruction. This slice was validated with automated Rust and Flutter coverage only.
+
+Result:
+- PRD #21 is fully verified and complete.
+

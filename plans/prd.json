@@ -144,7 +144,7 @@
     "category": "transforms",
     "description": "Build the touch-first transform inspector.\n\nSteps:\n1. Provide Flutter UI for direct transform editing separate from viewport gizmos.\n2. Keep the inspector sized and arranged for tablet editing first.\n3. Confirm transform edits propagate cleanly to scene tree, viewport feedback, and history state.\n4. Keep this slice focused on direct editing, not gizmo visuals.",
     "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build` if Rust transform commands or snapshots change. If the bridge API changes, run `apps/flutter/scripts/frb_codegen.ps1`. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, and `fvm flutter build windows --debug`. Manual: edit translation, rotation, and scale from the Flutter inspector and confirm behavior is predictable and touch-usable.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 22,

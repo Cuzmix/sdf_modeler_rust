@@ -70,6 +70,18 @@ const double _primitiveParameterMax = 100.0;
 const double _materialFactorMin = 0.0;
 const double _materialFactorMax = 1.0;
 const double _emissiveIntensityMax = 5.0;
+const double _transformTranslationMin = -10.0;
+const double _transformTranslationMax = 10.0;
+const double _transformRotationDegreesMin = -180.0;
+const double _transformRotationDegreesMax = 180.0;
+
+String _formatVec3(AppVec3 value) {
+  return [
+    value.x.toStringAsFixed(2),
+    value.y.toStringAsFixed(2),
+    value.z.toStringAsFixed(2),
+  ].join(', ');
+}
 
 class SdfModelerApp extends StatelessWidget {
   const SdfModelerApp({super.key});
@@ -862,6 +874,20 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                           blue: color.z,
                         ),
                       ),
+                      onSetTransformPosition: (x, y, z) => _runSceneCommand(
+                        () => setSelectedTransformPosition(x: x, y: y, z: z),
+                      ),
+                      onSetTransformRotationDegrees: (x, y, z) =>
+                          _runSceneCommand(
+                            () => setSelectedTransformRotationDegrees(
+                              xDegrees: x,
+                              yDegrees: y,
+                              zDegrees: z,
+                            ),
+                          ),
+                      onSetTransformScale: (x, y, z) => _runSceneCommand(
+                        () => setSelectedTransformScale(x: x, y: y, z: z),
+                      ),
                       onDuplicateSelected: () =>
                           _runSceneCommand(duplicateSelected),
                       onUndo: () => _runSceneCommand(undo),
@@ -989,6 +1015,19 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                       green: color.y,
                       blue: color.z,
                     ),
+                  ),
+                  onSetTransformPosition: (x, y, z) => _runSceneCommand(
+                    () => setSelectedTransformPosition(x: x, y: y, z: z),
+                  ),
+                  onSetTransformRotationDegrees: (x, y, z) => _runSceneCommand(
+                    () => setSelectedTransformRotationDegrees(
+                      xDegrees: x,
+                      yDegrees: y,
+                      zDegrees: z,
+                    ),
+                  ),
+                  onSetTransformScale: (x, y, z) => _runSceneCommand(
+                    () => setSelectedTransformScale(x: x, y: y, z: z),
                   ),
                   onDuplicateSelected: () =>
                       _runSceneCommand(duplicateSelected),
@@ -1149,6 +1188,9 @@ class _InspectorPanel extends StatelessWidget {
     required this.onSetPrimitiveParameter,
     required this.onSetMaterialFloat,
     required this.onSetMaterialColor,
+    required this.onSetTransformPosition,
+    required this.onSetTransformRotationDegrees,
+    required this.onSetTransformScale,
     required this.onDuplicateSelected,
     required this.onUndo,
     required this.onRedo,
@@ -1194,6 +1236,10 @@ class _InspectorPanel extends StatelessWidget {
   final void Function(String parameterKey, double value) onSetPrimitiveParameter;
   final void Function(String fieldId, double value) onSetMaterialFloat;
   final void Function(String fieldId, AppVec3 color) onSetMaterialColor;
+  final void Function(double x, double y, double z) onSetTransformPosition;
+  final void Function(double x, double y, double z)
+  onSetTransformRotationDegrees;
+  final void Function(double x, double y, double z) onSetTransformScale;
   final VoidCallback onDuplicateSelected;
   final VoidCallback onUndo;
   final VoidCallback onRedo;
@@ -1352,6 +1398,22 @@ class _InspectorPanel extends StatelessWidget {
               onToggleLock: selectedNodeProperties == null
                   ? null
                   : () => onToggleSceneNodeLock(selectedNodeProperties.nodeId),
+            ),
+          const SizedBox(height: ShellTokens.sectionGap),
+          Text(
+            'Transform Inspector',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: ShellTokens.controlGap),
+          if (snapshot == null)
+            const Text('Scene snapshot is still loading.')
+          else
+            _TransformInspectorPanel(
+              properties: selectedNodeProperties,
+              enabled: !commandInFlight,
+              onSetTransformPosition: onSetTransformPosition,
+              onSetTransformRotationDegrees: onSetTransformRotationDegrees,
+              onSetTransformScale: onSetTransformScale,
             ),
           const SizedBox(height: ShellTokens.sectionGap),
           Text(
@@ -1535,7 +1597,6 @@ class _NodeBasicsPanelState extends State<_NodeBasicsPanel> {
       return const Text('Select a node to inspect backend-owned properties.');
     }
 
-    final transform = selectedProperties.transform;
     final primitive = selectedProperties.primitive;
     final material = selectedProperties.material;
 
@@ -1583,27 +1644,6 @@ class _NodeBasicsPanelState extends State<_NodeBasicsPanel> {
                 'Prevent backend document commands from mutating this node.',
               ),
             ),
-            if (transform != null) ...[
-              const SizedBox(height: ShellTokens.controlGap),
-              Text(
-                'Transform',
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
-              const SizedBox(height: ShellTokens.compactGap),
-              _PropertyValueRow(
-                label: transform.positionLabel,
-                value: _formatVec3(transform.position),
-              ),
-              _PropertyValueRow(
-                label: 'Rotation',
-                value: '${_formatVec3(transform.rotationDegrees)} deg',
-              ),
-              if (transform.scale != null)
-                _PropertyValueRow(
-                  label: 'Scale',
-                  value: _formatVec3(transform.scale!),
-                ),
-            ],
             if (primitive != null && primitive.parameters.isNotEmpty) ...[
               const SizedBox(height: ShellTokens.controlGap),
               Text(
@@ -1728,37 +1768,243 @@ class _NodeBasicsPanelState extends State<_NodeBasicsPanel> {
       ),
     );
   }
-
-  static String _formatVec3(AppVec3 value) {
-    return [
-      value.x.toStringAsFixed(2),
-      value.y.toStringAsFixed(2),
-      value.z.toStringAsFixed(2),
-    ].join(', ');
-  }
 }
 
-class _PropertyValueRow extends StatelessWidget {
-  const _PropertyValueRow({required this.label, required this.value});
+class _TransformInspectorPanel extends StatefulWidget {
+  const _TransformInspectorPanel({
+    required this.properties,
+    required this.enabled,
+    required this.onSetTransformPosition,
+    required this.onSetTransformRotationDegrees,
+    required this.onSetTransformScale,
+  });
 
-  final String label;
-  final String value;
+  final AppSelectedNodePropertiesSnapshot? properties;
+  final bool enabled;
+  final void Function(double x, double y, double z) onSetTransformPosition;
+  final void Function(double x, double y, double z)
+  onSetTransformRotationDegrees;
+  final void Function(double x, double y, double z) onSetTransformScale;
+
+  @override
+  State<_TransformInspectorPanel> createState() =>
+      _TransformInspectorPanelState();
+}
+
+class _TransformInspectorPanelState extends State<_TransformInspectorPanel> {
+  Map<String, double> _drafts = <String, double>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _resetDrafts();
+  }
+
+  @override
+  void didUpdateWidget(covariant _TransformInspectorPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.properties != oldWidget.properties) {
+      _resetDrafts();
+    }
+  }
+
+  void _resetDrafts() {
+    final transform = widget.properties?.transform;
+    if (transform == null) {
+      _drafts = <String, double>{};
+      return;
+    }
+
+    _drafts = <String, double>{
+      'position:x': transform.position.x,
+      'position:y': transform.position.y,
+      'position:z': transform.position.z,
+      'rotation:x': transform.rotationDegrees.x,
+      'rotation:y': transform.rotationDegrees.y,
+      'rotation:z': transform.rotationDegrees.z,
+      if (transform.scale != null) ...<String, double>{
+        'scale:x': transform.scale!.x,
+        'scale:y': transform.scale!.y,
+        'scale:z': transform.scale!.z,
+      },
+    };
+  }
+
+  double _draftValue(String key, double fallback) {
+    return _drafts[key] ?? fallback;
+  }
+
+  void _setDraftValue(String key, double value) {
+    setState(() {
+      _drafts[key] = value;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    final selectedProperties = widget.properties;
+    final transform = selectedProperties?.transform;
+    if (selectedProperties == null || transform == null) {
+      return const Text(
+        'Select a node to edit backend-owned translation, rotation, and scale values.',
+      );
+    }
+
+    final scale = transform.scale;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(ShellTokens.panelPadding),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${selectedProperties.name} (${selectedProperties.kindLabel})',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: ShellTokens.compactGap),
+            Text(
+              'Direct edits stay on the Rust command path so later viewport tooling can reuse the same backend semantics.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: ShellTokens.controlGap),
+            _Vector3PropertyEditor(
+              label: transform.positionLabel,
+              keyPrefix: 'transform-position',
+              summary: _formatVec3(
+                AppVec3(
+                  x: _draftValue('position:x', transform.position.x),
+                  y: _draftValue('position:y', transform.position.y),
+                  z: _draftValue('position:z', transform.position.z),
+                ),
+              ),
+              values: (
+                _draftValue('position:x', transform.position.x),
+                _draftValue('position:y', transform.position.y),
+                _draftValue('position:z', transform.position.z),
+              ),
+              min: _transformTranslationMin,
+              max: _transformTranslationMax,
+              enabled: widget.enabled,
+              onChanged: (axis, value) =>
+                  _setDraftValue('position:$axis', value),
+              onChangeEnd: () => widget.onSetTransformPosition(
+                _draftValue('position:x', transform.position.x),
+                _draftValue('position:y', transform.position.y),
+                _draftValue('position:z', transform.position.z),
+              ),
+            ),
+            _Vector3PropertyEditor(
+              label: 'Rotation',
+              keyPrefix: 'transform-rotation',
+              summary:
+                  '${_formatVec3(AppVec3(x: _draftValue('rotation:x', transform.rotationDegrees.x), y: _draftValue('rotation:y', transform.rotationDegrees.y), z: _draftValue('rotation:z', transform.rotationDegrees.z)))} deg',
+              values: (
+                _draftValue('rotation:x', transform.rotationDegrees.x),
+                _draftValue('rotation:y', transform.rotationDegrees.y),
+                _draftValue('rotation:z', transform.rotationDegrees.z),
+              ),
+              min: _transformRotationDegreesMin,
+              max: _transformRotationDegreesMax,
+              enabled: widget.enabled,
+              onChanged: (axis, value) =>
+                  _setDraftValue('rotation:$axis', value),
+              onChangeEnd: () => widget.onSetTransformRotationDegrees(
+                _draftValue('rotation:x', transform.rotationDegrees.x),
+                _draftValue('rotation:y', transform.rotationDegrees.y),
+                _draftValue('rotation:z', transform.rotationDegrees.z),
+              ),
+            ),
+            if (scale != null)
+              _Vector3PropertyEditor(
+                label: 'Scale',
+                keyPrefix: 'transform-scale',
+                summary: _formatVec3(
+                  AppVec3(
+                    x: _draftValue('scale:x', scale.x),
+                    y: _draftValue('scale:y', scale.y),
+                    z: _draftValue('scale:z', scale.z),
+                  ),
+                ),
+                values: (
+                  _draftValue('scale:x', scale.x),
+                  _draftValue('scale:y', scale.y),
+                  _draftValue('scale:z', scale.z),
+                ),
+                min: _primitiveParameterMin,
+                max: _primitiveParameterMax,
+                enabled: widget.enabled,
+                onChanged: (axis, value) => _setDraftValue('scale:$axis', value),
+                onChangeEnd: () => widget.onSetTransformScale(
+                  _draftValue('scale:x', scale.x),
+                  _draftValue('scale:y', scale.y),
+                  _draftValue('scale:z', scale.z),
+                ),
+              )
+            else
+              Text(
+                'Scale stays fixed on this node type. Wrap geometry in a transform to edit scale directly.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Vector3PropertyEditor extends StatelessWidget {
+  const _Vector3PropertyEditor({
+    required this.label,
+    required this.keyPrefix,
+    required this.summary,
+    required this.values,
+    required this.min,
+    required this.max,
+    required this.enabled,
+    required this.onChanged,
+    required this.onChangeEnd,
+  });
+
+  final String label;
+  final String keyPrefix;
+  final String summary;
+  final (double, double, double) values;
+  final double min;
+  final double max;
+  final bool enabled;
+  final void Function(String axis, double value) onChanged;
+  final VoidCallback onChangeEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    final axes = <(String, double, String)>[
+      ('X', values.$1, 'x'),
+      ('Y', values.$2, 'y'),
+      ('Z', values.$3, 'z'),
+    ];
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: ShellTokens.compactGap),
-      child: Row(
+      padding: const EdgeInsets.only(bottom: ShellTokens.controlGap),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 112,
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
+          Text(
+            '$label: $summary',
+            style: Theme.of(context).textTheme.titleSmall,
           ),
-          Expanded(child: Text(value)),
+          const SizedBox(height: ShellTokens.compactGap),
+          for (final axis in axes)
+            _ScalarPropertyEditor(
+              key: ValueKey('$keyPrefix-${axis.$3}-slider'),
+              label: axis.$1,
+              value: axis.$2,
+              min: min,
+              max: max,
+              enabled: enabled,
+              onChanged: (value) => onChanged(axis.$3, value),
+              onChangeEnd: (_) => onChangeEnd(),
+            ),
         ],
       ),
     );

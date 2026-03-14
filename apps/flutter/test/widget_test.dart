@@ -518,6 +518,65 @@ void main() {
     expect(scaledSnapshot, _MockRustApi._selectedTransformScaledSnapshot);
   });
 
+  testWidgets('routes transform inspector edits through the Rust facade', (
+    WidgetTester tester,
+  ) async {
+    mockApi.currentSnapshot = _MockRustApi._selectedTransformPropertySnapshot;
+
+    await pumpApp(tester, logicalSize: const Size(1400, 900));
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('transform-position-x-slider')),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.drag(
+      find.byKey(const ValueKey('transform-position-x-slider')),
+      const Offset(180, 0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(mockApi.setSelectedTransformPositionCalls, 1);
+    expect(mockApi.currentSnapshot, _MockRustApi._selectedTransformMovedSnapshot);
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('transform-rotation-z-slider')),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.drag(
+      find.byKey(const ValueKey('transform-rotation-z-slider')),
+      const Offset(120, 0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(mockApi.setSelectedTransformRotationDegreesCalls, 1);
+    expect(
+      mockApi.currentSnapshot,
+      _MockRustApi._selectedTransformRotatedSnapshot,
+    );
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('transform-scale-x-slider')),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.drag(
+      find.byKey(const ValueKey('transform-scale-x-slider')),
+      const Offset(-200, 0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(mockApi.setSelectedTransformScaleCalls, 1);
+    expect(mockApi.currentSnapshot, _MockRustApi._selectedTransformScaledSnapshot);
+  });
+
   testWidgets('renders bridge status, scene snapshot, and real viewport host', (
     WidgetTester tester,
   ) async {
