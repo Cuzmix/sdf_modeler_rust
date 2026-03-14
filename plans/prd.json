@@ -205,7 +205,7 @@
   {
     "id": 30,
     "category": "decommission",
-    "description": "Delete remaining egui adapter slices only after required parity gaps have moved behind backend-neutral modules.\n\nSteps:\n1. Move any still-required reusable behavior into backend-neutral modules before deleting UI code.\n2. Delete the remaining egui adapter modules gradually instead of attempting a single destructive cutover.\n3. Keep out-of-scope egui-only features explicit instead of deleting them accidentally.\n4. Finish with the smallest possible set of retained egui files, or none if parity is complete.",
+    "description": "Delete remaining egui adapter slices only after the concrete parity-gap tasks below have passed.\n\nSteps:\n1. Treat PRD items `#32` through `#41` as the execution queue for the remaining product-relevant egui-owned surface.\n2. Move any still-required reusable behavior into backend-neutral modules before deleting UI code.\n3. Delete the remaining egui adapter modules gradually instead of attempting a single destructive cutover.\n4. Keep out-of-scope egui-only features explicit instead of deleting them accidentally.\n5. Finish with the smallest possible set of retained egui files, or none if parity is complete.",
     "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build` for each deletion slice. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, and `fvm flutter build windows --debug` whenever the active host changes.",
     "passes": false
   },
@@ -215,5 +215,75 @@
     "description": "Create a separate UI customization PRD only after the functional migration foundation is stable.\n\nSteps:\n1. Wait until touch-first interaction patterns, document editing, and viewport manipulation are functionally stable.\n2. Then create a dedicated PRD for visual language, theming, motion, tablet and desktop presentation polish, and brand-level customization.\n3. Keep that work separate from the functional migration PRD so aesthetics do not derail architecture and parity work.\n4. Use the touch-first shell contract from PRD items 9 and 10 as the basis for that later customization phase.",
     "verification": "Create the customization PRD only after the earlier functional migration items pass, and keep it separate from the migration execution PRD.",
     "passes": true
+  },
+  {
+    "id": 32,
+    "category": "export",
+    "description": "Port mesh export workflow and export progress into backend-owned Flutter surfaces.\n\nSteps:\n1. Expose backend-neutral export commands, progress, and error state without keeping egui dialogs as the source of truth.\n2. Keep export format semantics, validation, and long-running task ownership in Rust.\n3. Add Flutter export entry and progress UI sized for the existing touch-first shell.\n4. Remove the egui-only export dialog/progress ownership once parity is in place.",
+    "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build`. If the bridge API changes, run `apps/flutter/scripts/frb_codegen.ps1`. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, and `fvm flutter build windows --debug`.",
+    "passes": false
+  },
+  {
+    "id": 33,
+    "category": "import",
+    "description": "Port mesh import and sculpt-convert entry flows into backend-owned Flutter surfaces.\n\nSteps:\n1. Expose backend-neutral intent/state for mesh import and sculpt conversion instead of keeping egui dialogs authoritative.\n2. Keep file parsing, validation, resolution defaults, and conversion rules in Rust.\n3. Add Flutter entry surfaces for import settings and sculpt-convert configuration.\n4. Remove the egui-only import/sculpt-convert dialog ownership once parity is in place.",
+    "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build`. If the bridge API changes, run `apps/flutter/scripts/frb_codegen.ps1`. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, and `fvm flutter build windows --debug`.",
+    "passes": false
+  },
+  {
+    "id": 34,
+    "category": "sculpt",
+    "description": "Expose a backend-owned sculpt snapshot and command surface.\n\nSteps:\n1. Define toolkit-neutral sculpt state snapshots for the selected sculpt node and active sculpt session.\n2. Expose backend commands for brush mode, radius, strength, symmetry, resolution, and sculpt-session lifecycle.\n3. Keep sculpt semantics, constraints, and bake/flatten rules in Rust.\n4. Shape the command surface so Flutter and any future frontends can share it without egui-specific assumptions.",
+    "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build`. If the bridge API changes, run `apps/flutter/scripts/frb_codegen.ps1`. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, and `fvm flutter build windows --debug` if the shell or bridge changes.",
+    "passes": false
+  },
+  {
+    "id": 35,
+    "category": "sculpt",
+    "description": "Build the touch-first Flutter sculpt controls and workflow against backend-owned sculpt state.\n\nSteps:\n1. Add Flutter controls for the sculpt command surface exposed in PRD `#34`.\n2. Keep the layout usable on tablets first, then adapt upward for desktop.\n3. Synchronize sculpt mode, brush settings, viewport feedback, and node state from backend snapshots.\n4. Remove egui-only sculpt control ownership once the Flutter flow is functionally sufficient.",
+    "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build` if Rust sculpt code changes. If the bridge API changes, run `apps/flutter/scripts/frb_codegen.ps1`. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, `fvm flutter build windows --debug`, and `fvm flutter test integration_test -d windows` when viewport sculpt interactions change.",
+    "passes": false
+  },
+  {
+    "id": 36,
+    "category": "lights",
+    "description": "Expose backend-owned advanced light snapshots and commands, including light linking.\n\nSteps:\n1. Define toolkit-neutral snapshots for advanced light properties and per-node light-linking state.\n2. Expose backend commands for light type-specific settings, shadows, volumetrics, cookies, expressions, and light masks.\n3. Keep light semantics, limits, and validation in Rust.\n4. Avoid coupling the command surface to the existing egui light graph presentation.",
+    "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build`. If the bridge API changes, run `apps/flutter/scripts/frb_codegen.ps1`. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, and `fvm flutter build windows --debug` if the shell or bridge changes.",
+    "passes": false
+  },
+  {
+    "id": 37,
+    "category": "lights",
+    "description": "Build the Flutter advanced light inspector and light-linking panel.\n\nSteps:\n1. Add Flutter UI for the backend-owned light snapshots and commands from PRD `#36`.\n2. Keep the inspector touch-usable without recreating egui-only graph affordances by default.\n3. Ensure light edits, linking changes, and selection feedback remain synchronized with backend state.\n4. Remove egui-only advanced light panel ownership once parity is sufficient.",
+    "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build` if Rust light code changes. If the bridge API changes, run `apps/flutter/scripts/frb_codegen.ps1`. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, and `fvm flutter build windows --debug`.",
+    "passes": false
+  },
+  {
+    "id": 38,
+    "category": "rendering",
+    "description": "Port render settings into backend-owned snapshots and a Flutter panel.\n\nSteps:\n1. Expose backend-neutral render settings snapshots and commands for the active renderer configuration.\n2. Keep render-quality, shading, AO, shadow, and post-processing semantics in Rust.\n3. Add a Flutter render settings panel that reads and writes those backend-owned values.\n4. Remove egui-only render-settings ownership once parity is in place.",
+    "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build`. If the bridge API changes, run `apps/flutter/scripts/frb_codegen.ps1`. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, and `fvm flutter build windows --debug`.",
+    "passes": false
+  },
+  {
+    "id": 39,
+    "category": "settings",
+    "description": "Port application settings and keymap editing behind backend-neutral snapshots and Flutter UI.\n\nSteps:\n1. Expose backend-neutral settings snapshots and commands for application preferences that remain in scope.\n2. Expose a safe command surface for keymap inspection and editing without tying it to egui widgets.\n3. Add Flutter settings and keymap surfaces for the in-scope settings set.\n4. Remove egui settings-window ownership once parity is functionally sufficient.",
+    "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build`. If the bridge API changes, run `apps/flutter/scripts/frb_codegen.ps1`. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, and `fvm flutter build windows --debug`.",
+    "passes": false
+  },
+  {
+    "id": 40,
+    "category": "diagnostics",
+    "description": "Decide and implement parity for history inspection, scene statistics, and deep diagnostics.\n\nSteps:\n1. Decide which egui-only history/profiler/statistics surfaces remain product-relevant in the Flutter host.\n2. Move the retained subset behind backend-neutral snapshots and commands.\n3. Add Flutter surfaces only for the retained subset instead of blindly cloning every egui panel.\n4. Explicitly drop the rest from parity scope so final egui deletion is not ambiguous.",
+    "verification": "Write the retained-versus-dropped decision into the active migration artifacts, then run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build` for any code changes. Run Flutter validation if any host or shell surfaces change.",
+    "passes": false
+  },
+  {
+    "id": 41,
+    "category": "reference-images",
+    "description": "Decide whether reference image management is part of Flutter parity and act on that decision.\n\nSteps:\n1. Make an explicit product decision on whether reference images remain in scope for the Flutter host.\n2. If retained, move reference-image state and commands behind backend-neutral modules and add Flutter UI.\n3. If dropped, document that decision clearly and remove it from the egui deletion blocker list.\n4. Keep the outcome explicit so PRD `#30` can close without hidden ownership.",
+    "verification": "Record the retained-versus-dropped decision in the active migration artifacts. If retained and implemented, run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, `cargo build`, and Flutter validation when the host changes.",
+    "passes": false
   }
 ]

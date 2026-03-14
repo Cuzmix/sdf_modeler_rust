@@ -2574,3 +2574,25 @@ Manual verification:
 Result:
 - PRD #31 is fully verified and complete.
 
+--- Migration Iteration 24: PRD #30 split into concrete parity-gap tasks ---
+COMPLETED. Split the old final-egui-deletion umbrella into concrete execution slices so the remaining work can be chosen and executed one gap at a time.
+
+Changes:
+- plans/prd.json
+- plans/progress.txt
+  - Kept PRD `#30` as the final egui adapter deletion umbrella.
+  - Added concrete blocker tasks:
+    - `#32` export workflow and progress
+    - `#33` mesh import and sculpt-convert entry flows
+    - `#34` backend-owned sculpt snapshot and command surface
+    - `#35` Flutter sculpt controls and workflow
+    - `#36` backend-owned advanced light snapshots and commands
+    - `#37` Flutter advanced light inspector and light linking
+    - `#38` render settings parity
+    - `#39` application settings and keymap editing parity
+    - `#40` history / scene-stats / diagnostics retained-vs-dropped decision and implementation
+    - `#41` reference image retained-vs-dropped decision and implementation
+
+Result:
+- The remaining decommission queue is now explicit enough to choose the next slice without treating `#30` as a vague blocker.
+
