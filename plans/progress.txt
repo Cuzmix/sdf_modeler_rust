@@ -1411,7 +1411,7 @@ Changes:
 
 Verification: cargo check ✓, cargo clippy ✓, cargo test (460/460) ✓, cargo build ✓
 
---- Iteration 38: PRD #41 � Crash recovery dialog on startup ---
+--- Iteration 38: PRD #41 - Crash recovery dialog on startup ---
 COMPLETED. Added startup crash recovery flow with autosave metadata, modal recovery UI, and clean-exit tracking.
 
 Changes:
@@ -1599,3 +1599,47 @@ Manual verification pending:
 - Enable Distance in viewport tools and confirm cursor overlay updates.
 - Enable Measure and click two points on geometry; confirm line + distance label.
 - Press `M` to toggle measurement mode and reset points.
+
+--- Migration Reset: 2026-03-14 ---
+The active Ralph target is now the Flutter migration.
+
+Decisions:
+- `plans/prd.json` is now the source of truth for the migration plan.
+- Prior feature PRD work remains in git history, but the active PRD is no longer the large feature backlog.
+- `docs/flutter_migration.md` is no longer the active migration plan; it should only point back to the PRD/progress workflow to avoid drift.
+- Product direction is now touch-first for tablets, then adaptive upward to desktop.
+- Final UI customization/theming work is intentionally deferred until the functional migration foundation is stable.
+
+Current completed baseline carried into the new PRD:
+- Flutter workspace + FVM pinning
+- FRB codegen workflow
+- toolkit-neutral `src/app_bridge/` baseline
+- real native viewport in Flutter
+- native-side render loop + viewport events
+- camera/view commands in backend
+- scene tree snapshot + minimal document commands in Flutter
+
+Immediate next recommended slice:
+- Port `undo`, `redo`, `duplicate_selected`, and `rename_node` through `src/app_bridge/`
+- expose them through FRB
+- add a minimal Flutter command strip for them
+- keep the shell touch-first while deferring visual customization
+
+--- Migration Planning Refinement: 2026-03-14 ---
+Refined the active Flutter migration PRD into smaller Ralph-friendly slices.
+
+What changed:
+- Split the touch-first shell work into two explicit tasks: shared sizing/gesture rules, then responsive shell primitives.
+- Split document history/naming into four separate backend-command slices: `undo`, `redo`, `duplicate_selected`, and `rename_node`.
+- Split create-node work into two smaller slices: operations/transforms/modifiers first, then the minimum light/sculpt entrypoints.
+- Split property work into snapshot surface, touch-first node basics, primitive/material editing, backend transform commands, and a dedicated transform inspector.
+- Split viewport work into touch-first navigation/selection first, then manipulation/gizmo command routing.
+- Split decommissioning into an explicit parity audit and a later staged egui removal pass.
+- Added explicit Rust verification and Flutter verification expectations to each PRD item where those stacks are involved.
+
+Current execution order:
+- Next UX foundation slices are PRD #9 and PRD #10.
+- Next backend document slices after that are PRD #11 through PRD #14.
+- UI customization remains intentionally deferred until the functional migration foundation is stable.
+- This refined execution order supersedes the earlier note that suggested jumping directly to undo/redo first.
+
