@@ -482,7 +482,6 @@ impl ActionBinding {
         Self::ToggleIsolation,
         Self::CycleShadingMode,
         Self::ToggleTurntable,
-        Self::ShowQuickToolbar,
         Self::ToggleReferenceImages,
         Self::ToggleMeasurementTool,
         Self::SculptBrushAdd,
@@ -537,7 +536,7 @@ impl ActionBinding {
             Self::ToggleIsolation => "Toggle Isolation",
             Self::CycleShadingMode => "Cycle Shading Mode",
             Self::ToggleTurntable => "Toggle Turntable",
-            Self::ShowQuickToolbar => "Quick Primitives",
+            Self::ShowQuickToolbar => "Retired: Quick Primitives",
             Self::ToggleReferenceImages => "Toggle Reference Images",
             Self::ToggleMeasurementTool => "Toggle Measurement Tool",
             Self::SculptBrushAdd => "Brush: Add",
@@ -694,7 +693,6 @@ impl Default for KeymapConfig {
         bind(ActionBinding::ToggleIsolation, KeyCombo::new(K::Slash));
         bind(ActionBinding::CycleShadingMode, KeyCombo::new(K::Z));
         bind(ActionBinding::ToggleTurntable, KeyCombo::new(K::Space));
-        bind(ActionBinding::ShowQuickToolbar, KeyCombo::shift(K::A));
         bind(ActionBinding::ToggleReferenceImages, KeyCombo::alt(K::R));
         bind(ActionBinding::ToggleMeasurementTool, KeyCombo::new(K::M));
 
@@ -808,10 +806,6 @@ mod tests {
             Some(&KeyCombo::new(SerializableKey::W))
         );
         assert_eq!(
-            keymap.get_binding(ActionBinding::ShowQuickToolbar),
-            Some(&KeyCombo::shift(SerializableKey::A))
-        );
-        assert_eq!(
             keymap.get_binding(ActionBinding::ToggleReferenceImages),
             Some(&KeyCombo::alt(SerializableKey::R))
         );
@@ -870,10 +864,6 @@ mod tests {
         assert_eq!(
             keymap.format_shortcut(ActionBinding::ResetPivot),
             Some("Alt+C".to_string())
-        );
-        assert_eq!(
-            keymap.format_shortcut(ActionBinding::ShowQuickToolbar),
-            Some("Shift+A".to_string())
         );
         assert_eq!(
             keymap.format_shortcut(ActionBinding::ToggleReferenceImages),

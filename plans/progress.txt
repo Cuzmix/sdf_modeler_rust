@@ -2453,3 +2453,37 @@ Manual verification:
 Result:
 - PRD #26 is fully verified and complete.
 
+--- Migration Iteration 19: PRD #27 - Retire egui quick-primitives toolbar ---
+COMPLETED. Split the oversized egui decommission umbrella into smaller PRD slices, then retired the egui quick-primitives toolbar as the first low-risk duplicate-ownership deletion.
+
+Changes:
+- src/app/egui_frontend.rs
+- src/app/input.rs
+- src/app/state.rs
+- src/app/mod.rs
+- src/ui/mod.rs
+- src/keymap.rs
+- Deleted `src/ui/quick_toolbar.rs`
+  - Removed the egui quick-primitives floating window from the active egui frontend.
+  - Removed the egui UI state that existed only to keep that window open.
+  - Stopped exposing the quick-toolbar shortcut in the editable default keymap while keeping the enum variant as a no-op so older serialized keymaps still deserialize.
+- plans/prd.json
+  - Split the previous large decommission umbrella into smaller tasks:
+    - `#27` quick-toolbar retirement
+    - `#28` duplicate egui menu ownership cleanup
+    - `#29` duplicate egui scene-tree/basic-property cleanup
+    - `#30` final egui adapter deletion after parity gaps close
+    - moved the customization-planning item to `#31`
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS
+- cargo build: PASS
+
+Manual verification:
+- Skipped by current workflow instruction. This deletion slice was validated with automated Rust coverage only.
+
+Result:
+- PRD #27 is fully verified and complete.
+

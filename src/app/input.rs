@@ -189,7 +189,8 @@ impl SdfApp {
                 }
             }
             ActionBinding::ShowQuickToolbar => {
-                self.ui.show_quick_toolbar = !self.ui.show_quick_toolbar;
+                // Retained as a no-op so older serialized keymaps still deserialize cleanly
+                // while the egui quick toolbar is being decommissioned in small slices.
             }
             ActionBinding::ToggleReferenceImages => {
                 actions.push(Action::ToggleAllReferenceImages);

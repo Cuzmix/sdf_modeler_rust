@@ -29,7 +29,6 @@ impl SdfApp {
             &self.doc.camera,
         );
         crate::ui::toasts::draw(ctx, &mut self.ui.toasts);
-        crate::ui::quick_toolbar::draw(ctx, &mut self.ui.show_quick_toolbar, action_sink);
 
         crate::ui::sculpt_convert_dialog::draw(
             ctx,

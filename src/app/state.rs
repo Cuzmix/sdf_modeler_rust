@@ -222,8 +222,6 @@ pub struct UiState {
     pub sculpt_convert_dialog: Option<SculptConvertDialog>,
     /// Open "Import Mesh" settings dialog state (None = hidden).
     pub import_dialog: Option<ImportDialog>,
-    /// Quick Primitives floating toolbar (Shift+A).
-    pub show_quick_toolbar: bool,
     /// Keybinding editor: which action is currently waiting for a key press (None = not rebinding).
     pub rebinding_action: Option<crate::keymap::ActionBinding>,
     /// Set of Light NodeIds currently active on GPU (nearest MAX_SCENE_LIGHTS to camera).

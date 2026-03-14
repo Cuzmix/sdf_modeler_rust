@@ -397,7 +397,6 @@ impl SdfApp {
                 command_palette_selected: 0,
                 sculpt_convert_dialog: None,
                 import_dialog: None,
-                show_quick_toolbar: false,
                 rebinding_action: None,
                 active_light_ids: std::collections::HashSet::new(),
                 total_light_count: 0,

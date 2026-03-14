@@ -184,12 +184,33 @@
   {
     "id": 27,
     "category": "decommission",
-    "description": "Stage egui decommission and remove duplicate ownership only after the parity audit is explicit.\n\nSteps:\n1. Move any remaining reusable behavior into backend-neutral modules before deleting UI code.\n2. Remove duplicate ownership where Flutter is already authoritative through `src/app_bridge/`.\n3. Delete egui slices gradually instead of attempting a single destructive cutover.\n4. Keep each deletion slice small enough that parity gaps stay obvious.",
-    "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build` for each decommission slice. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, and `fvm flutter build windows --debug` whenever the active host changes. Manual: confirm the deleted egui slice no longer owns required workflows before removing the next one.",
-    "passes": false
+    "description": "Retire the egui quick-primitives toolbar and its duplicate shortcut exposure.\n\nSteps:\n1. Remove the egui quick-toolbar window from the active egui frontend.\n2. Remove any egui-only state that exists only to keep that toolbar open.\n3. Stop exposing the quick-toolbar binding in the editable default keymap while preserving backward-compatible deserialization for older settings.\n4. Treat Flutter command surfaces as the authoritative replacement for rapid scene creation.",
+    "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build`.",
+    "passes": true
   },
   {
     "id": 28,
+    "category": "decommission",
+    "description": "Remove duplicate egui menu ownership for document, history, and camera commands that Flutter already drives through `src/app_bridge/`.\n\nSteps:\n1. Remove egui-only menu wiring for backend-owned document lifecycle commands once parity is already present in Flutter.\n2. Remove duplicate egui menu triggers for undo/redo and camera commands that no longer own semantics.\n3. Keep any remaining egui-only workflows explicit rather than bundled into the same deletion.\n4. Keep the slice small enough that lost ownership is obvious in git history.",
+    "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build` for the deletion slice.",
+    "passes": false
+  },
+  {
+    "id": 29,
+    "category": "decommission",
+    "description": "Remove duplicate egui scene-tree and basic-property ownership where Flutter is already authoritative.\n\nSteps:\n1. Delete or narrow egui scene-tree behaviors that are already superseded by backend snapshots and Flutter surfaces.\n2. Delete or narrow egui basic property editing that duplicates backend-owned Flutter panels.\n3. Leave advanced light, sculpt, render, and settings sections explicit if they are still egui-only.\n4. Keep the slice narrow enough that remaining parity gaps stay visible.",
+    "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build` for the deletion slice.",
+    "passes": false
+  },
+  {
+    "id": 30,
+    "category": "decommission",
+    "description": "Delete remaining egui adapter slices only after required parity gaps have moved behind backend-neutral modules.\n\nSteps:\n1. Move any still-required reusable behavior into backend-neutral modules before deleting UI code.\n2. Delete the remaining egui adapter modules gradually instead of attempting a single destructive cutover.\n3. Keep out-of-scope egui-only features explicit instead of deleting them accidentally.\n4. Finish with the smallest possible set of retained egui files, or none if parity is complete.",
+    "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build` for each deletion slice. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, and `fvm flutter build windows --debug` whenever the active host changes.",
+    "passes": false
+  },
+  {
+    "id": 31,
     "category": "planning",
     "description": "Create a separate UI customization PRD only after the functional migration foundation is stable.\n\nSteps:\n1. Wait until touch-first interaction patterns, document editing, and viewport manipulation are functionally stable.\n2. Then create a dedicated PRD for visual language, theming, motion, tablet and desktop presentation polish, and brand-level customization.\n3. Keep that work separate from the functional migration PRD so aesthetics do not derail architecture and parity work.\n4. Use the touch-first shell contract from PRD items 9 and 10 as the basis for that later customization phase.",
     "verification": "Create the customization PRD only after the earlier functional migration items pass, and keep it separate from the migration execution PRD.",

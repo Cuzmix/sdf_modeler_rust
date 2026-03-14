@@ -14,7 +14,6 @@ pub mod lights_panel;
 pub mod node_graph;
 pub mod profiler;
 pub mod properties;
-pub mod quick_toolbar;
 pub mod recovery_dialog;
 pub mod reference_image;
 pub mod render_settings;
