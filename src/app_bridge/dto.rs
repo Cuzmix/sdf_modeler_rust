@@ -35,6 +35,16 @@ pub struct AppNodeSnapshot {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppSceneTreeNodeSnapshot {
+    pub id: u64,
+    pub name: String,
+    pub kind_label: String,
+    pub visible: bool,
+    pub locked: bool,
+    pub children: Vec<AppSceneTreeNodeSnapshot>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AppSceneStatsSnapshot {
     pub total_nodes: u32,
     pub visible_nodes: u32,
@@ -64,6 +74,7 @@ pub struct AppToolSnapshot {
 pub struct AppSceneSnapshot {
     pub selected_node: Option<AppNodeSnapshot>,
     pub top_level_nodes: Vec<AppNodeSnapshot>,
+    pub scene_tree_roots: Vec<AppSceneTreeNodeSnapshot>,
     pub camera: AppCameraSnapshot,
     pub stats: AppSceneStatsSnapshot,
     pub tool: AppToolSnapshot,

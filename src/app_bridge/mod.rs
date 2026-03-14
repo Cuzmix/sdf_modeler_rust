@@ -3,7 +3,7 @@ pub mod renderer;
 pub mod session;
 
 pub use dto::{
-    AppCameraSnapshot, AppNodeSnapshot, AppSceneSnapshot, AppSceneStatsSnapshot, AppToolSnapshot,
-    AppVec3, AppViewportFeedbackSnapshot,
+    AppCameraSnapshot, AppNodeSnapshot, AppSceneSnapshot, AppSceneStatsSnapshot,
+    AppSceneTreeNodeSnapshot, AppToolSnapshot, AppVec3, AppViewportFeedbackSnapshot,
 };
 pub use session::AppBridge;

@@ -1,0 +1,188 @@
+import 'package:flutter/material.dart';
+import 'package:sdf_modeler_flutter/src/scene/scene_snapshot.dart';
+
+class SceneTreePanel extends StatelessWidget {
+  const SceneTreePanel({
+    super.key,
+    required this.roots,
+    required this.selectedNodeId,
+    required this.enabled,
+    required this.onSelectNode,
+    required this.onToggleNodeVisibility,
+    required this.onToggleNodeLock,
+  });
+
+  final List<AppSceneTreeNodeSnapshot> roots;
+  final int? selectedNodeId;
+  final bool enabled;
+  final ValueChanged<int> onSelectNode;
+  final ValueChanged<int> onToggleNodeVisibility;
+  final ValueChanged<int> onToggleNodeLock;
+
+  @override
+  Widget build(BuildContext context) {
+    if (roots.isEmpty) {
+      return const Text('No nodes in the current scene.');
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: roots
+          .map(
+            (node) => _SceneTreeNodeTile(
+              node: node,
+              depth: 0,
+              selectedNodeId: selectedNodeId,
+              enabled: enabled,
+              onSelectNode: onSelectNode,
+              onToggleNodeVisibility: onToggleNodeVisibility,
+              onToggleNodeLock: onToggleNodeLock,
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+}
+
+class _SceneTreeNodeTile extends StatelessWidget {
+  const _SceneTreeNodeTile({
+    required this.node,
+    required this.depth,
+    required this.selectedNodeId,
+    required this.enabled,
+    required this.onSelectNode,
+    required this.onToggleNodeVisibility,
+    required this.onToggleNodeLock,
+  });
+
+  final AppSceneTreeNodeSnapshot node;
+  final int depth;
+  final int? selectedNodeId;
+  final bool enabled;
+  final ValueChanged<int> onSelectNode;
+  final ValueChanged<int> onToggleNodeVisibility;
+  final ValueChanged<int> onToggleNodeLock;
+
+  @override
+  Widget build(BuildContext context) {
+    final isSelected = selectedNodeId == node.id;
+    final theme = Theme.of(context);
+    final labelColor = node.visible
+        ? theme.colorScheme.onSurface
+        : theme.colorScheme.onSurfaceVariant;
+
+    return Padding(
+      padding: EdgeInsets.only(left: depth * 16.0, bottom: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? theme.colorScheme.primaryContainer.withValues(alpha: 0.55)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isSelected
+                    ? theme.colorScheme.primary.withValues(alpha: 0.5)
+                    : theme.colorScheme.outlineVariant,
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    key: ValueKey('scene-tree-node-${node.id}'),
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: enabled ? () => onSelectNode(node.id) : null,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            node.children.isEmpty
+                                ? Icons.radio_button_unchecked
+                                : Icons.account_tree_outlined,
+                            size: 16,
+                            color: labelColor,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  node.name,
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: labelColor,
+                                    fontWeight: isSelected
+                                        ? FontWeight.w700
+                                        : FontWeight.w500,
+                                    decoration: node.visible
+                                        ? TextDecoration.none
+                                        : TextDecoration.lineThrough,
+                                  ),
+                                ),
+                                Text(
+                                  node.kindLabel,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                Tooltip(
+                  message: node.visible
+                      ? 'Hide ${node.name}'
+                      : 'Show ${node.name}',
+                  child: IconButton(
+                    key: ValueKey('scene-tree-visibility-${node.id}'),
+                    onPressed: enabled
+                        ? () => onToggleNodeVisibility(node.id)
+                        : null,
+                    icon: Icon(
+                      node.visible ? Icons.visibility : Icons.visibility_off,
+                    ),
+                  ),
+                ),
+                Tooltip(
+                  message: node.locked
+                      ? 'Unlock ${node.name}'
+                      : 'Lock ${node.name}',
+                  child: IconButton(
+                    key: ValueKey('scene-tree-lock-${node.id}'),
+                    onPressed: enabled ? () => onToggleNodeLock(node.id) : null,
+                    icon: Icon(node.locked ? Icons.lock : Icons.lock_open),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (node.children.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            ...node.children.map(
+              (child) => _SceneTreeNodeTile(
+                node: child,
+                depth: depth + 1,
+                selectedNodeId: selectedNodeId,
+                enabled: enabled,
+                onSelectNode: onSelectNode,
+                onToggleNodeVisibility: onToggleNodeVisibility,
+                onToggleNodeLock: onToggleNodeLock,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}

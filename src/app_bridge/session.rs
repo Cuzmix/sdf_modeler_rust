@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use glam::Vec3;
 
 use crate::gpu::camera::Camera;
@@ -5,8 +7,8 @@ use crate::graph::scene::{NodeData, NodeId, Scene, SceneNode, SdfPrimitive};
 use crate::settings::RenderConfig;
 
 use super::dto::{
-    AppCameraSnapshot, AppNodeSnapshot, AppSceneSnapshot, AppSceneStatsSnapshot, AppToolSnapshot,
-    AppVec3, AppViewportFeedbackSnapshot,
+    AppCameraSnapshot, AppNodeSnapshot, AppSceneSnapshot, AppSceneStatsSnapshot,
+    AppSceneTreeNodeSnapshot, AppToolSnapshot, AppVec3, AppViewportFeedbackSnapshot,
 };
 use super::renderer::{HeadlessPickRequest, HeadlessRenderRequest, HeadlessViewportRenderer};
 
@@ -66,6 +68,7 @@ impl AppBridge {
         AppSceneSnapshot {
             selected_node: self.node_snapshot_by_id(self.selected_node),
             top_level_nodes,
+            scene_tree_roots: self.scene_tree_roots(),
             camera: self.camera_snapshot(),
             stats: AppSceneStatsSnapshot {
                 total_nodes: node_counts.total as u32,
@@ -239,15 +242,57 @@ impl AppBridge {
         self.camera.toggle_ortho();
     }
 
+    pub fn add_sphere(&mut self) -> u64 {
+        self.add_primitive(SdfPrimitive::Sphere)
+    }
+
+    pub fn add_box(&mut self) -> u64 {
+        self.add_primitive(SdfPrimitive::Box)
+    }
+
+    pub fn add_cylinder(&mut self) -> u64 {
+        self.add_primitive(SdfPrimitive::Cylinder)
+    }
+
+    pub fn add_torus(&mut self) -> u64 {
+        self.add_primitive(SdfPrimitive::Torus)
+    }
+
+    pub fn delete_selected(&mut self) {
+        let Some(selected_node) = self.selected_node else {
+            return;
+        };
+
+        if self.node_is_locked(selected_node) {
+            return;
+        }
+
+        self.scene.remove_node(selected_node);
+        if self.selected_node == Some(selected_node) {
+            self.selected_node = None;
+        }
+        if self.hovered_node == Some(selected_node) {
+            self.hovered_node = None;
+        }
+    }
+
+    pub fn toggle_node_visibility(&mut self, node_id: u64) {
+        if self.scene.nodes.contains_key(&node_id) {
+            self.scene.toggle_visibility(node_id);
+        }
+    }
+
+    pub fn toggle_node_lock(&mut self, node_id: u64) {
+        if let Some(node) = self.scene.nodes.get_mut(&node_id) {
+            node.locked = !node.locked;
+        }
+    }
+
     pub fn add_primitive(&mut self, kind: SdfPrimitive) -> u64 {
         let new_node_id = self.scene.create_primitive(kind);
         self.selected_node = Some(new_node_id);
         self.hovered_node = Some(new_node_id);
         new_node_id
-    }
-
-    pub fn add_sphere(&mut self) -> u64 {
-        self.add_primitive(SdfPrimitive::Sphere)
     }
 
     pub fn select_node(&mut self, node_id: Option<u64>) {
@@ -278,6 +323,48 @@ impl AppBridge {
             .unwrap_or(0.0);
         self.last_viewport_time_seconds = Some(time_seconds);
         self.camera.tick_transition(delta_seconds as f64)
+    }
+
+    fn scene_tree_roots(&self) -> Vec<AppSceneTreeNodeSnapshot> {
+        let mut visited = HashSet::new();
+        self.scene
+            .top_level_nodes()
+            .into_iter()
+            .filter_map(|node_id| self.scene_tree_node_snapshot(node_id, &mut visited))
+            .collect()
+    }
+
+    fn scene_tree_node_snapshot(
+        &self,
+        node_id: NodeId,
+        visited: &mut HashSet<NodeId>,
+    ) -> Option<AppSceneTreeNodeSnapshot> {
+        if !visited.insert(node_id) {
+            return None;
+        }
+
+        let node = self.scene.nodes.get(&node_id)?;
+        let children = node
+            .data
+            .children()
+            .filter_map(|child_id| self.scene_tree_node_snapshot(child_id, visited))
+            .collect();
+
+        Some(AppSceneTreeNodeSnapshot {
+            id: node.id,
+            name: node.name.clone(),
+            kind_label: node_kind_label(node),
+            visible: !self.scene.is_hidden(node.id),
+            locked: node.locked,
+            children,
+        })
+    }
+
+    fn node_is_locked(&self, node_id: NodeId) -> bool {
+        self.scene
+            .nodes
+            .get(&node_id)
+            .is_some_and(|node| node.locked)
     }
 
     fn camera_snapshot(&self) -> AppCameraSnapshot {
@@ -324,4 +411,42 @@ fn node_kind_label(node: &SceneNode) -> String {
 
 fn app_vec3(value: Vec3) -> AppVec3 {
     AppVec3::new(value.x, value.y, value.z)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AppBridge;
+
+    #[test]
+    fn scene_snapshot_includes_recursive_scene_tree() {
+        let bridge = AppBridge::new();
+        let snapshot = bridge.scene_snapshot();
+
+        assert_eq!(snapshot.scene_tree_roots.len(), snapshot.top_level_nodes.len());
+        assert!(snapshot.scene_tree_roots.iter().any(|node| !node.children.is_empty()));
+    }
+
+    #[test]
+    fn delete_selected_removes_unlocked_node() {
+        let mut bridge = AppBridge::new();
+        let node_id = bridge.add_box();
+
+        bridge.delete_selected();
+
+        assert!(!bridge.scene.nodes.contains_key(&node_id));
+        assert_eq!(bridge.selected_node, None);
+        assert_eq!(bridge.hovered_node, None);
+    }
+
+    #[test]
+    fn delete_selected_keeps_locked_node() {
+        let mut bridge = AppBridge::new();
+        let node_id = bridge.add_box();
+        bridge.scene.nodes.get_mut(&node_id).unwrap().locked = true;
+
+        bridge.delete_selected();
+
+        assert!(bridge.scene.nodes.contains_key(&node_id));
+        assert_eq!(bridge.selected_node, Some(node_id));
+    }
 }

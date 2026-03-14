@@ -36,6 +36,9 @@ void panCamera({required double deltaX, required double deltaY}) => RustLib
 void zoomCamera({required double delta}) =>
     RustLib.instance.api.crateApiSimpleZoomCamera(delta: delta);
 
+String selectNode({BigInt? nodeId}) =>
+    RustLib.instance.api.crateApiSimpleSelectNode(nodeId: nodeId);
+
 String selectNodeAtViewport({
   required double mouseX,
   required double mouseY,
@@ -49,6 +52,14 @@ String selectNodeAtViewport({
   height: height,
   timeSeconds: timeSeconds,
 );
+
+String toggleNodeVisibility({required BigInt nodeId}) =>
+    RustLib.instance.api.crateApiSimpleToggleNodeVisibility(nodeId: nodeId);
+
+String toggleNodeLock({required BigInt nodeId}) =>
+    RustLib.instance.api.crateApiSimpleToggleNodeLock(nodeId: nodeId);
+
+String deleteSelected() => RustLib.instance.api.crateApiSimpleDeleteSelected();
 
 String focusSelected() => RustLib.instance.api.crateApiSimpleFocusSelected();
 
@@ -70,5 +81,11 @@ String toggleOrthographic() =>
     RustLib.instance.api.crateApiSimpleToggleOrthographic();
 
 String addSphere() => RustLib.instance.api.crateApiSimpleAddSphere();
+
+String addBox() => RustLib.instance.api.crateApiSimpleAddBox();
+
+String addCylinder() => RustLib.instance.api.crateApiSimpleAddCylinder();
+
+String addTorus() => RustLib.instance.api.crateApiSimpleAddTorus();
 
 String resetScene() => RustLib.instance.api.crateApiSimpleResetScene();

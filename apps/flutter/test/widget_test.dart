@@ -13,22 +13,45 @@ class _MockRustApi extends RustLibApi {
   static const String _orthoSnapshot = '''{"selected_node":null,"top_level_nodes":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false}],"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":true,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":7,"visible_nodes":7,"top_level_nodes":1,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":1,"structure_key":11,"data_fingerprint":22,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
 
   String currentSnapshot = _baseSnapshot;
+  int addBoxCalls = 0;
+  int deleteSelectedCalls = 0;
   int focusSelectedCalls = 0;
   int cameraFrontCalls = 0;
+  int selectNodeCalls = 0;
+  int toggleNodeVisibilityCalls = 0;
+  int toggleNodeLockCalls = 0;
   int toggleOrthographicCalls = 0;
 
   void resetState() {
     currentSnapshot = _baseSnapshot;
+    addBoxCalls = 0;
+    deleteSelectedCalls = 0;
     focusSelectedCalls = 0;
     cameraFrontCalls = 0;
+    selectNodeCalls = 0;
+    toggleNodeVisibilityCalls = 0;
+    toggleNodeLockCalls = 0;
     toggleOrthographicCalls = 0;
   }
+
+  @override
+  String crateApiSimpleAddBox() {
+    addBoxCalls += 1;
+    currentSnapshot = _selectedSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleAddCylinder() => _selectedSnapshot;
 
   @override
   String crateApiSimpleAddSphere() {
     currentSnapshot = _selectedSnapshot;
     return currentSnapshot;
   }
+
+  @override
+  String crateApiSimpleAddTorus() => _selectedSnapshot;
 
   @override
   String crateApiSimpleBridgeVersion() => '0.1.0-test';
@@ -53,6 +76,13 @@ class _MockRustApi extends RustLibApi {
 
   @override
   String crateApiSimpleCameraTop() => currentSnapshot;
+
+  @override
+  String crateApiSimpleDeleteSelected() {
+    deleteSelectedCalls += 1;
+    currentSnapshot = _baseSnapshot;
+    return currentSnapshot;
+  }
 
   @override
   String crateApiSimpleFocusSelected() {
@@ -100,6 +130,13 @@ class _MockRustApi extends RustLibApi {
   String crateApiSimpleSceneSnapshotJson() => currentSnapshot;
 
   @override
+  String crateApiSimpleSelectNode({BigInt? nodeId}) {
+    selectNodeCalls += 1;
+    currentSnapshot = nodeId == null ? _baseSnapshot : _selectedSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
   String crateApiSimpleSelectNodeAtViewport({
     required double mouseX,
     required double mouseY,
@@ -107,6 +144,19 @@ class _MockRustApi extends RustLibApi {
     required int height,
     required double timeSeconds,
   }) {
+    currentSnapshot = _selectedSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleToggleNodeLock({required BigInt nodeId}) {
+    toggleNodeLockCalls += 1;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleToggleNodeVisibility({required BigInt nodeId}) {
+    toggleNodeVisibilityCalls += 1;
     return currentSnapshot;
   }
 
@@ -238,7 +288,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Adaptive Interaction Resolution'), findsOneWidget);
-    expect(find.text('Camera'), findsOneWidget);
+    expect(find.text('Scene Tree'), findsOneWidget);
     expect(createTextureCalls, 1);
     expect(setTextureSizeCalls, greaterThanOrEqualTo(0));
     expect(requestFrameCalls, greaterThan(0));
@@ -291,6 +341,39 @@ void main() {
     expect(find.textContaining('at 65% scale interactive'), findsOneWidget);
 
     await orbitGesture.up();
+  });
+
+  testWidgets('routes scene tree commands through the Rust facade', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const SdfModelerApp());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('scene-tree-node-1')),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('scene-tree-node-1')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('scene-tree-visibility-1')));
+    await tester.pump();
+    await tester.scrollUntilVisible(
+      find.text('Box'),
+      -200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pump();
+    await tester.tap(find.text('Box'));
+    await tester.pump();
+
+    expect(mockApi.selectNodeCalls, 1);
+    expect(mockApi.toggleNodeVisibilityCalls, 1);
+    expect(mockApi.addBoxCalls, 1);
+    expect(requestFrameCalls, greaterThan(0));
   });
 
   testWidgets('routes viewport gestures to native texture commands', (
@@ -380,3 +463,5 @@ void main() {
     expect(requestFrameCalls, greaterThan(0));
   });
 }
+
+

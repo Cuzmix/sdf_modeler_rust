@@ -1140,5 +1140,5 @@ For ongoing UI migration safety rules, see `docs/ui_backend_boundary.md`.
 
 This contract defines which app modules stay toolkit-agnostic (`src/app/backend_frame.rs`) and which are toolkit adapters (`src/app/egui_frontend.rs`, `src/app/frontend_bridge.rs`).
 
-`src/app_bridge/` is the parallel migration facade for non-egui hosts. It should own toolkit-neutral scene snapshots, viewport feedback, camera commands, selection commands, and renderer access so Flutter, Slint, or Iced hosts do not need to recreate egui-only behavior.
+`src/app_bridge/` is the parallel migration facade for non-egui hosts. It should own toolkit-neutral scene snapshots, scene tree hierarchy snapshots, viewport feedback, camera commands, document commands, selection commands, and renderer access so Flutter, Slint, or Iced hosts do not need to recreate egui-only behavior or keep scene-tree/document ownership in egui-only panels.
 

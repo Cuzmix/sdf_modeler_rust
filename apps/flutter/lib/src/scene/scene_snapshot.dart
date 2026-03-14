@@ -1,4 +1,4 @@
-﻿class AppVec3 {
+class AppVec3 {
   const AppVec3({required this.x, required this.y, required this.z});
 
   final double x;
@@ -71,6 +71,52 @@ class AppNodeSnapshot {
       kindLabel: json['kind_label'] as String,
       visible: json['visible'] as bool,
       locked: json['locked'] as bool,
+    );
+  }
+}
+
+class AppSceneTreeNodeSnapshot {
+  const AppSceneTreeNodeSnapshot({
+    required this.id,
+    required this.name,
+    required this.kindLabel,
+    required this.visible,
+    required this.locked,
+    required this.children,
+  });
+
+  final int id;
+  final String name;
+  final String kindLabel;
+  final bool visible;
+  final bool locked;
+  final List<AppSceneTreeNodeSnapshot> children;
+
+  factory AppSceneTreeNodeSnapshot.fromJson(Map<String, dynamic> json) {
+    return AppSceneTreeNodeSnapshot(
+      id: (json['id'] as num).toInt(),
+      name: json['name'] as String,
+      kindLabel: json['kind_label'] as String,
+      visible: json['visible'] as bool,
+      locked: json['locked'] as bool,
+      children: (json['children'] as List<dynamic>? ?? const [])
+          .map(
+            (item) => AppSceneTreeNodeSnapshot.fromJson(
+              item as Map<String, dynamic>,
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+
+  factory AppSceneTreeNodeSnapshot.fromNodeSnapshot(AppNodeSnapshot node) {
+    return AppSceneTreeNodeSnapshot(
+      id: node.id,
+      name: node.name,
+      kindLabel: node.kindLabel,
+      visible: node.visible,
+      locked: node.locked,
+      children: const [],
     );
   }
 }
@@ -155,6 +201,7 @@ class AppSceneSnapshot {
   const AppSceneSnapshot({
     required this.selectedNode,
     required this.topLevelNodes,
+    required this.sceneTreeRoots,
     required this.camera,
     required this.stats,
     required this.tool,
@@ -162,20 +209,35 @@ class AppSceneSnapshot {
 
   final AppNodeSnapshot? selectedNode;
   final List<AppNodeSnapshot> topLevelNodes;
+  final List<AppSceneTreeNodeSnapshot> sceneTreeRoots;
   final AppCameraSnapshot camera;
   final AppSceneStatsSnapshot stats;
   final AppToolSnapshot tool;
 
   factory AppSceneSnapshot.fromJson(Map<String, dynamic> json) {
+    final topLevelNodes = (json['top_level_nodes'] as List<dynamic>)
+        .map((item) => AppNodeSnapshot.fromJson(item as Map<String, dynamic>))
+        .toList(growable: false);
+    final sceneTreeRootsJson = json['scene_tree_roots'] as List<dynamic>?;
+
     return AppSceneSnapshot(
       selectedNode: json['selected_node'] == null
           ? null
           : AppNodeSnapshot.fromJson(
               json['selected_node'] as Map<String, dynamic>,
             ),
-      topLevelNodes: (json['top_level_nodes'] as List<dynamic>)
-          .map((item) => AppNodeSnapshot.fromJson(item as Map<String, dynamic>))
-          .toList(growable: false),
+      topLevelNodes: topLevelNodes,
+      sceneTreeRoots: sceneTreeRootsJson == null
+          ? topLevelNodes
+              .map(AppSceneTreeNodeSnapshot.fromNodeSnapshot)
+              .toList(growable: false)
+          : sceneTreeRootsJson
+              .map(
+                (item) => AppSceneTreeNodeSnapshot.fromJson(
+                  item as Map<String, dynamic>,
+                ),
+              )
+              .toList(growable: false),
       camera: AppCameraSnapshot.fromJson(json['camera'] as Map<String, dynamic>),
       stats: AppSceneStatsSnapshot.fromJson(
         json['stats'] as Map<String, dynamic>,
@@ -184,4 +246,3 @@ class AppSceneSnapshot {
     );
   }
 }
-

@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:sdf_modeler_flutter/src/rust/api/simple.dart';
 import 'package:sdf_modeler_flutter/src/scene/scene_snapshot.dart';
+import 'package:sdf_modeler_flutter/src/scene/scene_tree_panel.dart';
 import 'package:sdf_modeler_flutter/src/texture/texture_bridge.dart';
 import 'package:sdf_modeler_flutter/src/texture/texture_viewport_event.dart';
 import 'package:sdf_modeler_flutter/src/texture/texture_viewport_feedback.dart';
@@ -614,6 +615,19 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                   _toggleAdaptiveInteractionResolution,
               onRefresh: _refreshBridgeStatus,
               onAddSphere: () => _runSceneCommand(addSphere),
+              onAddBox: () => _runSceneCommand(addBox),
+              onAddCylinder: () => _runSceneCommand(addCylinder),
+              onAddTorus: () => _runSceneCommand(addTorus),
+              onDeleteSelected: () => _runSceneCommand(deleteSelected),
+              onSelectSceneNode: (nodeId) => _runSceneCommand(
+                () => selectNode(nodeId: BigInt.from(nodeId)),
+              ),
+              onToggleSceneNodeVisibility: (nodeId) => _runSceneCommand(
+                () => toggleNodeVisibility(nodeId: BigInt.from(nodeId)),
+              ),
+              onToggleSceneNodeLock: (nodeId) => _runSceneCommand(
+                () => toggleNodeLock(nodeId: BigInt.from(nodeId)),
+              ),
               onFrameAll: () => _runSceneCommand(frameAll),
               onResetScene: () => _runSceneCommand(resetScene),
               onFocusSelected: () => _runSceneCommand(focusSelected),
@@ -664,6 +678,13 @@ class _InspectorPanel extends StatelessWidget {
     required this.onToggleAdaptiveInteractionResolution,
     required this.onRefresh,
     required this.onAddSphere,
+    required this.onAddBox,
+    required this.onAddCylinder,
+    required this.onAddTorus,
+    required this.onDeleteSelected,
+    required this.onSelectSceneNode,
+    required this.onToggleSceneNodeVisibility,
+    required this.onToggleSceneNodeLock,
     required this.onFrameAll,
     required this.onResetScene,
     required this.onFocusSelected,
@@ -686,6 +707,13 @@ class _InspectorPanel extends StatelessWidget {
   final ValueChanged<bool> onToggleAdaptiveInteractionResolution;
   final VoidCallback onRefresh;
   final VoidCallback onAddSphere;
+  final VoidCallback onAddBox;
+  final VoidCallback onAddCylinder;
+  final VoidCallback onAddTorus;
+  final VoidCallback onDeleteSelected;
+  final ValueChanged<int> onSelectSceneNode;
+  final ValueChanged<int> onToggleSceneNodeVisibility;
+  final ValueChanged<int> onToggleSceneNodeLock;
   final VoidCallback onFrameAll;
   final VoidCallback onResetScene;
   final VoidCallback onFocusSelected;
@@ -702,8 +730,11 @@ class _InspectorPanel extends StatelessWidget {
     final currentCamera = viewportFeedback?.camera ?? snapshot?.camera;
     final selectedNode = viewportFeedback?.selectedNode ?? snapshot?.selectedNode;
     final hoveredNode = viewportFeedback?.hoveredNode;
+    final selectedNodeId = selectedNode?.id;
     final cameraControlsEnabled = !commandInFlight && currentCamera != null;
     final focusSelectedEnabled = !commandInFlight && selectedNode != null;
+    final sceneCommandsEnabled = !commandInFlight;
+    final deleteSelectedEnabled = !commandInFlight && selectedNode != null;
     final projectionButtonLabel = currentCamera?.orthographic ?? false
         ? 'Use Perspective'
         : 'Use Ortho';
@@ -730,26 +761,50 @@ class _InspectorPanel extends StatelessWidget {
                 'Lower the viewport render scale while navigating.',
               ),
             ),
+            const SizedBox(height: 16),
+            Text(
+              'Scene Tree',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
                 FilledButton(
-                  onPressed: commandInFlight ? null : onAddSphere,
-                  child: const Text('Add Sphere'),
+                  onPressed: sceneCommandsEnabled ? onAddSphere : null,
+                  child: const Text('Sphere'),
                 ),
                 OutlinedButton(
-                  onPressed: commandInFlight ? null : onFrameAll,
-                  child: const Text('Frame All'),
+                  onPressed: sceneCommandsEnabled ? onAddBox : null,
+                  child: const Text('Box'),
                 ),
                 OutlinedButton(
-                  onPressed: commandInFlight ? null : onResetScene,
-                  child: const Text('Reset Scene'),
+                  onPressed: sceneCommandsEnabled ? onAddCylinder : null,
+                  child: const Text('Cylinder'),
                 ),
-                TextButton(onPressed: onRefresh, child: const Text('Re-run Ping')),
+                OutlinedButton(
+                  onPressed: sceneCommandsEnabled ? onAddTorus : null,
+                  child: const Text('Torus'),
+                ),
+                OutlinedButton(
+                  onPressed: deleteSelectedEnabled ? onDeleteSelected : null,
+                  child: const Text('Delete Selected'),
+                ),
               ],
             ),
+            const SizedBox(height: 12),
+            if (snapshot == null)
+              const Text('Scene snapshot is still loading.')
+            else
+              SceneTreePanel(
+                roots: snapshot!.sceneTreeRoots,
+                selectedNodeId: selectedNodeId,
+                enabled: !commandInFlight,
+                onSelectNode: onSelectSceneNode,
+                onToggleNodeVisibility: onToggleSceneNodeVisibility,
+                onToggleNodeLock: onToggleSceneNodeLock,
+              ),
             const SizedBox(height: 16),
             Text(
               'Camera',
@@ -763,6 +818,10 @@ class _InspectorPanel extends StatelessWidget {
                 FilledButton(
                   onPressed: focusSelectedEnabled ? onFocusSelected : null,
                   child: const Text('Focus Selected'),
+                ),
+                OutlinedButton(
+                  onPressed: sceneCommandsEnabled ? onFrameAll : null,
+                  child: const Text('Frame All'),
                 ),
                 OutlinedButton(
                   onPressed: cameraControlsEnabled ? onToggleProjection : null,
@@ -818,26 +877,21 @@ class _InspectorPanel extends StatelessWidget {
               Text(
                 'SDF complexity: ${snapshot!.stats.sdfEvalComplexity} - Voxel memory: ${snapshot!.stats.voxelMemoryBytes} bytes',
               ),
-              const SizedBox(height: 16),
-              Text(
-                'Top-Level Nodes',
-                style: Theme.of(context).textTheme.titleMedium,
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton(
+                    onPressed: sceneCommandsEnabled ? onResetScene : null,
+                    child: const Text('Reset Scene'),
+                  ),
+                  TextButton(
+                    onPressed: onRefresh,
+                    child: const Text('Re-run Ping'),
+                  ),
+                ],
               ),
-              const SizedBox(height: 8),
-              if (snapshot!.topLevelNodes.isEmpty)
-                const Text('No top-level nodes in the current scene.')
-              else
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: snapshot!.topLevelNodes
-                      .map(
-                        (node) => Chip(
-                          label: Text('${node.name} - ${node.kindLabel}'),
-                        ),
-                      )
-                      .toList(growable: false),
-                ),
             ],
           ],
         ),

@@ -32,7 +32,8 @@ This document defines the required separation between application core logic and
 - Frontend adapters should emit `Action` values via `ActionSink` for structural edits.
 - Data-level live edits may stay direct where required for latency, but do not introduce toolkit types into backend modules.
 - Viewport camera and selection commands that must survive toolkit swaps belong in toolkit-neutral facades such as `src/app_bridge/`; do not leave preset views, projection toggles, or framing behavior owned only by egui panels or egui action glue.
-- Native viewport hosts may own frame cadence and texture transport, but Rust backend modules own scene state, camera behavior, picking, and command semantics.
+- Scene tree snapshots and document commands that must survive toolkit swaps also belong in toolkit-neutral facades such as `src/app_bridge/`; add/select/delete/rename/toggle visibility/toggle lock behavior must not live only in egui panels.
+- Native viewport hosts may own frame cadence and texture transport, but Rust backend modules own scene state, camera behavior, picking, scene hierarchy snapshots, and command semantics.
 
 ## Adding Another UI Toolkit
 

@@ -20,7 +20,8 @@ pub fn render_preview_frame(width: u32, height: u32, time_seconds: f32) -> Vec<u
     app_bridge()
         .lock()
         .expect("app bridge mutex")
-        .render_viewport_frame(width, height, time_seconds).pixels
+        .render_viewport_frame(width, height, time_seconds)
+        .pixels
 }
 
 #[flutter_rust_bridge::frb(sync)]
@@ -42,6 +43,13 @@ pub fn zoom_camera(delta: f32) {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn select_node(node_id: Option<u64>) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.select_node(node_id);
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn select_node_at_viewport(
     mouse_x: f32,
     mouse_y: f32,
@@ -51,6 +59,27 @@ pub fn select_node_at_viewport(
 ) -> String {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.select_node_at_viewport(mouse_x, mouse_y, width, height, time_seconds);
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn toggle_node_visibility(node_id: u64) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.toggle_node_visibility(node_id);
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn toggle_node_lock(node_id: u64) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.toggle_node_lock(node_id);
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn delete_selected() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.delete_selected();
     snapshot_json(&bridge)
 }
 
@@ -121,6 +150,27 @@ pub fn toggle_orthographic() -> String {
 pub fn add_sphere() -> String {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.add_sphere();
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn add_box() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.add_box();
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn add_cylinder() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.add_cylinder();
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn add_torus() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.add_torus();
     snapshot_json(&bridge)
 }
 
