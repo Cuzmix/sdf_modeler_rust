@@ -28,6 +28,11 @@ class _MockRustApi extends RustLibApi {
   static const String _operationSnapshot = '''{"selected_node":{"id":8,"name":"Union","kind_label":"Union","visible":true,"locked":false},"top_level_nodes":[{"id":8,"name":"Union","kind_label":"Union","visible":true,"locked":false}],"scene_tree_roots":[{"id":8,"name":"Union","kind_label":"Union","visible":true,"locked":false,"children":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false,"children":[]},{"id":2,"name":"Box","kind_label":"Box","visible":true,"locked":false,"children":[]}]}],"history":{"can_undo":true,"can_redo":false},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":9,"visible_nodes":9,"top_level_nodes":4,"primitive_nodes":2,"operation_nodes":1,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":3,"structure_key":13,"data_fingerprint":24,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":3.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
   static const String _transformSnapshot = '''{"selected_node":{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false},"top_level_nodes":[{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false}],"scene_tree_roots":[{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false,"children":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false,"children":[]}]}],"history":{"can_undo":true,"can_redo":false},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":8,"visible_nodes":8,"top_level_nodes":4,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":4,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":2,"structure_key":12,"data_fingerprint":24,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
   static const String _selectedTransformPropertySnapshot = '''{"selected_node":{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false},"selected_node_properties":{"node_id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false,"transform":{"position_label":"Translation","position":{"x":0.0,"y":0.0,"z":0.0},"rotation_degrees":{"x":0.0,"y":0.0,"z":0.0},"scale":{"x":1.0,"y":1.0,"z":1.0}},"primitive":null,"material":null},"top_level_nodes":[{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false}],"scene_tree_roots":[{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false,"children":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false,"children":[]}]}],"history":{"can_undo":true,"can_redo":false},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":8,"visible_nodes":8,"top_level_nodes":4,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":4,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":2,"structure_key":12,"data_fingerprint":24,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
+  static const String _selectedTransformManipulatorSnapshot = '''{"selected_node":{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false},"selected_node_properties":{"node_id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false,"transform":{"position_label":"Translation","position":{"x":0.0,"y":0.0,"z":0.0},"rotation_degrees":{"x":0.0,"y":0.0,"z":0.0},"scale":{"x":1.0,"y":1.0,"z":1.0}},"primitive":null,"material":null},"top_level_nodes":[{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false}],"scene_tree_roots":[{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false,"children":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false,"children":[]}]}],"history":{"can_undo":true,"can_redo":false},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":8,"visible_nodes":8,"top_level_nodes":4,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":4,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":2,"structure_key":12,"data_fingerprint":24,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true,"manipulator_mode_id":"translate","manipulator_mode_label":"Move","manipulator_space_id":"local","manipulator_space_label":"Local","manipulator_visible":true,"can_reset_pivot":false,"pivot_offset":{"x":0.0,"y":0.0,"z":0.0}}}''';
+  static const String _selectedTransformRotateSnapshot = '''{"selected_node":{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false},"selected_node_properties":{"node_id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false,"transform":{"position_label":"Translation","position":{"x":0.0,"y":0.0,"z":0.0},"rotation_degrees":{"x":0.0,"y":0.0,"z":0.0},"scale":{"x":1.0,"y":1.0,"z":1.0}},"primitive":null,"material":null},"top_level_nodes":[{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false}],"scene_tree_roots":[{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false,"children":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false,"children":[]}]}],"history":{"can_undo":true,"can_redo":false},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":8,"visible_nodes":8,"top_level_nodes":4,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":4,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":2,"structure_key":12,"data_fingerprint":24,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true,"manipulator_mode_id":"rotate","manipulator_mode_label":"Rotate","manipulator_space_id":"local","manipulator_space_label":"Local","manipulator_visible":true,"can_reset_pivot":false,"pivot_offset":{"x":0.0,"y":0.0,"z":0.0}}}''';
+  static const String _selectedTransformRotateWorldSnapshot = '''{"selected_node":{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false},"selected_node_properties":{"node_id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false,"transform":{"position_label":"Translation","position":{"x":0.0,"y":0.0,"z":0.0},"rotation_degrees":{"x":0.0,"y":0.0,"z":0.0},"scale":{"x":1.0,"y":1.0,"z":1.0}},"primitive":null,"material":null},"top_level_nodes":[{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false}],"scene_tree_roots":[{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false,"children":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false,"children":[]}]}],"history":{"can_undo":true,"can_redo":false},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":8,"visible_nodes":8,"top_level_nodes":4,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":4,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":2,"structure_key":12,"data_fingerprint":24,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true,"manipulator_mode_id":"rotate","manipulator_mode_label":"Rotate","manipulator_space_id":"world","manipulator_space_label":"World","manipulator_visible":true,"can_reset_pivot":false,"pivot_offset":{"x":0.0,"y":0.0,"z":0.0}}}''';
+  static const String _selectedTransformPivotSnapshot = '''{"selected_node":{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false},"selected_node_properties":{"node_id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false,"transform":{"position_label":"Translation","position":{"x":0.0,"y":0.0,"z":0.0},"rotation_degrees":{"x":0.0,"y":0.0,"z":0.0},"scale":{"x":1.0,"y":1.0,"z":1.0}},"primitive":null,"material":null},"top_level_nodes":[{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false}],"scene_tree_roots":[{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false,"children":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false,"children":[]}]}],"history":{"can_undo":true,"can_redo":false},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":8,"visible_nodes":8,"top_level_nodes":4,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":4,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":2,"structure_key":12,"data_fingerprint":24,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true,"manipulator_mode_id":"rotate","manipulator_mode_label":"Rotate","manipulator_space_id":"world","manipulator_space_label":"World","manipulator_visible":true,"can_reset_pivot":true,"pivot_offset":{"x":0.25,"y":0.0,"z":0.0}}}''';
+  static const String _selectedTransformPivotResetSnapshot = '''{"selected_node":{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false},"selected_node_properties":{"node_id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false,"transform":{"position_label":"Translation","position":{"x":0.0,"y":0.0,"z":0.0},"rotation_degrees":{"x":0.0,"y":0.0,"z":0.0},"scale":{"x":1.0,"y":1.0,"z":1.0}},"primitive":null,"material":null},"top_level_nodes":[{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false}],"scene_tree_roots":[{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false,"children":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false,"children":[]}]}],"history":{"can_undo":true,"can_redo":false},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":8,"visible_nodes":8,"top_level_nodes":4,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":4,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":2,"structure_key":12,"data_fingerprint":24,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true,"manipulator_mode_id":"rotate","manipulator_mode_label":"Rotate","manipulator_space_id":"world","manipulator_space_label":"World","manipulator_visible":true,"can_reset_pivot":false,"pivot_offset":{"x":0.0,"y":0.0,"z":0.0}}}''';
   static const String _selectedTransformMovedSnapshot = '''{"selected_node":{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false},"selected_node_properties":{"node_id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false,"transform":{"position_label":"Translation","position":{"x":1.0,"y":-2.0,"z":3.5},"rotation_degrees":{"x":0.0,"y":0.0,"z":0.0},"scale":{"x":1.0,"y":1.0,"z":1.0}},"primitive":null,"material":null},"top_level_nodes":[{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false}],"scene_tree_roots":[{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false,"children":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false,"children":[]}]}],"history":{"can_undo":true,"can_redo":false},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":8,"visible_nodes":8,"top_level_nodes":4,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":4,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":2,"structure_key":12,"data_fingerprint":28,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
   static const String _selectedTransformRotatedSnapshot = '''{"selected_node":{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false},"selected_node_properties":{"node_id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false,"transform":{"position_label":"Translation","position":{"x":1.0,"y":-2.0,"z":3.5},"rotation_degrees":{"x":10.0,"y":20.0,"z":30.0},"scale":{"x":1.0,"y":1.0,"z":1.0}},"primitive":null,"material":null},"top_level_nodes":[{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false}],"scene_tree_roots":[{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false,"children":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false,"children":[]}]}],"history":{"can_undo":true,"can_redo":false},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":8,"visible_nodes":8,"top_level_nodes":4,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":4,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":2,"structure_key":12,"data_fingerprint":29,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
   static const String _selectedTransformScaledSnapshot = '''{"selected_node":{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false},"selected_node_properties":{"node_id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false,"transform":{"position_label":"Translation","position":{"x":1.0,"y":-2.0,"z":3.5},"rotation_degrees":{"x":10.0,"y":20.0,"z":30.0},"scale":{"x":0.01,"y":2.0,"z":100.0}},"primitive":null,"material":null},"top_level_nodes":[{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false}],"scene_tree_roots":[{"id":8,"name":"Transform 4","kind_label":"Transform","visible":true,"locked":false,"children":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false,"children":[]}]}],"history":{"can_undo":true,"can_redo":false},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":8,"visible_nodes":8,"top_level_nodes":4,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":4,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":2,"structure_key":12,"data_fingerprint":30,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
@@ -52,6 +57,13 @@ class _MockRustApi extends RustLibApi {
   int setSelectedTransformPositionCalls = 0;
   int setSelectedTransformRotationDegreesCalls = 0;
   int setSelectedTransformScaleCalls = 0;
+  int setManipulatorModeCalls = 0;
+  int toggleManipulatorSpaceCalls = 0;
+  int nudgeManipulatorPivotOffsetCalls = 0;
+  int resetManipulatorPivotCalls = 0;
+  int nudgeSelectedTranslationCalls = 0;
+  int nudgeSelectedRotationDegreesCalls = 0;
+  int nudgeSelectedScaleCalls = 0;
   int deleteSelectedCalls = 0;
   int focusSelectedCalls = 0;
   int cameraFrontCalls = 0;
@@ -78,6 +90,13 @@ class _MockRustApi extends RustLibApi {
     setSelectedTransformPositionCalls = 0;
     setSelectedTransformRotationDegreesCalls = 0;
     setSelectedTransformScaleCalls = 0;
+    setManipulatorModeCalls = 0;
+    toggleManipulatorSpaceCalls = 0;
+    nudgeManipulatorPivotOffsetCalls = 0;
+    resetManipulatorPivotCalls = 0;
+    nudgeSelectedTranslationCalls = 0;
+    nudgeSelectedRotationDegreesCalls = 0;
+    nudgeSelectedScaleCalls = 0;
     deleteSelectedCalls = 0;
     focusSelectedCalls = 0;
     cameraFrontCalls = 0;
@@ -252,6 +271,74 @@ class _MockRustApi extends RustLibApi {
     required double z,
   }) {
     setSelectedTransformScaleCalls += 1;
+    currentSnapshot = _selectedTransformScaledSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetManipulatorMode({required String modeId}) {
+    setManipulatorModeCalls += 1;
+    currentSnapshot = switch (modeId) {
+      'rotate' => _selectedTransformRotateSnapshot,
+      _ => _selectedTransformManipulatorSnapshot,
+    };
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleToggleManipulatorSpace() {
+    toggleManipulatorSpaceCalls += 1;
+    currentSnapshot = _selectedTransformRotateWorldSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleNudgeManipulatorPivotOffset({
+    required double x,
+    required double y,
+    required double z,
+  }) {
+    nudgeManipulatorPivotOffsetCalls += 1;
+    currentSnapshot = _selectedTransformPivotSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleResetManipulatorPivot() {
+    resetManipulatorPivotCalls += 1;
+    currentSnapshot = _selectedTransformPivotResetSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleNudgeSelectedTranslation({
+    required double deltaX,
+    required double deltaY,
+    required double deltaZ,
+  }) {
+    nudgeSelectedTranslationCalls += 1;
+    currentSnapshot = _selectedTransformMovedSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleNudgeSelectedRotationDegrees({
+    required double deltaXDegrees,
+    required double deltaYDegrees,
+    required double deltaZDegrees,
+  }) {
+    nudgeSelectedRotationDegreesCalls += 1;
+    currentSnapshot = _selectedTransformRotatedSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleNudgeSelectedScale({
+    required double deltaX,
+    required double deltaY,
+    required double deltaZ,
+  }) {
+    nudgeSelectedScaleCalls += 1;
     currentSnapshot = _selectedTransformScaledSnapshot;
     return currentSnapshot;
   }
@@ -575,6 +662,51 @@ void main() {
 
     expect(mockApi.setSelectedTransformScaleCalls, 1);
     expect(mockApi.currentSnapshot, _MockRustApi._selectedTransformScaledSnapshot);
+  });
+
+  testWidgets('routes viewport tool overlay commands through the Rust facade', (
+    WidgetTester tester,
+  ) async {
+    mockApi.currentSnapshot = _MockRustApi._selectedTransformManipulatorSnapshot;
+
+    await pumpApp(tester, logicalSize: const Size(1400, 900));
+
+    await tester.tap(find.byKey(const ValueKey('viewport-tool-mode-rotate')));
+    await tester.pump();
+
+    expect(mockApi.setManipulatorModeCalls, 1);
+    expect(mockApi.currentSnapshot, _MockRustApi._selectedTransformRotateSnapshot);
+
+    await tester.tap(find.byKey(const ValueKey('viewport-tool-space-toggle')));
+    await tester.pump();
+
+    expect(mockApi.toggleManipulatorSpaceCalls, 1);
+    expect(
+      mockApi.currentSnapshot,
+      _MockRustApi._selectedTransformRotateWorldSnapshot,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('viewport-tool-pivot-x-positive')));
+    await tester.pump();
+
+    expect(mockApi.nudgeManipulatorPivotOffsetCalls, 1);
+    expect(mockApi.currentSnapshot, _MockRustApi._selectedTransformPivotSnapshot);
+
+    await tester.tap(find.byKey(const ValueKey('viewport-tool-pivot-reset')));
+    await tester.pump();
+
+    expect(mockApi.resetManipulatorPivotCalls, 1);
+    expect(
+      mockApi.currentSnapshot,
+      _MockRustApi._selectedTransformPivotResetSnapshot,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('viewport-tool-nudge-x-positive')));
+    await tester.pump();
+
+    expect(mockApi.nudgeSelectedRotationDegreesCalls, 1);
+    expect(mockApi.currentSnapshot, _MockRustApi._selectedTransformRotatedSnapshot);
+    expect(requestFrameCalls, greaterThan(0));
   });
 
   testWidgets('renders bridge status, scene snapshot, and real viewport host', (

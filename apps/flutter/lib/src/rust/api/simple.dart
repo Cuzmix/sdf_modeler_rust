@@ -141,6 +141,55 @@ String setSelectedTransformScale({
   z: z,
 );
 
+String setManipulatorMode({required String modeId}) =>
+    RustLib.instance.api.crateApiSimpleSetManipulatorMode(modeId: modeId);
+
+String toggleManipulatorSpace() =>
+    RustLib.instance.api.crateApiSimpleToggleManipulatorSpace();
+
+String nudgeManipulatorPivotOffset({
+  required double x,
+  required double y,
+  required double z,
+}) => RustLib.instance.api.crateApiSimpleNudgeManipulatorPivotOffset(
+  x: x,
+  y: y,
+  z: z,
+);
+
+String resetManipulatorPivot() =>
+    RustLib.instance.api.crateApiSimpleResetManipulatorPivot();
+
+String nudgeSelectedTranslation({
+  required double deltaX,
+  required double deltaY,
+  required double deltaZ,
+}) => RustLib.instance.api.crateApiSimpleNudgeSelectedTranslation(
+  deltaX: deltaX,
+  deltaY: deltaY,
+  deltaZ: deltaZ,
+);
+
+String nudgeSelectedRotationDegrees({
+  required double deltaXDegrees,
+  required double deltaYDegrees,
+  required double deltaZDegrees,
+}) => RustLib.instance.api.crateApiSimpleNudgeSelectedRotationDegrees(
+  deltaXDegrees: deltaXDegrees,
+  deltaYDegrees: deltaYDegrees,
+  deltaZDegrees: deltaZDegrees,
+);
+
+String nudgeSelectedScale({
+  required double deltaX,
+  required double deltaY,
+  required double deltaZ,
+}) => RustLib.instance.api.crateApiSimpleNudgeSelectedScale(
+  deltaX: deltaX,
+  deltaY: deltaY,
+  deltaZ: deltaZ,
+);
+
 String undo() => RustLib.instance.api.crateApiSimpleUndo();
 
 String redo() => RustLib.instance.api.crateApiSimpleRedo();

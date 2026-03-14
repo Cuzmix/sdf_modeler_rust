@@ -31,6 +31,9 @@ pub struct AppBridge {
     selected_node: Option<NodeId>,
     hovered_node: Option<NodeId>,
     active_tool_label: String,
+    manipulator_mode: ManipulatorMode,
+    manipulator_space: ManipulatorSpace,
+    pivot_offset: Vec3,
     renderer: HeadlessViewportRenderer,
     last_viewport_time_seconds: Option<f32>,
 }
@@ -41,6 +44,69 @@ const PRIMITIVE_PARAMETER_MAX: f32 = 100.0;
 const MATERIAL_FACTOR_MIN: f32 = 0.0;
 const MATERIAL_FACTOR_MAX: f32 = 1.0;
 const EMISSIVE_INTENSITY_MAX: f32 = 5.0;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ManipulatorMode {
+    Translate,
+    Rotate,
+    Scale,
+}
+
+impl ManipulatorMode {
+    fn id(self) -> &'static str {
+        match self {
+            Self::Translate => "translate",
+            Self::Rotate => "rotate",
+            Self::Scale => "scale",
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Translate => "Move",
+            Self::Rotate => "Rotate",
+            Self::Scale => "Scale",
+        }
+    }
+
+    fn from_id(mode_id: &str) -> Option<Self> {
+        Some(match mode_id {
+            "translate" => Self::Translate,
+            "rotate" => Self::Rotate,
+            "scale" => Self::Scale,
+            _ => return None,
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ManipulatorSpace {
+    Local,
+    World,
+}
+
+impl ManipulatorSpace {
+    fn id(self) -> &'static str {
+        match self {
+            Self::Local => "local",
+            Self::World => "world",
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Local => "Local",
+            Self::World => "World",
+        }
+    }
+
+    fn toggled(self) -> Self {
+        match self {
+            Self::Local => Self::World,
+            Self::World => Self::Local,
+        }
+    }
+}
 
 impl Default for AppBridge {
     fn default() -> Self {
@@ -63,6 +129,9 @@ impl AppBridge {
             selected_node: None,
             hovered_node: None,
             active_tool_label: "Select".to_string(),
+            manipulator_mode: ManipulatorMode::Translate,
+            manipulator_space: ManipulatorSpace::Local,
+            pivot_offset: Vec3::ZERO,
             renderer,
             last_viewport_time_seconds: None,
         }
@@ -111,6 +180,17 @@ impl AppBridge {
                 active_tool_label: self.active_tool_label.clone(),
                 shading_mode_label: self.render_config.shading_mode.label().to_string(),
                 grid_enabled: self.render_config.show_grid,
+                manipulator_mode_id: self.manipulator_mode.id().to_string(),
+                manipulator_mode_label: self.manipulator_mode.label().to_string(),
+                manipulator_space_id: self.manipulator_space.id().to_string(),
+                manipulator_space_label: self.manipulator_space.label().to_string(),
+                manipulator_visible: self.selected_node.is_some(),
+                can_reset_pivot: self.pivot_offset.length_squared() > 0.0,
+                pivot_offset: AppVec3::new(
+                    self.pivot_offset.x,
+                    self.pivot_offset.y,
+                    self.pivot_offset.z,
+                ),
             },
         }
     }
@@ -262,6 +342,27 @@ impl AppBridge {
     pub fn toggle_orthographic(&mut self) {
         self.cancel_camera_transition();
         self.camera.toggle_ortho();
+    }
+
+    pub fn set_manipulator_mode(&mut self, mode_id: &str) -> bool {
+        let Some(mode) = ManipulatorMode::from_id(mode_id) else {
+            return false;
+        };
+
+        self.manipulator_mode = mode;
+        true
+    }
+
+    pub fn toggle_manipulator_space(&mut self) {
+        self.manipulator_space = self.manipulator_space.toggled();
+    }
+
+    pub fn nudge_manipulator_pivot_offset(&mut self, x: f32, y: f32, z: f32) {
+        self.pivot_offset += Vec3::new(x, y, z);
+    }
+
+    pub fn reset_manipulator_pivot(&mut self) {
+        self.pivot_offset = Vec3::ZERO;
     }
 
     pub fn add_sphere(&mut self) -> u64 {
@@ -617,6 +718,48 @@ impl AppBridge {
         })
     }
 
+    pub fn nudge_selected_translation(
+        &mut self,
+        delta_x: f32,
+        delta_y: f32,
+        delta_z: f32,
+    ) -> bool {
+        let Some(position) = self.selected_transform_position() else {
+            return false;
+        };
+
+        self.set_selected_transform_position(
+            position.x + delta_x,
+            position.y + delta_y,
+            position.z + delta_z,
+        )
+    }
+
+    pub fn nudge_selected_rotation_degrees(
+        &mut self,
+        delta_x_degrees: f32,
+        delta_y_degrees: f32,
+        delta_z_degrees: f32,
+    ) -> bool {
+        let Some(rotation_degrees) = self.selected_transform_rotation_degrees() else {
+            return false;
+        };
+
+        self.set_selected_transform_rotation_degrees(
+            rotation_degrees.x + delta_x_degrees,
+            rotation_degrees.y + delta_y_degrees,
+            rotation_degrees.z + delta_z_degrees,
+        )
+    }
+
+    pub fn nudge_selected_scale(&mut self, delta_x: f32, delta_y: f32, delta_z: f32) -> bool {
+        let Some(scale) = self.selected_transform_scale() else {
+            return false;
+        };
+
+        self.set_selected_transform_scale(scale.x + delta_x, scale.y + delta_y, scale.z + delta_z)
+    }
+
     pub fn toggle_node_visibility(&mut self, node_id: u64) {
         self.run_document_command(|bridge| {
             if bridge.scene.nodes.contains_key(&node_id) {
@@ -783,6 +926,42 @@ impl AppBridge {
             .nodes
             .get(&node_id)
             .is_some_and(|node| node.locked)
+    }
+
+    fn selected_transform_position(&self) -> Option<Vec3> {
+        let selected_node = self.selected_node?;
+        let node = self.scene.nodes.get(&selected_node)?;
+        match &node.data {
+            NodeData::Primitive { position, .. } | NodeData::Sculpt { position, .. } => {
+                Some(*position)
+            }
+            NodeData::Transform { translation, .. } => Some(*translation),
+            _ => None,
+        }
+    }
+
+    fn selected_transform_rotation_degrees(&self) -> Option<Vec3> {
+        let selected_node = self.selected_node?;
+        let node = self.scene.nodes.get(&selected_node)?;
+        match &node.data {
+            NodeData::Primitive { rotation, .. }
+            | NodeData::Sculpt { rotation, .. }
+            | NodeData::Transform { rotation, .. } => Some(Vec3::new(
+                rotation.x.to_degrees(),
+                rotation.y.to_degrees(),
+                rotation.z.to_degrees(),
+            )),
+            _ => None,
+        }
+    }
+
+    fn selected_transform_scale(&self) -> Option<Vec3> {
+        let selected_node = self.selected_node?;
+        let node = self.scene.nodes.get(&selected_node)?;
+        match &node.data {
+            NodeData::Transform { scale, .. } => Some(*scale),
+            _ => None,
+        }
     }
 
     fn camera_snapshot(&self) -> AppCameraSnapshot {
@@ -1101,6 +1280,48 @@ mod tests {
     }
 
     #[test]
+    fn tool_snapshot_includes_default_manipulator_state() {
+        let bridge = AppBridge::new();
+
+        let tool = bridge.scene_snapshot().tool;
+        assert_eq!(tool.manipulator_mode_id, "translate");
+        assert_eq!(tool.manipulator_mode_label, "Move");
+        assert_eq!(tool.manipulator_space_id, "local");
+        assert_eq!(tool.manipulator_space_label, "Local");
+        assert!(!tool.manipulator_visible);
+        assert!(!tool.can_reset_pivot);
+        assert_eq!(tool.pivot_offset, AppVec3::new(0.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn manipulator_mode_and_space_commands_update_tool_snapshot() {
+        let mut bridge = AppBridge::new();
+        let sphere_id = bridge
+            .scene
+            .top_level_nodes()
+            .into_iter()
+            .find(|node_id| {
+                matches!(
+                    bridge.scene.nodes[node_id].data,
+                    NodeData::Primitive {
+                        kind: SdfPrimitive::Sphere,
+                        ..
+                    }
+                )
+            })
+            .expect("default sphere");
+        bridge.select_node(Some(sphere_id));
+
+        assert!(bridge.set_manipulator_mode("rotate"));
+        bridge.toggle_manipulator_space();
+
+        let tool = bridge.scene_snapshot().tool;
+        assert_eq!(tool.manipulator_mode_id, "rotate");
+        assert_eq!(tool.manipulator_space_id, "world");
+        assert!(tool.manipulator_visible);
+    }
+
+    #[test]
     fn selected_sculpt_property_snapshot_includes_material_without_primitive_parameters() {
         let mut bridge = AppBridge::new();
         let sphere_id = bridge
@@ -1335,6 +1556,70 @@ mod tests {
             .expect("transform properties");
         assert_eq!(
             transform.scale,
+            Some(AppVec3::new(
+                PRIMITIVE_PARAMETER_MIN,
+                2.0,
+                PRIMITIVE_PARAMETER_MAX
+            ))
+        );
+    }
+
+    #[test]
+    fn pivot_and_manipulation_nudges_update_snapshots() {
+        let mut bridge = AppBridge::new();
+        let sphere_id = bridge
+            .scene
+            .top_level_nodes()
+            .into_iter()
+            .find(|node_id| {
+                matches!(
+                    bridge.scene.nodes[node_id].data,
+                    NodeData::Primitive {
+                        kind: SdfPrimitive::Sphere,
+                        ..
+                    }
+                )
+            })
+            .expect("default sphere");
+        bridge.select_node(Some(sphere_id));
+        bridge.create_transform();
+
+        bridge.nudge_manipulator_pivot_offset(0.25, 0.0, 0.0);
+        let tool = bridge.scene_snapshot().tool;
+        assert!(tool.can_reset_pivot);
+        assert_eq!(tool.pivot_offset, AppVec3::new(0.25, 0.0, 0.0));
+
+        bridge.reset_manipulator_pivot();
+        assert_eq!(bridge.scene_snapshot().tool.pivot_offset, AppVec3::new(0.0, 0.0, 0.0));
+
+        assert!(bridge.nudge_selected_translation(0.5, -0.25, 1.0));
+        let moved_transform = bridge
+            .scene_snapshot()
+            .selected_node_properties
+            .expect("selected properties")
+            .transform
+            .expect("transform properties");
+        assert_eq!(moved_transform.position, AppVec3::new(0.5, -0.25, 1.0));
+
+        assert!(bridge.nudge_selected_rotation_degrees(15.0, 0.0, -30.0));
+        let rotated_transform = bridge
+            .scene_snapshot()
+            .selected_node_properties
+            .expect("selected properties")
+            .transform
+            .expect("transform properties");
+        assert!((rotated_transform.rotation_degrees.x - 15.0).abs() < 1e-3);
+        assert!((rotated_transform.rotation_degrees.z + 30.0).abs() < 1e-3);
+
+        assert!(bridge.nudge_selected_scale(-5.0, 1.0, 500.0));
+        let scaled_transform = bridge
+            .scene_snapshot()
+            .selected_node_properties
+            .expect("selected properties")
+            .transform
+            .expect("transform properties");
+        assert_eq!(
+            scaled_transform.scale,
             Some(AppVec3::new(
                 PRIMITIVE_PARAMETER_MIN,
                 2.0,

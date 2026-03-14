@@ -32,6 +32,7 @@ class ViewportSurface extends StatefulWidget {
     required this.onScroll,
     required this.onInteractionEnd,
     this.overlay,
+    this.controlsOverlay,
   });
 
   final int? textureId;
@@ -44,6 +45,7 @@ class ViewportSurface extends StatefulWidget {
   final ViewportScrollCallback onScroll;
   final VoidCallback onInteractionEnd;
   final Widget? overlay;
+  final Widget? controlsOverlay;
 
   @override
   State<ViewportSurface> createState() => _ViewportSurfaceState();
@@ -444,6 +446,8 @@ class _ViewportSurfaceState extends State<ViewportSurface> {
                             : Texture(textureId: widget.textureId!),
                         if (widget.overlay != null)
                           IgnorePointer(child: widget.overlay!),
+                        if (widget.controlsOverlay != null)
+                          widget.controlsOverlay!,
                       ],
                     ),
                   ),

@@ -2303,3 +2303,47 @@ Manual verification:
 Result:
 - PRD #22 is fully verified and complete.
 
+--- Migration Iteration 15: PRD #23 - Backend-owned manipulation command surface ---
+COMPLETED. Added a backend-owned manipulation tool snapshot plus backend nudge commands for translation, rotation, scale, space, and pivot state, then routed a compact Flutter viewport tool overlay into that surface.
+
+Changes:
+- src/app_bridge/dto.rs
+- src/app_bridge/session.rs
+  - Expanded the toolkit-neutral tool snapshot with manipulator mode, space, visibility, and pivot metadata.
+  - Added backend commands for manipulator mode/space changes, pivot nudging/reset, and selected-node translation/rotation/scale nudges.
+  - Added bridge tests covering default tool snapshot state, mode/space updates, pivot state updates, and manipulation nudge behavior.
+- apps/flutter/rust/src/api/simple.rs
+- apps/flutter/rust/src/frb_generated.rs
+- apps/flutter/lib/src/rust/api/simple.dart
+- apps/flutter/lib/src/rust/frb_generated.dart
+  - Exposed the manipulation commands through FRB and regenerated the bindings.
+- apps/flutter/lib/src/scene/scene_snapshot.dart:
+  - Added Dart-side parsing for the expanded tool snapshot while keeping sensible defaults for older snapshots.
+- apps/flutter/lib/src/viewport/viewport_surface.dart
+- apps/flutter/lib/src/viewport/viewport_tool_overlay.dart
+- apps/flutter/lib/app.dart
+  - Added a viewport tool overlay with mode toggles, local/world space toggle, pivot reset, pivot nudges, and backend-routed manipulation nudges.
+  - Kept Flutter limited to dispatching tool intents and nudge deltas rather than owning manipulation semantics.
+- apps/flutter/test/widget_test.dart:
+  - Added mock tool snapshots, bridge method coverage, and widget coverage for the viewport tool overlay path.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS (500 passed)
+- cargo build: PASS
+- apps/flutter/rust cargo check: PASS
+- apps/flutter/rust cargo clippy -- -D warnings: PASS
+- apps/flutter/rust cargo test: PASS
+- apps/flutter/rust cargo build: PASS
+- FRB direct generate command: PASS
+- Flutter analyze: PASS
+- Flutter test: PASS
+- Flutter build windows --debug: PASS
+
+Manual verification:
+- Skipped by current workflow instruction. This slice was validated with automated Rust and Flutter coverage only.
+
+Result:
+- PRD #23 is fully verified and complete.
+

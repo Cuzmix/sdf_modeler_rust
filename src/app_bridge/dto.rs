@@ -68,6 +68,13 @@ pub struct AppToolSnapshot {
     pub active_tool_label: String,
     pub shading_mode_label: String,
     pub grid_enabled: bool,
+    pub manipulator_mode_id: String,
+    pub manipulator_mode_label: String,
+    pub manipulator_space_id: String,
+    pub manipulator_space_label: String,
+    pub manipulator_visible: bool,
+    pub can_reset_pivot: bool,
+    pub pivot_offset: AppVec3,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

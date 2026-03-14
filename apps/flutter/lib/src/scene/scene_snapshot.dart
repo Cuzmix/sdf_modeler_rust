@@ -182,17 +182,43 @@ class AppToolSnapshot {
     required this.activeToolLabel,
     required this.shadingModeLabel,
     required this.gridEnabled,
+    this.manipulatorModeId = 'translate',
+    this.manipulatorModeLabel = 'Move',
+    this.manipulatorSpaceId = 'local',
+    this.manipulatorSpaceLabel = 'Local',
+    this.manipulatorVisible = false,
+    this.canResetPivot = false,
+    this.pivotOffset = const AppVec3(x: 0, y: 0, z: 0),
   });
 
   final String activeToolLabel;
   final String shadingModeLabel;
   final bool gridEnabled;
+  final String manipulatorModeId;
+  final String manipulatorModeLabel;
+  final String manipulatorSpaceId;
+  final String manipulatorSpaceLabel;
+  final bool manipulatorVisible;
+  final bool canResetPivot;
+  final AppVec3 pivotOffset;
 
   factory AppToolSnapshot.fromJson(Map<String, dynamic> json) {
     return AppToolSnapshot(
       activeToolLabel: json['active_tool_label'] as String,
       shadingModeLabel: json['shading_mode_label'] as String,
       gridEnabled: json['grid_enabled'] as bool,
+      manipulatorModeId:
+          json['manipulator_mode_id'] as String? ?? 'translate',
+      manipulatorModeLabel:
+          json['manipulator_mode_label'] as String? ?? 'Move',
+      manipulatorSpaceId: json['manipulator_space_id'] as String? ?? 'local',
+      manipulatorSpaceLabel:
+          json['manipulator_space_label'] as String? ?? 'Local',
+      manipulatorVisible: json['manipulator_visible'] as bool? ?? false,
+      canResetPivot: json['can_reset_pivot'] as bool? ?? false,
+      pivotOffset: json['pivot_offset'] == null
+          ? const AppVec3(x: 0, y: 0, z: 0)
+          : AppVec3.fromJson(json['pivot_offset'] as Map<String, dynamic>),
     );
   }
 }

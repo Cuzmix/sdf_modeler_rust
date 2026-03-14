@@ -158,7 +158,7 @@
     "category": "viewport",
     "description": "Port backend-owned manipulation commands and route Flutter viewport tooling into them.\n\nSteps:\n1. Add the backend command surface needed for gizmo mode, space, pivot, and manipulation operations that must survive toolkit swaps.\n2. Route Flutter viewport tooling into those backend commands instead of duplicating manipulation semantics in Dart.\n3. Keep future desktop and tablet manipulation paths sharing the same backend ownership.\n4. Preserve performance and native viewport responsiveness while this command surface grows.",
     "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build`. If the bridge API changes, run `apps/flutter/scripts/frb_codegen.ps1`. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, `fvm flutter build windows --debug`, and `fvm flutter test integration_test -d windows` when native viewport routing changes. Manual: manipulate a selected node from the Flutter viewport tooling and confirm backend state, viewport feedback, and scene tree remain consistent.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 24,

@@ -191,6 +191,59 @@ pub fn set_selected_transform_scale(x: f32, y: f32, z: f32) -> String {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn set_manipulator_mode(mode_id: String) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_manipulator_mode(&mode_id);
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn toggle_manipulator_space() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.toggle_manipulator_space();
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn nudge_manipulator_pivot_offset(x: f32, y: f32, z: f32) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.nudge_manipulator_pivot_offset(x, y, z);
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn reset_manipulator_pivot() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.reset_manipulator_pivot();
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn nudge_selected_translation(delta_x: f32, delta_y: f32, delta_z: f32) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.nudge_selected_translation(delta_x, delta_y, delta_z);
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn nudge_selected_rotation_degrees(
+    delta_x_degrees: f32,
+    delta_y_degrees: f32,
+    delta_z_degrees: f32,
+) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.nudge_selected_rotation_degrees(delta_x_degrees, delta_y_degrees, delta_z_degrees);
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn nudge_selected_scale(delta_x: f32, delta_y: f32, delta_z: f32) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.nudge_selected_scale(delta_x, delta_y, delta_z);
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn undo() -> String {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.undo();

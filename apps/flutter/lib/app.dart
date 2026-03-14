@@ -17,6 +17,7 @@ import 'package:sdf_modeler_flutter/src/texture/texture_viewport_event.dart';
 import 'package:sdf_modeler_flutter/src/texture/texture_viewport_feedback.dart';
 import 'package:sdf_modeler_flutter/src/viewport/viewport_feedback_overlay.dart';
 import 'package:sdf_modeler_flutter/src/viewport/viewport_surface.dart';
+import 'package:sdf_modeler_flutter/src/viewport/viewport_tool_overlay.dart';
 
 enum _BridgeModalPanel { commands }
 
@@ -74,6 +75,10 @@ const double _transformTranslationMin = -10.0;
 const double _transformTranslationMax = 10.0;
 const double _transformRotationDegreesMin = -180.0;
 const double _transformRotationDegreesMax = 180.0;
+const double _viewportTranslationNudge = 0.25;
+const double _viewportRotationNudgeDegrees = 15.0;
+const double _viewportScaleNudge = 0.25;
+const double _viewportPivotNudge = 0.25;
 
 String _formatVec3(AppVec3 value) {
   return [
@@ -678,6 +683,71 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     }
   }
 
+  Future<void> _setManipulatorMode(String modeId) {
+    return _runSceneCommand(() => setManipulatorMode(modeId: modeId));
+  }
+
+  Future<void> _toggleManipulatorSpace() {
+    return _runSceneCommand(toggleManipulatorSpace);
+  }
+
+  Future<void> _resetManipulatorPivot() {
+    return _runSceneCommand(resetManipulatorPivot);
+  }
+
+  Future<void> _nudgeManipulatorPivot(String axisId, double direction) {
+    final amount = direction * _viewportPivotNudge;
+    final delta = switch (axisId) {
+      'x' => (x: amount, y: 0.0, z: 0.0),
+      'y' => (x: 0.0, y: amount, z: 0.0),
+      _ => (x: 0.0, y: 0.0, z: amount),
+    };
+    return _runSceneCommand(
+      () => nudgeManipulatorPivotOffset(x: delta.x, y: delta.y, z: delta.z),
+    );
+  }
+
+  Future<void> _nudgeManipulatorAxis(
+    String modeId,
+    String axisId,
+    double direction,
+  ) {
+    final amount = switch (modeId) {
+      'rotate' => direction * _viewportRotationNudgeDegrees,
+      'scale' => direction * _viewportScaleNudge,
+      _ => direction * _viewportTranslationNudge,
+    };
+    final delta = switch (axisId) {
+      'x' => (x: amount, y: 0.0, z: 0.0),
+      'y' => (x: 0.0, y: amount, z: 0.0),
+      _ => (x: 0.0, y: 0.0, z: amount),
+    };
+
+    return switch (modeId) {
+      'rotate' => _runSceneCommand(
+        () => nudgeSelectedRotationDegrees(
+          deltaXDegrees: delta.x,
+          deltaYDegrees: delta.y,
+          deltaZDegrees: delta.z,
+        ),
+      ),
+      'scale' => _runSceneCommand(
+        () => nudgeSelectedScale(
+          deltaX: delta.x,
+          deltaY: delta.y,
+          deltaZ: delta.z,
+        ),
+      ),
+      _ => _runSceneCommand(
+        () => nudgeSelectedTranslation(
+          deltaX: delta.x,
+          deltaY: delta.y,
+          deltaZ: delta.z,
+        ),
+      ),
+    };
+  }
+
   Future<void> _promptRenameSelectedNode() async {
     if (_commandInFlight || !mounted) {
       return;
@@ -803,6 +873,8 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final shellLayout = ShellLayout.forWidth(constraints.maxWidth);
+            final selectedNode =
+                _viewportFeedback?.selectedNode ?? snapshot?.selectedNode;
             final viewportCard = ViewportSurface(
               textureId: activeTextureId,
               onViewportSizeChanged: _handleViewportSizeChanged,
@@ -819,6 +891,21 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                 frameTimeMs: _lastNativeFrameTimeMs,
                 framesPerSecond: _smoothedFramesPerSecond,
                 droppedFrameCount: _droppedFrameCount,
+              ),
+              controlsOverlay: ViewportToolOverlay(
+                tool: snapshot?.tool,
+                hasSelection: selectedNode != null,
+                enabled: !_commandInFlight,
+                onSetManipulatorMode: (modeId) =>
+                    unawaited(_setManipulatorMode(modeId)),
+                onToggleManipulatorSpace: () =>
+                    unawaited(_toggleManipulatorSpace()),
+                onResetManipulatorPivot: () =>
+                    unawaited(_resetManipulatorPivot()),
+                onNudgeManipulatorAxis: (modeId, axisId, direction) =>
+                    unawaited(_nudgeManipulatorAxis(modeId, axisId, direction)),
+                onNudgeManipulatorPivot: (axisId, direction) =>
+                    unawaited(_nudgeManipulatorPivot(axisId, direction)),
               ),
             );
 
