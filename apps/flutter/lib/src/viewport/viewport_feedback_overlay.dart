@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:sdf_modeler_flutter/src/shell/shell_contract.dart';
 import 'package:sdf_modeler_flutter/src/texture/texture_viewport_feedback.dart';
 
 class ViewportFeedbackOverlay extends StatelessWidget {
@@ -22,58 +23,72 @@ class ViewportFeedbackOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final selectedNode = feedback?.selectedNode;
-    final hoveredNode = feedback?.hoveredNode;
-    final shouldShowHoveredNode =
-        hoveredNode != null && hoveredNode.id != selectedNode?.id;
-    final shouldShowStats =
-        framesPerSecond != null ||
-        frameTimeMs != null ||
-        droppedFrameCount > 0 ||
-        interactionPhase != 'idle';
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final selectedNode = feedback?.selectedNode;
+        final hoveredNode = feedback?.hoveredNode;
+        final shouldShowHoveredNode =
+            hoveredNode != null &&
+            hoveredNode.id != selectedNode?.id &&
+            constraints.maxHeight >= 80;
+        final shouldShowStats =
+            framesPerSecond != null ||
+            frameTimeMs != null ||
+            droppedFrameCount > 0 ||
+            interactionPhase != 'idle';
 
-    if (selectedNode == null && !shouldShowHoveredNode && !shouldShowStats) {
-      return const SizedBox.shrink();
-    }
+        if (selectedNode == null && !shouldShowHoveredNode && !shouldShowStats) {
+          return const SizedBox.shrink();
+        }
 
-    return Padding(
-      padding: const EdgeInsets.all(12),
-      child: Stack(
-        children: [
-          Align(
-            alignment: Alignment.topLeft,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (selectedNode != null)
-                  _OverlayChip(
-                    label: 'Selected',
-                    value: selectedNode.name,
-                    accentColor: const Color(0xFF8DE1D5),
+        return Padding(
+          padding: const EdgeInsets.all(ShellTokens.overlayPadding),
+          child: Stack(
+            children: [
+              Align(
+                alignment: Alignment.topLeft,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.topLeft,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (selectedNode != null)
+                        _OverlayChip(
+                          label: 'Selected',
+                          value: selectedNode.name,
+                          accentColor: const Color(0xFF8DE1D5),
+                        ),
+                      if (shouldShowHoveredNode) ...[
+                        const SizedBox(height: ShellTokens.compactGap),
+                        _OverlayChip(
+                          label: 'Hover',
+                          value: hoveredNode.name,
+                          accentColor: const Color(0xFFF3E6A7),
+                        ),
+                      ],
+                    ],
                   ),
-                if (shouldShowHoveredNode) ...[
-                  const SizedBox(height: 8),
-                  _OverlayChip(
-                    label: 'Hover',
-                    value: hoveredNode.name,
-                    accentColor: const Color(0xFFF3E6A7),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          if (shouldShowStats)
-            Align(
-              alignment: Alignment.topRight,
-              child: _OverlayChip(
-                label: interactionPhase,
-                value: _buildStatsLine(),
-                accentColor: _statsAccentColor(),
+                ),
               ),
-            ),
-        ],
-      ),
+              if (shouldShowStats)
+                Align(
+                  alignment: Alignment.topRight,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.topRight,
+                    child: _OverlayChip(
+                      label: interactionPhase,
+                      value: _buildStatsLine(),
+                      accentColor: _statsAccentColor(),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -124,7 +139,10 @@ class _OverlayChip extends StatelessWidget {
         border: Border.all(color: accentColor.withValues(alpha: 0.7)),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(
+          horizontal: ShellTokens.overlayChipHorizontalPadding,
+          vertical: ShellTokens.overlayChipVerticalPadding,
+        ),
         child: RichText(
           text: TextSpan(
             style: Theme.of(context).textTheme.bodySmall?.copyWith(

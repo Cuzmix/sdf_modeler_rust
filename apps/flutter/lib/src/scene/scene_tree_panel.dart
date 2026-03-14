@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:sdf_modeler_flutter/src/scene/scene_snapshot.dart';
+import 'package:sdf_modeler_flutter/src/shell/shell_contract.dart';
 
 class SceneTreePanel extends StatelessWidget {
   const SceneTreePanel({
@@ -72,7 +73,10 @@ class _SceneTreeNodeTile extends StatelessWidget {
         : theme.colorScheme.onSurfaceVariant;
 
     return Padding(
-      padding: EdgeInsets.only(left: depth * 16.0, bottom: 4),
+      padding: EdgeInsets.only(
+        left: depth * ShellTokens.sceneTreeIndent,
+        bottom: ShellTokens.sceneTreeNodeGap,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -81,7 +85,7 @@ class _SceneTreeNodeTile extends StatelessWidget {
               color: isSelected
                   ? theme.colorScheme.primaryContainer.withValues(alpha: 0.55)
                   : Colors.transparent,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(ShellTokens.surfaceRadius),
               border: Border.all(
                 color: isSelected
                     ? theme.colorScheme.primary.withValues(alpha: 0.5)
@@ -93,12 +97,14 @@ class _SceneTreeNodeTile extends StatelessWidget {
                 Expanded(
                   child: InkWell(
                     key: ValueKey('scene-tree-node-${node.id}'),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(
+                      ShellTokens.surfaceRadius,
+                    ),
                     onTap: enabled ? () => onSelectNode(node.id) : null,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
+                        horizontal: ShellTokens.sceneTreeTileHorizontalPadding,
+                        vertical: ShellTokens.sceneTreeTileVerticalPadding,
                       ),
                       child: Row(
                         children: [
@@ -109,7 +115,7 @@ class _SceneTreeNodeTile extends StatelessWidget {
                             size: 16,
                             color: labelColor,
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: ShellTokens.controlGap),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -165,10 +171,10 @@ class _SceneTreeNodeTile extends StatelessWidget {
                   ),
                 ),
               ],
+              ),
             ),
-          ),
           if (node.children.isNotEmpty) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: ShellTokens.sceneTreeNodeGap),
             ...node.children.map(
               (child) => _SceneTreeNodeTile(
                 node: child,

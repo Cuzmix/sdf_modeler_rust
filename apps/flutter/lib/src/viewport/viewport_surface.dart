@@ -1,9 +1,8 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:sdf_modeler_flutter/src/shell/shell_contract.dart';
 
 const double _viewportAspectRatio = 16.0 / 9.0;
-const double _tapSlop = 6.0;
-const double _hoverSlop = 4.0;
 
 typedef ViewportSizeChanged = void Function(
   Size logicalViewportSize,
@@ -53,33 +52,78 @@ class ViewportSurface extends StatefulWidget {
 class _ViewportSurfaceState extends State<ViewportSurface> {
   Offset? _pressLocalPosition;
   Offset? _lastHoverLocalPosition;
+  Offset? _lastDragLocalPosition;
+  PointerDeviceKind? _pressPointerKind;
   int _pressButtons = 0;
+  bool _dragGestureStarted = false;
   bool _tapCanceled = false;
   Size _currentViewportSize = const Size(1, 1);
 
   void _handlePointerDown(PointerDownEvent event) {
     _pressLocalPosition = event.localPosition;
     _lastHoverLocalPosition = event.localPosition;
+    _lastDragLocalPosition = event.localPosition;
+    _pressPointerKind = event.kind;
     _pressButtons = event.buttons;
+    _dragGestureStarted = false;
     _tapCanceled = false;
   }
 
   void _handlePointerMove(PointerMoveEvent event) {
-    if (_pressLocalPosition != null &&
+    final pressLocalPosition = _pressLocalPosition;
+    final pointerKind = _pressPointerKind ?? event.kind;
+
+    if (pressLocalPosition != null &&
         !_tapCanceled &&
-        (event.localPosition - _pressLocalPosition!).distance > _tapSlop) {
+        (event.localPosition - pressLocalPosition).distance >
+            ShellGestureContract.tapSlopFor(pointerKind)) {
       _tapCanceled = true;
     }
 
-    if ((event.buttons & kPrimaryMouseButton) != 0) {
-      widget.onOrbitDrag(event.localDelta);
+    final isOrbitDrag = (event.buttons & kPrimaryMouseButton) != 0;
+    final isPanDrag =
+        (event.buttons & kSecondaryMouseButton) != 0 ||
+        (event.buttons & kMiddleMouseButton) != 0;
+    if (!isOrbitDrag && !isPanDrag) {
       return;
     }
 
-    if ((event.buttons & kSecondaryMouseButton) != 0 ||
-        (event.buttons & kMiddleMouseButton) != 0) {
-      widget.onPanDrag(event.localDelta);
+    if (pressLocalPosition == null) {
+      return;
     }
+
+    if (!_dragGestureStarted) {
+      final dragDistance = (event.localPosition - pressLocalPosition).distance;
+      if (dragDistance < ShellGestureContract.dragStartSlopFor(pointerKind)) {
+        return;
+      }
+
+      _dragGestureStarted = true;
+      _tapCanceled = true;
+      _lastDragLocalPosition = event.localPosition;
+      if (isOrbitDrag) {
+        widget.onOrbitDrag(event.localDelta);
+        return;
+      }
+
+      widget.onPanDrag(event.localDelta);
+      return;
+    }
+
+    final previousDragPosition = _lastDragLocalPosition ?? event.localPosition;
+    final dragDelta = event.localPosition - previousDragPosition;
+    if (dragDelta.distance == 0.0) {
+      return;
+    }
+
+    _lastDragLocalPosition = event.localPosition;
+
+    if (isOrbitDrag) {
+      widget.onOrbitDrag(dragDelta);
+      return;
+    }
+
+    widget.onPanDrag(dragDelta);
   }
 
   void _handlePointerUp(PointerUpEvent event) {
@@ -88,7 +132,10 @@ class _ViewportSurfaceState extends State<ViewportSurface> {
         !_tapCanceled && (pressedButtons & kPrimaryMouseButton) != 0;
 
     _pressLocalPosition = null;
+    _lastDragLocalPosition = null;
+    _pressPointerKind = null;
     _pressButtons = 0;
+    _dragGestureStarted = false;
     _tapCanceled = false;
     _lastHoverLocalPosition = null;
 
@@ -101,7 +148,10 @@ class _ViewportSurfaceState extends State<ViewportSurface> {
 
   void _handlePointerCancel(PointerCancelEvent event) {
     _pressLocalPosition = null;
+    _lastDragLocalPosition = null;
+    _pressPointerKind = null;
     _pressButtons = 0;
+    _dragGestureStarted = false;
     _tapCanceled = false;
     _lastHoverLocalPosition = null;
     widget.onInteractionEnd();
@@ -123,7 +173,8 @@ class _ViewportSurfaceState extends State<ViewportSurface> {
 
     final previousHoverPosition = _lastHoverLocalPosition;
     if (previousHoverPosition != null &&
-        (event.localPosition - previousHoverPosition).distance < _hoverSlop) {
+        (event.localPosition - previousHoverPosition).distance <
+            ShellGestureContract.hoverUpdateSlop) {
       return;
     }
 
@@ -159,11 +210,11 @@ class _ViewportSurfaceState extends State<ViewportSurface> {
         return DecoratedBox(
           decoration: BoxDecoration(
             color: Colors.black,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(ShellTokens.surfaceRadius),
             border: Border.all(color: Colors.white24),
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(ShellTokens.surfaceRadius),
             child: Center(
               child: SizedBox(
                 width: viewportSize.width,

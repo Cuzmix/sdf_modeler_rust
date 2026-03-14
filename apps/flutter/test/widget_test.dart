@@ -1,9 +1,13 @@
 import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sdf_modeler_flutter/app.dart';
 import 'package:sdf_modeler_flutter/src/rust/frb_generated.dart';
+import 'package:sdf_modeler_flutter/src/shell/shell_contract.dart';
+import 'package:sdf_modeler_flutter/src/shell/shell_desktop_side_panel.dart';
+import 'package:sdf_modeler_flutter/src/shell/shell_modal_panel.dart';
+import 'package:sdf_modeler_flutter/src/shell/shell_stacked_panes.dart';
 import 'package:sdf_modeler_flutter/src/viewport/viewport_feedback_overlay.dart';
 import 'package:sdf_modeler_flutter/src/viewport/viewport_surface.dart';
 
@@ -205,6 +209,34 @@ void main() {
     disposeTextureCalls = 0;
   }
 
+  Future<void> pumpApp(
+    WidgetTester tester, {
+    Size logicalSize = const Size(900, 900),
+  }) async {
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = logicalSize;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(const SdfModelerApp());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+  }
+
+  Future<void> revealTabletBottomSheetContent(
+    WidgetTester tester,
+    Finder finder,
+  ) async {
+    await tester.scrollUntilVisible(
+      finder,
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
+  }
+
   setUpAll(() {
     RustLib.initMock(api: mockApi);
 
@@ -278,9 +310,7 @@ void main() {
   testWidgets('renders bridge status, scene snapshot, and real viewport host', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const SdfModelerApp());
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 200));
+    await pumpApp(tester);
 
     expect(find.textContaining('Rust ping: pong-test'), findsOneWidget);
     expect(
@@ -288,6 +318,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Adaptive Interaction Resolution'), findsOneWidget);
+    await revealTabletBottomSheetContent(tester, find.text('Scene Tree'));
     expect(find.text('Scene Tree'), findsOneWidget);
     expect(createTextureCalls, 1);
     expect(setTextureSizeCalls, greaterThanOrEqualTo(0));
@@ -322,9 +353,7 @@ void main() {
   testWidgets('adaptive interaction resolution only drops scale when enabled', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const SdfModelerApp());
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 200));
+    await pumpApp(tester);
 
     await tester.tap(find.text('Adaptive Interaction Resolution'));
     await tester.pump();
@@ -343,12 +372,29 @@ void main() {
     await orbitGesture.up();
   });
 
+  testWidgets('shared shell theme keeps command controls touch-sized', (
+    WidgetTester tester,
+  ) async {
+    await pumpApp(tester);
+    await revealTabletBottomSheetContent(
+      tester,
+      find.byKey(const ValueKey('open-command-panel')),
+    );
+
+    final commandButtonSize = tester.getSize(
+      find.byKey(const ValueKey('open-command-panel')),
+    );
+
+    expect(
+      commandButtonSize.height,
+      greaterThanOrEqualTo(ShellTokens.minimumTouchTarget),
+    );
+  });
+
   testWidgets('routes scene tree commands through the Rust facade', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const SdfModelerApp());
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 200));
+    await pumpApp(tester, logicalSize: const Size(1400, 900));
 
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('scene-tree-node-1')),
@@ -379,9 +425,7 @@ void main() {
   testWidgets('routes viewport gestures to native texture commands', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const SdfModelerApp());
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 200));
+    await pumpApp(tester);
 
     final viewportCenter = tester.getCenter(find.byType(ViewportSurface));
     final hoverGesture = await tester.createGesture(
@@ -433,14 +477,44 @@ void main() {
     expect(zoomCalls, 1);
   });
 
+  testWidgets('viewport gesture thresholds separate touch taps from drags', (
+    WidgetTester tester,
+  ) async {
+    await pumpApp(tester);
+
+    final viewportCenter = tester.getCenter(find.byType(ViewportSurface));
+
+    final tapGesture = await tester.startGesture(
+      viewportCenter,
+      kind: PointerDeviceKind.touch,
+    );
+    await tapGesture.moveBy(const Offset(10, 0));
+    await tapGesture.up();
+    await tester.pump();
+
+    expect(pickCalls, 1);
+    expect(orbitCalls, 0);
+
+    final dragGesture = await tester.startGesture(
+      viewportCenter,
+      kind: PointerDeviceKind.touch,
+    );
+    await dragGesture.moveBy(const Offset(20, 0));
+    await tester.pump();
+    await dragGesture.moveBy(const Offset(20, 10));
+    await dragGesture.up();
+    await tester.pump();
+
+    expect(orbitCalls, greaterThan(0));
+    expect(pickCalls, 1);
+  });
+
   testWidgets('routes inspector camera commands through the Rust facade', (
     WidgetTester tester,
   ) async {
     mockApi.currentSnapshot = _MockRustApi._selectedSnapshot;
 
-    await tester.pumpWidget(const SdfModelerApp());
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 200));
+    await pumpApp(tester, logicalSize: const Size(1400, 900));
 
     await tester.scrollUntilVisible(
       find.text('Focus Selected'),
@@ -461,6 +535,42 @@ void main() {
     expect(mockApi.toggleOrthographicCalls, 1);
     expect(find.text('Use Perspective'), findsOneWidget);
     expect(requestFrameCalls, greaterThan(0));
+  });
+
+  testWidgets('tablet shell uses stacked panes and modal command surfaces', (
+    WidgetTester tester,
+  ) async {
+    await pumpApp(tester);
+    await revealTabletBottomSheetContent(
+      tester,
+      find.byKey(const ValueKey('open-command-panel')),
+    );
+
+    expect(find.byType(ShellStackedPaneLayout), findsOneWidget);
+    expect(find.byType(ShellDesktopSidePanel), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('open-command-panel')));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ShellModalPanel), findsOneWidget);
+    expect(find.text('Workspace Commands'), findsOneWidget);
+
+    await tester.tap(find.text('Box'));
+    await tester.pumpAndSettle();
+
+    expect(mockApi.addBoxCalls, 1);
+    expect(find.byType(ShellModalPanel), findsNothing);
+  });
+
+  testWidgets('desktop shell keeps the side panel layout active', (
+    WidgetTester tester,
+  ) async {
+    await pumpApp(tester, logicalSize: const Size(1400, 900));
+
+    expect(find.byType(ShellDesktopSidePanel), findsOneWidget);
+    expect(find.byType(ShellStackedPaneLayout), findsNothing);
+    expect(find.byKey(const ValueKey('open-command-panel')), findsNothing);
+    expect(find.widgetWithText(FilledButton, 'Sphere'), findsOneWidget);
   });
 }
 

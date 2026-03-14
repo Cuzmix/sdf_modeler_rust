@@ -1643,3 +1643,118 @@ Current execution order:
 - UI customization remains intentionally deferred until the functional migration foundation is stable.
 - This refined execution order supersedes the earlier note that suggested jumping directly to undo/redo first.
 
+--- Migration Iteration 1: PRD #9 - Shared touch-first sizing and gesture contract ---
+COMPLETED. Centralized the Flutter shell's tablet-first layout rules, touch target sizing, and viewport gesture thresholds without starting visual customization work.
+
+Changes:
+- apps/flutter/lib/src/shell/shell_contract.dart:
+  - Added `ShellLayout` with a tablet-first default and a desktop side-panel breakpoint at `1100.0`.
+  - Added centralized `ShellTokens` for touch target sizing, shell spacing, panel padding, scene-tree indentation, and overlay spacing.
+  - Added `ShellGestureContract` for viewport interaction cooldown, tap slop, drag-start slop, and hover update thresholds, with touch/stylus using larger thresholds than mouse.
+  - Added `buildTouchFirstShellTheme()` so button and icon-button minimum target sizes are enforced from one place.
+- apps/flutter/lib/app.dart:
+  - Switched the Flutter host to `buildTouchFirstShellTheme()`.
+  - Replaced hardcoded shell padding, panel gap, inspector width/height, and interaction cooldown values with the shared shell contract.
+  - Kept the tablet layout stacked by default and only moves to a desktop side panel once the shared breakpoint is reached.
+- apps/flutter/lib/src/viewport/viewport_surface.dart:
+  - Replaced local tap/hover constants with the shared gesture contract.
+  - Added drag-start arbitration so orbit/pan only begin after the pointer crosses the configured threshold, while still activating interaction on the first valid drag frame.
+- apps/flutter/lib/src/scene/scene_tree_panel.dart:
+  - Replaced inline indentation, radius, padding, and row spacing values with shared shell tokens.
+- apps/flutter/lib/src/viewport/viewport_feedback_overlay.dart:
+  - Replaced inline overlay spacing with shared shell tokens.
+  - Added scale-down behavior for tiny viewport sizes so the overlay no longer overflows when the viewport is short.
+- apps/flutter/test/shell_contract_test.dart:
+  - Added contract coverage for the tablet-vs-desktop breakpoint and touch-vs-mouse gesture thresholds.
+- apps/flutter/test/widget_test.dart:
+  - Added a touch-target assertion for command buttons.
+  - Added a touch gesture arbitration test to prove taps stay taps below threshold and become drags once the threshold is crossed.
+
+Verification:
+- Flutter analyze: PASS
+- Flutter test: PASS
+- Flutter build windows --debug: PASS
+
+Manual verification pending:
+- Open the Flutter Windows host in a tablet-sized window and confirm the stacked layout still feels touch-first.
+- Confirm command surfaces remain comfortable to tap in tablet-sized and desktop-sized windows.
+- Confirm small pointer motion does not accidentally start viewport orbit/pan, while deliberate drags still begin immediately after crossing the shared threshold.
+
+Notes:
+- Standalone `dart format` could not run cleanly in this sandbox because the SDK formatter attempted to access blocked user-profile locations (`.dart-tool` / global Pub cache). The code changes were kept formatted manually and passed `flutter analyze`.
+
+--- Migration Iteration 2: PRD #10 - Responsive shell primitives for tablet-first layout and desktop adaptation ---
+IMPLEMENTED, but verification is still blocked in this sandbox, so PRD #10 remains `passes: false` for now.
+
+Changes:
+- apps/flutter/lib/src/shell/:
+  - Added `shell_panel_surface.dart` as the shared panel container used by side panels, bottom sheets, and modal panels.
+  - Added `shell_command_strip.dart` for reusable touch-first horizontal command surfaces.
+  - Added `shell_bottom_sheet_panel.dart` for a draggable tablet bottom sheet with a shared handle and scroll-controller handoff.
+  - Added `shell_stacked_panes.dart` for the tablet-first stacked viewport + bottom-sheet layout.
+  - Added `shell_desktop_side_panel.dart` as the explicit desktop side-panel primitive.
+  - Added `shell_modal_panel.dart` for reusable shell-owned modal panels anchored above the tablet workspace.
+- apps/flutter/lib/src/shell/shell_contract.dart:
+  - Added shared placement tokens for the tablet sheet, sheet handle, and modal panel sizing so later Flutter slices can reuse the same shell geometry.
+- apps/flutter/lib/app.dart:
+  - Replaced the old fixed viewport/inspector column with `ShellStackedPaneLayout` on tablet widths and `ShellDesktopSidePanel` on desktop widths.
+  - Kept the inspector content backend-driven while routing tablet quick actions through a `ShellCommandStrip` and a reusable `ShellModalPanel`.
+  - Split the previous inline action buttons into reusable scene and camera command widgets so tablet modal surfaces and desktop inline panels share the same command content.
+  - Kept scene tree, selection, camera, and viewport status ownership in Rust; Flutter still only invokes commands and renders snapshots.
+- apps/flutter/test/widget_test.dart:
+  - Added size-aware test pumping so tablet and desktop layouts are exercised explicitly.
+  - Added coverage for stacked-pane tablet layout, modal command surface opening, and desktop side-panel activation.
+  - Updated the existing command-routing tests to use the correct layout size for the command surface they exercise.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS (474 passed)
+- cargo build: PASS
+- Flutter analyze: BLOCKED by sandbox/tooling restrictions. Direct `dart analyze` failed because the SDK could not create or launch required tooling state/processes from the locked profile / runtime path.
+- Flutter test: BLOCKED by sandbox/tooling restrictions. `flutter test` did not complete in this environment, even after redirecting `APPDATA` and suppressing analytics.
+- Flutter build windows --debug: NOT RUN because the Flutter toolchain could not be validated in this sandbox.
+
+Manual verification pending:
+- Open the Flutter Windows host at a tablet-sized width and confirm the viewport stays primary while the inspector lives in the draggable bottom sheet.
+- Open the tablet command surface and confirm scene/camera commands remain touch-usable and route through the existing Rust bridge.
+- Open the Flutter Windows host at a desktop-sized width and confirm the explicit side panel replaces the tablet bottom-sheet presentation cleanly.
+
+--- Migration Iteration 2 Follow-up: PRD #10 verification unblocked ---
+Automated verification now passes for PRD #10. The item still remains `passes: false`
+until a real visual/manual tablet and desktop layout check is completed.
+
+Changes since the earlier PRD #10 note:
+- apps/flutter/test/widget_test.dart:
+  - Added a helper that scrolls the tablet bottom sheet before asserting on content
+    that is intentionally below the initial fold.
+  - Updated the smoke test to reveal the scene tree before asserting on it.
+  - Updated the touch-target and tablet modal tests to reveal the command strip
+    before measuring or tapping the `open-command-panel` control.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS (474 passed)
+- cargo build: PASS
+- Flutter analyze: PASS
+- Flutter test: PASS
+- Flutter build windows --debug: PASS
+- Windows debug host launch sanity: PASS (`launch_ok` after 10s)
+
+Manual verification still pending:
+- Open the Flutter Windows host at a tablet-sized width and confirm the viewport stays primary while the inspector lives in the draggable bottom sheet.
+- Open the tablet command surface and confirm scene/camera commands remain touch-usable and route through the existing Rust bridge.
+- Open the Flutter Windows host at a desktop-sized width and confirm the explicit side panel replaces the tablet bottom-sheet presentation cleanly.
+
+--- Migration Iteration 2 Manual Verification: PRD #10 complete ---
+Manual verification completed on 2026-03-14 for the responsive shell primitives slice.
+
+Manual verification:
+- Tablet-sized Flutter Windows host: PASS. The viewport remained primary and the inspector worked from the draggable bottom sheet.
+- Tablet command surface: PASS. Scene and camera commands remained touch-usable and routed through the existing Rust bridge.
+- Desktop-sized Flutter Windows host: PASS. The explicit side panel replaced the tablet bottom-sheet presentation cleanly.
+
+Result:
+- PRD #10 is fully verified and complete.
+

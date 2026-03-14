@@ -6,11 +6,19 @@ import 'package:flutter/material.dart';
 import 'package:sdf_modeler_flutter/src/rust/api/simple.dart';
 import 'package:sdf_modeler_flutter/src/scene/scene_snapshot.dart';
 import 'package:sdf_modeler_flutter/src/scene/scene_tree_panel.dart';
+import 'package:sdf_modeler_flutter/src/shell/shell_command_strip.dart';
+import 'package:sdf_modeler_flutter/src/shell/shell_contract.dart';
+import 'package:sdf_modeler_flutter/src/shell/shell_desktop_side_panel.dart';
+import 'package:sdf_modeler_flutter/src/shell/shell_modal_panel.dart';
+import 'package:sdf_modeler_flutter/src/shell/shell_panel_surface.dart';
+import 'package:sdf_modeler_flutter/src/shell/shell_stacked_panes.dart';
 import 'package:sdf_modeler_flutter/src/texture/texture_bridge.dart';
 import 'package:sdf_modeler_flutter/src/texture/texture_viewport_event.dart';
 import 'package:sdf_modeler_flutter/src/texture/texture_viewport_feedback.dart';
 import 'package:sdf_modeler_flutter/src/viewport/viewport_feedback_overlay.dart';
 import 'package:sdf_modeler_flutter/src/viewport/viewport_surface.dart';
+
+enum _BridgeModalPanel { commands }
 
 class SdfModelerApp extends StatelessWidget {
   const SdfModelerApp({super.key});
@@ -19,7 +27,7 @@ class SdfModelerApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'SDF Modeler Flutter',
-      theme: ThemeData(colorSchemeSeed: Colors.teal, useMaterial3: true),
+      theme: buildTouchFirstShellTheme(),
       home: const BridgeStatusPage(),
     );
   }
@@ -33,7 +41,6 @@ class BridgeStatusPage extends StatefulWidget {
 }
 
 class _BridgeStatusPageState extends State<BridgeStatusPage> {
-  static const Duration _interactionSharpnessDelay = Duration(milliseconds: 180);
   static const int _defaultFrameWidth = 640;
   static const int _defaultFrameHeight = 360;
   static const int _minimumFrameWidth = 320;
@@ -67,6 +74,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
   String _interactionPhase = 'idle';
   Size _lastLogicalViewportSize = Size.zero;
   double _lastDevicePixelRatio = 1.0;
+  _BridgeModalPanel? _activeModalPanel;
 
   @override
   void initState() {
@@ -245,7 +253,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     }
 
     _interactionCooldownTimer = Timer(
-      _interactionSharpnessDelay,
+      ShellGestureContract.viewportInteractionCooldown,
       _endViewportInteraction,
     );
   }
@@ -437,6 +445,31 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
 
   void _handleViewportInteractionEnd() {}
 
+  void _openCommandPanel() {
+    if (_activeModalPanel == _BridgeModalPanel.commands) {
+      return;
+    }
+
+    setState(() {
+      _activeModalPanel = _BridgeModalPanel.commands;
+    });
+  }
+
+  void _closeCommandPanel() {
+    if (_activeModalPanel == null) {
+      return;
+    }
+
+    setState(() {
+      _activeModalPanel = null;
+    });
+  }
+
+  void _runModalSceneCommand(String Function() command) {
+    _closeCommandPanel();
+    unawaited(_runSceneCommand(command));
+  }
+
   double _normalizeViewportCoordinate(
     double logicalCoordinate,
     double logicalExtent,
@@ -580,10 +613,12 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('SDF Modeler Flutter Host')),
       body: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(
+          ShellLayout.forWidth(MediaQuery.sizeOf(context).width).screenPadding,
+        ),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final useSidePanel = constraints.maxWidth >= 900;
+            final shellLayout = ShellLayout.forWidth(constraints.maxWidth);
             final viewportCard = ViewportSurface(
               textureId: activeTextureId,
               onViewportSizeChanged: _handleViewportSizeChanged,
@@ -602,62 +637,141 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                 droppedFrameCount: _droppedFrameCount,
               ),
             );
-            final inspectorPanel = _InspectorPanel(
-              snapshot: snapshot,
-              viewportFeedback: _viewportFeedback,
-              statusLine: _statusLine,
-              versionLine: _versionLine,
-              previewLine: _previewLine,
-              commandInFlight: _commandInFlight,
-              adaptiveInteractionResolutionEnabled:
-                  _adaptiveInteractionResolutionEnabled,
-              onToggleAdaptiveInteractionResolution:
-                  _toggleAdaptiveInteractionResolution,
-              onRefresh: _refreshBridgeStatus,
-              onAddSphere: () => _runSceneCommand(addSphere),
-              onAddBox: () => _runSceneCommand(addBox),
-              onAddCylinder: () => _runSceneCommand(addCylinder),
-              onAddTorus: () => _runSceneCommand(addTorus),
-              onDeleteSelected: () => _runSceneCommand(deleteSelected),
-              onSelectSceneNode: (nodeId) => _runSceneCommand(
-                () => selectNode(nodeId: BigInt.from(nodeId)),
-              ),
-              onToggleSceneNodeVisibility: (nodeId) => _runSceneCommand(
-                () => toggleNodeVisibility(nodeId: BigInt.from(nodeId)),
-              ),
-              onToggleSceneNodeLock: (nodeId) => _runSceneCommand(
-                () => toggleNodeLock(nodeId: BigInt.from(nodeId)),
-              ),
-              onFrameAll: () => _runSceneCommand(frameAll),
-              onResetScene: () => _runSceneCommand(resetScene),
-              onFocusSelected: () => _runSceneCommand(focusSelected),
-              onCameraFront: () => _runSceneCommand(cameraFront),
-              onCameraTop: () => _runSceneCommand(cameraTop),
-              onCameraRight: () => _runSceneCommand(cameraRight),
-              onCameraBack: () => _runSceneCommand(cameraBack),
-              onCameraLeft: () => _runSceneCommand(cameraLeft),
-              onCameraBottom: () => _runSceneCommand(cameraBottom),
-              onToggleProjection: () => _runSceneCommand(toggleOrthographic),
-            );
 
-            if (useSidePanel) {
+            if (shellLayout.useSidePanel) {
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Expanded(flex: 3, child: viewportCard),
-                  const SizedBox(width: 16),
-                  SizedBox(width: 320, child: inspectorPanel),
+                  SizedBox(width: shellLayout.panelGap),
+                  ShellDesktopSidePanel(
+                    width: shellLayout.inspectorPanelExtent,
+                    child: _InspectorPanel(
+                      shellLayout: shellLayout,
+                      snapshot: snapshot,
+                      viewportFeedback: _viewportFeedback,
+                      statusLine: _statusLine,
+                      versionLine: _versionLine,
+                      previewLine: _previewLine,
+                      commandInFlight: _commandInFlight,
+                      adaptiveInteractionResolutionEnabled:
+                          _adaptiveInteractionResolutionEnabled,
+                      onToggleAdaptiveInteractionResolution:
+                          _toggleAdaptiveInteractionResolution,
+                      onRefresh: _refreshBridgeStatus,
+                      onAddSphere: () => _runSceneCommand(addSphere),
+                      onAddBox: () => _runSceneCommand(addBox),
+                      onAddCylinder: () => _runSceneCommand(addCylinder),
+                      onAddTorus: () => _runSceneCommand(addTorus),
+                      onDeleteSelected: () => _runSceneCommand(deleteSelected),
+                      onSelectSceneNode: (nodeId) => _runSceneCommand(
+                        () => selectNode(nodeId: BigInt.from(nodeId)),
+                      ),
+                      onToggleSceneNodeVisibility: (nodeId) => _runSceneCommand(
+                        () => toggleNodeVisibility(nodeId: BigInt.from(nodeId)),
+                      ),
+                      onToggleSceneNodeLock: (nodeId) => _runSceneCommand(
+                        () => toggleNodeLock(nodeId: BigInt.from(nodeId)),
+                      ),
+                      onFrameAll: () => _runSceneCommand(frameAll),
+                      onResetScene: () => _runSceneCommand(resetScene),
+                      onFocusSelected: () => _runSceneCommand(focusSelected),
+                      onCameraFront: () => _runSceneCommand(cameraFront),
+                      onCameraTop: () => _runSceneCommand(cameraTop),
+                      onCameraRight: () => _runSceneCommand(cameraRight),
+                      onCameraBack: () => _runSceneCommand(cameraBack),
+                      onCameraLeft: () => _runSceneCommand(cameraLeft),
+                      onCameraBottom: () => _runSceneCommand(cameraBottom),
+                      onToggleProjection: () =>
+                          _runSceneCommand(toggleOrthographic),
+                    ),
+                  ),
                 ],
               );
             }
 
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(child: viewportCard),
-                const SizedBox(height: 16),
-                SizedBox(height: 360, child: inspectorPanel),
-              ],
+            return ShellStackedPaneLayout(
+              viewport: viewportCard,
+              modalPanel: _activeModalPanel == _BridgeModalPanel.commands
+                  ? ShellModalPanel(
+                      title: 'Workspace Commands',
+                      onDismiss: _closeCommandPanel,
+                      child: _CommandSheetContent(
+                        commandInFlight: _commandInFlight,
+                        viewportFeedback: _viewportFeedback,
+                        snapshot: snapshot,
+                        onAddSphere: () => _runModalSceneCommand(addSphere),
+                        onAddBox: () => _runModalSceneCommand(addBox),
+                        onAddCylinder: () =>
+                            _runModalSceneCommand(addCylinder),
+                        onAddTorus: () => _runModalSceneCommand(addTorus),
+                        onDeleteSelected: () =>
+                            _runModalSceneCommand(deleteSelected),
+                        onFrameAll: () => _runModalSceneCommand(frameAll),
+                        onResetScene: () => _runModalSceneCommand(resetScene),
+                        onFocusSelected: () =>
+                            _runModalSceneCommand(focusSelected),
+                        onCameraFront: () =>
+                            _runModalSceneCommand(cameraFront),
+                        onCameraTop: () => _runModalSceneCommand(cameraTop),
+                        onCameraRight: () =>
+                            _runModalSceneCommand(cameraRight),
+                        onCameraBack: () => _runModalSceneCommand(cameraBack),
+                        onCameraLeft: () => _runModalSceneCommand(cameraLeft),
+                        onCameraBottom: () =>
+                            _runModalSceneCommand(cameraBottom),
+                        onToggleProjection: () =>
+                            _runModalSceneCommand(toggleOrthographic),
+                        onRefresh: () {
+                          _closeCommandPanel();
+                          _refreshBridgeStatus();
+                        },
+                      ),
+                    )
+                  : null,
+              bottomSheetBuilder: (context, scrollController) {
+                return _InspectorPanel(
+                  shellLayout: shellLayout,
+                  scrollController: scrollController,
+                  snapshot: snapshot,
+                  viewportFeedback: _viewportFeedback,
+                  statusLine: _statusLine,
+                  versionLine: _versionLine,
+                  previewLine: _previewLine,
+                  commandInFlight: _commandInFlight,
+                  adaptiveInteractionResolutionEnabled:
+                      _adaptiveInteractionResolutionEnabled,
+                  onToggleAdaptiveInteractionResolution:
+                      _toggleAdaptiveInteractionResolution,
+                  onRefresh: _refreshBridgeStatus,
+                  onAddSphere: () => _runSceneCommand(addSphere),
+                  onAddBox: () => _runSceneCommand(addBox),
+                  onAddCylinder: () => _runSceneCommand(addCylinder),
+                  onAddTorus: () => _runSceneCommand(addTorus),
+                  onDeleteSelected: () => _runSceneCommand(deleteSelected),
+                  onSelectSceneNode: (nodeId) => _runSceneCommand(
+                    () => selectNode(nodeId: BigInt.from(nodeId)),
+                  ),
+                  onToggleSceneNodeVisibility: (nodeId) => _runSceneCommand(
+                    () => toggleNodeVisibility(nodeId: BigInt.from(nodeId)),
+                  ),
+                  onToggleSceneNodeLock: (nodeId) => _runSceneCommand(
+                    () => toggleNodeLock(nodeId: BigInt.from(nodeId)),
+                  ),
+                  onFrameAll: () => _runSceneCommand(frameAll),
+                  onResetScene: () => _runSceneCommand(resetScene),
+                  onFocusSelected: () => _runSceneCommand(focusSelected),
+                  onCameraFront: () => _runSceneCommand(cameraFront),
+                  onCameraTop: () => _runSceneCommand(cameraTop),
+                  onCameraRight: () => _runSceneCommand(cameraRight),
+                  onCameraBack: () => _runSceneCommand(cameraBack),
+                  onCameraLeft: () => _runSceneCommand(cameraLeft),
+                  onCameraBottom: () => _runSceneCommand(cameraBottom),
+                  onToggleProjection: () =>
+                      _runSceneCommand(toggleOrthographic),
+                  onOpenCommandPanel: _openCommandPanel,
+                );
+              },
             );
           },
         ),
@@ -668,6 +782,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
 
 class _InspectorPanel extends StatelessWidget {
   const _InspectorPanel({
+    required this.shellLayout,
     required this.snapshot,
     required this.viewportFeedback,
     required this.statusLine,
@@ -695,8 +810,12 @@ class _InspectorPanel extends StatelessWidget {
     required this.onCameraLeft,
     required this.onCameraBottom,
     required this.onToggleProjection,
+    this.scrollController,
+    this.onOpenCommandPanel,
   });
 
+  final ShellLayout shellLayout;
+  final ScrollController? scrollController;
   final AppSceneSnapshot? snapshot;
   final TextureViewportFeedback? viewportFeedback;
   final String statusLine;
@@ -724,6 +843,7 @@ class _InspectorPanel extends StatelessWidget {
   final VoidCallback onCameraLeft;
   final VoidCallback onCameraBottom;
   final VoidCallback onToggleProjection;
+  final VoidCallback? onOpenCommandPanel;
 
   @override
   Widget build(BuildContext context) {
@@ -738,149 +858,145 @@ class _InspectorPanel extends StatelessWidget {
     final projectionButtonLabel = currentCamera?.orthographic ?? false
         ? 'Use Perspective'
         : 'Use Ortho';
+    final showInlineCommandSections = shellLayout.useSidePanel;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: ListView(
-          children: [
-            Text(statusLine),
-            if (versionLine.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(versionLine),
-            ],
-            const SizedBox(height: 4),
-            Text(previewLine),
-            const SizedBox(height: 16),
-            SwitchListTile.adaptive(
-              contentPadding: EdgeInsets.zero,
-              value: adaptiveInteractionResolutionEnabled,
-              onChanged: onToggleAdaptiveInteractionResolution,
-              title: const Text('Adaptive Interaction Resolution'),
-              subtitle: const Text(
-                'Lower the viewport render scale while navigating.',
-              ),
+    return ShellPanelSurface(
+      child: ListView(
+        controller: scrollController,
+        children: [
+          Text(statusLine),
+          if (versionLine.isNotEmpty) ...[
+            const SizedBox(height: ShellTokens.compactGap),
+            Text(versionLine),
+          ],
+          const SizedBox(height: ShellTokens.compactGap),
+          Text(previewLine),
+          const SizedBox(height: ShellTokens.sectionGap),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            value: adaptiveInteractionResolutionEnabled,
+            onChanged: onToggleAdaptiveInteractionResolution,
+            title: const Text('Adaptive Interaction Resolution'),
+            subtitle: const Text(
+              'Lower the viewport render scale while navigating.',
             ),
-            const SizedBox(height: 16),
+          ),
+          if (!showInlineCommandSections) ...[
+            const SizedBox(height: ShellTokens.sectionGap),
             Text(
-              'Scene Tree',
+              'Workspace',
               style: Theme.of(context).textTheme.titleMedium,
             ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
+            const SizedBox(height: ShellTokens.controlGap),
+            ShellCommandStrip(
               children: [
-                FilledButton(
-                  onPressed: sceneCommandsEnabled ? onAddSphere : null,
-                  child: const Text('Sphere'),
-                ),
-                OutlinedButton(
-                  onPressed: sceneCommandsEnabled ? onAddBox : null,
-                  child: const Text('Box'),
-                ),
-                OutlinedButton(
-                  onPressed: sceneCommandsEnabled ? onAddCylinder : null,
-                  child: const Text('Cylinder'),
-                ),
-                OutlinedButton(
-                  onPressed: sceneCommandsEnabled ? onAddTorus : null,
-                  child: const Text('Torus'),
-                ),
-                OutlinedButton(
-                  onPressed: deleteSelectedEnabled ? onDeleteSelected : null,
-                  child: const Text('Delete Selected'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (snapshot == null)
-              const Text('Scene snapshot is still loading.')
-            else
-              SceneTreePanel(
-                roots: snapshot!.sceneTreeRoots,
-                selectedNodeId: selectedNodeId,
-                enabled: !commandInFlight,
-                onSelectNode: onSelectSceneNode,
-                onToggleNodeVisibility: onToggleSceneNodeVisibility,
-                onToggleNodeLock: onToggleSceneNodeLock,
-              ),
-            const SizedBox(height: 16),
-            Text(
-              'Camera',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                FilledButton(
-                  onPressed: focusSelectedEnabled ? onFocusSelected : null,
-                  child: const Text('Focus Selected'),
+                FilledButton.icon(
+                  key: const ValueKey('open-command-panel'),
+                  onPressed: onOpenCommandPanel,
+                  icon: const Icon(Icons.dashboard_customize_outlined),
+                  label: const Text('Commands'),
                 ),
                 OutlinedButton(
                   onPressed: sceneCommandsEnabled ? onFrameAll : null,
                   child: const Text('Frame All'),
                 ),
                 OutlinedButton(
+                  onPressed: focusSelectedEnabled ? onFocusSelected : null,
+                  child: const Text('Focus Selected'),
+                ),
+                OutlinedButton(
                   onPressed: cameraControlsEnabled ? onToggleProjection : null,
                   child: Text(projectionButtonLabel),
                 ),
-                OutlinedButton(
-                  onPressed: cameraControlsEnabled ? onCameraFront : null,
-                  child: const Text('Front'),
-                ),
-                OutlinedButton(
-                  onPressed: cameraControlsEnabled ? onCameraTop : null,
-                  child: const Text('Top'),
-                ),
-                OutlinedButton(
-                  onPressed: cameraControlsEnabled ? onCameraRight : null,
-                  child: const Text('Right'),
-                ),
-                OutlinedButton(
-                  onPressed: cameraControlsEnabled ? onCameraBack : null,
-                  child: const Text('Back'),
-                ),
-                OutlinedButton(
-                  onPressed: cameraControlsEnabled ? onCameraLeft : null,
-                  child: const Text('Left'),
-                ),
-                OutlinedButton(
-                  onPressed: cameraControlsEnabled ? onCameraBottom : null,
-                  child: const Text('Bottom'),
-                ),
               ],
             ),
-            const SizedBox(height: 16),
-            Text(
-              'Viewport Status',
-              style: Theme.of(context).textTheme.titleMedium,
+          ],
+          const SizedBox(height: ShellTokens.sectionGap),
+          Text(
+            'Scene Tree',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          if (showInlineCommandSections) ...[
+            const SizedBox(height: ShellTokens.controlGap),
+            _SceneCommandButtons(
+              sceneCommandsEnabled: sceneCommandsEnabled,
+              deleteSelectedEnabled: deleteSelectedEnabled,
+              onAddSphere: onAddSphere,
+              onAddBox: onAddBox,
+              onAddCylinder: onAddCylinder,
+              onAddTorus: onAddTorus,
+              onDeleteSelected: onDeleteSelected,
             ),
-            const SizedBox(height: 8),
-            if (snapshot == null)
-              const Text('Scene snapshot is still loading.')
-            else ...[
-              Text('Selected: ${selectedNode?.name ?? 'None'}'),
-              Text('Hovered: ${hoveredNode?.name ?? 'None'}'),
+          ],
+          const SizedBox(height: ShellTokens.controlGap),
+          if (snapshot == null)
+            const Text('Scene snapshot is still loading.')
+          else
+            SceneTreePanel(
+              roots: snapshot!.sceneTreeRoots,
+              selectedNodeId: selectedNodeId,
+              enabled: !commandInFlight,
+              onSelectNode: onSelectSceneNode,
+              onToggleNodeVisibility: onToggleSceneNodeVisibility,
+              onToggleNodeLock: onToggleSceneNodeLock,
+            ),
+          const SizedBox(height: ShellTokens.sectionGap),
+          Text(
+            'Camera',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          if (showInlineCommandSections) ...[
+            const SizedBox(height: ShellTokens.controlGap),
+            _CameraCommandButtons(
+              cameraControlsEnabled: cameraControlsEnabled,
+              focusSelectedEnabled: focusSelectedEnabled,
+              projectionButtonLabel: projectionButtonLabel,
+              onFocusSelected: onFocusSelected,
+              onFrameAll: onFrameAll,
+              onToggleProjection: onToggleProjection,
+              onCameraFront: onCameraFront,
+              onCameraTop: onCameraTop,
+              onCameraRight: onCameraRight,
+              onCameraBack: onCameraBack,
+              onCameraLeft: onCameraLeft,
+              onCameraBottom: onCameraBottom,
+            ),
+          ] else ...[
+            const SizedBox(height: ShellTokens.controlGap),
+            Text(
+              'Primary camera commands stay in the command strip and modal panel so the tablet shell keeps the scene tree reachable.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+          const SizedBox(height: ShellTokens.sectionGap),
+          Text(
+            'Viewport Status',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: ShellTokens.controlGap),
+          if (snapshot == null)
+            const Text('Scene snapshot is still loading.')
+          else ...[
+            Text('Selected: ${selectedNode?.name ?? 'None'}'),
+            Text('Hovered: ${hoveredNode?.name ?? 'None'}'),
+            Text(
+              'Tool: ${snapshot!.tool.activeToolLabel} - ${snapshot!.tool.shadingModeLabel}',
+            ),
+            if (currentCamera != null)
               Text(
-                'Tool: ${snapshot!.tool.activeToolLabel} - ${snapshot!.tool.shadingModeLabel}',
+                'Camera distance: ${currentCamera.distance.toStringAsFixed(2)} - ${currentCamera.orthographic ? 'Ortho' : 'Perspective'}',
               ),
-              if (currentCamera != null)
-                Text(
-                  'Camera distance: ${currentCamera.distance.toStringAsFixed(2)} - ${currentCamera.orthographic ? 'Ortho' : 'Perspective'}',
-                ),
-              Text(
-                'Scene nodes: ${snapshot!.stats.totalNodes} total - ${snapshot!.stats.visibleNodes} visible - ${snapshot!.stats.topLevelNodes} roots',
-              ),
-              Text(
-                'SDF complexity: ${snapshot!.stats.sdfEvalComplexity} - Voxel memory: ${snapshot!.stats.voxelMemoryBytes} bytes',
-              ),
-              const SizedBox(height: 12),
+            Text(
+              'Scene nodes: ${snapshot!.stats.totalNodes} total - ${snapshot!.stats.visibleNodes} visible - ${snapshot!.stats.topLevelNodes} roots',
+            ),
+            Text(
+              'SDF complexity: ${snapshot!.stats.sdfEvalComplexity} - Voxel memory: ${snapshot!.stats.voxelMemoryBytes} bytes',
+            ),
+            const SizedBox(height: ShellTokens.controlGap),
+            if (showInlineCommandSections)
               Wrap(
-                spacing: 8,
-                runSpacing: 8,
+                spacing: ShellTokens.controlGap,
+                runSpacing: ShellTokens.controlGap,
                 children: [
                   OutlinedButton(
                     onPressed: sceneCommandsEnabled ? onResetScene : null,
@@ -892,10 +1008,252 @@ class _InspectorPanel extends StatelessWidget {
                   ),
                 ],
               ),
-            ],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SceneCommandButtons extends StatelessWidget {
+  const _SceneCommandButtons({
+    required this.sceneCommandsEnabled,
+    required this.deleteSelectedEnabled,
+    required this.onAddSphere,
+    required this.onAddBox,
+    required this.onAddCylinder,
+    required this.onAddTorus,
+    required this.onDeleteSelected,
+  });
+
+  final bool sceneCommandsEnabled;
+  final bool deleteSelectedEnabled;
+  final VoidCallback onAddSphere;
+  final VoidCallback onAddBox;
+  final VoidCallback onAddCylinder;
+  final VoidCallback onAddTorus;
+  final VoidCallback onDeleteSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: ShellTokens.controlGap,
+      runSpacing: ShellTokens.controlGap,
+      children: [
+        FilledButton(
+          onPressed: sceneCommandsEnabled ? onAddSphere : null,
+          child: const Text('Sphere'),
+        ),
+        OutlinedButton(
+          onPressed: sceneCommandsEnabled ? onAddBox : null,
+          child: const Text('Box'),
+        ),
+        OutlinedButton(
+          onPressed: sceneCommandsEnabled ? onAddCylinder : null,
+          child: const Text('Cylinder'),
+        ),
+        OutlinedButton(
+          onPressed: sceneCommandsEnabled ? onAddTorus : null,
+          child: const Text('Torus'),
+        ),
+        OutlinedButton(
+          onPressed: deleteSelectedEnabled ? onDeleteSelected : null,
+          child: const Text('Delete Selected'),
+        ),
+      ],
+    );
+  }
+}
+
+class _CameraCommandButtons extends StatelessWidget {
+  const _CameraCommandButtons({
+    required this.cameraControlsEnabled,
+    required this.focusSelectedEnabled,
+    required this.projectionButtonLabel,
+    required this.onFocusSelected,
+    required this.onFrameAll,
+    required this.onToggleProjection,
+    required this.onCameraFront,
+    required this.onCameraTop,
+    required this.onCameraRight,
+    required this.onCameraBack,
+    required this.onCameraLeft,
+    required this.onCameraBottom,
+  });
+
+  final bool cameraControlsEnabled;
+  final bool focusSelectedEnabled;
+  final String projectionButtonLabel;
+  final VoidCallback onFocusSelected;
+  final VoidCallback onFrameAll;
+  final VoidCallback onToggleProjection;
+  final VoidCallback onCameraFront;
+  final VoidCallback onCameraTop;
+  final VoidCallback onCameraRight;
+  final VoidCallback onCameraBack;
+  final VoidCallback onCameraLeft;
+  final VoidCallback onCameraBottom;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: ShellTokens.controlGap,
+      runSpacing: ShellTokens.controlGap,
+      children: [
+        FilledButton(
+          onPressed: focusSelectedEnabled ? onFocusSelected : null,
+          child: const Text('Focus Selected'),
+        ),
+        OutlinedButton(
+          onPressed: cameraControlsEnabled ? onFrameAll : null,
+          child: const Text('Frame All'),
+        ),
+        OutlinedButton(
+          onPressed: cameraControlsEnabled ? onToggleProjection : null,
+          child: Text(projectionButtonLabel),
+        ),
+        OutlinedButton(
+          onPressed: cameraControlsEnabled ? onCameraFront : null,
+          child: const Text('Front'),
+        ),
+        OutlinedButton(
+          onPressed: cameraControlsEnabled ? onCameraTop : null,
+          child: const Text('Top'),
+        ),
+        OutlinedButton(
+          onPressed: cameraControlsEnabled ? onCameraRight : null,
+          child: const Text('Right'),
+        ),
+        OutlinedButton(
+          onPressed: cameraControlsEnabled ? onCameraBack : null,
+          child: const Text('Back'),
+        ),
+        OutlinedButton(
+          onPressed: cameraControlsEnabled ? onCameraLeft : null,
+          child: const Text('Left'),
+        ),
+        OutlinedButton(
+          onPressed: cameraControlsEnabled ? onCameraBottom : null,
+          child: const Text('Bottom'),
+        ),
+      ],
+    );
+  }
+}
+
+class _CommandSheetContent extends StatelessWidget {
+  const _CommandSheetContent({
+    required this.commandInFlight,
+    required this.viewportFeedback,
+    required this.snapshot,
+    required this.onAddSphere,
+    required this.onAddBox,
+    required this.onAddCylinder,
+    required this.onAddTorus,
+    required this.onDeleteSelected,
+    required this.onFrameAll,
+    required this.onResetScene,
+    required this.onFocusSelected,
+    required this.onCameraFront,
+    required this.onCameraTop,
+    required this.onCameraRight,
+    required this.onCameraBack,
+    required this.onCameraLeft,
+    required this.onCameraBottom,
+    required this.onToggleProjection,
+    required this.onRefresh,
+  });
+
+  final bool commandInFlight;
+  final TextureViewportFeedback? viewportFeedback;
+  final AppSceneSnapshot? snapshot;
+  final VoidCallback onAddSphere;
+  final VoidCallback onAddBox;
+  final VoidCallback onAddCylinder;
+  final VoidCallback onAddTorus;
+  final VoidCallback onDeleteSelected;
+  final VoidCallback onFrameAll;
+  final VoidCallback onResetScene;
+  final VoidCallback onFocusSelected;
+  final VoidCallback onCameraFront;
+  final VoidCallback onCameraTop;
+  final VoidCallback onCameraRight;
+  final VoidCallback onCameraBack;
+  final VoidCallback onCameraLeft;
+  final VoidCallback onCameraBottom;
+  final VoidCallback onToggleProjection;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final currentCamera = viewportFeedback?.camera ?? snapshot?.camera;
+    final selectedNode = viewportFeedback?.selectedNode ?? snapshot?.selectedNode;
+    final sceneCommandsEnabled = !commandInFlight;
+    final deleteSelectedEnabled = !commandInFlight && selectedNode != null;
+    final cameraControlsEnabled = !commandInFlight && currentCamera != null;
+    final focusSelectedEnabled = !commandInFlight && selectedNode != null;
+    final projectionButtonLabel = currentCamera?.orthographic ?? false
+        ? 'Use Perspective'
+        : 'Use Ortho';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Scene Commands',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: ShellTokens.controlGap),
+        _SceneCommandButtons(
+          sceneCommandsEnabled: sceneCommandsEnabled,
+          deleteSelectedEnabled: deleteSelectedEnabled,
+          onAddSphere: onAddSphere,
+          onAddBox: onAddBox,
+          onAddCylinder: onAddCylinder,
+          onAddTorus: onAddTorus,
+          onDeleteSelected: onDeleteSelected,
+        ),
+        const SizedBox(height: ShellTokens.sectionGap),
+        Text(
+          'Camera Commands',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: ShellTokens.controlGap),
+        _CameraCommandButtons(
+          cameraControlsEnabled: cameraControlsEnabled,
+          focusSelectedEnabled: focusSelectedEnabled,
+          projectionButtonLabel: projectionButtonLabel,
+          onFocusSelected: onFocusSelected,
+          onFrameAll: onFrameAll,
+          onToggleProjection: onToggleProjection,
+          onCameraFront: onCameraFront,
+          onCameraTop: onCameraTop,
+          onCameraRight: onCameraRight,
+          onCameraBack: onCameraBack,
+          onCameraLeft: onCameraLeft,
+          onCameraBottom: onCameraBottom,
+        ),
+        const SizedBox(height: ShellTokens.sectionGap),
+        Text(
+          'Session',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: ShellTokens.controlGap),
+        Wrap(
+          spacing: ShellTokens.controlGap,
+          runSpacing: ShellTokens.controlGap,
+          children: [
+            OutlinedButton(
+              onPressed: sceneCommandsEnabled ? onResetScene : null,
+              child: const Text('Reset Scene'),
+            ),
+            TextButton(
+              onPressed: onRefresh,
+              child: const Text('Re-run Ping'),
+            ),
           ],
         ),
-      ),
+      ],
     );
   }
 }

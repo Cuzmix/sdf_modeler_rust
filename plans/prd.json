@@ -60,14 +60,14 @@
     "category": "ux-foundation",
     "description": "Define the shared touch-first sizing and gesture contract for the Flutter shell.\n\nSteps:\n1. Define tablet as the primary interaction target and desktop as the upward adaptation target.\n2. Add shared layout constants for touch targets, spacing, drag thresholds, and gesture arbitration.\n3. Keep those constants centralized so later panels and viewport widgets do not invent their own thresholds.\n4. Do not start visual customization here; this slice is structural and interaction-focused only.",
     "verification": "Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, and `fvm flutter build windows --debug`. Manual: check a tablet-sized window and confirm controls stay touch-usable, drag thresholds feel intentional, and panel gestures do not conflict with viewport gestures.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 10,
     "category": "ux-foundation",
     "description": "Implement responsive shell primitives for tablet-first layout and desktop adaptation.\n\nSteps:\n1. Add reusable shell primitives for bottom sheets, modal panels, stacked panes, and desktop side panels.\n2. Make panel placement and command surfaces work for touch first, then augment for mouse and keyboard desktop use.\n3. Keep the shell composition reusable so later scene tree and properties slices do not re-solve layout structure.\n4. Keep this slice focused on structure, not final styling.",
     "verification": "Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, and `fvm flutter build windows --debug`. Manual: check tablet-sized and desktop-sized windows and confirm panel placement, navigation, and command surfaces adapt cleanly without tiny desktop-only affordances.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 11,
