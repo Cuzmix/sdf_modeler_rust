@@ -4,7 +4,10 @@ use glam::Vec3;
 
 use crate::gpu::camera::Camera;
 use crate::graph::history::History;
-use crate::graph::scene::{CsgOp, ModifierKind, NodeData, NodeId, Scene, SceneNode, SdfPrimitive};
+use crate::graph::scene::{
+    CsgOp, LightType, ModifierKind, NodeData, NodeId, Scene, SceneNode, SdfPrimitive,
+};
+use crate::graph::voxel::create_displacement_grid_for_subtree;
 use crate::settings::RenderConfig;
 
 use super::dto::{
@@ -30,6 +33,8 @@ pub struct AppBridge {
     renderer: HeadlessViewportRenderer,
     last_viewport_time_seconds: Option<f32>,
 }
+
+const DEFAULT_SCULPT_ENTRY_RESOLUTION: u32 = 64;
 
 impl Default for AppBridge {
     fn default() -> Self {
@@ -355,6 +360,61 @@ impl AppBridge {
         })
     }
 
+    pub fn create_light(&mut self, light_type: LightType) -> u64 {
+        self.run_document_command(|bridge| {
+            let (_light_id, transform_id) = bridge.scene.create_light(light_type);
+            bridge.selected_node = Some(transform_id);
+            bridge.hovered_node = Some(transform_id);
+            transform_id
+        })
+    }
+
+    pub fn create_sculpt(&mut self) -> Option<u64> {
+        let selected_node = self.selected_node?;
+
+        if self
+            .scene
+            .nodes
+            .get(&selected_node)
+            .is_some_and(|node| matches!(node.data, NodeData::Sculpt { .. }))
+        {
+            self.hovered_node = Some(selected_node);
+            return Some(selected_node);
+        }
+
+        let parent_map = self.scene.build_parent_map();
+        if let Some(sculpt_id) = self.scene.find_sculpt_parent(selected_node, &parent_map) {
+            self.selected_node = Some(sculpt_id);
+            self.hovered_node = Some(sculpt_id);
+            return Some(sculpt_id);
+        }
+
+        self.run_document_command(|bridge| {
+            let selected_node = bridge.selected_node?;
+            let (grid, center) = create_displacement_grid_for_subtree(
+                &bridge.scene,
+                selected_node,
+                DEFAULT_SCULPT_ENTRY_RESOLUTION,
+            );
+            let color = bridge
+                .scene
+                .nodes
+                .get(&selected_node)
+                .map(|node| match &node.data {
+                    NodeData::Primitive { color, .. } => *color,
+                    _ => Vec3::new(0.8, 0.8, 0.8),
+                })
+                .unwrap_or(Vec3::new(0.8, 0.8, 0.8));
+            let sculpt_id =
+                bridge
+                    .scene
+                    .insert_sculpt_above(selected_node, center, Vec3::ZERO, color, grid);
+            bridge.selected_node = Some(sculpt_id);
+            bridge.hovered_node = Some(sculpt_id);
+            Some(sculpt_id)
+        })
+    }
+
     pub fn toggle_node_visibility(&mut self, node_id: u64) {
         self.run_document_command(|bridge| {
             if bridge.scene.nodes.contains_key(&node_id) {
@@ -571,8 +631,8 @@ fn app_vec3(value: Vec3) -> AppVec3 {
 
 #[cfg(test)]
 mod tests {
-    use super::AppBridge;
-    use crate::graph::scene::{CsgOp, ModifierKind, NodeData, SdfPrimitive};
+    use super::{AppBridge, DEFAULT_SCULPT_ENTRY_RESOLUTION};
+    use crate::graph::scene::{CsgOp, LightType, ModifierKind, NodeData, SdfPrimitive};
 
     #[test]
     fn scene_snapshot_includes_recursive_scene_tree() {
@@ -836,6 +896,104 @@ mod tests {
             }
             _ => panic!("expected operation"),
         }
+    }
+
+    #[test]
+    fn create_light_selects_transform_wrapper() {
+        let mut bridge = AppBridge::new();
+
+        let transform_id = bridge.create_light(LightType::Point);
+
+        assert_eq!(bridge.selected_node, Some(transform_id));
+        assert_eq!(bridge.hovered_node, Some(transform_id));
+        assert!(bridge.scene_snapshot().history.can_undo);
+        match &bridge.scene.nodes[&transform_id].data {
+            NodeData::Transform { input, .. } => {
+                let light_id = input.expect("light child");
+                match &bridge.scene.nodes[&light_id].data {
+                    NodeData::Light { light_type, .. } => {
+                        assert_eq!(*light_type, LightType::Point);
+                    }
+                    _ => panic!("expected light child"),
+                }
+            }
+            _ => panic!("expected transform"),
+        }
+    }
+
+    #[test]
+    fn create_sculpt_wraps_selected_node_with_default_resolution() {
+        let mut bridge = AppBridge::new();
+        let sphere_id = bridge
+            .scene
+            .top_level_nodes()
+            .into_iter()
+            .find(|node_id| {
+                matches!(
+                    bridge.scene.nodes[node_id].data,
+                    NodeData::Primitive {
+                        kind: SdfPrimitive::Sphere,
+                        ..
+                    }
+                )
+            })
+            .expect("default sphere");
+        bridge.select_node(Some(sphere_id));
+
+        let sculpt_id = bridge.create_sculpt().expect("sculpt id");
+
+        assert_eq!(bridge.selected_node, Some(sculpt_id));
+        assert_eq!(bridge.hovered_node, Some(sculpt_id));
+        assert!(bridge.scene_snapshot().history.can_undo);
+        match &bridge.scene.nodes[&sculpt_id].data {
+            NodeData::Sculpt {
+                input,
+                voxel_grid,
+                desired_resolution,
+                ..
+            } => {
+                assert_eq!(*input, Some(sphere_id));
+                assert_eq!(voxel_grid.resolution, DEFAULT_SCULPT_ENTRY_RESOLUTION);
+                assert_eq!(*desired_resolution, DEFAULT_SCULPT_ENTRY_RESOLUTION);
+            }
+            _ => panic!("expected sculpt"),
+        }
+    }
+
+    #[test]
+    fn create_sculpt_reuses_existing_sculpt_parent() {
+        let mut bridge = AppBridge::new();
+        let sphere_id = bridge
+            .scene
+            .top_level_nodes()
+            .into_iter()
+            .find(|node_id| {
+                matches!(
+                    bridge.scene.nodes[node_id].data,
+                    NodeData::Primitive {
+                        kind: SdfPrimitive::Sphere,
+                        ..
+                    }
+                )
+            })
+            .expect("default sphere");
+        bridge.select_node(Some(sphere_id));
+        let sculpt_id = bridge.create_sculpt().expect("initial sculpt");
+
+        bridge.select_node(Some(sphere_id));
+        let scene_node_count = bridge.scene.nodes.len();
+        let can_undo_before_reuse = bridge.scene_snapshot().history.can_undo;
+
+        let reused_id = bridge.create_sculpt().expect("reused sculpt");
+
+        assert_eq!(reused_id, sculpt_id);
+        assert_eq!(bridge.selected_node, Some(sculpt_id));
+        assert_eq!(bridge.hovered_node, Some(sculpt_id));
+        assert_eq!(bridge.scene.nodes.len(), scene_node_count);
+        assert_eq!(
+            bridge.scene_snapshot().history.can_undo,
+            can_undo_before_reuse
+        );
     }
 
     #[test]

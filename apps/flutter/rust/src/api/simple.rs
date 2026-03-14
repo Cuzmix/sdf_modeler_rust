@@ -1,5 +1,5 @@
 use crate::bridge_state::{app_bridge, snapshot_json};
-use sdf_modeler::{CsgOp, ModifierKind};
+use sdf_modeler::{CsgOp, LightType, ModifierKind};
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn ping() -> String {
@@ -120,6 +120,22 @@ pub fn create_modifier(modifier_id: String) -> String {
         .unwrap_or_else(|| panic!("unknown modifier id: {modifier_id}"));
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.create_modifier(modifier);
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn create_light(light_id: String) -> String {
+    let light_type =
+        parse_light_id(&light_id).unwrap_or_else(|| panic!("unknown light id: {light_id}"));
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.create_light(light_type);
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn create_sculpt() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.create_sculpt();
     snapshot_json(&bridge)
 }
 
@@ -274,6 +290,16 @@ fn parse_modifier_id(modifier_id: &str) -> Option<ModifierKind> {
         "radial_repeat" => ModifierKind::RadialRepeat,
         "offset" => ModifierKind::Offset,
         "noise" => ModifierKind::Noise,
+        _ => return None,
+    })
+}
+
+fn parse_light_id(light_id: &str) -> Option<LightType> {
+    Some(match light_id {
+        "point" => LightType::Point,
+        "spot" => LightType::Spot,
+        "directional" => LightType::Directional,
+        "ambient" => LightType::Ambient,
         _ => return None,
     })
 }

@@ -6,7 +6,7 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `parse_modifier_id`, `parse_operation_id`
+// These functions are ignored because they are not marked as `pub`: `parse_light_id`, `parse_modifier_id`, `parse_operation_id`
 
 String ping() => RustLib.instance.api.crateApiSimplePing();
 
@@ -77,6 +77,11 @@ String createTransform() =>
 
 String createModifier({required String modifierId}) =>
     RustLib.instance.api.crateApiSimpleCreateModifier(modifierId: modifierId);
+
+String createLight({required String lightId}) =>
+    RustLib.instance.api.crateApiSimpleCreateLight(lightId: lightId);
+
+String createSculpt() => RustLib.instance.api.crateApiSimpleCreateSculpt();
 
 String undo() => RustLib.instance.api.crateApiSimpleUndo();
 

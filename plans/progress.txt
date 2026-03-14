@@ -2050,3 +2050,49 @@ Manual verification:
 Result:
 - PRD #15 is fully verified and complete.
 
+--- Migration Iteration 8: PRD #16 - Minimum light and sculpt entrypoint creation flows ---
+COMPLETED. Added the smallest backend-owned light and sculpt creation entrypoints needed for functional Flutter editing, kept all default naming/placement/initialization logic in Rust, and exposed only thin Flutter command surfaces for them.
+
+Changes:
+- src/app_bridge/session.rs:
+  - Added backend `create_light(light_type)` that reuses native scene light defaults, creates the transform wrapper in Rust, and selects the transform root.
+  - Added backend `create_sculpt()` that keeps sculpt entry semantics in Rust: reuse an existing sculpt selection when applicable, reuse an existing sculpt parent when the selected node is already inside one, otherwise create a backend-owned differential sculpt above the selected subtree using the native default active-node resolution of `64`.
+  - Added bridge tests covering light creation, sculpt wrapping, and sculpt-parent reuse.
+- src/lib.rs:
+  - Re-exported `LightType` for the Flutter bridge crate.
+- apps/flutter/rust/src/api/simple.rs:
+  - Added FRB-exposed synchronous `create_light(light_id)` and `create_sculpt()` commands.
+  - Added stable light ID parsing at the bridge boundary for the minimal supported light set: `point`, `spot`, `directional`, and `ambient`.
+- apps/flutter/lib/src/rust/api/simple.dart
+- apps/flutter/lib/src/rust/frb_generated.dart
+- apps/flutter/rust/src/frb_generated.rs
+  - Regenerated the FRB bindings for the new light/sculpt command surface.
+- apps/flutter/lib/app.dart:
+  - Added a touch-usable `Light` chooser flow backed by Rust light IDs.
+  - Added a direct `Sculpt` command that stays disabled when nothing is selected.
+  - Kept Flutter limited to invoking backend intents and refreshing from returned scene snapshots.
+- apps/flutter/test/widget_test.dart:
+  - Added mock bridge support and widget coverage for create light and create sculpt flows.
+  - Updated the sculpt widget test to scroll the desktop command list before tapping the new button.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS (487 passed)
+- cargo build: PASS
+- apps/flutter/rust cargo check: PASS
+- apps/flutter/rust cargo clippy -- -D warnings: PASS
+- apps/flutter/rust cargo test: PASS
+- apps/flutter/rust cargo build: PASS
+- apps/flutter/scripts/frb_codegen.ps1: PASS
+- Flutter analyze: PASS
+- Flutter test: PASS
+- Flutter build windows --debug: PASS
+
+Manual verification:
+- Flutter Windows host light/sculpt entrypoints: PASS. User-confirmed the live host looked correct after exercising the requested verification flow: select `Sphere`, create `Sculpt`, then create `Light -> Point`.
+- Backend-owned update path: PASS. This slice keeps sculpt wrapping, sculpt-parent reuse, light naming, light placement, transform-wrapper selection, and snapshot refresh semantics owned by Rust rather than recreated in Dart.
+
+Result:
+- PRD #16 is fully verified and complete.
+

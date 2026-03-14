@@ -109,7 +109,7 @@
     "category": "scene-creation",
     "description": "Port the minimum light and sculpt entrypoint creation flows needed for functional editing.\n\nSteps:\n1. Add backend commands for the smallest useful light and sculpt creation entrypoints.\n2. Keep default names, placement, and any initialization rules backend-owned.\n3. Add Flutter entry surfaces without recreating backend scene semantics in Dart.\n4. Keep this slice minimal; do not pull full light or sculpt tooling into Flutter yet.",
     "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build`. If the bridge API changes, run `apps/flutter/scripts/frb_codegen.ps1`. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, and `fvm flutter build windows --debug`. Manual: create the newly-supported light and sculpt entrypoints from Flutter and confirm scene-tree, selection, and viewport feedback stay consistent.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 17,

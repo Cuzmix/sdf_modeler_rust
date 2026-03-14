@@ -58,6 +58,13 @@ const List<_CreateNodeOption> _modifierOptions = <_CreateNodeOption>[
   _CreateNodeOption(id: 'noise', label: 'Noise'),
 ];
 
+const List<_CreateNodeOption> _lightOptions = <_CreateNodeOption>[
+  _CreateNodeOption(id: 'point', label: 'Point'),
+  _CreateNodeOption(id: 'spot', label: 'Spot'),
+  _CreateNodeOption(id: 'directional', label: 'Directional'),
+  _CreateNodeOption(id: 'ambient', label: 'Ambient'),
+];
+
 class SdfModelerApp extends StatelessWidget {
   const SdfModelerApp({super.key});
 
@@ -695,6 +702,22 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     );
   }
 
+  Future<void> _promptCreateLight() async {
+    final selectedLight = await _promptCreateNodeOption(
+      title: 'Create Light',
+      optionKeyPrefix: 'light-option',
+      options: _lightOptions,
+    );
+
+    if (!mounted || selectedLight == null) {
+      return;
+    }
+
+    await _runSceneCommand(
+      () => createLight(lightId: selectedLight.id),
+    );
+  }
+
   Future<_CreateNodeOption?> _promptCreateNodeOption({
     required String title,
     required String optionKeyPrefix,
@@ -788,6 +811,8 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                       onCreateOperation: _promptCreateOperation,
                       onCreateTransform: () => _runSceneCommand(createTransform),
                       onCreateModifier: _promptCreateModifier,
+                      onCreateLight: _promptCreateLight,
+                      onCreateSculpt: () => _runSceneCommand(createSculpt),
                       onRenameSelected: _promptRenameSelectedNode,
                       onDuplicateSelected: () =>
                           _runSceneCommand(duplicateSelected),
@@ -839,6 +864,9 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                         onCreateTransform: () =>
                             _runModalSceneCommand(createTransform),
                         onCreateModifier: _promptCreateModifier,
+                        onCreateLight: _promptCreateLight,
+                        onCreateSculpt: () =>
+                            _runModalSceneCommand(createSculpt),
                         onRenameSelected: _promptRenameSelectedNode,
                         onDuplicateSelected: () =>
                             _runModalSceneCommand(duplicateSelected),
@@ -890,6 +918,8 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                   onCreateOperation: _promptCreateOperation,
                   onCreateTransform: () => _runSceneCommand(createTransform),
                   onCreateModifier: _promptCreateModifier,
+                  onCreateLight: _promptCreateLight,
+                  onCreateSculpt: () => _runSceneCommand(createSculpt),
                   onRenameSelected: _promptRenameSelectedNode,
                   onDuplicateSelected: () =>
                       _runSceneCommand(duplicateSelected),
@@ -1044,6 +1074,8 @@ class _InspectorPanel extends StatelessWidget {
     required this.onCreateOperation,
     required this.onCreateTransform,
     required this.onCreateModifier,
+    required this.onCreateLight,
+    required this.onCreateSculpt,
     required this.onRenameSelected,
     required this.onDuplicateSelected,
     required this.onUndo,
@@ -1084,6 +1116,8 @@ class _InspectorPanel extends StatelessWidget {
   final VoidCallback onCreateOperation;
   final VoidCallback onCreateTransform;
   final VoidCallback onCreateModifier;
+  final VoidCallback onCreateLight;
+  final VoidCallback onCreateSculpt;
   final VoidCallback onRenameSelected;
   final VoidCallback onDuplicateSelected;
   final VoidCallback onUndo;
@@ -1116,6 +1150,7 @@ class _InspectorPanel extends StatelessWidget {
     final undoEnabled = !commandInFlight && (snapshot?.history.canUndo ?? false);
     final redoEnabled = !commandInFlight && (snapshot?.history.canRedo ?? false);
     final renameSelectedEnabled = !commandInFlight && selectedNode != null;
+    final createSculptEnabled = !commandInFlight && selectedNode != null;
     final duplicateSelectedEnabled = !commandInFlight && selectedNode != null;
     final deleteSelectedEnabled = !commandInFlight && selectedNode != null;
     final projectionButtonLabel = currentCamera?.orthographic ?? false
@@ -1191,6 +1226,9 @@ class _InspectorPanel extends StatelessWidget {
               onCreateOperation: onCreateOperation,
               onCreateTransform: onCreateTransform,
               onCreateModifier: onCreateModifier,
+              onCreateLight: onCreateLight,
+              createSculptEnabled: createSculptEnabled,
+              onCreateSculpt: onCreateSculpt,
               renameSelectedEnabled: renameSelectedEnabled,
               onRenameSelected: onRenameSelected,
               duplicateSelectedEnabled: duplicateSelectedEnabled,
@@ -1302,6 +1340,9 @@ class _SceneCommandButtons extends StatelessWidget {
     required this.onCreateOperation,
     required this.onCreateTransform,
     required this.onCreateModifier,
+    required this.onCreateLight,
+    required this.createSculptEnabled,
+    required this.onCreateSculpt,
     required this.renameSelectedEnabled,
     required this.onRenameSelected,
     required this.duplicateSelectedEnabled,
@@ -1322,6 +1363,9 @@ class _SceneCommandButtons extends StatelessWidget {
   final VoidCallback onCreateOperation;
   final VoidCallback onCreateTransform;
   final VoidCallback onCreateModifier;
+  final VoidCallback onCreateLight;
+  final bool createSculptEnabled;
+  final VoidCallback onCreateSculpt;
   final bool renameSelectedEnabled;
   final VoidCallback onRenameSelected;
   final bool duplicateSelectedEnabled;
@@ -1366,6 +1410,16 @@ class _SceneCommandButtons extends StatelessWidget {
           key: const ValueKey('create-modifier-command'),
           onPressed: sceneCommandsEnabled ? onCreateModifier : null,
           child: const Text('Modifier'),
+        ),
+        OutlinedButton(
+          key: const ValueKey('create-light-command'),
+          onPressed: sceneCommandsEnabled ? onCreateLight : null,
+          child: const Text('Light'),
+        ),
+        OutlinedButton(
+          key: const ValueKey('create-sculpt-command'),
+          onPressed: createSculptEnabled ? onCreateSculpt : null,
+          child: const Text('Sculpt'),
         ),
         OutlinedButton(
           key: const ValueKey('rename-command'),
@@ -1484,6 +1538,8 @@ class _CommandSheetContent extends StatelessWidget {
     required this.onCreateOperation,
     required this.onCreateTransform,
     required this.onCreateModifier,
+    required this.onCreateLight,
+    required this.onCreateSculpt,
     required this.onRenameSelected,
     required this.onDuplicateSelected,
     required this.onUndo,
@@ -1512,6 +1568,8 @@ class _CommandSheetContent extends StatelessWidget {
   final VoidCallback onCreateOperation;
   final VoidCallback onCreateTransform;
   final VoidCallback onCreateModifier;
+  final VoidCallback onCreateLight;
+  final VoidCallback onCreateSculpt;
   final VoidCallback onRenameSelected;
   final VoidCallback onDuplicateSelected;
   final VoidCallback onUndo;
@@ -1537,6 +1595,7 @@ class _CommandSheetContent extends StatelessWidget {
     final undoEnabled = !commandInFlight && (snapshot?.history.canUndo ?? false);
     final redoEnabled = !commandInFlight && (snapshot?.history.canRedo ?? false);
     final renameSelectedEnabled = !commandInFlight && selectedNode != null;
+    final createSculptEnabled = !commandInFlight && selectedNode != null;
     final duplicateSelectedEnabled = !commandInFlight && selectedNode != null;
     final deleteSelectedEnabled = !commandInFlight && selectedNode != null;
     final cameraControlsEnabled = !commandInFlight && currentCamera != null;
@@ -1563,6 +1622,9 @@ class _CommandSheetContent extends StatelessWidget {
           onCreateOperation: onCreateOperation,
           onCreateTransform: onCreateTransform,
           onCreateModifier: onCreateModifier,
+          onCreateLight: onCreateLight,
+          createSculptEnabled: createSculptEnabled,
+          onCreateSculpt: onCreateSculpt,
           renameSelectedEnabled: renameSelectedEnabled,
           onRenameSelected: onRenameSelected,
           duplicateSelectedEnabled: duplicateSelectedEnabled,

@@ -15,7 +15,7 @@ mod sculpt_history;
 mod settings;
 mod ui;
 
-pub use graph::scene::{CsgOp, ModifierKind};
+pub use graph::scene::{CsgOp, LightType, ModifierKind};
 
 // ── Native entry point ──────────────────────────────────────────────────────
 
