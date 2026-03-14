@@ -77,8 +77,52 @@ pub struct AppHistorySnapshot {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppScalarPropertySnapshot {
+    pub key: String,
+    pub label: String,
+    pub value: f32,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppTransformPropertiesSnapshot {
+    pub position_label: String,
+    pub position: AppVec3,
+    pub rotation_degrees: AppVec3,
+    pub scale: Option<AppVec3>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppPrimitivePropertiesSnapshot {
+    pub primitive_kind: String,
+    pub parameters: Vec<AppScalarPropertySnapshot>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppMaterialPropertiesSnapshot {
+    pub color: AppVec3,
+    pub roughness: f32,
+    pub metallic: f32,
+    pub emissive: AppVec3,
+    pub emissive_intensity: f32,
+    pub fresnel: f32,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppSelectedNodePropertiesSnapshot {
+    pub node_id: u64,
+    pub name: String,
+    pub kind_label: String,
+    pub visible: bool,
+    pub locked: bool,
+    pub transform: Option<AppTransformPropertiesSnapshot>,
+    pub primitive: Option<AppPrimitivePropertiesSnapshot>,
+    pub material: Option<AppMaterialPropertiesSnapshot>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AppSceneSnapshot {
     pub selected_node: Option<AppNodeSnapshot>,
+    pub selected_node_properties: Option<AppSelectedNodePropertiesSnapshot>,
     pub top_level_nodes: Vec<AppNodeSnapshot>,
     pub scene_tree_roots: Vec<AppSceneTreeNodeSnapshot>,
     pub history: AppHistorySnapshot,

@@ -2096,3 +2096,40 @@ Manual verification:
 Result:
 - PRD #16 is fully verified and complete.
 
+--- Migration Iteration 9: PRD #17 - Selected-node property snapshot surface ---
+COMPLETED. Added a backend-owned selected-node property snapshot that gives Flutter stable property data without forcing Dart to inspect scene graph node internals.
+
+Changes:
+- src/app_bridge/dto.rs
+- src/app_bridge/mod.rs
+  - Added toolkit-neutral DTOs for selected-node properties, transform basics, primitive parameters, material basics, and scalar property entries.
+  - Extended `AppSceneSnapshot` with optional `selected_node_properties`.
+- src/app_bridge/session.rs:
+  - Added backend snapshot builders that derive the selected node's property surface directly from `NodeData`.
+  - Covered the first migration slice only: name, visibility, lock, transform basics, primitive parameters, and basic material fields.
+  - Exposed primitive size fields as labeled scalar parameters so Flutter does not need to decode `scale` semantics per primitive kind.
+  - Added bridge tests for no-selection, primitive, transform, and sculpt property snapshots.
+- apps/flutter/lib/src/scene/scene_snapshot.dart:
+  - Added Dart parsing models for the new selected-node property snapshot surface while keeping the field optional for older snapshots.
+- apps/flutter/test/scene_snapshot_test.dart:
+  - Added parsing coverage for populated selected-node property snapshots and backward-compatible snapshots without the new field.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS (491 passed)
+- cargo build: PASS
+- apps/flutter/rust cargo check: PASS
+- apps/flutter/rust cargo clippy -- -D warnings: PASS
+- apps/flutter/rust cargo test: PASS
+- apps/flutter/rust cargo build: PASS
+- Flutter analyze: PASS
+- Flutter test: PASS
+- Flutter build windows --debug: PASS
+
+Manual verification:
+- Skipped by current workflow instruction. This slice was validated with automated Rust and Flutter coverage only.
+
+Result:
+- PRD #17 is fully verified and complete.
+

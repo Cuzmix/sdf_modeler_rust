@@ -116,7 +116,7 @@
     "category": "properties",
     "description": "Expose a backend-owned selected-node property snapshot surface.\n\nSteps:\n1. Define a toolkit-neutral property snapshot for the selected node.\n2. Include only the data Flutter needs to render editing UI, not to reinterpret business rules.\n3. Cover the first migration slice: name, visibility, lock, transform basics, primitive parameters, and basic material fields.\n4. Keep the snapshot stable enough to support other frontends later.",
     "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build`. If the bridge API changes, run `apps/flutter/scripts/frb_codegen.ps1`. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, and `fvm flutter build windows --debug`. Manual: select multiple representative node types in Flutter and confirm the property snapshot loads without Flutter-side scene introspection hacks.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 18,

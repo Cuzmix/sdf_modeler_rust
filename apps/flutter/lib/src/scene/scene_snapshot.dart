@@ -211,9 +211,156 @@ class AppHistorySnapshot {
   }
 }
 
+class AppScalarPropertySnapshot {
+  const AppScalarPropertySnapshot({
+    required this.key,
+    required this.label,
+    required this.value,
+  });
+
+  final String key;
+  final String label;
+  final double value;
+
+  factory AppScalarPropertySnapshot.fromJson(Map<String, dynamic> json) {
+    return AppScalarPropertySnapshot(
+      key: json['key'] as String,
+      label: json['label'] as String,
+      value: (json['value'] as num).toDouble(),
+    );
+  }
+}
+
+class AppTransformPropertiesSnapshot {
+  const AppTransformPropertiesSnapshot({
+    required this.positionLabel,
+    required this.position,
+    required this.rotationDegrees,
+    required this.scale,
+  });
+
+  final String positionLabel;
+  final AppVec3 position;
+  final AppVec3 rotationDegrees;
+  final AppVec3? scale;
+
+  factory AppTransformPropertiesSnapshot.fromJson(Map<String, dynamic> json) {
+    return AppTransformPropertiesSnapshot(
+      positionLabel: json['position_label'] as String,
+      position: AppVec3.fromJson(json['position'] as Map<String, dynamic>),
+      rotationDegrees: AppVec3.fromJson(
+        json['rotation_degrees'] as Map<String, dynamic>,
+      ),
+      scale: json['scale'] == null
+          ? null
+          : AppVec3.fromJson(json['scale'] as Map<String, dynamic>),
+    );
+  }
+}
+
+class AppPrimitivePropertiesSnapshot {
+  const AppPrimitivePropertiesSnapshot({
+    required this.primitiveKind,
+    required this.parameters,
+  });
+
+  final String primitiveKind;
+  final List<AppScalarPropertySnapshot> parameters;
+
+  factory AppPrimitivePropertiesSnapshot.fromJson(Map<String, dynamic> json) {
+    return AppPrimitivePropertiesSnapshot(
+      primitiveKind: json['primitive_kind'] as String,
+      parameters: (json['parameters'] as List<dynamic>? ?? const [])
+          .map(
+            (item) => AppScalarPropertySnapshot.fromJson(
+              item as Map<String, dynamic>,
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+}
+
+class AppMaterialPropertiesSnapshot {
+  const AppMaterialPropertiesSnapshot({
+    required this.color,
+    required this.roughness,
+    required this.metallic,
+    required this.emissive,
+    required this.emissiveIntensity,
+    required this.fresnel,
+  });
+
+  final AppVec3 color;
+  final double roughness;
+  final double metallic;
+  final AppVec3 emissive;
+  final double emissiveIntensity;
+  final double fresnel;
+
+  factory AppMaterialPropertiesSnapshot.fromJson(Map<String, dynamic> json) {
+    return AppMaterialPropertiesSnapshot(
+      color: AppVec3.fromJson(json['color'] as Map<String, dynamic>),
+      roughness: (json['roughness'] as num).toDouble(),
+      metallic: (json['metallic'] as num).toDouble(),
+      emissive: AppVec3.fromJson(json['emissive'] as Map<String, dynamic>),
+      emissiveIntensity: (json['emissive_intensity'] as num).toDouble(),
+      fresnel: (json['fresnel'] as num).toDouble(),
+    );
+  }
+}
+
+class AppSelectedNodePropertiesSnapshot {
+  const AppSelectedNodePropertiesSnapshot({
+    required this.nodeId,
+    required this.name,
+    required this.kindLabel,
+    required this.visible,
+    required this.locked,
+    required this.transform,
+    required this.primitive,
+    required this.material,
+  });
+
+  final int nodeId;
+  final String name;
+  final String kindLabel;
+  final bool visible;
+  final bool locked;
+  final AppTransformPropertiesSnapshot? transform;
+  final AppPrimitivePropertiesSnapshot? primitive;
+  final AppMaterialPropertiesSnapshot? material;
+
+  factory AppSelectedNodePropertiesSnapshot.fromJson(Map<String, dynamic> json) {
+    return AppSelectedNodePropertiesSnapshot(
+      nodeId: (json['node_id'] as num).toInt(),
+      name: json['name'] as String,
+      kindLabel: json['kind_label'] as String,
+      visible: json['visible'] as bool,
+      locked: json['locked'] as bool,
+      transform: json['transform'] == null
+          ? null
+          : AppTransformPropertiesSnapshot.fromJson(
+              json['transform'] as Map<String, dynamic>,
+            ),
+      primitive: json['primitive'] == null
+          ? null
+          : AppPrimitivePropertiesSnapshot.fromJson(
+              json['primitive'] as Map<String, dynamic>,
+            ),
+      material: json['material'] == null
+          ? null
+          : AppMaterialPropertiesSnapshot.fromJson(
+              json['material'] as Map<String, dynamic>,
+            ),
+    );
+  }
+}
+
 class AppSceneSnapshot {
   const AppSceneSnapshot({
     required this.selectedNode,
+    required this.selectedNodeProperties,
     required this.topLevelNodes,
     required this.sceneTreeRoots,
     required this.history,
@@ -223,6 +370,7 @@ class AppSceneSnapshot {
   });
 
   final AppNodeSnapshot? selectedNode;
+  final AppSelectedNodePropertiesSnapshot? selectedNodeProperties;
   final List<AppNodeSnapshot> topLevelNodes;
   final List<AppSceneTreeNodeSnapshot> sceneTreeRoots;
   final AppHistorySnapshot history;
@@ -241,6 +389,11 @@ class AppSceneSnapshot {
           ? null
           : AppNodeSnapshot.fromJson(
               json['selected_node'] as Map<String, dynamic>,
+            ),
+      selectedNodeProperties: json['selected_node_properties'] == null
+          ? null
+          : AppSelectedNodePropertiesSnapshot.fromJson(
+              json['selected_node_properties'] as Map<String, dynamic>,
             ),
       topLevelNodes: topLevelNodes,
       sceneTreeRoots: sceneTreeRootsJson == null

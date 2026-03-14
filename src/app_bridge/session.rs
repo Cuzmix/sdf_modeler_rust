@@ -11,9 +11,10 @@ use crate::graph::voxel::create_displacement_grid_for_subtree;
 use crate::settings::RenderConfig;
 
 use super::dto::{
-    AppCameraSnapshot, AppHistorySnapshot, AppNodeSnapshot, AppSceneSnapshot,
-    AppSceneStatsSnapshot, AppSceneTreeNodeSnapshot, AppToolSnapshot, AppVec3,
-    AppViewportFeedbackSnapshot,
+    AppCameraSnapshot, AppHistorySnapshot, AppMaterialPropertiesSnapshot, AppNodeSnapshot,
+    AppPrimitivePropertiesSnapshot, AppScalarPropertySnapshot, AppSceneSnapshot,
+    AppSceneStatsSnapshot, AppSceneTreeNodeSnapshot, AppSelectedNodePropertiesSnapshot,
+    AppToolSnapshot, AppTransformPropertiesSnapshot, AppVec3, AppViewportFeedbackSnapshot,
 };
 use super::renderer::{HeadlessPickRequest, HeadlessRenderRequest, HeadlessViewportRenderer};
 
@@ -76,6 +77,7 @@ impl AppBridge {
 
         AppSceneSnapshot {
             selected_node: self.node_snapshot_by_id(self.selected_node),
+            selected_node_properties: self.selected_node_properties_snapshot(),
             top_level_nodes,
             scene_tree_roots: self.scene_tree_roots(),
             history: AppHistorySnapshot {
@@ -612,6 +614,102 @@ impl AppBridge {
             locked: node.locked,
         }
     }
+
+    fn selected_node_properties_snapshot(&self) -> Option<AppSelectedNodePropertiesSnapshot> {
+        let selected_node = self.selected_node?;
+        let node = self.scene.nodes.get(&selected_node)?;
+
+        Some(AppSelectedNodePropertiesSnapshot {
+            node_id: node.id,
+            name: node.name.clone(),
+            kind_label: node_kind_label(node),
+            visible: !self.scene.is_hidden(node.id),
+            locked: node.locked,
+            transform: self.node_transform_properties(&node.data),
+            primitive: self.node_primitive_properties(&node.data),
+            material: self.node_material_properties(&node.data),
+        })
+    }
+
+    fn node_transform_properties(&self, data: &NodeData) -> Option<AppTransformPropertiesSnapshot> {
+        match data {
+            NodeData::Primitive {
+                position, rotation, ..
+            }
+            | NodeData::Sculpt {
+                position, rotation, ..
+            } => Some(AppTransformPropertiesSnapshot {
+                position_label: "Position".to_string(),
+                position: app_vec3(*position),
+                rotation_degrees: app_degrees_vec3(*rotation),
+                scale: None,
+            }),
+            NodeData::Transform {
+                translation,
+                rotation,
+                scale,
+                ..
+            } => Some(AppTransformPropertiesSnapshot {
+                position_label: "Translation".to_string(),
+                position: app_vec3(*translation),
+                rotation_degrees: app_degrees_vec3(*rotation),
+                scale: Some(app_vec3(*scale)),
+            }),
+            _ => None,
+        }
+    }
+
+    fn node_primitive_properties(&self, data: &NodeData) -> Option<AppPrimitivePropertiesSnapshot> {
+        let NodeData::Primitive { kind, scale, .. } = data else {
+            return None;
+        };
+
+        let parameters = kind
+            .scale_params()
+            .iter()
+            .map(|(label, axis)| AppScalarPropertySnapshot {
+                key: property_key(label),
+                label: (*label).to_string(),
+                value: scale_component(*scale, *axis),
+            })
+            .collect();
+
+        Some(AppPrimitivePropertiesSnapshot {
+            primitive_kind: kind.base_name().to_string(),
+            parameters,
+        })
+    }
+
+    fn node_material_properties(&self, data: &NodeData) -> Option<AppMaterialPropertiesSnapshot> {
+        match data {
+            NodeData::Primitive {
+                color,
+                roughness,
+                metallic,
+                emissive,
+                emissive_intensity,
+                fresnel,
+                ..
+            }
+            | NodeData::Sculpt {
+                color,
+                roughness,
+                metallic,
+                emissive,
+                emissive_intensity,
+                fresnel,
+                ..
+            } => Some(AppMaterialPropertiesSnapshot {
+                color: app_vec3(*color),
+                roughness: *roughness,
+                metallic: *metallic,
+                emissive: app_vec3(*emissive),
+                emissive_intensity: *emissive_intensity,
+                fresnel: *fresnel,
+            }),
+            _ => None,
+        }
+    }
 }
 
 fn node_kind_label(node: &SceneNode) -> String {
@@ -629,9 +727,43 @@ fn app_vec3(value: Vec3) -> AppVec3 {
     AppVec3::new(value.x, value.y, value.z)
 }
 
+fn app_degrees_vec3(value: Vec3) -> AppVec3 {
+    AppVec3::new(
+        value.x.to_degrees(),
+        value.y.to_degrees(),
+        value.z.to_degrees(),
+    )
+}
+
+fn scale_component(scale: Vec3, axis: usize) -> f32 {
+    match axis {
+        0 => scale.x,
+        1 => scale.y,
+        _ => scale.z,
+    }
+}
+
+fn property_key(label: &str) -> String {
+    let mut key = String::with_capacity(label.len());
+    let mut previous_was_separator = false;
+
+    for character in label.chars() {
+        if character.is_ascii_alphanumeric() {
+            key.push(character.to_ascii_lowercase());
+            previous_was_separator = false;
+        } else if !previous_was_separator && !key.is_empty() {
+            key.push('_');
+            previous_was_separator = true;
+        }
+    }
+
+    key.trim_end_matches('_').to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::{AppBridge, DEFAULT_SCULPT_ENTRY_RESOLUTION};
+    use crate::app_bridge::{AppScalarPropertySnapshot, AppVec3};
     use crate::graph::scene::{CsgOp, LightType, ModifierKind, NodeData, SdfPrimitive};
 
     #[test]
@@ -647,6 +779,144 @@ mod tests {
             .scene_tree_roots
             .iter()
             .any(|node| !node.children.is_empty()));
+    }
+
+    #[test]
+    fn scene_snapshot_omits_selected_node_properties_without_selection() {
+        let bridge = AppBridge::new();
+
+        assert!(bridge.scene_snapshot().selected_node_properties.is_none());
+    }
+
+    #[test]
+    fn selected_primitive_property_snapshot_includes_transform_material_and_parameters() {
+        let mut bridge = AppBridge::new();
+        let sphere_id = bridge
+            .scene
+            .top_level_nodes()
+            .into_iter()
+            .find(|node_id| {
+                matches!(
+                    bridge.scene.nodes[node_id].data,
+                    NodeData::Primitive {
+                        kind: SdfPrimitive::Sphere,
+                        ..
+                    }
+                )
+            })
+            .expect("default sphere");
+        bridge.select_node(Some(sphere_id));
+
+        let selected_properties = bridge
+            .scene_snapshot()
+            .selected_node_properties
+            .expect("selected node properties");
+
+        assert_eq!(selected_properties.node_id, sphere_id);
+        assert_eq!(selected_properties.name, "Sphere");
+        assert_eq!(selected_properties.kind_label, "Sphere");
+        assert!(selected_properties.visible);
+        assert!(!selected_properties.locked);
+
+        let transform = selected_properties.transform.expect("transform snapshot");
+        assert_eq!(transform.position_label, "Position");
+        assert_eq!(transform.position, AppVec3::new(0.0, 0.0, 0.0));
+        assert_eq!(transform.rotation_degrees, AppVec3::new(0.0, 0.0, 0.0));
+        assert_eq!(transform.scale, None);
+
+        let primitive = selected_properties.primitive.expect("primitive snapshot");
+        assert_eq!(primitive.primitive_kind, "Sphere");
+        assert_eq!(
+            primitive.parameters,
+            vec![AppScalarPropertySnapshot {
+                key: "radius".to_string(),
+                label: "Radius".to_string(),
+                value: 1.0,
+            }]
+        );
+
+        let material = selected_properties.material.expect("material snapshot");
+        assert_eq!(material.color, AppVec3::new(0.8, 0.3, 0.2));
+        assert_eq!(material.roughness, 0.5);
+        assert_eq!(material.metallic, 0.0);
+        assert_eq!(material.emissive, AppVec3::new(0.0, 0.0, 0.0));
+        assert_eq!(material.emissive_intensity, 0.0);
+        assert_eq!(material.fresnel, 0.04);
+    }
+
+    #[test]
+    fn selected_transform_property_snapshot_includes_translation_rotation_and_scale() {
+        let mut bridge = AppBridge::new();
+        let sphere_id = bridge
+            .scene
+            .top_level_nodes()
+            .into_iter()
+            .find(|node_id| {
+                matches!(
+                    bridge.scene.nodes[node_id].data,
+                    NodeData::Primitive {
+                        kind: SdfPrimitive::Sphere,
+                        ..
+                    }
+                )
+            })
+            .expect("default sphere");
+        bridge.select_node(Some(sphere_id));
+        let transform_id = bridge.create_transform();
+
+        let selected_properties = bridge
+            .scene_snapshot()
+            .selected_node_properties
+            .expect("selected node properties");
+
+        assert_eq!(selected_properties.node_id, transform_id);
+        assert_eq!(selected_properties.kind_label, "Transform");
+        assert!(selected_properties.primitive.is_none());
+        assert!(selected_properties.material.is_none());
+
+        let transform = selected_properties.transform.expect("transform snapshot");
+        assert_eq!(transform.position_label, "Translation");
+        assert_eq!(transform.position, AppVec3::new(0.0, 0.0, 0.0));
+        assert_eq!(transform.rotation_degrees, AppVec3::new(0.0, 0.0, 0.0));
+        assert_eq!(transform.scale, Some(AppVec3::new(1.0, 1.0, 1.0)));
+    }
+
+    #[test]
+    fn selected_sculpt_property_snapshot_includes_material_without_primitive_parameters() {
+        let mut bridge = AppBridge::new();
+        let sphere_id = bridge
+            .scene
+            .top_level_nodes()
+            .into_iter()
+            .find(|node_id| {
+                matches!(
+                    bridge.scene.nodes[node_id].data,
+                    NodeData::Primitive {
+                        kind: SdfPrimitive::Sphere,
+                        ..
+                    }
+                )
+            })
+            .expect("default sphere");
+        bridge.select_node(Some(sphere_id));
+        bridge.create_sculpt().expect("sculpt");
+
+        let selected_properties = bridge
+            .scene_snapshot()
+            .selected_node_properties
+            .expect("selected node properties");
+
+        assert_eq!(selected_properties.kind_label, "Sculpt");
+        assert!(selected_properties.primitive.is_none());
+
+        let transform = selected_properties.transform.expect("transform snapshot");
+        assert_eq!(transform.position_label, "Position");
+        assert_eq!(transform.scale, None);
+
+        let material = selected_properties.material.expect("material snapshot");
+        assert_eq!(material.roughness, 0.5);
+        assert_eq!(material.metallic, 0.0);
+        assert_eq!(material.fresnel, 0.04);
     }
 
     #[test]
