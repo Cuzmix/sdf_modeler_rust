@@ -2539,3 +2539,38 @@ Manual verification:
 Result:
 - PRD #29 is fully verified and complete.
 
+--- Migration Iteration 22: PRD #30 - Final egui adapter deletion ---
+SKIPPED. This item remains blocked by the parity gaps already captured in `docs/egui_parity_audit.md`.
+
+Blocking gaps:
+- export workflow and progress
+- mesh import and sculpt conversion dialogs
+- sculpt editing/tool controls
+- advanced light editing and light linking parity
+- render settings parity
+- settings/keymap parity
+- history inspection, scene stats, and reference image management decisions
+
+Result:
+- PRD #30 remains open until those behaviors either move behind backend-neutral modules or are explicitly dropped by product decision.
+
+--- Migration Iteration 23: PRD #31 - Create separate UI customization PRD ---
+COMPLETED. Created the separate post-migration customization PRD so visual language and polish work can proceed independently from backend and parity migration work.
+
+Changes:
+- docs/ui_customization_prd.md
+- docs/flutter_migration.md
+- plans/prd.json
+- plans/progress.txt
+  - Added a dedicated customization PRD covering goals, non-goals, design principles, workstreams, constraints, deliverables, rollout order, and acceptance criteria.
+  - Linked the new customization PRD from the reduced migration note so the planning artifact is discoverable without mixing it into the migration execution PRD.
+
+Verification:
+- Not applicable. This slice is documentation-only.
+
+Manual verification:
+- Not applicable. This slice is documentation-only.
+
+Result:
+- PRD #31 is fully verified and complete.
+
