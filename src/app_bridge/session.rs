@@ -535,6 +535,88 @@ impl AppBridge {
         })
     }
 
+    pub fn set_selected_transform_position(&mut self, x: f32, y: f32, z: f32) -> bool {
+        let next_position = Vec3::new(x, y, z);
+
+        self.run_document_command(|bridge| {
+            let Some(selected_node) = bridge.selected_node else {
+                return false;
+            };
+            let Some(node) = bridge.scene.nodes.get_mut(&selected_node) else {
+                return false;
+            };
+
+            match &mut node.data {
+                NodeData::Primitive { position, .. } | NodeData::Sculpt { position, .. } => {
+                    *position = next_position;
+                    true
+                }
+                NodeData::Transform { translation, .. } => {
+                    *translation = next_position;
+                    true
+                }
+                _ => false,
+            }
+        })
+    }
+
+    pub fn set_selected_transform_rotation_degrees(
+        &mut self,
+        x_degrees: f32,
+        y_degrees: f32,
+        z_degrees: f32,
+    ) -> bool {
+        let next_rotation = Vec3::new(
+            x_degrees.to_radians(),
+            y_degrees.to_radians(),
+            z_degrees.to_radians(),
+        );
+
+        self.run_document_command(|bridge| {
+            let Some(selected_node) = bridge.selected_node else {
+                return false;
+            };
+            let Some(node) = bridge.scene.nodes.get_mut(&selected_node) else {
+                return false;
+            };
+
+            match &mut node.data {
+                NodeData::Primitive { rotation, .. }
+                | NodeData::Sculpt { rotation, .. }
+                | NodeData::Transform { rotation, .. } => {
+                    *rotation = next_rotation;
+                    true
+                }
+                _ => false,
+            }
+        })
+    }
+
+    pub fn set_selected_transform_scale(&mut self, x: f32, y: f32, z: f32) -> bool {
+        let next_scale = Vec3::new(
+            x.clamp(PRIMITIVE_PARAMETER_MIN, PRIMITIVE_PARAMETER_MAX),
+            y.clamp(PRIMITIVE_PARAMETER_MIN, PRIMITIVE_PARAMETER_MAX),
+            z.clamp(PRIMITIVE_PARAMETER_MIN, PRIMITIVE_PARAMETER_MAX),
+        );
+
+        self.run_document_command(|bridge| {
+            let Some(selected_node) = bridge.selected_node else {
+                return false;
+            };
+            let Some(node) = bridge.scene.nodes.get_mut(&selected_node) else {
+                return false;
+            };
+
+            match &mut node.data {
+                NodeData::Transform { scale, .. } => {
+                    *scale = next_scale;
+                    true
+                }
+                _ => false,
+            }
+        })
+    }
+
     pub fn toggle_node_visibility(&mut self, node_id: u64) {
         self.run_document_command(|bridge| {
             if bridge.scene.nodes.contains_key(&node_id) {
@@ -898,7 +980,7 @@ fn property_key(label: &str) -> String {
 mod tests {
     use super::{
         AppBridge, DEFAULT_SCULPT_ENTRY_RESOLUTION, EMISSIVE_INTENSITY_MAX, MATERIAL_FACTOR_MIN,
-        PRIMITIVE_PARAMETER_MAX,
+        PRIMITIVE_PARAMETER_MAX, PRIMITIVE_PARAMETER_MIN,
     };
     use crate::app_bridge::{AppScalarPropertySnapshot, AppVec3};
     use crate::graph::scene::{CsgOp, LightType, ModifierKind, NodeData, SdfPrimitive};
@@ -1159,6 +1241,106 @@ mod tests {
             .expect("material properties");
         assert_eq!(material.color, AppVec3::new(0.0, 0.4, 1.0));
         assert_eq!(material.emissive, AppVec3::new(0.2, 1.0, 0.3));
+    }
+
+    #[test]
+    fn set_selected_transform_position_updates_snapshot() {
+        let mut bridge = AppBridge::new();
+        let sphere_id = bridge
+            .scene
+            .top_level_nodes()
+            .into_iter()
+            .find(|node_id| {
+                matches!(
+                    bridge.scene.nodes[node_id].data,
+                    NodeData::Primitive {
+                        kind: SdfPrimitive::Sphere,
+                        ..
+                    }
+                )
+            })
+            .expect("default sphere");
+        bridge.select_node(Some(sphere_id));
+
+        assert!(bridge.set_selected_transform_position(1.5, -2.0, 3.25));
+
+        let transform = bridge
+            .scene_snapshot()
+            .selected_node_properties
+            .expect("selected properties")
+            .transform
+            .expect("transform properties");
+        assert_eq!(transform.position, AppVec3::new(1.5, -2.0, 3.25));
+    }
+
+    #[test]
+    fn set_selected_transform_rotation_degrees_updates_snapshot() {
+        let mut bridge = AppBridge::new();
+        let sphere_id = bridge
+            .scene
+            .top_level_nodes()
+            .into_iter()
+            .find(|node_id| {
+                matches!(
+                    bridge.scene.nodes[node_id].data,
+                    NodeData::Primitive {
+                        kind: SdfPrimitive::Sphere,
+                        ..
+                    }
+                )
+            })
+            .expect("default sphere");
+        bridge.select_node(Some(sphere_id));
+
+        assert!(bridge.set_selected_transform_rotation_degrees(15.0, 45.0, 90.0));
+
+        let transform = bridge
+            .scene_snapshot()
+            .selected_node_properties
+            .expect("selected properties")
+            .transform
+            .expect("transform properties");
+        assert!((transform.rotation_degrees.x - 15.0).abs() < 1e-3);
+        assert!((transform.rotation_degrees.y - 45.0).abs() < 1e-3);
+        assert!((transform.rotation_degrees.z - 90.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn set_selected_transform_scale_updates_transform_snapshot_and_clamps() {
+        let mut bridge = AppBridge::new();
+        let sphere_id = bridge
+            .scene
+            .top_level_nodes()
+            .into_iter()
+            .find(|node_id| {
+                matches!(
+                    bridge.scene.nodes[node_id].data,
+                    NodeData::Primitive {
+                        kind: SdfPrimitive::Sphere,
+                        ..
+                    }
+                )
+            })
+            .expect("default sphere");
+        bridge.select_node(Some(sphere_id));
+        bridge.create_transform();
+
+        assert!(bridge.set_selected_transform_scale(-1.0, 2.0, 500.0));
+
+        let transform = bridge
+            .scene_snapshot()
+            .selected_node_properties
+            .expect("selected properties")
+            .transform
+            .expect("transform properties");
+        assert_eq!(
+            transform.scale,
+            Some(AppVec3::new(
+                PRIMITIVE_PARAMETER_MIN,
+                2.0,
+                PRIMITIVE_PARAMETER_MAX
+            ))
+        );
     }
 
     #[test]

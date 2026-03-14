@@ -2206,3 +2206,39 @@ Manual verification:
 Result:
 - PRD #19 is fully verified and complete.
 
+--- Migration Iteration 12: PRD #20 - Backend transform command surface ---
+COMPLETED. Added the backend-owned transform command surface for direct translation, rotation, and scale edits, and exposed it through the Flutter bridge for later inspector and viewport reuse.
+
+Changes:
+- src/app_bridge/session.rs:
+  - Added backend commands for selected-node transform position, rotation-in-degrees, and scale edits.
+  - Kept transform semantics in Rust by mapping translation and rotation edits onto primitives, sculpts, and transforms while limiting scale edits to transform nodes.
+  - Reused native clamping rules for scale and added bridge tests covering transform position, rotation, and scale updates against the selected-node property snapshot.
+- apps/flutter/rust/src/api/simple.rs
+- apps/flutter/lib/src/rust/api/simple.dart
+- apps/flutter/lib/src/rust/frb_generated.dart
+- apps/flutter/rust/src/frb_generated.rs
+  - Exposed the new transform commands through FRB and regenerated the bindings.
+- apps/flutter/test/widget_test.dart:
+  - Added direct facade coverage that exercises the generated Flutter transform command wrappers and confirms their snapshot round-trips.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS (497 passed)
+- cargo build: PASS
+- apps/flutter/rust cargo check: PASS
+- apps/flutter/rust cargo clippy -- -D warnings: PASS
+- apps/flutter/rust cargo test: PASS
+- apps/flutter/rust cargo build: PASS
+- FRB direct generate command: PASS
+- Flutter analyze: PASS
+- Flutter test: PASS
+- Flutter build windows --debug: PASS
+
+Manual verification:
+- Skipped by current workflow instruction. This slice was validated with automated Rust and Flutter coverage only.
+
+Result:
+- PRD #20 is fully verified and complete.
+

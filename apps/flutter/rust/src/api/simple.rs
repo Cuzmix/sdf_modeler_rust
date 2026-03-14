@@ -166,6 +166,31 @@ pub fn set_selected_material_color(
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn set_selected_transform_position(x: f32, y: f32, z: f32) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_selected_transform_position(x, y, z);
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_selected_transform_rotation_degrees(
+    x_degrees: f32,
+    y_degrees: f32,
+    z_degrees: f32,
+) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_selected_transform_rotation_degrees(x_degrees, y_degrees, z_degrees);
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_selected_transform_scale(x: f32, y: f32, z: f32) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_selected_transform_scale(x, y, z);
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn undo() -> String {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.undo();

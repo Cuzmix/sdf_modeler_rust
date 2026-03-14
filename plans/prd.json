@@ -137,7 +137,7 @@
     "category": "transforms",
     "description": "Port the backend transform command surface.\n\nSteps:\n1. Expose backend commands for translation, rotation, and scale edits.\n2. Keep transform semantics, snapping, and node constraints in Rust.\n3. Keep Flutter invoking intents rather than mutating transform state directly.\n4. Ensure transform commands are shaped so viewport manipulation can reuse them later.",
     "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build`. If the bridge API changes, run `apps/flutter/scripts/frb_codegen.ps1`. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, and `fvm flutter build windows --debug` if the Flutter bridge or shell changes. Manual: send direct transform commands from Flutter and confirm selected-node state changes predictably.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 21,

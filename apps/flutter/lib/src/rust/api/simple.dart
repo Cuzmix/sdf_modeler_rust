@@ -111,6 +111,36 @@ String setSelectedMaterialColor({
   blue: blue,
 );
 
+String setSelectedTransformPosition({
+  required double x,
+  required double y,
+  required double z,
+}) => RustLib.instance.api.crateApiSimpleSetSelectedTransformPosition(
+  x: x,
+  y: y,
+  z: z,
+);
+
+String setSelectedTransformRotationDegrees({
+  required double xDegrees,
+  required double yDegrees,
+  required double zDegrees,
+}) => RustLib.instance.api.crateApiSimpleSetSelectedTransformRotationDegrees(
+  xDegrees: xDegrees,
+  yDegrees: yDegrees,
+  zDegrees: zDegrees,
+);
+
+String setSelectedTransformScale({
+  required double x,
+  required double y,
+  required double z,
+}) => RustLib.instance.api.crateApiSimpleSetSelectedTransformScale(
+  x: x,
+  y: y,
+  z: z,
+);
+
 String undo() => RustLib.instance.api.crateApiSimpleUndo();
 
 String redo() => RustLib.instance.api.crateApiSimpleRedo();
