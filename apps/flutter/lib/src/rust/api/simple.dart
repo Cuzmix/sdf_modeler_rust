@@ -83,6 +83,34 @@ String createLight({required String lightId}) =>
 
 String createSculpt() => RustLib.instance.api.crateApiSimpleCreateSculpt();
 
+String setSelectedPrimitiveParameter({
+  required String parameterKey,
+  required double value,
+}) => RustLib.instance.api.crateApiSimpleSetSelectedPrimitiveParameter(
+  parameterKey: parameterKey,
+  value: value,
+);
+
+String setSelectedMaterialFloat({
+  required String fieldId,
+  required double value,
+}) => RustLib.instance.api.crateApiSimpleSetSelectedMaterialFloat(
+  fieldId: fieldId,
+  value: value,
+);
+
+String setSelectedMaterialColor({
+  required String fieldId,
+  required double red,
+  required double green,
+  required double blue,
+}) => RustLib.instance.api.crateApiSimpleSetSelectedMaterialColor(
+  fieldId: fieldId,
+  red: red,
+  green: green,
+  blue: blue,
+);
+
 String undo() => RustLib.instance.api.crateApiSimpleUndo();
 
 String redo() => RustLib.instance.api.crateApiSimpleRedo();

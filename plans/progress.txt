@@ -2165,3 +2165,44 @@ Manual verification:
 Result:
 - PRD #18 is fully verified and complete.
 
+--- Migration Iteration 11: PRD #19 - Primitive and material basics editing panel ---
+COMPLETED. Added backend-owned primitive/material edit commands and wired the first Flutter editing panel for them against the selected-node property snapshot.
+
+Changes:
+- src/app_bridge/session.rs:
+  - Added backend commands for selected primitive parameters, material scalar fields, and material color fields.
+  - Kept all field validation and clamping in Rust: primitive parameters clamp to the native size range, material factors clamp to `0..1`, and emissive intensity clamps to `0..5`.
+  - Added bridge tests covering primitive parameter edits, material scalar edits, and material color edits.
+- apps/flutter/rust/src/api/simple.rs
+- apps/flutter/lib/src/rust/api/simple.dart
+- apps/flutter/lib/src/rust/frb_generated.dart
+- apps/flutter/rust/src/frb_generated.rs
+  - Exposed the new edit commands through FRB and regenerated the bindings.
+- apps/flutter/lib/app.dart:
+  - Upgraded the `Node Basics` card into an editable primitive/material panel with touch-usable sliders.
+  - Added material color editors plus primitive/material scalar editors that keep local slider drafts in Flutter but commit through Rust on change end.
+  - Kept Flutter limited to sending the backend snapshot field IDs and values back into Rust rather than re-implementing node-specific business rules.
+- apps/flutter/test/widget_test.dart:
+  - Added mock bridge support and widget coverage for primitive parameter edits, material scalar edits, and material color edits.
+  - Extended the node-basics mock snapshots to cover the editable property panel path.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS (494 passed)
+- cargo build: PASS
+- apps/flutter/rust cargo check: PASS
+- apps/flutter/rust cargo clippy -- -D warnings: PASS
+- apps/flutter/rust cargo test: PASS
+- apps/flutter/rust cargo build: PASS
+- FRB direct generate command: PASS
+- Flutter analyze: PASS
+- Flutter test: PASS
+- Flutter build windows --debug: PASS
+
+Manual verification:
+- Skipped by current workflow instruction. This slice was validated with automated Rust and Flutter coverage only.
+
+Result:
+- PRD #19 is fully verified and complete.
+

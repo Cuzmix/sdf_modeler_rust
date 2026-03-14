@@ -36,6 +36,11 @@ pub struct AppBridge {
 }
 
 const DEFAULT_SCULPT_ENTRY_RESOLUTION: u32 = 64;
+const PRIMITIVE_PARAMETER_MIN: f32 = 0.01;
+const PRIMITIVE_PARAMETER_MAX: f32 = 100.0;
+const MATERIAL_FACTOR_MIN: f32 = 0.0;
+const MATERIAL_FACTOR_MAX: f32 = 1.0;
+const EMISSIVE_INTENSITY_MAX: f32 = 5.0;
 
 impl Default for AppBridge {
     fn default() -> Self {
@@ -417,6 +422,119 @@ impl AppBridge {
         })
     }
 
+    pub fn set_selected_primitive_parameter(&mut self, parameter_key: &str, value: f32) -> bool {
+        let clamped_value = value.clamp(PRIMITIVE_PARAMETER_MIN, PRIMITIVE_PARAMETER_MAX);
+
+        self.run_document_command(|bridge| {
+            let Some(selected_node) = bridge.selected_node else {
+                return false;
+            };
+            let Some(node) = bridge.scene.nodes.get_mut(&selected_node) else {
+                return false;
+            };
+
+            match &mut node.data {
+                NodeData::Primitive { kind, scale, .. } => {
+                    let axis = kind.scale_params().iter().find_map(|(label, axis)| {
+                        (property_key(label) == parameter_key).then_some(*axis)
+                    });
+                    let Some(axis) = axis else {
+                        return false;
+                    };
+
+                    set_scale_component(scale, axis, clamped_value);
+                    true
+                }
+                _ => false,
+            }
+        })
+    }
+
+    pub fn set_selected_material_float(&mut self, field_id: &str, value: f32) -> bool {
+        self.run_document_command(|bridge| {
+            let Some(selected_node) = bridge.selected_node else {
+                return false;
+            };
+            let Some(node) = bridge.scene.nodes.get_mut(&selected_node) else {
+                return false;
+            };
+
+            match &mut node.data {
+                NodeData::Primitive {
+                    roughness,
+                    metallic,
+                    emissive_intensity,
+                    fresnel,
+                    ..
+                }
+                | NodeData::Sculpt {
+                    roughness,
+                    metallic,
+                    emissive_intensity,
+                    fresnel,
+                    ..
+                } => {
+                    match field_id {
+                        "roughness" => {
+                            *roughness = value.clamp(MATERIAL_FACTOR_MIN, MATERIAL_FACTOR_MAX)
+                        }
+                        "metallic" => {
+                            *metallic = value.clamp(MATERIAL_FACTOR_MIN, MATERIAL_FACTOR_MAX)
+                        }
+                        "fresnel" => {
+                            *fresnel = value.clamp(MATERIAL_FACTOR_MIN, MATERIAL_FACTOR_MAX)
+                        }
+                        "emissive_intensity" => {
+                            *emissive_intensity =
+                                value.clamp(MATERIAL_FACTOR_MIN, EMISSIVE_INTENSITY_MAX)
+                        }
+                        _ => return false,
+                    }
+
+                    true
+                }
+                _ => false,
+            }
+        })
+    }
+
+    pub fn set_selected_material_color(
+        &mut self,
+        field_id: &str,
+        red: f32,
+        green: f32,
+        blue: f32,
+    ) -> bool {
+        let clamped_color = clamp_color(Vec3::new(red, green, blue));
+
+        self.run_document_command(|bridge| {
+            let Some(selected_node) = bridge.selected_node else {
+                return false;
+            };
+            let Some(node) = bridge.scene.nodes.get_mut(&selected_node) else {
+                return false;
+            };
+
+            match &mut node.data {
+                NodeData::Primitive {
+                    color, emissive, ..
+                }
+                | NodeData::Sculpt {
+                    color, emissive, ..
+                } => {
+                    match field_id {
+                        "color" => *color = clamped_color,
+                        "emissive" => *emissive = clamped_color,
+                        _ => return false,
+                    }
+
+                    true
+                }
+                _ => false,
+            }
+        })
+    }
+
     pub fn toggle_node_visibility(&mut self, node_id: u64) {
         self.run_document_command(|bridge| {
             if bridge.scene.nodes.contains_key(&node_id) {
@@ -743,6 +861,22 @@ fn scale_component(scale: Vec3, axis: usize) -> f32 {
     }
 }
 
+fn set_scale_component(scale: &mut Vec3, axis: usize, value: f32) {
+    match axis {
+        0 => scale.x = value,
+        1 => scale.y = value,
+        _ => scale.z = value,
+    }
+}
+
+fn clamp_color(color: Vec3) -> Vec3 {
+    Vec3::new(
+        color.x.clamp(MATERIAL_FACTOR_MIN, MATERIAL_FACTOR_MAX),
+        color.y.clamp(MATERIAL_FACTOR_MIN, MATERIAL_FACTOR_MAX),
+        color.z.clamp(MATERIAL_FACTOR_MIN, MATERIAL_FACTOR_MAX),
+    )
+}
+
 fn property_key(label: &str) -> String {
     let mut key = String::with_capacity(label.len());
     let mut previous_was_separator = false;
@@ -762,7 +896,10 @@ fn property_key(label: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{AppBridge, DEFAULT_SCULPT_ENTRY_RESOLUTION};
+    use super::{
+        AppBridge, DEFAULT_SCULPT_ENTRY_RESOLUTION, EMISSIVE_INTENSITY_MAX, MATERIAL_FACTOR_MIN,
+        PRIMITIVE_PARAMETER_MAX,
+    };
     use crate::app_bridge::{AppScalarPropertySnapshot, AppVec3};
     use crate::graph::scene::{CsgOp, LightType, ModifierKind, NodeData, SdfPrimitive};
 
@@ -917,6 +1054,111 @@ mod tests {
         assert_eq!(material.roughness, 0.5);
         assert_eq!(material.metallic, 0.0);
         assert_eq!(material.fresnel, 0.04);
+    }
+
+    #[test]
+    fn set_selected_primitive_parameter_updates_snapshot_and_clamps() {
+        let mut bridge = AppBridge::new();
+        let sphere_id = bridge
+            .scene
+            .top_level_nodes()
+            .into_iter()
+            .find(|node_id| {
+                matches!(
+                    bridge.scene.nodes[node_id].data,
+                    NodeData::Primitive {
+                        kind: SdfPrimitive::Sphere,
+                        ..
+                    }
+                )
+            })
+            .expect("default sphere");
+        bridge.select_node(Some(sphere_id));
+
+        assert!(bridge.set_selected_primitive_parameter("radius", 500.0));
+
+        match &bridge.scene.nodes[&sphere_id].data {
+            NodeData::Primitive { scale, .. } => assert_eq!(scale.x, PRIMITIVE_PARAMETER_MAX),
+            _ => panic!("expected primitive"),
+        }
+        assert_eq!(
+            bridge
+                .scene_snapshot()
+                .selected_node_properties
+                .expect("selected properties")
+                .primitive
+                .expect("primitive properties")
+                .parameters,
+            vec![AppScalarPropertySnapshot {
+                key: "radius".to_string(),
+                label: "Radius".to_string(),
+                value: PRIMITIVE_PARAMETER_MAX,
+            }]
+        );
+    }
+
+    #[test]
+    fn set_selected_material_float_updates_snapshot_and_clamps() {
+        let mut bridge = AppBridge::new();
+        let sphere_id = bridge
+            .scene
+            .top_level_nodes()
+            .into_iter()
+            .find(|node_id| {
+                matches!(
+                    bridge.scene.nodes[node_id].data,
+                    NodeData::Primitive {
+                        kind: SdfPrimitive::Sphere,
+                        ..
+                    }
+                )
+            })
+            .expect("default sphere");
+        bridge.select_node(Some(sphere_id));
+
+        assert!(bridge.set_selected_material_float("roughness", -2.0));
+        assert!(bridge.set_selected_material_float("emissive_intensity", 99.0));
+
+        let material = bridge
+            .scene_snapshot()
+            .selected_node_properties
+            .expect("selected properties")
+            .material
+            .expect("material properties");
+        assert_eq!(material.roughness, MATERIAL_FACTOR_MIN);
+        assert_eq!(material.emissive_intensity, EMISSIVE_INTENSITY_MAX);
+    }
+
+    #[test]
+    fn set_selected_material_color_updates_snapshot_and_clamps() {
+        let mut bridge = AppBridge::new();
+        let sphere_id = bridge
+            .scene
+            .top_level_nodes()
+            .into_iter()
+            .find(|node_id| {
+                matches!(
+                    bridge.scene.nodes[node_id].data,
+                    NodeData::Primitive {
+                        kind: SdfPrimitive::Sphere,
+                        ..
+                    }
+                )
+            })
+            .expect("default sphere");
+        bridge.select_node(Some(sphere_id));
+
+        assert!(bridge.set_selected_material_color("color", -0.5, 0.4, 2.0));
+        assert!(bridge.set_selected_material_color("emissive", 0.2, 1.7, 0.3));
+
+        let material = bridge
+            .scene_snapshot()
+            .selected_node_properties
+            .expect("selected properties")
+            .material
+            .expect("material properties");
+        assert_eq!(material.color, AppVec3::new(0.0, 0.4, 1.0));
+        assert_eq!(material.emissive, AppVec3::new(0.2, 1.0, 0.3));
     }
 
     #[test]

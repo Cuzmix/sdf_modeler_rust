@@ -65,6 +65,12 @@ const List<_CreateNodeOption> _lightOptions = <_CreateNodeOption>[
   _CreateNodeOption(id: 'ambient', label: 'Ambient'),
 ];
 
+const double _primitiveParameterMin = 0.01;
+const double _primitiveParameterMax = 100.0;
+const double _materialFactorMin = 0.0;
+const double _materialFactorMax = 1.0;
+const double _emissiveIntensityMax = 5.0;
+
 class SdfModelerApp extends StatelessWidget {
   const SdfModelerApp({super.key});
 
@@ -835,6 +841,27 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                       onCreateLight: _promptCreateLight,
                       onCreateSculpt: () => _runSceneCommand(createSculpt),
                       onRenameSelected: _promptRenameSelectedNode,
+                      onSetPrimitiveParameter: (parameterKey, value) =>
+                          _runSceneCommand(
+                            () => setSelectedPrimitiveParameter(
+                              parameterKey: parameterKey,
+                              value: value,
+                            ),
+                          ),
+                      onSetMaterialFloat: (fieldId, value) => _runSceneCommand(
+                        () => setSelectedMaterialFloat(
+                          fieldId: fieldId,
+                          value: value,
+                        ),
+                      ),
+                      onSetMaterialColor: (fieldId, color) => _runSceneCommand(
+                        () => setSelectedMaterialColor(
+                          fieldId: fieldId,
+                          red: color.x,
+                          green: color.y,
+                          blue: color.z,
+                        ),
+                      ),
                       onDuplicateSelected: () =>
                           _runSceneCommand(duplicateSelected),
                       onUndo: () => _runSceneCommand(undo),
@@ -942,6 +969,27 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                   onCreateLight: _promptCreateLight,
                   onCreateSculpt: () => _runSceneCommand(createSculpt),
                   onRenameSelected: _promptRenameSelectedNode,
+                  onSetPrimitiveParameter: (parameterKey, value) =>
+                      _runSceneCommand(
+                        () => setSelectedPrimitiveParameter(
+                          parameterKey: parameterKey,
+                          value: value,
+                        ),
+                      ),
+                  onSetMaterialFloat: (fieldId, value) => _runSceneCommand(
+                    () => setSelectedMaterialFloat(
+                      fieldId: fieldId,
+                      value: value,
+                    ),
+                  ),
+                  onSetMaterialColor: (fieldId, color) => _runSceneCommand(
+                    () => setSelectedMaterialColor(
+                      fieldId: fieldId,
+                      red: color.x,
+                      green: color.y,
+                      blue: color.z,
+                    ),
+                  ),
                   onDuplicateSelected: () =>
                       _runSceneCommand(duplicateSelected),
                   onUndo: () => _runSceneCommand(undo),
@@ -1098,6 +1146,9 @@ class _InspectorPanel extends StatelessWidget {
     required this.onCreateLight,
     required this.onCreateSculpt,
     required this.onRenameSelected,
+    required this.onSetPrimitiveParameter,
+    required this.onSetMaterialFloat,
+    required this.onSetMaterialColor,
     required this.onDuplicateSelected,
     required this.onUndo,
     required this.onRedo,
@@ -1140,6 +1191,9 @@ class _InspectorPanel extends StatelessWidget {
   final VoidCallback onCreateLight;
   final VoidCallback onCreateSculpt;
   final VoidCallback onRenameSelected;
+  final void Function(String parameterKey, double value) onSetPrimitiveParameter;
+  final void Function(String fieldId, double value) onSetMaterialFloat;
+  final void Function(String fieldId, AppVec3 color) onSetMaterialColor;
   final VoidCallback onDuplicateSelected;
   final VoidCallback onUndo;
   final VoidCallback onRedo;
@@ -1287,6 +1341,9 @@ class _InspectorPanel extends StatelessWidget {
               properties: selectedNodeProperties,
               enabled: !commandInFlight,
               onRenameSelected: onRenameSelected,
+              onSetPrimitiveParameter: onSetPrimitiveParameter,
+              onSetMaterialFloat: onSetMaterialFloat,
+              onSetMaterialColor: onSetMaterialColor,
               onToggleVisibility: selectedNodeProperties == null
                   ? null
                   : () => onToggleSceneNodeVisibility(
@@ -1371,11 +1428,14 @@ class _InspectorPanel extends StatelessWidget {
   }
 }
 
-class _NodeBasicsPanel extends StatelessWidget {
+class _NodeBasicsPanel extends StatefulWidget {
   const _NodeBasicsPanel({
     required this.properties,
     required this.enabled,
     required this.onRenameSelected,
+    required this.onSetPrimitiveParameter,
+    required this.onSetMaterialFloat,
+    required this.onSetMaterialColor,
     required this.onToggleVisibility,
     required this.onToggleLock,
   });
@@ -1383,18 +1443,101 @@ class _NodeBasicsPanel extends StatelessWidget {
   final AppSelectedNodePropertiesSnapshot? properties;
   final bool enabled;
   final VoidCallback onRenameSelected;
+  final void Function(String parameterKey, double value) onSetPrimitiveParameter;
+  final void Function(String fieldId, double value) onSetMaterialFloat;
+  final void Function(String fieldId, AppVec3 color) onSetMaterialColor;
   final VoidCallback? onToggleVisibility;
   final VoidCallback? onToggleLock;
 
   @override
+  State<_NodeBasicsPanel> createState() => _NodeBasicsPanelState();
+}
+
+class _NodeBasicsPanelState extends State<_NodeBasicsPanel> {
+  Map<String, double> _scalarDrafts = <String, double>{};
+  Map<String, AppVec3> _colorDrafts = <String, AppVec3>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _resetDrafts();
+  }
+
+  @override
+  void didUpdateWidget(covariant _NodeBasicsPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.properties != oldWidget.properties) {
+      _resetDrafts();
+    }
+  }
+
+  void _resetDrafts() {
+    final selectedProperties = widget.properties;
+    if (selectedProperties == null) {
+      _scalarDrafts = <String, double>{};
+      _colorDrafts = <String, AppVec3>{};
+      return;
+    }
+
+    final nextScalarDrafts = <String, double>{};
+    final nextColorDrafts = <String, AppVec3>{};
+    for (final parameter in selectedProperties.primitive?.parameters ?? const []) {
+      nextScalarDrafts['primitive:${parameter.key}'] = parameter.value;
+    }
+    final material = selectedProperties.material;
+    if (material != null) {
+      nextScalarDrafts['material:roughness'] = material.roughness;
+      nextScalarDrafts['material:metallic'] = material.metallic;
+      nextScalarDrafts['material:fresnel'] = material.fresnel;
+      nextScalarDrafts['material:emissive_intensity'] = material.emissiveIntensity;
+      nextColorDrafts['material:color'] = material.color;
+      nextColorDrafts['material:emissive'] = material.emissive;
+    }
+    _scalarDrafts = nextScalarDrafts;
+    _colorDrafts = nextColorDrafts;
+  }
+
+  double _scalarValue(String key, double fallback) {
+    return _scalarDrafts[key] ?? fallback;
+  }
+
+  void _setScalarValue(String key, double value) {
+    setState(() {
+      _scalarDrafts[key] = value;
+    });
+  }
+
+  AppVec3 _colorValue(String key, AppVec3 fallback) {
+    return _colorDrafts[key] ?? fallback;
+  }
+
+  void _setColorComponent(
+    String key,
+    AppVec3 fallback,
+    int component,
+    double value,
+  ) {
+    final current = _colorValue(key, fallback);
+    final next = switch (component) {
+      0 => AppVec3(x: value, y: current.y, z: current.z),
+      1 => AppVec3(x: current.x, y: value, z: current.z),
+      _ => AppVec3(x: current.x, y: current.y, z: value),
+    };
+    setState(() {
+      _colorDrafts[key] = next;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final selectedProperties = properties;
+    final selectedProperties = widget.properties;
     if (selectedProperties == null) {
       return const Text('Select a node to inspect backend-owned properties.');
     }
 
     final transform = selectedProperties.transform;
     final primitive = selectedProperties.primitive;
+    final material = selectedProperties.material;
 
     return Card(
       child: Padding(
@@ -1411,7 +1554,7 @@ class _NodeBasicsPanel extends StatelessWidget {
             const SizedBox(height: ShellTokens.controlGap),
             FilledButton.icon(
               key: const ValueKey('node-basics-rename'),
-              onPressed: enabled ? onRenameSelected : null,
+              onPressed: widget.enabled ? widget.onRenameSelected : null,
               icon: const Icon(Icons.edit_outlined),
               label: const Text('Rename'),
             ),
@@ -1420,8 +1563,8 @@ class _NodeBasicsPanel extends StatelessWidget {
               key: const ValueKey('node-basics-visible-toggle'),
               contentPadding: EdgeInsets.zero,
               value: selectedProperties.visible,
-              onChanged: enabled && onToggleVisibility != null
-                  ? (_) => onToggleVisibility!()
+              onChanged: widget.enabled && widget.onToggleVisibility != null
+                  ? (_) => widget.onToggleVisibility!()
                   : null,
               title: const Text('Visible'),
               subtitle: const Text(
@@ -1432,8 +1575,8 @@ class _NodeBasicsPanel extends StatelessWidget {
               key: const ValueKey('node-basics-lock-toggle'),
               contentPadding: EdgeInsets.zero,
               value: selectedProperties.locked,
-              onChanged: enabled && onToggleLock != null
-                  ? (_) => onToggleLock!()
+              onChanged: widget.enabled && widget.onToggleLock != null
+                  ? (_) => widget.onToggleLock!()
                   : null,
               title: const Text('Locked'),
               subtitle: const Text(
@@ -1469,10 +1612,116 @@ class _NodeBasicsPanel extends StatelessWidget {
               ),
               const SizedBox(height: ShellTokens.compactGap),
               for (final parameter in primitive.parameters)
-                _PropertyValueRow(
+                _ScalarPropertyEditor(
+                  key: ValueKey('primitive-parameter-${parameter.key}-slider'),
                   label: parameter.label,
-                  value: parameter.value.toStringAsFixed(2),
+                  value: _scalarValue(
+                    'primitive:${parameter.key}',
+                    parameter.value,
+                  ),
+                  min: _primitiveParameterMin,
+                  max: _primitiveParameterMax,
+                  enabled: widget.enabled,
+                  onChanged: (value) => _setScalarValue(
+                    'primitive:${parameter.key}',
+                    value,
+                  ),
+                  onChangeEnd: (value) => widget.onSetPrimitiveParameter(
+                    parameter.key,
+                    value,
+                  ),
                 ),
+            ],
+            if (material != null) ...[
+              const SizedBox(height: ShellTokens.controlGap),
+              Text(
+                'Material Basics',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              const SizedBox(height: ShellTokens.compactGap),
+              _ColorPropertyEditor(
+                label: 'Color',
+                keyPrefix: 'material-color',
+                value: _colorValue('material:color', material.color),
+                enabled: widget.enabled,
+                onChanged: (component, value) => _setColorComponent(
+                  'material:color',
+                  material.color,
+                  component,
+                  value,
+                ),
+                onChangeEnd: (_) => widget.onSetMaterialColor(
+                  'color',
+                  _colorValue('material:color', material.color),
+                ),
+              ),
+              _ScalarPropertyEditor(
+                key: const ValueKey('material-metallic-slider'),
+                label: 'Metallic',
+                value: _scalarValue('material:metallic', material.metallic),
+                min: _materialFactorMin,
+                max: _materialFactorMax,
+                enabled: widget.enabled,
+                onChanged: (value) =>
+                    _setScalarValue('material:metallic', value),
+                onChangeEnd: (value) =>
+                    widget.onSetMaterialFloat('metallic', value),
+              ),
+              _ScalarPropertyEditor(
+                key: const ValueKey('material-roughness-slider'),
+                label: 'Roughness',
+                value: _scalarValue('material:roughness', material.roughness),
+                min: _materialFactorMin,
+                max: _materialFactorMax,
+                enabled: widget.enabled,
+                onChanged: (value) =>
+                    _setScalarValue('material:roughness', value),
+                onChangeEnd: (value) =>
+                    widget.onSetMaterialFloat('roughness', value),
+              ),
+              _ScalarPropertyEditor(
+                key: const ValueKey('material-fresnel-slider'),
+                label: 'Fresnel',
+                value: _scalarValue('material:fresnel', material.fresnel),
+                min: _materialFactorMin,
+                max: _materialFactorMax,
+                enabled: widget.enabled,
+                onChanged: (value) =>
+                    _setScalarValue('material:fresnel', value),
+                onChangeEnd: (value) =>
+                    widget.onSetMaterialFloat('fresnel', value),
+              ),
+              _ColorPropertyEditor(
+                label: 'Emissive',
+                keyPrefix: 'material-emissive',
+                value: _colorValue('material:emissive', material.emissive),
+                enabled: widget.enabled,
+                onChanged: (component, value) => _setColorComponent(
+                  'material:emissive',
+                  material.emissive,
+                  component,
+                  value,
+                ),
+                onChangeEnd: (_) => widget.onSetMaterialColor(
+                  'emissive',
+                  _colorValue('material:emissive', material.emissive),
+                ),
+              ),
+              _ScalarPropertyEditor(
+                key: const ValueKey('material-emissive-intensity-slider'),
+                label: 'Emissive Intensity',
+                value: _scalarValue(
+                  'material:emissive_intensity',
+                  material.emissiveIntensity,
+                ),
+                min: _materialFactorMin,
+                max: _emissiveIntensityMax,
+                enabled: widget.enabled,
+                onChanged: (value) =>
+                    _setScalarValue('material:emissive_intensity', value),
+                onChangeEnd: (value) =>
+                    widget.onSetMaterialFloat('emissive_intensity', value),
+              ),
             ],
           ],
         ),
@@ -1510,6 +1759,106 @@ class _PropertyValueRow extends StatelessWidget {
             ),
           ),
           Expanded(child: Text(value)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScalarPropertyEditor extends StatelessWidget {
+  const _ScalarPropertyEditor({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.enabled,
+    required this.onChanged,
+    required this.onChangeEnd,
+  });
+
+  final String label;
+  final double value;
+  final double min;
+  final double max;
+  final bool enabled;
+  final ValueChanged<double> onChanged;
+  final ValueChanged<double> onChangeEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: ShellTokens.controlGap),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('$label: ${value.toStringAsFixed(2)}'),
+          Slider(
+            value: value.clamp(min, max),
+            min: min,
+            max: max,
+            onChanged: enabled ? onChanged : null,
+            onChangeEnd: enabled ? onChangeEnd : null,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ColorPropertyEditor extends StatelessWidget {
+  const _ColorPropertyEditor({
+    required this.label,
+    required this.keyPrefix,
+    required this.value,
+    required this.enabled,
+    required this.onChanged,
+    required this.onChangeEnd,
+  });
+
+  final String label;
+  final String keyPrefix;
+  final AppVec3 value;
+  final bool enabled;
+  final void Function(int component, double value) onChanged;
+  final ValueChanged<AppVec3> onChangeEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    final components = <(String, double, String)>[
+      ('R', value.x, 'red'),
+      ('G', value.y, 'green'),
+      ('B', value.z, 'blue'),
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: ShellTokens.controlGap),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '$label: ${value.x.toStringAsFixed(2)}, ${value.y.toStringAsFixed(2)}, ${value.z.toStringAsFixed(2)}',
+          ),
+          for (final (index, component) in components.indexed)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(component.$1),
+                Slider(
+                  key: ValueKey('$keyPrefix-${component.$3}-slider'),
+                  value: component.$2.clamp(
+                    _materialFactorMin,
+                    _materialFactorMax,
+                  ),
+                  min: _materialFactorMin,
+                  max: _materialFactorMax,
+                  onChanged: enabled
+                      ? (nextValue) => onChanged(index, nextValue)
+                      : null,
+                  onChangeEnd: enabled ? (_) => onChangeEnd(value) : null,
+                ),
+              ],
+            ),
         ],
       ),
     );

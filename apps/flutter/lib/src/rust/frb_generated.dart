@@ -66,7 +66,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => -1688305408;
+  int get rustContentHash => 1372559238;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -156,6 +156,23 @@ abstract class RustLibApi extends BaseApi {
     required int width,
     required int height,
     required double timeSeconds,
+  });
+
+  String crateApiSimpleSetSelectedMaterialColor({
+    required String fieldId,
+    required double red,
+    required double green,
+    required double blue,
+  });
+
+  String crateApiSimpleSetSelectedMaterialFloat({
+    required String fieldId,
+    required double value,
+  });
+
+  String crateApiSimpleSetSelectedPrimitiveParameter({
+    required String parameterKey,
+    required double value,
   });
 
   String crateApiSimpleToggleNodeLock({required BigInt nodeId});
@@ -925,13 +942,107 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  String crateApiSimpleSetSelectedMaterialColor({
+    required String fieldId,
+    required double red,
+    required double green,
+    required double blue,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(fieldId, serializer);
+          sse_encode_f_32(red, serializer);
+          sse_encode_f_32(green, serializer);
+          sse_encode_f_32(blue, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 32)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSelectedMaterialColorConstMeta,
+        argValues: [fieldId, red, green, blue],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSelectedMaterialColorConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_selected_material_color",
+        argNames: ["fieldId", "red", "green", "blue"],
+      );
+
+  @override
+  String crateApiSimpleSetSelectedMaterialFloat({
+    required String fieldId,
+    required double value,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(fieldId, serializer);
+          sse_encode_f_32(value, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 33)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSelectedMaterialFloatConstMeta,
+        argValues: [fieldId, value],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSelectedMaterialFloatConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_selected_material_float",
+        argNames: ["fieldId", "value"],
+      );
+
+  @override
+  String crateApiSimpleSetSelectedPrimitiveParameter({
+    required String parameterKey,
+    required double value,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(parameterKey, serializer);
+          sse_encode_f_32(value, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 34)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSelectedPrimitiveParameterConstMeta,
+        argValues: [parameterKey, value],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSelectedPrimitiveParameterConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_selected_primitive_parameter",
+        argNames: ["parameterKey", "value"],
+      );
+
+  @override
   String crateApiSimpleToggleNodeLock({required BigInt nodeId}) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_u_64(nodeId, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 32)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 35)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -954,7 +1065,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_u_64(nodeId, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 33)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 36)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -979,7 +1090,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 34)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 37)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -1001,7 +1112,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 35)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 38)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -1024,7 +1135,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_f_32(delta, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 36)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 39)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_unit,

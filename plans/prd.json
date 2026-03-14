@@ -130,7 +130,7 @@
     "category": "properties",
     "description": "Port the primitive and material basics editing panel.\n\nSteps:\n1. Add backend commands for the primitive parameters and basic material fields exposed by the property snapshot.\n2. Build the first Flutter material editing panel against those backend snapshots and commands.\n3. Keep all node-specific semantics, clamping, and validation in Rust.\n4. Keep the layout touch-first for tablet use, then scale upward for desktop.",
     "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build`. If the bridge API changes, run `apps/flutter/scripts/frb_codegen.ps1`. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, and `fvm flutter build windows --debug`. Manual: edit primitive and material basics from Flutter and confirm the viewport, selection feedback, and scene tree stay synchronized.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 20,

@@ -140,6 +140,32 @@ pub fn create_sculpt() -> String {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn set_selected_primitive_parameter(parameter_key: String, value: f32) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_selected_primitive_parameter(&parameter_key, value);
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_selected_material_float(field_id: String, value: f32) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_selected_material_float(&field_id, value);
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_selected_material_color(
+    field_id: String,
+    red: f32,
+    green: f32,
+    blue: f32,
+) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_selected_material_color(&field_id, red, green, blue);
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn undo() -> String {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.undo();
