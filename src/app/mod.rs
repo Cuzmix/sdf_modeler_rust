@@ -482,5 +482,3 @@ impl eframe::App for SdfApp {
         self.settings.save();
     }
 }
-
-

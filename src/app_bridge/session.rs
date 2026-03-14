@@ -331,10 +331,15 @@ impl AppBridge {
         if let Some((restored_scene, restored_selected)) =
             self.history.undo(&self.scene, self.selected_node)
         {
-            self.scene = restored_scene;
-            self.selected_node =
-                restored_selected.filter(|node_id| self.scene.nodes.contains_key(node_id));
-            self.hovered_node = self.selected_node;
+            self.restore_history_state(restored_scene, restored_selected);
+        }
+    }
+
+    pub fn redo(&mut self) {
+        if let Some((restored_scene, restored_selected)) =
+            self.history.redo(&self.scene, self.selected_node)
+        {
+            self.restore_history_state(restored_scene, restored_selected);
         }
     }
 
@@ -361,6 +366,13 @@ impl AppBridge {
         self.history
             .end_frame(&self.scene, self.selected_node, false);
         result
+    }
+
+    fn restore_history_state(&mut self, restored_scene: Scene, restored_selected: Option<NodeId>) {
+        self.scene = restored_scene;
+        self.selected_node =
+            restored_selected.filter(|node_id| self.scene.nodes.contains_key(node_id));
+        self.hovered_node = self.selected_node;
     }
 
     fn scene_tree_roots(&self) -> Vec<AppSceneTreeNodeSnapshot> {
@@ -511,17 +523,37 @@ mod tests {
         assert_eq!(bridge.hovered_node, initial_selected);
         assert!(!bridge.scene.nodes.contains_key(&added_node));
         assert!(!bridge.scene_snapshot().history.can_undo);
+        assert!(bridge.scene_snapshot().history.can_redo);
     }
 
     #[test]
-    fn reset_scene_clears_undo_history() {
+    fn redo_restores_undone_scene_and_selection() {
+        let mut bridge = AppBridge::new();
+        let added_node = bridge.add_box();
+
+        bridge.undo();
+        assert!(bridge.scene_snapshot().history.can_redo);
+
+        bridge.redo();
+
+        assert!(bridge.scene.nodes.contains_key(&added_node));
+        assert_eq!(bridge.selected_node, Some(added_node));
+        assert_eq!(bridge.hovered_node, Some(added_node));
+        assert!(bridge.scene_snapshot().history.can_undo);
+        assert!(!bridge.scene_snapshot().history.can_redo);
+    }
+
+    #[test]
+    fn reset_scene_clears_undo_and_redo_history() {
         let mut bridge = AppBridge::new();
         bridge.add_box();
+        bridge.undo();
 
-        assert!(bridge.scene_snapshot().history.can_undo);
+        assert!(bridge.scene_snapshot().history.can_redo);
 
         bridge.reset_scene();
 
         assert!(!bridge.scene_snapshot().history.can_undo);
+        assert!(!bridge.scene_snapshot().history.can_redo);
     }
 }

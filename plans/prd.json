@@ -81,7 +81,7 @@
     "category": "document",
     "description": "Port the backend-owned `redo` command through `src/app_bridge/`.\n\nSteps:\n1. Expose `redo` as a backend command in `src/app_bridge/`.\n2. Surface any minimal metadata Flutter needs to render redo availability without duplicating history logic.\n3. Expose the command through FRB and extend the Flutter command surface for it.\n4. Keep history semantics in Rust.",
     "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build`. If the bridge API changes, run `apps/flutter/scripts/frb_codegen.ps1`. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, and `fvm flutter build windows --debug`. Manual: perform undo then redo in the Flutter host and confirm scene tree, selection, and viewport return to the redone backend state.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 13,

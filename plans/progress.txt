@@ -1810,3 +1810,47 @@ Manual verification:
 Result:
 - PRD #11 is fully verified and complete.
 
+--- Migration Iteration 4: PRD #12 - Backend-owned redo command through `src/app_bridge/` ---
+IMPLEMENTED, but PRD #12 remains `passes: false` until the required manual Flutter host redo check is completed.
+
+Changes:
+- src/app_bridge/session.rs:
+  - Added backend `redo()` that restores scene and selection state from Rust history.
+  - Consolidated undo/redo scene restoration through a shared `restore_history_state()` helper so both commands keep selection and hover state aligned.
+  - Added bridge tests covering redo restoration and reset clearing both undo and redo history.
+- apps/flutter/rust/src/api/simple.rs:
+  - Added the FRB-exposed synchronous `redo()` command.
+- apps/flutter/scripts/frb_codegen.ps1:
+  - Regenerated the FRB Rust and Dart bindings after the API change.
+- apps/flutter/lib/app.dart:
+  - Added a touch-usable `Redo` trigger to the shared scene command surface used by the desktop side panel and tablet modal command sheet.
+  - Wired the Flutter shell to backend-provided `history.canRedo` availability instead of reconstructing redo semantics in Dart.
+- apps/flutter/test/widget_test.dart:
+  - Added mock bridge support for the new redo API.
+  - Added a widget test proving the Flutter shell routes redo through the Rust facade and refreshes snapshot state afterward.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS (477 passed)
+- cargo build: PASS
+- apps/flutter/scripts/frb_codegen.ps1: PASS
+- Flutter analyze: PASS
+- Flutter test: PASS
+- Flutter build windows --debug: PASS
+
+Manual verification pending:
+- Run the Flutter Windows host, perform an undo followed by `Redo`, and confirm the scene tree, selection state, and viewport all return to the redone backend-owned state.
+
+Result:
+- PRD #12 is implemented and automatically verified, but it is not yet marked complete in `plans/prd.json` because the manual verification step is still outstanding.
+
+--- Migration Iteration 4 Manual Verification: PRD #12 complete ---
+Manual verification completed on 2026-03-14 for the backend-owned redo slice.
+
+Manual verification:
+- Flutter Windows host redo: PASS. After performing `Undo` followed by `Redo`, the scene tree, selection state, and viewport all returned to the redone backend-owned state.
+
+Result:
+- PRD #12 is fully verified and complete.
+

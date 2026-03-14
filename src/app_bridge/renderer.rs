@@ -118,14 +118,14 @@ impl HeadlessViewportRenderer {
             ctrl_held: false,
         };
 
-        let pick_result = self.viewport_resources.execute_pick(
-            &self.device,
-            &self.queue,
-            &pending_pick,
-        )?;
+        let pick_result =
+            self.viewport_resources
+                .execute_pick(&self.device, &self.queue, &pending_pick)?;
 
         let visible_topo_order = request.scene.visible_topo_order();
-        visible_topo_order.get(pick_result.material_id as usize).copied()
+        visible_topo_order
+            .get(pick_result.material_id as usize)
+            .copied()
     }
 
     fn sync_scene(

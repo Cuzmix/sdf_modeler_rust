@@ -1,4 +1,4 @@
-﻿use std::sync::atomic::Ordering;
+use std::sync::atomic::Ordering;
 
 use eframe::egui;
 
@@ -82,13 +82,14 @@ impl SdfApp {
         let mut sculpt_pressure: f32 = 0.0;
         let mut is_hover_pick = false;
         let sculpt_count = self.gpu.sculpt_tex_indices.len();
-        let isolation_label: Option<String> = self.ui.isolation_state.as_ref().and_then(|isolation| {
-            self.doc
-                .scene
-                .nodes
-                .get(&isolation.isolated_node)
-                .map(|node| node.name.clone())
-        });
+        let isolation_label: Option<String> =
+            self.ui.isolation_state.as_ref().and_then(|isolation| {
+                self.doc
+                    .scene
+                    .nodes
+                    .get(&isolation.isolated_node)
+                    .map(|node| node.name.clone())
+            });
         let solo_label: Option<String> = self
             .doc
             .soloed_light
@@ -199,4 +200,3 @@ impl SdfApp {
         }
     }
 }
-

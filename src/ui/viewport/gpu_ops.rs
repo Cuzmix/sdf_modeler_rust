@@ -324,7 +324,11 @@ impl ViewportResources {
             render_config.bloom_threshold,
             render_config.bloom_intensity,
             render_config.bloom_radius,
-            if render_config.bloom_enabled { 1.0 } else { 0.0 },
+            if render_config.bloom_enabled {
+                1.0
+            } else {
+                0.0
+            },
         ];
         queue.write_buffer(&blit_params_buffer, 0, bytemuck::cast_slice(&blit_data));
 

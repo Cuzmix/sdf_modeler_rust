@@ -63,6 +63,8 @@ String deleteSelected() => RustLib.instance.api.crateApiSimpleDeleteSelected();
 
 String undo() => RustLib.instance.api.crateApiSimpleUndo();
 
+String redo() => RustLib.instance.api.crateApiSimpleRedo();
+
 String focusSelected() => RustLib.instance.api.crateApiSimpleFocusSelected();
 
 String frameAll() => RustLib.instance.api.crateApiSimpleFrameAll();

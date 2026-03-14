@@ -91,6 +91,13 @@ pub fn undo() -> String {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn redo() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.redo();
+    snapshot_json(&bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn focus_selected() -> String {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.focus_selected();
