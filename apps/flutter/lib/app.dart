@@ -213,6 +213,16 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     final instantaneousFramesPerSecond = _framesPerSecondFromFrameTime(
       event.frameTimeMs,
     );
+    AppSceneSnapshot? refreshedSnapshot;
+    String? snapshotRefreshError;
+
+    if (event.sceneStateChanged) {
+      try {
+        refreshedSnapshot = _decodeSnapshot(sceneSnapshotJson());
+      } catch (error) {
+        snapshotRefreshError = 'Scene snapshot refresh error: $error';
+      }
+    }
 
     setState(() {
       _nativeFrameWidth = event.frameWidth;
@@ -225,10 +235,21 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
         instantaneousFramesPerSecond,
       );
       _interactionPhase = event.interactionPhase;
+      if (refreshedSnapshot != null) {
+        _sceneSnapshot = refreshedSnapshot;
+      }
       if (event.feedback != null) {
         _viewportFeedback = event.feedback;
+      } else if (refreshedSnapshot != null) {
+        _viewportFeedback = TextureViewportFeedback.fromSceneSnapshot(
+          refreshedSnapshot,
+        );
       }
-      _previewLine = _buildPreviewLine();
+      if (snapshotRefreshError != null) {
+        _previewLine = snapshotRefreshError;
+      } else {
+        _previewLine = _buildPreviewLine();
+      }
     });
   }
 
@@ -1142,6 +1163,7 @@ class _InspectorPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final currentCamera = viewportFeedback?.camera ?? snapshot?.camera;
     final selectedNode = viewportFeedback?.selectedNode ?? snapshot?.selectedNode;
+    final selectedNodeProperties = snapshot?.selectedNodeProperties;
     final hoveredNode = viewportFeedback?.hoveredNode;
     final selectedNodeId = selectedNode?.id;
     final cameraControlsEnabled = !commandInFlight && currentCamera != null;
@@ -1254,6 +1276,28 @@ class _InspectorPanel extends StatelessWidget {
             ),
           const SizedBox(height: ShellTokens.sectionGap),
           Text(
+            'Node Basics',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: ShellTokens.controlGap),
+          if (snapshot == null)
+            const Text('Scene snapshot is still loading.')
+          else
+            _NodeBasicsPanel(
+              properties: selectedNodeProperties,
+              enabled: !commandInFlight,
+              onRenameSelected: onRenameSelected,
+              onToggleVisibility: selectedNodeProperties == null
+                  ? null
+                  : () => onToggleSceneNodeVisibility(
+                      selectedNodeProperties.nodeId,
+                    ),
+              onToggleLock: selectedNodeProperties == null
+                  ? null
+                  : () => onToggleSceneNodeLock(selectedNodeProperties.nodeId),
+            ),
+          const SizedBox(height: ShellTokens.sectionGap),
+          Text(
             'Camera',
             style: Theme.of(context).textTheme.titleMedium,
           ),
@@ -1321,6 +1365,151 @@ class _InspectorPanel extends StatelessWidget {
                 ],
               ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _NodeBasicsPanel extends StatelessWidget {
+  const _NodeBasicsPanel({
+    required this.properties,
+    required this.enabled,
+    required this.onRenameSelected,
+    required this.onToggleVisibility,
+    required this.onToggleLock,
+  });
+
+  final AppSelectedNodePropertiesSnapshot? properties;
+  final bool enabled;
+  final VoidCallback onRenameSelected;
+  final VoidCallback? onToggleVisibility;
+  final VoidCallback? onToggleLock;
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedProperties = properties;
+    if (selectedProperties == null) {
+      return const Text('Select a node to inspect backend-owned properties.');
+    }
+
+    final transform = selectedProperties.transform;
+    final primitive = selectedProperties.primitive;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(ShellTokens.panelPadding),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              selectedProperties.name,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: ShellTokens.compactGap),
+            Text('Type: ${selectedProperties.kindLabel}'),
+            const SizedBox(height: ShellTokens.controlGap),
+            FilledButton.icon(
+              key: const ValueKey('node-basics-rename'),
+              onPressed: enabled ? onRenameSelected : null,
+              icon: const Icon(Icons.edit_outlined),
+              label: const Text('Rename'),
+            ),
+            const SizedBox(height: ShellTokens.controlGap),
+            SwitchListTile.adaptive(
+              key: const ValueKey('node-basics-visible-toggle'),
+              contentPadding: EdgeInsets.zero,
+              value: selectedProperties.visible,
+              onChanged: enabled && onToggleVisibility != null
+                  ? (_) => onToggleVisibility!()
+                  : null,
+              title: const Text('Visible'),
+              subtitle: const Text(
+                'Keep this node active in the backend-rendered scene.',
+              ),
+            ),
+            SwitchListTile.adaptive(
+              key: const ValueKey('node-basics-lock-toggle'),
+              contentPadding: EdgeInsets.zero,
+              value: selectedProperties.locked,
+              onChanged: enabled && onToggleLock != null
+                  ? (_) => onToggleLock!()
+                  : null,
+              title: const Text('Locked'),
+              subtitle: const Text(
+                'Prevent backend document commands from mutating this node.',
+              ),
+            ),
+            if (transform != null) ...[
+              const SizedBox(height: ShellTokens.controlGap),
+              Text(
+                'Transform',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              const SizedBox(height: ShellTokens.compactGap),
+              _PropertyValueRow(
+                label: transform.positionLabel,
+                value: _formatVec3(transform.position),
+              ),
+              _PropertyValueRow(
+                label: 'Rotation',
+                value: '${_formatVec3(transform.rotationDegrees)} deg',
+              ),
+              if (transform.scale != null)
+                _PropertyValueRow(
+                  label: 'Scale',
+                  value: _formatVec3(transform.scale!),
+                ),
+            ],
+            if (primitive != null && primitive.parameters.isNotEmpty) ...[
+              const SizedBox(height: ShellTokens.controlGap),
+              Text(
+                'Primitive Parameters',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              const SizedBox(height: ShellTokens.compactGap),
+              for (final parameter in primitive.parameters)
+                _PropertyValueRow(
+                  label: parameter.label,
+                  value: parameter.value.toStringAsFixed(2),
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _formatVec3(AppVec3 value) {
+    return [
+      value.x.toStringAsFixed(2),
+      value.y.toStringAsFixed(2),
+      value.z.toStringAsFixed(2),
+    ].join(', ');
+  }
+}
+
+class _PropertyValueRow extends StatelessWidget {
+  const _PropertyValueRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: ShellTokens.compactGap),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 112,
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
+          Expanded(child: Text(value)),
         ],
       ),
     );

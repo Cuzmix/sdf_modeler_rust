@@ -123,7 +123,7 @@
     "category": "properties",
     "description": "Build the touch-first node basics panel against backend snapshots and commands.\n\nSteps:\n1. Render name, visibility, lock, and basic primitive fields from the backend property snapshot.\n2. Keep all validation and clamping in Rust commands rather than Dart widgets.\n3. Make the panel usable on tablets first, then adapt it upward for desktop.\n4. Keep the scene tree, viewport, and property panel synchronized after edits.",
     "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build` if Rust command or snapshot code changes. If the bridge API changes, run `apps/flutter/scripts/frb_codegen.ps1`. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, and `fvm flutter build windows --debug`. Manual: edit node basics from Flutter and confirm the scene tree and viewport update immediately from backend state.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 19,

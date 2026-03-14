@@ -2133,3 +2133,35 @@ Manual verification:
 Result:
 - PRD #17 is fully verified and complete.
 
+--- Migration Iteration 10: PRD #18 - Touch-first node basics panel ---
+COMPLETED. Added the first touch-usable node basics panel in Flutter, driven directly from the backend-owned selected-node property snapshot and existing Rust document commands.
+
+Changes:
+- apps/flutter/lib/app.dart:
+  - Added a dedicated `Node Basics` section to the inspector panel with touch-sized rename, visibility, and lock controls backed by existing Rust commands.
+  - Rendered transform basics and primitive parameter summaries directly from `selected_node_properties` instead of reconstructing node semantics in Dart.
+  - Refreshed the full scene snapshot when the native viewport event stream reports `sceneStateChanged`, so viewport selection changes can update the property panel without Flutter-side scene introspection.
+- apps/flutter/test/widget_test.dart:
+  - Added mock selected-node property snapshots for the panel path.
+  - Added widget coverage for rendering backend-owned primitive parameter data and routing visibility/lock toggles through the Rust facade.
+  - Updated the rename assertion to scroll the deeper inspector content into view after the new panel section was inserted.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS (491 passed)
+- cargo build: PASS
+- apps/flutter/rust cargo check: PASS
+- apps/flutter/rust cargo clippy -- -D warnings: PASS
+- apps/flutter/rust cargo test: PASS
+- apps/flutter/rust cargo build: PASS
+- Flutter analyze: PASS
+- Flutter test: PASS
+- Flutter build windows --debug: PASS
+
+Manual verification:
+- Skipped by current workflow instruction. This slice was validated with automated Rust and Flutter coverage only.
+
+Result:
+- PRD #18 is fully verified and complete.
+
