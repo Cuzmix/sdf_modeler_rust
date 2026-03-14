@@ -2427,3 +2427,29 @@ Manual verification:
 Result:
 - PRD #25 is fully verified and complete.
 
+--- Migration Iteration 18: PRD #26 - Egui parity audit ---
+COMPLETED. Wrote an explicit parity audit for the remaining egui-owned surface, split between decommission-ready duplicates, still-required egui-only workflows, and intentionally out-of-scope egui-specific features.
+
+Changes:
+- docs/egui_parity_audit.md
+  - Added a concrete audit of the remaining egui surface after PRD #25.
+  - Identified the duplicate ownership already superseded by Flutter plus `src/app_bridge/`.
+  - Identified the still-required workflows that must move behind backend-neutral modules before PRD #27 can delete egui slices safely.
+  - Identified egui-only features that are currently out of the Flutter parity target instead of silently treating them as parity gaps.
+  - Added a staged deletion order for PRD #27.
+- docs/flutter_migration.md
+- plans/ralph_prompt.txt
+  - Linked the new audit from the active migration workflow material so future iterations can use it as the decommission checklist.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS
+- cargo build: PASS
+
+Manual verification:
+- Not applicable. This slice is documentation-only.
+
+Result:
+- PRD #26 is fully verified and complete.
+

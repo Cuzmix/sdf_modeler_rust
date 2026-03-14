@@ -179,7 +179,7 @@
     "category": "decommission",
     "description": "Produce an explicit parity audit for the remaining egui-owned surface.\n\nSteps:\n1. List what is still egui-only versus intentionally dropped.\n2. Identify which remaining behaviors must move into backend-neutral modules.\n3. Identify duplicated ownership where Flutter is already authoritative through `src/app_bridge/`.\n4. Keep the audit concrete enough to drive staged egui removal without guesswork.",
     "verification": "Write the parity audit, link it from the active migration workflow, and confirm the remaining egui-only surface is explicit enough to stage removal without hidden ownership.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 27,

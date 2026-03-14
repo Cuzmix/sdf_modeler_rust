@@ -6,12 +6,14 @@ Source of truth now lives in:
 
 - `plans/prd.json`
 - `plans/progress.txt`
+- `docs/egui_parity_audit.md`
 
 Keep migration rules and architecture constraints in:
 
 - `AGENTS.md`
 - `CLAUDE.md`
 - `docs/architecture.md`
+- `docs/egui_parity_audit.md`
 - `docs/ui_backend_boundary.md`
 - `apps/flutter/README.md`
 

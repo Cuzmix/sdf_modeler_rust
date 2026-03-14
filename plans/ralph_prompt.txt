@@ -2,6 +2,7 @@ You are working through a product requirements document (PRD) for this project.
 
 @plans/prd.json contains the task list. Each item has a "passes" flag.
 @plans/progress.txt contains notes from previous iterations.
+@docs/egui_parity_audit.md records the remaining egui-only surface and the decommission-ready duplicates for PRD items 26 and 27.
 
 Follow these steps:
 
