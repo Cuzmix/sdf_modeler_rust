@@ -1,41 +1,61 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Ralph HITL — Single interactive iteration (human-in-the-loop)
-# Usage: ./plans/ralph-once.sh
+# Ralph HITL - Single interactive iteration (human-in-the-loop)
+# Usage: ./plans/ralph-once.sh [--llm claude|codex]
 #
 # Runs one iteration of the Ralph loop interactively so you can steer and review.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+# shellcheck source=plans/ralph_common.sh
+source "$SCRIPT_DIR/ralph_common.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: ./plans/ralph-once.sh [--llm claude|codex]
+
+Examples:
+  ./plans/ralph-once.sh
+  ./plans/ralph-once.sh --llm codex
+  RALPH_LLM=codex ./plans/ralph-once.sh
+EOF
+  echo ""
+  ralph_print_provider_help
+}
+
+PROVIDER="${RALPH_LLM:-claude}"
+
+while (($# > 0)); do
+  case "$1" in
+    --llm)
+      if [ -z "${2:-}" ]; then
+        echo "Missing value for --llm" >&2
+        usage
+        exit 1
+      fi
+      PROVIDER="$2"
+      shift 2
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      usage
+      exit 1
+      ;;
+  esac
+done
+
+PROVIDER="$(ralph_resolve_provider "$PROVIDER")"
+PROJECT_DIR="$(ralph_project_dir)"
+PROMPT="$(ralph_load_prompt)"
 
 cd "$PROJECT_DIR"
 
-echo "Starting Ralph HITL — single interactive iteration"
+echo "Starting Ralph HITL - single interactive iteration"
+echo "LLM provider: $PROVIDER"
 echo "=========================================="
 
-claude 'You are working through a product requirements document (PRD) for this project.
-
-@plans/prd.json contains the task list. Each item has a "passes" flag.
-@plans/progress.txt contains notes from previous iterations.
-
-Follow these steps:
-
-1. Read plans/prd.json and plans/progress.txt to understand current state.
-2. Find the highest-priority feature that has "passes": false. Prioritize by
-   importance and dependencies — not necessarily the first item in the list.
-3. Implement ONLY that single feature. Keep the change small and focused.
-4. Run the verification loops:
-   - cargo check
-   - cargo clippy -- -D warnings
-   - cargo test
-   Fix any failures before proceeding.
-5. Update plans/prd.json — set "passes": true for completed items.
-6. APPEND your progress to plans/progress.txt (do NOT overwrite).
-   Include: what you did, files changed, any notes for the next iteration.
-7. Make a git commit with a descriptive message. Include all changed files
-   (code + prd.json + progress.txt).
-8. Only work on a SINGLE feature per iteration.
-
-If while implementing you notice the PRD is complete (all items pass),
-output exactly: <promise>COMPLETE</promise>'
+ralph_run_interactive "$PROVIDER" "$PROMPT"

@@ -235,19 +235,33 @@ This project supports the Ralph technique for long-running autonomous coding ses
 ### Files
 - `plans/prd.json` — Product requirements document. JSON array of tasks with `passes` flags.
 - `plans/progress.txt` — Append-only log of learnings, decisions, and completed work per sprint.
-- `plans/ralph.sh` — AFK loop: runs Claude Code headlessly for N iterations.
-- `plans/ralph-once.sh` — HITL mode: single interactive iteration for steering.
-
+- `plans/ralph_prompt.txt` - Shared Ralph iteration prompt and verification contract.
+- `plans/ralph_common.sh` - Shared Ralph provider helpers and prompt loading.
+- `plans/ralph_codex.ps1` - Windows Codex launcher wrapper used by the Ralph bash scripts.
+- `plans/ralph.sh` - AFK loop: runs the selected terminal coding agent headlessly for N iterations.
+- `plans/ralph-once.sh` - HITL mode: single interactive iteration for steering.
 ### How It Works
 1. The PRD defines **what** needs to be done (not how). Each item has a `passes` boolean.
 2. Each loop iteration: pick highest-priority incomplete task, implement it, run verification
    loops, update PRD (`passes: true`), append to progress.txt, git commit.
 3. Loop exits when all PRD items pass or max iterations reached.
 
+### Provider Selection
+- Ralph defaults to `claude` to preserve current behavior.
+- Override with `--llm claude` or `--llm codex`.
+- You can also set `RALPH_LLM=claude` or `RALPH_LLM=codex`.
+- Headless provider mapping:
+  - `claude`: `claude -p`
+  - `codex`: `codex exec`
+- Interactive provider mapping:
+  - `claude`: `claude`
+  - `codex`: `codex`
+
 ### Rules for Ralph Mode
 - Work on **exactly one task** per iteration — never batch multiple features.
 - Keep tasks small. If a PRD item is too large, split it before starting.
-- Always run verification loops (cargo check/clippy/test) before committing.
+- Always run verification loops (cargo check/clippy/test/build) before committing.
 - Append to progress.txt (don't overwrite) — this is memory for the next iteration.
+- Manually verify visual or behavioral changes before committing.
 - Commit PRD + progress.txt + code together so git history reflects the sprint.
 - If you discover a bug while working, add it to the PRD — don't fix it in the same iteration.
