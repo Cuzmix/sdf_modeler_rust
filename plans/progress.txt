@@ -1758,3 +1758,55 @@ Manual verification:
 Result:
 - PRD #10 is fully verified and complete.
 
+--- Migration Iteration 3: PRD #11 - Backend-owned undo command through `src/app_bridge/` ---
+IMPLEMENTED, but PRD #11 remains `passes: false` until the required manual Flutter host undo check is completed.
+
+Changes:
+- src/app_bridge/dto.rs:
+  - Added `AppHistorySnapshot` with `can_undo` and `can_redo`.
+  - Added history status to `AppSceneSnapshot` so frontends can render history availability without reimplementing stack logic.
+- src/app_bridge/session.rs:
+  - Added Rust-owned `History` state to `AppBridge`.
+  - Routed bridge-side document mutations through a shared history-tracked command helper for primitive creation, delete, visibility, and lock changes.
+  - Added backend `undo()` that restores scene and selection state from Rust history.
+  - Kept `reset_scene()` aligned with native `NewScene` semantics by clearing bridge history instead of making reset itself undoable.
+  - Added bridge tests covering undo restoration and history clearing on reset.
+- apps/flutter/rust/src/api/simple.rs:
+  - Added the FRB-exposed synchronous `undo()` command.
+- apps/flutter/scripts/frb_codegen.ps1:
+  - Regenerated the FRB Rust and Dart bindings after the API change.
+- apps/flutter/lib/src/scene/scene_snapshot.dart:
+  - Added the Flutter-side `AppHistorySnapshot` model.
+  - Added a safe fallback so older snapshot JSON without history metadata still decodes as `canUndo = false` / `canRedo = false`.
+- apps/flutter/lib/app.dart:
+  - Added a touch-usable `Undo` trigger to the shared scene command surface used by the desktop side panel and tablet modal command sheet.
+  - Kept Flutter limited to invoking the Rust command and reading backend-provided availability.
+- apps/flutter/test/widget_test.dart:
+  - Added mock bridge support for the new undo API.
+  - Added a widget test proving the Flutter shell routes undo through the Rust facade and refreshes snapshot state afterward.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS (476 passed)
+- cargo build: PASS
+- apps/flutter/scripts/frb_codegen.ps1: PASS
+- Flutter analyze: PASS
+- Flutter test: PASS
+- Flutter build windows --debug: PASS
+
+Manual verification pending:
+- Run the Flutter Windows host, make a scene mutation such as adding a primitive, trigger `Undo`, and confirm the scene tree, selection state, and viewport all return to the prior backend-owned state.
+
+Result:
+- PRD #11 is implemented and automatically verified, but it is not yet marked complete in `plans/prd.json` because the manual verification step is still outstanding.
+
+--- Migration Iteration 3 Manual Verification: PRD #11 complete ---
+Manual verification completed on 2026-03-14 for the backend-owned undo slice.
+
+Manual verification:
+- Flutter Windows host undo: PASS. After making a scene change and triggering `Undo`, the scene tree, selection state, and viewport all returned to the prior backend-owned state.
+
+Result:
+- PRD #11 is fully verified and complete.
+

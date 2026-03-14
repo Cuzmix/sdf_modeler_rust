@@ -663,6 +663,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                       onAddBox: () => _runSceneCommand(addBox),
                       onAddCylinder: () => _runSceneCommand(addCylinder),
                       onAddTorus: () => _runSceneCommand(addTorus),
+                      onUndo: () => _runSceneCommand(undo),
                       onDeleteSelected: () => _runSceneCommand(deleteSelected),
                       onSelectSceneNode: (nodeId) => _runSceneCommand(
                         () => selectNode(nodeId: BigInt.from(nodeId)),
@@ -705,6 +706,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                         onAddCylinder: () =>
                             _runModalSceneCommand(addCylinder),
                         onAddTorus: () => _runModalSceneCommand(addTorus),
+                        onUndo: () => _runModalSceneCommand(undo),
                         onDeleteSelected: () =>
                             _runModalSceneCommand(deleteSelected),
                         onFrameAll: () => _runModalSceneCommand(frameAll),
@@ -748,6 +750,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                   onAddBox: () => _runSceneCommand(addBox),
                   onAddCylinder: () => _runSceneCommand(addCylinder),
                   onAddTorus: () => _runSceneCommand(addTorus),
+                  onUndo: () => _runSceneCommand(undo),
                   onDeleteSelected: () => _runSceneCommand(deleteSelected),
                   onSelectSceneNode: (nodeId) => _runSceneCommand(
                     () => selectNode(nodeId: BigInt.from(nodeId)),
@@ -796,6 +799,7 @@ class _InspectorPanel extends StatelessWidget {
     required this.onAddBox,
     required this.onAddCylinder,
     required this.onAddTorus,
+    required this.onUndo,
     required this.onDeleteSelected,
     required this.onSelectSceneNode,
     required this.onToggleSceneNodeVisibility,
@@ -829,6 +833,7 @@ class _InspectorPanel extends StatelessWidget {
   final VoidCallback onAddBox;
   final VoidCallback onAddCylinder;
   final VoidCallback onAddTorus;
+  final VoidCallback onUndo;
   final VoidCallback onDeleteSelected;
   final ValueChanged<int> onSelectSceneNode;
   final ValueChanged<int> onToggleSceneNodeVisibility;
@@ -854,6 +859,7 @@ class _InspectorPanel extends StatelessWidget {
     final cameraControlsEnabled = !commandInFlight && currentCamera != null;
     final focusSelectedEnabled = !commandInFlight && selectedNode != null;
     final sceneCommandsEnabled = !commandInFlight;
+    final undoEnabled = !commandInFlight && (snapshot?.history.canUndo ?? false);
     final deleteSelectedEnabled = !commandInFlight && selectedNode != null;
     final projectionButtonLabel = currentCamera?.orthographic ?? false
         ? 'Use Perspective'
@@ -925,6 +931,8 @@ class _InspectorPanel extends StatelessWidget {
               onAddBox: onAddBox,
               onAddCylinder: onAddCylinder,
               onAddTorus: onAddTorus,
+              undoEnabled: undoEnabled,
+              onUndo: onUndo,
               onDeleteSelected: onDeleteSelected,
             ),
           ],
@@ -1018,20 +1026,24 @@ class _InspectorPanel extends StatelessWidget {
 class _SceneCommandButtons extends StatelessWidget {
   const _SceneCommandButtons({
     required this.sceneCommandsEnabled,
+    required this.undoEnabled,
     required this.deleteSelectedEnabled,
     required this.onAddSphere,
     required this.onAddBox,
     required this.onAddCylinder,
     required this.onAddTorus,
+    required this.onUndo,
     required this.onDeleteSelected,
   });
 
   final bool sceneCommandsEnabled;
+  final bool undoEnabled;
   final bool deleteSelectedEnabled;
   final VoidCallback onAddSphere;
   final VoidCallback onAddBox;
   final VoidCallback onAddCylinder;
   final VoidCallback onAddTorus;
+  final VoidCallback onUndo;
   final VoidCallback onDeleteSelected;
 
   @override
@@ -1055,6 +1067,11 @@ class _SceneCommandButtons extends StatelessWidget {
         OutlinedButton(
           onPressed: sceneCommandsEnabled ? onAddTorus : null,
           child: const Text('Torus'),
+        ),
+        OutlinedButton(
+          key: const ValueKey('undo-command'),
+          onPressed: undoEnabled ? onUndo : null,
+          child: const Text('Undo'),
         ),
         OutlinedButton(
           onPressed: deleteSelectedEnabled ? onDeleteSelected : null,
@@ -1150,6 +1167,7 @@ class _CommandSheetContent extends StatelessWidget {
     required this.onAddBox,
     required this.onAddCylinder,
     required this.onAddTorus,
+    required this.onUndo,
     required this.onDeleteSelected,
     required this.onFrameAll,
     required this.onResetScene,
@@ -1171,6 +1189,7 @@ class _CommandSheetContent extends StatelessWidget {
   final VoidCallback onAddBox;
   final VoidCallback onAddCylinder;
   final VoidCallback onAddTorus;
+  final VoidCallback onUndo;
   final VoidCallback onDeleteSelected;
   final VoidCallback onFrameAll;
   final VoidCallback onResetScene;
@@ -1189,6 +1208,7 @@ class _CommandSheetContent extends StatelessWidget {
     final currentCamera = viewportFeedback?.camera ?? snapshot?.camera;
     final selectedNode = viewportFeedback?.selectedNode ?? snapshot?.selectedNode;
     final sceneCommandsEnabled = !commandInFlight;
+    final undoEnabled = !commandInFlight && (snapshot?.history.canUndo ?? false);
     final deleteSelectedEnabled = !commandInFlight && selectedNode != null;
     final cameraControlsEnabled = !commandInFlight && currentCamera != null;
     final focusSelectedEnabled = !commandInFlight && selectedNode != null;
@@ -1211,6 +1231,8 @@ class _CommandSheetContent extends StatelessWidget {
           onAddBox: onAddBox,
           onAddCylinder: onAddCylinder,
           onAddTorus: onAddTorus,
+          undoEnabled: undoEnabled,
+          onUndo: onUndo,
           onDeleteSelected: onDeleteSelected,
         ),
         const SizedBox(height: ShellTokens.sectionGap),

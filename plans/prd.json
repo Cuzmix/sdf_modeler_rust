@@ -74,7 +74,7 @@
     "category": "document",
     "description": "Port the backend-owned `undo` command through `src/app_bridge/`.\n\nSteps:\n1. Expose `undo` as a backend command in `src/app_bridge/`.\n2. Surface any minimal metadata Flutter needs to render undo availability without duplicating history logic.\n3. Expose the command through FRB and add the first Flutter trigger for it.\n4. Keep history semantics in Rust.",
     "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build`. If the bridge API changes, run `apps/flutter/scripts/frb_codegen.ps1`. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, and `fvm flutter build windows --debug`. Manual: make a scene change in the Flutter host, trigger undo, and confirm scene tree, selection, and viewport all return to the prior backend state.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 12,

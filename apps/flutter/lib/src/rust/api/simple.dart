@@ -61,6 +61,8 @@ String toggleNodeLock({required BigInt nodeId}) =>
 
 String deleteSelected() => RustLib.instance.api.crateApiSimpleDeleteSelected();
 
+String undo() => RustLib.instance.api.crateApiSimpleUndo();
+
 String focusSelected() => RustLib.instance.api.crateApiSimpleFocusSelected();
 
 String frameAll() => RustLib.instance.api.crateApiSimpleFrameAll();

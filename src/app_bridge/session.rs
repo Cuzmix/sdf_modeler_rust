@@ -3,12 +3,14 @@ use std::collections::HashSet;
 use glam::Vec3;
 
 use crate::gpu::camera::Camera;
+use crate::graph::history::History;
 use crate::graph::scene::{NodeData, NodeId, Scene, SceneNode, SdfPrimitive};
 use crate::settings::RenderConfig;
 
 use super::dto::{
-    AppCameraSnapshot, AppNodeSnapshot, AppSceneSnapshot, AppSceneStatsSnapshot,
-    AppSceneTreeNodeSnapshot, AppToolSnapshot, AppVec3, AppViewportFeedbackSnapshot,
+    AppCameraSnapshot, AppHistorySnapshot, AppNodeSnapshot, AppSceneSnapshot,
+    AppSceneStatsSnapshot, AppSceneTreeNodeSnapshot, AppToolSnapshot, AppVec3,
+    AppViewportFeedbackSnapshot,
 };
 use super::renderer::{HeadlessPickRequest, HeadlessRenderRequest, HeadlessViewportRenderer};
 
@@ -21,6 +23,7 @@ pub struct AppBridge {
     scene: Scene,
     camera: Camera,
     render_config: RenderConfig,
+    history: History,
     selected_node: Option<NodeId>,
     hovered_node: Option<NodeId>,
     active_tool_label: String,
@@ -45,6 +48,7 @@ impl AppBridge {
             scene,
             camera,
             render_config,
+            history: History::new(),
             selected_node: None,
             hovered_node: None,
             active_tool_label: "Select".to_string(),
@@ -69,6 +73,10 @@ impl AppBridge {
             selected_node: self.node_snapshot_by_id(self.selected_node),
             top_level_nodes,
             scene_tree_roots: self.scene_tree_roots(),
+            history: AppHistorySnapshot {
+                can_undo: self.history.undo_count() > 0,
+                can_redo: self.history.redo_count() > 0,
+            },
             camera: self.camera_snapshot(),
             stats: AppSceneStatsSnapshot {
                 total_nodes: node_counts.total as u32,
@@ -198,7 +206,9 @@ impl AppBridge {
 
         self.cancel_camera_transition();
         let parent_map = self.scene.build_parent_map();
-        let (center, radius) = self.scene.compute_subtree_sphere(selected_node, &parent_map);
+        let (center, radius) = self
+            .scene
+            .compute_subtree_sphere(selected_node, &parent_map);
         self.camera
             .focus_on(Vec3::new(center[0], center[1], center[2]), radius.max(0.5));
     }
@@ -259,40 +269,48 @@ impl AppBridge {
     }
 
     pub fn delete_selected(&mut self) {
-        let Some(selected_node) = self.selected_node else {
-            return;
-        };
+        self.run_document_command(|bridge| {
+            let Some(selected_node) = bridge.selected_node else {
+                return;
+            };
 
-        if self.node_is_locked(selected_node) {
-            return;
-        }
+            if bridge.node_is_locked(selected_node) {
+                return;
+            }
 
-        self.scene.remove_node(selected_node);
-        if self.selected_node == Some(selected_node) {
-            self.selected_node = None;
-        }
-        if self.hovered_node == Some(selected_node) {
-            self.hovered_node = None;
-        }
+            bridge.scene.remove_node(selected_node);
+            if bridge.selected_node == Some(selected_node) {
+                bridge.selected_node = None;
+            }
+            if bridge.hovered_node == Some(selected_node) {
+                bridge.hovered_node = None;
+            }
+        });
     }
 
     pub fn toggle_node_visibility(&mut self, node_id: u64) {
-        if self.scene.nodes.contains_key(&node_id) {
-            self.scene.toggle_visibility(node_id);
-        }
+        self.run_document_command(|bridge| {
+            if bridge.scene.nodes.contains_key(&node_id) {
+                bridge.scene.toggle_visibility(node_id);
+            }
+        });
     }
 
     pub fn toggle_node_lock(&mut self, node_id: u64) {
-        if let Some(node) = self.scene.nodes.get_mut(&node_id) {
-            node.locked = !node.locked;
-        }
+        self.run_document_command(|bridge| {
+            if let Some(node) = bridge.scene.nodes.get_mut(&node_id) {
+                node.locked = !node.locked;
+            }
+        });
     }
 
     pub fn add_primitive(&mut self, kind: SdfPrimitive) -> u64 {
-        let new_node_id = self.scene.create_primitive(kind);
-        self.selected_node = Some(new_node_id);
-        self.hovered_node = Some(new_node_id);
-        new_node_id
+        self.run_document_command(|bridge| {
+            let new_node_id = bridge.scene.create_primitive(kind);
+            bridge.selected_node = Some(new_node_id);
+            bridge.hovered_node = Some(new_node_id);
+            new_node_id
+        })
     }
 
     pub fn select_node(&mut self, node_id: Option<u64>) {
@@ -303,9 +321,21 @@ impl AppBridge {
     pub fn reset_scene(&mut self) {
         self.scene = Scene::new();
         self.camera = Camera::default();
+        self.history = History::new();
         self.selected_node = None;
         self.hovered_node = None;
         self.last_viewport_time_seconds = None;
+    }
+
+    pub fn undo(&mut self) {
+        if let Some((restored_scene, restored_selected)) =
+            self.history.undo(&self.scene, self.selected_node)
+        {
+            self.scene = restored_scene;
+            self.selected_node =
+                restored_selected.filter(|node_id| self.scene.nodes.contains_key(node_id));
+            self.hovered_node = self.selected_node;
+        }
     }
 
     fn cancel_camera_transition(&mut self) {
@@ -323,6 +353,14 @@ impl AppBridge {
             .unwrap_or(0.0);
         self.last_viewport_time_seconds = Some(time_seconds);
         self.camera.tick_transition(delta_seconds as f64)
+    }
+
+    fn run_document_command<T>(&mut self, command: impl FnOnce(&mut Self) -> T) -> T {
+        self.history.begin_frame(&self.scene, self.selected_node);
+        let result = command(self);
+        self.history
+            .end_frame(&self.scene, self.selected_node, false);
+        result
     }
 
     fn scene_tree_roots(&self) -> Vec<AppSceneTreeNodeSnapshot> {
@@ -422,8 +460,14 @@ mod tests {
         let bridge = AppBridge::new();
         let snapshot = bridge.scene_snapshot();
 
-        assert_eq!(snapshot.scene_tree_roots.len(), snapshot.top_level_nodes.len());
-        assert!(snapshot.scene_tree_roots.iter().any(|node| !node.children.is_empty()));
+        assert_eq!(
+            snapshot.scene_tree_roots.len(),
+            snapshot.top_level_nodes.len()
+        );
+        assert!(snapshot
+            .scene_tree_roots
+            .iter()
+            .any(|node| !node.children.is_empty()));
     }
 
     #[test]
@@ -448,5 +492,36 @@ mod tests {
 
         assert!(bridge.scene.nodes.contains_key(&node_id));
         assert_eq!(bridge.selected_node, Some(node_id));
+    }
+
+    #[test]
+    fn undo_restores_previous_scene_and_selection() {
+        let mut bridge = AppBridge::new();
+        let initial_selected = bridge.selected_node;
+        let initial_node_count = bridge.scene.nodes.len();
+
+        let added_node = bridge.add_box();
+        assert_eq!(bridge.selected_node, Some(added_node));
+        assert!(bridge.scene_snapshot().history.can_undo);
+
+        bridge.undo();
+
+        assert_eq!(bridge.scene.nodes.len(), initial_node_count);
+        assert_eq!(bridge.selected_node, initial_selected);
+        assert_eq!(bridge.hovered_node, initial_selected);
+        assert!(!bridge.scene.nodes.contains_key(&added_node));
+        assert!(!bridge.scene_snapshot().history.can_undo);
+    }
+
+    #[test]
+    fn reset_scene_clears_undo_history() {
+        let mut bridge = AppBridge::new();
+        bridge.add_box();
+
+        assert!(bridge.scene_snapshot().history.can_undo);
+
+        bridge.reset_scene();
+
+        assert!(!bridge.scene_snapshot().history.can_undo);
     }
 }

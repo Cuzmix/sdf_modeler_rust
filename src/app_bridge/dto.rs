@@ -71,10 +71,17 @@ pub struct AppToolSnapshot {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppHistorySnapshot {
+    pub can_undo: bool,
+    pub can_redo: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AppSceneSnapshot {
     pub selected_node: Option<AppNodeSnapshot>,
     pub top_level_nodes: Vec<AppNodeSnapshot>,
     pub scene_tree_roots: Vec<AppSceneTreeNodeSnapshot>,
+    pub history: AppHistorySnapshot,
     pub camera: AppCameraSnapshot,
     pub stats: AppSceneStatsSnapshot,
     pub tool: AppToolSnapshot,

@@ -197,11 +197,26 @@ class AppToolSnapshot {
   }
 }
 
+class AppHistorySnapshot {
+  const AppHistorySnapshot({required this.canUndo, required this.canRedo});
+
+  final bool canUndo;
+  final bool canRedo;
+
+  factory AppHistorySnapshot.fromJson(Map<String, dynamic> json) {
+    return AppHistorySnapshot(
+      canUndo: json['can_undo'] as bool? ?? false,
+      canRedo: json['can_redo'] as bool? ?? false,
+    );
+  }
+}
+
 class AppSceneSnapshot {
   const AppSceneSnapshot({
     required this.selectedNode,
     required this.topLevelNodes,
     required this.sceneTreeRoots,
+    required this.history,
     required this.camera,
     required this.stats,
     required this.tool,
@@ -210,6 +225,7 @@ class AppSceneSnapshot {
   final AppNodeSnapshot? selectedNode;
   final List<AppNodeSnapshot> topLevelNodes;
   final List<AppSceneTreeNodeSnapshot> sceneTreeRoots;
+  final AppHistorySnapshot history;
   final AppCameraSnapshot camera;
   final AppSceneStatsSnapshot stats;
   final AppToolSnapshot tool;
@@ -238,6 +254,9 @@ class AppSceneSnapshot {
                 ),
               )
               .toList(growable: false),
+      history: json['history'] == null
+          ? const AppHistorySnapshot(canUndo: false, canRedo: false)
+          : AppHistorySnapshot.fromJson(json['history'] as Map<String, dynamic>),
       camera: AppCameraSnapshot.fromJson(json['camera'] as Map<String, dynamic>),
       stats: AppSceneStatsSnapshot.fromJson(
         json['stats'] as Map<String, dynamic>,

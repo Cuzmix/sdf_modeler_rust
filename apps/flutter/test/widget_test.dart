@@ -14,6 +14,8 @@ import 'package:sdf_modeler_flutter/src/viewport/viewport_surface.dart';
 class _MockRustApi extends RustLibApi {
   static const String _baseSnapshot = '''{"selected_node":null,"top_level_nodes":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false}],"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":7,"visible_nodes":7,"top_level_nodes":1,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":1,"structure_key":11,"data_fingerprint":22,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
   static const String _selectedSnapshot = '''{"selected_node":{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false},"top_level_nodes":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false}],"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":7,"visible_nodes":7,"top_level_nodes":1,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":1,"structure_key":11,"data_fingerprint":22,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
+  static const String _baseUndoSnapshot = '''{"selected_node":null,"top_level_nodes":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false}],"history":{"can_undo":true,"can_redo":false},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":7,"visible_nodes":7,"top_level_nodes":1,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":1,"structure_key":11,"data_fingerprint":22,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
+  static const String _selectedUndoSnapshot = '''{"selected_node":{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false},"top_level_nodes":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false}],"history":{"can_undo":true,"can_redo":false},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":7,"visible_nodes":7,"top_level_nodes":1,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":1,"structure_key":11,"data_fingerprint":22,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
   static const String _orthoSnapshot = '''{"selected_node":null,"top_level_nodes":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false}],"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":true,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":7,"visible_nodes":7,"top_level_nodes":1,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":1,"structure_key":11,"data_fingerprint":22,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
 
   String currentSnapshot = _baseSnapshot;
@@ -25,6 +27,7 @@ class _MockRustApi extends RustLibApi {
   int toggleNodeVisibilityCalls = 0;
   int toggleNodeLockCalls = 0;
   int toggleOrthographicCalls = 0;
+  int undoCalls = 0;
 
   void resetState() {
     currentSnapshot = _baseSnapshot;
@@ -36,26 +39,27 @@ class _MockRustApi extends RustLibApi {
     toggleNodeVisibilityCalls = 0;
     toggleNodeLockCalls = 0;
     toggleOrthographicCalls = 0;
+    undoCalls = 0;
   }
 
   @override
   String crateApiSimpleAddBox() {
     addBoxCalls += 1;
-    currentSnapshot = _selectedSnapshot;
+    currentSnapshot = _selectedUndoSnapshot;
     return currentSnapshot;
   }
 
   @override
-  String crateApiSimpleAddCylinder() => _selectedSnapshot;
+  String crateApiSimpleAddCylinder() => currentSnapshot = _selectedUndoSnapshot;
 
   @override
   String crateApiSimpleAddSphere() {
-    currentSnapshot = _selectedSnapshot;
+    currentSnapshot = _selectedUndoSnapshot;
     return currentSnapshot;
   }
 
   @override
-  String crateApiSimpleAddTorus() => _selectedSnapshot;
+  String crateApiSimpleAddTorus() => currentSnapshot = _selectedUndoSnapshot;
 
   @override
   String crateApiSimpleBridgeVersion() => '0.1.0-test';
@@ -84,7 +88,7 @@ class _MockRustApi extends RustLibApi {
   @override
   String crateApiSimpleDeleteSelected() {
     deleteSelectedCalls += 1;
-    currentSnapshot = _baseSnapshot;
+    currentSnapshot = _baseUndoSnapshot;
     return currentSnapshot;
   }
 
@@ -155,12 +159,14 @@ class _MockRustApi extends RustLibApi {
   @override
   String crateApiSimpleToggleNodeLock({required BigInt nodeId}) {
     toggleNodeLockCalls += 1;
+    currentSnapshot = _selectedUndoSnapshot;
     return currentSnapshot;
   }
 
   @override
   String crateApiSimpleToggleNodeVisibility({required BigInt nodeId}) {
     toggleNodeVisibilityCalls += 1;
+    currentSnapshot = _selectedUndoSnapshot;
     return currentSnapshot;
   }
 
@@ -170,6 +176,13 @@ class _MockRustApi extends RustLibApi {
     currentSnapshot = currentSnapshot == _orthoSnapshot
         ? _baseSnapshot
         : _orthoSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleUndo() {
+    undoCalls += 1;
+    currentSnapshot = _baseSnapshot;
     return currentSnapshot;
   }
 
@@ -419,6 +432,22 @@ void main() {
     expect(mockApi.selectNodeCalls, 1);
     expect(mockApi.toggleNodeVisibilityCalls, 1);
     expect(mockApi.addBoxCalls, 1);
+    expect(requestFrameCalls, greaterThan(0));
+  });
+
+  testWidgets('routes undo through the Rust facade and refreshes snapshot state', (
+    WidgetTester tester,
+  ) async {
+    await pumpApp(tester, logicalSize: const Size(1400, 900));
+
+    await tester.tap(find.text('Box'));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('undo-command')));
+    await tester.pump();
+
+    expect(mockApi.addBoxCalls, 1);
+    expect(mockApi.undoCalls, 1);
+    expect(mockApi.currentSnapshot, _MockRustApi._baseSnapshot);
     expect(requestFrameCalls, greaterThan(0));
   });
 
