@@ -32,6 +32,39 @@ String recoverAutosave() =>
 String discardRecovery() =>
     RustLib.instance.api.crateApiSimpleDiscardRecovery();
 
+String openImportDialog() =>
+    RustLib.instance.api.crateApiSimpleOpenImportDialog();
+
+String cancelImportDialog() =>
+    RustLib.instance.api.crateApiSimpleCancelImportDialog();
+
+String setImportUseAuto({required bool useAuto}) =>
+    RustLib.instance.api.crateApiSimpleSetImportUseAuto(useAuto: useAuto);
+
+String setImportResolution({required int resolution}) => RustLib.instance.api
+    .crateApiSimpleSetImportResolution(resolution: resolution);
+
+String startImport() => RustLib.instance.api.crateApiSimpleStartImport();
+
+String cancelImport() => RustLib.instance.api.crateApiSimpleCancelImport();
+
+String openSculptConvertDialogForSelected() =>
+    RustLib.instance.api.crateApiSimpleOpenSculptConvertDialogForSelected();
+
+String cancelSculptConvertDialog() =>
+    RustLib.instance.api.crateApiSimpleCancelSculptConvertDialog();
+
+String setSculptConvertMode({required String modeId}) =>
+    RustLib.instance.api.crateApiSimpleSetSculptConvertMode(modeId: modeId);
+
+String setSculptConvertResolution({required int resolution}) => RustLib
+    .instance
+    .api
+    .crateApiSimpleSetSculptConvertResolution(resolution: resolution);
+
+String startSculptConvert() =>
+    RustLib.instance.api.crateApiSimpleStartSculptConvert();
+
 String setExportResolution({required int resolution}) => RustLib.instance.api
     .crateApiSimpleSetExportResolution(resolution: resolution);
 

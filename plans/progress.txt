@@ -2632,3 +2632,41 @@ Manual verification:
 Result:
 - PRD #32 is fully verified and complete.
 
+--- Migration Iteration 26: PRD #33 - Import and sculpt-convert entry parity ---
+COMPLETED. Moved mesh import and sculpt-convert entry state behind the backend bridge and added Flutter surfaces for configuration, progress, and result reporting.
+
+Changes:
+- src/app_bridge/workflows.rs
+- src/app_bridge/dto.rs
+- src/app_bridge/mod.rs
+- src/app_bridge/session.rs
+- apps/flutter/rust/src/api/simple.rs
+- apps/flutter/rust/src/bridge_state.rs
+- apps/flutter/lib/src/scene/scene_snapshot.dart
+- apps/flutter/lib/src/import/import_panel.dart
+- apps/flutter/lib/src/sculpt/sculpt_convert_panel.dart
+- apps/flutter/lib/app.dart
+- apps/flutter/test/widget_test.dart
+- docs/egui_parity_audit.md
+  - Added backend-owned import and sculpt-convert snapshots to the bridge scene snapshot, including dialog settings, progress state, and completion/error messages.
+  - Added bridge commands for opening/cancelling import and sculpt-convert dialogs, editing resolution/mode state, starting import, cancelling import, and starting sculpt conversion.
+  - Added shared Flutter workflow polling so import, export, and flatten-convert progress all refresh from bridge snapshots without Dart owning task semantics.
+  - Added dedicated Flutter import and sculpt-convert panels in both the inspector and command modal, including settings, progress UI, cancellation, and result messaging.
+  - Added Rust bridge tests for import completion and sculpt-convert entry behavior plus Flutter widget coverage for both workflow panels.
+  - Updated the parity audit so import/sculpt-convert entry flows are no longer listed as remaining egui-only blockers.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS
+- cargo build: PASS
+- Flutter analyze: PASS
+- Flutter test: PASS
+- Flutter build windows --debug: PASS
+
+Manual verification:
+- Not run in this iteration.
+
+Result:
+- PRD #33 is fully verified and complete.
+

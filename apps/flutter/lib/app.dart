@@ -5,8 +5,10 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:sdf_modeler_flutter/src/rust/api/simple.dart';
 import 'package:sdf_modeler_flutter/src/export/export_panel.dart';
+import 'package:sdf_modeler_flutter/src/import/import_panel.dart';
 import 'package:sdf_modeler_flutter/src/scene/scene_snapshot.dart';
 import 'package:sdf_modeler_flutter/src/scene/scene_tree_panel.dart';
+import 'package:sdf_modeler_flutter/src/sculpt/sculpt_convert_panel.dart';
 import 'package:sdf_modeler_flutter/src/session/document_session_panel.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_command_strip.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_contract.dart';
@@ -129,9 +131,9 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
   TextureViewportFeedback? _viewportFeedback;
   int? _textureId;
   StreamSubscription<TextureViewportEvent>? _textureEventSubscription;
-  Timer? _exportPollTimer;
+  Timer? _workflowPollTimer;
   Timer? _interactionCooldownTimer;
-  bool _exportPollInFlight = false;
+  bool _workflowPollInFlight = false;
   bool _commandInFlight = false;
   bool _adaptiveInteractionResolutionEnabled = false;
   bool _viewportInteractionActive = false;
@@ -202,37 +204,40 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     return AppSceneSnapshot.fromJson(decoded);
   }
 
-  void _syncExportPolling(AppSceneSnapshot? snapshot) {
-    final shouldPoll = snapshot?.export.status.isInProgress ?? false;
+  void _syncWorkflowPolling(AppSceneSnapshot? snapshot) {
+    final shouldPoll =
+        (snapshot?.export.status.isInProgress ?? false) ||
+        (snapshot?.import.status.isInProgress ?? false) ||
+        (snapshot?.sculptConvert.status.isInProgress ?? false);
     if (shouldPoll) {
-      _exportPollTimer ??= Timer.periodic(
+      _workflowPollTimer ??= Timer.periodic(
         const Duration(milliseconds: 150),
-        (_) => _pollExportSnapshot(),
+        (_) => _pollWorkflowSnapshot(),
       );
       return;
     }
 
-    _exportPollTimer?.cancel();
-    _exportPollTimer = null;
+    _workflowPollTimer?.cancel();
+    _workflowPollTimer = null;
   }
 
   void _applySnapshotState(
     AppSceneSnapshot snapshot, {
     bool updateViewportFeedback = true,
   }) {
-    _syncExportPolling(snapshot);
+    _syncWorkflowPolling(snapshot);
     _sceneSnapshot = snapshot;
     if (updateViewportFeedback) {
       _viewportFeedback = TextureViewportFeedback.fromSceneSnapshot(snapshot);
     }
   }
 
-  Future<void> _pollExportSnapshot() async {
-    if (!mounted || _exportPollInFlight) {
+  Future<void> _pollWorkflowSnapshot() async {
+    if (!mounted || _workflowPollInFlight) {
       return;
     }
 
-    _exportPollInFlight = true;
+    _workflowPollInFlight = true;
     try {
       final snapshot = _decodeSnapshot(sceneSnapshotJson());
       if (!mounted) {
@@ -246,10 +251,10 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
         return;
       }
       setState(() {
-        _previewLine = 'Export polling error: $error';
+        _previewLine = 'Workflow polling error: $error';
       });
     } finally {
-      _exportPollInFlight = false;
+      _workflowPollInFlight = false;
     }
   }
 
@@ -805,6 +810,68 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     return _runSceneCommand(cancelExport, requestNativeFrame: false);
   }
 
+  Future<void> _openImportDialog() {
+    return _runSceneCommand(openImportDialog, requestNativeFrame: false);
+  }
+
+  Future<void> _cancelImportDialog() {
+    return _runSceneCommand(cancelImportDialog, requestNativeFrame: false);
+  }
+
+  Future<void> _setImportUseAuto(bool useAuto) {
+    return _runSceneCommand(
+      () => setImportUseAuto(useAuto: useAuto),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _setImportResolution(int resolution) {
+    return _runSceneCommand(
+      () => setImportResolution(resolution: resolution),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _startImport() {
+    return _runSceneCommand(startImport, requestNativeFrame: false);
+  }
+
+  Future<void> _cancelImport() {
+    return _runSceneCommand(cancelImport, requestNativeFrame: false);
+  }
+
+  Future<void> _openSculptConvertDialog() {
+    return _runSceneCommand(
+      openSculptConvertDialogForSelected,
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _cancelSculptConvertDialog() {
+    return _runSceneCommand(
+      cancelSculptConvertDialog,
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _setSculptConvertMode(String modeId) {
+    return _runSceneCommand(
+      () => setSculptConvertMode(modeId: modeId),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _setSculptConvertResolution(int resolution) {
+    return _runSceneCommand(
+      () => setSculptConvertResolution(resolution: resolution),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _startSculptConvert() {
+    return _runSceneCommand(startSculptConvert, requestNativeFrame: false);
+  }
+
   Future<void> _setManipulatorMode(String modeId) {
     return _runSceneCommand(() => setManipulatorMode(modeId: modeId));
   }
@@ -973,7 +1040,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
   @override
   void dispose() {
     _textureEventSubscription?.cancel();
-    _exportPollTimer?.cancel();
+    _workflowPollTimer?.cancel();
     _interactionCooldownTimer?.cancel();
     final activeTextureId = _textureId;
     if (activeTextureId != null) {
@@ -1124,6 +1191,17 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                       onSetAdaptiveExport: _setAdaptiveExport,
                       onStartExport: _startExport,
                       onCancelExport: _cancelExport,
+                      onOpenImportDialog: _openImportDialog,
+                      onCancelImportDialog: _cancelImportDialog,
+                      onSetImportUseAuto: _setImportUseAuto,
+                      onSetImportResolution: _setImportResolution,
+                      onStartImport: _startImport,
+                      onCancelImport: _cancelImport,
+                      onOpenSculptConvertDialog: _openSculptConvertDialog,
+                      onCancelSculptConvertDialog: _cancelSculptConvertDialog,
+                      onSetSculptConvertMode: _setSculptConvertMode,
+                      onSetSculptConvertResolution: _setSculptConvertResolution,
+                      onStartSculptConvert: _startSculptConvert,
                       onFrameAll: () => _runSceneCommand(frameAll),
                       onResetScene: () => _runSceneCommand(resetScene),
                       onFocusSelected: () => _runSceneCommand(focusSelected),
@@ -1198,6 +1276,63 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                         onCancelExport: () =>
                             _runModalSceneCommand(
                               cancelExport,
+                              requestNativeFrame: false,
+                            ),
+                        onOpenImportDialog: () =>
+                            _runModalSceneCommand(
+                              openImportDialog,
+                              requestNativeFrame: false,
+                            ),
+                        onCancelImportDialog: () =>
+                            _runModalSceneCommand(
+                              cancelImportDialog,
+                              requestNativeFrame: false,
+                            ),
+                        onSetImportUseAuto: (useAuto) =>
+                            _runModalSceneCommand(
+                              () => setImportUseAuto(useAuto: useAuto),
+                              requestNativeFrame: false,
+                            ),
+                        onSetImportResolution: (resolution) =>
+                            _runModalSceneCommand(
+                              () => setImportResolution(resolution: resolution),
+                              requestNativeFrame: false,
+                            ),
+                        onStartImport: () =>
+                            _runModalSceneCommand(
+                              startImport,
+                              requestNativeFrame: false,
+                            ),
+                        onCancelImport: () =>
+                            _runModalSceneCommand(
+                              cancelImport,
+                              requestNativeFrame: false,
+                            ),
+                        onOpenSculptConvertDialog: () =>
+                            _runModalSceneCommand(
+                              openSculptConvertDialogForSelected,
+                              requestNativeFrame: false,
+                            ),
+                        onCancelSculptConvertDialog: () =>
+                            _runModalSceneCommand(
+                              cancelSculptConvertDialog,
+                              requestNativeFrame: false,
+                            ),
+                        onSetSculptConvertMode: (modeId) =>
+                            _runModalSceneCommand(
+                              () => setSculptConvertMode(modeId: modeId),
+                              requestNativeFrame: false,
+                            ),
+                        onSetSculptConvertResolution: (resolution) =>
+                            _runModalSceneCommand(
+                              () => setSculptConvertResolution(
+                                resolution: resolution,
+                              ),
+                              requestNativeFrame: false,
+                            ),
+                        onStartSculptConvert: () =>
+                            _runModalSceneCommand(
+                              startSculptConvert,
                               requestNativeFrame: false,
                             ),
                         onFrameAll: () => _runModalSceneCommand(frameAll),
@@ -1306,6 +1441,17 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                   onSetAdaptiveExport: _setAdaptiveExport,
                   onStartExport: _startExport,
                   onCancelExport: _cancelExport,
+                  onOpenImportDialog: _openImportDialog,
+                  onCancelImportDialog: _cancelImportDialog,
+                  onSetImportUseAuto: _setImportUseAuto,
+                  onSetImportResolution: _setImportResolution,
+                  onStartImport: _startImport,
+                  onCancelImport: _cancelImport,
+                  onOpenSculptConvertDialog: _openSculptConvertDialog,
+                  onCancelSculptConvertDialog: _cancelSculptConvertDialog,
+                  onSetSculptConvertMode: _setSculptConvertMode,
+                  onSetSculptConvertResolution: _setSculptConvertResolution,
+                  onStartSculptConvert: _startSculptConvert,
                   onFrameAll: () => _runSceneCommand(frameAll),
                   onResetScene: () => _runSceneCommand(resetScene),
                   onFocusSelected: () => _runSceneCommand(focusSelected),
@@ -1472,6 +1618,17 @@ class _InspectorPanel extends StatelessWidget {
     required this.onSetAdaptiveExport,
     required this.onStartExport,
     required this.onCancelExport,
+    required this.onOpenImportDialog,
+    required this.onCancelImportDialog,
+    required this.onSetImportUseAuto,
+    required this.onSetImportResolution,
+    required this.onStartImport,
+    required this.onCancelImport,
+    required this.onOpenSculptConvertDialog,
+    required this.onCancelSculptConvertDialog,
+    required this.onSetSculptConvertMode,
+    required this.onSetSculptConvertResolution,
+    required this.onStartSculptConvert,
     required this.onFrameAll,
     required this.onResetScene,
     required this.onFocusSelected,
@@ -1532,6 +1689,17 @@ class _InspectorPanel extends StatelessWidget {
   final ValueChanged<bool> onSetAdaptiveExport;
   final VoidCallback onStartExport;
   final VoidCallback onCancelExport;
+  final VoidCallback onOpenImportDialog;
+  final VoidCallback onCancelImportDialog;
+  final ValueChanged<bool> onSetImportUseAuto;
+  final ValueChanged<int> onSetImportResolution;
+  final VoidCallback onStartImport;
+  final VoidCallback onCancelImport;
+  final VoidCallback onOpenSculptConvertDialog;
+  final VoidCallback onCancelSculptConvertDialog;
+  final ValueChanged<String> onSetSculptConvertMode;
+  final ValueChanged<int> onSetSculptConvertResolution;
+  final VoidCallback onStartSculptConvert;
   final VoidCallback onFrameAll;
   final VoidCallback onResetScene;
   final VoidCallback onFocusSelected;
@@ -1753,6 +1921,38 @@ class _InspectorPanel extends StatelessWidget {
             onSetAdaptive: onSetAdaptiveExport,
             onStartExport: onStartExport,
             onCancelExport: onCancelExport,
+          ),
+          const SizedBox(height: ShellTokens.sectionGap),
+          Text(
+            'Import',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: ShellTokens.controlGap),
+          ImportPanel(
+            importSnapshot: snapshot?.import,
+            enabled: !commandInFlight,
+            onOpenImportDialog: onOpenImportDialog,
+            onCancelImportDialog: onCancelImportDialog,
+            onSetUseAuto: onSetImportUseAuto,
+            onSetResolution: onSetImportResolution,
+            onStartImport: onStartImport,
+            onCancelImport: onCancelImport,
+          ),
+          const SizedBox(height: ShellTokens.sectionGap),
+          Text(
+            'Sculpt Convert',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: ShellTokens.controlGap),
+          SculptConvertPanel(
+            selectedNode: selectedNode,
+            sculptConvertSnapshot: snapshot?.sculptConvert,
+            enabled: !commandInFlight,
+            onOpenDialog: onOpenSculptConvertDialog,
+            onCancelDialog: onCancelSculptConvertDialog,
+            onSetMode: onSetSculptConvertMode,
+            onSetResolution: onSetSculptConvertResolution,
+            onStartConvert: onStartSculptConvert,
           ),
           const SizedBox(height: ShellTokens.sectionGap),
           Text(
@@ -2651,6 +2851,17 @@ class _CommandSheetContent extends StatelessWidget {
     required this.onSetAdaptiveExport,
     required this.onStartExport,
     required this.onCancelExport,
+    required this.onOpenImportDialog,
+    required this.onCancelImportDialog,
+    required this.onSetImportUseAuto,
+    required this.onSetImportResolution,
+    required this.onStartImport,
+    required this.onCancelImport,
+    required this.onOpenSculptConvertDialog,
+    required this.onCancelSculptConvertDialog,
+    required this.onSetSculptConvertMode,
+    required this.onSetSculptConvertResolution,
+    required this.onStartSculptConvert,
     required this.onFrameAll,
     required this.onResetScene,
     required this.onFocusSelected,
@@ -2692,6 +2903,17 @@ class _CommandSheetContent extends StatelessWidget {
   final ValueChanged<bool> onSetAdaptiveExport;
   final VoidCallback onStartExport;
   final VoidCallback onCancelExport;
+  final VoidCallback onOpenImportDialog;
+  final VoidCallback onCancelImportDialog;
+  final ValueChanged<bool> onSetImportUseAuto;
+  final ValueChanged<int> onSetImportResolution;
+  final VoidCallback onStartImport;
+  final VoidCallback onCancelImport;
+  final VoidCallback onOpenSculptConvertDialog;
+  final VoidCallback onCancelSculptConvertDialog;
+  final ValueChanged<String> onSetSculptConvertMode;
+  final ValueChanged<int> onSetSculptConvertResolution;
+  final VoidCallback onStartSculptConvert;
   final VoidCallback onFrameAll;
   final VoidCallback onResetScene;
   final VoidCallback onFocusSelected;
@@ -2797,6 +3019,38 @@ class _CommandSheetContent extends StatelessWidget {
           onSetAdaptive: onSetAdaptiveExport,
           onStartExport: onStartExport,
           onCancelExport: onCancelExport,
+        ),
+        const SizedBox(height: ShellTokens.sectionGap),
+        Text(
+          'Import',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: ShellTokens.controlGap),
+        ImportPanel(
+          importSnapshot: snapshot?.import,
+          enabled: sceneCommandsEnabled,
+          onOpenImportDialog: onOpenImportDialog,
+          onCancelImportDialog: onCancelImportDialog,
+          onSetUseAuto: onSetImportUseAuto,
+          onSetResolution: onSetImportResolution,
+          onStartImport: onStartImport,
+          onCancelImport: onCancelImport,
+        ),
+        const SizedBox(height: ShellTokens.sectionGap),
+        Text(
+          'Sculpt Convert',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: ShellTokens.controlGap),
+        SculptConvertPanel(
+          selectedNode: selectedNode,
+          sculptConvertSnapshot: snapshot?.sculptConvert,
+          enabled: sceneCommandsEnabled,
+          onOpenDialog: onOpenSculptConvertDialog,
+          onCancelDialog: onCancelSculptConvertDialog,
+          onSetMode: onSetSculptConvertMode,
+          onSetResolution: onSetSculptConvertResolution,
+          onStartConvert: onStartSculptConvert,
         ),
         const SizedBox(height: ShellTokens.sectionGap),
         Wrap(

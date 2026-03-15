@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -49,6 +51,224 @@ class _MockRustApi extends RustLibApi {
   static const String _baseRedoSnapshot = '''{"selected_node":null,"top_level_nodes":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false}],"history":{"can_undo":false,"can_redo":true},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":7,"visible_nodes":7,"top_level_nodes":1,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":1,"structure_key":11,"data_fingerprint":22,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
   static const String _orthoSnapshot = '''{"selected_node":null,"top_level_nodes":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false}],"history":{"can_undo":false,"can_redo":false},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":true,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":7,"visible_nodes":7,"top_level_nodes":1,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":1,"structure_key":11,"data_fingerprint":22,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
 
+  static String _withFields(String baseJson, Map<String, Object?> fields) {
+    final snapshot = jsonDecode(baseJson) as Map<String, dynamic>;
+    snapshot.addAll(fields);
+    return jsonEncode(snapshot);
+  }
+
+  static Map<String, Object?> _idleImport() => <String, Object?>{
+        'dialog': null,
+        'status': <String, Object?>{
+          'state': 'idle',
+          'progress': 0,
+          'total': 0,
+          'filename': null,
+          'phase_label': null,
+          'message': null,
+          'is_error': false,
+        },
+      };
+
+  static Map<String, Object?> _idleSculptConvert() => <String, Object?>{
+        'dialog': null,
+        'status': <String, Object?>{
+          'state': 'idle',
+          'progress': 0,
+          'total': 0,
+          'target_name': null,
+          'phase_label': null,
+          'message': null,
+          'is_error': false,
+        },
+      };
+
+  static final String _importDialogSnapshot = _withFields(
+    _baseSnapshot,
+    <String, Object?>{
+      'import': <String, Object?>{
+        'dialog': <String, Object?>{
+          'filename': 'hero_mesh.obj',
+          'resolution': 96,
+          'auto_resolution': 96,
+          'use_auto': true,
+          'vertex_count': 2048,
+          'triangle_count': 4096,
+          'bounds_size': <String, double>{'x': 3.0, 'y': 2.0, 'z': 1.5},
+          'min_resolution': 16,
+          'max_resolution': 512,
+        },
+        'status': _idleImport()['status'],
+      },
+    },
+  );
+
+  static final String _importManualSnapshot = _withFields(
+    _baseSnapshot,
+    <String, Object?>{
+      'import': <String, Object?>{
+        'dialog': <String, Object?>{
+          'filename': 'hero_mesh.obj',
+          'resolution': 96,
+          'auto_resolution': 96,
+          'use_auto': false,
+          'vertex_count': 2048,
+          'triangle_count': 4096,
+          'bounds_size': <String, double>{'x': 3.0, 'y': 2.0, 'z': 1.5},
+          'min_resolution': 16,
+          'max_resolution': 512,
+        },
+        'status': _idleImport()['status'],
+      },
+    },
+  );
+
+  static final String _importResolutionSnapshot = _withFields(
+    _baseSnapshot,
+    <String, Object?>{
+      'import': <String, Object?>{
+        'dialog': <String, Object?>{
+          'filename': 'hero_mesh.obj',
+          'resolution': 144,
+          'auto_resolution': 96,
+          'use_auto': false,
+          'vertex_count': 2048,
+          'triangle_count': 4096,
+          'bounds_size': <String, double>{'x': 3.0, 'y': 2.0, 'z': 1.5},
+          'min_resolution': 16,
+          'max_resolution': 512,
+        },
+        'status': _idleImport()['status'],
+      },
+    },
+  );
+
+  static final String _importRunningSnapshot = _withFields(
+    _baseSnapshot,
+    <String, Object?>{
+      'import': <String, Object?>{
+        'dialog': null,
+        'status': <String, Object?>{
+          'state': 'in_progress',
+          'progress': 24,
+          'total': 144,
+          'filename': 'hero_mesh.obj',
+          'phase_label': 'Voxelizing mesh...',
+          'message': null,
+          'is_error': false,
+        },
+      },
+    },
+  );
+
+  static final String _importDoneSnapshot = _withFields(
+    _baseSnapshot,
+    <String, Object?>{
+      'import': <String, Object?>{
+        'dialog': null,
+        'status': <String, Object?>{
+          'state': 'idle',
+          'progress': 0,
+          'total': 0,
+          'filename': null,
+          'phase_label': null,
+          'message': 'Imported hero_mesh.obj as sculpt geometry',
+          'is_error': false,
+        },
+      },
+    },
+  );
+
+  static final String _sculptConvertDialogSnapshot = _withFields(
+    _selectedSnapshot,
+    <String, Object?>{
+      'sculpt_convert': <String, Object?>{
+        'dialog': <String, Object?>{
+          'target_node_id': 1,
+          'target_name': 'Sphere',
+          'mode_id': 'active_node',
+          'mode_label': 'Bake active node',
+          'resolution': 64,
+          'min_resolution': 16,
+          'max_resolution': 256,
+        },
+        'status': _idleSculptConvert()['status'],
+      },
+    },
+  );
+
+  static final String _sculptConvertFlattenSnapshot = _withFields(
+    _selectedSnapshot,
+    <String, Object?>{
+      'sculpt_convert': <String, Object?>{
+        'dialog': <String, Object?>{
+          'target_node_id': 1,
+          'target_name': 'Sphere',
+          'mode_id': 'whole_scene_flatten',
+          'mode_label': 'Bake whole scene + flatten',
+          'resolution': 64,
+          'min_resolution': 16,
+          'max_resolution': 256,
+        },
+        'status': _idleSculptConvert()['status'],
+      },
+    },
+  );
+
+  static final String _sculptConvertResolutionSnapshot = _withFields(
+    _selectedSnapshot,
+    <String, Object?>{
+      'sculpt_convert': <String, Object?>{
+        'dialog': <String, Object?>{
+          'target_node_id': 1,
+          'target_name': 'Sphere',
+          'mode_id': 'whole_scene_flatten',
+          'mode_label': 'Bake whole scene + flatten',
+          'resolution': 96,
+          'min_resolution': 16,
+          'max_resolution': 256,
+        },
+        'status': _idleSculptConvert()['status'],
+      },
+    },
+  );
+
+  static final String _sculptConvertRunningSnapshot = _withFields(
+    _selectedSnapshot,
+    <String, Object?>{
+      'sculpt_convert': <String, Object?>{
+        'dialog': null,
+        'status': <String, Object?>{
+          'state': 'in_progress',
+          'progress': 19,
+          'total': 96,
+          'target_name': 'Sphere',
+          'phase_label': 'Preparing sculpt volume...',
+          'message': null,
+          'is_error': false,
+        },
+      },
+    },
+  );
+
+  static final String _sculptConvertDoneSnapshot = _withFields(
+    _selectedSnapshot,
+    <String, Object?>{
+      'sculpt_convert': <String, Object?>{
+        'dialog': null,
+        'status': <String, Object?>{
+          'state': 'idle',
+          'progress': 0,
+          'total': 0,
+          'target_name': null,
+          'phase_label': null,
+          'message': 'Converted Sphere to sculpt',
+          'is_error': false,
+        },
+      },
+    },
+  );
+
   String currentSnapshot = _baseSnapshot;
   int sceneSnapshotJsonCalls = 0;
   int addBoxCalls = 0;
@@ -69,6 +289,17 @@ class _MockRustApi extends RustLibApi {
   int setAdaptiveExportCalls = 0;
   int startExportCalls = 0;
   int cancelExportCalls = 0;
+  int openImportDialogCalls = 0;
+  int cancelImportDialogCalls = 0;
+  int setImportUseAutoCalls = 0;
+  int setImportResolutionCalls = 0;
+  int startImportCalls = 0;
+  int cancelImportCalls = 0;
+  int openSculptConvertDialogCalls = 0;
+  int cancelSculptConvertDialogCalls = 0;
+  int setSculptConvertModeCalls = 0;
+  int setSculptConvertResolutionCalls = 0;
+  int startSculptConvertCalls = 0;
   int renameNodeCalls = 0;
   int setSelectedPrimitiveParameterCalls = 0;
   int setSelectedMaterialFloatCalls = 0;
@@ -114,6 +345,17 @@ class _MockRustApi extends RustLibApi {
     setAdaptiveExportCalls = 0;
     startExportCalls = 0;
     cancelExportCalls = 0;
+    openImportDialogCalls = 0;
+    cancelImportDialogCalls = 0;
+    setImportUseAutoCalls = 0;
+    setImportResolutionCalls = 0;
+    startImportCalls = 0;
+    cancelImportCalls = 0;
+    openSculptConvertDialogCalls = 0;
+    cancelSculptConvertDialogCalls = 0;
+    setSculptConvertModeCalls = 0;
+    setSculptConvertResolutionCalls = 0;
+    startSculptConvertCalls = 0;
     renameNodeCalls = 0;
     setSelectedPrimitiveParameterCalls = 0;
     setSelectedMaterialFloatCalls = 0;
@@ -192,6 +434,85 @@ class _MockRustApi extends RustLibApi {
   String crateApiSimpleCancelExport() {
     cancelExportCalls += 1;
     currentSnapshot = _exportIdleSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleOpenImportDialog() {
+    openImportDialogCalls += 1;
+    currentSnapshot = _importDialogSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleCancelImportDialog() {
+    cancelImportDialogCalls += 1;
+    currentSnapshot = _baseSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetImportUseAuto({required bool useAuto}) {
+    setImportUseAutoCalls += 1;
+    currentSnapshot = useAuto ? _importDialogSnapshot : _importManualSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetImportResolution({required int resolution}) {
+    setImportResolutionCalls += 1;
+    currentSnapshot = _importResolutionSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleStartImport() {
+    startImportCalls += 1;
+    currentSnapshot = _importRunningSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleCancelImport() {
+    cancelImportCalls += 1;
+    currentSnapshot = _baseSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleOpenSculptConvertDialogForSelected() {
+    openSculptConvertDialogCalls += 1;
+    currentSnapshot = _sculptConvertDialogSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleCancelSculptConvertDialog() {
+    cancelSculptConvertDialogCalls += 1;
+    currentSnapshot = _selectedSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetSculptConvertMode({required String modeId}) {
+    setSculptConvertModeCalls += 1;
+    currentSnapshot = modeId == 'whole_scene_flatten'
+        ? _sculptConvertFlattenSnapshot
+        : _sculptConvertDialogSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetSculptConvertResolution({required int resolution}) {
+    setSculptConvertResolutionCalls += 1;
+    currentSnapshot = _sculptConvertResolutionSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleStartSculptConvert() {
+    startSculptConvertCalls += 1;
+    currentSnapshot = _sculptConvertRunningSnapshot;
     return currentSnapshot;
   }
 
@@ -498,6 +819,12 @@ class _MockRustApi extends RustLibApi {
     sceneSnapshotJsonCalls += 1;
     if (currentSnapshot == _exportRunningSnapshot && sceneSnapshotJsonCalls >= 3) {
       currentSnapshot = _exportDoneSnapshot;
+    } else if (currentSnapshot == _importRunningSnapshot &&
+        sceneSnapshotJsonCalls >= 3) {
+      currentSnapshot = _importDoneSnapshot;
+    } else if (currentSnapshot == _sculptConvertRunningSnapshot &&
+        sceneSnapshotJsonCalls >= 3) {
+      currentSnapshot = _sculptConvertDoneSnapshot;
     }
     return currentSnapshot;
   }
@@ -1181,6 +1508,99 @@ void main() {
     expect(find.text('Exported OBJ (128 verts, 64 tris)'), findsOneWidget);
     expect(find.byKey(const ValueKey('export-progress-indicator')), findsNothing);
   });
+
+  testWidgets('routes import settings and import start through the Rust facade', (
+    WidgetTester tester,
+  ) async {
+    await pumpApp(tester, logicalSize: const Size(1400, 900));
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('open-import-dialog-command')),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('open-import-dialog-command')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Manual'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('import-resolution-field')),
+      '144',
+    );
+    await tester.tap(find.byKey(const ValueKey('import-apply-resolution')));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('start-import-command')));
+    await tester.pump();
+
+    expect(mockApi.openImportDialogCalls, 1);
+    expect(mockApi.setImportUseAutoCalls, 1);
+    expect(mockApi.setImportResolutionCalls, 1);
+    expect(mockApi.startImportCalls, 1);
+    expect(find.byKey(const ValueKey('import-progress-indicator')), findsOneWidget);
+    expect(find.textContaining('Importing hero_mesh.obj'), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+
+    expect(mockApi.sceneSnapshotJsonCalls, greaterThanOrEqualTo(3));
+    expect(find.text('Imported hero_mesh.obj as sculpt geometry'), findsOneWidget);
+    expect(find.byKey(const ValueKey('import-progress-indicator')), findsNothing);
+  });
+
+  testWidgets(
+    'routes sculpt convert settings and start through the Rust facade',
+    (WidgetTester tester) async {
+      mockApi.currentSnapshot = _MockRustApi._selectedSnapshot;
+
+      await pumpApp(tester, logicalSize: const Size(1400, 900));
+
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('open-sculpt-convert-dialog-command')),
+        200,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.byKey(const ValueKey('open-sculpt-convert-dialog-command')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Bake whole scene + flatten'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('sculpt-convert-resolution-field')),
+        '96',
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('sculpt-convert-apply-resolution')),
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('start-sculpt-convert-command')));
+      await tester.pump();
+
+      expect(mockApi.openSculptConvertDialogCalls, 1);
+      expect(mockApi.setSculptConvertModeCalls, 1);
+      expect(mockApi.setSculptConvertResolutionCalls, 1);
+      expect(mockApi.startSculptConvertCalls, 1);
+      expect(
+        find.byKey(const ValueKey('sculpt-convert-progress-indicator')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Converting Sphere'), findsOneWidget);
+
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pumpAndSettle();
+
+      expect(mockApi.sceneSnapshotJsonCalls, greaterThanOrEqualTo(3));
+      expect(find.text('Converted Sphere to sculpt'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('sculpt-convert-progress-indicator')),
+        findsNothing,
+      );
+    },
+  );
 
   testWidgets('routes undo through the Rust facade and refreshes snapshot state', (
     WidgetTester tester,

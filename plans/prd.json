@@ -228,7 +228,7 @@
     "category": "import",
     "description": "Port mesh import and sculpt-convert entry flows into backend-owned Flutter surfaces.\n\nSteps:\n1. Expose backend-neutral intent/state for mesh import and sculpt conversion instead of keeping egui dialogs authoritative.\n2. Keep file parsing, validation, resolution defaults, and conversion rules in Rust.\n3. Add Flutter entry surfaces for import settings and sculpt-convert configuration.\n4. Remove the egui-only import/sculpt-convert dialog ownership once parity is in place.",
     "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build`. If the bridge API changes, run `apps/flutter/scripts/frb_codegen.ps1`. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, and `fvm flutter build windows --debug`.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 34,

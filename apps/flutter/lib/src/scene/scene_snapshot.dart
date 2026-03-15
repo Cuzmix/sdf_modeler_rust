@@ -375,6 +375,206 @@ class AppExportSnapshot {
   }
 }
 
+class AppImportDialogSnapshot {
+  const AppImportDialogSnapshot({
+    required this.filename,
+    required this.resolution,
+    required this.autoResolution,
+    required this.useAuto,
+    required this.vertexCount,
+    required this.triangleCount,
+    required this.boundsSize,
+    required this.minResolution,
+    required this.maxResolution,
+  });
+
+  final String filename;
+  final int resolution;
+  final int autoResolution;
+  final bool useAuto;
+  final int vertexCount;
+  final int triangleCount;
+  final AppVec3 boundsSize;
+  final int minResolution;
+  final int maxResolution;
+
+  factory AppImportDialogSnapshot.fromJson(Map<String, dynamic> json) {
+    return AppImportDialogSnapshot(
+      filename: json['filename'] as String? ?? 'mesh',
+      resolution: (json['resolution'] as num?)?.toInt() ?? 64,
+      autoResolution: (json['auto_resolution'] as num?)?.toInt() ?? 64,
+      useAuto: json['use_auto'] as bool? ?? true,
+      vertexCount: (json['vertex_count'] as num?)?.toInt() ?? 0,
+      triangleCount: (json['triangle_count'] as num?)?.toInt() ?? 0,
+      boundsSize: json['bounds_size'] == null
+          ? const AppVec3(x: 0, y: 0, z: 0)
+          : AppVec3.fromJson(json['bounds_size'] as Map<String, dynamic>),
+      minResolution: (json['min_resolution'] as num?)?.toInt() ?? 16,
+      maxResolution: (json['max_resolution'] as num?)?.toInt() ?? 320,
+    );
+  }
+}
+
+class AppImportStatusSnapshot {
+  const AppImportStatusSnapshot({
+    required this.state,
+    required this.progress,
+    required this.total,
+    required this.filename,
+    required this.phaseLabel,
+    required this.message,
+    required this.isError,
+  });
+
+  final String state;
+  final int progress;
+  final int total;
+  final String? filename;
+  final String? phaseLabel;
+  final String? message;
+  final bool isError;
+
+  bool get isInProgress => state == 'in_progress';
+
+  factory AppImportStatusSnapshot.fromJson(Map<String, dynamic> json) {
+    return AppImportStatusSnapshot(
+      state: json['state'] as String? ?? 'idle',
+      progress: (json['progress'] as num?)?.toInt() ?? 0,
+      total: (json['total'] as num?)?.toInt() ?? 0,
+      filename: json['filename'] as String?,
+      phaseLabel: json['phase_label'] as String?,
+      message: json['message'] as String?,
+      isError: json['is_error'] as bool? ?? false,
+    );
+  }
+}
+
+class AppImportSnapshot {
+  const AppImportSnapshot({required this.dialog, required this.status});
+
+  final AppImportDialogSnapshot? dialog;
+  final AppImportStatusSnapshot status;
+
+  factory AppImportSnapshot.fromJson(Map<String, dynamic> json) {
+    return AppImportSnapshot(
+      dialog: json['dialog'] == null
+          ? null
+          : AppImportDialogSnapshot.fromJson(
+              json['dialog'] as Map<String, dynamic>,
+            ),
+      status: json['status'] == null
+          ? const AppImportStatusSnapshot(
+              state: 'idle',
+              progress: 0,
+              total: 0,
+              filename: null,
+              phaseLabel: null,
+              message: null,
+              isError: false,
+            )
+          : AppImportStatusSnapshot.fromJson(
+              json['status'] as Map<String, dynamic>,
+            ),
+    );
+  }
+}
+
+class AppSculptConvertDialogSnapshot {
+  const AppSculptConvertDialogSnapshot({
+    required this.targetNodeId,
+    required this.targetName,
+    required this.modeId,
+    required this.modeLabel,
+    required this.resolution,
+    required this.minResolution,
+    required this.maxResolution,
+  });
+
+  final int targetNodeId;
+  final String targetName;
+  final String modeId;
+  final String modeLabel;
+  final int resolution;
+  final int minResolution;
+  final int maxResolution;
+
+  factory AppSculptConvertDialogSnapshot.fromJson(Map<String, dynamic> json) {
+    return AppSculptConvertDialogSnapshot(
+      targetNodeId: (json['target_node_id'] as num?)?.toInt() ?? 0,
+      targetName: json['target_name'] as String? ?? 'Node',
+      modeId: json['mode_id'] as String? ?? 'active_node',
+      modeLabel: json['mode_label'] as String? ?? 'Bake active node',
+      resolution: (json['resolution'] as num?)?.toInt() ?? 64,
+      minResolution: (json['min_resolution'] as num?)?.toInt() ?? 16,
+      maxResolution: (json['max_resolution'] as num?)?.toInt() ?? 320,
+    );
+  }
+}
+
+class AppSculptConvertStatusSnapshot {
+  const AppSculptConvertStatusSnapshot({
+    required this.state,
+    required this.progress,
+    required this.total,
+    required this.targetName,
+    required this.phaseLabel,
+    required this.message,
+    required this.isError,
+  });
+
+  final String state;
+  final int progress;
+  final int total;
+  final String? targetName;
+  final String? phaseLabel;
+  final String? message;
+  final bool isError;
+
+  bool get isInProgress => state == 'in_progress';
+
+  factory AppSculptConvertStatusSnapshot.fromJson(Map<String, dynamic> json) {
+    return AppSculptConvertStatusSnapshot(
+      state: json['state'] as String? ?? 'idle',
+      progress: (json['progress'] as num?)?.toInt() ?? 0,
+      total: (json['total'] as num?)?.toInt() ?? 0,
+      targetName: json['target_name'] as String?,
+      phaseLabel: json['phase_label'] as String?,
+      message: json['message'] as String?,
+      isError: json['is_error'] as bool? ?? false,
+    );
+  }
+}
+
+class AppSculptConvertSnapshot {
+  const AppSculptConvertSnapshot({required this.dialog, required this.status});
+
+  final AppSculptConvertDialogSnapshot? dialog;
+  final AppSculptConvertStatusSnapshot status;
+
+  factory AppSculptConvertSnapshot.fromJson(Map<String, dynamic> json) {
+    return AppSculptConvertSnapshot(
+      dialog: json['dialog'] == null
+          ? null
+          : AppSculptConvertDialogSnapshot.fromJson(
+              json['dialog'] as Map<String, dynamic>,
+            ),
+      status: json['status'] == null
+          ? const AppSculptConvertStatusSnapshot(
+              state: 'idle',
+              progress: 0,
+              total: 0,
+              targetName: null,
+              phaseLabel: null,
+              message: null,
+              isError: false,
+            )
+          : AppSculptConvertStatusSnapshot.fromJson(
+              json['status'] as Map<String, dynamic>,
+            ),
+    );
+  }
+}
+
 class AppScalarPropertySnapshot {
   const AppScalarPropertySnapshot({
     required this.key,
@@ -530,6 +730,8 @@ class AppSceneSnapshot {
     required this.history,
     required this.document,
     required this.export,
+    required this.import,
+    required this.sculptConvert,
     required this.camera,
     required this.stats,
     required this.tool,
@@ -542,6 +744,8 @@ class AppSceneSnapshot {
   final AppHistorySnapshot history;
   final AppDocumentSnapshot document;
   final AppExportSnapshot export;
+  final AppImportSnapshot import;
+  final AppSculptConvertSnapshot sculptConvert;
   final AppCameraSnapshot camera;
   final AppSceneStatsSnapshot stats;
   final AppToolSnapshot tool;
@@ -609,6 +813,36 @@ class AppSceneSnapshot {
               ),
             )
           : AppExportSnapshot.fromJson(json['export'] as Map<String, dynamic>),
+      import: json['import'] == null
+          ? const AppImportSnapshot(
+              dialog: null,
+              status: AppImportStatusSnapshot(
+                state: 'idle',
+                progress: 0,
+                total: 0,
+                filename: null,
+                phaseLabel: null,
+                message: null,
+                isError: false,
+              ),
+            )
+          : AppImportSnapshot.fromJson(json['import'] as Map<String, dynamic>),
+      sculptConvert: json['sculpt_convert'] == null
+          ? const AppSculptConvertSnapshot(
+              dialog: null,
+              status: AppSculptConvertStatusSnapshot(
+                state: 'idle',
+                progress: 0,
+                total: 0,
+                targetName: null,
+                phaseLabel: null,
+                message: null,
+                isError: false,
+              ),
+            )
+          : AppSculptConvertSnapshot.fromJson(
+              json['sculpt_convert'] as Map<String, dynamic>,
+            ),
       camera: AppCameraSnapshot.fromJson(json['camera'] as Map<String, dynamic>),
       stats: AppSceneStatsSnapshot.fromJson(
         json['stats'] as Map<String, dynamic>,

@@ -67,6 +67,83 @@ pub fn discard_recovery() -> String {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn open_import_dialog() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.open_import_dialog();
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn cancel_import_dialog() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.cancel_import_dialog();
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_import_use_auto(use_auto: bool) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_import_use_auto(use_auto);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_import_resolution(resolution: u32) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_import_resolution(resolution);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn start_import() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.start_import();
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn cancel_import() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.cancel_import();
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn open_sculpt_convert_dialog_for_selected() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.open_sculpt_convert_dialog_for_selected();
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn cancel_sculpt_convert_dialog() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.cancel_sculpt_convert_dialog();
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_sculpt_convert_mode(mode_id: String) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_sculpt_convert_mode(&mode_id);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_sculpt_convert_resolution(resolution: u32) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_sculpt_convert_resolution(resolution);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn start_sculpt_convert() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.start_sculpt_convert();
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn set_export_resolution(resolution: u32) -> String {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_export_resolution(resolution);

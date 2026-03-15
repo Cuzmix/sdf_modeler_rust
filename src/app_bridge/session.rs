@@ -16,12 +16,18 @@ use crate::settings::{RenderConfig, Settings};
 
 use super::dto::{
     AppCameraSnapshot, AppDocumentSnapshot, AppExportPresetSnapshot, AppExportSnapshot,
-    AppExportStatusSnapshot, AppHistorySnapshot, AppMaterialPropertiesSnapshot, AppNodeSnapshot,
+    AppExportStatusSnapshot, AppHistorySnapshot, AppImportDialogSnapshot, AppImportSnapshot,
+    AppImportStatusSnapshot, AppMaterialPropertiesSnapshot, AppNodeSnapshot,
     AppPrimitivePropertiesSnapshot, AppScalarPropertySnapshot, AppSceneSnapshot,
-    AppSceneStatsSnapshot, AppSceneTreeNodeSnapshot, AppSelectedNodePropertiesSnapshot,
-    AppToolSnapshot, AppTransformPropertiesSnapshot, AppVec3, AppViewportFeedbackSnapshot,
+    AppSceneStatsSnapshot, AppSceneTreeNodeSnapshot, AppSculptConvertDialogSnapshot,
+    AppSculptConvertSnapshot, AppSculptConvertStatusSnapshot,
+    AppSelectedNodePropertiesSnapshot, AppToolSnapshot, AppTransformPropertiesSnapshot, AppVec3,
+    AppViewportFeedbackSnapshot,
 };
 use super::renderer::{HeadlessPickRequest, HeadlessRenderRequest, HeadlessViewportRenderer};
+use super::workflows::{
+    ImportDialogState, SculptConvertDialogState, SculptConvertMode, WorkflowMessage,
+};
 
 pub struct RenderedViewportFrame {
     pub pixels: Vec<u8>,
@@ -38,6 +44,8 @@ pub struct AppBridge {
     selected_node: Option<NodeId>,
     hovered_node: Option<NodeId>,
     export_state: ExportState,
+    import_state: ImportState,
+    sculpt_convert_state: SculptConvertState,
     active_tool_label: String,
     manipulator_mode: ManipulatorMode,
     manipulator_space: ManipulatorSpace,
@@ -57,7 +65,7 @@ struct DocumentPersistence {
 
 struct ExportState {
     task: ExportTask,
-    last_message: Option<ExportMessage>,
+    last_message: Option<WorkflowMessage>,
 }
 
 enum ExportTask {
@@ -72,9 +80,40 @@ enum ExportTask {
     },
 }
 
-struct ExportMessage {
-    text: String,
-    is_error: bool,
+struct ImportState {
+    dialog: Option<ImportDialogState>,
+    task: ImportTask,
+    last_message: Option<WorkflowMessage>,
+}
+
+enum ImportTask {
+    Idle,
+    InProgress {
+        progress: Arc<AtomicU32>,
+        total: u32,
+        filename: String,
+        receiver: std::sync::mpsc::Receiver<(crate::graph::voxel::VoxelGrid, Vec3)>,
+        cancelled: Arc<AtomicBool>,
+    },
+}
+
+struct SculptConvertState {
+    dialog: Option<SculptConvertDialogState>,
+    task: SculptConvertTask,
+    last_message: Option<WorkflowMessage>,
+}
+
+enum SculptConvertTask {
+    Idle,
+    InProgress {
+        progress: Arc<AtomicU32>,
+        total: u32,
+        target_name: String,
+        receiver: std::sync::mpsc::Receiver<(crate::graph::voxel::VoxelGrid, Vec3)>,
+        subtree_root: NodeId,
+        color: Vec3,
+        flatten: bool,
+    },
 }
 
 const DEFAULT_SCULPT_ENTRY_RESOLUTION: u32 = 64;
@@ -189,6 +228,16 @@ impl AppBridge {
                 task: ExportTask::Idle,
                 last_message: None,
             },
+            import_state: ImportState {
+                dialog: None,
+                task: ImportTask::Idle,
+                last_message: None,
+            },
+            sculpt_convert_state: SculptConvertState {
+                dialog: None,
+                task: SculptConvertTask::Idle,
+                last_message: None,
+            },
             active_tool_label: "Select".to_string(),
             manipulator_mode: ManipulatorMode::Translate,
             manipulator_space: ManipulatorSpace::Local,
@@ -221,6 +270,8 @@ impl AppBridge {
             },
             document: self.document_snapshot(),
             export: self.export_snapshot(),
+            import: self.import_snapshot(),
+            sculpt_convert: self.sculpt_convert_snapshot(),
             camera: self.camera_snapshot(),
             stats: AppSceneStatsSnapshot {
                 total_nodes: node_counts.total as u32,
@@ -268,6 +319,8 @@ impl AppBridge {
 
     pub fn refresh_background_state(&mut self) {
         self.poll_export();
+        self.poll_import();
+        self.poll_sculpt_convert();
     }
 
     pub fn render_viewport_frame(
@@ -439,6 +492,7 @@ impl AppBridge {
         self.selected_node = None;
         self.hovered_node = None;
         self.last_viewport_time_seconds = None;
+        self.clear_workflow_state();
         self.persistence.current_file_path = None;
         self.persistence.saved_fingerprint = self.scene.data_fingerprint();
         self.persistence.scene_dirty = false;
@@ -499,6 +553,7 @@ impl AppBridge {
         self.selected_node = None;
         self.hovered_node = None;
         self.last_viewport_time_seconds = None;
+        self.clear_workflow_state();
         self.persistence.current_file_path = None;
         self.persistence.saved_fingerprint = 0;
         self.persistence.scene_dirty = true;
@@ -512,6 +567,232 @@ impl AppBridge {
         }
 
         self.clear_recovery_prompt();
+        true
+    }
+
+    pub fn open_import_dialog(&mut self) -> bool {
+        let Some(path) = rfd::FileDialog::new()
+            .set_title("Import Mesh")
+            .add_filter("Wavefront OBJ", &["obj"])
+            .add_filter("STL Binary", &["stl"])
+            .add_filter("All Mesh Files", &["obj", "stl"])
+            .pick_file()
+        else {
+            return false;
+        };
+
+        let mesh = match crate::mesh_import::load_mesh(&path) {
+            Ok(mesh) => mesh,
+            Err(error) => {
+                self.import_state.last_message = Some(WorkflowMessage {
+                    text: format!("Import failed: {}", error),
+                    is_error: true,
+                });
+                return false;
+            }
+        };
+
+        let filename = path
+            .file_name()
+            .and_then(|file_name| file_name.to_str())
+            .unwrap_or("mesh")
+            .to_string();
+        self.import_state.dialog = Some(ImportDialogState::new(
+            mesh,
+            filename,
+            self.settings.max_sculpt_resolution,
+        ));
+        self.import_state.last_message = None;
+        true
+    }
+
+    pub fn cancel_import_dialog(&mut self) -> bool {
+        if self.import_state.dialog.is_none() {
+            return false;
+        }
+
+        self.import_state.dialog = None;
+        true
+    }
+
+    pub fn set_import_use_auto(&mut self, use_auto: bool) -> bool {
+        let Some(dialog) = self.import_state.dialog.as_mut() else {
+            return false;
+        };
+
+        dialog.set_use_auto(use_auto);
+        true
+    }
+
+    pub fn set_import_resolution(&mut self, resolution: u32) -> bool {
+        let Some(dialog) = self.import_state.dialog.as_mut() else {
+            return false;
+        };
+
+        dialog.set_use_auto(false);
+        dialog.set_resolution(resolution);
+        true
+    }
+
+    pub fn start_import(&mut self) -> bool {
+        if matches!(self.import_state.task, ImportTask::InProgress { .. }) {
+            return false;
+        }
+
+        let Some(dialog) = self.import_state.dialog.take() else {
+            return false;
+        };
+
+        let mesh = dialog.mesh;
+        let filename = dialog.filename;
+        let resolution = dialog.resolution;
+        let progress = Arc::new(AtomicU32::new(0));
+        let progress_clone = Arc::clone(&progress);
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let cancelled_clone = Arc::clone(&cancelled);
+        let (sender, receiver) = std::sync::mpsc::channel();
+
+        std::thread::spawn(move || {
+            let result = crate::mesh_import::mesh_to_sdf(&mesh, resolution, &progress_clone);
+            if cancelled_clone.load(Ordering::Relaxed) {
+                return;
+            }
+            let _ = sender.send(result);
+        });
+
+        self.import_state.last_message = None;
+        self.import_state.task = ImportTask::InProgress {
+            progress,
+            total: resolution,
+            filename,
+            receiver,
+            cancelled,
+        };
+        true
+    }
+
+    pub fn cancel_import(&mut self) -> bool {
+        let ImportTask::InProgress { cancelled, .. } = &self.import_state.task else {
+            return false;
+        };
+
+        cancelled.store(true, Ordering::Relaxed);
+        true
+    }
+
+    pub fn open_sculpt_convert_dialog_for_selected(&mut self) -> bool {
+        let Some(selected_node) = self.selected_node else {
+            self.sculpt_convert_state.last_message = Some(WorkflowMessage {
+                text: "Select a node to sculpt".to_string(),
+                is_error: true,
+            });
+            return false;
+        };
+
+        let Some(node) = self.scene.nodes.get(&selected_node) else {
+            return false;
+        };
+
+        self.sculpt_convert_state.dialog = Some(SculptConvertDialogState::new(
+            selected_node,
+            node.name.clone(),
+            self.settings.max_sculpt_resolution,
+        ));
+        self.sculpt_convert_state.last_message = None;
+        true
+    }
+
+    pub fn cancel_sculpt_convert_dialog(&mut self) -> bool {
+        if self.sculpt_convert_state.dialog.is_none() {
+            return false;
+        }
+
+        self.sculpt_convert_state.dialog = None;
+        true
+    }
+
+    pub fn set_sculpt_convert_mode(&mut self, mode_id: &str) -> bool {
+        let Some(dialog) = self.sculpt_convert_state.dialog.as_mut() else {
+            return false;
+        };
+        let Some(mode) = SculptConvertMode::from_id(mode_id) else {
+            return false;
+        };
+
+        dialog.mode = mode;
+        true
+    }
+
+    pub fn set_sculpt_convert_resolution(&mut self, resolution: u32) -> bool {
+        let Some(dialog) = self.sculpt_convert_state.dialog.as_mut() else {
+            return false;
+        };
+
+        dialog.set_resolution(resolution);
+        true
+    }
+
+    pub fn start_sculpt_convert(&mut self) -> bool {
+        if matches!(self.sculpt_convert_state.task, SculptConvertTask::InProgress { .. }) {
+            return false;
+        }
+
+        let Some(dialog) = self.sculpt_convert_state.dialog.take() else {
+            return false;
+        };
+
+        let Some(target_node) = self.scene.nodes.get(&dialog.target) else {
+            return false;
+        };
+
+        let (subtree_root, flatten) = match dialog.mode {
+            SculptConvertMode::BakeWholeScene => (self.topmost_ancestor(dialog.target), false),
+            SculptConvertMode::BakeWholeSceneFlatten => {
+                (self.topmost_ancestor(dialog.target), true)
+            }
+            SculptConvertMode::BakeActiveNode => (dialog.target, false),
+        };
+        let color = match &target_node.data {
+            NodeData::Primitive { color, .. } => *color,
+            _ => Vec3::new(0.8, 0.8, 0.8),
+        };
+
+        if flatten {
+            let scene_clone = self.scene.clone();
+            let progress = Arc::new(AtomicU32::new(0));
+            let progress_clone = Arc::clone(&progress);
+            let (sender, receiver) = std::sync::mpsc::channel();
+            let resolution = dialog.resolution;
+            let target_name = dialog.target_name.clone();
+            std::thread::spawn(move || {
+                let result = crate::graph::voxel::bake_subtree_with_progress(
+                    &scene_clone,
+                    subtree_root,
+                    resolution,
+                    progress_clone,
+                );
+                let _ = sender.send(result);
+            });
+            self.sculpt_convert_state.last_message = None;
+            self.sculpt_convert_state.task = SculptConvertTask::InProgress {
+                progress,
+                total: dialog.resolution,
+                target_name,
+                receiver,
+                subtree_root,
+                color,
+                flatten,
+            };
+            return true;
+        }
+
+        let (grid, center) =
+            create_displacement_grid_for_subtree(&self.scene, subtree_root, dialog.resolution);
+        self.apply_sculpt_convert_result(grid, center, subtree_root, color, false);
+        self.sculpt_convert_state.last_message = Some(WorkflowMessage {
+            text: format!("Converted {} to sculpt", dialog.target_name),
+            is_error: false,
+        });
         true
     }
 
@@ -984,6 +1265,7 @@ impl AppBridge {
         self.selected_node = None;
         self.hovered_node = None;
         self.last_viewport_time_seconds = None;
+        self.clear_workflow_state();
         self.sync_document_persistence();
     }
 
@@ -1059,6 +1341,7 @@ impl AppBridge {
         self.selected_node = None;
         self.hovered_node = None;
         self.last_viewport_time_seconds = None;
+        self.clear_workflow_state();
         self.persistence.current_file_path = Some(path.to_path_buf());
         self.persistence.saved_fingerprint = self.scene.data_fingerprint();
         self.persistence.scene_dirty = false;
@@ -1106,6 +1389,15 @@ impl AppBridge {
     fn clear_recovery_prompt(&mut self) {
         self.persistence.recovery_prompt_visible = false;
         self.persistence.recovery_summary = None;
+    }
+
+    fn clear_workflow_state(&mut self) {
+        self.import_state.dialog = None;
+        self.import_state.task = ImportTask::Idle;
+        self.import_state.last_message = None;
+        self.sculpt_convert_state.dialog = None;
+        self.sculpt_convert_state.task = SculptConvertTask::Idle;
+        self.sculpt_convert_state.last_message = None;
     }
 
     fn start_export_to_path(&mut self, path: PathBuf) -> bool {
@@ -1171,7 +1463,7 @@ impl AppBridge {
 
         self.export_state.last_message = Some(match maybe_mesh {
             Some(mesh) => match crate::export::write_mesh(&mesh, &path) {
-                Ok(()) => ExportMessage {
+                Ok(()) => WorkflowMessage {
                     text: format!(
                         "Exported {} ({} verts, {} tris)",
                         export_format_label(&path),
@@ -1180,17 +1472,139 @@ impl AppBridge {
                     ),
                     is_error: false,
                 },
-                Err(error) => ExportMessage {
+                Err(error) => WorkflowMessage {
                     text: format!("Export failed: {}", error),
                     is_error: true,
                 },
             },
-            None => ExportMessage {
+            None => WorkflowMessage {
                 text: "Export cancelled".to_string(),
                 is_error: false,
             },
         });
         self.export_state.task = ExportTask::Idle;
+    }
+
+    fn poll_import(&mut self) {
+        if let ImportTask::InProgress {
+            cancelled,
+            receiver,
+            ..
+        } = &self.import_state.task
+        {
+            if cancelled.load(Ordering::Relaxed) {
+                let _ = receiver.try_recv();
+                self.import_state.last_message = Some(WorkflowMessage {
+                    text: "Import cancelled".to_string(),
+                    is_error: false,
+                });
+                self.import_state.task = ImportTask::Idle;
+                return;
+            }
+        }
+
+        let completed = if let ImportTask::InProgress { receiver, .. } = &self.import_state.task {
+            receiver.try_recv().ok()
+        } else {
+            None
+        };
+
+        let Some((grid, center)) = completed else {
+            return;
+        };
+
+        let filename = match &self.import_state.task {
+            ImportTask::InProgress { filename, .. } => filename.clone(),
+            ImportTask::Idle => return,
+        };
+
+        self.run_document_command(|bridge| {
+            let desired_resolution = grid.resolution;
+            let node_name = bridge.scene.next_name("Import");
+            let sculpt_id = bridge.scene.add_node(
+                node_name,
+                NodeData::Sculpt {
+                    input: None,
+                    position: center,
+                    rotation: Vec3::ZERO,
+                    color: Vec3::new(0.7, 0.7, 0.7),
+                    roughness: 0.5,
+                    metallic: 0.0,
+                    emissive: Vec3::ZERO,
+                    emissive_intensity: 0.0,
+                    fresnel: 0.04,
+                    layer_intensity: 1.0,
+                    voxel_grid: grid,
+                    desired_resolution,
+                },
+            );
+            bridge.selected_node = Some(sculpt_id);
+            bridge.hovered_node = Some(sculpt_id);
+            bridge.active_tool_label = "Sculpt".to_string();
+        });
+
+        self.import_state.last_message = Some(WorkflowMessage {
+            text: format!("Imported {} as sculpt geometry", filename),
+            is_error: false,
+        });
+        self.import_state.task = ImportTask::Idle;
+    }
+
+    fn poll_sculpt_convert(&mut self) {
+        let completed = if let SculptConvertTask::InProgress { receiver, .. } =
+            &self.sculpt_convert_state.task
+        {
+            receiver.try_recv().ok()
+        } else {
+            None
+        };
+
+        let Some((grid, center)) = completed else {
+            return;
+        };
+
+        let (subtree_root, color, flatten, target_name) = match &self.sculpt_convert_state.task {
+            SculptConvertTask::InProgress {
+                subtree_root,
+                color,
+                flatten,
+                target_name,
+                ..
+            } => (*subtree_root, *color, *flatten, target_name.clone()),
+            SculptConvertTask::Idle => return,
+        };
+
+        self.apply_sculpt_convert_result(grid, center, subtree_root, color, flatten);
+        self.sculpt_convert_state.last_message = Some(WorkflowMessage {
+            text: format!("Converted {} to sculpt", target_name),
+            is_error: false,
+        });
+        self.sculpt_convert_state.task = SculptConvertTask::Idle;
+    }
+
+    fn apply_sculpt_convert_result(
+        &mut self,
+        grid: crate::graph::voxel::VoxelGrid,
+        center: Vec3,
+        subtree_root: NodeId,
+        color: Vec3,
+        flatten: bool,
+    ) {
+        self.run_document_command(|bridge| {
+            if flatten {
+                let sculpt_id = bridge.scene.flatten_subtree(subtree_root, grid, center, color);
+                bridge.selected_node = Some(sculpt_id);
+                bridge.hovered_node = Some(sculpt_id);
+            } else {
+                let sculpt_id =
+                    bridge
+                        .scene
+                        .insert_sculpt_above(subtree_root, center, Vec3::ZERO, color, grid);
+                bridge.selected_node = Some(sculpt_id);
+                bridge.hovered_node = Some(sculpt_id);
+            }
+            bridge.active_tool_label = "Sculpt".to_string();
+        });
     }
 
     fn offset_duplicated_root(&mut self, node_id: NodeId) {
@@ -1204,6 +1618,15 @@ impl AppBridge {
             }
             _ => {}
         }
+    }
+
+    fn topmost_ancestor(&self, start_node: NodeId) -> NodeId {
+        let parent_map = self.scene.build_parent_map();
+        let mut current_node = start_node;
+        while let Some(&parent_id) = parent_map.get(&current_node) {
+            current_node = parent_id;
+        }
+        current_node
     }
 
     fn top_level_geometry_roots(&self) -> Vec<NodeId> {
@@ -1354,6 +1777,118 @@ impl AppBridge {
                 .collect(),
             status,
         }
+    }
+
+    fn import_snapshot(&self) -> AppImportSnapshot {
+        let dialog = self.import_state.dialog.as_ref().map(|dialog| AppImportDialogSnapshot {
+            filename: dialog.filename.clone(),
+            resolution: dialog.resolution,
+            auto_resolution: dialog.auto_resolution,
+            use_auto: dialog.use_auto,
+            vertex_count: dialog.vertex_count,
+            triangle_count: dialog.triangle_count,
+            bounds_size: app_vec3(dialog.bounds_size),
+            min_resolution: dialog.min_resolution,
+            max_resolution: dialog.max_resolution,
+        });
+        let status = match &self.import_state.task {
+            ImportTask::Idle => AppImportStatusSnapshot {
+                state: "idle".to_string(),
+                progress: 0,
+                total: 0,
+                filename: None,
+                phase_label: None,
+                message: self
+                    .import_state
+                    .last_message
+                    .as_ref()
+                    .map(|message| message.text.clone()),
+                is_error: self
+                    .import_state
+                    .last_message
+                    .as_ref()
+                    .is_some_and(|message| message.is_error),
+            },
+            ImportTask::InProgress {
+                progress,
+                total,
+                filename,
+                ..
+            } => {
+                let completed_steps = progress.load(Ordering::Relaxed).min(*total);
+                AppImportStatusSnapshot {
+                    state: "in_progress".to_string(),
+                    progress: completed_steps,
+                    total: *total,
+                    filename: Some(filename.clone()),
+                    phase_label: Some(format!(
+                        "Voxelizing slice {}/{}",
+                        completed_steps, total
+                    )),
+                    message: None,
+                    is_error: false,
+                }
+            }
+        };
+
+        AppImportSnapshot { dialog, status }
+    }
+
+    fn sculpt_convert_snapshot(&self) -> AppSculptConvertSnapshot {
+        let dialog = self
+            .sculpt_convert_state
+            .dialog
+            .as_ref()
+            .map(|dialog| AppSculptConvertDialogSnapshot {
+                target_node_id: dialog.target,
+                target_name: dialog.target_name.clone(),
+                mode_id: dialog.mode.id().to_string(),
+                mode_label: dialog.mode.label().to_string(),
+                resolution: dialog.resolution,
+                min_resolution: dialog.min_resolution,
+                max_resolution: dialog.max_resolution,
+            });
+        let status = match &self.sculpt_convert_state.task {
+            SculptConvertTask::Idle => AppSculptConvertStatusSnapshot {
+                state: "idle".to_string(),
+                progress: 0,
+                total: 0,
+                target_name: None,
+                phase_label: None,
+                message: self
+                    .sculpt_convert_state
+                    .last_message
+                    .as_ref()
+                    .map(|message| message.text.clone()),
+                is_error: self
+                    .sculpt_convert_state
+                    .last_message
+                    .as_ref()
+                    .is_some_and(|message| message.is_error),
+            },
+            SculptConvertTask::InProgress {
+                progress,
+                total,
+                target_name,
+                ..
+            } => {
+                let completed_steps = progress.load(Ordering::Relaxed).min(*total);
+                AppSculptConvertStatusSnapshot {
+                    state: "in_progress".to_string(),
+                    progress: completed_steps,
+                    total: *total,
+                    target_name: Some(target_name.clone()),
+                    phase_label: Some(format!(
+                        "Baking sculpt volume {}/{}",
+                        completed_steps, total
+                    )),
+                    message: None,
+                    is_error: false,
+                }
+            }
+        };
+
+        AppSculptConvertSnapshot { dialog, status }
     }
 
     fn node_is_locked(&self, node_id: NodeId) -> bool {
@@ -1623,7 +2158,10 @@ mod tests {
         PRIMITIVE_PARAMETER_MAX, PRIMITIVE_PARAMETER_MIN,
     };
     use crate::app_bridge::{AppScalarPropertySnapshot, AppVec3};
+    use crate::app_bridge::workflows::{ImportDialogState, SculptConvertMode};
     use crate::graph::scene::{CsgOp, LightType, ModifierKind, NodeData, SdfPrimitive};
+    use crate::mesh_import::TriMesh;
+    use glam::Vec3;
 
     #[test]
     fn scene_snapshot_includes_recursive_scene_tree() {
@@ -1653,9 +2191,15 @@ mod tests {
 
         let export = bridge.scene_snapshot().export;
         assert_eq!(export.min_resolution, 16);
-        assert_eq!(export.max_resolution, 2048);
-        assert_eq!(export.resolution, 128);
-        assert!(!export.adaptive);
+        assert_eq!(export.max_resolution, bridge.settings.max_export_resolution.max(16));
+        assert_eq!(
+            export.resolution,
+            bridge
+                .settings
+                .export_resolution
+                .clamp(16, bridge.settings.max_export_resolution.max(16))
+        );
+        assert_eq!(export.adaptive, bridge.settings.adaptive_export);
         assert_eq!(export.status.state, "idle");
         assert!(export.status.message.is_none());
         assert_eq!(export.presets.len(), 4);
@@ -1708,6 +2252,111 @@ mod tests {
         assert!(temp_path.exists());
 
         let _ = std::fs::remove_file(temp_path);
+    }
+
+    #[test]
+    fn import_background_task_reports_completion_in_snapshot() {
+        let mut bridge = AppBridge::new();
+        bridge.import_state.dialog = Some(ImportDialogState::new(
+            TriMesh {
+                vertices: vec![
+                    Vec3::new(-0.5, 0.0, 0.0),
+                    Vec3::new(0.5, 0.0, 0.0),
+                    Vec3::new(0.0, 0.75, 0.0),
+                ],
+                triangles: vec![[0, 1, 2]],
+            },
+            "hero_mesh.obj".to_string(),
+            128,
+        ));
+        bridge.import_state.dialog.as_mut().unwrap().set_use_auto(false);
+        bridge.import_state.dialog.as_mut().unwrap().set_resolution(32);
+
+        assert!(bridge.start_import());
+        assert_eq!(bridge.scene_snapshot().import.status.state, "in_progress");
+
+        for _ in 0..200 {
+            bridge.poll_import();
+            if bridge.scene_snapshot().import.status.state == "idle" {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+
+        let import = bridge.scene_snapshot().import;
+        assert_eq!(import.status.state, "idle");
+        assert!(!import.status.is_error);
+        assert!(import
+            .status
+            .message
+            .as_deref()
+            .is_some_and(|message| message.contains("Imported hero_mesh.obj as sculpt geometry")));
+        assert_eq!(bridge.scene_snapshot().tool.active_tool_label, "Sculpt");
+        assert_eq!(
+            bridge
+                .scene_snapshot()
+                .selected_node
+                .as_ref()
+                .map(|node| node.kind_label.as_str()),
+            Some("Sculpt")
+        );
+    }
+
+    #[test]
+    fn sculpt_convert_entry_flow_updates_snapshot_and_selection() {
+        let mut bridge = AppBridge::new();
+        let sphere_id = bridge
+            .scene
+            .top_level_nodes()
+            .into_iter()
+            .find(|node_id| {
+                matches!(
+                    bridge.scene.nodes[node_id].data,
+                    NodeData::Primitive {
+                        kind: SdfPrimitive::Sphere,
+                        ..
+                    }
+                )
+            })
+            .expect("default sphere");
+        bridge.select_node(Some(sphere_id));
+
+        assert!(bridge.open_sculpt_convert_dialog_for_selected());
+        let dialog = bridge
+            .scene_snapshot()
+            .sculpt_convert
+            .dialog
+            .expect("sculpt convert dialog");
+        assert_eq!(dialog.target_node_id, sphere_id);
+        assert_eq!(dialog.target_name, "Sphere");
+        assert_eq!(dialog.mode_id, SculptConvertMode::BakeActiveNode.id());
+
+        assert!(bridge.set_sculpt_convert_mode(SculptConvertMode::BakeActiveNode.id()));
+        assert!(bridge.set_sculpt_convert_resolution(48));
+        assert_eq!(
+            bridge
+                .scene_snapshot()
+                .sculpt_convert
+                .dialog
+                .as_ref()
+                .map(|dialog| dialog.resolution),
+            Some(48)
+        );
+        assert!(bridge.start_sculpt_convert());
+
+        let snapshot = bridge.scene_snapshot();
+        assert_eq!(snapshot.tool.active_tool_label, "Sculpt");
+        assert_eq!(
+            snapshot.selected_node.as_ref().map(|node| node.kind_label.as_str()),
+            Some("Sculpt")
+        );
+        assert_eq!(snapshot.sculpt_convert.status.state, "idle");
+        assert!(snapshot
+            .sculpt_convert
+            .status
+            .message
+            .as_deref()
+            .is_some_and(|message| message.contains("Converted Sphere to sculpt")));
     }
 
     #[test]

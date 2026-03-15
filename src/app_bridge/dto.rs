@@ -124,6 +124,64 @@ pub struct AppExportSnapshot {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppImportDialogSnapshot {
+    pub filename: String,
+    pub resolution: u32,
+    pub auto_resolution: u32,
+    pub use_auto: bool,
+    pub vertex_count: usize,
+    pub triangle_count: usize,
+    pub bounds_size: AppVec3,
+    pub min_resolution: u32,
+    pub max_resolution: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppImportStatusSnapshot {
+    pub state: String,
+    pub progress: u32,
+    pub total: u32,
+    pub filename: Option<String>,
+    pub phase_label: Option<String>,
+    pub message: Option<String>,
+    pub is_error: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppImportSnapshot {
+    pub dialog: Option<AppImportDialogSnapshot>,
+    pub status: AppImportStatusSnapshot,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppSculptConvertDialogSnapshot {
+    pub target_node_id: u64,
+    pub target_name: String,
+    pub mode_id: String,
+    pub mode_label: String,
+    pub resolution: u32,
+    pub min_resolution: u32,
+    pub max_resolution: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppSculptConvertStatusSnapshot {
+    pub state: String,
+    pub progress: u32,
+    pub total: u32,
+    pub target_name: Option<String>,
+    pub phase_label: Option<String>,
+    pub message: Option<String>,
+    pub is_error: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppSculptConvertSnapshot {
+    pub dialog: Option<AppSculptConvertDialogSnapshot>,
+    pub status: AppSculptConvertStatusSnapshot,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AppScalarPropertySnapshot {
     pub key: String,
     pub label: String,
@@ -175,6 +233,8 @@ pub struct AppSceneSnapshot {
     pub history: AppHistorySnapshot,
     pub document: AppDocumentSnapshot,
     pub export: AppExportSnapshot,
+    pub import: AppImportSnapshot,
+    pub sculpt_convert: AppSculptConvertSnapshot,
     pub camera: AppCameraSnapshot,
     pub stats: AppSceneStatsSnapshot,
     pub tool: AppToolSnapshot,

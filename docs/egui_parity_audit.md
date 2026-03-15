@@ -16,6 +16,7 @@ These areas already have backend-neutral ownership through `src/app_bridge/` and
 | --- | --- | --- | --- | --- |
 | Document lifecycle: new/open/save/save-as/recent/recovery | `src/app_bridge/session.rs`, `src/app_bridge/dto.rs` | `apps/flutter/lib/src/session/document_session_panel.dart`, `apps/flutter/lib/app.dart` | `src/app/ui_panels.rs` File menu, `src/ui/recovery_dialog.rs` | Remove egui-only command wiring after confirming no remaining egui dialogs depend on it. |
 | Export workflow and progress | `src/app_bridge/session.rs`, `src/app_bridge/dto.rs` | `apps/flutter/lib/src/export/export_panel.dart`, `apps/flutter/lib/app.dart` | `src/ui/export_dialog.rs`, `src/ui/export_progress.rs`, `src/app/egui_frontend.rs` | Flutter now owns export settings, start/cancel, progress, and completion/error state through the bridge snapshot. |
+| Mesh import and sculpt-convert entry flows | `src/app_bridge/session.rs`, `src/app_bridge/dto.rs`, `src/app_bridge/workflows.rs` | `apps/flutter/lib/src/import/import_panel.dart`, `apps/flutter/lib/src/sculpt/sculpt_convert_panel.dart`, `apps/flutter/lib/app.dart` | `src/ui/import_dialog.rs`, `src/ui/sculpt_convert_dialog.rs`, `src/app/egui_frontend.rs` | Flutter now owns import/sculpt-convert dialog state, configuration, progress, and result messaging through the bridge snapshot. |
 | Undo/redo/duplicate/rename/delete/select/visibility/lock | `src/app_bridge/session.rs` | `apps/flutter/lib/app.dart`, `apps/flutter/lib/src/scene/scene_tree_panel.dart` | `src/app/ui_panels.rs`, `src/ui/scene_tree.rs`, parts of `src/ui/properties.rs` | Delete duplicate menu and panel handlers in small slices. |
 | Scene tree snapshots and selection state | `src/app_bridge/session.rs`, `src/app_bridge/dto.rs` | `apps/flutter/lib/src/scene/scene_tree_panel.dart` | `src/ui/scene_tree.rs` | Safe to decommission once any egui-only drag/drop or search behavior is either dropped or separately migrated. |
 | Selected-node basics, primitive/material basics, transform inspector | `src/app_bridge/session.rs`, `src/app_bridge/dto.rs` | Flutter property sections in `apps/flutter/lib/app.dart` | `src/ui/properties.rs` | Keep only egui-only fields that do not yet exist in backend-neutral snapshots. |
@@ -29,7 +30,6 @@ These behaviors are still product-relevant and should not be deleted until they 
 
 | Area | Current egui files | Why it still blocks decommission | Required migration direction |
 | --- | --- | --- | --- |
-| Mesh import and sculpt conversion dialogs | `src/ui/import_dialog.rs`, `src/ui/sculpt_convert_dialog.rs`, `src/app/egui_frontend.rs` | Import and sculpt-convert entry flows still live behind egui dialogs. | Move import/sculpt-convert intent and state into a neutral facade, then rebuild the shell in Flutter. |
 | Sculpt tool controls and sculpt-specific workflow | `src/ui/brush_settings.rs`, sculpt sections in `src/ui/properties.rs`, viewport sculpt behavior in `src/ui/viewport/draw.rs` | PRD only migrated sculpt node creation, not sculpt editing. | Introduce a backend-owned sculpt snapshot/command surface before deleting egui sculpt UI. |
 | Advanced light editing and light linking | `src/ui/lights_panel.rs`, `src/ui/light_linking.rs`, `src/ui/light_gizmo.rs`, `src/ui/light_graph.rs` | Flutter can create a minimal light entrypoint, but not edit advanced light properties or light masks. | Add neutral light snapshots/commands first. Decide separately whether the visual light graph survives the toolkit swap. |
 | Render settings | `src/ui/render_settings.rs` | Flutter does not yet expose renderer quality, shading, AO, shadow, or post-processing controls. | Add backend-owned render settings snapshot/commands and a Flutter panel. |
@@ -67,12 +67,12 @@ These are the high-signal duplicate ownership points to cut before touching larg
 ## PRD #27 Deletion Order
 
 1. Remove duplicate egui menu and panel command wiring for document, history, camera, scene-tree, and basic property edits.
-2. Keep egui-only workflows that still block parity isolated and explicit: export, import, sculpt, lights, render settings, settings/keymap, advanced diagnostics.
+2. Keep egui-only workflows that still block parity isolated and explicit: sculpt, lights, render settings, settings/keymap, advanced diagnostics.
 3. Decide whether out-of-scope egui-only features are intentionally retained for the native egui app or formally dropped.
 4. Only after the remaining required workflows move behind backend-neutral modules should the egui adapter modules themselves be deleted.
 
 ## Decision Summary
 
 - Flutter plus `src/app_bridge/` is already authoritative for the core editing loop.
-- The biggest remaining product gaps are export/import, sculpt tooling, advanced lights, render settings, and application settings.
+- The biggest remaining product gaps are sculpt tooling, advanced lights, render settings, and application settings.
 - The biggest duplicate-ownership cleanup targets are `src/app/ui_panels.rs`, `src/ui/scene_tree.rs`, `src/ui/properties.rs`, and `src/ui/quick_toolbar.rs`.
