@@ -885,6 +885,145 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
+  String crateApiSimpleClearSelectedLightCookie() {
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetNodeLightLinkEnabled({
+    required BigInt nodeId,
+    required BigInt lightId,
+    required bool enabled,
+  }) {
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetNodeLightMask({
+    required BigInt nodeId,
+    required int mask,
+  }) {
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetSelectedLightArrayColorVariation({
+    required double value,
+  }) {
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetSelectedLightArrayCount({required int count}) {
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetSelectedLightArrayPattern({
+    required String patternId,
+  }) {
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetSelectedLightArrayRadius({required double radius}) {
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetSelectedLightCastShadows({required bool enabled}) {
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetSelectedLightColor({
+    required double red,
+    required double green,
+    required double blue,
+  }) {
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetSelectedLightColorHueExpression({
+    required String expression,
+  }) {
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetSelectedLightCookie({required BigInt cookieNodeId}) {
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetSelectedLightIntensity({required double intensity}) {
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetSelectedLightIntensityExpression({
+    required String expression,
+  }) {
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetSelectedLightProximityMode({required String modeId}) {
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetSelectedLightProximityRange({required double range}) {
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetSelectedLightRange({required double range}) {
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetSelectedLightShadowColor({
+    required double red,
+    required double green,
+    required double blue,
+  }) {
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetSelectedLightShadowSoftness({
+    required double softness,
+  }) {
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetSelectedLightSpotAngle({
+    required double angleDegrees,
+  }) {
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetSelectedLightType({required String lightTypeId}) {
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetSelectedLightVolumetric({required bool enabled}) {
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetSelectedLightVolumetricDensity({
+    required double density,
+  }) {
+    return currentSnapshot;
+  }
+
+  @override
   String crateApiSimpleSetManipulatorMode({required String modeId}) {
     setManipulatorModeCalls += 1;
     currentSnapshot = switch (modeId) {

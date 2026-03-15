@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1518609794;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1196538592;
 
 // Section: executor
 
@@ -476,6 +476,36 @@ fn wire__crate__api__simple__cancel_sculpt_convert_dialog_impl(
             transform_result_sse::<_, ()>((move || {
                 let output_ok =
                     Result::<_, ()>::Ok(crate::api::simple::cancel_sculpt_convert_dialog())?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__clear_selected_light_cookie_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "clear_selected_light_cookie",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok =
+                    Result::<_, ()>::Ok(crate::api::simple::clear_selected_light_cookie())?;
                 Ok(output_ok)
             })())
         },
@@ -1728,6 +1758,77 @@ fn wire__crate__api__simple__set_manipulator_mode_impl(
         },
     )
 }
+fn wire__crate__api__simple__set_node_light_link_enabled_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_node_light_link_enabled",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_node_id = <u64>::sse_decode(&mut deserializer);
+            let api_light_id = <u64>::sse_decode(&mut deserializer);
+            let api_enabled = <bool>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok =
+                    Result::<_, ()>::Ok(crate::api::simple::set_node_light_link_enabled(
+                        api_node_id,
+                        api_light_id,
+                        api_enabled,
+                    ))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__set_node_light_mask_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_node_light_mask",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_node_id = <u64>::sse_decode(&mut deserializer);
+            let api_mask = <u8>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(crate::api::simple::set_node_light_mask(
+                    api_node_id,
+                    api_mask,
+                ))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__simple__set_sculpt_brush_mode_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -1911,6 +2012,618 @@ fn wire__crate__api__simple__set_sculpt_symmetry_axis_impl(
             transform_result_sse::<_, ()>((move || {
                 let output_ok =
                     Result::<_, ()>::Ok(crate::api::simple::set_sculpt_symmetry_axis(api_axis_id))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__set_selected_light_array_color_variation_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_selected_light_array_color_variation",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_value = <f32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(
+                    crate::api::simple::set_selected_light_array_color_variation(api_value),
+                )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__set_selected_light_array_count_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_selected_light_array_count",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_count = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(
+                    crate::api::simple::set_selected_light_array_count(api_count),
+                )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__set_selected_light_array_pattern_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_selected_light_array_pattern",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_pattern_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(
+                    crate::api::simple::set_selected_light_array_pattern(api_pattern_id),
+                )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__set_selected_light_array_radius_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_selected_light_array_radius",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_radius = <f32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(
+                    crate::api::simple::set_selected_light_array_radius(api_radius),
+                )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__set_selected_light_cast_shadows_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_selected_light_cast_shadows",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_enabled = <bool>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(
+                    crate::api::simple::set_selected_light_cast_shadows(api_enabled),
+                )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__set_selected_light_color_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_selected_light_color",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_red = <f32>::sse_decode(&mut deserializer);
+            let api_green = <f32>::sse_decode(&mut deserializer);
+            let api_blue = <f32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(crate::api::simple::set_selected_light_color(
+                    api_red, api_green, api_blue,
+                ))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__set_selected_light_color_hue_expression_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_selected_light_color_hue_expression",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_expression = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(
+                    crate::api::simple::set_selected_light_color_hue_expression(api_expression),
+                )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__set_selected_light_cookie_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_selected_light_cookie",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_cookie_node_id = <u64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(
+                    crate::api::simple::set_selected_light_cookie(api_cookie_node_id),
+                )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__set_selected_light_intensity_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_selected_light_intensity",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_intensity = <f32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(
+                    crate::api::simple::set_selected_light_intensity(api_intensity),
+                )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__set_selected_light_intensity_expression_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_selected_light_intensity_expression",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_expression = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(
+                    crate::api::simple::set_selected_light_intensity_expression(api_expression),
+                )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__set_selected_light_proximity_mode_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_selected_light_proximity_mode",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_mode_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(
+                    crate::api::simple::set_selected_light_proximity_mode(api_mode_id),
+                )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__set_selected_light_proximity_range_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_selected_light_proximity_range",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_range = <f32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(
+                    crate::api::simple::set_selected_light_proximity_range(api_range),
+                )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__set_selected_light_range_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_selected_light_range",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_range = <f32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok =
+                    Result::<_, ()>::Ok(crate::api::simple::set_selected_light_range(api_range))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__set_selected_light_shadow_color_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_selected_light_shadow_color",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_red = <f32>::sse_decode(&mut deserializer);
+            let api_green = <f32>::sse_decode(&mut deserializer);
+            let api_blue = <f32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok =
+                    Result::<_, ()>::Ok(crate::api::simple::set_selected_light_shadow_color(
+                        api_red, api_green, api_blue,
+                    ))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__set_selected_light_shadow_softness_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_selected_light_shadow_softness",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_softness = <f32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(
+                    crate::api::simple::set_selected_light_shadow_softness(api_softness),
+                )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__set_selected_light_spot_angle_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_selected_light_spot_angle",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_angle_degrees = <f32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(
+                    crate::api::simple::set_selected_light_spot_angle(api_angle_degrees),
+                )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__set_selected_light_type_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_selected_light_type",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_light_type_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(crate::api::simple::set_selected_light_type(
+                    api_light_type_id,
+                ))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__set_selected_light_volumetric_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_selected_light_volumetric",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_enabled = <bool>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(
+                    crate::api::simple::set_selected_light_volumetric(api_enabled),
+                )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__set_selected_light_volumetric_density_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_selected_light_volumetric_density",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_density = <f32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(
+                    crate::api::simple::set_selected_light_volumetric_density(api_density),
+                )?;
                 Ok(output_ok)
             })())
         },
@@ -2549,8 +3262,8 @@ fn pde_ffi_dispatcher_primary_impl(
 ) {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        26 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
-        42 => {
+        27 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
+        43 => {
             wire__crate__api__simple__render_preview_frame_impl(port, ptr, rust_vec_len, data_len)
         }
         _ => unreachable!(),
@@ -2582,107 +3295,191 @@ fn pde_ffi_dispatcher_sync_impl(
         15 => {
             wire__crate__api__simple__cancel_sculpt_convert_dialog_impl(ptr, rust_vec_len, data_len)
         }
-        16 => wire__crate__api__simple__create_light_impl(ptr, rust_vec_len, data_len),
-        17 => wire__crate__api__simple__create_modifier_impl(ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__simple__create_operation_impl(ptr, rust_vec_len, data_len),
-        19 => wire__crate__api__simple__create_sculpt_impl(ptr, rust_vec_len, data_len),
-        20 => wire__crate__api__simple__create_transform_impl(ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__simple__delete_selected_impl(ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__simple__discard_recovery_impl(ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__simple__duplicate_selected_impl(ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__simple__focus_selected_impl(ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__simple__frame_all_impl(ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__simple__new_scene_impl(ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__simple__nudge_manipulator_pivot_offset_impl(
+        16 => {
+            wire__crate__api__simple__clear_selected_light_cookie_impl(ptr, rust_vec_len, data_len)
+        }
+        17 => wire__crate__api__simple__create_light_impl(ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__simple__create_modifier_impl(ptr, rust_vec_len, data_len),
+        19 => wire__crate__api__simple__create_operation_impl(ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__simple__create_sculpt_impl(ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__simple__create_transform_impl(ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__simple__delete_selected_impl(ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__simple__discard_recovery_impl(ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__simple__duplicate_selected_impl(ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__simple__focus_selected_impl(ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__simple__frame_all_impl(ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__simple__new_scene_impl(ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__simple__nudge_manipulator_pivot_offset_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        29 => wire__crate__api__simple__nudge_selected_rotation_degrees_impl(
+        30 => wire__crate__api__simple__nudge_selected_rotation_degrees_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        30 => wire__crate__api__simple__nudge_selected_scale_impl(ptr, rust_vec_len, data_len),
-        31 => {
+        31 => wire__crate__api__simple__nudge_selected_scale_impl(ptr, rust_vec_len, data_len),
+        32 => {
             wire__crate__api__simple__nudge_selected_translation_impl(ptr, rust_vec_len, data_len)
         }
-        32 => wire__crate__api__simple__open_import_dialog_impl(ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__simple__open_recent_scene_impl(ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__simple__open_scene_impl(ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__simple__open_sculpt_convert_dialog_for_selected_impl(
+        33 => wire__crate__api__simple__open_import_dialog_impl(ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__simple__open_recent_scene_impl(ptr, rust_vec_len, data_len),
+        35 => wire__crate__api__simple__open_scene_impl(ptr, rust_vec_len, data_len),
+        36 => wire__crate__api__simple__open_sculpt_convert_dialog_for_selected_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        36 => wire__crate__api__simple__orbit_camera_impl(ptr, rust_vec_len, data_len),
-        37 => wire__crate__api__simple__pan_camera_impl(ptr, rust_vec_len, data_len),
-        38 => wire__crate__api__simple__ping_impl(ptr, rust_vec_len, data_len),
-        39 => wire__crate__api__simple__recover_autosave_impl(ptr, rust_vec_len, data_len),
-        40 => wire__crate__api__simple__redo_impl(ptr, rust_vec_len, data_len),
-        41 => wire__crate__api__simple__rename_node_impl(ptr, rust_vec_len, data_len),
-        43 => wire__crate__api__simple__reset_manipulator_pivot_impl(ptr, rust_vec_len, data_len),
-        44 => wire__crate__api__simple__reset_scene_impl(ptr, rust_vec_len, data_len),
-        45 => wire__crate__api__simple__resume_sculpting_selected_impl(ptr, rust_vec_len, data_len),
-        46 => wire__crate__api__simple__save_scene_impl(ptr, rust_vec_len, data_len),
-        47 => wire__crate__api__simple__save_scene_as_impl(ptr, rust_vec_len, data_len),
-        48 => wire__crate__api__simple__scene_snapshot_json_impl(ptr, rust_vec_len, data_len),
-        49 => wire__crate__api__simple__select_node_impl(ptr, rust_vec_len, data_len),
-        50 => wire__crate__api__simple__select_node_at_viewport_impl(ptr, rust_vec_len, data_len),
-        51 => wire__crate__api__simple__set_adaptive_export_impl(ptr, rust_vec_len, data_len),
-        52 => wire__crate__api__simple__set_export_resolution_impl(ptr, rust_vec_len, data_len),
-        53 => wire__crate__api__simple__set_import_resolution_impl(ptr, rust_vec_len, data_len),
-        54 => wire__crate__api__simple__set_import_use_auto_impl(ptr, rust_vec_len, data_len),
-        55 => wire__crate__api__simple__set_manipulator_mode_impl(ptr, rust_vec_len, data_len),
-        56 => wire__crate__api__simple__set_sculpt_brush_mode_impl(ptr, rust_vec_len, data_len),
-        57 => wire__crate__api__simple__set_sculpt_brush_radius_impl(ptr, rust_vec_len, data_len),
-        58 => wire__crate__api__simple__set_sculpt_brush_strength_impl(ptr, rust_vec_len, data_len),
-        59 => wire__crate__api__simple__set_sculpt_convert_mode_impl(ptr, rust_vec_len, data_len),
-        60 => wire__crate__api__simple__set_sculpt_convert_resolution_impl(
+        37 => wire__crate__api__simple__orbit_camera_impl(ptr, rust_vec_len, data_len),
+        38 => wire__crate__api__simple__pan_camera_impl(ptr, rust_vec_len, data_len),
+        39 => wire__crate__api__simple__ping_impl(ptr, rust_vec_len, data_len),
+        40 => wire__crate__api__simple__recover_autosave_impl(ptr, rust_vec_len, data_len),
+        41 => wire__crate__api__simple__redo_impl(ptr, rust_vec_len, data_len),
+        42 => wire__crate__api__simple__rename_node_impl(ptr, rust_vec_len, data_len),
+        44 => wire__crate__api__simple__reset_manipulator_pivot_impl(ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__simple__reset_scene_impl(ptr, rust_vec_len, data_len),
+        46 => wire__crate__api__simple__resume_sculpting_selected_impl(ptr, rust_vec_len, data_len),
+        47 => wire__crate__api__simple__save_scene_impl(ptr, rust_vec_len, data_len),
+        48 => wire__crate__api__simple__save_scene_as_impl(ptr, rust_vec_len, data_len),
+        49 => wire__crate__api__simple__scene_snapshot_json_impl(ptr, rust_vec_len, data_len),
+        50 => wire__crate__api__simple__select_node_impl(ptr, rust_vec_len, data_len),
+        51 => wire__crate__api__simple__select_node_at_viewport_impl(ptr, rust_vec_len, data_len),
+        52 => wire__crate__api__simple__set_adaptive_export_impl(ptr, rust_vec_len, data_len),
+        53 => wire__crate__api__simple__set_export_resolution_impl(ptr, rust_vec_len, data_len),
+        54 => wire__crate__api__simple__set_import_resolution_impl(ptr, rust_vec_len, data_len),
+        55 => wire__crate__api__simple__set_import_use_auto_impl(ptr, rust_vec_len, data_len),
+        56 => wire__crate__api__simple__set_manipulator_mode_impl(ptr, rust_vec_len, data_len),
+        57 => {
+            wire__crate__api__simple__set_node_light_link_enabled_impl(ptr, rust_vec_len, data_len)
+        }
+        58 => wire__crate__api__simple__set_node_light_mask_impl(ptr, rust_vec_len, data_len),
+        59 => wire__crate__api__simple__set_sculpt_brush_mode_impl(ptr, rust_vec_len, data_len),
+        60 => wire__crate__api__simple__set_sculpt_brush_radius_impl(ptr, rust_vec_len, data_len),
+        61 => wire__crate__api__simple__set_sculpt_brush_strength_impl(ptr, rust_vec_len, data_len),
+        62 => wire__crate__api__simple__set_sculpt_convert_mode_impl(ptr, rust_vec_len, data_len),
+        63 => wire__crate__api__simple__set_sculpt_convert_resolution_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        61 => wire__crate__api__simple__set_sculpt_symmetry_axis_impl(ptr, rust_vec_len, data_len),
-        62 => {
+        64 => wire__crate__api__simple__set_sculpt_symmetry_axis_impl(ptr, rust_vec_len, data_len),
+        65 => wire__crate__api__simple__set_selected_light_array_color_variation_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        66 => wire__crate__api__simple__set_selected_light_array_count_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        67 => wire__crate__api__simple__set_selected_light_array_pattern_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        68 => wire__crate__api__simple__set_selected_light_array_radius_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        69 => wire__crate__api__simple__set_selected_light_cast_shadows_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        70 => wire__crate__api__simple__set_selected_light_color_impl(ptr, rust_vec_len, data_len),
+        71 => wire__crate__api__simple__set_selected_light_color_hue_expression_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        72 => wire__crate__api__simple__set_selected_light_cookie_impl(ptr, rust_vec_len, data_len),
+        73 => {
+            wire__crate__api__simple__set_selected_light_intensity_impl(ptr, rust_vec_len, data_len)
+        }
+        74 => wire__crate__api__simple__set_selected_light_intensity_expression_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        75 => wire__crate__api__simple__set_selected_light_proximity_mode_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        76 => wire__crate__api__simple__set_selected_light_proximity_range_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        77 => wire__crate__api__simple__set_selected_light_range_impl(ptr, rust_vec_len, data_len),
+        78 => wire__crate__api__simple__set_selected_light_shadow_color_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        79 => wire__crate__api__simple__set_selected_light_shadow_softness_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        80 => wire__crate__api__simple__set_selected_light_spot_angle_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        81 => wire__crate__api__simple__set_selected_light_type_impl(ptr, rust_vec_len, data_len),
+        82 => wire__crate__api__simple__set_selected_light_volumetric_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        83 => wire__crate__api__simple__set_selected_light_volumetric_density_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        84 => {
             wire__crate__api__simple__set_selected_material_color_impl(ptr, rust_vec_len, data_len)
         }
-        63 => {
+        85 => {
             wire__crate__api__simple__set_selected_material_float_impl(ptr, rust_vec_len, data_len)
         }
-        64 => wire__crate__api__simple__set_selected_primitive_parameter_impl(
+        86 => wire__crate__api__simple__set_selected_primitive_parameter_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        65 => wire__crate__api__simple__set_selected_sculpt_resolution_impl(
+        87 => wire__crate__api__simple__set_selected_sculpt_resolution_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        66 => wire__crate__api__simple__set_selected_transform_position_impl(
+        88 => wire__crate__api__simple__set_selected_transform_position_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        67 => wire__crate__api__simple__set_selected_transform_rotation_degrees_impl(
+        89 => wire__crate__api__simple__set_selected_transform_rotation_degrees_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        68 => {
+        90 => {
             wire__crate__api__simple__set_selected_transform_scale_impl(ptr, rust_vec_len, data_len)
         }
-        69 => wire__crate__api__simple__start_export_impl(ptr, rust_vec_len, data_len),
-        70 => wire__crate__api__simple__start_import_impl(ptr, rust_vec_len, data_len),
-        71 => wire__crate__api__simple__start_sculpt_convert_impl(ptr, rust_vec_len, data_len),
-        72 => wire__crate__api__simple__stop_sculpting_impl(ptr, rust_vec_len, data_len),
-        73 => wire__crate__api__simple__toggle_manipulator_space_impl(ptr, rust_vec_len, data_len),
-        74 => wire__crate__api__simple__toggle_node_lock_impl(ptr, rust_vec_len, data_len),
-        75 => wire__crate__api__simple__toggle_node_visibility_impl(ptr, rust_vec_len, data_len),
-        76 => wire__crate__api__simple__toggle_orthographic_impl(ptr, rust_vec_len, data_len),
-        77 => wire__crate__api__simple__undo_impl(ptr, rust_vec_len, data_len),
-        78 => wire__crate__api__simple__zoom_camera_impl(ptr, rust_vec_len, data_len),
+        91 => wire__crate__api__simple__start_export_impl(ptr, rust_vec_len, data_len),
+        92 => wire__crate__api__simple__start_import_impl(ptr, rust_vec_len, data_len),
+        93 => wire__crate__api__simple__start_sculpt_convert_impl(ptr, rust_vec_len, data_len),
+        94 => wire__crate__api__simple__stop_sculpting_impl(ptr, rust_vec_len, data_len),
+        95 => wire__crate__api__simple__toggle_manipulator_space_impl(ptr, rust_vec_len, data_len),
+        96 => wire__crate__api__simple__toggle_node_lock_impl(ptr, rust_vec_len, data_len),
+        97 => wire__crate__api__simple__toggle_node_visibility_impl(ptr, rust_vec_len, data_len),
+        98 => wire__crate__api__simple__toggle_orthographic_impl(ptr, rust_vec_len, data_len),
+        99 => wire__crate__api__simple__undo_impl(ptr, rust_vec_len, data_len),
+        100 => wire__crate__api__simple__zoom_camera_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }

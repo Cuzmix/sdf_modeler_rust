@@ -249,7 +249,7 @@
     "category": "lights",
     "description": "Expose backend-owned advanced light snapshots and commands, including light linking.\n\nSteps:\n1. Define toolkit-neutral snapshots for advanced light properties and per-node light-linking state.\n2. Expose backend commands for light type-specific settings, shadows, volumetrics, cookies, expressions, and light masks.\n3. Keep light semantics, limits, and validation in Rust.\n4. Avoid coupling the command surface to the existing egui light graph presentation.",
     "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build`. If the bridge API changes, run `apps/flutter/scripts/frb_codegen.ps1`. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, and `fvm flutter build windows --debug` if the shell or bridge changes.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 37,

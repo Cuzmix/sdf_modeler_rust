@@ -8,8 +8,10 @@ use glam::Vec3;
 use crate::compat::{Duration, Instant};
 use crate::gpu::camera::Camera;
 use crate::graph::history::History;
+use crate::gpu::buffers::identify_active_lights;
 use crate::graph::scene::{
-    CsgOp, LightType, ModifierKind, NodeData, NodeId, Scene, SceneNode, SdfPrimitive,
+    ArrayPattern, CsgOp, LightType, ModifierKind, NodeData, NodeId, ProximityMode, Scene,
+    SceneNode, SdfPrimitive, MAX_SCENE_LIGHTS,
 };
 use crate::graph::voxel::create_displacement_grid_for_subtree;
 use crate::sculpt::{BrushMode, SculptState, DEFAULT_BRUSH_STRENGTH};
@@ -18,13 +20,14 @@ use crate::settings::{RenderConfig, Settings};
 use super::dto::{
     AppCameraSnapshot, AppDocumentSnapshot, AppExportPresetSnapshot, AppExportSnapshot,
     AppExportStatusSnapshot, AppHistorySnapshot, AppImportDialogSnapshot, AppImportSnapshot,
-    AppImportStatusSnapshot, AppMaterialPropertiesSnapshot, AppNodeSnapshot,
-    AppPrimitivePropertiesSnapshot, AppScalarPropertySnapshot, AppSceneSnapshot,
-    AppSceneStatsSnapshot, AppSceneTreeNodeSnapshot, AppSculptConvertDialogSnapshot,
-    AppSculptConvertSnapshot, AppSculptConvertStatusSnapshot, AppSculptSessionSnapshot,
-    AppSculptSnapshot, AppSelectedSculptSnapshot,
-    AppSelectedNodePropertiesSnapshot, AppToolSnapshot, AppTransformPropertiesSnapshot, AppVec3,
-    AppViewportFeedbackSnapshot,
+    AppImportStatusSnapshot, AppLightCookieCandidateSnapshot, AppLightLinkingSnapshot,
+    AppLightLinkNodeSnapshot, AppLightLinkTargetSnapshot, AppLightPropertiesSnapshot,
+    AppMaterialPropertiesSnapshot, AppNodeSnapshot, AppPrimitivePropertiesSnapshot,
+    AppScalarPropertySnapshot, AppSceneSnapshot, AppSceneStatsSnapshot,
+    AppSceneTreeNodeSnapshot, AppSculptConvertDialogSnapshot, AppSculptConvertSnapshot,
+    AppSculptConvertStatusSnapshot, AppSculptSessionSnapshot, AppSculptSnapshot,
+    AppSelectedNodePropertiesSnapshot, AppSelectedSculptSnapshot, AppToolSnapshot,
+    AppTransformPropertiesSnapshot, AppVec3, AppViewportFeedbackSnapshot,
 };
 use super::renderer::{HeadlessPickRequest, HeadlessRenderRequest, HeadlessViewportRenderer};
 use super::workflows::{
@@ -119,12 +122,37 @@ enum SculptConvertTask {
     },
 }
 
+struct LightLinkTarget {
+    light_node_id: NodeId,
+    light_name: String,
+    light_type_label: String,
+    active: bool,
+    mask_bit: u8,
+    color: Vec3,
+}
+
 const DEFAULT_SCULPT_ENTRY_RESOLUTION: u32 = 64;
 const PRIMITIVE_PARAMETER_MIN: f32 = 0.01;
 const PRIMITIVE_PARAMETER_MAX: f32 = 100.0;
 const MATERIAL_FACTOR_MIN: f32 = 0.0;
 const MATERIAL_FACTOR_MAX: f32 = 1.0;
 const EMISSIVE_INTENSITY_MAX: f32 = 5.0;
+const LIGHT_INTENSITY_MIN: f32 = -10.0;
+const LIGHT_INTENSITY_MAX: f32 = 10.0;
+const LIGHT_RANGE_MIN: f32 = 0.1;
+const LIGHT_RANGE_MAX: f32 = 50.0;
+const LIGHT_SPOT_ANGLE_MIN: f32 = 1.0;
+const LIGHT_SPOT_ANGLE_MAX: f32 = 179.0;
+const LIGHT_SHADOW_SOFTNESS_MIN: f32 = 1.0;
+const LIGHT_SHADOW_SOFTNESS_MAX: f32 = 64.0;
+const LIGHT_VOLUMETRIC_DENSITY_MIN: f32 = 0.01;
+const LIGHT_VOLUMETRIC_DENSITY_MAX: f32 = 1.0;
+const LIGHT_PROXIMITY_RANGE_MIN: f32 = 0.1;
+const LIGHT_PROXIMITY_RANGE_MAX: f32 = 10.0;
+const LIGHT_ARRAY_COUNT_MIN: u32 = 2;
+const LIGHT_ARRAY_COUNT_MAX: u32 = 32;
+const LIGHT_ARRAY_RADIUS_MIN: f32 = 0.1;
+const LIGHT_ARRAY_RADIUS_MAX: f32 = 20.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ManipulatorMode {
@@ -277,6 +305,7 @@ impl AppBridge {
             import: self.import_snapshot(),
             sculpt_convert: self.sculpt_convert_snapshot(),
             sculpt: self.sculpt_snapshot(),
+            light_linking: self.light_linking_snapshot(),
             camera: self.camera_snapshot(),
             stats: AppSceneStatsSnapshot {
                 total_nodes: node_counts.total as u32,
@@ -1299,6 +1328,398 @@ impl AppBridge {
         })
     }
 
+    pub fn set_selected_light_type(&mut self, light_type_id: &str) -> bool {
+        let Some(next_light_type) = parse_light_type_id(light_type_id) else {
+            return false;
+        };
+
+        self.run_selected_light_command(|data| match data {
+            NodeData::Light {
+                light_type,
+                array_config,
+                ..
+            } => {
+                *light_type = next_light_type.clone();
+                if matches!(next_light_type, LightType::Array) && array_config.is_none() {
+                    *array_config = Some(crate::graph::scene::LightArrayConfig::default());
+                }
+                true
+            }
+            _ => false,
+        })
+    }
+
+    pub fn set_selected_light_color(&mut self, red: f32, green: f32, blue: f32) -> bool {
+        let clamped_color = clamp_color(Vec3::new(red, green, blue));
+
+        self.run_selected_light_command(|data| match data {
+            NodeData::Light { color, .. } => {
+                *color = clamped_color;
+                true
+            }
+            _ => false,
+        })
+    }
+
+    pub fn set_selected_light_intensity(&mut self, intensity: f32) -> bool {
+        if !intensity.is_finite() {
+            return false;
+        }
+
+        let clamped_intensity = intensity.clamp(LIGHT_INTENSITY_MIN, LIGHT_INTENSITY_MAX);
+        self.run_selected_light_command(|data| match data {
+            NodeData::Light { intensity, .. } => {
+                *intensity = clamped_intensity;
+                true
+            }
+            _ => false,
+        })
+    }
+
+    pub fn set_selected_light_range(&mut self, range: f32) -> bool {
+        if !range.is_finite() {
+            return false;
+        }
+
+        let clamped_range = range.clamp(LIGHT_RANGE_MIN, LIGHT_RANGE_MAX);
+        self.run_selected_light_command(|data| match data {
+            NodeData::Light {
+                light_type,
+                range,
+                ..
+            } if light_type_supports_range(light_type) => {
+                *range = clamped_range;
+                true
+            }
+            _ => false,
+        })
+    }
+
+    pub fn set_selected_light_spot_angle(&mut self, angle_degrees: f32) -> bool {
+        if !angle_degrees.is_finite() {
+            return false;
+        }
+
+        let clamped_angle = angle_degrees.clamp(LIGHT_SPOT_ANGLE_MIN, LIGHT_SPOT_ANGLE_MAX);
+        self.run_selected_light_command(|data| match data {
+            NodeData::Light {
+                light_type: LightType::Spot,
+                spot_angle,
+                ..
+            } => {
+                *spot_angle = clamped_angle;
+                true
+            }
+            _ => false,
+        })
+    }
+
+    pub fn set_selected_light_cast_shadows(&mut self, enabled: bool) -> bool {
+        self.run_selected_light_command(|data| match data {
+            NodeData::Light {
+                light_type,
+                cast_shadows,
+                ..
+            } if light_type_supports_shadows(light_type) => {
+                *cast_shadows = enabled;
+                true
+            }
+            _ => false,
+        })
+    }
+
+    pub fn set_selected_light_shadow_softness(&mut self, softness: f32) -> bool {
+        if !softness.is_finite() {
+            return false;
+        }
+
+        let clamped_softness =
+            softness.clamp(LIGHT_SHADOW_SOFTNESS_MIN, LIGHT_SHADOW_SOFTNESS_MAX);
+        self.run_selected_light_command(|data| match data {
+            NodeData::Light {
+                light_type,
+                shadow_softness,
+                ..
+            } if light_type_supports_shadows(light_type) => {
+                *shadow_softness = clamped_softness;
+                true
+            }
+            _ => false,
+        })
+    }
+
+    pub fn set_selected_light_shadow_color(&mut self, red: f32, green: f32, blue: f32) -> bool {
+        let clamped_color = clamp_color(Vec3::new(red, green, blue));
+
+        self.run_selected_light_command(|data| match data {
+            NodeData::Light {
+                light_type,
+                shadow_color,
+                ..
+            } if light_type_supports_shadows(light_type) => {
+                *shadow_color = clamped_color;
+                true
+            }
+            _ => false,
+        })
+    }
+
+    pub fn set_selected_light_volumetric(&mut self, enabled: bool) -> bool {
+        self.run_selected_light_command(|data| match data {
+            NodeData::Light {
+                light_type,
+                volumetric,
+                ..
+            } if light_type_supports_volumetric(light_type) => {
+                *volumetric = enabled;
+                true
+            }
+            _ => false,
+        })
+    }
+
+    pub fn set_selected_light_volumetric_density(&mut self, density: f32) -> bool {
+        if !density.is_finite() {
+            return false;
+        }
+
+        let clamped_density =
+            density.clamp(LIGHT_VOLUMETRIC_DENSITY_MIN, LIGHT_VOLUMETRIC_DENSITY_MAX);
+        self.run_selected_light_command(|data| match data {
+            NodeData::Light {
+                light_type,
+                volumetric_density,
+                ..
+            } if light_type_supports_volumetric(light_type) => {
+                *volumetric_density = clamped_density;
+                true
+            }
+            _ => false,
+        })
+    }
+
+    pub fn set_selected_light_cookie(&mut self, cookie_node_id: u64) -> bool {
+        let cookie_target = self.is_valid_light_cookie_target(cookie_node_id);
+        if !cookie_target {
+            return false;
+        }
+
+        self.run_selected_light_command(|data| match data {
+            NodeData::Light {
+                light_type,
+                cookie_node,
+                ..
+            } if light_type_supports_cookie(light_type) => {
+                *cookie_node = Some(cookie_node_id);
+                true
+            }
+            _ => false,
+        })
+    }
+
+    pub fn clear_selected_light_cookie(&mut self) -> bool {
+        self.run_selected_light_command(|data| match data {
+            NodeData::Light {
+                light_type,
+                cookie_node,
+                ..
+            } if light_type_supports_cookie(light_type) => {
+                *cookie_node = None;
+                true
+            }
+            _ => false,
+        })
+    }
+
+    pub fn set_selected_light_proximity_mode(&mut self, mode_id: &str) -> bool {
+        let Some(next_mode) = parse_proximity_mode_id(mode_id) else {
+            return false;
+        };
+
+        self.run_selected_light_command(|data| match data {
+            NodeData::Light {
+                light_type,
+                proximity_mode,
+                ..
+            } if light_type_supports_proximity(light_type) => {
+                *proximity_mode = next_mode.clone();
+                true
+            }
+            _ => false,
+        })
+    }
+
+    pub fn set_selected_light_proximity_range(&mut self, range: f32) -> bool {
+        if !range.is_finite() {
+            return false;
+        }
+
+        let clamped_range = range.clamp(LIGHT_PROXIMITY_RANGE_MIN, LIGHT_PROXIMITY_RANGE_MAX);
+        self.run_selected_light_command(|data| match data {
+            NodeData::Light {
+                light_type,
+                proximity_range,
+                ..
+            } if light_type_supports_proximity(light_type) => {
+                *proximity_range = clamped_range;
+                true
+            }
+            _ => false,
+        })
+    }
+
+    pub fn set_selected_light_array_pattern(&mut self, pattern_id: &str) -> bool {
+        let Some(next_pattern) = parse_array_pattern_id(pattern_id) else {
+            return false;
+        };
+
+        self.run_selected_light_command(|data| match data {
+            NodeData::Light {
+                light_type: LightType::Array,
+                array_config,
+                ..
+            } => {
+                let config =
+                    array_config.get_or_insert_with(crate::graph::scene::LightArrayConfig::default);
+                config.pattern = next_pattern.clone();
+                true
+            }
+            _ => false,
+        })
+    }
+
+    pub fn set_selected_light_array_count(&mut self, count: u32) -> bool {
+        let clamped_count = count.clamp(LIGHT_ARRAY_COUNT_MIN, LIGHT_ARRAY_COUNT_MAX);
+        self.run_selected_light_command(|data| match data {
+            NodeData::Light {
+                light_type: LightType::Array,
+                array_config,
+                ..
+            } => {
+                let config =
+                    array_config.get_or_insert_with(crate::graph::scene::LightArrayConfig::default);
+                config.count = clamped_count;
+                true
+            }
+            _ => false,
+        })
+    }
+
+    pub fn set_selected_light_array_radius(&mut self, radius: f32) -> bool {
+        if !radius.is_finite() {
+            return false;
+        }
+
+        let clamped_radius = radius.clamp(LIGHT_ARRAY_RADIUS_MIN, LIGHT_ARRAY_RADIUS_MAX);
+        self.run_selected_light_command(|data| match data {
+            NodeData::Light {
+                light_type: LightType::Array,
+                array_config,
+                ..
+            } => {
+                let config =
+                    array_config.get_or_insert_with(crate::graph::scene::LightArrayConfig::default);
+                config.radius = clamped_radius;
+                true
+            }
+            _ => false,
+        })
+    }
+
+    pub fn set_selected_light_array_color_variation(&mut self, value: f32) -> bool {
+        if !value.is_finite() {
+            return false;
+        }
+
+        let clamped_value = value.clamp(MATERIAL_FACTOR_MIN, MATERIAL_FACTOR_MAX);
+        self.run_selected_light_command(|data| match data {
+            NodeData::Light {
+                light_type: LightType::Array,
+                array_config,
+                ..
+            } => {
+                let config =
+                    array_config.get_or_insert_with(crate::graph::scene::LightArrayConfig::default);
+                config.color_variation = clamped_value;
+                true
+            }
+            _ => false,
+        })
+    }
+
+    pub fn set_selected_light_intensity_expression(&mut self, expression: &str) -> bool {
+        let next_expression = normalize_optional_text(expression);
+        self.run_selected_light_command(|data| match data {
+            NodeData::Light {
+                light_type,
+                intensity_expr,
+                ..
+            } if light_type_supports_expressions(light_type) => {
+                *intensity_expr = next_expression;
+                true
+            }
+            _ => false,
+        })
+    }
+
+    pub fn set_selected_light_color_hue_expression(&mut self, expression: &str) -> bool {
+        let next_expression = normalize_optional_text(expression);
+        self.run_selected_light_command(|data| match data {
+            NodeData::Light {
+                light_type,
+                color_hue_expr,
+                ..
+            } if light_type_supports_expressions(light_type) => {
+                *color_hue_expr = next_expression;
+                true
+            }
+            _ => false,
+        })
+    }
+
+    pub fn set_node_light_mask(&mut self, node_id: u64, mask: u8) -> bool {
+        self.run_document_command(|bridge| {
+            let Some(node) = bridge.scene.nodes.get(&node_id) else {
+                return false;
+            };
+            if !node_supports_light_linking(&node.data) {
+                return false;
+            }
+
+            bridge.scene.set_light_mask(node_id, mask);
+            true
+        })
+    }
+
+    pub fn set_node_light_link_enabled(
+        &mut self,
+        node_id: u64,
+        light_id: u64,
+        enabled: bool,
+    ) -> bool {
+        let Some(mask_bit) = self.light_mask_bit_for_light(light_id) else {
+            return false;
+        };
+
+        self.run_document_command(|bridge| {
+            let Some(node) = bridge.scene.nodes.get(&node_id) else {
+                return false;
+            };
+            if !node_supports_light_linking(&node.data) {
+                return false;
+            }
+
+            let mut next_mask = bridge.scene.get_light_mask(node_id);
+            if enabled {
+                next_mask |= mask_bit;
+            } else {
+                next_mask &= !mask_bit;
+            }
+            bridge.scene.set_light_mask(node_id, next_mask);
+            true
+        })
+    }
+
     pub fn nudge_selected_translation(&mut self, delta_x: f32, delta_y: f32, delta_z: f32) -> bool {
         let Some(position) = self.selected_transform_position() else {
             return false;
@@ -1427,6 +1848,262 @@ impl AppBridge {
         self.hovered_node = self.selected_node;
         self.sync_document_persistence();
         self.sync_sculpt_session();
+    }
+
+    fn run_selected_light_command(
+        &mut self,
+        command: impl FnOnce(&mut NodeData) -> bool,
+    ) -> bool {
+        self.run_document_command(|bridge| {
+            let Some(light_id) = bridge.selected_light_node_id() else {
+                return false;
+            };
+            let Some(node) = bridge.scene.nodes.get_mut(&light_id) else {
+                return false;
+            };
+            command(&mut node.data)
+        })
+    }
+
+    fn selected_light_node_id(&self) -> Option<NodeId> {
+        let selected_node = self.selected_node?;
+        let node = self.scene.nodes.get(&selected_node)?;
+
+        match &node.data {
+            NodeData::Light { .. } => Some(selected_node),
+            NodeData::Transform {
+                input: Some(light_id),
+                ..
+            } => self
+                .scene
+                .nodes
+                .get(light_id)
+                .and_then(|child| matches!(child.data, NodeData::Light { .. }).then_some(*light_id)),
+            _ => None,
+        }
+    }
+
+    fn selected_light_transform_id(&self) -> Option<NodeId> {
+        let selected_node = self.selected_node?;
+        let node = self.scene.nodes.get(&selected_node)?;
+
+        match &node.data {
+            NodeData::Transform {
+                input: Some(light_id),
+                ..
+            } if self
+                .scene
+                .nodes
+                .get(light_id)
+                .is_some_and(|child| matches!(child.data, NodeData::Light { .. })) =>
+            {
+                Some(selected_node)
+            }
+            NodeData::Light { .. } => {
+                let parent_map = self.scene.build_parent_map();
+                parent_map.get(&selected_node).copied().filter(|parent_id| {
+                    self.scene.nodes.get(parent_id).is_some_and(
+                        |parent| matches!(parent.data, NodeData::Transform { .. }),
+                    )
+                })
+            }
+            _ => None,
+        }
+    }
+
+    fn selected_light_properties_snapshot(&self) -> Option<AppLightPropertiesSnapshot> {
+        let light_node_id = self.selected_light_node_id()?;
+        let transform_node_id = self.selected_light_transform_id();
+        let light_node = self.scene.nodes.get(&light_node_id)?;
+        let NodeData::Light {
+            light_type,
+            color,
+            intensity,
+            range,
+            spot_angle,
+            cast_shadows,
+            shadow_softness,
+            shadow_color,
+            volumetric,
+            volumetric_density,
+            cookie_node,
+            proximity_mode,
+            proximity_range,
+            array_config,
+            intensity_expr,
+            color_hue_expr,
+        } = &light_node.data
+        else {
+            return None;
+        };
+
+        let cookie_candidates = self.light_cookie_candidates();
+        let cookie_node_name = cookie_node
+            .and_then(|node_id| self.scene.nodes.get(&node_id))
+            .map(|node| node.name.clone());
+        let intensity_expression = intensity_expr.clone();
+        let color_hue_expression = color_hue_expr.clone();
+
+        Some(AppLightPropertiesSnapshot {
+            node_id: light_node_id,
+            transform_node_id,
+            light_type_id: light_type_id(light_type).to_string(),
+            light_type_label: light_type.label().to_string(),
+            color: app_vec3(*color),
+            intensity: *intensity,
+            range: *range,
+            spot_angle: *spot_angle,
+            cast_shadows: *cast_shadows,
+            shadow_softness: *shadow_softness,
+            shadow_color: app_vec3(*shadow_color),
+            volumetric: *volumetric,
+            volumetric_density: *volumetric_density,
+            cookie_node_id: *cookie_node,
+            cookie_node_name,
+            cookie_candidates,
+            proximity_mode_id: proximity_mode_id(proximity_mode).to_string(),
+            proximity_mode_label: proximity_mode.label().to_string(),
+            proximity_range: *proximity_range,
+            array_pattern_id: array_config
+                .as_ref()
+                .map(|config| array_pattern_id(&config.pattern).to_string()),
+            array_pattern_label: array_config
+                .as_ref()
+                .map(|config| config.pattern.label().to_string()),
+            array_count: array_config.as_ref().map(|config| config.count),
+            array_radius: array_config.as_ref().map(|config| config.radius),
+            array_color_variation: array_config
+                .as_ref()
+                .map(|config| config.color_variation),
+            intensity_expression: intensity_expression.clone(),
+            intensity_expression_error: expression_error_message(intensity_expression.as_deref()),
+            color_hue_expression: color_hue_expression.clone(),
+            color_hue_expression_error: expression_error_message(color_hue_expression.as_deref()),
+            supports_range: light_type_supports_range(light_type),
+            supports_spot_angle: matches!(light_type, LightType::Spot),
+            supports_shadows: light_type_supports_shadows(light_type),
+            supports_volumetric: light_type_supports_volumetric(light_type),
+            supports_cookie: light_type_supports_cookie(light_type),
+            supports_proximity: light_type_supports_proximity(light_type),
+            supports_expressions: light_type_supports_expressions(light_type),
+            supports_array: matches!(light_type, LightType::Array),
+        })
+    }
+
+    fn light_cookie_candidates(&self) -> Vec<AppLightCookieCandidateSnapshot> {
+        let mut candidates: Vec<_> = self
+            .scene
+            .nodes
+            .iter()
+            .filter(|(_, node)| {
+                matches!(
+                    node.data,
+                    NodeData::Primitive { .. } | NodeData::Operation { .. }
+                )
+            })
+            .map(|(&node_id, node)| AppLightCookieCandidateSnapshot {
+                    node_id,
+                    name: node.name.clone(),
+                    kind_label: node_kind_label(node),
+                })
+            .collect();
+        candidates.sort_by(|left, right| left.name.cmp(&right.name).then(left.node_id.cmp(&right.node_id)));
+        candidates
+    }
+
+    fn light_link_targets(&self) -> (Vec<LightLinkTarget>, usize) {
+        let (active_light_ids, _) = identify_active_lights(&self.scene, self.camera.eye());
+        let parent_map = self.scene.build_parent_map();
+        let mut light_ids: Vec<NodeId> = self
+            .scene
+            .nodes
+            .iter()
+            .filter_map(|(&node_id, node)| {
+                matches!(node.data, NodeData::Light { .. })
+                    .then_some(node_id)
+                    .filter(|id| !self.scene.is_hidden(*id))
+                    .filter(|id| parent_map.contains_key(id))
+            })
+            .collect();
+        light_ids.sort_unstable();
+
+        let total_visible_light_count = light_ids.len();
+        let targets = light_ids
+            .into_iter()
+            .take(MAX_SCENE_LIGHTS)
+            .enumerate()
+            .filter_map(|(slot, light_node_id)| {
+                let node = self.scene.nodes.get(&light_node_id)?;
+                let NodeData::Light {
+                    light_type, color, ..
+                } = &node.data
+                else {
+                    return None;
+                };
+
+                Some(LightLinkTarget {
+                    light_node_id,
+                    light_name: node.name.clone(),
+                    light_type_label: light_type.label().to_string(),
+                    active: active_light_ids.contains(&light_node_id),
+                    mask_bit: 1u8 << slot,
+                    color: *color,
+                })
+            })
+            .collect();
+
+        (targets, total_visible_light_count)
+    }
+
+    fn light_mask_bit_for_light(&self, light_id: NodeId) -> Option<u8> {
+        self.light_link_targets()
+            .0
+            .into_iter()
+            .find(|target| target.light_node_id == light_id)
+            .map(|target| target.mask_bit)
+    }
+
+    fn light_linking_snapshot(&self) -> AppLightLinkingSnapshot {
+        let (targets, total_visible_light_count) = self.light_link_targets();
+        let mut geometry_nodes: Vec<_> = self
+            .scene
+            .nodes
+            .iter()
+            .filter(|(_, node)| node_supports_light_linking(&node.data))
+            .map(|(&node_id, node)| AppLightLinkNodeSnapshot {
+                    node_id,
+                    node_name: node.name.clone(),
+                    kind_label: node_kind_label(node),
+                    light_mask: self.scene.get_light_mask(node_id),
+                })
+            .collect();
+        geometry_nodes.sort_by_key(|node| node.node_id);
+
+        AppLightLinkingSnapshot {
+            lights: targets
+                .into_iter()
+                .map(|target| AppLightLinkTargetSnapshot {
+                    light_node_id: target.light_node_id,
+                    light_name: target.light_name,
+                    light_type_label: target.light_type_label,
+                    active: target.active,
+                    mask_bit: target.mask_bit,
+                    color: app_vec3(target.color),
+                })
+                .collect(),
+            geometry_nodes,
+            total_visible_light_count: total_visible_light_count as u32,
+            max_light_count: MAX_SCENE_LIGHTS as u32,
+        }
+    }
+
+    fn is_valid_light_cookie_target(&self, node_id: NodeId) -> bool {
+        self.scene.nodes.get(&node_id).is_some_and(|node| {
+            matches!(
+                node.data,
+                NodeData::Primitive { .. } | NodeData::Operation { .. }
+            )
+        })
     }
 
     fn recovery_summary_from_meta(meta: Option<&crate::io::RecoveryMeta>) -> String {
@@ -2190,6 +2867,7 @@ impl AppBridge {
             transform: self.node_transform_properties(&node.data),
             primitive: self.node_primitive_properties(&node.data),
             material: self.node_material_properties(&node.data),
+            light: self.selected_light_properties_snapshot(),
         })
     }
 
@@ -2321,6 +2999,107 @@ fn clamp_color(color: Vec3) -> Vec3 {
     )
 }
 
+fn light_type_id(light_type: &LightType) -> &'static str {
+    match light_type {
+        LightType::Point => "point",
+        LightType::Spot => "spot",
+        LightType::Directional => "directional",
+        LightType::Ambient => "ambient",
+        LightType::Array => "array",
+    }
+}
+
+fn parse_light_type_id(light_type_id: &str) -> Option<LightType> {
+    Some(match light_type_id {
+        "point" => LightType::Point,
+        "spot" => LightType::Spot,
+        "directional" => LightType::Directional,
+        "ambient" => LightType::Ambient,
+        "array" => LightType::Array,
+        _ => return None,
+    })
+}
+
+fn proximity_mode_id(proximity_mode: &ProximityMode) -> &'static str {
+    match proximity_mode {
+        ProximityMode::Off => "off",
+        ProximityMode::Brighten => "brighten",
+        ProximityMode::Dim => "dim",
+    }
+}
+
+fn parse_proximity_mode_id(mode_id: &str) -> Option<ProximityMode> {
+    Some(match mode_id {
+        "off" => ProximityMode::Off,
+        "brighten" => ProximityMode::Brighten,
+        "dim" => ProximityMode::Dim,
+        _ => return None,
+    })
+}
+
+fn array_pattern_id(pattern: &ArrayPattern) -> &'static str {
+    match pattern {
+        ArrayPattern::Ring => "ring",
+        ArrayPattern::Line => "line",
+        ArrayPattern::Grid => "grid",
+        ArrayPattern::Spiral => "spiral",
+    }
+}
+
+fn parse_array_pattern_id(pattern_id: &str) -> Option<ArrayPattern> {
+    Some(match pattern_id {
+        "ring" => ArrayPattern::Ring,
+        "line" => ArrayPattern::Line,
+        "grid" => ArrayPattern::Grid,
+        "spiral" => ArrayPattern::Spiral,
+        _ => return None,
+    })
+}
+
+fn light_type_supports_range(light_type: &LightType) -> bool {
+    matches!(light_type, LightType::Point | LightType::Spot | LightType::Array)
+}
+
+fn light_type_supports_shadows(light_type: &LightType) -> bool {
+    !matches!(light_type, LightType::Ambient | LightType::Array)
+}
+
+fn light_type_supports_volumetric(light_type: &LightType) -> bool {
+    matches!(light_type, LightType::Point | LightType::Spot)
+}
+
+fn light_type_supports_cookie(light_type: &LightType) -> bool {
+    matches!(light_type, LightType::Point | LightType::Spot)
+}
+
+fn light_type_supports_proximity(light_type: &LightType) -> bool {
+    matches!(light_type, LightType::Point | LightType::Spot)
+}
+
+fn light_type_supports_expressions(light_type: &LightType) -> bool {
+    !matches!(light_type, LightType::Ambient | LightType::Array)
+}
+
+fn normalize_optional_text(text: &str) -> Option<String> {
+    let trimmed = text.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_string())
+}
+
+fn expression_error_message(expression: Option<&str>) -> Option<String> {
+    let expression = expression?.trim();
+    if expression.is_empty() {
+        return None;
+    }
+
+    crate::expression::parse_expression(expression)
+        .err()
+        .map(|error| error.to_string())
+}
+
+fn node_supports_light_linking(data: &NodeData) -> bool {
+    matches!(data, NodeData::Primitive { .. } | NodeData::Sculpt { .. })
+}
+
 fn property_key(label: &str) -> String {
     let mut key = String::with_capacity(label.len());
     let mut previous_was_separator = false;
@@ -2447,12 +3226,16 @@ fn sculpt_symmetry_axis_label(axis: Option<u8>) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::{
-        AppBridge, DEFAULT_SCULPT_ENTRY_RESOLUTION, EMISSIVE_INTENSITY_MAX, MATERIAL_FACTOR_MIN,
-        PRIMITIVE_PARAMETER_MAX, PRIMITIVE_PARAMETER_MIN,
+        AppBridge, DEFAULT_SCULPT_ENTRY_RESOLUTION, EMISSIVE_INTENSITY_MAX,
+        LIGHT_INTENSITY_MAX, LIGHT_PROXIMITY_RANGE_MAX, LIGHT_RANGE_MIN,
+        LIGHT_VOLUMETRIC_DENSITY_MAX, MATERIAL_FACTOR_MIN, PRIMITIVE_PARAMETER_MAX,
+        PRIMITIVE_PARAMETER_MIN,
     };
     use crate::app_bridge::{AppScalarPropertySnapshot, AppVec3};
     use crate::app_bridge::workflows::{ImportDialogState, SculptConvertMode};
-    use crate::graph::scene::{CsgOp, LightType, ModifierKind, NodeData, SdfPrimitive};
+    use crate::graph::scene::{
+        CsgOp, LightType, ModifierKind, NodeData, SdfPrimitive, MAX_SCENE_LIGHTS,
+    };
     use crate::mesh_import::TriMesh;
     use glam::Vec3;
 
@@ -2746,6 +3529,125 @@ mod tests {
         assert_eq!(transform.position, AppVec3::new(0.0, 0.0, 0.0));
         assert_eq!(transform.rotation_degrees, AppVec3::new(0.0, 0.0, 0.0));
         assert_eq!(transform.scale, Some(AppVec3::new(1.0, 1.0, 1.0)));
+    }
+
+    #[test]
+    fn selected_light_property_snapshot_includes_transform_wrapped_light() {
+        let mut bridge = AppBridge::new();
+        let transform_id = bridge.create_light(LightType::Spot);
+
+        let selected_properties = bridge
+            .scene_snapshot()
+            .selected_node_properties
+            .expect("selected node properties");
+
+        assert_eq!(selected_properties.node_id, transform_id);
+        assert_eq!(selected_properties.kind_label, "Transform");
+        assert!(selected_properties.primitive.is_none());
+        assert!(selected_properties.material.is_none());
+
+        let light = selected_properties.light.expect("light snapshot");
+        assert_eq!(light.transform_node_id, Some(transform_id));
+        assert_eq!(light.light_type_id, "spot");
+        assert_eq!(light.light_type_label, "Spot");
+        assert!(light.supports_range);
+        assert!(light.supports_spot_angle);
+        assert!(light.supports_cookie);
+        assert!(light.cookie_candidates.iter().any(|candidate| candidate.name == "Sphere"));
+    }
+
+    #[test]
+    fn selected_light_commands_update_snapshot_and_clamp() {
+        let mut bridge = AppBridge::new();
+        bridge.create_light(LightType::Point);
+        let cookie_node_id = bridge
+            .scene
+            .top_level_nodes()
+            .into_iter()
+            .find(|node_id| {
+                matches!(
+                    bridge.scene.nodes[node_id].data,
+                    NodeData::Primitive {
+                        kind: SdfPrimitive::Sphere,
+                        ..
+                    }
+                )
+            })
+            .expect("cookie candidate");
+
+        assert!(bridge.set_selected_light_intensity(99.0));
+        assert!(bridge.set_selected_light_range(0.01));
+        assert!(bridge.set_selected_light_volumetric(true));
+        assert!(bridge.set_selected_light_volumetric_density(9.0));
+        assert!(bridge.set_selected_light_proximity_mode("brighten"));
+        assert!(bridge.set_selected_light_proximity_range(12.0));
+        assert!(bridge.set_selected_light_cookie(cookie_node_id));
+        assert!(bridge.set_selected_light_intensity_expression("sin(t * 2.0)"));
+        assert!(bridge.set_selected_light_color_hue_expression("bad("));
+
+        let light = bridge
+            .scene_snapshot()
+            .selected_node_properties
+            .and_then(|properties| properties.light)
+            .expect("light snapshot");
+        assert_eq!(light.intensity, LIGHT_INTENSITY_MAX);
+        assert_eq!(light.range, LIGHT_RANGE_MIN);
+        assert!(light.volumetric);
+        assert_eq!(light.volumetric_density, LIGHT_VOLUMETRIC_DENSITY_MAX);
+        assert_eq!(light.proximity_mode_id, "brighten");
+        assert_eq!(light.proximity_range, LIGHT_PROXIMITY_RANGE_MAX);
+        assert_eq!(light.cookie_node_id, Some(cookie_node_id));
+        assert_eq!(light.intensity_expression.as_deref(), Some("sin(t * 2.0)"));
+        assert!(light.intensity_expression_error.is_none());
+        assert_eq!(light.color_hue_expression.as_deref(), Some("bad("));
+        assert!(light.color_hue_expression_error.is_some());
+    }
+
+    #[test]
+    fn light_linking_snapshot_and_commands_round_trip_masks() {
+        let mut bridge = AppBridge::new();
+        bridge.create_light(LightType::Point);
+        bridge.create_light(LightType::Spot);
+        let sphere_id = bridge
+            .scene
+            .top_level_nodes()
+            .into_iter()
+            .find(|node_id| {
+                matches!(
+                    bridge.scene.nodes[node_id].data,
+                    NodeData::Primitive {
+                        kind: SdfPrimitive::Sphere,
+                        ..
+                    }
+                )
+            })
+            .expect("default sphere");
+
+        let light_linking_before = bridge.scene_snapshot().light_linking;
+        assert_eq!(light_linking_before.geometry_nodes.len(), 1);
+        assert_eq!(light_linking_before.geometry_nodes[0].light_mask, 0xFF);
+        assert_eq!(light_linking_before.max_light_count, MAX_SCENE_LIGHTS as u32);
+        let first_light = light_linking_before
+            .lights
+            .first()
+            .expect("first light target");
+
+        assert!(bridge.set_node_light_link_enabled(
+            sphere_id,
+            first_light.light_node_id,
+            false,
+        ));
+        let light_linking_after_toggle = bridge.scene_snapshot().light_linking;
+        assert_eq!(
+            light_linking_after_toggle.geometry_nodes[0].light_mask,
+            0xFF & !first_light.mask_bit
+        );
+
+        assert!(bridge.set_node_light_mask(sphere_id, 0x03));
+        assert_eq!(
+            bridge.scene_snapshot().light_linking.geometry_nodes[0].light_mask,
+            0x03
+        );
     }
 
     #[test]

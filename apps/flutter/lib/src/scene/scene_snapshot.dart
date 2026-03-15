@@ -667,6 +667,240 @@ class AppSculptSnapshot {
   }
 }
 
+class AppLightCookieCandidateSnapshot {
+  const AppLightCookieCandidateSnapshot({
+    required this.nodeId,
+    required this.name,
+    required this.kindLabel,
+  });
+
+  final int nodeId;
+  final String name;
+  final String kindLabel;
+
+  factory AppLightCookieCandidateSnapshot.fromJson(Map<String, dynamic> json) {
+    return AppLightCookieCandidateSnapshot(
+      nodeId: (json['node_id'] as num).toInt(),
+      name: json['name'] as String,
+      kindLabel: json['kind_label'] as String,
+    );
+  }
+}
+
+class AppLightPropertiesSnapshot {
+  const AppLightPropertiesSnapshot({
+    required this.nodeId,
+    required this.transformNodeId,
+    required this.lightTypeId,
+    required this.lightTypeLabel,
+    required this.color,
+    required this.intensity,
+    required this.range,
+    required this.spotAngle,
+    required this.castShadows,
+    required this.shadowSoftness,
+    required this.shadowColor,
+    required this.volumetric,
+    required this.volumetricDensity,
+    required this.cookieNodeId,
+    required this.cookieNodeName,
+    required this.cookieCandidates,
+    required this.proximityModeId,
+    required this.proximityModeLabel,
+    required this.proximityRange,
+    required this.arrayPatternId,
+    required this.arrayPatternLabel,
+    required this.arrayCount,
+    required this.arrayRadius,
+    required this.arrayColorVariation,
+    required this.intensityExpression,
+    required this.intensityExpressionError,
+    required this.colorHueExpression,
+    required this.colorHueExpressionError,
+    required this.supportsRange,
+    required this.supportsSpotAngle,
+    required this.supportsShadows,
+    required this.supportsVolumetric,
+    required this.supportsCookie,
+    required this.supportsProximity,
+    required this.supportsExpressions,
+    required this.supportsArray,
+  });
+
+  final int nodeId;
+  final int? transformNodeId;
+  final String lightTypeId;
+  final String lightTypeLabel;
+  final AppVec3 color;
+  final double intensity;
+  final double range;
+  final double spotAngle;
+  final bool castShadows;
+  final double shadowSoftness;
+  final AppVec3 shadowColor;
+  final bool volumetric;
+  final double volumetricDensity;
+  final int? cookieNodeId;
+  final String? cookieNodeName;
+  final List<AppLightCookieCandidateSnapshot> cookieCandidates;
+  final String proximityModeId;
+  final String proximityModeLabel;
+  final double proximityRange;
+  final String? arrayPatternId;
+  final String? arrayPatternLabel;
+  final int? arrayCount;
+  final double? arrayRadius;
+  final double? arrayColorVariation;
+  final String? intensityExpression;
+  final String? intensityExpressionError;
+  final String? colorHueExpression;
+  final String? colorHueExpressionError;
+  final bool supportsRange;
+  final bool supportsSpotAngle;
+  final bool supportsShadows;
+  final bool supportsVolumetric;
+  final bool supportsCookie;
+  final bool supportsProximity;
+  final bool supportsExpressions;
+  final bool supportsArray;
+
+  factory AppLightPropertiesSnapshot.fromJson(Map<String, dynamic> json) {
+    return AppLightPropertiesSnapshot(
+      nodeId: (json['node_id'] as num).toInt(),
+      transformNodeId: (json['transform_node_id'] as num?)?.toInt(),
+      lightTypeId: json['light_type_id'] as String,
+      lightTypeLabel: json['light_type_label'] as String,
+      color: AppVec3.fromJson(json['color'] as Map<String, dynamic>),
+      intensity: (json['intensity'] as num).toDouble(),
+      range: (json['range'] as num).toDouble(),
+      spotAngle: (json['spot_angle'] as num).toDouble(),
+      castShadows: json['cast_shadows'] as bool,
+      shadowSoftness: (json['shadow_softness'] as num).toDouble(),
+      shadowColor: AppVec3.fromJson(json['shadow_color'] as Map<String, dynamic>),
+      volumetric: json['volumetric'] as bool,
+      volumetricDensity: (json['volumetric_density'] as num).toDouble(),
+      cookieNodeId: (json['cookie_node_id'] as num?)?.toInt(),
+      cookieNodeName: json['cookie_node_name'] as String?,
+      cookieCandidates: (json['cookie_candidates'] as List<dynamic>? ?? const [])
+          .map(
+            (item) => AppLightCookieCandidateSnapshot.fromJson(
+              item as Map<String, dynamic>,
+            ),
+          )
+          .toList(growable: false),
+      proximityModeId: json['proximity_mode_id'] as String,
+      proximityModeLabel: json['proximity_mode_label'] as String,
+      proximityRange: (json['proximity_range'] as num).toDouble(),
+      arrayPatternId: json['array_pattern_id'] as String?,
+      arrayPatternLabel: json['array_pattern_label'] as String?,
+      arrayCount: (json['array_count'] as num?)?.toInt(),
+      arrayRadius: (json['array_radius'] as num?)?.toDouble(),
+      arrayColorVariation:
+          (json['array_color_variation'] as num?)?.toDouble(),
+      intensityExpression: json['intensity_expression'] as String?,
+      intensityExpressionError: json['intensity_expression_error'] as String?,
+      colorHueExpression: json['color_hue_expression'] as String?,
+      colorHueExpressionError: json['color_hue_expression_error'] as String?,
+      supportsRange: json['supports_range'] as bool? ?? false,
+      supportsSpotAngle: json['supports_spot_angle'] as bool? ?? false,
+      supportsShadows: json['supports_shadows'] as bool? ?? false,
+      supportsVolumetric: json['supports_volumetric'] as bool? ?? false,
+      supportsCookie: json['supports_cookie'] as bool? ?? false,
+      supportsProximity: json['supports_proximity'] as bool? ?? false,
+      supportsExpressions: json['supports_expressions'] as bool? ?? false,
+      supportsArray: json['supports_array'] as bool? ?? false,
+    );
+  }
+}
+
+class AppLightLinkTargetSnapshot {
+  const AppLightLinkTargetSnapshot({
+    required this.lightNodeId,
+    required this.lightName,
+    required this.lightTypeLabel,
+    required this.active,
+    required this.maskBit,
+    required this.color,
+  });
+
+  final int lightNodeId;
+  final String lightName;
+  final String lightTypeLabel;
+  final bool active;
+  final int maskBit;
+  final AppVec3 color;
+
+  factory AppLightLinkTargetSnapshot.fromJson(Map<String, dynamic> json) {
+    return AppLightLinkTargetSnapshot(
+      lightNodeId: (json['light_node_id'] as num).toInt(),
+      lightName: json['light_name'] as String,
+      lightTypeLabel: json['light_type_label'] as String,
+      active: json['active'] as bool? ?? false,
+      maskBit: (json['mask_bit'] as num).toInt(),
+      color: AppVec3.fromJson(json['color'] as Map<String, dynamic>),
+    );
+  }
+}
+
+class AppLightLinkNodeSnapshot {
+  const AppLightLinkNodeSnapshot({
+    required this.nodeId,
+    required this.nodeName,
+    required this.kindLabel,
+    required this.lightMask,
+  });
+
+  final int nodeId;
+  final String nodeName;
+  final String kindLabel;
+  final int lightMask;
+
+  factory AppLightLinkNodeSnapshot.fromJson(Map<String, dynamic> json) {
+    return AppLightLinkNodeSnapshot(
+      nodeId: (json['node_id'] as num).toInt(),
+      nodeName: json['node_name'] as String,
+      kindLabel: json['kind_label'] as String,
+      lightMask: (json['light_mask'] as num).toInt(),
+    );
+  }
+}
+
+class AppLightLinkingSnapshot {
+  const AppLightLinkingSnapshot({
+    required this.lights,
+    required this.geometryNodes,
+    required this.totalVisibleLightCount,
+    required this.maxLightCount,
+  });
+
+  final List<AppLightLinkTargetSnapshot> lights;
+  final List<AppLightLinkNodeSnapshot> geometryNodes;
+  final int totalVisibleLightCount;
+  final int maxLightCount;
+
+  factory AppLightLinkingSnapshot.fromJson(Map<String, dynamic> json) {
+    return AppLightLinkingSnapshot(
+      lights: (json['lights'] as List<dynamic>? ?? const [])
+          .map(
+            (item) => AppLightLinkTargetSnapshot.fromJson(
+              item as Map<String, dynamic>,
+            ),
+          )
+          .toList(growable: false),
+      geometryNodes: (json['geometry_nodes'] as List<dynamic>? ?? const [])
+          .map(
+            (item) => AppLightLinkNodeSnapshot.fromJson(
+              item as Map<String, dynamic>,
+            ),
+          )
+          .toList(growable: false),
+      totalVisibleLightCount:
+          (json['total_visible_light_count'] as num?)?.toInt() ?? 0,
+      maxLightCount: (json['max_light_count'] as num?)?.toInt() ?? 8,
+    );
+  }
+}
+
 class AppScalarPropertySnapshot {
   const AppScalarPropertySnapshot({
     required this.key,
@@ -776,6 +1010,7 @@ class AppSelectedNodePropertiesSnapshot {
     required this.transform,
     required this.primitive,
     required this.material,
+    required this.light,
   });
 
   final int nodeId;
@@ -786,6 +1021,7 @@ class AppSelectedNodePropertiesSnapshot {
   final AppTransformPropertiesSnapshot? transform;
   final AppPrimitivePropertiesSnapshot? primitive;
   final AppMaterialPropertiesSnapshot? material;
+  final AppLightPropertiesSnapshot? light;
 
   factory AppSelectedNodePropertiesSnapshot.fromJson(Map<String, dynamic> json) {
     return AppSelectedNodePropertiesSnapshot(
@@ -809,6 +1045,11 @@ class AppSelectedNodePropertiesSnapshot {
           : AppMaterialPropertiesSnapshot.fromJson(
               json['material'] as Map<String, dynamic>,
             ),
+      light: json['light'] == null
+          ? null
+          : AppLightPropertiesSnapshot.fromJson(
+              json['light'] as Map<String, dynamic>,
+            ),
     );
   }
 }
@@ -825,6 +1066,7 @@ class AppSceneSnapshot {
     required this.import,
     required this.sculptConvert,
     required this.sculpt,
+    required this.lightLinking,
     required this.camera,
     required this.stats,
     required this.tool,
@@ -840,6 +1082,7 @@ class AppSceneSnapshot {
   final AppImportSnapshot import;
   final AppSculptConvertSnapshot sculptConvert;
   final AppSculptSnapshot sculpt;
+  final AppLightLinkingSnapshot lightLinking;
   final AppCameraSnapshot camera;
   final AppSceneStatsSnapshot stats;
   final AppToolSnapshot tool;
@@ -946,6 +1189,16 @@ class AppSceneSnapshot {
               maxResolution: 16,
             )
           : AppSculptSnapshot.fromJson(json['sculpt'] as Map<String, dynamic>),
+      lightLinking: json['light_linking'] == null
+          ? const AppLightLinkingSnapshot(
+              lights: <AppLightLinkTargetSnapshot>[],
+              geometryNodes: <AppLightLinkNodeSnapshot>[],
+              totalVisibleLightCount: 0,
+              maxLightCount: 8,
+            )
+          : AppLightLinkingSnapshot.fromJson(
+              json['light_linking'] as Map<String, dynamic>,
+            ),
       camera: AppCameraSnapshot.fromJson(json['camera'] as Map<String, dynamic>),
       stats: AppSceneStatsSnapshot.fromJson(
         json['stats'] as Map<String, dynamic>,

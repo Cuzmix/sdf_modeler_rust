@@ -211,6 +211,53 @@ pub struct AppSculptSnapshot {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppLightCookieCandidateSnapshot {
+    pub node_id: u64,
+    pub name: String,
+    pub kind_label: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppLightPropertiesSnapshot {
+    pub node_id: u64,
+    pub transform_node_id: Option<u64>,
+    pub light_type_id: String,
+    pub light_type_label: String,
+    pub color: AppVec3,
+    pub intensity: f32,
+    pub range: f32,
+    pub spot_angle: f32,
+    pub cast_shadows: bool,
+    pub shadow_softness: f32,
+    pub shadow_color: AppVec3,
+    pub volumetric: bool,
+    pub volumetric_density: f32,
+    pub cookie_node_id: Option<u64>,
+    pub cookie_node_name: Option<String>,
+    pub cookie_candidates: Vec<AppLightCookieCandidateSnapshot>,
+    pub proximity_mode_id: String,
+    pub proximity_mode_label: String,
+    pub proximity_range: f32,
+    pub array_pattern_id: Option<String>,
+    pub array_pattern_label: Option<String>,
+    pub array_count: Option<u32>,
+    pub array_radius: Option<f32>,
+    pub array_color_variation: Option<f32>,
+    pub intensity_expression: Option<String>,
+    pub intensity_expression_error: Option<String>,
+    pub color_hue_expression: Option<String>,
+    pub color_hue_expression_error: Option<String>,
+    pub supports_range: bool,
+    pub supports_spot_angle: bool,
+    pub supports_shadows: bool,
+    pub supports_volumetric: bool,
+    pub supports_cookie: bool,
+    pub supports_proximity: bool,
+    pub supports_expressions: bool,
+    pub supports_array: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AppScalarPropertySnapshot {
     pub key: String,
     pub label: String,
@@ -251,6 +298,33 @@ pub struct AppSelectedNodePropertiesSnapshot {
     pub transform: Option<AppTransformPropertiesSnapshot>,
     pub primitive: Option<AppPrimitivePropertiesSnapshot>,
     pub material: Option<AppMaterialPropertiesSnapshot>,
+    pub light: Option<AppLightPropertiesSnapshot>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppLightLinkTargetSnapshot {
+    pub light_node_id: u64,
+    pub light_name: String,
+    pub light_type_label: String,
+    pub active: bool,
+    pub mask_bit: u8,
+    pub color: AppVec3,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppLightLinkNodeSnapshot {
+    pub node_id: u64,
+    pub node_name: String,
+    pub kind_label: String,
+    pub light_mask: u8,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppLightLinkingSnapshot {
+    pub lights: Vec<AppLightLinkTargetSnapshot>,
+    pub geometry_nodes: Vec<AppLightLinkNodeSnapshot>,
+    pub total_visible_light_count: u32,
+    pub max_light_count: u32,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -265,6 +339,7 @@ pub struct AppSceneSnapshot {
     pub import: AppImportSnapshot,
     pub sculpt_convert: AppSculptConvertSnapshot,
     pub sculpt: AppSculptSnapshot,
+    pub light_linking: AppLightLinkingSnapshot,
     pub camera: AppCameraSnapshot,
     pub stats: AppSceneStatsSnapshot,
     pub tool: AppToolSnapshot,

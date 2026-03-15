@@ -2739,3 +2739,42 @@ Manual verification:
 Result:
 - PRD #35 is fully verified and complete.
 
+--- Migration Iteration 29: PRD #36 - Backend-owned advanced light bridge surface ---
+COMPLETED. Moved advanced light properties, validation, and per-node light-linking state behind the backend bridge so Flutter and future frontends can consume the same light semantics without egui-owned inspector state.
+
+Changes:
+- src/app_bridge/dto.rs
+- src/app_bridge/mod.rs
+- src/app_bridge/session.rs
+- apps/flutter/rust/src/api/simple.rs
+- apps/flutter/rust/src/frb_generated.rs
+- apps/flutter/lib/src/rust/api/simple.dart
+- apps/flutter/lib/src/rust/frb_generated.dart
+- apps/flutter/lib/src/scene/scene_snapshot.dart
+- apps/flutter/test/scene_snapshot_test.dart
+- apps/flutter/test/widget_test.dart
+- docs/egui_parity_audit.md
+- plans/prd.json
+- plans/progress.txt
+  - Added backend-owned advanced light snapshot DTOs for selected light properties, including type-specific settings, shadows, volumetrics, cookies, expressions, and feature-support flags for the Flutter inspector.
+  - Added a scene-wide light-linking snapshot that exposes stable light targets, per-node masks, and active-link state without reusing the egui light graph presentation.
+  - Added backend light commands for light type changes, color/intensity/range/spot updates, shadow and volumetric controls, cookie assignment, proximity and array settings, expression edits, and per-node light mask toggles.
+  - Exposed the full light surface through FRB, regenerated bindings, extended the Flutter scene snapshot model, and added parsing coverage for advanced light and light-linking payloads.
+  - Updated the parity audit so advanced light ownership is no longer blocked on egui state; the remaining gap is the Flutter advanced light inspector and linking UI in PRD `#37`.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS
+- cargo build: PASS
+- FRB codegen: PASS (`flutter_rust_bridge_codegen generate --rust-input crate::api --rust-root rust --dart-output lib/src/rust --dart-root . --dart-entrypoint-class-name RustLib --stop-on-error`)
+- Flutter analyze: PASS
+- Flutter test: PASS
+- Flutter build windows --debug: PASS
+
+Manual verification:
+- Not run in this iteration.
+
+Result:
+- PRD #36 is fully verified and complete.
+

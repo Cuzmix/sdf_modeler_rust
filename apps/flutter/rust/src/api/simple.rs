@@ -394,6 +394,160 @@ pub fn set_selected_transform_scale(x: f32, y: f32, z: f32) -> String {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn set_selected_light_type(light_type_id: String) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_selected_light_type(&light_type_id);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_selected_light_color(red: f32, green: f32, blue: f32) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_selected_light_color(red, green, blue);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_selected_light_intensity(intensity: f32) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_selected_light_intensity(intensity);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_selected_light_range(range: f32) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_selected_light_range(range);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_selected_light_spot_angle(angle_degrees: f32) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_selected_light_spot_angle(angle_degrees);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_selected_light_cast_shadows(enabled: bool) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_selected_light_cast_shadows(enabled);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_selected_light_shadow_softness(softness: f32) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_selected_light_shadow_softness(softness);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_selected_light_shadow_color(red: f32, green: f32, blue: f32) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_selected_light_shadow_color(red, green, blue);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_selected_light_volumetric(enabled: bool) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_selected_light_volumetric(enabled);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_selected_light_volumetric_density(density: f32) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_selected_light_volumetric_density(density);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_selected_light_cookie(cookie_node_id: u64) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_selected_light_cookie(cookie_node_id);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn clear_selected_light_cookie() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.clear_selected_light_cookie();
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_selected_light_proximity_mode(mode_id: String) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_selected_light_proximity_mode(&mode_id);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_selected_light_proximity_range(range: f32) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_selected_light_proximity_range(range);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_selected_light_array_pattern(pattern_id: String) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_selected_light_array_pattern(&pattern_id);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_selected_light_array_count(count: u32) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_selected_light_array_count(count);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_selected_light_array_radius(radius: f32) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_selected_light_array_radius(radius);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_selected_light_array_color_variation(value: f32) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_selected_light_array_color_variation(value);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_selected_light_intensity_expression(expression: String) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_selected_light_intensity_expression(&expression);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_selected_light_color_hue_expression(expression: String) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_selected_light_color_hue_expression(&expression);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_node_light_mask(node_id: u64, mask: u8) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_node_light_mask(node_id, mask);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_node_light_link_enabled(node_id: u64, light_id: u64, enabled: bool) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_node_light_link_enabled(node_id, light_id, enabled);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn set_manipulator_mode(mode_id: String) -> String {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_manipulator_mode(&mode_id);
@@ -607,6 +761,7 @@ fn parse_light_id(light_id: &str) -> Option<LightType> {
         "spot" => LightType::Spot,
         "directional" => LightType::Directional,
         "ambient" => LightType::Ambient,
+        "array" => LightType::Array,
         _ => return None,
     })
 }

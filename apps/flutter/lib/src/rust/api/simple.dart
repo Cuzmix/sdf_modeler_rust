@@ -225,6 +225,125 @@ String setSelectedTransformScale({
   z: z,
 );
 
+String setSelectedLightType({required String lightTypeId}) => RustLib
+    .instance
+    .api
+    .crateApiSimpleSetSelectedLightType(lightTypeId: lightTypeId);
+
+String setSelectedLightColor({
+  required double red,
+  required double green,
+  required double blue,
+}) => RustLib.instance.api.crateApiSimpleSetSelectedLightColor(
+  red: red,
+  green: green,
+  blue: blue,
+);
+
+String setSelectedLightIntensity({required double intensity}) => RustLib
+    .instance
+    .api
+    .crateApiSimpleSetSelectedLightIntensity(intensity: intensity);
+
+String setSelectedLightRange({required double range}) =>
+    RustLib.instance.api.crateApiSimpleSetSelectedLightRange(range: range);
+
+String setSelectedLightSpotAngle({required double angleDegrees}) => RustLib
+    .instance
+    .api
+    .crateApiSimpleSetSelectedLightSpotAngle(angleDegrees: angleDegrees);
+
+String setSelectedLightCastShadows({required bool enabled}) => RustLib
+    .instance
+    .api
+    .crateApiSimpleSetSelectedLightCastShadows(enabled: enabled);
+
+String setSelectedLightShadowSoftness({required double softness}) => RustLib
+    .instance
+    .api
+    .crateApiSimpleSetSelectedLightShadowSoftness(softness: softness);
+
+String setSelectedLightShadowColor({
+  required double red,
+  required double green,
+  required double blue,
+}) => RustLib.instance.api.crateApiSimpleSetSelectedLightShadowColor(
+  red: red,
+  green: green,
+  blue: blue,
+);
+
+String setSelectedLightVolumetric({required bool enabled}) => RustLib
+    .instance
+    .api
+    .crateApiSimpleSetSelectedLightVolumetric(enabled: enabled);
+
+String setSelectedLightVolumetricDensity({required double density}) => RustLib
+    .instance
+    .api
+    .crateApiSimpleSetSelectedLightVolumetricDensity(density: density);
+
+String setSelectedLightCookie({required BigInt cookieNodeId}) => RustLib
+    .instance
+    .api
+    .crateApiSimpleSetSelectedLightCookie(cookieNodeId: cookieNodeId);
+
+String clearSelectedLightCookie() =>
+    RustLib.instance.api.crateApiSimpleClearSelectedLightCookie();
+
+String setSelectedLightProximityMode({required String modeId}) => RustLib
+    .instance
+    .api
+    .crateApiSimpleSetSelectedLightProximityMode(modeId: modeId);
+
+String setSelectedLightProximityRange({required double range}) => RustLib
+    .instance
+    .api
+    .crateApiSimpleSetSelectedLightProximityRange(range: range);
+
+String setSelectedLightArrayPattern({required String patternId}) => RustLib
+    .instance
+    .api
+    .crateApiSimpleSetSelectedLightArrayPattern(patternId: patternId);
+
+String setSelectedLightArrayCount({required int count}) =>
+    RustLib.instance.api.crateApiSimpleSetSelectedLightArrayCount(count: count);
+
+String setSelectedLightArrayRadius({required double radius}) => RustLib
+    .instance
+    .api
+    .crateApiSimpleSetSelectedLightArrayRadius(radius: radius);
+
+String setSelectedLightArrayColorVariation({required double value}) => RustLib
+    .instance
+    .api
+    .crateApiSimpleSetSelectedLightArrayColorVariation(value: value);
+
+String setSelectedLightIntensityExpression({required String expression}) =>
+    RustLib.instance.api.crateApiSimpleSetSelectedLightIntensityExpression(
+      expression: expression,
+    );
+
+String setSelectedLightColorHueExpression({required String expression}) =>
+    RustLib.instance.api.crateApiSimpleSetSelectedLightColorHueExpression(
+      expression: expression,
+    );
+
+String setNodeLightMask({required BigInt nodeId, required int mask}) => RustLib
+    .instance
+    .api
+    .crateApiSimpleSetNodeLightMask(nodeId: nodeId, mask: mask);
+
+String setNodeLightLinkEnabled({
+  required BigInt nodeId,
+  required BigInt lightId,
+  required bool enabled,
+}) => RustLib.instance.api.crateApiSimpleSetNodeLightLinkEnabled(
+  nodeId: nodeId,
+  lightId: lightId,
+  enabled: enabled,
+);
+
 String setManipulatorMode({required String modeId}) =>
     RustLib.instance.api.crateApiSimpleSetManipulatorMode(modeId: modeId);
 
