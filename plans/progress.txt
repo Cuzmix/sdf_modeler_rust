@@ -2896,3 +2896,27 @@ Manual verification:
 Result:
 - PRD #39 is fully verified and complete.
 
+--- Migration Iteration 33: PRD #40 - Diagnostics retained-vs-dropped decision ---
+COMPLETED. Recorded the Flutter parity decision for diagnostics and history/state inspection so egui-only diagnostics no longer block the migration queue ambiguously.
+
+Changes:
+- docs/egui_parity_audit.md
+- plans/prd.json
+- plans/progress.txt
+  - Declared the retained diagnostics subset for the Flutter host: undo/redo availability from the backend history snapshot plus the existing viewport overlay for FPS, frame time, dropped frames, interaction phase, and host errors.
+  - Explicitly dropped the labeled history panel, scene statistics window, deep profiler views, and debug-toggle-driven diagnostics windows from the Flutter parity target.
+  - Moved those dropped diagnostics surfaces into the out-of-scope section of the parity audit so they no longer remain as hidden blockers for PRD `#30`.
+  - Narrowed the remaining parity decision queue to reference-image management in PRD `#41` and the still-open foundation verification item `#1`.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS
+- cargo build: PASS
+
+Manual verification:
+- Not required for this documentation-only decision slice.
+
+Result:
+- PRD #40 is fully verified and complete.
+

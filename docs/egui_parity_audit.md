@@ -32,9 +32,19 @@ These behaviors are still product-relevant and should not be deleted until they 
 
 | Area | Current egui files | Why it still blocks decommission | Required migration direction |
 | --- | --- | --- | --- |
-| History inspection beyond undo/redo buttons | `src/ui/history_panel.rs` | Flutter exposes command availability but not the history list or labels. | Decide whether labeled history remains required; if yes, expose neutral history snapshot data. |
-| Scene statistics and deep profiler views | `src/ui/scene_stats.rs`, `src/ui/profiler.rs` | Flutter has basic frame diagnostics only. Detailed scene/profiler data is still egui-only. | Either promote these diagnostics into backend-neutral snapshots or explicitly drop them from parity. |
 | Reference image management | `src/ui/reference_image.rs`, `src/ui/dock.rs` | Reference images are still configured entirely inside egui. | Decide whether they are part of the Flutter parity target; if yes, move state ownership out of egui. |
+
+## PRD #40 Diagnostics Decision
+
+The Flutter parity target keeps only the diagnostics that already support the active touch-first host and migration workflow. The rest are explicitly dropped from Flutter parity scope.
+
+| Decision | Surface | Current owner | Outcome |
+| --- | --- | --- | --- |
+| Retain | Undo/redo availability and history command state | `src/app_bridge/session.rs`, `src/app_bridge/dto.rs` | Already exposed through `history.can_undo` / `history.can_redo` and used by Flutter command surfaces. No separate Flutter history list is required. |
+| Retain | Migration-facing viewport diagnostics: FPS, frame time, dropped frames, interaction phase, host error | Native Flutter host, `src/app_bridge/renderer.rs`, `apps/flutter/lib/src/viewport/viewport_feedback_overlay.dart` | Already implemented in the active Flutter host. This is the retained diagnostics subset for parity. |
+| Drop | Labeled history inspection panel | `src/ui/history_panel.rs` | Keep as egui-local tooling only if the native egui app still needs it. It does not block Flutter parity or PRD `#30`. |
+| Drop | Scene statistics window | `src/ui/scene_stats.rs` | Existing backend stats snapshots may remain available for debugging or future use, but no dedicated Flutter stats panel is part of the parity target. |
+| Drop | Deep profiler views and debug-toggle-driven diagnostics windows | `src/ui/profiler.rs`, debug/profile hooks in egui menus | Treat as native egui developer tooling, not a Flutter product requirement. They do not block decommission of the Flutter parity queue. |
 
 ## Egui-Only Surface That Is Out Of The Current Flutter Parity Target
 
@@ -42,6 +52,8 @@ These features are not covered by the current migration PRD and should be treate
 
 | Area | Current egui files | Current disposition |
 | --- | --- | --- |
+| History inspection panel | `src/ui/history_panel.rs` | Flutter keeps undo/redo availability only. The labeled history list is explicitly out of the parity target. |
+| Scene statistics and profiler windows | `src/ui/scene_stats.rs`, `src/ui/profiler.rs` | Flutter keeps only the migration-facing viewport overlay diagnostics. Dedicated stats/profiler windows are explicitly out of scope. |
 | Dock layout, tab management, and workspace presets | `src/ui/dock.rs`, `src/app/ui_panels.rs` | Flutter intentionally uses a touch-first shell instead of reproducing egui docking semantics. Keep only if the desktop native app continues to need them. |
 | Command palette | `src/ui/command_palette.rs`, `src/app/egui_frontend.rs` | No Flutter parity target exists today. Replace with Flutter-specific shell affordances only if later needed. |
 | Quick toolbar | `src/ui/quick_toolbar.rs` | The Flutter shell already owns its command presentation model. Treat egui quick access as toolkit-specific sugar. |
@@ -65,7 +77,7 @@ These are the high-signal duplicate ownership points to cut before touching larg
 ## PRD #27 Deletion Order
 
 1. Remove duplicate egui menu and panel command wiring for document, history, camera, scene-tree, and basic property edits.
-2. Keep egui-only workflows that still block parity isolated and explicit: advanced diagnostics and any retained reference-image workflow.
+2. Keep egui-only workflows that still block parity isolated and explicit: only the reference-image workflow if it remains in scope.
 3. Decide whether out-of-scope egui-only features are intentionally retained for the native egui app or formally dropped.
 4. Only after the remaining required workflows move behind backend-neutral modules should the egui adapter modules themselves be deleted.
 
@@ -74,5 +86,6 @@ These are the high-signal duplicate ownership points to cut before touching larg
 - Flutter plus `src/app_bridge/` is already authoritative for the core editing loop.
 - Render settings now round-trip through backend-neutral snapshots and Flutter surfaces instead of depending on egui ownership.
 - Application settings, bookmarks, and keymap editing now round-trip through backend-neutral snapshots and Flutter surfaces instead of depending on the egui settings window.
-- The biggest remaining product gaps are the retained-vs-dropped diagnostics surface and the reference-image scope decision.
+- The retained Flutter diagnostics subset is now explicit: command availability plus the existing viewport overlay. The labeled history panel, scene stats window, and deep profiler views are out of parity scope.
+- The last unresolved product decision in the parity queue is reference-image management.
 - The biggest duplicate-ownership cleanup targets are `src/app/ui_panels.rs`, `src/ui/scene_tree.rs`, `src/ui/properties.rs`, and `src/ui/quick_toolbar.rs`.

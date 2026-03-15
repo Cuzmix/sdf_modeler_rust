@@ -277,7 +277,7 @@
     "category": "diagnostics",
     "description": "Decide and implement parity for history inspection, scene statistics, and deep diagnostics.\n\nSteps:\n1. Decide which egui-only history/profiler/statistics surfaces remain product-relevant in the Flutter host.\n2. Move the retained subset behind backend-neutral snapshots and commands.\n3. Add Flutter surfaces only for the retained subset instead of blindly cloning every egui panel.\n4. Explicitly drop the rest from parity scope so final egui deletion is not ambiguous.",
     "verification": "Write the retained-versus-dropped decision into the active migration artifacts, then run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build` for any code changes. Run Flutter validation if any host or shell surfaces change.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 41,
