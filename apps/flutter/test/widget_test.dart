@@ -1953,6 +1953,73 @@ void main() {
     },
   );
 
+  testWidgets('routes sculpt workflow controls through the Rust facade', (
+    WidgetTester tester,
+  ) async {
+    mockApi.currentSnapshot = _MockRustApi._sculptActiveSnapshot;
+
+    await pumpApp(tester, logicalSize: const Size(1400, 900));
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('sculpt-brush-mode-grab')),
+      200,
+      scrollable: find.byWidgetPredicate(
+        (widget) => widget is Scrollable && widget.axisDirection == AxisDirection.down,
+      ).first,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('sculpt-brush-mode-grab')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey('sculpt-radius-increase')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('sculpt-radius-increase')));
+    await tester.pump();
+    await tester.ensureVisible(find.byKey(const ValueKey('sculpt-strength-increase')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('sculpt-strength-increase')));
+    await tester.pump();
+    await tester.ensureVisible(find.byKey(const ValueKey('sculpt-symmetry-z')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('sculpt-symmetry-z')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('selected-sculpt-resolution-field')),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('selected-sculpt-resolution-field')),
+      '128',
+    );
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('selected-sculpt-apply-resolution')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('selected-sculpt-apply-resolution')),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey('stop-sculpt-command')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('stop-sculpt-command')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('resume-sculpt-command')), findsOneWidget);
+
+    await tester.ensureVisible(find.byKey(const ValueKey('resume-sculpt-command')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('resume-sculpt-command')));
+    await tester.pumpAndSettle();
+
+    expect(mockApi.setSculptBrushModeCalls, 1);
+    expect(mockApi.setSculptBrushRadiusCalls, 1);
+    expect(mockApi.setSculptBrushStrengthCalls, 1);
+    expect(mockApi.setSculptSymmetryAxisCalls, 1);
+    expect(mockApi.setSelectedSculptResolutionCalls, 1);
+    expect(mockApi.stopSculptingCalls, 1);
+    expect(mockApi.resumeSculptingSelectedCalls, 1);
+  });
+
   testWidgets(
     'routes create sculpt through the Rust facade and refreshes snapshot state',
     (WidgetTester tester) async {

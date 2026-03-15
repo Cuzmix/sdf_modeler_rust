@@ -17,6 +17,7 @@ These areas already have backend-neutral ownership through `src/app_bridge/` and
 | Document lifecycle: new/open/save/save-as/recent/recovery | `src/app_bridge/session.rs`, `src/app_bridge/dto.rs` | `apps/flutter/lib/src/session/document_session_panel.dart`, `apps/flutter/lib/app.dart` | `src/app/ui_panels.rs` File menu, `src/ui/recovery_dialog.rs` | Remove egui-only command wiring after confirming no remaining egui dialogs depend on it. |
 | Export workflow and progress | `src/app_bridge/session.rs`, `src/app_bridge/dto.rs` | `apps/flutter/lib/src/export/export_panel.dart`, `apps/flutter/lib/app.dart` | `src/ui/export_dialog.rs`, `src/ui/export_progress.rs`, `src/app/egui_frontend.rs` | Flutter now owns export settings, start/cancel, progress, and completion/error state through the bridge snapshot. |
 | Mesh import and sculpt-convert entry flows | `src/app_bridge/session.rs`, `src/app_bridge/dto.rs`, `src/app_bridge/workflows.rs` | `apps/flutter/lib/src/import/import_panel.dart`, `apps/flutter/lib/src/sculpt/sculpt_convert_panel.dart`, `apps/flutter/lib/app.dart` | `src/ui/import_dialog.rs`, `src/ui/sculpt_convert_dialog.rs`, `src/app/egui_frontend.rs` | Flutter now owns import/sculpt-convert dialog state, configuration, progress, and result messaging through the bridge snapshot. |
+| Sculpt session controls and selected-sculpt workflow | `src/app_bridge/session.rs`, `src/app_bridge/dto.rs` | `apps/flutter/lib/src/sculpt/sculpt_session_panel.dart`, `apps/flutter/lib/app.dart` | `src/ui/brush_settings.rs`, sculpt sections in `src/ui/properties.rs` | Flutter now owns sculpt session lifecycle, brush settings, symmetry, and resolution controls through backend snapshots and commands. Keep native viewport stroke handling isolated from panel ownership cleanup. |
 | Undo/redo/duplicate/rename/delete/select/visibility/lock | `src/app_bridge/session.rs` | `apps/flutter/lib/app.dart`, `apps/flutter/lib/src/scene/scene_tree_panel.dart` | `src/app/ui_panels.rs`, `src/ui/scene_tree.rs`, parts of `src/ui/properties.rs` | Delete duplicate menu and panel handlers in small slices. |
 | Scene tree snapshots and selection state | `src/app_bridge/session.rs`, `src/app_bridge/dto.rs` | `apps/flutter/lib/src/scene/scene_tree_panel.dart` | `src/ui/scene_tree.rs` | Safe to decommission once any egui-only drag/drop or search behavior is either dropped or separately migrated. |
 | Selected-node basics, primitive/material basics, transform inspector | `src/app_bridge/session.rs`, `src/app_bridge/dto.rs` | Flutter property sections in `apps/flutter/lib/app.dart` | `src/ui/properties.rs` | Keep only egui-only fields that do not yet exist in backend-neutral snapshots. |
@@ -30,7 +31,6 @@ These behaviors are still product-relevant and should not be deleted until they 
 
 | Area | Current egui files | Why it still blocks decommission | Required migration direction |
 | --- | --- | --- | --- |
-| Sculpt tool controls and sculpt-specific workflow | `src/ui/brush_settings.rs`, sculpt sections in `src/ui/properties.rs`, viewport sculpt behavior in `src/ui/viewport/draw.rs` | Backend-neutral sculpt snapshot and command ownership now lives in `src/app_bridge/`, but Flutter does not yet expose the editing workflow. | Build the Flutter sculpt controls/workflow from PRD `#35`, then remove egui-only sculpt control ownership. |
 | Advanced light editing and light linking | `src/ui/lights_panel.rs`, `src/ui/light_linking.rs`, `src/ui/light_gizmo.rs`, `src/ui/light_graph.rs` | Flutter can create a minimal light entrypoint, but not edit advanced light properties or light masks. | Add neutral light snapshots/commands first. Decide separately whether the visual light graph survives the toolkit swap. |
 | Render settings | `src/ui/render_settings.rs` | Flutter does not yet expose renderer quality, shading, AO, shadow, or post-processing controls. | Add backend-owned render settings snapshot/commands and a Flutter panel. |
 | Application settings and keymap editing | `src/ui/settings_window.rs`, `src/keymap.rs`, menu hooks in `src/app/ui_panels.rs` | Flutter has no parity for settings, key bindings, bookmarks, or debug toggles. | Migrate settings snapshots/commands before deleting the egui settings window. |
@@ -60,19 +60,19 @@ These are the high-signal duplicate ownership points to cut before touching larg
 - `src/ui/scene_tree.rs`
   - Scene hierarchy selection, rename, visibility, lock, and delete flows are duplicated by Flutter against backend snapshots.
 - `src/ui/properties.rs`
-  - Basic node, transform, primitive, and material editing is duplicated. Advanced sculpt/light/render sections are not.
+  - Basic node, transform, primitive, material, and sculpt session controls are duplicated. Advanced light/render sections are not.
 - `src/ui/quick_toolbar.rs`
   - Manipulation and quick command affordances overlap with Flutter command strips and viewport tool overlay.
 
 ## PRD #27 Deletion Order
 
 1. Remove duplicate egui menu and panel command wiring for document, history, camera, scene-tree, and basic property edits.
-2. Keep egui-only workflows that still block parity isolated and explicit: sculpt, lights, render settings, settings/keymap, advanced diagnostics.
+2. Keep egui-only workflows that still block parity isolated and explicit: advanced lights, render settings, settings/keymap, and advanced diagnostics.
 3. Decide whether out-of-scope egui-only features are intentionally retained for the native egui app or formally dropped.
 4. Only after the remaining required workflows move behind backend-neutral modules should the egui adapter modules themselves be deleted.
 
 ## Decision Summary
 
 - Flutter plus `src/app_bridge/` is already authoritative for the core editing loop.
-- The biggest remaining product gaps are sculpt tooling, advanced lights, render settings, and application settings.
+- The biggest remaining product gaps are advanced lights, render settings, application settings, and any diagnostics/reference-image surfaces that stay in scope.
 - The biggest duplicate-ownership cleanup targets are `src/app/ui_panels.rs`, `src/ui/scene_tree.rs`, `src/ui/properties.rs`, and `src/ui/quick_toolbar.rs`.

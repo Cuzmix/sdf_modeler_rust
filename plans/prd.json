@@ -242,7 +242,7 @@
     "category": "sculpt",
     "description": "Build the touch-first Flutter sculpt controls and workflow against backend-owned sculpt state.\n\nSteps:\n1. Add Flutter controls for the sculpt command surface exposed in PRD `#34`.\n2. Keep the layout usable on tablets first, then adapt upward for desktop.\n3. Synchronize sculpt mode, brush settings, viewport feedback, and node state from backend snapshots.\n4. Remove egui-only sculpt control ownership once the Flutter flow is functionally sufficient.",
     "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build` if Rust sculpt code changes. If the bridge API changes, run `apps/flutter/scripts/frb_codegen.ps1`. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, `fvm flutter build windows --debug`, and `fvm flutter test integration_test -d windows` when viewport sculpt interactions change.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 36,

@@ -9,6 +9,7 @@ import 'package:sdf_modeler_flutter/src/import/import_panel.dart';
 import 'package:sdf_modeler_flutter/src/scene/scene_snapshot.dart';
 import 'package:sdf_modeler_flutter/src/scene/scene_tree_panel.dart';
 import 'package:sdf_modeler_flutter/src/sculpt/sculpt_convert_panel.dart';
+import 'package:sdf_modeler_flutter/src/sculpt/sculpt_session_panel.dart';
 import 'package:sdf_modeler_flutter/src/session/document_session_panel.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_command_strip.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_contract.dart';
@@ -872,6 +873,52 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     return _runSceneCommand(startSculptConvert, requestNativeFrame: false);
   }
 
+  Future<void> _resumeSculptingSelected() {
+    return _runSceneCommand(
+      resumeSculptingSelected,
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _stopSculpting() {
+    return _runSceneCommand(stopSculpting, requestNativeFrame: false);
+  }
+
+  Future<void> _setSculptBrushMode(String modeId) {
+    return _runSceneCommand(
+      () => setSculptBrushMode(modeId: modeId),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _setSculptBrushRadius(double radius) {
+    return _runSceneCommand(
+      () => setSculptBrushRadius(radius: radius),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _setSculptBrushStrength(double strength) {
+    return _runSceneCommand(
+      () => setSculptBrushStrength(strength: strength),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _setSculptSymmetryAxis(String axisId) {
+    return _runSceneCommand(
+      () => setSculptSymmetryAxis(axisId: axisId),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _setSelectedSculptResolution(int resolution) {
+    return _runSceneCommand(
+      () => setSelectedSculptResolution(resolution: resolution),
+      requestNativeFrame: false,
+    );
+  }
+
   Future<void> _setManipulatorMode(String modeId) {
     return _runSceneCommand(() => setManipulatorMode(modeId: modeId));
   }
@@ -1202,6 +1249,13 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                       onSetSculptConvertMode: _setSculptConvertMode,
                       onSetSculptConvertResolution: _setSculptConvertResolution,
                       onStartSculptConvert: _startSculptConvert,
+                      onResumeSculptingSelected: _resumeSculptingSelected,
+                      onStopSculpting: _stopSculpting,
+                      onSetSculptBrushMode: _setSculptBrushMode,
+                      onSetSculptBrushRadius: _setSculptBrushRadius,
+                      onSetSculptBrushStrength: _setSculptBrushStrength,
+                      onSetSculptSymmetryAxis: _setSculptSymmetryAxis,
+                      onSetSelectedSculptResolution: _setSelectedSculptResolution,
                       onFrameAll: () => _runSceneCommand(frameAll),
                       onResetScene: () => _runSceneCommand(resetScene),
                       onFocusSelected: () => _runSceneCommand(focusSelected),
@@ -1335,6 +1389,43 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                               startSculptConvert,
                               requestNativeFrame: false,
                             ),
+                        onResumeSculptingSelected: () =>
+                            _runModalSceneCommand(
+                              resumeSculptingSelected,
+                              requestNativeFrame: false,
+                            ),
+                        onStopSculpting: () =>
+                            _runModalSceneCommand(
+                              stopSculpting,
+                              requestNativeFrame: false,
+                            ),
+                        onSetSculptBrushMode: (modeId) =>
+                            _runModalSceneCommand(
+                              () => setSculptBrushMode(modeId: modeId),
+                              requestNativeFrame: false,
+                            ),
+                        onSetSculptBrushRadius: (radius) =>
+                            _runModalSceneCommand(
+                              () => setSculptBrushRadius(radius: radius),
+                              requestNativeFrame: false,
+                            ),
+                        onSetSculptBrushStrength: (strength) =>
+                            _runModalSceneCommand(
+                              () => setSculptBrushStrength(strength: strength),
+                              requestNativeFrame: false,
+                            ),
+                        onSetSculptSymmetryAxis: (axisId) =>
+                            _runModalSceneCommand(
+                              () => setSculptSymmetryAxis(axisId: axisId),
+                              requestNativeFrame: false,
+                            ),
+                        onSetSelectedSculptResolution: (resolution) =>
+                            _runModalSceneCommand(
+                              () => setSelectedSculptResolution(
+                                resolution: resolution,
+                              ),
+                              requestNativeFrame: false,
+                            ),
                         onFrameAll: () => _runModalSceneCommand(frameAll),
                         onResetScene: () => _runModalSceneCommand(resetScene),
                         onFocusSelected: () =>
@@ -1452,6 +1543,13 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                   onSetSculptConvertMode: _setSculptConvertMode,
                   onSetSculptConvertResolution: _setSculptConvertResolution,
                   onStartSculptConvert: _startSculptConvert,
+                  onResumeSculptingSelected: _resumeSculptingSelected,
+                  onStopSculpting: _stopSculpting,
+                  onSetSculptBrushMode: _setSculptBrushMode,
+                  onSetSculptBrushRadius: _setSculptBrushRadius,
+                  onSetSculptBrushStrength: _setSculptBrushStrength,
+                  onSetSculptSymmetryAxis: _setSculptSymmetryAxis,
+                  onSetSelectedSculptResolution: _setSelectedSculptResolution,
                   onFrameAll: () => _runSceneCommand(frameAll),
                   onResetScene: () => _runSceneCommand(resetScene),
                   onFocusSelected: () => _runSceneCommand(focusSelected),
@@ -1629,6 +1727,13 @@ class _InspectorPanel extends StatelessWidget {
     required this.onSetSculptConvertMode,
     required this.onSetSculptConvertResolution,
     required this.onStartSculptConvert,
+    required this.onResumeSculptingSelected,
+    required this.onStopSculpting,
+    required this.onSetSculptBrushMode,
+    required this.onSetSculptBrushRadius,
+    required this.onSetSculptBrushStrength,
+    required this.onSetSculptSymmetryAxis,
+    required this.onSetSelectedSculptResolution,
     required this.onFrameAll,
     required this.onResetScene,
     required this.onFocusSelected,
@@ -1700,6 +1805,13 @@ class _InspectorPanel extends StatelessWidget {
   final ValueChanged<String> onSetSculptConvertMode;
   final ValueChanged<int> onSetSculptConvertResolution;
   final VoidCallback onStartSculptConvert;
+  final VoidCallback onResumeSculptingSelected;
+  final VoidCallback onStopSculpting;
+  final ValueChanged<String> onSetSculptBrushMode;
+  final ValueChanged<double> onSetSculptBrushRadius;
+  final ValueChanged<double> onSetSculptBrushStrength;
+  final ValueChanged<String> onSetSculptSymmetryAxis;
+  final ValueChanged<int> onSetSelectedSculptResolution;
   final VoidCallback onFrameAll;
   final VoidCallback onResetScene;
   final VoidCallback onFocusSelected;
@@ -1953,6 +2065,25 @@ class _InspectorPanel extends StatelessWidget {
             onSetMode: onSetSculptConvertMode,
             onSetResolution: onSetSculptConvertResolution,
             onStartConvert: onStartSculptConvert,
+          ),
+          const SizedBox(height: ShellTokens.sectionGap),
+          Text(
+            'Sculpt Workflow',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: ShellTokens.controlGap),
+          SculptSessionPanel(
+            selectedNode: selectedNode,
+            sculptSnapshot: snapshot?.sculpt,
+            enabled: !commandInFlight,
+            onCreateSculpt: onCreateSculpt,
+            onResumeSelected: onResumeSculptingSelected,
+            onStopSculpting: onStopSculpting,
+            onSetBrushMode: onSetSculptBrushMode,
+            onSetBrushRadius: onSetSculptBrushRadius,
+            onSetBrushStrength: onSetSculptBrushStrength,
+            onSetSymmetryAxis: onSetSculptSymmetryAxis,
+            onSetResolution: onSetSelectedSculptResolution,
           ),
           const SizedBox(height: ShellTokens.sectionGap),
           Text(
@@ -2862,6 +2993,13 @@ class _CommandSheetContent extends StatelessWidget {
     required this.onSetSculptConvertMode,
     required this.onSetSculptConvertResolution,
     required this.onStartSculptConvert,
+    required this.onResumeSculptingSelected,
+    required this.onStopSculpting,
+    required this.onSetSculptBrushMode,
+    required this.onSetSculptBrushRadius,
+    required this.onSetSculptBrushStrength,
+    required this.onSetSculptSymmetryAxis,
+    required this.onSetSelectedSculptResolution,
     required this.onFrameAll,
     required this.onResetScene,
     required this.onFocusSelected,
@@ -2914,6 +3052,13 @@ class _CommandSheetContent extends StatelessWidget {
   final ValueChanged<String> onSetSculptConvertMode;
   final ValueChanged<int> onSetSculptConvertResolution;
   final VoidCallback onStartSculptConvert;
+  final VoidCallback onResumeSculptingSelected;
+  final VoidCallback onStopSculpting;
+  final ValueChanged<String> onSetSculptBrushMode;
+  final ValueChanged<double> onSetSculptBrushRadius;
+  final ValueChanged<double> onSetSculptBrushStrength;
+  final ValueChanged<String> onSetSculptSymmetryAxis;
+  final ValueChanged<int> onSetSelectedSculptResolution;
   final VoidCallback onFrameAll;
   final VoidCallback onResetScene;
   final VoidCallback onFocusSelected;
@@ -3051,6 +3196,25 @@ class _CommandSheetContent extends StatelessWidget {
           onSetMode: onSetSculptConvertMode,
           onSetResolution: onSetSculptConvertResolution,
           onStartConvert: onStartSculptConvert,
+        ),
+        const SizedBox(height: ShellTokens.sectionGap),
+        Text(
+          'Sculpt Workflow',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: ShellTokens.controlGap),
+        SculptSessionPanel(
+          selectedNode: selectedNode,
+          sculptSnapshot: snapshot?.sculpt,
+          enabled: sceneCommandsEnabled,
+          onCreateSculpt: onCreateSculpt,
+          onResumeSelected: onResumeSculptingSelected,
+          onStopSculpting: onStopSculpting,
+          onSetBrushMode: onSetSculptBrushMode,
+          onSetBrushRadius: onSetSculptBrushRadius,
+          onSetBrushStrength: onSetSculptBrushStrength,
+          onSetSymmetryAxis: onSetSculptSymmetryAxis,
+          onSetResolution: onSetSelectedSculptResolution,
         ),
         const SizedBox(height: ShellTokens.sectionGap),
         Wrap(

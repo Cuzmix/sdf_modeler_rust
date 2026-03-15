@@ -2709,3 +2709,33 @@ Manual verification:
 Result:
 - PRD #34 is fully verified and complete.
 
+--- Migration Iteration 28: PRD #35 - Flutter sculpt workflow parity ---
+COMPLETED. Added touch-first Flutter sculpt session controls on top of the backend-owned sculpt snapshot and command surface so sculpt lifecycle, brush settings, symmetry, and resolution editing no longer depend on egui panels.
+
+Changes:
+- apps/flutter/lib/src/sculpt/sculpt_session_panel.dart
+- apps/flutter/lib/app.dart
+- apps/flutter/test/widget_test.dart
+- docs/egui_parity_audit.md
+- plans/prd.json
+- plans/progress.txt
+  - Added a dedicated Flutter sculpt session panel that handles create/resume/stop flow, brush mode switching, radius/strength steppers, symmetry toggles, and selected sculpt resolution editing from backend snapshots.
+  - Wired the sculpt workflow panel into both the desktop inspector and the tablet command sheet so the same backend-owned sculpt commands are reachable across shell layouts.
+  - Added widget coverage for the sculpt workflow path, including brush setting updates, resolution apply, stop, and resume flows routed through the Rust facade.
+  - Updated the parity audit so sculpt control ownership is now treated as duplicate egui panel state rather than a remaining parity blocker; the next functional migration gap is advanced light ownership in PRD `#36`.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS
+- cargo build: PASS
+- Flutter analyze: PASS
+- Flutter test: PASS
+- Flutter build windows --debug: PASS
+
+Manual verification:
+- Not run in this iteration.
+
+Result:
+- PRD #35 is fully verified and complete.
+
