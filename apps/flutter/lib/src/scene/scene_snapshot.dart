@@ -323,6 +323,157 @@ class AppRenderSettingsSnapshot {
   }
 }
 
+class AppKeyOptionSnapshot {
+  const AppKeyOptionSnapshot({required this.id, required this.label});
+
+  final String id;
+  final String label;
+
+  factory AppKeyOptionSnapshot.fromJson(Map<String, dynamic> json) {
+    return AppKeyOptionSnapshot(
+      id: json['id'] as String? ?? 'key',
+      label: json['label'] as String? ?? 'Key',
+    );
+  }
+}
+
+class AppKeyComboSnapshot {
+  const AppKeyComboSnapshot({
+    required this.keyId,
+    required this.keyLabel,
+    required this.ctrl,
+    required this.shift,
+    required this.alt,
+    required this.shortcutLabel,
+  });
+
+  final String keyId;
+  final String keyLabel;
+  final bool ctrl;
+  final bool shift;
+  final bool alt;
+  final String shortcutLabel;
+
+  factory AppKeyComboSnapshot.fromJson(Map<String, dynamic> json) {
+    return AppKeyComboSnapshot(
+      keyId: json['key_id'] as String? ?? 'key',
+      keyLabel: json['key_label'] as String? ?? 'Key',
+      ctrl: json['ctrl'] as bool? ?? false,
+      shift: json['shift'] as bool? ?? false,
+      alt: json['alt'] as bool? ?? false,
+      shortcutLabel: json['shortcut_label'] as String? ?? 'Key',
+    );
+  }
+}
+
+class AppKeybindingSnapshot {
+  const AppKeybindingSnapshot({
+    required this.actionId,
+    required this.actionLabel,
+    required this.category,
+    required this.binding,
+  });
+
+  final String actionId;
+  final String actionLabel;
+  final String category;
+  final AppKeyComboSnapshot? binding;
+
+  factory AppKeybindingSnapshot.fromJson(Map<String, dynamic> json) {
+    return AppKeybindingSnapshot(
+      actionId: json['action_id'] as String? ?? 'action',
+      actionLabel: json['action_label'] as String? ?? 'Action',
+      category: json['category'] as String? ?? 'General',
+      binding: json['binding'] == null
+          ? null
+          : AppKeyComboSnapshot.fromJson(json['binding'] as Map<String, dynamic>),
+    );
+  }
+}
+
+class AppCameraBookmarkSnapshot {
+  const AppCameraBookmarkSnapshot({
+    required this.slotIndex,
+    required this.saved,
+  });
+
+  final int slotIndex;
+  final bool saved;
+
+  factory AppCameraBookmarkSnapshot.fromJson(Map<String, dynamic> json) {
+    return AppCameraBookmarkSnapshot(
+      slotIndex: (json['slot_index'] as num?)?.toInt() ?? 0,
+      saved: json['saved'] as bool? ?? false,
+    );
+  }
+}
+
+class AppSettingsSnapshot {
+  const AppSettingsSnapshot({
+    required this.showFpsOverlay,
+    required this.showNodeLabels,
+    required this.showBoundingBox,
+    required this.showLightGizmos,
+    required this.autoSaveEnabled,
+    required this.autoSaveIntervalSecs,
+    required this.maxExportResolution,
+    required this.maxSculptResolution,
+    required this.cameraBookmarks,
+    required this.keyOptions,
+    required this.keybindings,
+  });
+
+  final bool showFpsOverlay;
+  final bool showNodeLabels;
+  final bool showBoundingBox;
+  final bool showLightGizmos;
+  final bool autoSaveEnabled;
+  final int autoSaveIntervalSecs;
+  final int maxExportResolution;
+  final int maxSculptResolution;
+  final List<AppCameraBookmarkSnapshot> cameraBookmarks;
+  final List<AppKeyOptionSnapshot> keyOptions;
+  final List<AppKeybindingSnapshot> keybindings;
+
+  factory AppSettingsSnapshot.fromJson(Map<String, dynamic> json) {
+    return AppSettingsSnapshot(
+      showFpsOverlay: json['show_fps_overlay'] as bool? ?? true,
+      showNodeLabels: json['show_node_labels'] as bool? ?? false,
+      showBoundingBox: json['show_bounding_box'] as bool? ?? true,
+      showLightGizmos: json['show_light_gizmos'] as bool? ?? true,
+      autoSaveEnabled: json['auto_save_enabled'] as bool? ?? true,
+      autoSaveIntervalSecs:
+          (json['auto_save_interval_secs'] as num?)?.toInt() ?? 120,
+      maxExportResolution:
+          (json['max_export_resolution'] as num?)?.toInt() ?? 2048,
+      maxSculptResolution:
+          (json['max_sculpt_resolution'] as num?)?.toInt() ?? 320,
+      cameraBookmarks:
+          (json['camera_bookmarks'] as List<dynamic>? ?? const <dynamic>[])
+              .map(
+                (item) => AppCameraBookmarkSnapshot.fromJson(
+                  item as Map<String, dynamic>,
+                ),
+              )
+              .toList(growable: false),
+      keyOptions: (json['key_options'] as List<dynamic>? ?? const <dynamic>[])
+          .map(
+            (item) =>
+                AppKeyOptionSnapshot.fromJson(item as Map<String, dynamic>),
+          )
+          .toList(growable: false),
+      keybindings:
+          (json['keybindings'] as List<dynamic>? ?? const <dynamic>[])
+              .map(
+                (item) => AppKeybindingSnapshot.fromJson(
+                  item as Map<String, dynamic>,
+                ),
+              )
+              .toList(growable: false),
+    );
+  }
+}
+
 class AppHistorySnapshot {
   const AppHistorySnapshot({required this.canUndo, required this.canRedo});
 
@@ -1163,6 +1314,7 @@ class AppSceneSnapshot {
     required this.history,
     required this.document,
     required this.render,
+    required this.settings,
     required this.export,
     required this.import,
     required this.sculptConvert,
@@ -1180,6 +1332,7 @@ class AppSceneSnapshot {
   final AppHistorySnapshot history;
   final AppDocumentSnapshot document;
   final AppRenderSettingsSnapshot render;
+  final AppSettingsSnapshot settings;
   final AppExportSnapshot export;
   final AppImportSnapshot import;
   final AppSculptConvertSnapshot sculptConvert;
@@ -1258,6 +1411,23 @@ class AppSceneSnapshot {
             )
           : AppRenderSettingsSnapshot.fromJson(
               json['render'] as Map<String, dynamic>,
+            ),
+      settings: json['settings'] == null
+          ? const AppSettingsSnapshot(
+              showFpsOverlay: true,
+              showNodeLabels: false,
+              showBoundingBox: true,
+              showLightGizmos: true,
+              autoSaveEnabled: true,
+              autoSaveIntervalSecs: 120,
+              maxExportResolution: 2048,
+              maxSculptResolution: 320,
+              cameraBookmarks: <AppCameraBookmarkSnapshot>[],
+              keyOptions: <AppKeyOptionSnapshot>[],
+              keybindings: <AppKeybindingSnapshot>[],
+            )
+          : AppSettingsSnapshot.fromJson(
+              json['settings'] as Map<String, dynamic>,
             ),
       export: json['export'] == null
           ? const AppExportSnapshot(

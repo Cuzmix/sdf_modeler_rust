@@ -99,6 +99,56 @@ String setRenderScalar({required String fieldId, required double value}) =>
       value: value,
     );
 
+String resetSettings() => RustLib.instance.api.crateApiSimpleResetSettings();
+
+String exportSettings() => RustLib.instance.api.crateApiSimpleExportSettings();
+
+String importSettings() => RustLib.instance.api.crateApiSimpleImportSettings();
+
+String setSettingsToggle({required String fieldId, required bool enabled}) =>
+    RustLib.instance.api.crateApiSimpleSetSettingsToggle(
+      fieldId: fieldId,
+      enabled: enabled,
+    );
+
+String setSettingsInteger({required String fieldId, required int value}) =>
+    RustLib.instance.api.crateApiSimpleSetSettingsInteger(
+      fieldId: fieldId,
+      value: value,
+    );
+
+String saveCameraBookmark({required int slotIndex}) =>
+    RustLib.instance.api.crateApiSimpleSaveCameraBookmark(slotIndex: slotIndex);
+
+String restoreCameraBookmark({required int slotIndex}) => RustLib.instance.api
+    .crateApiSimpleRestoreCameraBookmark(slotIndex: slotIndex);
+
+String clearCameraBookmark({required int slotIndex}) => RustLib.instance.api
+    .crateApiSimpleClearCameraBookmark(slotIndex: slotIndex);
+
+String resetKeymap() => RustLib.instance.api.crateApiSimpleResetKeymap();
+
+String exportKeymap() => RustLib.instance.api.crateApiSimpleExportKeymap();
+
+String importKeymap() => RustLib.instance.api.crateApiSimpleImportKeymap();
+
+String clearKeybinding({required String actionId}) =>
+    RustLib.instance.api.crateApiSimpleClearKeybinding(actionId: actionId);
+
+String setKeybinding({
+  required String actionId,
+  required String keyId,
+  required bool ctrl,
+  required bool shift,
+  required bool alt,
+}) => RustLib.instance.api.crateApiSimpleSetKeybinding(
+  actionId: actionId,
+  keyId: keyId,
+  ctrl: ctrl,
+  shift: shift,
+  alt: alt,
+);
+
 Future<Uint8List> renderPreviewFrame({
   required int width,
   required int height,

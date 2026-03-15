@@ -4,13 +4,14 @@ pub mod session;
 pub mod workflows;
 
 pub use dto::{
-    AppCameraSnapshot, AppDocumentSnapshot, AppExportPresetSnapshot, AppExportSnapshot,
-    AppExportStatusSnapshot, AppHistorySnapshot, AppImportDialogSnapshot, AppImportSnapshot,
-    AppImportStatusSnapshot, AppLightCookieCandidateSnapshot, AppLightLinkNodeSnapshot,
+    AppCameraBookmarkSnapshot, AppCameraSnapshot, AppDocumentSnapshot, AppExportPresetSnapshot,
+    AppExportSnapshot, AppExportStatusSnapshot, AppHistorySnapshot, AppImportDialogSnapshot,
+    AppImportSnapshot, AppImportStatusSnapshot, AppKeyComboSnapshot, AppKeyOptionSnapshot,
+    AppKeybindingSnapshot, AppLightCookieCandidateSnapshot, AppLightLinkNodeSnapshot,
     AppLightLinkTargetSnapshot, AppLightLinkingSnapshot, AppLightPropertiesSnapshot,
     AppMaterialPropertiesSnapshot, AppNodeSnapshot, AppPrimitivePropertiesSnapshot,
     AppRenderOptionSnapshot, AppRenderSettingsSnapshot, AppScalarPropertySnapshot,
-    AppSceneSnapshot, AppSceneStatsSnapshot, AppSceneTreeNodeSnapshot,
+    AppSceneSnapshot, AppSceneStatsSnapshot, AppSceneTreeNodeSnapshot, AppSettingsSnapshot,
     AppSculptConvertDialogSnapshot, AppSculptConvertSnapshot, AppSculptConvertStatusSnapshot,
     AppSculptSessionSnapshot, AppSculptSnapshot, AppSelectedNodePropertiesSnapshot,
     AppSelectedSculptSnapshot, AppToolSnapshot, AppTransformPropertiesSnapshot, AppVec3,

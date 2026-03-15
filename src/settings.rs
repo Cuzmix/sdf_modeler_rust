@@ -256,19 +256,21 @@ impl Settings {
         }
     }
 
-    pub fn export_dialog(&self) {
-        if let Some(path) = rfd::FileDialog::new()
+    pub fn export_dialog(&self) -> bool {
+        let Some(path) = rfd::FileDialog::new()
             .set_title("Export Settings")
             .add_filter("JSON", &["json"])
             .set_file_name("settings.json")
             .save_file()
-        {
-            if let Ok(json) = serde_json::to_string_pretty(self) {
-                if let Err(e) = std::fs::write(&path, json) {
-                    log::error!("Failed to export settings: {}", e);
-                }
-            }
-        }
+        else {
+            return false;
+        };
+
+        let Ok(json) = serde_json::to_string_pretty(self) else {
+            return false;
+        };
+
+        std::fs::write(path, json).is_ok()
     }
 
     pub fn import_dialog(&mut self) -> bool {

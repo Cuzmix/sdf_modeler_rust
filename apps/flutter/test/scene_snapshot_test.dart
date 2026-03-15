@@ -381,4 +381,99 @@ void main() {
     expect(snapshot.lightLinking.geometryNodes.single.lightMask, 255);
     expect(snapshot.lightLinking.maxLightCount, 8);
   });
+
+  test('parses settings and keymap snapshots', () {
+    final snapshot = AppSceneSnapshot.fromJson(
+      jsonDecode(
+            '''
+{
+  "selected_node": null,
+  "top_level_nodes": [],
+  "scene_tree_roots": [],
+  "history": {"can_undo": false, "can_redo": false},
+  "settings": {
+    "show_fps_overlay": false,
+    "show_node_labels": true,
+    "show_bounding_box": false,
+    "show_light_gizmos": true,
+    "auto_save_enabled": true,
+    "auto_save_interval_secs": 300,
+    "max_export_resolution": 1024,
+    "max_sculpt_resolution": 256,
+    "camera_bookmarks": [
+      {"slot_index": 0, "saved": true},
+      {"slot_index": 1, "saved": false}
+    ],
+    "key_options": [
+      {"id": "z", "label": "Z"},
+      {"id": "u", "label": "U"}
+    ],
+    "keybindings": [
+      {
+        "action_id": "undo",
+        "action_label": "Undo",
+        "category": "General",
+        "binding": {
+          "key_id": "z",
+          "key_label": "Z",
+          "ctrl": true,
+          "shift": false,
+          "alt": false,
+          "shortcut_label": "Ctrl+Z"
+        }
+      },
+      {
+        "action_id": "redo",
+        "action_label": "Redo",
+        "category": "General",
+        "binding": null
+      }
+    ]
+  },
+  "camera": {
+    "yaw": 0.0,
+    "pitch": 0.0,
+    "roll": 0.0,
+    "distance": 5.0,
+    "fov_degrees": 45.0,
+    "orthographic": false,
+    "target": {"x": 0.0, "y": 0.0, "z": 0.0},
+    "eye": {"x": 3.0, "y": 2.0, "z": 3.0}
+  },
+  "stats": {
+    "total_nodes": 0,
+    "visible_nodes": 0,
+    "top_level_nodes": 0,
+    "primitive_nodes": 0,
+    "operation_nodes": 0,
+    "transform_nodes": 0,
+    "modifier_nodes": 0,
+    "sculpt_nodes": 0,
+    "light_nodes": 0,
+    "voxel_memory_bytes": 0,
+    "sdf_eval_complexity": 0,
+    "structure_key": 0,
+    "data_fingerprint": 0,
+    "bounds_min": {"x": 0.0, "y": 0.0, "z": 0.0},
+    "bounds_max": {"x": 0.0, "y": 0.0, "z": 0.0}
+  },
+  "tool": {
+    "active_tool_label": "Select",
+    "shading_mode_label": "Full",
+    "grid_enabled": true
+  }
+}
+''',
+          )
+          as Map<String, dynamic>,
+    );
+
+    expect(snapshot.settings.showFpsOverlay, isFalse);
+    expect(snapshot.settings.showNodeLabels, isTrue);
+    expect(snapshot.settings.autoSaveIntervalSecs, 300);
+    expect(snapshot.settings.cameraBookmarks.first.saved, isTrue);
+    expect(snapshot.settings.keyOptions.last.id, 'u');
+    expect(snapshot.settings.keybindings.first.binding!.shortcutLabel, 'Ctrl+Z');
+    expect(snapshot.settings.keybindings.last.binding, isNull);
+  });
 }

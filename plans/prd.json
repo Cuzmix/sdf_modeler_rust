@@ -270,7 +270,7 @@
     "category": "settings",
     "description": "Port application settings and keymap editing behind backend-neutral snapshots and Flutter UI.\n\nSteps:\n1. Expose backend-neutral settings snapshots and commands for application preferences that remain in scope.\n2. Expose a safe command surface for keymap inspection and editing without tying it to egui widgets.\n3. Add Flutter settings and keymap surfaces for the in-scope settings set.\n4. Remove egui settings-window ownership once parity is functionally sufficient.",
     "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build`. If the bridge API changes, run `apps/flutter/scripts/frb_codegen.ps1`. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, and `fvm flutter build windows --debug`.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 40,

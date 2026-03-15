@@ -169,6 +169,206 @@ pub enum SerializableKey {
 }
 
 impl SerializableKey {
+    pub const ALL: &'static [Self] = &[
+        Self::A,
+        Self::B,
+        Self::C,
+        Self::D,
+        Self::E,
+        Self::F,
+        Self::G,
+        Self::H,
+        Self::I,
+        Self::J,
+        Self::K,
+        Self::L,
+        Self::M,
+        Self::N,
+        Self::O,
+        Self::P,
+        Self::Q,
+        Self::R,
+        Self::S,
+        Self::T,
+        Self::U,
+        Self::V,
+        Self::W,
+        Self::X,
+        Self::Y,
+        Self::Z,
+        Self::Num0,
+        Self::Num1,
+        Self::Num2,
+        Self::Num3,
+        Self::Num4,
+        Self::Num5,
+        Self::Num6,
+        Self::Num7,
+        Self::Num8,
+        Self::Num9,
+        Self::F1,
+        Self::F2,
+        Self::F3,
+        Self::F4,
+        Self::F5,
+        Self::F6,
+        Self::F7,
+        Self::F8,
+        Self::F9,
+        Self::F10,
+        Self::F11,
+        Self::F12,
+        Self::Space,
+        Self::Enter,
+        Self::Escape,
+        Self::Tab,
+        Self::Delete,
+        Self::Home,
+        Self::End,
+        Self::ArrowUp,
+        Self::ArrowDown,
+        Self::ArrowLeft,
+        Self::ArrowRight,
+        Self::OpenBracket,
+        Self::CloseBracket,
+        Self::Slash,
+    ];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::A => "a",
+            Self::B => "b",
+            Self::C => "c",
+            Self::D => "d",
+            Self::E => "e",
+            Self::F => "f",
+            Self::G => "g",
+            Self::H => "h",
+            Self::I => "i",
+            Self::J => "j",
+            Self::K => "k",
+            Self::L => "l",
+            Self::M => "m",
+            Self::N => "n",
+            Self::O => "o",
+            Self::P => "p",
+            Self::Q => "q",
+            Self::R => "r",
+            Self::S => "s",
+            Self::T => "t",
+            Self::U => "u",
+            Self::V => "v",
+            Self::W => "w",
+            Self::X => "x",
+            Self::Y => "y",
+            Self::Z => "z",
+            Self::Num0 => "0",
+            Self::Num1 => "1",
+            Self::Num2 => "2",
+            Self::Num3 => "3",
+            Self::Num4 => "4",
+            Self::Num5 => "5",
+            Self::Num6 => "6",
+            Self::Num7 => "7",
+            Self::Num8 => "8",
+            Self::Num9 => "9",
+            Self::F1 => "f1",
+            Self::F2 => "f2",
+            Self::F3 => "f3",
+            Self::F4 => "f4",
+            Self::F5 => "f5",
+            Self::F6 => "f6",
+            Self::F7 => "f7",
+            Self::F8 => "f8",
+            Self::F9 => "f9",
+            Self::F10 => "f10",
+            Self::F11 => "f11",
+            Self::F12 => "f12",
+            Self::Space => "space",
+            Self::Enter => "enter",
+            Self::Escape => "escape",
+            Self::Tab => "tab",
+            Self::Delete => "delete",
+            Self::Home => "home",
+            Self::End => "end",
+            Self::ArrowUp => "arrow_up",
+            Self::ArrowDown => "arrow_down",
+            Self::ArrowLeft => "arrow_left",
+            Self::ArrowRight => "arrow_right",
+            Self::OpenBracket => "open_bracket",
+            Self::CloseBracket => "close_bracket",
+            Self::Slash => "slash",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<Self> {
+        match id {
+            "a" => Some(Self::A),
+            "b" => Some(Self::B),
+            "c" => Some(Self::C),
+            "d" => Some(Self::D),
+            "e" => Some(Self::E),
+            "f" => Some(Self::F),
+            "g" => Some(Self::G),
+            "h" => Some(Self::H),
+            "i" => Some(Self::I),
+            "j" => Some(Self::J),
+            "k" => Some(Self::K),
+            "l" => Some(Self::L),
+            "m" => Some(Self::M),
+            "n" => Some(Self::N),
+            "o" => Some(Self::O),
+            "p" => Some(Self::P),
+            "q" => Some(Self::Q),
+            "r" => Some(Self::R),
+            "s" => Some(Self::S),
+            "t" => Some(Self::T),
+            "u" => Some(Self::U),
+            "v" => Some(Self::V),
+            "w" => Some(Self::W),
+            "x" => Some(Self::X),
+            "y" => Some(Self::Y),
+            "z" => Some(Self::Z),
+            "0" => Some(Self::Num0),
+            "1" => Some(Self::Num1),
+            "2" => Some(Self::Num2),
+            "3" => Some(Self::Num3),
+            "4" => Some(Self::Num4),
+            "5" => Some(Self::Num5),
+            "6" => Some(Self::Num6),
+            "7" => Some(Self::Num7),
+            "8" => Some(Self::Num8),
+            "9" => Some(Self::Num9),
+            "f1" => Some(Self::F1),
+            "f2" => Some(Self::F2),
+            "f3" => Some(Self::F3),
+            "f4" => Some(Self::F4),
+            "f5" => Some(Self::F5),
+            "f6" => Some(Self::F6),
+            "f7" => Some(Self::F7),
+            "f8" => Some(Self::F8),
+            "f9" => Some(Self::F9),
+            "f10" => Some(Self::F10),
+            "f11" => Some(Self::F11),
+            "f12" => Some(Self::F12),
+            "space" => Some(Self::Space),
+            "enter" => Some(Self::Enter),
+            "escape" => Some(Self::Escape),
+            "tab" => Some(Self::Tab),
+            "delete" => Some(Self::Delete),
+            "home" => Some(Self::Home),
+            "end" => Some(Self::End),
+            "arrow_up" => Some(Self::ArrowUp),
+            "arrow_down" => Some(Self::ArrowDown),
+            "arrow_left" => Some(Self::ArrowLeft),
+            "arrow_right" => Some(Self::ArrowRight),
+            "open_bracket" => Some(Self::OpenBracket),
+            "close_bracket" => Some(Self::CloseBracket),
+            "slash" => Some(Self::Slash),
+            _ => None,
+        }
+    }
+
     /// Try to convert an egui::Key back to a SerializableKey. Returns None for unsupported keys.
     pub fn from_egui(key: egui::Key) -> Option<Self> {
         match key {
@@ -499,6 +699,118 @@ impl ActionBinding {
     ];
 
     /// Human-readable label for this action.
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::ToggleHelp => "toggle_help",
+            Self::ToggleDebug => "toggle_debug",
+            Self::NewScene => "new_scene",
+            Self::OpenProject => "open_project",
+            Self::SaveProject => "save_project",
+            Self::Undo => "undo",
+            Self::Redo => "redo",
+            Self::Copy => "copy",
+            Self::Paste => "paste",
+            Self::Duplicate => "duplicate",
+            Self::DeleteSelected => "delete_selected",
+            Self::CopyProperties => "copy_properties",
+            Self::PasteProperties => "paste_properties",
+            Self::TakeScreenshot => "take_screenshot",
+            Self::ShowExportDialog => "show_export_dialog",
+            Self::ToggleCommandPalette => "toggle_command_palette",
+            Self::CameraFront => "camera_front",
+            Self::CameraTop => "camera_top",
+            Self::CameraRight => "camera_right",
+            Self::CameraBack => "camera_back",
+            Self::CameraLeft => "camera_left",
+            Self::CameraBottom => "camera_bottom",
+            Self::ToggleOrtho => "toggle_ortho",
+            Self::FocusSelected => "focus_selected",
+            Self::FrameAll => "frame_all",
+            Self::GizmoTranslate => "gizmo_translate",
+            Self::GizmoRotate => "gizmo_rotate",
+            Self::GizmoScale => "gizmo_scale",
+            Self::ToggleGizmoSpace => "toggle_gizmo_space",
+            Self::ResetPivot => "reset_pivot",
+            Self::EnterSculptMode => "enter_sculpt_mode",
+            Self::QuickSculptMode => "quick_sculpt_mode",
+            Self::ToggleIsolation => "toggle_isolation",
+            Self::CycleShadingMode => "cycle_shading_mode",
+            Self::ToggleTurntable => "toggle_turntable",
+            Self::ShowQuickToolbar => "show_quick_toolbar",
+            Self::ToggleReferenceImages => "toggle_reference_images",
+            Self::ToggleMeasurementTool => "toggle_measurement_tool",
+            Self::SculptBrushAdd => "sculpt_brush_add",
+            Self::SculptBrushCarve => "sculpt_brush_carve",
+            Self::SculptBrushSmooth => "sculpt_brush_smooth",
+            Self::SculptBrushFlatten => "sculpt_brush_flatten",
+            Self::SculptBrushInflate => "sculpt_brush_inflate",
+            Self::SculptBrushGrab => "sculpt_brush_grab",
+            Self::SculptBrushShrink => "sculpt_brush_shrink",
+            Self::SculptBrushGrow => "sculpt_brush_grow",
+            Self::SculptSymmetryX => "sculpt_symmetry_x",
+            Self::SculptSymmetryY => "sculpt_symmetry_y",
+            Self::SculptSymmetryZ => "sculpt_symmetry_z",
+            Self::ExitSculptMode => "exit_sculpt_mode",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<Self> {
+        match id {
+            "toggle_help" => Some(Self::ToggleHelp),
+            "toggle_debug" => Some(Self::ToggleDebug),
+            "new_scene" => Some(Self::NewScene),
+            "open_project" => Some(Self::OpenProject),
+            "save_project" => Some(Self::SaveProject),
+            "undo" => Some(Self::Undo),
+            "redo" => Some(Self::Redo),
+            "copy" => Some(Self::Copy),
+            "paste" => Some(Self::Paste),
+            "duplicate" => Some(Self::Duplicate),
+            "delete_selected" => Some(Self::DeleteSelected),
+            "copy_properties" => Some(Self::CopyProperties),
+            "paste_properties" => Some(Self::PasteProperties),
+            "take_screenshot" => Some(Self::TakeScreenshot),
+            "show_export_dialog" => Some(Self::ShowExportDialog),
+            "toggle_command_palette" => Some(Self::ToggleCommandPalette),
+            "camera_front" => Some(Self::CameraFront),
+            "camera_top" => Some(Self::CameraTop),
+            "camera_right" => Some(Self::CameraRight),
+            "camera_back" => Some(Self::CameraBack),
+            "camera_left" => Some(Self::CameraLeft),
+            "camera_bottom" => Some(Self::CameraBottom),
+            "toggle_ortho" => Some(Self::ToggleOrtho),
+            "focus_selected" => Some(Self::FocusSelected),
+            "frame_all" => Some(Self::FrameAll),
+            "gizmo_translate" => Some(Self::GizmoTranslate),
+            "gizmo_rotate" => Some(Self::GizmoRotate),
+            "gizmo_scale" => Some(Self::GizmoScale),
+            "toggle_gizmo_space" => Some(Self::ToggleGizmoSpace),
+            "reset_pivot" => Some(Self::ResetPivot),
+            "enter_sculpt_mode" => Some(Self::EnterSculptMode),
+            "quick_sculpt_mode" => Some(Self::QuickSculptMode),
+            "toggle_isolation" => Some(Self::ToggleIsolation),
+            "cycle_shading_mode" => Some(Self::CycleShadingMode),
+            "toggle_turntable" => Some(Self::ToggleTurntable),
+            "show_quick_toolbar" => Some(Self::ShowQuickToolbar),
+            "toggle_reference_images" => Some(Self::ToggleReferenceImages),
+            "toggle_measurement_tool" => Some(Self::ToggleMeasurementTool),
+            "sculpt_brush_add" => Some(Self::SculptBrushAdd),
+            "sculpt_brush_carve" => Some(Self::SculptBrushCarve),
+            "sculpt_brush_smooth" => Some(Self::SculptBrushSmooth),
+            "sculpt_brush_flatten" => Some(Self::SculptBrushFlatten),
+            "sculpt_brush_inflate" => Some(Self::SculptBrushInflate),
+            "sculpt_brush_grab" => Some(Self::SculptBrushGrab),
+            "sculpt_brush_shrink" => Some(Self::SculptBrushShrink),
+            "sculpt_brush_grow" => Some(Self::SculptBrushGrow),
+            "sculpt_symmetry_x" => Some(Self::SculptSymmetryX),
+            "sculpt_symmetry_y" => Some(Self::SculptSymmetryY),
+            "sculpt_symmetry_z" => Some(Self::SculptSymmetryZ),
+            "exit_sculpt_mode" => Some(Self::ExitSculptMode),
+            _ => None,
+        }
+    }
+
+    /// Human-readable label for this action.
     pub fn label(self) -> &'static str {
         match self {
             Self::ToggleHelp => "Toggle Help",
@@ -735,6 +1047,20 @@ impl KeymapConfig {
         self.bindings.insert(action, combo);
     }
 
+    /// Set or update a key combo while removing any conflicting action first.
+    pub fn set_binding_with_conflict_resolution(
+        &mut self,
+        action: ActionBinding,
+        combo: KeyCombo,
+    ) -> Option<ActionBinding> {
+        let conflicting = self.find_conflict(&combo, action);
+        if let Some(conflicting_action) = conflicting {
+            self.remove_binding(conflicting_action);
+        }
+        self.set_binding(action, combo);
+        conflicting
+    }
+
     /// Remove a binding for an action.
     pub fn remove_binding(&mut self, action: ActionBinding) {
         self.bindings.remove(&action);
@@ -770,6 +1096,46 @@ impl KeymapConfig {
     /// Iterate over all bindings.
     pub fn bindings(&self) -> &HashMap<ActionBinding, KeyCombo> {
         &self.bindings
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl KeymapConfig {
+    pub fn export_dialog(&self) -> bool {
+        let Some(path) = rfd::FileDialog::new()
+            .set_title("Export Keybindings")
+            .add_filter("JSON", &["json"])
+            .set_file_name("keybindings.json")
+            .save_file()
+        else {
+            return false;
+        };
+
+        let Ok(json) = serde_json::to_string_pretty(self) else {
+            return false;
+        };
+
+        std::fs::write(path, json).is_ok()
+    }
+
+    pub fn import_dialog(&mut self) -> bool {
+        let Some(path) = rfd::FileDialog::new()
+            .set_title("Import Keybindings")
+            .add_filter("JSON", &["json"])
+            .pick_file()
+        else {
+            return false;
+        };
+
+        let Ok(json) = std::fs::read_to_string(path) else {
+            return false;
+        };
+        let Ok(imported) = serde_json::from_str::<KeymapConfig>(&json) else {
+            return false;
+        };
+
+        *self = imported;
+        true
     }
 }
 

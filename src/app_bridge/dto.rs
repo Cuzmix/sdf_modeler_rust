@@ -110,6 +110,51 @@ pub struct AppRenderSettingsSnapshot {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppKeyOptionSnapshot {
+    pub id: String,
+    pub label: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppKeyComboSnapshot {
+    pub key_id: String,
+    pub key_label: String,
+    pub ctrl: bool,
+    pub shift: bool,
+    pub alt: bool,
+    pub shortcut_label: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppKeybindingSnapshot {
+    pub action_id: String,
+    pub action_label: String,
+    pub category: String,
+    pub binding: Option<AppKeyComboSnapshot>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppCameraBookmarkSnapshot {
+    pub slot_index: u8,
+    pub saved: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppSettingsSnapshot {
+    pub show_fps_overlay: bool,
+    pub show_node_labels: bool,
+    pub show_bounding_box: bool,
+    pub show_light_gizmos: bool,
+    pub auto_save_enabled: bool,
+    pub auto_save_interval_secs: u32,
+    pub max_export_resolution: u32,
+    pub max_sculpt_resolution: u32,
+    pub camera_bookmarks: Vec<AppCameraBookmarkSnapshot>,
+    pub key_options: Vec<AppKeyOptionSnapshot>,
+    pub keybindings: Vec<AppKeybindingSnapshot>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AppHistorySnapshot {
     pub can_undo: bool,
     pub can_redo: bool,
@@ -368,6 +413,7 @@ pub struct AppSceneSnapshot {
     pub history: AppHistorySnapshot,
     pub document: AppDocumentSnapshot,
     pub render: AppRenderSettingsSnapshot,
+    pub settings: AppSettingsSnapshot,
     pub export: AppExportSnapshot,
     pub import: AppImportSnapshot,
     pub sculpt_convert: AppSculptConvertSnapshot,

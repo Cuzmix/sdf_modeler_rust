@@ -70,6 +70,11 @@ impl SculptConvertDialogState {
     pub fn set_resolution(&mut self, resolution: u32) {
         self.resolution = resolution.clamp(self.min_resolution, self.max_resolution);
     }
+
+    pub fn set_max_resolution(&mut self, max_resolution: u32) {
+        self.max_resolution = max_resolution.max(MIN_VOXEL_RESOLUTION);
+        self.set_resolution(self.resolution);
+    }
 }
 
 pub struct ImportDialogState {
@@ -126,5 +131,17 @@ impl ImportDialogState {
 
     pub fn set_resolution(&mut self, resolution: u32) {
         self.resolution = resolution.clamp(self.min_resolution, self.max_resolution);
+    }
+
+    pub fn set_max_resolution(&mut self, max_resolution: u32) {
+        self.max_resolution = max_resolution.max(MIN_VOXEL_RESOLUTION);
+        self.auto_resolution = self
+            .auto_resolution
+            .clamp(self.min_resolution, self.max_resolution);
+        if self.use_auto {
+            self.resolution = self.auto_resolution;
+        } else {
+            self.set_resolution(self.resolution);
+        }
     }
 }

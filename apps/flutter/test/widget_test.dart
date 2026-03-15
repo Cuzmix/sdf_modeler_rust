@@ -618,6 +618,77 @@ class _MockRustApi extends RustLibApi {
     <String, Object?>{'render': _defaultRenderPayload()},
   );
 
+  static Map<String, Object?> _defaultSettingsPayload() => <String, Object?>{
+        'show_fps_overlay': true,
+        'show_node_labels': false,
+        'show_bounding_box': true,
+        'show_light_gizmos': true,
+        'auto_save_enabled': true,
+        'auto_save_interval_secs': 120,
+        'max_export_resolution': 2048,
+        'max_sculpt_resolution': 320,
+        'camera_bookmarks': List<Map<String, Object?>>.generate(
+          9,
+          (index) => <String, Object?>{
+            'slot_index': index,
+            'saved': index == 0,
+          },
+          growable: false,
+        ),
+        'key_options': <Map<String, String>>[
+          <String, String>{'id': 'z', 'label': 'Z'},
+          <String, String>{'id': 'y', 'label': 'Y'},
+          <String, String>{'id': 'u', 'label': 'U'},
+          <String, String>{'id': 'f1', 'label': 'F1'},
+        ],
+        'keybindings': <Map<String, Object?>>[
+          <String, Object?>{
+            'action_id': 'undo',
+            'action_label': 'Undo',
+            'category': 'General',
+            'binding': <String, Object?>{
+              'key_id': 'z',
+              'key_label': 'Z',
+              'ctrl': true,
+              'shift': false,
+              'alt': false,
+              'shortcut_label': 'Ctrl+Z',
+            },
+          },
+          <String, Object?>{
+            'action_id': 'redo',
+            'action_label': 'Redo',
+            'category': 'General',
+            'binding': <String, Object?>{
+              'key_id': 'y',
+              'key_label': 'Y',
+              'ctrl': true,
+              'shift': false,
+              'alt': false,
+              'shortcut_label': 'Ctrl+Y',
+            },
+          },
+          <String, Object?>{
+            'action_id': 'toggle_help',
+            'action_label': 'Toggle Help',
+            'category': 'General',
+            'binding': <String, Object?>{
+              'key_id': 'f1',
+              'key_label': 'F1',
+              'ctrl': false,
+              'shift': false,
+              'alt': false,
+              'shortcut_label': 'F1',
+            },
+          },
+        ],
+      };
+
+  static final String _settingsSnapshot = _withFields(
+    _baseSnapshot,
+    <String, Object?>{'settings': _defaultSettingsPayload()},
+  );
+
   String currentSnapshot = _baseSnapshot;
   int sceneSnapshotJsonCalls = 0;
   int addBoxCalls = 0;
@@ -668,6 +739,19 @@ class _MockRustApi extends RustLibApi {
   int setRenderToggleCalls = 0;
   int setRenderIntegerCalls = 0;
   int setRenderScalarCalls = 0;
+  int resetSettingsCalls = 0;
+  int exportSettingsCalls = 0;
+  int importSettingsCalls = 0;
+  int setSettingsToggleCalls = 0;
+  int setSettingsIntegerCalls = 0;
+  int saveCameraBookmarkCalls = 0;
+  int restoreCameraBookmarkCalls = 0;
+  int clearCameraBookmarkCalls = 0;
+  int resetKeymapCalls = 0;
+  int exportKeymapCalls = 0;
+  int importKeymapCalls = 0;
+  int clearKeybindingCalls = 0;
+  int setKeybindingCalls = 0;
   int setExportResolutionCalls = 0;
   int setAdaptiveExportCalls = 0;
   int startExportCalls = 0;
@@ -758,6 +842,19 @@ class _MockRustApi extends RustLibApi {
     setRenderToggleCalls = 0;
     setRenderIntegerCalls = 0;
     setRenderScalarCalls = 0;
+    resetSettingsCalls = 0;
+    exportSettingsCalls = 0;
+    importSettingsCalls = 0;
+    setSettingsToggleCalls = 0;
+    setSettingsIntegerCalls = 0;
+    saveCameraBookmarkCalls = 0;
+    restoreCameraBookmarkCalls = 0;
+    clearCameraBookmarkCalls = 0;
+    resetKeymapCalls = 0;
+    exportKeymapCalls = 0;
+    importKeymapCalls = 0;
+    clearKeybindingCalls = 0;
+    setKeybindingCalls = 0;
     setExportResolutionCalls = 0;
     setAdaptiveExportCalls = 0;
     startExportCalls = 0;
@@ -813,6 +910,23 @@ class _MockRustApi extends RustLibApi {
     tool['shading_mode_label'] = render['shading_mode_label'];
     tool['grid_enabled'] = render['show_grid'];
     snapshot['tool'] = tool;
+    currentSnapshot = jsonEncode(snapshot);
+    return currentSnapshot;
+  }
+
+  String _updateSettingsSnapshot(
+    void Function(Map<String, dynamic> settings) apply,
+  ) {
+    final snapshot = jsonDecode(currentSnapshot) as Map<String, dynamic>;
+    final settings = jsonDecode(
+          jsonEncode(
+            snapshot['settings'] as Map<String, dynamic>? ??
+                _defaultSettingsPayload(),
+          ),
+        )
+        as Map<String, dynamic>;
+    apply(settings);
+    snapshot['settings'] = settings;
     currentSnapshot = jsonEncode(snapshot);
     return currentSnapshot;
   }
@@ -975,6 +1089,200 @@ class _MockRustApi extends RustLibApi {
         default:
           render[fieldId] = value;
       }
+    });
+  }
+
+  @override
+  String crateApiSimpleResetSettings() {
+    resetSettingsCalls += 1;
+    return _updateSettingsSnapshot((settings) {
+      settings
+        ..clear()
+        ..addAll(_defaultSettingsPayload());
+    });
+  }
+
+  @override
+  String crateApiSimpleExportSettings() {
+    exportSettingsCalls += 1;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleImportSettings() {
+    importSettingsCalls += 1;
+    return _updateSettingsSnapshot((settings) {
+      settings
+        ..clear()
+        ..addAll(_defaultSettingsPayload());
+    });
+  }
+
+  @override
+  String crateApiSimpleSetSettingsToggle({
+    required String fieldId,
+    required bool enabled,
+  }) {
+    setSettingsToggleCalls += 1;
+    return _updateSettingsSnapshot((settings) {
+      settings[fieldId] = enabled;
+    });
+  }
+
+  @override
+  String crateApiSimpleSetSettingsInteger({
+    required String fieldId,
+    required int value,
+  }) {
+    setSettingsIntegerCalls += 1;
+    return _updateSettingsSnapshot((settings) {
+      switch (fieldId) {
+        case 'auto_save_interval_secs':
+          settings[fieldId] = value.clamp(30, 600);
+        case 'max_export_resolution':
+          settings[fieldId] = value.clamp(64, 4096);
+        case 'max_sculpt_resolution':
+          settings[fieldId] = value.clamp(16, 512);
+        default:
+          settings[fieldId] = value;
+      }
+    });
+  }
+
+  @override
+  String crateApiSimpleSaveCameraBookmark({required int slotIndex}) {
+    saveCameraBookmarkCalls += 1;
+    return _updateSettingsSnapshot((settings) {
+      final bookmarks = List<dynamic>.from(
+        settings['camera_bookmarks'] as List<dynamic>? ?? const <dynamic>[],
+      );
+      if (slotIndex < 0 || slotIndex >= bookmarks.length) {
+        return;
+      }
+      bookmarks[slotIndex] = <String, Object?>{
+        'slot_index': slotIndex,
+        'saved': true,
+      };
+      settings['camera_bookmarks'] = bookmarks;
+    });
+  }
+
+  @override
+  String crateApiSimpleRestoreCameraBookmark({required int slotIndex}) {
+    restoreCameraBookmarkCalls += 1;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleClearCameraBookmark({required int slotIndex}) {
+    clearCameraBookmarkCalls += 1;
+    return _updateSettingsSnapshot((settings) {
+      final bookmarks = List<dynamic>.from(
+        settings['camera_bookmarks'] as List<dynamic>? ?? const <dynamic>[],
+      );
+      if (slotIndex < 0 || slotIndex >= bookmarks.length) {
+        return;
+      }
+      bookmarks[slotIndex] = <String, Object?>{
+        'slot_index': slotIndex,
+        'saved': false,
+      };
+      settings['camera_bookmarks'] = bookmarks;
+    });
+  }
+
+  @override
+  String crateApiSimpleResetKeymap() {
+    resetKeymapCalls += 1;
+    return _updateSettingsSnapshot((settings) {
+      final defaults = _defaultSettingsPayload();
+      settings['key_options'] = defaults['key_options'];
+      settings['keybindings'] = defaults['keybindings'];
+    });
+  }
+
+  @override
+  String crateApiSimpleExportKeymap() {
+    exportKeymapCalls += 1;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleImportKeymap() {
+    importKeymapCalls += 1;
+    return _updateSettingsSnapshot((settings) {
+      final defaults = _defaultSettingsPayload();
+      settings['key_options'] = defaults['key_options'];
+      settings['keybindings'] = defaults['keybindings'];
+    });
+  }
+
+  @override
+  String crateApiSimpleClearKeybinding({required String actionId}) {
+    clearKeybindingCalls += 1;
+    return _updateSettingsSnapshot((settings) {
+      final keybindings = List<Map<String, dynamic>>.from(
+        (settings['keybindings'] as List<dynamic>? ?? const <dynamic>[])
+            .map((binding) => Map<String, dynamic>.from(binding as Map)),
+      );
+      final bindingIndex = keybindings.indexWhere(
+        (binding) => binding['action_id'] == actionId,
+      );
+      if (bindingIndex == -1) {
+        return;
+      }
+      keybindings[bindingIndex]['binding'] = null;
+      settings['keybindings'] = keybindings;
+    });
+  }
+
+  @override
+  String crateApiSimpleSetKeybinding({
+    required String actionId,
+    required String keyId,
+    required bool ctrl,
+    required bool shift,
+    required bool alt,
+  }) {
+    setKeybindingCalls += 1;
+    return _updateSettingsSnapshot((settings) {
+      final keybindings = List<Map<String, dynamic>>.from(
+        (settings['keybindings'] as List<dynamic>? ?? const <dynamic>[])
+            .map((binding) => Map<String, dynamic>.from(binding as Map)),
+      );
+      final shortcutLabelParts = <String>[
+        if (ctrl) 'Ctrl',
+        if (shift) 'Shift',
+        if (alt) 'Alt',
+        keyId.toUpperCase(),
+      ];
+      final nextBinding = <String, Object?>{
+        'key_id': keyId,
+        'key_label': keyId.toUpperCase(),
+        'ctrl': ctrl,
+        'shift': shift,
+        'alt': alt,
+        'shortcut_label': shortcutLabelParts.join('+'),
+      };
+      for (final binding in keybindings) {
+        final existing = binding['binding'] as Map<String, dynamic>?;
+        if (binding['action_id'] != actionId &&
+            existing != null &&
+            existing['key_id'] == keyId &&
+            existing['ctrl'] == ctrl &&
+            existing['shift'] == shift &&
+            existing['alt'] == alt) {
+          binding['binding'] = null;
+        }
+      }
+      final bindingIndex = keybindings.indexWhere(
+        (binding) => binding['action_id'] == actionId,
+      );
+      if (bindingIndex == -1) {
+        return;
+      }
+      keybindings[bindingIndex]['binding'] = nextBinding;
+      settings['keybindings'] = keybindings;
     });
   }
 
@@ -2350,6 +2658,117 @@ void main() {
     expect(mockApi.currentSnapshot, contains('"shadow_steps":72'));
     expect(mockApi.currentSnapshot, contains('"bloom_enabled":true'));
     expect(mockApi.currentSnapshot, contains('"cross_section_axis":2'));
+    expect(requestFrameCalls, greaterThan(0));
+  });
+
+  testWidgets('routes settings controls through the Rust facade', (
+    WidgetTester tester,
+  ) async {
+    mockApi.currentSnapshot = _MockRustApi._settingsSnapshot;
+
+    await pumpApp(tester, logicalSize: const Size(1400, 900));
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('settings-reset-command')),
+      200,
+      scrollable: _commandPanelScrollable(),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('settings-reset-command')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('settings-export-command')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('settings-fps-overlay-toggle')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('settings-auto-save-interval-increase')),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('settings-bookmark-save-1')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('settings-bookmark-save-1')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('settings-bookmark-restore-0')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('settings-bookmark-restore-0')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('settings-bookmark-clear-0')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('settings-bookmark-clear-0')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('settings-import-command')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('settings-import-command')));
+    await tester.pumpAndSettle();
+
+    expect(mockApi.resetSettingsCalls, 1);
+    expect(mockApi.exportSettingsCalls, 1);
+    expect(mockApi.importSettingsCalls, 1);
+    expect(mockApi.setSettingsToggleCalls, 1);
+    expect(mockApi.setSettingsIntegerCalls, 1);
+    expect(mockApi.saveCameraBookmarkCalls, 1);
+    expect(mockApi.restoreCameraBookmarkCalls, 1);
+    expect(mockApi.clearCameraBookmarkCalls, 1);
+    expect(mockApi.currentSnapshot, contains('"show_fps_overlay":true'));
+    expect(mockApi.currentSnapshot, contains('"auto_save_interval_secs":120'));
+    expect(mockApi.currentSnapshot, contains('"slot_index":0,"saved":true'));
+    expect(mockApi.currentSnapshot, contains('"slot_index":1,"saved":false'));
+    expect(requestFrameCalls, greaterThan(0));
+  });
+
+  testWidgets('routes keymap controls through the Rust facade', (
+    WidgetTester tester,
+  ) async {
+    mockApi.currentSnapshot = _MockRustApi._settingsSnapshot;
+
+    await pumpApp(tester, logicalSize: const Size(1400, 900));
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('keymap-export-command')),
+      200,
+      scrollable: _commandPanelScrollable(),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('keymap-export-command')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('keymap-import-command')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey('keymap-reset-command')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('keymap-reset-command')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey('keybinding-clear-undo')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('keybinding-clear-undo')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('keybinding-edit-redo')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('keybinding-key-dropdown')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('keybinding-key-option-z')).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('keybinding-save-command')));
+    await tester.pumpAndSettle();
+
+    expect(mockApi.exportKeymapCalls, 1);
+    expect(mockApi.importKeymapCalls, 1);
+    expect(mockApi.resetKeymapCalls, 1);
+    expect(mockApi.clearKeybindingCalls, 1);
+    expect(mockApi.setKeybindingCalls, 1);
+    expect(mockApi.currentSnapshot, contains('"action_id":"undo"'));
+    expect(mockApi.currentSnapshot, contains('"action_id":"redo"'));
+    expect(mockApi.currentSnapshot, contains('"key_id":"z"'));
+    expect(mockApi.currentSnapshot, contains('"shortcut_label":"Ctrl+Z"'));
     expect(requestFrameCalls, greaterThan(0));
   });
 

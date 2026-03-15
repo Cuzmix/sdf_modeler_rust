@@ -2851,3 +2851,48 @@ Manual verification:
 Result:
 - PRD #38 is fully verified and complete.
 
+--- Migration Iteration 32: PRD #39 - Flutter settings and keymap parity ---
+COMPLETED. Added backend-owned application settings and keymap snapshots plus a touch-usable Flutter settings panel, so persisted host preferences, camera bookmarks, and shortcut editing no longer depend on the egui settings window.
+
+Changes:
+- src/keymap.rs
+- src/settings.rs
+- src/ui/settings_window.rs
+- src/app_bridge/dto.rs
+- src/app_bridge/mod.rs
+- src/app_bridge/session.rs
+- src/app_bridge/workflows.rs
+- apps/flutter/rust/src/api/simple.rs
+- apps/flutter/rust/src/frb_generated.rs
+- apps/flutter/lib/src/rust/api/simple.dart
+- apps/flutter/lib/src/rust/frb_generated.dart
+- apps/flutter/lib/src/scene/scene_snapshot.dart
+- apps/flutter/lib/src/settings/settings_panel.dart
+- apps/flutter/lib/app.dart
+- apps/flutter/test/scene_snapshot_test.dart
+- apps/flutter/test/widget_test.dart
+- docs/egui_parity_audit.md
+- plans/prd.json
+- plans/progress.txt
+  - Added backend-owned settings, bookmark, and keymap DTOs plus bridge commands for settings reset/import/export, boolean and integer preference edits, camera bookmark save/restore/clear, and safe keybinding reset/import/export/edit flows.
+  - Reused the same backend keymap helpers in the egui settings window so Flutter and egui now share one conflict-resolution and import/export path instead of maintaining duplicate UI logic.
+  - Added a dedicated Flutter settings panel and wired it into both the desktop inspector and tablet command sheet so persisted host preferences, bookmark slots, and editable shortcut bindings are reachable across shell layouts.
+  - Regenerated the FRB bindings, extended the scene snapshot parser with settings/keymap models, and added widget coverage that drives the new settings and keymap controls through the Rust facade.
+  - Updated the parity audit so settings/keymap are no longer an egui decommission blocker; the remaining explicit parity decisions are diagnostics/history/statistics in PRD `#40`, reference images in PRD `#41`, and the still-open foundation verification item `#1`.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS
+- cargo build: PASS
+- FRB codegen: PASS (`flutter_rust_bridge_codegen generate --rust-input crate::api --rust-root rust --dart-output lib/src/rust --dart-root . --dart-entrypoint-class-name RustLib --stop-on-error`)
+- Flutter analyze: PASS
+- Flutter test: PASS
+- Flutter build windows --debug: PASS
+
+Manual verification:
+- Windows debug host smoke launch: PASS (`apps/flutter/build/windows/x64/runner/Debug/sdf_modeler_flutter.exe` launched and stayed running for 8 seconds without an early exit)
+
+Result:
+- PRD #39 is fully verified and complete.
+

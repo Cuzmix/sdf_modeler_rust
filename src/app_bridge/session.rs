@@ -14,17 +14,19 @@ use crate::graph::scene::{
     SceneNode, SdfPrimitive, MAX_SCENE_LIGHTS,
 };
 use crate::graph::voxel::create_displacement_grid_for_subtree;
+use crate::keymap::{ActionBinding, KeyCombo, SerializableKey};
 use crate::sculpt::{BrushMode, SculptState, DEFAULT_BRUSH_STRENGTH};
 use crate::settings::{RenderConfig, Settings, ShadingMode};
 
 use super::dto::{
-    AppCameraSnapshot, AppDocumentSnapshot, AppExportPresetSnapshot, AppExportSnapshot,
-    AppExportStatusSnapshot, AppHistorySnapshot, AppImportDialogSnapshot, AppImportSnapshot,
-    AppImportStatusSnapshot, AppLightCookieCandidateSnapshot, AppLightLinkNodeSnapshot,
+    AppCameraBookmarkSnapshot, AppCameraSnapshot, AppDocumentSnapshot, AppExportPresetSnapshot,
+    AppExportSnapshot, AppExportStatusSnapshot, AppHistorySnapshot, AppImportDialogSnapshot,
+    AppImportSnapshot, AppImportStatusSnapshot, AppKeyComboSnapshot, AppKeyOptionSnapshot,
+    AppKeybindingSnapshot, AppLightCookieCandidateSnapshot, AppLightLinkNodeSnapshot,
     AppLightLinkTargetSnapshot, AppLightLinkingSnapshot, AppLightPropertiesSnapshot,
     AppMaterialPropertiesSnapshot, AppNodeSnapshot, AppPrimitivePropertiesSnapshot,
     AppRenderOptionSnapshot, AppRenderSettingsSnapshot, AppScalarPropertySnapshot,
-    AppSceneSnapshot, AppSceneStatsSnapshot, AppSceneTreeNodeSnapshot,
+    AppSceneSnapshot, AppSceneStatsSnapshot, AppSceneTreeNodeSnapshot, AppSettingsSnapshot,
     AppSculptConvertDialogSnapshot, AppSculptConvertSnapshot, AppSculptConvertStatusSnapshot,
     AppSculptSessionSnapshot, AppSculptSnapshot, AppSelectedNodePropertiesSnapshot,
     AppSelectedSculptSnapshot, AppToolSnapshot, AppTransformPropertiesSnapshot, AppVec3,
@@ -303,6 +305,7 @@ impl AppBridge {
             },
             document: self.document_snapshot(),
             render: self.render_settings_snapshot(),
+            settings: self.settings_snapshot(),
             export: self.export_snapshot(),
             import: self.import_snapshot(),
             sculpt_convert: self.sculpt_convert_snapshot(),
@@ -608,6 +611,179 @@ impl AppBridge {
         }
 
         self.persist_render_config();
+        true
+    }
+
+    pub fn reset_settings(&mut self) -> bool {
+        let recent_files = self.settings.recent_files.clone();
+        self.settings = Settings::default();
+        self.settings.recent_files = recent_files;
+        self.render_config = self.settings.render.clone();
+        self.sync_settings_dependent_state();
+        self.settings.save();
+        true
+    }
+
+    pub fn export_settings(&self) -> bool {
+        self.settings.export_dialog()
+    }
+
+    pub fn import_settings(&mut self) -> bool {
+        if !self.settings.import_dialog() {
+            return false;
+        }
+
+        self.render_config = self.settings.render.clone();
+        self.sync_settings_dependent_state();
+        true
+    }
+
+    pub fn set_settings_toggle(&mut self, field_id: &str, enabled: bool) -> bool {
+        match field_id {
+            "show_fps_overlay" => self.settings.show_fps_overlay = enabled,
+            "show_node_labels" => self.render_config.show_node_labels = enabled,
+            "show_bounding_box" => self.render_config.show_bounding_box = enabled,
+            "show_light_gizmos" => self.render_config.show_light_gizmos = enabled,
+            "auto_save_enabled" => self.settings.auto_save_enabled = enabled,
+            _ => return false,
+        }
+
+        if matches!(
+            field_id,
+            "show_node_labels" | "show_bounding_box" | "show_light_gizmos"
+        ) {
+            self.persist_render_config();
+        } else {
+            self.settings.save();
+        }
+        true
+    }
+
+    pub fn set_settings_integer(&mut self, field_id: &str, value: u32) -> bool {
+        match field_id {
+            "auto_save_interval_secs" => {
+                self.settings.auto_save_interval_secs = value.clamp(30, 600);
+            }
+            "max_export_resolution" => {
+                self.settings.max_export_resolution = value.clamp(64, 4096);
+                self.sync_settings_dependent_state();
+            }
+            "max_sculpt_resolution" => {
+                self.settings.max_sculpt_resolution = value.clamp(16, 512);
+                self.sync_settings_dependent_state();
+            }
+            _ => return false,
+        }
+
+        self.settings.save();
+        true
+    }
+
+    pub fn save_camera_bookmark(&mut self, slot_index: u8) -> bool {
+        if slot_index >= 9 {
+            return false;
+        }
+
+        while self.settings.bookmarks.len() < 9 {
+            self.settings.bookmarks.push(None);
+        }
+        self.settings.bookmarks[slot_index as usize] = Some(crate::settings::CameraBookmark {
+            yaw: self.camera.yaw,
+            pitch: self.camera.pitch,
+            roll: self.camera.roll,
+            distance: self.camera.distance,
+            target: [
+                self.camera.target.x,
+                self.camera.target.y,
+                self.camera.target.z,
+            ],
+            orthographic: self.camera.orthographic,
+        });
+        self.settings.save();
+        true
+    }
+
+    pub fn restore_camera_bookmark(&mut self, slot_index: u8) -> bool {
+        let Some(Some(bookmark)) = self.settings.bookmarks.get(slot_index as usize).cloned() else {
+            return false;
+        };
+
+        self.camera.yaw = bookmark.yaw;
+        self.camera.pitch = bookmark.pitch;
+        self.camera.roll = bookmark.roll;
+        self.camera.distance = bookmark.distance;
+        self.camera.target = Vec3::new(bookmark.target[0], bookmark.target[1], bookmark.target[2]);
+        self.camera.orthographic = bookmark.orthographic;
+        true
+    }
+
+    pub fn clear_camera_bookmark(&mut self, slot_index: u8) -> bool {
+        let Some(slot) = self.settings.bookmarks.get_mut(slot_index as usize) else {
+            return false;
+        };
+        if slot.is_none() {
+            return false;
+        }
+
+        *slot = None;
+        self.settings.save();
+        true
+    }
+
+    pub fn reset_keymap(&mut self) -> bool {
+        self.settings.keymap.reset_to_defaults();
+        self.settings.save();
+        true
+    }
+
+    pub fn export_keymap(&self) -> bool {
+        self.settings.keymap.export_dialog()
+    }
+
+    pub fn import_keymap(&mut self) -> bool {
+        if !self.settings.keymap.import_dialog() {
+            return false;
+        }
+
+        self.settings.save();
+        true
+    }
+
+    pub fn clear_keybinding(&mut self, action_id: &str) -> bool {
+        let Some(action) = ActionBinding::from_id(action_id) else {
+            return false;
+        };
+
+        self.settings.keymap.remove_binding(action);
+        self.settings.save();
+        true
+    }
+
+    pub fn set_keybinding(
+        &mut self,
+        action_id: &str,
+        key_id: &str,
+        ctrl: bool,
+        shift: bool,
+        alt: bool,
+    ) -> bool {
+        let Some(action) = ActionBinding::from_id(action_id) else {
+            return false;
+        };
+        let Some(key) = SerializableKey::from_id(key_id) else {
+            return false;
+        };
+
+        let combo = KeyCombo {
+            key,
+            ctrl,
+            shift,
+            alt,
+        };
+        self.settings
+            .keymap
+            .set_binding_with_conflict_resolution(action, combo);
+        self.settings.save();
         true
     }
 
@@ -2577,6 +2753,20 @@ impl AppBridge {
         self.settings.save();
     }
 
+    fn sync_settings_dependent_state(&mut self) {
+        self.settings.export_resolution = self
+            .settings
+            .export_resolution
+            .clamp(16, self.settings.max_export_resolution.max(16));
+
+        if let Some(dialog) = self.import_state.dialog.as_mut() {
+            dialog.set_max_resolution(self.settings.max_sculpt_resolution);
+        }
+        if let Some(dialog) = self.sculpt_convert_state.dialog.as_mut() {
+            dialog.set_max_resolution(self.settings.max_sculpt_resolution);
+        }
+    }
+
     fn render_settings_snapshot(&self) -> AppRenderSettingsSnapshot {
         AppRenderSettingsSnapshot {
             shading_modes: ShadingMode::ALL
@@ -2607,6 +2797,59 @@ impl AppBridge {
             tonemapping_aces: self.render_config.tonemapping_aces,
             cross_section_axis: self.render_config.cross_section_axis.min(2),
             cross_section_position: self.render_config.cross_section_position,
+        }
+    }
+
+    fn settings_snapshot(&self) -> AppSettingsSnapshot {
+        AppSettingsSnapshot {
+            show_fps_overlay: self.settings.show_fps_overlay,
+            show_node_labels: self.render_config.show_node_labels,
+            show_bounding_box: self.render_config.show_bounding_box,
+            show_light_gizmos: self.render_config.show_light_gizmos,
+            auto_save_enabled: self.settings.auto_save_enabled,
+            auto_save_interval_secs: self.settings.auto_save_interval_secs,
+            max_export_resolution: self.settings.max_export_resolution.max(16),
+            max_sculpt_resolution: self.settings.max_sculpt_resolution.max(16),
+            camera_bookmarks: (0u8..9u8)
+                .map(|slot_index| AppCameraBookmarkSnapshot {
+                    slot_index,
+                    saved: self
+                        .settings
+                        .bookmarks
+                        .get(slot_index as usize)
+                        .and_then(|bookmark| bookmark.as_ref())
+                        .is_some(),
+                })
+                .collect(),
+            key_options: SerializableKey::ALL
+                .iter()
+                .map(|key| AppKeyOptionSnapshot {
+                    id: key.id().to_string(),
+                    label: key.label().to_string(),
+                })
+                .collect(),
+            keybindings: ActionBinding::ALL
+                .iter()
+                .map(|action| {
+                    let binding = self.settings.keymap.get_binding(*action).map(|combo| {
+                        AppKeyComboSnapshot {
+                            key_id: combo.key.id().to_string(),
+                            key_label: combo.key.label().to_string(),
+                            ctrl: combo.ctrl,
+                            shift: combo.shift,
+                            alt: combo.alt,
+                            shortcut_label: combo.to_string(),
+                        }
+                    });
+
+                    AppKeybindingSnapshot {
+                        action_id: action.id().to_string(),
+                        action_label: action.label().to_string(),
+                        category: action.category().to_string(),
+                        binding,
+                    }
+                })
+                .collect(),
         }
     }
 
@@ -3367,6 +3610,7 @@ mod tests {
     use crate::graph::scene::{
         CsgOp, LightType, ModifierKind, NodeData, SdfPrimitive, MAX_SCENE_LIGHTS,
     };
+    use crate::keymap::{ActionBinding, SerializableKey};
     use crate::mesh_import::TriMesh;
     use crate::settings::ShadingMode;
     use glam::Vec3;
@@ -3440,15 +3684,42 @@ mod tests {
     }
 
     #[test]
+    fn scene_snapshot_includes_settings_and_keymap() {
+        let bridge = AppBridge::new();
+
+        let settings = bridge.scene_snapshot().settings;
+        let undo_shortcut = bridge.settings.keymap.format_shortcut(ActionBinding::Undo);
+        assert_eq!(settings.show_fps_overlay, bridge.settings.show_fps_overlay);
+        assert_eq!(settings.show_node_labels, bridge.render_config.show_node_labels);
+        assert_eq!(settings.auto_save_interval_secs, bridge.settings.auto_save_interval_secs);
+        assert_eq!(
+            settings.max_export_resolution,
+            bridge.settings.max_export_resolution.max(16)
+        );
+        assert_eq!(settings.camera_bookmarks.len(), 9);
+        assert_eq!(settings.key_options.len(), SerializableKey::ALL.len());
+        assert_eq!(settings.keybindings.len(), ActionBinding::ALL.len());
+        assert!(settings.keybindings.iter().any(|binding| {
+            binding.action_id == "undo"
+                && binding
+                    .binding
+                    .as_ref()
+                    .map(|combo| combo.shortcut_label.as_str())
+                    == undo_shortcut.as_deref()
+        }));
+    }
+
+    #[test]
     fn export_setting_commands_update_snapshot_and_clamp() {
         let mut bridge = AppBridge::new();
+        let expected_max_resolution = bridge.settings.max_export_resolution.max(16);
 
         let resolution = bridge.set_export_resolution(9_999);
         bridge.set_adaptive_export(true);
 
         let export = bridge.scene_snapshot().export;
-        assert_eq!(resolution, 2048);
-        assert_eq!(export.resolution, 2048);
+        assert_eq!(resolution, expected_max_resolution);
+        assert_eq!(export.resolution, expected_max_resolution);
         assert!(export.adaptive);
     }
 
@@ -3473,6 +3744,75 @@ mod tests {
         assert_eq!(render.bloom_intensity, 2.0);
         assert_eq!(render.cross_section_position, -5.0);
         assert!(bridge.settings.render == bridge.render_config);
+    }
+
+    #[test]
+    fn settings_and_keybinding_commands_update_snapshot_and_persist() {
+        let mut bridge = AppBridge::new();
+
+        assert!(bridge.set_settings_toggle("show_fps_overlay", false));
+        assert!(bridge.set_settings_toggle("show_node_labels", true));
+        assert!(bridge.set_settings_integer("auto_save_interval_secs", 9_999));
+        assert!(bridge.set_settings_integer("max_export_resolution", 32));
+        assert!(bridge.set_settings_integer("max_sculpt_resolution", 1_024));
+        assert!(bridge.set_keybinding("undo", "u", true, false, false));
+        assert!(bridge.set_keybinding("redo", "u", true, false, false));
+        assert!(bridge.clear_keybinding("redo"));
+
+        let settings = bridge.scene_snapshot().settings;
+        assert!(!settings.show_fps_overlay);
+        assert!(settings.show_node_labels);
+        assert_eq!(settings.auto_save_interval_secs, 600);
+        assert_eq!(settings.max_export_resolution, 64);
+        assert_eq!(settings.max_sculpt_resolution, 512);
+        assert!(settings
+            .keybindings
+            .iter()
+            .find(|binding| binding.action_id == "undo")
+            .and_then(|binding| binding.binding.as_ref())
+            .is_none());
+        assert!(settings
+            .keybindings
+            .iter()
+            .find(|binding| binding.action_id == "redo")
+            .and_then(|binding| binding.binding.as_ref())
+            .is_none());
+        assert_eq!(bridge.settings.auto_save_interval_secs, 600);
+        assert_eq!(bridge.settings.max_export_resolution, 64);
+        assert_eq!(bridge.settings.max_sculpt_resolution, 512);
+        assert!(bridge.render_config.show_node_labels);
+    }
+
+    #[test]
+    fn camera_bookmark_commands_round_trip() {
+        let mut bridge = AppBridge::new();
+        bridge.camera.yaw = 1.25;
+        bridge.camera.pitch = -0.5;
+        bridge.camera.roll = 0.2;
+        bridge.camera.distance = 7.5;
+        bridge.camera.target = Vec3::new(4.0, -2.0, 1.0);
+        bridge.camera.orthographic = true;
+
+        assert!(bridge.save_camera_bookmark(0));
+        assert!(bridge.scene_snapshot().settings.camera_bookmarks[0].saved);
+
+        bridge.camera.yaw = 9.0;
+        bridge.camera.pitch = 9.0;
+        bridge.camera.roll = 9.0;
+        bridge.camera.distance = 9.0;
+        bridge.camera.target = Vec3::ZERO;
+        bridge.camera.orthographic = false;
+
+        assert!(bridge.restore_camera_bookmark(0));
+        assert_eq!(bridge.camera.yaw, 1.25);
+        assert_eq!(bridge.camera.pitch, -0.5);
+        assert_eq!(bridge.camera.roll, 0.2);
+        assert_eq!(bridge.camera.distance, 7.5);
+        assert_eq!(bridge.camera.target, Vec3::new(4.0, -2.0, 1.0));
+        assert!(bridge.camera.orthographic);
+
+        assert!(bridge.clear_camera_bookmark(0));
+        assert!(!bridge.scene_snapshot().settings.camera_bookmarks[0].saved);
     }
 
     #[test]

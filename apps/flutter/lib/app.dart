@@ -12,6 +12,7 @@ import 'package:sdf_modeler_flutter/src/scene/scene_snapshot.dart';
 import 'package:sdf_modeler_flutter/src/scene/scene_tree_panel.dart';
 import 'package:sdf_modeler_flutter/src/sculpt/sculpt_convert_panel.dart';
 import 'package:sdf_modeler_flutter/src/sculpt/sculpt_session_panel.dart';
+import 'package:sdf_modeler_flutter/src/settings/settings_panel.dart';
 import 'package:sdf_modeler_flutter/src/session/document_session_panel.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_command_strip.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_contract.dart';
@@ -839,6 +840,86 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     );
   }
 
+  Future<void> _resetSettings() {
+    return _runSceneCommand(resetSettings);
+  }
+
+  Future<void> _exportSettings() {
+    return _runSceneCommand(exportSettings, requestNativeFrame: false);
+  }
+
+  Future<void> _importSettings() {
+    return _runSceneCommand(importSettings);
+  }
+
+  Future<void> _setSettingsToggle(String fieldId, bool enabled) {
+    return _runSceneCommand(
+      () => setSettingsToggle(fieldId: fieldId, enabled: enabled),
+    );
+  }
+
+  Future<void> _setSettingsInteger(String fieldId, int value) {
+    return _runSceneCommand(
+      () => setSettingsInteger(fieldId: fieldId, value: value),
+    );
+  }
+
+  Future<void> _saveCameraBookmark(int slotIndex) {
+    return _runSceneCommand(
+      () => saveCameraBookmark(slotIndex: slotIndex),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _restoreCameraBookmark(int slotIndex) {
+    return _runSceneCommand(() => restoreCameraBookmark(slotIndex: slotIndex));
+  }
+
+  Future<void> _clearCameraBookmark(int slotIndex) {
+    return _runSceneCommand(
+      () => clearCameraBookmark(slotIndex: slotIndex),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _resetKeymap() {
+    return _runSceneCommand(resetKeymap, requestNativeFrame: false);
+  }
+
+  Future<void> _exportKeymap() {
+    return _runSceneCommand(exportKeymap, requestNativeFrame: false);
+  }
+
+  Future<void> _importKeymap() {
+    return _runSceneCommand(importKeymap, requestNativeFrame: false);
+  }
+
+  Future<void> _clearKeybinding(String actionId) {
+    return _runSceneCommand(
+      () => clearKeybinding(actionId: actionId),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _setKeybinding(
+    String actionId,
+    String keyId,
+    bool ctrl,
+    bool shift,
+    bool alt,
+  ) {
+    return _runSceneCommand(
+      () => setKeybinding(
+        actionId: actionId,
+        keyId: keyId,
+        ctrl: ctrl,
+        shift: shift,
+        alt: alt,
+      ),
+      requestNativeFrame: false,
+    );
+  }
+
   Future<void> _openImportDialog() {
     return _runSceneCommand(openImportDialog, requestNativeFrame: false);
   }
@@ -1303,6 +1384,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
             final shellLayout = ShellLayout.forWidth(constraints.maxWidth);
             final selectedNode =
                 _viewportFeedback?.selectedNode ?? snapshot?.selectedNode;
+            final showPerformanceOverlay = snapshot?.settings.showFpsOverlay ?? true;
             final viewportCard = ViewportSurface(
               textureId: activeTextureId,
               onViewportSizeChanged: _handleViewportSizeChanged,
@@ -1315,10 +1397,14 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
               onInteractionEnd: _handleViewportInteractionEnd,
               overlay: ViewportFeedbackOverlay(
                 feedback: _viewportFeedback,
-                interactionPhase: _interactionPhase,
-                frameTimeMs: _lastNativeFrameTimeMs,
-                framesPerSecond: _smoothedFramesPerSecond,
-                droppedFrameCount: _droppedFrameCount,
+                interactionPhase: showPerformanceOverlay
+                    ? _interactionPhase
+                    : 'idle',
+                frameTimeMs: showPerformanceOverlay ? _lastNativeFrameTimeMs : null,
+                framesPerSecond: showPerformanceOverlay
+                    ? _smoothedFramesPerSecond
+                    : null,
+                droppedFrameCount: showPerformanceOverlay ? _droppedFrameCount : 0,
                 hostError: _lastViewportHostError,
               ),
               controlsOverlay: ViewportToolOverlay(
@@ -1430,6 +1516,19 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                       onSetRenderToggle: _setRenderToggle,
                       onSetRenderInteger: _setRenderInteger,
                       onSetRenderScalar: _setRenderScalar,
+                      onResetSettings: _resetSettings,
+                      onExportSettings: _exportSettings,
+                      onImportSettings: _importSettings,
+                      onSetSettingsToggle: _setSettingsToggle,
+                      onSetSettingsInteger: _setSettingsInteger,
+                      onSaveCameraBookmark: _saveCameraBookmark,
+                      onRestoreCameraBookmark: _restoreCameraBookmark,
+                      onClearCameraBookmark: _clearCameraBookmark,
+                      onResetKeymap: _resetKeymap,
+                      onExportKeymap: _exportKeymap,
+                      onImportKeymap: _importKeymap,
+                      onClearKeybinding: _clearKeybinding,
+                      onSetKeybinding: _setKeybinding,
                       onSetExportResolution: _setExportResolution,
                       onSetAdaptiveExport: _setAdaptiveExport,
                       onStartExport: _startExport,
@@ -1572,6 +1671,75 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                                 value: value,
                               ),
                             ),
+                        onResetSettings: () =>
+                            _runModalSceneCommand(resetSettings),
+                        onExportSettings: () =>
+                            _runModalSceneCommand(
+                              exportSettings,
+                              requestNativeFrame: false,
+                            ),
+                        onImportSettings: () =>
+                            _runModalSceneCommand(importSettings),
+                        onSetSettingsToggle: (fieldId, enabled) =>
+                            _runModalSceneCommand(
+                              () => setSettingsToggle(
+                                fieldId: fieldId,
+                                enabled: enabled,
+                              ),
+                            ),
+                        onSetSettingsInteger: (fieldId, value) =>
+                            _runModalSceneCommand(
+                              () => setSettingsInteger(
+                                fieldId: fieldId,
+                                value: value,
+                              ),
+                            ),
+                        onSaveCameraBookmark: (slotIndex) =>
+                            _runModalSceneCommand(
+                              () => saveCameraBookmark(slotIndex: slotIndex),
+                              requestNativeFrame: false,
+                            ),
+                        onRestoreCameraBookmark: (slotIndex) =>
+                            _runModalSceneCommand(
+                              () => restoreCameraBookmark(slotIndex: slotIndex),
+                            ),
+                        onClearCameraBookmark: (slotIndex) =>
+                            _runModalSceneCommand(
+                              () => clearCameraBookmark(slotIndex: slotIndex),
+                              requestNativeFrame: false,
+                            ),
+                        onResetKeymap: () =>
+                            _runModalSceneCommand(
+                              resetKeymap,
+                              requestNativeFrame: false,
+                            ),
+                        onExportKeymap: () =>
+                            _runModalSceneCommand(
+                              exportKeymap,
+                              requestNativeFrame: false,
+                            ),
+                        onImportKeymap: () =>
+                            _runModalSceneCommand(
+                              importKeymap,
+                              requestNativeFrame: false,
+                            ),
+                        onClearKeybinding: (actionId) =>
+                            _runModalSceneCommand(
+                              () => clearKeybinding(actionId: actionId),
+                              requestNativeFrame: false,
+                            ),
+                        onSetKeybinding:
+                            (actionId, keyId, ctrl, shift, alt) =>
+                                _runModalSceneCommand(
+                                  () => setKeybinding(
+                                    actionId: actionId,
+                                    keyId: keyId,
+                                    ctrl: ctrl,
+                                    shift: shift,
+                                    alt: alt,
+                                  ),
+                                  requestNativeFrame: false,
+                                ),
                         onSetExportResolution: (resolution) =>
                             _runModalSceneCommand(
                               () => setExportResolution(resolution: resolution),
@@ -1793,6 +1961,19 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                   onSetRenderToggle: _setRenderToggle,
                   onSetRenderInteger: _setRenderInteger,
                   onSetRenderScalar: _setRenderScalar,
+                  onResetSettings: _resetSettings,
+                  onExportSettings: _exportSettings,
+                  onImportSettings: _importSettings,
+                  onSetSettingsToggle: _setSettingsToggle,
+                  onSetSettingsInteger: _setSettingsInteger,
+                  onSaveCameraBookmark: _saveCameraBookmark,
+                  onRestoreCameraBookmark: _restoreCameraBookmark,
+                  onClearCameraBookmark: _clearCameraBookmark,
+                  onResetKeymap: _resetKeymap,
+                  onExportKeymap: _exportKeymap,
+                  onImportKeymap: _importKeymap,
+                  onClearKeybinding: _clearKeybinding,
+                  onSetKeybinding: _setKeybinding,
                   onSetExportResolution: _setExportResolution,
                   onSetAdaptiveExport: _setAdaptiveExport,
                   onStartExport: _startExport,
@@ -2017,6 +2198,19 @@ class _InspectorPanel extends StatelessWidget {
     required this.onSetRenderToggle,
     required this.onSetRenderInteger,
     required this.onSetRenderScalar,
+    required this.onResetSettings,
+    required this.onExportSettings,
+    required this.onImportSettings,
+    required this.onSetSettingsToggle,
+    required this.onSetSettingsInteger,
+    required this.onSaveCameraBookmark,
+    required this.onRestoreCameraBookmark,
+    required this.onClearCameraBookmark,
+    required this.onResetKeymap,
+    required this.onExportKeymap,
+    required this.onImportKeymap,
+    required this.onClearKeybinding,
+    required this.onSetKeybinding,
     required this.onSetExportResolution,
     required this.onSetAdaptiveExport,
     required this.onStartExport,
@@ -2122,6 +2316,26 @@ class _InspectorPanel extends StatelessWidget {
   final void Function(String fieldId, bool enabled) onSetRenderToggle;
   final void Function(String fieldId, int value) onSetRenderInteger;
   final void Function(String fieldId, double value) onSetRenderScalar;
+  final VoidCallback onResetSettings;
+  final VoidCallback onExportSettings;
+  final VoidCallback onImportSettings;
+  final void Function(String fieldId, bool enabled) onSetSettingsToggle;
+  final void Function(String fieldId, int value) onSetSettingsInteger;
+  final ValueChanged<int> onSaveCameraBookmark;
+  final ValueChanged<int> onRestoreCameraBookmark;
+  final ValueChanged<int> onClearCameraBookmark;
+  final VoidCallback onResetKeymap;
+  final VoidCallback onExportKeymap;
+  final VoidCallback onImportKeymap;
+  final ValueChanged<String> onClearKeybinding;
+  final void Function(
+    String actionId,
+    String keyId,
+    bool ctrl,
+    bool shift,
+    bool alt,
+  )
+  onSetKeybinding;
   final ValueChanged<int> onSetExportResolution;
   final ValueChanged<bool> onSetAdaptiveExport;
   final VoidCallback onStartExport;
@@ -2425,6 +2639,29 @@ class _InspectorPanel extends StatelessWidget {
             onOpenRecentScene: onOpenRecentScene,
             onRecoverAutosave: onRecoverAutosave,
             onDiscardRecovery: onDiscardRecovery,
+          ),
+          const SizedBox(height: ShellTokens.sectionGap),
+          Text(
+            'Settings',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: ShellTokens.controlGap),
+          SettingsPanel(
+            settings: snapshot?.settings,
+            enabled: !commandInFlight,
+            onResetSettings: onResetSettings,
+            onExportSettings: onExportSettings,
+            onImportSettings: onImportSettings,
+            onSetToggle: onSetSettingsToggle,
+            onSetInteger: onSetSettingsInteger,
+            onSaveCameraBookmark: onSaveCameraBookmark,
+            onRestoreCameraBookmark: onRestoreCameraBookmark,
+            onClearCameraBookmark: onClearCameraBookmark,
+            onResetKeymap: onResetKeymap,
+            onExportKeymap: onExportKeymap,
+            onImportKeymap: onImportKeymap,
+            onClearKeybinding: onClearKeybinding,
+            onSetKeybinding: onSetKeybinding,
           ),
           const SizedBox(height: ShellTokens.sectionGap),
           Text(
@@ -3389,6 +3626,19 @@ class _CommandSheetContent extends StatelessWidget {
     required this.onSetRenderToggle,
     required this.onSetRenderInteger,
     required this.onSetRenderScalar,
+    required this.onResetSettings,
+    required this.onExportSettings,
+    required this.onImportSettings,
+    required this.onSetSettingsToggle,
+    required this.onSetSettingsInteger,
+    required this.onSaveCameraBookmark,
+    required this.onRestoreCameraBookmark,
+    required this.onClearCameraBookmark,
+    required this.onResetKeymap,
+    required this.onExportKeymap,
+    required this.onImportKeymap,
+    required this.onClearKeybinding,
+    required this.onSetKeybinding,
     required this.onSetExportResolution,
     required this.onSetAdaptiveExport,
     required this.onStartExport,
@@ -3453,6 +3703,26 @@ class _CommandSheetContent extends StatelessWidget {
   final void Function(String fieldId, bool enabled) onSetRenderToggle;
   final void Function(String fieldId, int value) onSetRenderInteger;
   final void Function(String fieldId, double value) onSetRenderScalar;
+  final VoidCallback onResetSettings;
+  final VoidCallback onExportSettings;
+  final VoidCallback onImportSettings;
+  final void Function(String fieldId, bool enabled) onSetSettingsToggle;
+  final void Function(String fieldId, int value) onSetSettingsInteger;
+  final ValueChanged<int> onSaveCameraBookmark;
+  final ValueChanged<int> onRestoreCameraBookmark;
+  final ValueChanged<int> onClearCameraBookmark;
+  final VoidCallback onResetKeymap;
+  final VoidCallback onExportKeymap;
+  final VoidCallback onImportKeymap;
+  final ValueChanged<String> onClearKeybinding;
+  final void Function(
+    String actionId,
+    String keyId,
+    bool ctrl,
+    bool shift,
+    bool alt,
+  )
+  onSetKeybinding;
   final ValueChanged<int> onSetExportResolution;
   final ValueChanged<bool> onSetAdaptiveExport;
   final VoidCallback onStartExport;
@@ -3581,6 +3851,29 @@ class _CommandSheetContent extends StatelessWidget {
           onOpenRecentScene: onOpenRecentScene,
           onRecoverAutosave: onRecoverAutosave,
           onDiscardRecovery: onDiscardRecovery,
+        ),
+        const SizedBox(height: ShellTokens.sectionGap),
+        Text(
+          'Settings',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: ShellTokens.controlGap),
+        SettingsPanel(
+          settings: snapshot?.settings,
+          enabled: sceneCommandsEnabled,
+          onResetSettings: onResetSettings,
+          onExportSettings: onExportSettings,
+          onImportSettings: onImportSettings,
+          onSetToggle: onSetSettingsToggle,
+          onSetInteger: onSetSettingsInteger,
+          onSaveCameraBookmark: onSaveCameraBookmark,
+          onRestoreCameraBookmark: onRestoreCameraBookmark,
+          onClearCameraBookmark: onClearCameraBookmark,
+          onResetKeymap: onResetKeymap,
+          onExportKeymap: onExportKeymap,
+          onImportKeymap: onImportKeymap,
+          onClearKeybinding: onClearKeybinding,
+          onSetKeybinding: onSetKeybinding,
         ),
         const SizedBox(height: ShellTokens.sectionGap),
         Text(

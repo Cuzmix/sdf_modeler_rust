@@ -206,6 +206,103 @@ pub fn set_render_scalar(field_id: String, value: f32) -> String {
     snapshot_json(&mut bridge)
 }
 
+#[flutter_rust_bridge::frb(sync)]
+pub fn reset_settings() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.reset_settings();
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn export_settings() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.export_settings();
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn import_settings() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.import_settings();
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_settings_toggle(field_id: String, enabled: bool) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_settings_toggle(&field_id, enabled);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_settings_integer(field_id: String, value: u32) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_settings_integer(&field_id, value);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn save_camera_bookmark(slot_index: u8) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.save_camera_bookmark(slot_index);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn restore_camera_bookmark(slot_index: u8) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.restore_camera_bookmark(slot_index);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn clear_camera_bookmark(slot_index: u8) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.clear_camera_bookmark(slot_index);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn reset_keymap() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.reset_keymap();
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn export_keymap() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.export_keymap();
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn import_keymap() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.import_keymap();
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn clear_keybinding(action_id: String) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.clear_keybinding(&action_id);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_keybinding(
+    action_id: String,
+    key_id: String,
+    ctrl: bool,
+    shift: bool,
+    alt: bool,
+) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_keybinding(&action_id, &key_id, ctrl, shift, alt);
+    snapshot_json(&mut bridge)
+}
+
 pub fn render_preview_frame(width: u32, height: u32, time_seconds: f32) -> Vec<u8> {
     app_bridge()
         .lock()

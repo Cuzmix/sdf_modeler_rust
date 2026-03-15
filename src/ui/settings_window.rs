@@ -264,14 +264,14 @@ fn draw_keybindings_section(
                         .on_hover_text("Save keybindings to a JSON file")
                         .clicked()
                     {
-                        export_keymap_dialog(keymap);
+                        keymap.export_dialog();
                     }
                     if ui
                         .button("Import...")
                         .on_hover_text("Load keybindings from a JSON file")
                         .clicked()
                     {
-                        import_keymap_dialog(keymap);
+                        keymap.import_dialog();
                         *rebinding_action = None;
                     }
                 }
@@ -377,8 +377,9 @@ fn capture_rebind_key(
                     alt: modifiers.alt,
                 };
 
-                // Check for conflicts
-                if let Some(conflicting) = keymap.find_conflict(&new_combo, action) {
+                if let Some(conflicting) =
+                    keymap.set_binding_with_conflict_resolution(action, new_combo.clone())
+                {
                     // Remove the conflicting binding to resolve the conflict
                     log::warn!(
                         "Keybinding conflict: {} was bound to {}. Unbound {}.",
@@ -386,51 +387,10 @@ fn capture_rebind_key(
                         conflicting.label(),
                         conflicting.label()
                     );
-                    keymap.remove_binding(conflicting);
                 }
-
-                keymap.set_binding(action, new_combo);
                 *rebinding_action = None;
                 return;
             }
-        }
-    }
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn export_keymap_dialog(keymap: &KeymapConfig) {
-    if let Some(path) = rfd::FileDialog::new()
-        .set_title("Export Keybindings")
-        .add_filter("JSON", &["json"])
-        .set_file_name("keybindings.json")
-        .save_file()
-    {
-        match serde_json::to_string_pretty(keymap) {
-            Ok(json) => {
-                if let Err(err) = std::fs::write(&path, json) {
-                    log::error!("Failed to export keybindings: {}", err);
-                }
-            }
-            Err(err) => log::error!("Failed to serialize keybindings: {}", err),
-        }
-    }
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn import_keymap_dialog(keymap: &mut KeymapConfig) {
-    if let Some(path) = rfd::FileDialog::new()
-        .set_title("Import Keybindings")
-        .add_filter("JSON", &["json"])
-        .pick_file()
-    {
-        match std::fs::read_to_string(&path) {
-            Ok(json) => match serde_json::from_str::<KeymapConfig>(&json) {
-                Ok(imported) => {
-                    *keymap = imported;
-                }
-                Err(err) => log::error!("Failed to parse keybindings file: {}", err),
-            },
-            Err(err) => log::error!("Failed to read keybindings file: {}", err),
         }
     }
 }

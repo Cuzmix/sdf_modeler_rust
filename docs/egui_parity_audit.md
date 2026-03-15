@@ -22,6 +22,7 @@ These areas already have backend-neutral ownership through `src/app_bridge/` and
 | Scene tree snapshots and selection state | `src/app_bridge/session.rs`, `src/app_bridge/dto.rs` | `apps/flutter/lib/src/scene/scene_tree_panel.dart` | `src/ui/scene_tree.rs` | Safe to decommission once any egui-only drag/drop or search behavior is either dropped or separately migrated. |
 | Selected-node basics, primitive/material basics, transform inspector | `src/app_bridge/session.rs`, `src/app_bridge/dto.rs` | Flutter property sections in `apps/flutter/lib/app.dart` | `src/ui/properties.rs` | Keep only egui-only fields that do not yet exist in backend-neutral snapshots. |
 | Camera presets, frame-all, focus-selected, projection toggle | `src/app_bridge/session.rs` | Flutter command surfaces in `apps/flutter/lib/app.dart` | `src/app/ui_panels.rs`, viewport toolbar shortcuts | Remove duplicate egui command buttons without touching backend camera logic. |
+| Application settings, bookmarks, and keymap editing | `src/app_bridge/session.rs`, `src/app_bridge/dto.rs`, `src/keymap.rs` | `apps/flutter/lib/src/settings/settings_panel.dart`, `apps/flutter/lib/app.dart` | `src/ui/settings_window.rs`, menu hooks in `src/app/ui_panels.rs` | Flutter now owns persisted host settings, camera bookmarks, settings import/export/reset, and safe keymap editing through backend snapshots and commands. Keep profiler/history/statistics decisions isolated under PRD `#40`. |
 | Viewport navigation, selection, manipulation mode/space/pivot, manipulation nudges | `src/app_bridge/session.rs`, native host event path | `apps/flutter/lib/src/viewport/viewport_surface.dart`, `apps/flutter/lib/src/viewport/viewport_tool_overlay.dart`, Windows texture host | egui input glue in `src/ui/viewport/draw.rs`, `src/ui/gizmo.rs`, `src/ui/quick_toolbar.rs` | Do not delete egui viewport rendering wholesale yet; first remove duplicate command ownership and keep any renderer-specific code that still serves the native egui app. |
 | Viewport performance stats and interaction diagnostics | native Flutter host plus `src/app_bridge/renderer.rs` feedback | `apps/flutter/lib/src/viewport/viewport_feedback_overlay.dart` | `src/ui/profiler.rs`, viewport overlays in egui | The Flutter host now owns the migration-facing diagnostics surface. Keep egui profiler only if the native egui app still needs it locally. |
 
@@ -31,7 +32,6 @@ These behaviors are still product-relevant and should not be deleted until they 
 
 | Area | Current egui files | Why it still blocks decommission | Required migration direction |
 | --- | --- | --- | --- |
-| Application settings and keymap editing | `src/ui/settings_window.rs`, `src/keymap.rs`, menu hooks in `src/app/ui_panels.rs` | Flutter has no parity for settings, key bindings, bookmarks, or debug toggles. | Migrate settings snapshots/commands before deleting the egui settings window. |
 | History inspection beyond undo/redo buttons | `src/ui/history_panel.rs` | Flutter exposes command availability but not the history list or labels. | Decide whether labeled history remains required; if yes, expose neutral history snapshot data. |
 | Scene statistics and deep profiler views | `src/ui/scene_stats.rs`, `src/ui/profiler.rs` | Flutter has basic frame diagnostics only. Detailed scene/profiler data is still egui-only. | Either promote these diagnostics into backend-neutral snapshots or explicitly drop them from parity. |
 | Reference image management | `src/ui/reference_image.rs`, `src/ui/dock.rs` | Reference images are still configured entirely inside egui. | Decide whether they are part of the Flutter parity target; if yes, move state ownership out of egui. |
@@ -65,7 +65,7 @@ These are the high-signal duplicate ownership points to cut before touching larg
 ## PRD #27 Deletion Order
 
 1. Remove duplicate egui menu and panel command wiring for document, history, camera, scene-tree, and basic property edits.
-2. Keep egui-only workflows that still block parity isolated and explicit: settings/keymap and advanced diagnostics.
+2. Keep egui-only workflows that still block parity isolated and explicit: advanced diagnostics and any retained reference-image workflow.
 3. Decide whether out-of-scope egui-only features are intentionally retained for the native egui app or formally dropped.
 4. Only after the remaining required workflows move behind backend-neutral modules should the egui adapter modules themselves be deleted.
 
@@ -73,5 +73,6 @@ These are the high-signal duplicate ownership points to cut before touching larg
 
 - Flutter plus `src/app_bridge/` is already authoritative for the core editing loop.
 - Render settings now round-trip through backend-neutral snapshots and Flutter surfaces instead of depending on egui ownership.
-- The biggest remaining product gaps are application settings and any diagnostics/reference-image surfaces that stay in scope.
+- Application settings, bookmarks, and keymap editing now round-trip through backend-neutral snapshots and Flutter surfaces instead of depending on the egui settings window.
+- The biggest remaining product gaps are the retained-vs-dropped diagnostics surface and the reference-image scope decision.
 - The biggest duplicate-ownership cleanup targets are `src/app/ui_panels.rs`, `src/ui/scene_tree.rs`, `src/ui/properties.rs`, and `src/ui/quick_toolbar.rs`.
