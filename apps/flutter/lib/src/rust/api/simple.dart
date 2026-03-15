@@ -32,6 +32,16 @@ String recoverAutosave() =>
 String discardRecovery() =>
     RustLib.instance.api.crateApiSimpleDiscardRecovery();
 
+String setExportResolution({required int resolution}) => RustLib.instance.api
+    .crateApiSimpleSetExportResolution(resolution: resolution);
+
+String setAdaptiveExport({required bool enabled}) =>
+    RustLib.instance.api.crateApiSimpleSetAdaptiveExport(enabled: enabled);
+
+String startExport() => RustLib.instance.api.crateApiSimpleStartExport();
+
+String cancelExport() => RustLib.instance.api.crateApiSimpleCancelExport();
+
 Future<Uint8List> renderPreviewFrame({
   required int width,
   required int height,

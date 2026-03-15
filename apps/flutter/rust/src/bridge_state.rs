@@ -7,7 +7,8 @@ pub(crate) fn app_bridge() -> &'static Mutex<AppBridge> {
     APP_BRIDGE.get_or_init(|| Mutex::new(AppBridge::new()))
 }
 
-pub(crate) fn snapshot_json(bridge: &AppBridge) -> String {
+pub(crate) fn snapshot_json(bridge: &mut AppBridge) -> String {
+    bridge.refresh_background_state();
     serde_json::to_string(&bridge.scene_snapshot()).expect("scene snapshot json")
 }
 

@@ -1,5 +1,7 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::Arc;
 
 use glam::Vec3;
 
@@ -13,11 +15,11 @@ use crate::graph::voxel::create_displacement_grid_for_subtree;
 use crate::settings::{RenderConfig, Settings};
 
 use super::dto::{
-    AppCameraSnapshot, AppDocumentSnapshot, AppHistorySnapshot,
-    AppMaterialPropertiesSnapshot, AppNodeSnapshot, AppPrimitivePropertiesSnapshot,
-    AppScalarPropertySnapshot, AppSceneSnapshot, AppSceneStatsSnapshot,
-    AppSceneTreeNodeSnapshot, AppSelectedNodePropertiesSnapshot, AppToolSnapshot,
-    AppTransformPropertiesSnapshot, AppVec3, AppViewportFeedbackSnapshot,
+    AppCameraSnapshot, AppDocumentSnapshot, AppExportPresetSnapshot, AppExportSnapshot,
+    AppExportStatusSnapshot, AppHistorySnapshot, AppMaterialPropertiesSnapshot, AppNodeSnapshot,
+    AppPrimitivePropertiesSnapshot, AppScalarPropertySnapshot, AppSceneSnapshot,
+    AppSceneStatsSnapshot, AppSceneTreeNodeSnapshot, AppSelectedNodePropertiesSnapshot,
+    AppToolSnapshot, AppTransformPropertiesSnapshot, AppVec3, AppViewportFeedbackSnapshot,
 };
 use super::renderer::{HeadlessPickRequest, HeadlessRenderRequest, HeadlessViewportRenderer};
 
@@ -35,6 +37,7 @@ pub struct AppBridge {
     persistence: DocumentPersistence,
     selected_node: Option<NodeId>,
     hovered_node: Option<NodeId>,
+    export_state: ExportState,
     active_tool_label: String,
     manipulator_mode: ManipulatorMode,
     manipulator_space: ManipulatorSpace,
@@ -50,6 +53,28 @@ struct DocumentPersistence {
     last_auto_save: Instant,
     recovery_prompt_visible: bool,
     recovery_summary: Option<String>,
+}
+
+struct ExportState {
+    task: ExportTask,
+    last_message: Option<ExportMessage>,
+}
+
+enum ExportTask {
+    Idle,
+    InProgress {
+        progress: Arc<AtomicU32>,
+        total: u32,
+        resolution: u32,
+        receiver: std::sync::mpsc::Receiver<Option<crate::export::ExportMesh>>,
+        path: PathBuf,
+        cancelled: Arc<AtomicBool>,
+    },
+}
+
+struct ExportMessage {
+    text: String,
+    is_error: bool,
 }
 
 const DEFAULT_SCULPT_ENTRY_RESOLUTION: u32 = 64;
@@ -137,7 +162,9 @@ impl AppBridge {
         let renderer = HeadlessViewportRenderer::new(&scene, &render_config);
         let initial_saved_fingerprint = scene.data_fingerprint();
         let recovery_summary = if crate::io::has_recovery_file() {
-            Some(Self::recovery_summary_from_meta(crate::io::read_recovery_meta().as_ref()))
+            Some(Self::recovery_summary_from_meta(
+                crate::io::read_recovery_meta().as_ref(),
+            ))
         } else {
             None
         };
@@ -158,6 +185,10 @@ impl AppBridge {
             },
             selected_node: None,
             hovered_node: None,
+            export_state: ExportState {
+                task: ExportTask::Idle,
+                last_message: None,
+            },
             active_tool_label: "Select".to_string(),
             manipulator_mode: ManipulatorMode::Translate,
             manipulator_space: ManipulatorSpace::Local,
@@ -189,6 +220,7 @@ impl AppBridge {
                 can_redo: self.history.redo_count() > 0,
             },
             document: self.document_snapshot(),
+            export: self.export_snapshot(),
             camera: self.camera_snapshot(),
             stats: AppSceneStatsSnapshot {
                 total_nodes: node_counts.total as u32,
@@ -232,6 +264,10 @@ impl AppBridge {
             selected_node: self.node_snapshot_by_id(self.selected_node),
             hovered_node: self.node_snapshot_by_id(self.hovered_node),
         }
+    }
+
+    pub fn refresh_background_state(&mut self) {
+        self.poll_export();
     }
 
     pub fn render_viewport_frame(
@@ -422,7 +458,9 @@ impl AppBridge {
         if self.open_scene_from_path(&path) {
             true
         } else {
-            self.settings.recent_files.retain(|path_entry| path_entry != recent_path);
+            self.settings
+                .recent_files
+                .retain(|path_entry| path_entry != recent_path);
             self.settings.save();
             false
         }
@@ -474,6 +512,48 @@ impl AppBridge {
         }
 
         self.clear_recovery_prompt();
+        true
+    }
+
+    pub fn set_export_resolution(&mut self, resolution: u32) -> u32 {
+        let max_resolution = self.settings.max_export_resolution.max(16);
+        let clamped_resolution = resolution.clamp(16, max_resolution);
+        self.settings.export_resolution = clamped_resolution;
+        self.settings.save();
+        clamped_resolution
+    }
+
+    pub fn set_adaptive_export(&mut self, enabled: bool) {
+        self.settings.adaptive_export = enabled;
+        self.settings.save();
+    }
+
+    pub fn start_export(&mut self) -> bool {
+        if matches!(self.export_state.task, ExportTask::InProgress { .. }) {
+            return false;
+        }
+
+        let Some(path) = rfd::FileDialog::new()
+            .set_title("Export Mesh")
+            .add_filter("Wavefront OBJ", &["obj"])
+            .add_filter("STL Binary", &["stl"])
+            .add_filter("Stanford PLY", &["ply"])
+            .add_filter("glTF Binary", &["glb"])
+            .add_filter("USD ASCII", &["usda"])
+            .save_file()
+        else {
+            return false;
+        };
+
+        self.start_export_to_path(path)
+    }
+
+    pub fn cancel_export(&mut self) -> bool {
+        let ExportTask::InProgress { cancelled, .. } = &self.export_state.task else {
+            return false;
+        };
+
+        cancelled.store(true, Ordering::Relaxed);
         true
     }
 
@@ -830,12 +910,7 @@ impl AppBridge {
         })
     }
 
-    pub fn nudge_selected_translation(
-        &mut self,
-        delta_x: f32,
-        delta_y: f32,
-        delta_z: f32,
-    ) -> bool {
+    pub fn nudge_selected_translation(&mut self, delta_x: f32, delta_y: f32, delta_z: f32) -> bool {
         let Some(position) = self.selected_transform_position() else {
             return false;
         };
@@ -963,7 +1038,9 @@ impl AppBridge {
     }
 
     fn recovery_summary_from_meta(meta: Option<&crate::io::RecoveryMeta>) -> String {
-        let timestamp = meta.map(|recovery_meta| recovery_meta.autosave_unix_secs).unwrap_or(0);
+        let timestamp = meta
+            .map(|recovery_meta| recovery_meta.autosave_unix_secs)
+            .unwrap_or(0);
         let project_hint = meta
             .and_then(|recovery_meta| recovery_meta.project_path.as_deref())
             .map(|path| format!("\nSource project: {path}"))
@@ -1029,6 +1106,91 @@ impl AppBridge {
     fn clear_recovery_prompt(&mut self) {
         self.persistence.recovery_prompt_visible = false;
         self.persistence.recovery_summary = None;
+    }
+
+    fn start_export_to_path(&mut self, path: PathBuf) -> bool {
+        if matches!(self.export_state.task, ExportTask::InProgress { .. }) {
+            return false;
+        }
+
+        let scene_clone = self.scene.clone();
+        let bounds = self.scene.compute_bounds();
+        let padding = 0.5;
+        let bounds_min = Vec3::from(bounds.0) - Vec3::splat(padding);
+        let bounds_max = Vec3::from(bounds.1) + Vec3::splat(padding);
+        let max_resolution = self.settings.max_export_resolution.max(16);
+        let resolution = self.settings.export_resolution.clamp(16, max_resolution);
+        let adaptive = self.settings.adaptive_export;
+        let progress = Arc::new(AtomicU32::new(0));
+        let progress_clone = Arc::clone(&progress);
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let cancelled_clone = Arc::clone(&cancelled);
+        let (sender, receiver) = std::sync::mpsc::channel();
+
+        std::thread::spawn(move || {
+            let mesh = crate::export::marching_cubes(
+                &scene_clone,
+                resolution,
+                bounds_min,
+                bounds_max,
+                &progress_clone,
+                adaptive,
+                &cancelled_clone,
+            );
+            let _ = sender.send(mesh);
+        });
+
+        self.settings.save();
+        self.export_state.last_message = None;
+        self.export_state.task = ExportTask::InProgress {
+            progress,
+            total: (resolution + 1) + resolution,
+            resolution,
+            receiver,
+            path,
+            cancelled,
+        };
+        true
+    }
+
+    fn poll_export(&mut self) {
+        let completed = if let ExportTask::InProgress { receiver, .. } = &self.export_state.task {
+            receiver.try_recv().ok()
+        } else {
+            None
+        };
+
+        let Some(maybe_mesh) = completed else {
+            return;
+        };
+
+        let path = match &self.export_state.task {
+            ExportTask::InProgress { path, .. } => path.clone(),
+            ExportTask::Idle => return,
+        };
+
+        self.export_state.last_message = Some(match maybe_mesh {
+            Some(mesh) => match crate::export::write_mesh(&mesh, &path) {
+                Ok(()) => ExportMessage {
+                    text: format!(
+                        "Exported {} ({} verts, {} tris)",
+                        export_format_label(&path),
+                        mesh.vertices.len(),
+                        mesh.triangles.len(),
+                    ),
+                    is_error: false,
+                },
+                Err(error) => ExportMessage {
+                    text: format!("Export failed: {}", error),
+                    is_error: true,
+                },
+            },
+            None => ExportMessage {
+                text: "Export cancelled".to_string(),
+                is_error: false,
+            },
+        });
+        self.export_state.task = ExportTask::Idle;
     }
 
     fn offset_duplicated_root(&mut self, node_id: NodeId) {
@@ -1125,6 +1287,72 @@ impl AppBridge {
             recent_files: self.settings.recent_files.clone(),
             recovery_available: self.persistence.recovery_prompt_visible,
             recovery_summary: self.persistence.recovery_summary.clone(),
+        }
+    }
+
+    fn export_snapshot(&self) -> AppExportSnapshot {
+        let max_resolution = self.settings.max_export_resolution.max(16);
+        let status = match &self.export_state.task {
+            ExportTask::Idle => AppExportStatusSnapshot {
+                state: "idle".to_string(),
+                progress: 0,
+                total: 0,
+                resolution: self.settings.export_resolution.clamp(16, max_resolution),
+                phase_label: None,
+                target_file_name: None,
+                target_file_path: None,
+                format_label: None,
+                message: self
+                    .export_state
+                    .last_message
+                    .as_ref()
+                    .map(|message| message.text.clone()),
+                is_error: self
+                    .export_state
+                    .last_message
+                    .as_ref()
+                    .is_some_and(|message| message.is_error),
+            },
+            ExportTask::InProgress {
+                progress,
+                total,
+                resolution,
+                path,
+                ..
+            } => {
+                let completed_steps = progress.load(Ordering::Relaxed).min(*total);
+                AppExportStatusSnapshot {
+                    state: "in_progress".to_string(),
+                    progress: completed_steps,
+                    total: *total,
+                    resolution: *resolution,
+                    phase_label: Some(export_phase_label(completed_steps, *total, *resolution)),
+                    target_file_name: path
+                        .file_name()
+                        .map(|file_name| file_name.to_string_lossy().to_string()),
+                    target_file_path: Some(path.to_string_lossy().to_string()),
+                    format_label: Some(export_format_label(path)),
+                    message: None,
+                    is_error: false,
+                }
+            }
+        };
+
+        AppExportSnapshot {
+            resolution: self.settings.export_resolution.clamp(16, max_resolution),
+            min_resolution: 16,
+            max_resolution,
+            adaptive: self.settings.adaptive_export,
+            presets: self
+                .settings
+                .export_presets
+                .iter()
+                .map(|preset| AppExportPresetSnapshot {
+                    name: preset.name.clone(),
+                    resolution: preset.resolution,
+                })
+                .collect(),
+            status,
         }
     }
 
@@ -1362,6 +1590,32 @@ fn property_key(label: &str) -> String {
     key.trim_end_matches('_').to_string()
 }
 
+fn export_phase_label(progress: u32, total: u32, resolution: u32) -> String {
+    let sample_slices = resolution + 1;
+    if progress < sample_slices {
+        format!(
+            "Phase 1/3: Sampling SDF field ({}/{})",
+            progress, sample_slices
+        )
+    } else if progress < total {
+        let extracted_slices = progress - sample_slices;
+        let extracted_total = total - sample_slices;
+        format!(
+            "Phase 2/3: Extracting triangles ({}/{})",
+            extracted_slices, extracted_total
+        )
+    } else {
+        "Phase 3/3: Merging vertices and sampling colors...".to_string()
+    }
+}
+
+fn export_format_label(path: &Path) -> String {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .unwrap_or("obj")
+        .to_uppercase()
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -1391,6 +1645,69 @@ mod tests {
         let bridge = AppBridge::new();
 
         assert!(bridge.scene_snapshot().selected_node_properties.is_none());
+    }
+
+    #[test]
+    fn scene_snapshot_includes_export_settings() {
+        let bridge = AppBridge::new();
+
+        let export = bridge.scene_snapshot().export;
+        assert_eq!(export.min_resolution, 16);
+        assert_eq!(export.max_resolution, 2048);
+        assert_eq!(export.resolution, 128);
+        assert!(!export.adaptive);
+        assert_eq!(export.status.state, "idle");
+        assert!(export.status.message.is_none());
+        assert_eq!(export.presets.len(), 4);
+        assert_eq!(export.presets[0].name, "Low");
+        assert_eq!(export.presets[0].resolution, 64);
+    }
+
+    #[test]
+    fn export_setting_commands_update_snapshot_and_clamp() {
+        let mut bridge = AppBridge::new();
+
+        let resolution = bridge.set_export_resolution(9_999);
+        bridge.set_adaptive_export(true);
+
+        let export = bridge.scene_snapshot().export;
+        assert_eq!(resolution, 2048);
+        assert_eq!(export.resolution, 2048);
+        assert!(export.adaptive);
+    }
+
+    #[test]
+    fn export_background_task_reports_completion_in_snapshot() {
+        let mut bridge = AppBridge::new();
+        let temp_path = std::env::temp_dir().join(format!(
+            "sdf_modeler_bridge_export_{}.obj",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&temp_path);
+
+        bridge.set_export_resolution(16);
+        assert!(bridge.start_export_to_path(temp_path.clone()));
+        assert_eq!(bridge.scene_snapshot().export.status.state, "in_progress");
+
+        for _ in 0..200 {
+            bridge.poll_export();
+            if bridge.scene_snapshot().export.status.state == "idle" {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+
+        let export = bridge.scene_snapshot().export;
+        assert_eq!(export.status.state, "idle");
+        assert_eq!(export.status.is_error, false);
+        assert!(export
+            .status
+            .message
+            .as_deref()
+            .is_some_and(|message| message.contains("Exported OBJ")));
+        assert!(temp_path.exists());
+
+        let _ = std::fs::remove_file(temp_path);
     }
 
     #[test]
@@ -1797,7 +2114,10 @@ mod tests {
         assert_eq!(tool.pivot_offset, AppVec3::new(0.25, 0.0, 0.0));
 
         bridge.reset_manipulator_pivot();
-        assert_eq!(bridge.scene_snapshot().tool.pivot_offset, AppVec3::new(0.0, 0.0, 0.0));
+        assert_eq!(
+            bridge.scene_snapshot().tool.pivot_offset,
+            AppVec3::new(0.0, 0.0, 0.0)
+        );
 
         assert!(bridge.nudge_selected_translation(0.5, -0.25, 1.0));
         let moved_transform = bridge

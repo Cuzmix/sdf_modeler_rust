@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:sdf_modeler_flutter/src/rust/api/simple.dart';
+import 'package:sdf_modeler_flutter/src/export/export_panel.dart';
 import 'package:sdf_modeler_flutter/src/scene/scene_snapshot.dart';
 import 'package:sdf_modeler_flutter/src/scene/scene_tree_panel.dart';
 import 'package:sdf_modeler_flutter/src/session/document_session_panel.dart';
@@ -128,7 +129,9 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
   TextureViewportFeedback? _viewportFeedback;
   int? _textureId;
   StreamSubscription<TextureViewportEvent>? _textureEventSubscription;
+  Timer? _exportPollTimer;
   Timer? _interactionCooldownTimer;
+  bool _exportPollInFlight = false;
   bool _commandInFlight = false;
   bool _adaptiveInteractionResolutionEnabled = false;
   bool _viewportInteractionActive = false;
@@ -176,7 +179,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
         _statusLine = 'Rust ping: $pingValue';
         _versionLine = 'Bridge crate version: $versionValue';
         _textureId = createdTextureId;
-        _sceneSnapshot = snapshot;
+        _applySnapshotState(snapshot);
         _viewportFeedback = viewportFeedback;
         _previewLine = _buildPreviewLine();
       });
@@ -197,6 +200,57 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
   AppSceneSnapshot _decodeSnapshot(String rawJson) {
     final decoded = jsonDecode(rawJson) as Map<String, dynamic>;
     return AppSceneSnapshot.fromJson(decoded);
+  }
+
+  void _syncExportPolling(AppSceneSnapshot? snapshot) {
+    final shouldPoll = snapshot?.export.status.isInProgress ?? false;
+    if (shouldPoll) {
+      _exportPollTimer ??= Timer.periodic(
+        const Duration(milliseconds: 150),
+        (_) => _pollExportSnapshot(),
+      );
+      return;
+    }
+
+    _exportPollTimer?.cancel();
+    _exportPollTimer = null;
+  }
+
+  void _applySnapshotState(
+    AppSceneSnapshot snapshot, {
+    bool updateViewportFeedback = true,
+  }) {
+    _syncExportPolling(snapshot);
+    _sceneSnapshot = snapshot;
+    if (updateViewportFeedback) {
+      _viewportFeedback = TextureViewportFeedback.fromSceneSnapshot(snapshot);
+    }
+  }
+
+  Future<void> _pollExportSnapshot() async {
+    if (!mounted || _exportPollInFlight) {
+      return;
+    }
+
+    _exportPollInFlight = true;
+    try {
+      final snapshot = _decodeSnapshot(sceneSnapshotJson());
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _applySnapshotState(snapshot, updateViewportFeedback: false);
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _previewLine = 'Export polling error: $error';
+      });
+    } finally {
+      _exportPollInFlight = false;
+    }
   }
 
   double get _effectiveRenderScale {
@@ -263,7 +317,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
       _interactionPhase = event.interactionPhase;
       _lastViewportHostError = hostError;
       if (refreshedSnapshot != null) {
-        _sceneSnapshot = refreshedSnapshot;
+        _applySnapshotState(refreshedSnapshot, updateViewportFeedback: false);
       }
       if (event.feedback != null) {
         _viewportFeedback = event.feedback;
@@ -327,8 +381,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
       setState(() {
         _statusLine = 'Rust ping: $pingValue';
         _versionLine = 'Bridge crate version: $versionValue';
-        _sceneSnapshot = snapshot;
-        _viewportFeedback = TextureViewportFeedback.fromSceneSnapshot(snapshot);
+        _applySnapshotState(snapshot);
       });
     } catch (error) {
       setState(() {
@@ -564,9 +617,14 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     });
   }
 
-  void _runModalSceneCommand(String Function() command) {
+  void _runModalSceneCommand(
+    String Function() command, {
+    bool requestNativeFrame = true,
+  }) {
     _closeCommandPanel();
-    unawaited(_runSceneCommand(command));
+    unawaited(
+      _runSceneCommand(command, requestNativeFrame: requestNativeFrame),
+    );
   }
 
   double _normalizeViewportCoordinate(
@@ -658,7 +716,10 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     return math.max(minimumValue, alignedValue);
   }
 
-  Future<void> _runSceneCommand(String Function() command) async {
+  Future<void> _runSceneCommand(
+    String Function() command, {
+    bool requestNativeFrame = true,
+  }) async {
     if (_commandInFlight) {
       return;
     }
@@ -673,10 +734,11 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
         return;
       }
       setState(() {
-        _sceneSnapshot = snapshot;
-        _viewportFeedback = TextureViewportFeedback.fromSceneSnapshot(snapshot);
+        _applySnapshotState(snapshot);
       });
-      _requestNativeFrame();
+      if (requestNativeFrame) {
+        _requestNativeFrame();
+      }
     } catch (error) {
       if (!mounted) {
         return;
@@ -719,6 +781,28 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
 
   Future<void> _discardRecovery() {
     return _runSceneCommand(discardRecovery);
+  }
+
+  Future<void> _setExportResolution(int resolution) {
+    return _runSceneCommand(
+      () => setExportResolution(resolution: resolution),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _setAdaptiveExport(bool enabled) {
+    return _runSceneCommand(
+      () => setAdaptiveExport(enabled: enabled),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _startExport() {
+    return _runSceneCommand(startExport, requestNativeFrame: false);
+  }
+
+  Future<void> _cancelExport() {
+    return _runSceneCommand(cancelExport, requestNativeFrame: false);
   }
 
   Future<void> _setManipulatorMode(String modeId) {
@@ -889,6 +973,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
   @override
   void dispose() {
     _textureEventSubscription?.cancel();
+    _exportPollTimer?.cancel();
     _interactionCooldownTimer?.cancel();
     final activeTextureId = _textureId;
     if (activeTextureId != null) {
@@ -1035,6 +1120,10 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                       onOpenRecentScene: _openRecentScene,
                       onRecoverAutosave: _recoverAutosave,
                       onDiscardRecovery: _discardRecovery,
+                      onSetExportResolution: _setExportResolution,
+                      onSetAdaptiveExport: _setAdaptiveExport,
+                      onStartExport: _startExport,
+                      onCancelExport: _cancelExport,
                       onFrameAll: () => _runSceneCommand(frameAll),
                       onResetScene: () => _runSceneCommand(resetScene),
                       onFocusSelected: () => _runSceneCommand(focusSelected),
@@ -1091,6 +1180,26 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                             _runModalSceneCommand(recoverAutosave),
                         onDiscardRecovery: () =>
                             _runModalSceneCommand(discardRecovery),
+                        onSetExportResolution: (resolution) =>
+                            _runModalSceneCommand(
+                              () => setExportResolution(resolution: resolution),
+                              requestNativeFrame: false,
+                            ),
+                        onSetAdaptiveExport: (enabled) =>
+                            _runModalSceneCommand(
+                              () => setAdaptiveExport(enabled: enabled),
+                              requestNativeFrame: false,
+                            ),
+                        onStartExport: () =>
+                            _runModalSceneCommand(
+                              startExport,
+                              requestNativeFrame: false,
+                            ),
+                        onCancelExport: () =>
+                            _runModalSceneCommand(
+                              cancelExport,
+                              requestNativeFrame: false,
+                            ),
                         onFrameAll: () => _runModalSceneCommand(frameAll),
                         onResetScene: () => _runModalSceneCommand(resetScene),
                         onFocusSelected: () =>
@@ -1193,6 +1302,10 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                   onOpenRecentScene: _openRecentScene,
                   onRecoverAutosave: _recoverAutosave,
                   onDiscardRecovery: _discardRecovery,
+                  onSetExportResolution: _setExportResolution,
+                  onSetAdaptiveExport: _setAdaptiveExport,
+                  onStartExport: _startExport,
+                  onCancelExport: _cancelExport,
                   onFrameAll: () => _runSceneCommand(frameAll),
                   onResetScene: () => _runSceneCommand(resetScene),
                   onFocusSelected: () => _runSceneCommand(focusSelected),
@@ -1355,6 +1468,10 @@ class _InspectorPanel extends StatelessWidget {
     required this.onOpenRecentScene,
     required this.onRecoverAutosave,
     required this.onDiscardRecovery,
+    required this.onSetExportResolution,
+    required this.onSetAdaptiveExport,
+    required this.onStartExport,
+    required this.onCancelExport,
     required this.onFrameAll,
     required this.onResetScene,
     required this.onFocusSelected,
@@ -1411,6 +1528,10 @@ class _InspectorPanel extends StatelessWidget {
   final ValueChanged<String> onOpenRecentScene;
   final VoidCallback onRecoverAutosave;
   final VoidCallback onDiscardRecovery;
+  final ValueChanged<int> onSetExportResolution;
+  final ValueChanged<bool> onSetAdaptiveExport;
+  final VoidCallback onStartExport;
+  final VoidCallback onCancelExport;
   final VoidCallback onFrameAll;
   final VoidCallback onResetScene;
   final VoidCallback onFocusSelected;
@@ -1618,6 +1739,20 @@ class _InspectorPanel extends StatelessWidget {
             onOpenRecentScene: onOpenRecentScene,
             onRecoverAutosave: onRecoverAutosave,
             onDiscardRecovery: onDiscardRecovery,
+          ),
+          const SizedBox(height: ShellTokens.sectionGap),
+          Text(
+            'Export',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: ShellTokens.controlGap),
+          ExportPanel(
+            export: snapshot?.export,
+            enabled: !commandInFlight,
+            onSetResolution: onSetExportResolution,
+            onSetAdaptive: onSetAdaptiveExport,
+            onStartExport: onStartExport,
+            onCancelExport: onCancelExport,
           ),
           const SizedBox(height: ShellTokens.sectionGap),
           Text(
@@ -2512,6 +2647,10 @@ class _CommandSheetContent extends StatelessWidget {
     required this.onOpenRecentScene,
     required this.onRecoverAutosave,
     required this.onDiscardRecovery,
+    required this.onSetExportResolution,
+    required this.onSetAdaptiveExport,
+    required this.onStartExport,
+    required this.onCancelExport,
     required this.onFrameAll,
     required this.onResetScene,
     required this.onFocusSelected,
@@ -2549,6 +2688,10 @@ class _CommandSheetContent extends StatelessWidget {
   final ValueChanged<String> onOpenRecentScene;
   final VoidCallback onRecoverAutosave;
   final VoidCallback onDiscardRecovery;
+  final ValueChanged<int> onSetExportResolution;
+  final ValueChanged<bool> onSetAdaptiveExport;
+  final VoidCallback onStartExport;
+  final VoidCallback onCancelExport;
   final VoidCallback onFrameAll;
   final VoidCallback onResetScene;
   final VoidCallback onFocusSelected;
@@ -2640,6 +2783,20 @@ class _CommandSheetContent extends StatelessWidget {
           onOpenRecentScene: onOpenRecentScene,
           onRecoverAutosave: onRecoverAutosave,
           onDiscardRecovery: onDiscardRecovery,
+        ),
+        const SizedBox(height: ShellTokens.sectionGap),
+        Text(
+          'Export',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: ShellTokens.controlGap),
+        ExportPanel(
+          export: snapshot?.export,
+          enabled: sceneCommandsEnabled,
+          onSetResolution: onSetExportResolution,
+          onSetAdaptive: onSetAdaptiveExport,
+          onStartExport: onStartExport,
+          onCancelExport: onCancelExport,
         ),
         const SizedBox(height: ShellTokens.sectionGap),
         Wrap(

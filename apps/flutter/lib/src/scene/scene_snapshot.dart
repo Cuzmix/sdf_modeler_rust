@@ -268,6 +268,113 @@ class AppDocumentSnapshot {
   }
 }
 
+class AppExportPresetSnapshot {
+  const AppExportPresetSnapshot({required this.name, required this.resolution});
+
+  final String name;
+  final int resolution;
+
+  factory AppExportPresetSnapshot.fromJson(Map<String, dynamic> json) {
+    return AppExportPresetSnapshot(
+      name: json['name'] as String? ?? 'Preset',
+      resolution: (json['resolution'] as num?)?.toInt() ?? 128,
+    );
+  }
+}
+
+class AppExportStatusSnapshot {
+  const AppExportStatusSnapshot({
+    required this.state,
+    required this.progress,
+    required this.total,
+    required this.resolution,
+    required this.phaseLabel,
+    required this.targetFileName,
+    required this.targetFilePath,
+    required this.formatLabel,
+    required this.message,
+    required this.isError,
+  });
+
+  final String state;
+  final int progress;
+  final int total;
+  final int resolution;
+  final String? phaseLabel;
+  final String? targetFileName;
+  final String? targetFilePath;
+  final String? formatLabel;
+  final String? message;
+  final bool isError;
+
+  bool get isInProgress => state == 'in_progress';
+
+  factory AppExportStatusSnapshot.fromJson(Map<String, dynamic> json) {
+    return AppExportStatusSnapshot(
+      state: json['state'] as String? ?? 'idle',
+      progress: (json['progress'] as num?)?.toInt() ?? 0,
+      total: (json['total'] as num?)?.toInt() ?? 0,
+      resolution: (json['resolution'] as num?)?.toInt() ?? 128,
+      phaseLabel: json['phase_label'] as String?,
+      targetFileName: json['target_file_name'] as String?,
+      targetFilePath: json['target_file_path'] as String?,
+      formatLabel: json['format_label'] as String?,
+      message: json['message'] as String?,
+      isError: json['is_error'] as bool? ?? false,
+    );
+  }
+}
+
+class AppExportSnapshot {
+  const AppExportSnapshot({
+    required this.resolution,
+    required this.minResolution,
+    required this.maxResolution,
+    required this.adaptive,
+    required this.presets,
+    required this.status,
+  });
+
+  final int resolution;
+  final int minResolution;
+  final int maxResolution;
+  final bool adaptive;
+  final List<AppExportPresetSnapshot> presets;
+  final AppExportStatusSnapshot status;
+
+  factory AppExportSnapshot.fromJson(Map<String, dynamic> json) {
+    return AppExportSnapshot(
+      resolution: (json['resolution'] as num?)?.toInt() ?? 128,
+      minResolution: (json['min_resolution'] as num?)?.toInt() ?? 16,
+      maxResolution: (json['max_resolution'] as num?)?.toInt() ?? 2048,
+      adaptive: json['adaptive'] as bool? ?? false,
+      presets: (json['presets'] as List<dynamic>? ?? const [])
+          .map(
+            (item) => AppExportPresetSnapshot.fromJson(
+              item as Map<String, dynamic>,
+            ),
+          )
+          .toList(growable: false),
+      status: json['status'] == null
+          ? const AppExportStatusSnapshot(
+              state: 'idle',
+              progress: 0,
+              total: 0,
+              resolution: 128,
+              phaseLabel: null,
+              targetFileName: null,
+              targetFilePath: null,
+              formatLabel: null,
+              message: null,
+              isError: false,
+            )
+          : AppExportStatusSnapshot.fromJson(
+              json['status'] as Map<String, dynamic>,
+            ),
+    );
+  }
+}
+
 class AppScalarPropertySnapshot {
   const AppScalarPropertySnapshot({
     required this.key,
@@ -422,6 +529,7 @@ class AppSceneSnapshot {
     required this.sceneTreeRoots,
     required this.history,
     required this.document,
+    required this.export,
     required this.camera,
     required this.stats,
     required this.tool,
@@ -433,6 +541,7 @@ class AppSceneSnapshot {
   final List<AppSceneTreeNodeSnapshot> sceneTreeRoots;
   final AppHistorySnapshot history;
   final AppDocumentSnapshot document;
+  final AppExportSnapshot export;
   final AppCameraSnapshot camera;
   final AppSceneStatsSnapshot stats;
   final AppToolSnapshot tool;
@@ -479,6 +588,27 @@ class AppSceneSnapshot {
               recoverySummary: null,
             )
           : AppDocumentSnapshot.fromJson(json['document'] as Map<String, dynamic>),
+      export: json['export'] == null
+          ? const AppExportSnapshot(
+              resolution: 128,
+              minResolution: 16,
+              maxResolution: 2048,
+              adaptive: false,
+              presets: <AppExportPresetSnapshot>[],
+              status: AppExportStatusSnapshot(
+                state: 'idle',
+                progress: 0,
+                total: 0,
+                resolution: 128,
+                phaseLabel: null,
+                targetFileName: null,
+                targetFilePath: null,
+                formatLabel: null,
+                message: null,
+                isError: false,
+              ),
+            )
+          : AppExportSnapshot.fromJson(json['export'] as Map<String, dynamic>),
       camera: AppCameraSnapshot.fromJson(json['camera'] as Map<String, dynamic>),
       stats: AppSceneStatsSnapshot.fromJson(
         json['stats'] as Map<String, dynamic>,

@@ -16,6 +16,11 @@ import 'package:sdf_modeler_flutter/src/viewport/viewport_surface.dart';
 class _MockRustApi extends RustLibApi {
   static const String _baseSnapshot = '''{"selected_node":null,"top_level_nodes":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false}],"history":{"can_undo":false,"can_redo":false},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":7,"visible_nodes":7,"top_level_nodes":1,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":1,"structure_key":11,"data_fingerprint":22,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
   static const String _documentSnapshot = '''{"selected_node":null,"top_level_nodes":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false}],"history":{"can_undo":false,"can_redo":false},"document":{"current_file_path":"C:\\\\Scenes\\\\hero.sdf","current_file_name":"hero.sdf","has_unsaved_changes":true,"recent_files":["C:\\\\Scenes\\\\hero.sdf","C:\\\\Scenes\\\\blockout.sdf"],"recovery_available":true,"recovery_summary":"Recovered unsaved work found."},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":7,"visible_nodes":7,"top_level_nodes":1,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":1,"structure_key":11,"data_fingerprint":22,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
+  static const String _exportIdleSnapshot = '''{"selected_node":null,"top_level_nodes":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false}],"history":{"can_undo":false,"can_redo":false},"document":{"current_file_path":"C:\\\\Scenes\\\\hero.sdf","current_file_name":"hero.sdf","has_unsaved_changes":false,"recent_files":["C:\\\\Scenes\\\\hero.sdf"],"recovery_available":false,"recovery_summary":null},"export":{"resolution":128,"min_resolution":16,"max_resolution":2048,"adaptive":false,"presets":[{"name":"Low","resolution":64},{"name":"Medium","resolution":128},{"name":"High","resolution":256},{"name":"Ultra","resolution":512}],"status":{"state":"idle","progress":0,"total":0,"resolution":128,"phase_label":null,"target_file_name":null,"target_file_path":null,"format_label":null,"message":null,"is_error":false}},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":7,"visible_nodes":7,"top_level_nodes":1,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":1,"structure_key":11,"data_fingerprint":22,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
+  static const String _exportResolutionSnapshot = '''{"selected_node":null,"top_level_nodes":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false}],"history":{"can_undo":false,"can_redo":false},"document":{"current_file_path":"C:\\\\Scenes\\\\hero.sdf","current_file_name":"hero.sdf","has_unsaved_changes":false,"recent_files":["C:\\\\Scenes\\\\hero.sdf"],"recovery_available":false,"recovery_summary":null},"export":{"resolution":256,"min_resolution":16,"max_resolution":2048,"adaptive":false,"presets":[{"name":"Low","resolution":64},{"name":"Medium","resolution":128},{"name":"High","resolution":256},{"name":"Ultra","resolution":512}],"status":{"state":"idle","progress":0,"total":0,"resolution":256,"phase_label":null,"target_file_name":null,"target_file_path":null,"format_label":null,"message":null,"is_error":false}},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":7,"visible_nodes":7,"top_level_nodes":1,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":1,"structure_key":11,"data_fingerprint":22,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
+  static const String _exportAdaptiveSnapshot = '''{"selected_node":null,"top_level_nodes":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false}],"history":{"can_undo":false,"can_redo":false},"document":{"current_file_path":"C:\\\\Scenes\\\\hero.sdf","current_file_name":"hero.sdf","has_unsaved_changes":false,"recent_files":["C:\\\\Scenes\\\\hero.sdf"],"recovery_available":false,"recovery_summary":null},"export":{"resolution":256,"min_resolution":16,"max_resolution":2048,"adaptive":true,"presets":[{"name":"Low","resolution":64},{"name":"Medium","resolution":128},{"name":"High","resolution":256},{"name":"Ultra","resolution":512}],"status":{"state":"idle","progress":0,"total":0,"resolution":256,"phase_label":null,"target_file_name":null,"target_file_path":null,"format_label":null,"message":null,"is_error":false}},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":7,"visible_nodes":7,"top_level_nodes":1,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":1,"structure_key":11,"data_fingerprint":22,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
+  static const String _exportRunningSnapshot = '''{"selected_node":null,"top_level_nodes":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false}],"history":{"can_undo":false,"can_redo":false},"document":{"current_file_path":"C:\\\\Scenes\\\\hero.sdf","current_file_name":"hero.sdf","has_unsaved_changes":false,"recent_files":["C:\\\\Scenes\\\\hero.sdf"],"recovery_available":false,"recovery_summary":null},"export":{"resolution":256,"min_resolution":16,"max_resolution":2048,"adaptive":true,"presets":[{"name":"Low","resolution":64},{"name":"Medium","resolution":128},{"name":"High","resolution":256},{"name":"Ultra","resolution":512}],"status":{"state":"in_progress","progress":8,"total":33,"resolution":16,"phase_label":"Phase 1/3: Sampling SDF field (8/17)","target_file_name":"hero.obj","target_file_path":"C:\\\\Exports\\\\hero.obj","format_label":"OBJ","message":null,"is_error":false}},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":7,"visible_nodes":7,"top_level_nodes":1,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":1,"structure_key":11,"data_fingerprint":22,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
+  static const String _exportDoneSnapshot = '''{"selected_node":null,"top_level_nodes":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false}],"history":{"can_undo":false,"can_redo":false},"document":{"current_file_path":"C:\\\\Scenes\\\\hero.sdf","current_file_name":"hero.sdf","has_unsaved_changes":false,"recent_files":["C:\\\\Scenes\\\\hero.sdf"],"recovery_available":false,"recovery_summary":null},"export":{"resolution":256,"min_resolution":16,"max_resolution":2048,"adaptive":true,"presets":[{"name":"Low","resolution":64},{"name":"Medium","resolution":128},{"name":"High","resolution":256},{"name":"Ultra","resolution":512}],"status":{"state":"idle","progress":0,"total":0,"resolution":256,"phase_label":null,"target_file_name":null,"target_file_path":null,"format_label":null,"message":"Exported OBJ (128 verts, 64 tris)","is_error":false}},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":7,"visible_nodes":7,"top_level_nodes":1,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":1,"structure_key":11,"data_fingerprint":22,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
   static const String _selectedSnapshot = '''{"selected_node":{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false},"top_level_nodes":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false}],"history":{"can_undo":false,"can_redo":false},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":7,"visible_nodes":7,"top_level_nodes":1,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":1,"structure_key":11,"data_fingerprint":22,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
   static const String _selectedPropertySnapshot = '''{"selected_node":{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false},"selected_node_properties":{"node_id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false,"transform":{"position_label":"Position","position":{"x":0.0,"y":0.0,"z":0.0},"rotation_degrees":{"x":0.0,"y":0.0,"z":0.0},"scale":null},"primitive":{"primitive_kind":"Sphere","parameters":[{"key":"radius","label":"Radius","value":1.0}]},"material":{"color":{"x":0.8,"y":0.3,"z":0.2},"roughness":0.5,"metallic":0.0,"emissive":{"x":0.0,"y":0.0,"z":0.0},"emissive_intensity":0.0,"fresnel":0.04}},"top_level_nodes":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false}],"history":{"can_undo":true,"can_redo":false},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":7,"visible_nodes":7,"top_level_nodes":1,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":1,"structure_key":11,"data_fingerprint":22,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
   static const String _selectedPropertyHiddenSnapshot = '''{"selected_node":{"id":1,"name":"Sphere","kind_label":"Sphere","visible":false,"locked":false},"selected_node_properties":{"node_id":1,"name":"Sphere","kind_label":"Sphere","visible":false,"locked":false,"transform":{"position_label":"Position","position":{"x":0.0,"y":0.0,"z":0.0},"rotation_degrees":{"x":0.0,"y":0.0,"z":0.0},"scale":null},"primitive":{"primitive_kind":"Sphere","parameters":[{"key":"radius","label":"Radius","value":1.0}]},"material":{"color":{"x":0.8,"y":0.3,"z":0.2},"roughness":0.5,"metallic":0.0,"emissive":{"x":0.0,"y":0.0,"z":0.0},"emissive_intensity":0.0,"fresnel":0.04}},"top_level_nodes":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":false,"locked":false}],"history":{"can_undo":true,"can_redo":false},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":7,"visible_nodes":6,"top_level_nodes":1,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":1,"structure_key":11,"data_fingerprint":23,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
@@ -60,6 +65,10 @@ class _MockRustApi extends RustLibApi {
   int saveSceneAsCalls = 0;
   int recoverAutosaveCalls = 0;
   int discardRecoveryCalls = 0;
+  int setExportResolutionCalls = 0;
+  int setAdaptiveExportCalls = 0;
+  int startExportCalls = 0;
+  int cancelExportCalls = 0;
   int renameNodeCalls = 0;
   int setSelectedPrimitiveParameterCalls = 0;
   int setSelectedMaterialFloatCalls = 0;
@@ -101,6 +110,10 @@ class _MockRustApi extends RustLibApi {
     saveSceneAsCalls = 0;
     recoverAutosaveCalls = 0;
     discardRecoveryCalls = 0;
+    setExportResolutionCalls = 0;
+    setAdaptiveExportCalls = 0;
+    startExportCalls = 0;
+    cancelExportCalls = 0;
     renameNodeCalls = 0;
     setSelectedPrimitiveParameterCalls = 0;
     setSelectedMaterialFloatCalls = 0;
@@ -151,6 +164,34 @@ class _MockRustApi extends RustLibApi {
   @override
   String crateApiSimpleDiscardRecovery() {
     discardRecoveryCalls += 1;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetExportResolution({required int resolution}) {
+    setExportResolutionCalls += 1;
+    currentSnapshot = _exportResolutionSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetAdaptiveExport({required bool enabled}) {
+    setAdaptiveExportCalls += 1;
+    currentSnapshot = enabled ? _exportAdaptiveSnapshot : _exportResolutionSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleStartExport() {
+    startExportCalls += 1;
+    currentSnapshot = _exportRunningSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleCancelExport() {
+    cancelExportCalls += 1;
+    currentSnapshot = _exportIdleSnapshot;
     return currentSnapshot;
   }
 
@@ -455,6 +496,9 @@ class _MockRustApi extends RustLibApi {
   @override
   String crateApiSimpleSceneSnapshotJson() {
     sceneSnapshotJsonCalls += 1;
+    if (currentSnapshot == _exportRunningSnapshot && sceneSnapshotJsonCalls >= 3) {
+      currentSnapshot = _exportDoneSnapshot;
+    }
     return currentSnapshot;
   }
 
@@ -1097,6 +1141,45 @@ void main() {
 
     expect(mockApi.setSelectedMaterialColorCalls, 1);
     expect(mockApi.currentSnapshot, _MockRustApi._selectedPropertyColorSnapshot);
+  });
+
+  testWidgets('routes export settings and export start through the Rust facade', (
+    WidgetTester tester,
+  ) async {
+    mockApi.currentSnapshot = _MockRustApi._exportIdleSnapshot;
+
+    await pumpApp(tester, logicalSize: const Size(1400, 900));
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('export-resolution-field')),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('export-resolution-field')),
+      '256',
+    );
+    await tester.tap(find.byKey(const ValueKey('export-apply-resolution')));
+    await tester.pump();
+
+    await tester.tap(find.byKey(const ValueKey('export-adaptive-toggle')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('export-start-command')));
+    await tester.pump();
+
+    expect(mockApi.setExportResolutionCalls, 1);
+    expect(mockApi.setAdaptiveExportCalls, 1);
+    expect(mockApi.startExportCalls, 1);
+    expect(find.byKey(const ValueKey('export-progress-indicator')), findsOneWidget);
+    expect(find.textContaining('Exporting hero.obj'), findsOneWidget);
+
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+
+    expect(mockApi.sceneSnapshotJsonCalls, greaterThanOrEqualTo(3));
+    expect(find.text('Exported OBJ (128 verts, 64 tris)'), findsOneWidget);
+    expect(find.byKey(const ValueKey('export-progress-indicator')), findsNothing);
   });
 
   testWidgets('routes undo through the Rust facade and refreshes snapshot state', (

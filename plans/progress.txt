@@ -2596,3 +2596,39 @@ Changes:
 Result:
 - The remaining decommission queue is now explicit enough to choose the next slice without treating `#30` as a vague blocker.
 
+--- Migration Iteration 25: PRD #32 - Export workflow and progress parity ---
+COMPLETED. Moved export settings, start/cancel flow, progress state, and completion/error reporting behind the backend bridge and added the Flutter export surface that consumes it.
+
+Changes:
+- src/app_bridge/dto.rs
+- src/app_bridge/mod.rs
+- src/app_bridge/session.rs
+- apps/flutter/rust/src/bridge_state.rs
+- apps/flutter/rust/src/api/simple.rs
+- apps/flutter/lib/src/scene/scene_snapshot.dart
+- apps/flutter/lib/src/export/export_panel.dart
+- apps/flutter/lib/app.dart
+- apps/flutter/test/widget_test.dart
+- docs/egui_parity_audit.md
+  - Added a backend-owned export snapshot to the bridge scene snapshot, including export presets, resolution/adaptive settings, in-progress status, progress phases, target file info, and completion/error messages.
+  - Added bridge commands for export resolution changes, adaptive export toggling, export start, and export cancellation.
+  - Added async export polling inside the bridge snapshot path so Flutter can observe progress without owning export semantics.
+  - Added a dedicated Flutter export panel for both the inspector and command modal, including presets, resolution entry, adaptive toggle, progress UI, cancellation, and result messaging.
+  - Added Rust bridge tests for export snapshot/config/progress behavior and Flutter widget coverage for export configuration and progress polling.
+  - Updated the parity audit so export is no longer listed as an outstanding egui-only migration blocker.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS
+- cargo build: PASS
+- Flutter analyze: PASS
+- Flutter test: PASS
+- Flutter build windows --debug: PASS
+
+Manual verification:
+- Not run in this iteration.
+
+Result:
+- PRD #32 is fully verified and complete.
+

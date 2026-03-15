@@ -94,6 +94,36 @@ pub struct AppDocumentSnapshot {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppExportPresetSnapshot {
+    pub name: String,
+    pub resolution: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppExportStatusSnapshot {
+    pub state: String,
+    pub progress: u32,
+    pub total: u32,
+    pub resolution: u32,
+    pub phase_label: Option<String>,
+    pub target_file_name: Option<String>,
+    pub target_file_path: Option<String>,
+    pub format_label: Option<String>,
+    pub message: Option<String>,
+    pub is_error: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppExportSnapshot {
+    pub resolution: u32,
+    pub min_resolution: u32,
+    pub max_resolution: u32,
+    pub adaptive: bool,
+    pub presets: Vec<AppExportPresetSnapshot>,
+    pub status: AppExportStatusSnapshot,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AppScalarPropertySnapshot {
     pub key: String,
     pub label: String,
@@ -144,6 +174,7 @@ pub struct AppSceneSnapshot {
     pub scene_tree_roots: Vec<AppSceneTreeNodeSnapshot>,
     pub history: AppHistorySnapshot,
     pub document: AppDocumentSnapshot,
+    pub export: AppExportSnapshot,
     pub camera: AppCameraSnapshot,
     pub stats: AppSceneStatsSnapshot,
     pub tool: AppToolSnapshot,

@@ -221,7 +221,7 @@
     "category": "export",
     "description": "Port mesh export workflow and export progress into backend-owned Flutter surfaces.\n\nSteps:\n1. Expose backend-neutral export commands, progress, and error state without keeping egui dialogs as the source of truth.\n2. Keep export format semantics, validation, and long-running task ownership in Rust.\n3. Add Flutter export entry and progress UI sized for the existing touch-first shell.\n4. Remove the egui-only export dialog/progress ownership once parity is in place.",
     "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build`. If the bridge API changes, run `apps/flutter/scripts/frb_codegen.ps1`. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, and `fvm flutter build windows --debug`.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 33,

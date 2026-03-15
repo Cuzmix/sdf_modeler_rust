@@ -3,8 +3,9 @@ pub mod renderer;
 pub mod session;
 
 pub use dto::{
-    AppCameraSnapshot, AppDocumentSnapshot, AppHistorySnapshot, AppMaterialPropertiesSnapshot,
-    AppNodeSnapshot, AppPrimitivePropertiesSnapshot, AppScalarPropertySnapshot, AppSceneSnapshot,
+    AppCameraSnapshot, AppDocumentSnapshot, AppExportPresetSnapshot, AppExportSnapshot,
+    AppExportStatusSnapshot, AppHistorySnapshot, AppMaterialPropertiesSnapshot, AppNodeSnapshot,
+    AppPrimitivePropertiesSnapshot, AppScalarPropertySnapshot, AppSceneSnapshot,
     AppSceneStatsSnapshot, AppSceneTreeNodeSnapshot, AppSelectedNodePropertiesSnapshot,
     AppToolSnapshot, AppTransformPropertiesSnapshot, AppVec3, AppViewportFeedbackSnapshot,
 };
