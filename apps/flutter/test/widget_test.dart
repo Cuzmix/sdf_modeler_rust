@@ -83,6 +83,44 @@ class _MockRustApi extends RustLibApi {
         },
       };
 
+  static Map<String, Object?> _sculptPayload({
+    required bool canResumeSelected,
+    required bool canStop,
+    required int desiredResolution,
+    String? brushModeId,
+    String? brushModeLabel,
+    double? brushRadius,
+    double? brushStrength,
+    String? symmetryAxisId,
+    String? symmetryAxisLabel,
+  }) {
+    final session =
+        brushModeId == null
+            ? null
+            : <String, Object?>{
+                'node_id': 8,
+                'node_name': 'Sculpt',
+                'brush_mode_id': brushModeId,
+                'brush_mode_label': brushModeLabel!,
+                'brush_radius': brushRadius!,
+                'brush_strength': brushStrength!,
+                'symmetry_axis_id': symmetryAxisId!,
+                'symmetry_axis_label': symmetryAxisLabel!,
+              };
+    return <String, Object?>{
+      'selected': <String, Object?>{
+        'node_id': 8,
+        'node_name': 'Sculpt',
+        'current_resolution': 64,
+        'desired_resolution': desiredResolution,
+      },
+      'session': session,
+      'can_resume_selected': canResumeSelected,
+      'can_stop': canStop,
+      'max_resolution': 256,
+    };
+  }
+
   static final String _importDialogSnapshot = _withFields(
     _baseSnapshot,
     <String, Object?>{
@@ -269,6 +307,110 @@ class _MockRustApi extends RustLibApi {
     },
   );
 
+  static final String _sculptActiveSnapshot = _withFields(
+    _sculptSnapshot,
+    <String, Object?>{
+      'tool': <String, Object?>{
+        'active_tool_label': 'Sculpt',
+        'shading_mode_label': 'Full',
+        'grid_enabled': true,
+      },
+      'sculpt': _sculptPayload(
+        canResumeSelected: false,
+        canStop: true,
+        desiredResolution: 64,
+        brushModeId: 'add',
+        brushModeLabel: 'Add',
+        brushRadius: 0.15,
+        brushStrength: 0.05,
+        symmetryAxisId: 'off',
+        symmetryAxisLabel: 'Off',
+      ),
+    },
+  );
+
+  static final String _sculptStoppedSnapshot = _withFields(
+    _sculptSnapshot,
+    <String, Object?>{
+      'tool': <String, Object?>{
+        'active_tool_label': 'Select',
+        'shading_mode_label': 'Full',
+        'grid_enabled': true,
+      },
+      'sculpt': _sculptPayload(
+        canResumeSelected: true,
+        canStop: false,
+        desiredResolution: 64,
+      ),
+    },
+  );
+
+  static final String _sculptGrabSnapshot = _withFields(
+    _sculptSnapshot,
+    <String, Object?>{
+      'tool': <String, Object?>{
+        'active_tool_label': 'Sculpt',
+        'shading_mode_label': 'Full',
+        'grid_enabled': true,
+      },
+      'sculpt': _sculptPayload(
+        canResumeSelected: false,
+        canStop: true,
+        desiredResolution: 64,
+        brushModeId: 'grab',
+        brushModeLabel: 'Grab',
+        brushRadius: 0.15,
+        brushStrength: 3.0,
+        symmetryAxisId: 'off',
+        symmetryAxisLabel: 'Off',
+      ),
+    },
+  );
+
+  static final String _sculptSymmetrySnapshot = _withFields(
+    _sculptSnapshot,
+    <String, Object?>{
+      'tool': <String, Object?>{
+        'active_tool_label': 'Sculpt',
+        'shading_mode_label': 'Full',
+        'grid_enabled': true,
+      },
+      'sculpt': _sculptPayload(
+        canResumeSelected: false,
+        canStop: true,
+        desiredResolution: 64,
+        brushModeId: 'grab',
+        brushModeLabel: 'Grab',
+        brushRadius: 0.15,
+        brushStrength: 3.0,
+        symmetryAxisId: 'z',
+        symmetryAxisLabel: 'Z',
+      ),
+    },
+  );
+
+  static final String _sculptResolutionSnapshot = _withFields(
+    _sculptSnapshot,
+    <String, Object?>{
+      'tool': <String, Object?>{
+        'active_tool_label': 'Sculpt',
+        'shading_mode_label': 'Full',
+        'grid_enabled': true,
+      },
+      'sculpt': _sculptPayload(
+        canResumeSelected: false,
+        canStop: true,
+        desiredResolution: 128,
+        brushModeId: 'grab',
+        brushModeLabel: 'Grab',
+        brushRadius: 0.15,
+        brushStrength: 3.0,
+        symmetryAxisId: 'z',
+        symmetryAxisLabel: 'Z',
+      ),
+    },
+  );
+
   String currentSnapshot = _baseSnapshot;
   int sceneSnapshotJsonCalls = 0;
   int addBoxCalls = 0;
@@ -277,6 +419,13 @@ class _MockRustApi extends RustLibApi {
   int createModifierCalls = 0;
   int createLightCalls = 0;
   int createSculptCalls = 0;
+  int resumeSculptingSelectedCalls = 0;
+  int stopSculptingCalls = 0;
+  int setSculptBrushModeCalls = 0;
+  int setSculptBrushRadiusCalls = 0;
+  int setSculptBrushStrengthCalls = 0;
+  int setSculptSymmetryAxisCalls = 0;
+  int setSelectedSculptResolutionCalls = 0;
   int duplicateSelectedCalls = 0;
   int newSceneCalls = 0;
   int openSceneCalls = 0;
@@ -333,6 +482,13 @@ class _MockRustApi extends RustLibApi {
     createModifierCalls = 0;
     createLightCalls = 0;
     createSculptCalls = 0;
+    resumeSculptingSelectedCalls = 0;
+    stopSculptingCalls = 0;
+    setSculptBrushModeCalls = 0;
+    setSculptBrushRadiusCalls = 0;
+    setSculptBrushStrengthCalls = 0;
+    setSculptSymmetryAxisCalls = 0;
+    setSelectedSculptResolutionCalls = 0;
     duplicateSelectedCalls = 0;
     newSceneCalls = 0;
     openSceneCalls = 0;
@@ -568,7 +724,56 @@ class _MockRustApi extends RustLibApi {
   @override
   String crateApiSimpleCreateSculpt() {
     createSculptCalls += 1;
-    currentSnapshot = _sculptSnapshot;
+    currentSnapshot = _sculptActiveSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleResumeSculptingSelected() {
+    resumeSculptingSelectedCalls += 1;
+    currentSnapshot = _sculptActiveSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleStopSculpting() {
+    stopSculptingCalls += 1;
+    currentSnapshot = _sculptStoppedSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetSculptBrushMode({required String modeId}) {
+    setSculptBrushModeCalls += 1;
+    currentSnapshot = modeId == 'grab' ? _sculptGrabSnapshot : _sculptActiveSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetSculptBrushRadius({required double radius}) {
+    setSculptBrushRadiusCalls += 1;
+    currentSnapshot = _sculptActiveSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetSculptBrushStrength({required double strength}) {
+    setSculptBrushStrengthCalls += 1;
+    currentSnapshot = _sculptGrabSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetSculptSymmetryAxis({required String axisId}) {
+    setSculptSymmetryAxisCalls += 1;
+    currentSnapshot = axisId == 'z' ? _sculptSymmetrySnapshot : _sculptActiveSnapshot;
+    return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleSetSelectedSculptResolution({required int resolution}) {
+    setSelectedSculptResolutionCalls += 1;
+    currentSnapshot = _sculptResolutionSnapshot;
     return currentSnapshot;
   }
 
@@ -1765,7 +1970,7 @@ void main() {
       await tester.pump();
 
       expect(mockApi.createSculptCalls, 1);
-      expect(mockApi.currentSnapshot, _MockRustApi._sculptSnapshot);
+      expect(mockApi.currentSnapshot, _MockRustApi._sculptActiveSnapshot);
       expect(requestFrameCalls, greaterThan(0));
     },
   );

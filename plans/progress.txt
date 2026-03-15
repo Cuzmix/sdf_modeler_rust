@@ -2670,3 +2670,42 @@ Manual verification:
 Result:
 - PRD #33 is fully verified and complete.
 
+--- Migration Iteration 27: PRD #34 - Backend-owned sculpt snapshot and command surface ---
+COMPLETED. Moved sculpt session state, selected sculpt metadata, and sculpt editing commands behind the backend bridge so Flutter and future frontends can consume sculpt semantics without egui-owned state.
+
+Changes:
+- src/app_bridge/dto.rs
+- src/app_bridge/mod.rs
+- src/app_bridge/session.rs
+- apps/flutter/rust/src/api/simple.rs
+- apps/flutter/rust/src/frb_generated.rs
+- apps/flutter/lib/src/rust/api/simple.dart
+- apps/flutter/lib/src/rust/frb_generated.dart
+- apps/flutter/lib/src/scene/scene_snapshot.dart
+- apps/flutter/test/scene_snapshot_test.dart
+- apps/flutter/test/widget_test.dart
+- docs/egui_parity_audit.md
+- plans/prd.json
+- plans/progress.txt
+  - Added backend-owned sculpt snapshot DTOs for the selected sculpt node and active sculpt session, including current/desired resolution, brush mode, brush radius/strength, symmetry, resume/stop affordances, and max resolution limits.
+  - Added backend sculpt commands for resume/stop lifecycle, brush mode, brush radius, brush strength, symmetry axis, and selected sculpt resolution updates.
+  - Synced sculpt session ownership with sculpt creation/import/convert flows and history-backed document mutations so stale sculpt sessions fall back to Select when their target node disappears.
+  - Exposed the sculpt command surface through FRB and extended the Flutter scene snapshot model plus tests to parse the new sculpt payload.
+  - Updated the parity audit so sculpt is no longer blocked on backend-neutral ownership; the remaining gap is the Flutter sculpt UI workflow in PRD `#35`.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS
+- cargo build: PASS
+- FRB codegen: PASS (`flutter_rust_bridge_codegen generate --rust-input crate::api --rust-root rust --dart-output lib/src/rust --dart-root . --dart-entrypoint-class-name RustLib --stop-on-error`)
+- Flutter analyze: PASS
+- Flutter test: PASS
+- Flutter build windows --debug: PASS
+
+Manual verification:
+- Not run in this iteration.
+
+Result:
+- PRD #34 is fully verified and complete.
+

@@ -151,5 +151,91 @@ void main() {
     );
 
     expect(snapshot.selectedNodeProperties, isNull);
+    expect(snapshot.sculpt.selected, isNull);
+    expect(snapshot.sculpt.session, isNull);
+    expect(snapshot.sculpt.canResumeSelected, isFalse);
+  });
+
+  test('parses sculpt snapshot payloads', () {
+    final snapshot = AppSceneSnapshot.fromJson(
+      jsonDecode(
+            '''
+{
+  "selected_node": {
+    "id": 8,
+    "name": "Sculpt",
+    "kind_label": "Sculpt",
+    "visible": true,
+    "locked": false
+  },
+  "top_level_nodes": [],
+  "scene_tree_roots": [],
+  "history": {"can_undo": true, "can_redo": false},
+  "sculpt": {
+    "selected": {
+      "node_id": 8,
+      "node_name": "Sculpt",
+      "current_resolution": 64,
+      "desired_resolution": 96
+    },
+    "session": {
+      "node_id": 8,
+      "node_name": "Sculpt",
+      "brush_mode_id": "grab",
+      "brush_mode_label": "Grab",
+      "brush_radius": 0.35,
+      "brush_strength": 3.0,
+      "symmetry_axis_id": "z",
+      "symmetry_axis_label": "Z"
+    },
+    "can_resume_selected": false,
+    "can_stop": true,
+    "max_resolution": 256
+  },
+  "camera": {
+    "yaw": 0.0,
+    "pitch": 0.0,
+    "roll": 0.0,
+    "distance": 5.0,
+    "fov_degrees": 45.0,
+    "orthographic": false,
+    "target": {"x": 0.0, "y": 0.0, "z": 0.0},
+    "eye": {"x": 3.0, "y": 2.0, "z": 3.0}
+  },
+  "stats": {
+    "total_nodes": 1,
+    "visible_nodes": 1,
+    "top_level_nodes": 1,
+    "primitive_nodes": 0,
+    "operation_nodes": 0,
+    "transform_nodes": 0,
+    "modifier_nodes": 0,
+    "sculpt_nodes": 1,
+    "light_nodes": 0,
+    "voxel_memory_bytes": 1048576,
+    "sdf_eval_complexity": 1,
+    "structure_key": 12,
+    "data_fingerprint": 33,
+    "bounds_min": {"x": -1.0, "y": -1.0, "z": -1.0},
+    "bounds_max": {"x": 1.0, "y": 1.0, "z": 1.0}
+  },
+  "tool": {
+    "active_tool_label": "Sculpt",
+    "shading_mode_label": "Full",
+    "grid_enabled": true
+  }
+}
+''',
+          )
+          as Map<String, dynamic>,
+    );
+
+    expect(snapshot.sculpt.selected, isNotNull);
+    expect(snapshot.sculpt.selected!.desiredResolution, 96);
+    expect(snapshot.sculpt.session, isNotNull);
+    expect(snapshot.sculpt.session!.brushModeId, 'grab');
+    expect(snapshot.sculpt.session!.symmetryAxisId, 'z');
+    expect(snapshot.sculpt.canStop, isTrue);
+    expect(snapshot.sculpt.maxResolution, 256);
   });
 }

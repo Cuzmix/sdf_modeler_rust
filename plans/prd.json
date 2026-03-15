@@ -4,7 +4,7 @@
     "category": "foundation",
     "description": "Bootstrap the Flutter workspace and lock the toolchain.\n\nSteps:\n1. Keep the Flutter host in `apps/flutter`.\n2. Keep the repo-pinned Flutter SDK via FVM working on Windows.\n3. Keep `.gitignore` and workspace layout correct for Flutter, Dart, generated files, and Windows build artifacts.\n4. Treat this as the baseline for all later migration work.",
     "verification": "From `apps/flutter`, run `fvm flutter --version` and confirm the pinned SDK resolves and the Windows host still builds.",
-    "passes": true
+    "passes": false
   },
   {
     "id": 2,
@@ -207,7 +207,7 @@
     "category": "decommission",
     "description": "Delete remaining egui adapter slices only after the concrete parity-gap tasks below have passed.\n\nSteps:\n1. Treat PRD items `#32` through `#41` as the execution queue for the remaining product-relevant egui-owned surface.\n2. Move any still-required reusable behavior into backend-neutral modules before deleting UI code.\n3. Delete the remaining egui adapter modules gradually instead of attempting a single destructive cutover.\n4. Keep out-of-scope egui-only features explicit instead of deleting them accidentally.\n5. Finish with the smallest possible set of retained egui files, or none if parity is complete.",
     "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build` for each deletion slice. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, and `fvm flutter build windows --debug` whenever the active host changes.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 31,
@@ -235,7 +235,7 @@
     "category": "sculpt",
     "description": "Expose a backend-owned sculpt snapshot and command surface.\n\nSteps:\n1. Define toolkit-neutral sculpt state snapshots for the selected sculpt node and active sculpt session.\n2. Expose backend commands for brush mode, radius, strength, symmetry, resolution, and sculpt-session lifecycle.\n3. Keep sculpt semantics, constraints, and bake/flatten rules in Rust.\n4. Shape the command surface so Flutter and any future frontends can share it without egui-specific assumptions.",
     "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build`. If the bridge API changes, run `apps/flutter/scripts/frb_codegen.ps1`. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, and `fvm flutter build windows --debug` if the shell or bridge changes.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 35,

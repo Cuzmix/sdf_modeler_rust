@@ -9,7 +9,8 @@ pub use dto::{
     AppImportStatusSnapshot, AppMaterialPropertiesSnapshot, AppNodeSnapshot,
     AppPrimitivePropertiesSnapshot, AppScalarPropertySnapshot, AppSceneSnapshot,
     AppSceneStatsSnapshot, AppSceneTreeNodeSnapshot, AppSculptConvertDialogSnapshot,
-    AppSculptConvertSnapshot, AppSculptConvertStatusSnapshot,
+    AppSculptConvertSnapshot, AppSculptConvertStatusSnapshot, AppSculptSessionSnapshot,
+    AppSculptSnapshot, AppSelectedSculptSnapshot,
     AppSelectedNodePropertiesSnapshot, AppToolSnapshot, AppTransformPropertiesSnapshot, AppVec3,
     AppViewportFeedbackSnapshot,
 };

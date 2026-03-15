@@ -143,6 +143,30 @@ String createLight({required String lightId}) =>
 
 String createSculpt() => RustLib.instance.api.crateApiSimpleCreateSculpt();
 
+String resumeSculptingSelected() =>
+    RustLib.instance.api.crateApiSimpleResumeSculptingSelected();
+
+String stopSculpting() => RustLib.instance.api.crateApiSimpleStopSculpting();
+
+String setSculptBrushMode({required String modeId}) =>
+    RustLib.instance.api.crateApiSimpleSetSculptBrushMode(modeId: modeId);
+
+String setSculptBrushRadius({required double radius}) =>
+    RustLib.instance.api.crateApiSimpleSetSculptBrushRadius(radius: radius);
+
+String setSculptBrushStrength({required double strength}) => RustLib
+    .instance
+    .api
+    .crateApiSimpleSetSculptBrushStrength(strength: strength);
+
+String setSculptSymmetryAxis({required String axisId}) =>
+    RustLib.instance.api.crateApiSimpleSetSculptSymmetryAxis(axisId: axisId);
+
+String setSelectedSculptResolution({required int resolution}) => RustLib
+    .instance
+    .api
+    .crateApiSimpleSetSelectedSculptResolution(resolution: resolution);
+
 String setSelectedPrimitiveParameter({
   required String parameterKey,
   required double value,

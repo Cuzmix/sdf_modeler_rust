@@ -575,6 +575,98 @@ class AppSculptConvertSnapshot {
   }
 }
 
+class AppSelectedSculptSnapshot {
+  const AppSelectedSculptSnapshot({
+    required this.nodeId,
+    required this.nodeName,
+    required this.currentResolution,
+    required this.desiredResolution,
+  });
+
+  final int nodeId;
+  final String nodeName;
+  final int currentResolution;
+  final int desiredResolution;
+
+  factory AppSelectedSculptSnapshot.fromJson(Map<String, dynamic> json) {
+    return AppSelectedSculptSnapshot(
+      nodeId: (json['node_id'] as num).toInt(),
+      nodeName: json['node_name'] as String,
+      currentResolution: (json['current_resolution'] as num).toInt(),
+      desiredResolution: (json['desired_resolution'] as num).toInt(),
+    );
+  }
+}
+
+class AppSculptSessionSnapshot {
+  const AppSculptSessionSnapshot({
+    required this.nodeId,
+    required this.nodeName,
+    required this.brushModeId,
+    required this.brushModeLabel,
+    required this.brushRadius,
+    required this.brushStrength,
+    required this.symmetryAxisId,
+    required this.symmetryAxisLabel,
+  });
+
+  final int nodeId;
+  final String nodeName;
+  final String brushModeId;
+  final String brushModeLabel;
+  final double brushRadius;
+  final double brushStrength;
+  final String symmetryAxisId;
+  final String symmetryAxisLabel;
+
+  factory AppSculptSessionSnapshot.fromJson(Map<String, dynamic> json) {
+    return AppSculptSessionSnapshot(
+      nodeId: (json['node_id'] as num).toInt(),
+      nodeName: json['node_name'] as String,
+      brushModeId: json['brush_mode_id'] as String,
+      brushModeLabel: json['brush_mode_label'] as String,
+      brushRadius: (json['brush_radius'] as num).toDouble(),
+      brushStrength: (json['brush_strength'] as num).toDouble(),
+      symmetryAxisId: json['symmetry_axis_id'] as String,
+      symmetryAxisLabel: json['symmetry_axis_label'] as String,
+    );
+  }
+}
+
+class AppSculptSnapshot {
+  const AppSculptSnapshot({
+    required this.selected,
+    required this.session,
+    required this.canResumeSelected,
+    required this.canStop,
+    required this.maxResolution,
+  });
+
+  final AppSelectedSculptSnapshot? selected;
+  final AppSculptSessionSnapshot? session;
+  final bool canResumeSelected;
+  final bool canStop;
+  final int maxResolution;
+
+  factory AppSculptSnapshot.fromJson(Map<String, dynamic> json) {
+    return AppSculptSnapshot(
+      selected: json['selected'] == null
+          ? null
+          : AppSelectedSculptSnapshot.fromJson(
+              json['selected'] as Map<String, dynamic>,
+            ),
+      session: json['session'] == null
+          ? null
+          : AppSculptSessionSnapshot.fromJson(
+              json['session'] as Map<String, dynamic>,
+            ),
+      canResumeSelected: json['can_resume_selected'] as bool? ?? false,
+      canStop: json['can_stop'] as bool? ?? false,
+      maxResolution: (json['max_resolution'] as num?)?.toInt() ?? 16,
+    );
+  }
+}
+
 class AppScalarPropertySnapshot {
   const AppScalarPropertySnapshot({
     required this.key,
@@ -732,6 +824,7 @@ class AppSceneSnapshot {
     required this.export,
     required this.import,
     required this.sculptConvert,
+    required this.sculpt,
     required this.camera,
     required this.stats,
     required this.tool,
@@ -746,6 +839,7 @@ class AppSceneSnapshot {
   final AppExportSnapshot export;
   final AppImportSnapshot import;
   final AppSculptConvertSnapshot sculptConvert;
+  final AppSculptSnapshot sculpt;
   final AppCameraSnapshot camera;
   final AppSceneStatsSnapshot stats;
   final AppToolSnapshot tool;
@@ -843,6 +937,15 @@ class AppSceneSnapshot {
           : AppSculptConvertSnapshot.fromJson(
               json['sculpt_convert'] as Map<String, dynamic>,
             ),
+      sculpt: json['sculpt'] == null
+          ? const AppSculptSnapshot(
+              selected: null,
+              session: null,
+              canResumeSelected: false,
+              canStop: false,
+              maxResolution: 16,
+            )
+          : AppSculptSnapshot.fromJson(json['sculpt'] as Map<String, dynamic>),
       camera: AppCameraSnapshot.fromJson(json['camera'] as Map<String, dynamic>),
       stats: AppSceneStatsSnapshot.fromJson(
         json['stats'] as Map<String, dynamic>,

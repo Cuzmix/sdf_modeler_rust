@@ -182,6 +182,35 @@ pub struct AppSculptConvertSnapshot {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppSelectedSculptSnapshot {
+    pub node_id: u64,
+    pub node_name: String,
+    pub current_resolution: u32,
+    pub desired_resolution: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppSculptSessionSnapshot {
+    pub node_id: u64,
+    pub node_name: String,
+    pub brush_mode_id: String,
+    pub brush_mode_label: String,
+    pub brush_radius: f32,
+    pub brush_strength: f32,
+    pub symmetry_axis_id: String,
+    pub symmetry_axis_label: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppSculptSnapshot {
+    pub selected: Option<AppSelectedSculptSnapshot>,
+    pub session: Option<AppSculptSessionSnapshot>,
+    pub can_resume_selected: bool,
+    pub can_stop: bool,
+    pub max_resolution: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AppScalarPropertySnapshot {
     pub key: String,
     pub label: String,
@@ -235,6 +264,7 @@ pub struct AppSceneSnapshot {
     pub export: AppExportSnapshot,
     pub import: AppImportSnapshot,
     pub sculpt_convert: AppSculptConvertSnapshot,
+    pub sculpt: AppSculptSnapshot,
     pub camera: AppCameraSnapshot,
     pub stats: AppSceneStatsSnapshot,
     pub tool: AppToolSnapshot,

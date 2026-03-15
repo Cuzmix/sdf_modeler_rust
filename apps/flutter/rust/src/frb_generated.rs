@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1041807292;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1518609794;
 
 // Section: executor
 
@@ -1386,6 +1386,36 @@ fn wire__crate__api__simple__reset_scene_impl(
         },
     )
 }
+fn wire__crate__api__simple__resume_sculpting_selected_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "resume_sculpting_selected",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok =
+                    Result::<_, ()>::Ok(crate::api::simple::resume_sculpting_selected())?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__simple__save_scene_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -1698,6 +1728,100 @@ fn wire__crate__api__simple__set_manipulator_mode_impl(
         },
     )
 }
+fn wire__crate__api__simple__set_sculpt_brush_mode_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_sculpt_brush_mode",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_mode_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok =
+                    Result::<_, ()>::Ok(crate::api::simple::set_sculpt_brush_mode(api_mode_id))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__set_sculpt_brush_radius_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_sculpt_brush_radius",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_radius = <f32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok =
+                    Result::<_, ()>::Ok(crate::api::simple::set_sculpt_brush_radius(api_radius))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__set_sculpt_brush_strength_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_sculpt_brush_strength",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_strength = <f32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(
+                    crate::api::simple::set_sculpt_brush_strength(api_strength),
+                )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__simple__set_sculpt_convert_mode_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -1756,6 +1880,37 @@ fn wire__crate__api__simple__set_sculpt_convert_resolution_impl(
                 let output_ok = Result::<_, ()>::Ok(
                     crate::api::simple::set_sculpt_convert_resolution(api_resolution),
                 )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__set_sculpt_symmetry_axis_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_sculpt_symmetry_axis",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_axis_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok =
+                    Result::<_, ()>::Ok(crate::api::simple::set_sculpt_symmetry_axis(api_axis_id))?;
                 Ok(output_ok)
             })())
         },
@@ -1863,6 +2018,38 @@ fn wire__crate__api__simple__set_selected_primitive_parameter_impl(
                         api_parameter_key,
                         api_value,
                     ))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__set_selected_sculpt_resolution_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_selected_sculpt_resolution",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_resolution = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(
+                    crate::api::simple::set_selected_sculpt_resolution(api_resolution),
+                )?;
                 Ok(output_ok)
             })())
         },
@@ -2056,6 +2243,35 @@ fn wire__crate__api__simple__start_sculpt_convert_impl(
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok(crate::api::simple::start_sculpt_convert())?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__stop_sculpting_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "stop_sculpting",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(crate::api::simple::stop_sculpting())?;
                 Ok(output_ok)
             })())
         },
@@ -2407,55 +2623,66 @@ fn pde_ffi_dispatcher_sync_impl(
         41 => wire__crate__api__simple__rename_node_impl(ptr, rust_vec_len, data_len),
         43 => wire__crate__api__simple__reset_manipulator_pivot_impl(ptr, rust_vec_len, data_len),
         44 => wire__crate__api__simple__reset_scene_impl(ptr, rust_vec_len, data_len),
-        45 => wire__crate__api__simple__save_scene_impl(ptr, rust_vec_len, data_len),
-        46 => wire__crate__api__simple__save_scene_as_impl(ptr, rust_vec_len, data_len),
-        47 => wire__crate__api__simple__scene_snapshot_json_impl(ptr, rust_vec_len, data_len),
-        48 => wire__crate__api__simple__select_node_impl(ptr, rust_vec_len, data_len),
-        49 => wire__crate__api__simple__select_node_at_viewport_impl(ptr, rust_vec_len, data_len),
-        50 => wire__crate__api__simple__set_adaptive_export_impl(ptr, rust_vec_len, data_len),
-        51 => wire__crate__api__simple__set_export_resolution_impl(ptr, rust_vec_len, data_len),
-        52 => wire__crate__api__simple__set_import_resolution_impl(ptr, rust_vec_len, data_len),
-        53 => wire__crate__api__simple__set_import_use_auto_impl(ptr, rust_vec_len, data_len),
-        54 => wire__crate__api__simple__set_manipulator_mode_impl(ptr, rust_vec_len, data_len),
-        55 => wire__crate__api__simple__set_sculpt_convert_mode_impl(ptr, rust_vec_len, data_len),
-        56 => wire__crate__api__simple__set_sculpt_convert_resolution_impl(
+        45 => wire__crate__api__simple__resume_sculpting_selected_impl(ptr, rust_vec_len, data_len),
+        46 => wire__crate__api__simple__save_scene_impl(ptr, rust_vec_len, data_len),
+        47 => wire__crate__api__simple__save_scene_as_impl(ptr, rust_vec_len, data_len),
+        48 => wire__crate__api__simple__scene_snapshot_json_impl(ptr, rust_vec_len, data_len),
+        49 => wire__crate__api__simple__select_node_impl(ptr, rust_vec_len, data_len),
+        50 => wire__crate__api__simple__select_node_at_viewport_impl(ptr, rust_vec_len, data_len),
+        51 => wire__crate__api__simple__set_adaptive_export_impl(ptr, rust_vec_len, data_len),
+        52 => wire__crate__api__simple__set_export_resolution_impl(ptr, rust_vec_len, data_len),
+        53 => wire__crate__api__simple__set_import_resolution_impl(ptr, rust_vec_len, data_len),
+        54 => wire__crate__api__simple__set_import_use_auto_impl(ptr, rust_vec_len, data_len),
+        55 => wire__crate__api__simple__set_manipulator_mode_impl(ptr, rust_vec_len, data_len),
+        56 => wire__crate__api__simple__set_sculpt_brush_mode_impl(ptr, rust_vec_len, data_len),
+        57 => wire__crate__api__simple__set_sculpt_brush_radius_impl(ptr, rust_vec_len, data_len),
+        58 => wire__crate__api__simple__set_sculpt_brush_strength_impl(ptr, rust_vec_len, data_len),
+        59 => wire__crate__api__simple__set_sculpt_convert_mode_impl(ptr, rust_vec_len, data_len),
+        60 => wire__crate__api__simple__set_sculpt_convert_resolution_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        57 => {
+        61 => wire__crate__api__simple__set_sculpt_symmetry_axis_impl(ptr, rust_vec_len, data_len),
+        62 => {
             wire__crate__api__simple__set_selected_material_color_impl(ptr, rust_vec_len, data_len)
         }
-        58 => {
+        63 => {
             wire__crate__api__simple__set_selected_material_float_impl(ptr, rust_vec_len, data_len)
         }
-        59 => wire__crate__api__simple__set_selected_primitive_parameter_impl(
+        64 => wire__crate__api__simple__set_selected_primitive_parameter_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        60 => wire__crate__api__simple__set_selected_transform_position_impl(
+        65 => wire__crate__api__simple__set_selected_sculpt_resolution_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        61 => wire__crate__api__simple__set_selected_transform_rotation_degrees_impl(
+        66 => wire__crate__api__simple__set_selected_transform_position_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        62 => {
+        67 => wire__crate__api__simple__set_selected_transform_rotation_degrees_impl(
+            ptr,
+            rust_vec_len,
+            data_len,
+        ),
+        68 => {
             wire__crate__api__simple__set_selected_transform_scale_impl(ptr, rust_vec_len, data_len)
         }
-        63 => wire__crate__api__simple__start_export_impl(ptr, rust_vec_len, data_len),
-        64 => wire__crate__api__simple__start_import_impl(ptr, rust_vec_len, data_len),
-        65 => wire__crate__api__simple__start_sculpt_convert_impl(ptr, rust_vec_len, data_len),
-        66 => wire__crate__api__simple__toggle_manipulator_space_impl(ptr, rust_vec_len, data_len),
-        67 => wire__crate__api__simple__toggle_node_lock_impl(ptr, rust_vec_len, data_len),
-        68 => wire__crate__api__simple__toggle_node_visibility_impl(ptr, rust_vec_len, data_len),
-        69 => wire__crate__api__simple__toggle_orthographic_impl(ptr, rust_vec_len, data_len),
-        70 => wire__crate__api__simple__undo_impl(ptr, rust_vec_len, data_len),
-        71 => wire__crate__api__simple__zoom_camera_impl(ptr, rust_vec_len, data_len),
+        69 => wire__crate__api__simple__start_export_impl(ptr, rust_vec_len, data_len),
+        70 => wire__crate__api__simple__start_import_impl(ptr, rust_vec_len, data_len),
+        71 => wire__crate__api__simple__start_sculpt_convert_impl(ptr, rust_vec_len, data_len),
+        72 => wire__crate__api__simple__stop_sculpting_impl(ptr, rust_vec_len, data_len),
+        73 => wire__crate__api__simple__toggle_manipulator_space_impl(ptr, rust_vec_len, data_len),
+        74 => wire__crate__api__simple__toggle_node_lock_impl(ptr, rust_vec_len, data_len),
+        75 => wire__crate__api__simple__toggle_node_visibility_impl(ptr, rust_vec_len, data_len),
+        76 => wire__crate__api__simple__toggle_orthographic_impl(ptr, rust_vec_len, data_len),
+        77 => wire__crate__api__simple__undo_impl(ptr, rust_vec_len, data_len),
+        78 => wire__crate__api__simple__zoom_camera_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }

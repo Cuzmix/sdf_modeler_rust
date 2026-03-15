@@ -294,6 +294,55 @@ pub fn create_sculpt() -> String {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn resume_sculpting_selected() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.resume_sculpting_selected();
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn stop_sculpting() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.stop_sculpting();
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_sculpt_brush_mode(mode_id: String) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_sculpt_brush_mode(&mode_id);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_sculpt_brush_radius(radius: f32) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_sculpt_brush_radius(radius);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_sculpt_brush_strength(strength: f32) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_sculpt_brush_strength(strength);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_sculpt_symmetry_axis(axis_id: String) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_sculpt_symmetry_axis(&axis_id);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_selected_sculpt_resolution(resolution: u32) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_selected_sculpt_resolution(resolution);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn set_selected_primitive_parameter(parameter_key: String, value: f32) -> String {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_selected_primitive_parameter(&parameter_key, value);

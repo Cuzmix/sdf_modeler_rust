@@ -12,6 +12,7 @@ use crate::graph::scene::{
     CsgOp, LightType, ModifierKind, NodeData, NodeId, Scene, SceneNode, SdfPrimitive,
 };
 use crate::graph::voxel::create_displacement_grid_for_subtree;
+use crate::sculpt::{BrushMode, SculptState, DEFAULT_BRUSH_STRENGTH};
 use crate::settings::{RenderConfig, Settings};
 
 use super::dto::{
@@ -20,7 +21,8 @@ use super::dto::{
     AppImportStatusSnapshot, AppMaterialPropertiesSnapshot, AppNodeSnapshot,
     AppPrimitivePropertiesSnapshot, AppScalarPropertySnapshot, AppSceneSnapshot,
     AppSceneStatsSnapshot, AppSceneTreeNodeSnapshot, AppSculptConvertDialogSnapshot,
-    AppSculptConvertSnapshot, AppSculptConvertStatusSnapshot,
+    AppSculptConvertSnapshot, AppSculptConvertStatusSnapshot, AppSculptSessionSnapshot,
+    AppSculptSnapshot, AppSelectedSculptSnapshot,
     AppSelectedNodePropertiesSnapshot, AppToolSnapshot, AppTransformPropertiesSnapshot, AppVec3,
     AppViewportFeedbackSnapshot,
 };
@@ -46,6 +48,7 @@ pub struct AppBridge {
     export_state: ExportState,
     import_state: ImportState,
     sculpt_convert_state: SculptConvertState,
+    sculpt_state: SculptState,
     active_tool_label: String,
     manipulator_mode: ManipulatorMode,
     manipulator_space: ManipulatorSpace,
@@ -238,6 +241,7 @@ impl AppBridge {
                 task: SculptConvertTask::Idle,
                 last_message: None,
             },
+            sculpt_state: SculptState::Inactive,
             active_tool_label: "Select".to_string(),
             manipulator_mode: ManipulatorMode::Translate,
             manipulator_space: ManipulatorSpace::Local,
@@ -272,6 +276,7 @@ impl AppBridge {
             export: self.export_snapshot(),
             import: self.import_snapshot(),
             sculpt_convert: self.sculpt_convert_snapshot(),
+            sculpt: self.sculpt_snapshot(),
             camera: self.camera_snapshot(),
             stats: AppSceneStatsSnapshot {
                 total_nodes: node_counts.total as u32,
@@ -796,6 +801,106 @@ impl AppBridge {
         true
     }
 
+    pub fn resume_sculpting_selected(&mut self) -> bool {
+        let Some(selected_node) = self.selected_node else {
+            return false;
+        };
+
+        self.activate_sculpt_session(selected_node)
+    }
+
+    pub fn stop_sculpting(&mut self) -> bool {
+        if !self.sculpt_state.is_active() {
+            return false;
+        }
+
+        self.deactivate_sculpt_session();
+        true
+    }
+
+    pub fn set_sculpt_brush_mode(&mut self, mode_id: &str) -> bool {
+        let Some(brush_mode) = brush_mode_from_id(mode_id) else {
+            return false;
+        };
+
+        let SculptState::Active {
+            brush_mode: current_mode,
+            brush_strength,
+            ..
+        } = &mut self.sculpt_state
+        else {
+            return false;
+        };
+
+        let previous_mode = current_mode.clone();
+        *current_mode = brush_mode.clone();
+        if brush_mode == BrushMode::Grab && *brush_strength < 0.5 {
+            *brush_strength = 1.0;
+        } else if previous_mode == BrushMode::Grab && *brush_strength > 0.5 {
+            *brush_strength = DEFAULT_BRUSH_STRENGTH;
+        }
+        *brush_strength = clamp_sculpt_strength_for_mode(current_mode, *brush_strength);
+        true
+    }
+
+    pub fn set_sculpt_brush_radius(&mut self, radius: f32) -> bool {
+        let SculptState::Active { brush_radius, .. } = &mut self.sculpt_state else {
+            return false;
+        };
+
+        *brush_radius = radius.clamp(0.05, 2.0);
+        true
+    }
+
+    pub fn set_sculpt_brush_strength(&mut self, strength: f32) -> bool {
+        let SculptState::Active {
+            brush_mode,
+            brush_strength,
+            ..
+        } = &mut self.sculpt_state
+        else {
+            return false;
+        };
+
+        *brush_strength = clamp_sculpt_strength_for_mode(brush_mode, strength);
+        true
+    }
+
+    pub fn set_sculpt_symmetry_axis(&mut self, axis_id: &str) -> bool {
+        let Some(parsed_symmetry_axis) = sculpt_symmetry_axis_from_id(axis_id) else {
+            return false;
+        };
+
+        let SculptState::Active { symmetry_axis, .. } = &mut self.sculpt_state else {
+            return false;
+        };
+
+        *symmetry_axis = parsed_symmetry_axis;
+        true
+    }
+
+    pub fn set_selected_sculpt_resolution(&mut self, resolution: u32) -> bool {
+        let Some(selected_node) = self.selected_node else {
+            return false;
+        };
+        let clamped_resolution = resolution.clamp(16, self.settings.max_sculpt_resolution.max(16));
+
+        self.run_document_command(|bridge| {
+            let Some(node) = bridge.scene.nodes.get_mut(&selected_node) else {
+                return false;
+            };
+            let NodeData::Sculpt {
+                desired_resolution, ..
+            } = &mut node.data
+            else {
+                return false;
+            };
+
+            *desired_resolution = clamped_resolution;
+            true
+        })
+    }
+
     pub fn set_export_resolution(&mut self, resolution: u32) -> u32 {
         let max_resolution = self.settings.max_export_resolution.max(16);
         let clamped_resolution = resolution.clamp(16, max_resolution);
@@ -960,6 +1065,7 @@ impl AppBridge {
             .is_some_and(|node| matches!(node.data, NodeData::Sculpt { .. }))
         {
             self.hovered_node = Some(selected_node);
+            self.activate_sculpt_session(selected_node);
             return Some(selected_node);
         }
 
@@ -967,6 +1073,7 @@ impl AppBridge {
         if let Some(sculpt_id) = self.scene.find_sculpt_parent(selected_node, &parent_map) {
             self.selected_node = Some(sculpt_id);
             self.hovered_node = Some(sculpt_id);
+            self.activate_sculpt_session(sculpt_id);
             return Some(sculpt_id);
         }
 
@@ -992,6 +1099,7 @@ impl AppBridge {
                     .insert_sculpt_above(selected_node, center, Vec3::ZERO, color, grid);
             bridge.selected_node = Some(sculpt_id);
             bridge.hovered_node = Some(sculpt_id);
+            bridge.activate_sculpt_session(sculpt_id);
             Some(sculpt_id)
         })
     }
@@ -1308,6 +1416,7 @@ impl AppBridge {
         self.history
             .end_frame(&self.scene, self.selected_node, false);
         self.sync_document_persistence();
+        self.sync_sculpt_session();
         result
     }
 
@@ -1317,6 +1426,7 @@ impl AppBridge {
             restored_selected.filter(|node_id| self.scene.nodes.contains_key(node_id));
         self.hovered_node = self.selected_node;
         self.sync_document_persistence();
+        self.sync_sculpt_session();
     }
 
     fn recovery_summary_from_meta(meta: Option<&crate::io::RecoveryMeta>) -> String {
@@ -1398,6 +1508,8 @@ impl AppBridge {
         self.sculpt_convert_state.dialog = None;
         self.sculpt_convert_state.task = SculptConvertTask::Idle;
         self.sculpt_convert_state.last_message = None;
+        self.sculpt_state = SculptState::Inactive;
+        self.active_tool_label = "Select".to_string();
     }
 
     fn start_export_to_path(&mut self, path: PathBuf) -> bool {
@@ -1540,7 +1652,7 @@ impl AppBridge {
             );
             bridge.selected_node = Some(sculpt_id);
             bridge.hovered_node = Some(sculpt_id);
-            bridge.active_tool_label = "Sculpt".to_string();
+            bridge.activate_sculpt_session(sculpt_id);
         });
 
         self.import_state.last_message = Some(WorkflowMessage {
@@ -1595,6 +1707,7 @@ impl AppBridge {
                 let sculpt_id = bridge.scene.flatten_subtree(subtree_root, grid, center, color);
                 bridge.selected_node = Some(sculpt_id);
                 bridge.hovered_node = Some(sculpt_id);
+                bridge.activate_sculpt_session(sculpt_id);
             } else {
                 let sculpt_id =
                     bridge
@@ -1602,8 +1715,8 @@ impl AppBridge {
                         .insert_sculpt_above(subtree_root, center, Vec3::ZERO, color, grid);
                 bridge.selected_node = Some(sculpt_id);
                 bridge.hovered_node = Some(sculpt_id);
+                bridge.activate_sculpt_session(sculpt_id);
             }
-            bridge.active_tool_label = "Sculpt".to_string();
         });
     }
 
@@ -1891,11 +2004,111 @@ impl AppBridge {
         AppSculptConvertSnapshot { dialog, status }
     }
 
+    fn sculpt_snapshot(&self) -> AppSculptSnapshot {
+        let selected = self.selected_node.and_then(|selected_node| {
+            let node = self.scene.nodes.get(&selected_node)?;
+            let NodeData::Sculpt {
+                voxel_grid,
+                desired_resolution,
+                ..
+            } = &node.data
+            else {
+                return None;
+            };
+
+            Some(AppSelectedSculptSnapshot {
+                node_id: selected_node,
+                node_name: node.name.clone(),
+                current_resolution: voxel_grid.resolution,
+                desired_resolution: *desired_resolution,
+            })
+        });
+        let active_node_id = self.sculpt_state.active_node();
+        let session = match &self.sculpt_state {
+            SculptState::Active {
+                node_id,
+                brush_mode,
+                brush_radius,
+                brush_strength,
+                symmetry_axis,
+                ..
+            } => self
+                .scene
+                .nodes
+                .get(node_id)
+                .map(|node| AppSculptSessionSnapshot {
+                    node_id: *node_id,
+                    node_name: node.name.clone(),
+                    brush_mode_id: brush_mode_id(brush_mode).to_string(),
+                    brush_mode_label: brush_mode_label(brush_mode).to_string(),
+                    brush_radius: *brush_radius,
+                    brush_strength: *brush_strength,
+                    symmetry_axis_id: sculpt_symmetry_axis_id(*symmetry_axis).to_string(),
+                    symmetry_axis_label: sculpt_symmetry_axis_label(*symmetry_axis).to_string(),
+                }),
+            SculptState::Inactive => None,
+        };
+
+        AppSculptSnapshot {
+            can_resume_selected: selected
+                .as_ref()
+                .is_some_and(|selected_sculpt| active_node_id != Some(selected_sculpt.node_id)),
+            can_stop: self.sculpt_state.is_active(),
+            max_resolution: self.settings.max_sculpt_resolution.max(16),
+            selected,
+            session,
+        }
+    }
+
     fn node_is_locked(&self, node_id: NodeId) -> bool {
         self.scene
             .nodes
             .get(&node_id)
             .is_some_and(|node| node.locked)
+    }
+
+    fn activate_sculpt_session(&mut self, node_id: NodeId) -> bool {
+        let Some(node) = self.scene.nodes.get(&node_id) else {
+            return false;
+        };
+        let NodeData::Sculpt { .. } = &node.data else {
+            return false;
+        };
+
+        let extent = node
+            .data
+            .geometry_local_sphere()
+            .map(|(_, radius)| radius.max(0.5))
+            .unwrap_or(0.5);
+        self.sculpt_state = SculptState::new_active_with_radius(node_id, extent);
+        self.active_tool_label = "Sculpt".to_string();
+        true
+    }
+
+    fn deactivate_sculpt_session(&mut self) {
+        self.sculpt_state = SculptState::Inactive;
+        self.active_tool_label = "Select".to_string();
+    }
+
+    fn sync_sculpt_session(&mut self) {
+        let Some(active_node) = self.sculpt_state.active_node() else {
+            if self.active_tool_label == "Sculpt" {
+                self.active_tool_label = "Select".to_string();
+            }
+            return;
+        };
+
+        if self
+            .scene
+            .nodes
+            .get(&active_node)
+            .is_some_and(|node| matches!(node.data, NodeData::Sculpt { .. }))
+        {
+            self.active_tool_label = "Sculpt".to_string();
+            return;
+        }
+
+        self.deactivate_sculpt_session();
     }
 
     fn selected_transform_position(&self) -> Option<Vec3> {
@@ -2151,6 +2364,86 @@ fn export_format_label(path: &Path) -> String {
         .to_uppercase()
 }
 
+fn brush_mode_from_id(mode_id: &str) -> Option<BrushMode> {
+    Some(match mode_id {
+        "add" => BrushMode::Add,
+        "carve" => BrushMode::Carve,
+        "smooth" => BrushMode::Smooth,
+        "flatten" => BrushMode::Flatten,
+        "inflate" => BrushMode::Inflate,
+        "grab" => BrushMode::Grab,
+        _ => return None,
+    })
+}
+
+fn brush_mode_id(mode: &BrushMode) -> &'static str {
+    match mode {
+        BrushMode::Add => "add",
+        BrushMode::Carve => "carve",
+        BrushMode::Smooth => "smooth",
+        BrushMode::Flatten => "flatten",
+        BrushMode::Inflate => "inflate",
+        BrushMode::Grab => "grab",
+    }
+}
+
+fn brush_mode_label(mode: &BrushMode) -> &'static str {
+    match mode {
+        BrushMode::Add => "Add",
+        BrushMode::Carve => "Carve",
+        BrushMode::Smooth => "Smooth",
+        BrushMode::Flatten => "Flatten",
+        BrushMode::Inflate => "Inflate",
+        BrushMode::Grab => "Grab",
+    }
+}
+
+fn sculpt_strength_range_for_mode(mode: &BrushMode) -> (f32, f32) {
+    match mode {
+        BrushMode::Grab => (0.1, 3.0),
+        BrushMode::Add
+        | BrushMode::Carve
+        | BrushMode::Smooth
+        | BrushMode::Flatten
+        | BrushMode::Inflate => (0.01, 0.5),
+    }
+}
+
+fn clamp_sculpt_strength_for_mode(mode: &BrushMode, value: f32) -> f32 {
+    let (min_strength, max_strength) = sculpt_strength_range_for_mode(mode);
+    value.clamp(min_strength, max_strength)
+}
+
+fn sculpt_symmetry_axis_from_id(axis_id: &str) -> Option<Option<u8>> {
+    Some(match axis_id {
+        "off" => None,
+        "x" => Some(0),
+        "y" => Some(1),
+        "z" => Some(2),
+        _ => return None,
+    })
+}
+
+fn sculpt_symmetry_axis_id(axis: Option<u8>) -> &'static str {
+    match axis {
+        None => "off",
+        Some(0) => "x",
+        Some(1) => "y",
+        Some(2) => "z",
+        Some(_) => "off",
+    }
+}
+
+fn sculpt_symmetry_axis_label(axis: Option<u8>) -> &'static str {
+    match axis {
+        None => "Off",
+        Some(0) => "X",
+        Some(1) => "Y",
+        Some(2) => "Z",
+        Some(_) => "Off",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -2300,6 +2593,9 @@ mod tests {
                 .map(|node| node.kind_label.as_str()),
             Some("Sculpt")
         );
+        let sculpt = bridge.scene_snapshot().sculpt;
+        assert_eq!(sculpt.selected.as_ref().map(|selected| selected.node_name.as_str()), Some("Import"));
+        assert_eq!(sculpt.session.as_ref().map(|session| session.brush_mode_id.as_str()), Some("add"));
     }
 
     #[test]
@@ -3100,6 +3396,16 @@ mod tests {
         assert_eq!(bridge.selected_node, Some(sculpt_id));
         assert_eq!(bridge.hovered_node, Some(sculpt_id));
         assert!(bridge.scene_snapshot().history.can_undo);
+        let sculpt = bridge.scene_snapshot().sculpt;
+        assert_eq!(
+            sculpt.selected.as_ref().map(|selected| selected.node_id),
+            Some(sculpt_id)
+        );
+        assert_eq!(
+            sculpt.session.as_ref().map(|session| session.node_id),
+            Some(sculpt_id)
+        );
+        assert!(sculpt.can_stop);
         match &bridge.scene.nodes[&sculpt_id].data {
             NodeData::Sculpt {
                 input,
@@ -3149,6 +3455,117 @@ mod tests {
             bridge.scene_snapshot().history.can_undo,
             can_undo_before_reuse
         );
+        assert_eq!(
+            bridge.scene_snapshot().sculpt.session.as_ref().map(|session| session.node_id),
+            Some(sculpt_id)
+        );
+    }
+
+    #[test]
+    fn sculpt_snapshot_commands_update_session_and_selected_resolution() {
+        let mut bridge = AppBridge::new();
+        let sphere_id = bridge
+            .scene
+            .top_level_nodes()
+            .into_iter()
+            .find(|node_id| {
+                matches!(
+                    bridge.scene.nodes[node_id].data,
+                    NodeData::Primitive {
+                        kind: SdfPrimitive::Sphere,
+                        ..
+                    }
+                )
+            })
+            .expect("default sphere");
+        bridge.select_node(Some(sphere_id));
+        let sculpt_id = bridge.create_sculpt().expect("sculpt id");
+
+        assert!(bridge.set_sculpt_brush_mode("grab"));
+        assert!(bridge.set_sculpt_brush_strength(9.0));
+        assert!(bridge.set_sculpt_symmetry_axis("z"));
+        assert!(bridge.set_selected_sculpt_resolution(999));
+
+        let sculpt = bridge.scene_snapshot().sculpt;
+        let session = sculpt.session.expect("active sculpt session");
+        let selected = sculpt.selected.expect("selected sculpt");
+        assert_eq!(session.node_id, sculpt_id);
+        assert_eq!(session.brush_mode_id, "grab");
+        assert_eq!(session.brush_mode_label, "Grab");
+        assert_eq!(session.brush_strength, 3.0);
+        assert_eq!(session.symmetry_axis_id, "z");
+        assert_eq!(session.symmetry_axis_label, "Z");
+        assert_eq!(
+            selected.desired_resolution,
+            bridge.settings.max_sculpt_resolution.max(16)
+        );
+    }
+
+    #[test]
+    fn sculpt_session_can_stop_and_resume_selected() {
+        let mut bridge = AppBridge::new();
+        let sphere_id = bridge
+            .scene
+            .top_level_nodes()
+            .into_iter()
+            .find(|node_id| {
+                matches!(
+                    bridge.scene.nodes[node_id].data,
+                    NodeData::Primitive {
+                        kind: SdfPrimitive::Sphere,
+                        ..
+                    }
+                )
+            })
+            .expect("default sphere");
+        bridge.select_node(Some(sphere_id));
+        let sculpt_id = bridge.create_sculpt().expect("sculpt id");
+
+        assert!(bridge.stop_sculpting());
+        let stopped = bridge.scene_snapshot().sculpt;
+        assert!(!stopped.can_stop);
+        assert!(stopped.session.is_none());
+        assert!(stopped.can_resume_selected);
+        assert_eq!(bridge.scene_snapshot().tool.active_tool_label, "Select");
+
+        assert!(bridge.resume_sculpting_selected());
+        let resumed = bridge.scene_snapshot().sculpt;
+        assert_eq!(
+            resumed.session.as_ref().map(|session| session.node_id),
+            Some(sculpt_id)
+        );
+        assert!(resumed.can_stop);
+        assert!(!resumed.can_resume_selected);
+        assert_eq!(bridge.scene_snapshot().tool.active_tool_label, "Sculpt");
+    }
+
+    #[test]
+    fn sculpt_session_syncs_when_active_sculpt_is_deleted() {
+        let mut bridge = AppBridge::new();
+        let sphere_id = bridge
+            .scene
+            .top_level_nodes()
+            .into_iter()
+            .find(|node_id| {
+                matches!(
+                    bridge.scene.nodes[node_id].data,
+                    NodeData::Primitive {
+                        kind: SdfPrimitive::Sphere,
+                        ..
+                    }
+                )
+            })
+            .expect("default sphere");
+        bridge.select_node(Some(sphere_id));
+        let sculpt_id = bridge.create_sculpt().expect("sculpt id");
+
+        bridge.delete_selected();
+
+        let sculpt = bridge.scene_snapshot().sculpt;
+        assert!(sculpt.session.is_none());
+        assert!(sculpt.selected.is_none());
+        assert!(!bridge.scene.nodes.contains_key(&sculpt_id));
+        assert_eq!(bridge.scene_snapshot().tool.active_tool_label, "Select");
     }
 
     #[test]
