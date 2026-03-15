@@ -31,7 +31,6 @@ These behaviors are still product-relevant and should not be deleted until they 
 
 | Area | Current egui files | Why it still blocks decommission | Required migration direction |
 | --- | --- | --- | --- |
-| Advanced light editing and light linking | `src/ui/lights_panel.rs`, `src/ui/light_linking.rs`, `src/ui/light_gizmo.rs`, `src/ui/light_graph.rs` | Backend-owned light snapshots, validation, and light-linking commands now live in `src/app_bridge/`, but Flutter still lacks the advanced light inspector and per-node linking UI. | Build the Flutter light inspector and linking surface in PRD `#37`. Decide separately whether the visual light graph survives the toolkit swap. |
 | Render settings | `src/ui/render_settings.rs` | Flutter does not yet expose renderer quality, shading, AO, shadow, or post-processing controls. | Add backend-owned render settings snapshot/commands and a Flutter panel. |
 | Application settings and keymap editing | `src/ui/settings_window.rs`, `src/keymap.rs`, menu hooks in `src/app/ui_panels.rs` | Flutter has no parity for settings, key bindings, bookmarks, or debug toggles. | Migrate settings snapshots/commands before deleting the egui settings window. |
 | History inspection beyond undo/redo buttons | `src/ui/history_panel.rs` | Flutter exposes command availability but not the history list or labels. | Decide whether labeled history remains required; if yes, expose neutral history snapshot data. |
@@ -60,19 +59,19 @@ These are the high-signal duplicate ownership points to cut before touching larg
 - `src/ui/scene_tree.rs`
   - Scene hierarchy selection, rename, visibility, lock, and delete flows are duplicated by Flutter against backend snapshots.
 - `src/ui/properties.rs`
-  - Basic node, transform, primitive, material, and sculpt session controls are duplicated. Advanced light/render sections are not.
+  - Basic node, transform, primitive, material, sculpt session, and advanced light controls are duplicated. Render/settings sections are not.
 - `src/ui/quick_toolbar.rs`
   - Manipulation and quick command affordances overlap with Flutter command strips and viewport tool overlay.
 
 ## PRD #27 Deletion Order
 
 1. Remove duplicate egui menu and panel command wiring for document, history, camera, scene-tree, and basic property edits.
-2. Keep egui-only workflows that still block parity isolated and explicit: advanced lights, render settings, settings/keymap, and advanced diagnostics.
+2. Keep egui-only workflows that still block parity isolated and explicit: render settings, settings/keymap, and advanced diagnostics.
 3. Decide whether out-of-scope egui-only features are intentionally retained for the native egui app or formally dropped.
 4. Only after the remaining required workflows move behind backend-neutral modules should the egui adapter modules themselves be deleted.
 
 ## Decision Summary
 
 - Flutter plus `src/app_bridge/` is already authoritative for the core editing loop.
-- The biggest remaining product gaps are advanced lights, render settings, application settings, and any diagnostics/reference-image surfaces that stay in scope.
+- The biggest remaining product gaps are render settings, application settings, and any diagnostics/reference-image surfaces that stay in scope.
 - The biggest duplicate-ownership cleanup targets are `src/app/ui_panels.rs`, `src/ui/scene_tree.rs`, `src/ui/properties.rs`, and `src/ui/quick_toolbar.rs`.

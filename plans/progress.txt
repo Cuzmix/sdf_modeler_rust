@@ -2778,3 +2778,34 @@ Manual verification:
 Result:
 - PRD #36 is fully verified and complete.
 
+--- Migration Iteration 30: PRD #37 - Flutter advanced light inspector and linking panel ---
+COMPLETED. Added a touch-usable Flutter light inspector and per-node light-linking surface on top of the backend-owned light snapshot and command layer, so advanced light editing no longer depends on egui panels.
+
+Changes:
+- apps/flutter/lib/src/light/light_inspector_panel.dart
+- apps/flutter/lib/app.dart
+- apps/flutter/test/widget_test.dart
+- docs/egui_parity_audit.md
+- plans/prd.json
+- plans/progress.txt
+  - Added a dedicated Flutter light inspector module that exposes backend-owned light type changes, color/intensity/range controls, shadow and volumetric toggles, cookie selection, proximity settings, array controls, and expression editing.
+  - Wired the light inspector into the existing desktop inspector and tablet bottom-sheet inspector so the same backend light commands remain reachable across shell layouts.
+  - Added a touch-friendly light-linking list that lets geometry nodes toggle backend light links without depending on the egui light matrix or graph presentation.
+  - Extended the widget test harness with advanced light snapshots and command counters, then added coverage for inspector edits, expression apply, array-type switching, and light-link toggles through the Rust facade.
+  - Updated the parity audit so advanced light editing is no longer a remaining parity blocker; the next migration gap is render settings in PRD `#38`.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS
+- cargo build: PASS
+- Flutter analyze: PASS
+- Flutter test: PASS
+- Flutter build windows --debug: PASS
+
+Manual verification:
+- Not run in this iteration.
+
+Result:
+- PRD #37 is fully verified and complete.
+

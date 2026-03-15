@@ -256,7 +256,7 @@
     "category": "lights",
     "description": "Build the Flutter advanced light inspector and light-linking panel.\n\nSteps:\n1. Add Flutter UI for the backend-owned light snapshots and commands from PRD `#36`.\n2. Keep the inspector touch-usable without recreating egui-only graph affordances by default.\n3. Ensure light edits, linking changes, and selection feedback remain synchronized with backend state.\n4. Remove egui-only advanced light panel ownership once parity is sufficient.",
     "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build` if Rust light code changes. If the bridge API changes, run `apps/flutter/scripts/frb_codegen.ps1`. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, and `fvm flutter build windows --debug`.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 38,

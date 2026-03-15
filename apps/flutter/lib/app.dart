@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:sdf_modeler_flutter/src/rust/api/simple.dart';
 import 'package:sdf_modeler_flutter/src/export/export_panel.dart';
 import 'package:sdf_modeler_flutter/src/import/import_panel.dart';
+import 'package:sdf_modeler_flutter/src/light/light_inspector_panel.dart';
 import 'package:sdf_modeler_flutter/src/scene/scene_snapshot.dart';
 import 'package:sdf_modeler_flutter/src/scene/scene_tree_panel.dart';
 import 'package:sdf_modeler_flutter/src/sculpt/sculpt_convert_panel.dart';
@@ -919,6 +920,169 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     );
   }
 
+  Future<void> _setSelectedLightType(String lightTypeId) {
+    return _runSceneCommand(
+      () => setSelectedLightType(lightTypeId: lightTypeId),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _setSelectedLightColor(AppVec3 color) {
+    return _runSceneCommand(
+      () => setSelectedLightColor(
+        red: color.x,
+        green: color.y,
+        blue: color.z,
+      ),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _setSelectedLightIntensity(double intensity) {
+    return _runSceneCommand(
+      () => setSelectedLightIntensity(intensity: intensity),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _setSelectedLightRange(double range) {
+    return _runSceneCommand(
+      () => setSelectedLightRange(range: range),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _setSelectedLightSpotAngle(double angleDegrees) {
+    return _runSceneCommand(
+      () => setSelectedLightSpotAngle(angleDegrees: angleDegrees),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _setSelectedLightCastShadows(bool enabled) {
+    return _runSceneCommand(
+      () => setSelectedLightCastShadows(enabled: enabled),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _setSelectedLightShadowSoftness(double softness) {
+    return _runSceneCommand(
+      () => setSelectedLightShadowSoftness(softness: softness),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _setSelectedLightShadowColor(AppVec3 color) {
+    return _runSceneCommand(
+      () => setSelectedLightShadowColor(
+        red: color.x,
+        green: color.y,
+        blue: color.z,
+      ),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _setSelectedLightVolumetric(bool enabled) {
+    return _runSceneCommand(
+      () => setSelectedLightVolumetric(enabled: enabled),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _setSelectedLightVolumetricDensity(double density) {
+    return _runSceneCommand(
+      () => setSelectedLightVolumetricDensity(density: density),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _setSelectedLightCookie(int cookieNodeId) {
+    return _runSceneCommand(
+      () => setSelectedLightCookie(cookieNodeId: BigInt.from(cookieNodeId)),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _clearSelectedLightCookie() {
+    return _runSceneCommand(clearSelectedLightCookie, requestNativeFrame: false);
+  }
+
+  Future<void> _setSelectedLightProximityMode(String modeId) {
+    return _runSceneCommand(
+      () => setSelectedLightProximityMode(modeId: modeId),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _setSelectedLightProximityRange(double range) {
+    return _runSceneCommand(
+      () => setSelectedLightProximityRange(range: range),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _setSelectedLightArrayPattern(String patternId) {
+    return _runSceneCommand(
+      () => setSelectedLightArrayPattern(patternId: patternId),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _setSelectedLightArrayCount(int count) {
+    return _runSceneCommand(
+      () => setSelectedLightArrayCount(count: count),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _setSelectedLightArrayRadius(double radius) {
+    return _runSceneCommand(
+      () => setSelectedLightArrayRadius(radius: radius),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _setSelectedLightArrayColorVariation(double value) {
+    return _runSceneCommand(
+      () => setSelectedLightArrayColorVariation(value: value),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _setSelectedLightIntensityExpression(String expression) {
+    return _runSceneCommand(
+      () => setSelectedLightIntensityExpression(expression: expression),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _setSelectedLightColorHueExpression(String expression) {
+    return _runSceneCommand(
+      () => setSelectedLightColorHueExpression(expression: expression),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _setNodeLightMask(int nodeId, int mask) {
+    return _runSceneCommand(
+      () => setNodeLightMask(nodeId: BigInt.from(nodeId), mask: mask),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _setNodeLightLinkEnabled(int nodeId, int lightId, bool enabled) {
+    return _runSceneCommand(
+      () => setNodeLightLinkEnabled(
+        nodeId: BigInt.from(nodeId),
+        lightId: BigInt.from(lightId),
+        enabled: enabled,
+      ),
+      requestNativeFrame: false,
+    );
+  }
+
   Future<void> _setManipulatorMode(String modeId) {
     return _runSceneCommand(() => setManipulatorMode(modeId: modeId));
   }
@@ -1256,6 +1420,41 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                       onSetSculptBrushStrength: _setSculptBrushStrength,
                       onSetSculptSymmetryAxis: _setSculptSymmetryAxis,
                       onSetSelectedSculptResolution: _setSelectedSculptResolution,
+                      onSetSelectedLightType: _setSelectedLightType,
+                      onSetSelectedLightColor: _setSelectedLightColor,
+                      onSetSelectedLightIntensity: _setSelectedLightIntensity,
+                      onSetSelectedLightRange: _setSelectedLightRange,
+                      onSetSelectedLightSpotAngle: _setSelectedLightSpotAngle,
+                      onSetSelectedLightCastShadows:
+                          _setSelectedLightCastShadows,
+                      onSetSelectedLightShadowSoftness:
+                          _setSelectedLightShadowSoftness,
+                      onSetSelectedLightShadowColor:
+                          _setSelectedLightShadowColor,
+                      onSetSelectedLightVolumetric:
+                          _setSelectedLightVolumetric,
+                      onSetSelectedLightVolumetricDensity:
+                          _setSelectedLightVolumetricDensity,
+                      onSetSelectedLightCookie: _setSelectedLightCookie,
+                      onClearSelectedLightCookie: _clearSelectedLightCookie,
+                      onSetSelectedLightProximityMode:
+                          _setSelectedLightProximityMode,
+                      onSetSelectedLightProximityRange:
+                          _setSelectedLightProximityRange,
+                      onSetSelectedLightArrayPattern:
+                          _setSelectedLightArrayPattern,
+                      onSetSelectedLightArrayCount:
+                          _setSelectedLightArrayCount,
+                      onSetSelectedLightArrayRadius:
+                          _setSelectedLightArrayRadius,
+                      onSetSelectedLightArrayColorVariation:
+                          _setSelectedLightArrayColorVariation,
+                      onSetSelectedLightIntensityExpression:
+                          _setSelectedLightIntensityExpression,
+                      onSetSelectedLightColorHueExpression:
+                          _setSelectedLightColorHueExpression,
+                      onSetNodeLightMask: _setNodeLightMask,
+                      onSetNodeLightLinkEnabled: _setNodeLightLinkEnabled,
                       onFrameAll: () => _runSceneCommand(frameAll),
                       onResetScene: () => _runSceneCommand(resetScene),
                       onFocusSelected: () => _runSceneCommand(focusSelected),
@@ -1550,6 +1749,41 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                   onSetSculptBrushStrength: _setSculptBrushStrength,
                   onSetSculptSymmetryAxis: _setSculptSymmetryAxis,
                   onSetSelectedSculptResolution: _setSelectedSculptResolution,
+                  onSetSelectedLightType: _setSelectedLightType,
+                  onSetSelectedLightColor: _setSelectedLightColor,
+                  onSetSelectedLightIntensity: _setSelectedLightIntensity,
+                  onSetSelectedLightRange: _setSelectedLightRange,
+                  onSetSelectedLightSpotAngle: _setSelectedLightSpotAngle,
+                  onSetSelectedLightCastShadows:
+                      _setSelectedLightCastShadows,
+                  onSetSelectedLightShadowSoftness:
+                      _setSelectedLightShadowSoftness,
+                  onSetSelectedLightShadowColor:
+                      _setSelectedLightShadowColor,
+                  onSetSelectedLightVolumetric:
+                      _setSelectedLightVolumetric,
+                  onSetSelectedLightVolumetricDensity:
+                      _setSelectedLightVolumetricDensity,
+                  onSetSelectedLightCookie: _setSelectedLightCookie,
+                  onClearSelectedLightCookie: _clearSelectedLightCookie,
+                  onSetSelectedLightProximityMode:
+                      _setSelectedLightProximityMode,
+                  onSetSelectedLightProximityRange:
+                      _setSelectedLightProximityRange,
+                  onSetSelectedLightArrayPattern:
+                      _setSelectedLightArrayPattern,
+                  onSetSelectedLightArrayCount:
+                      _setSelectedLightArrayCount,
+                  onSetSelectedLightArrayRadius:
+                      _setSelectedLightArrayRadius,
+                  onSetSelectedLightArrayColorVariation:
+                      _setSelectedLightArrayColorVariation,
+                  onSetSelectedLightIntensityExpression:
+                      _setSelectedLightIntensityExpression,
+                  onSetSelectedLightColorHueExpression:
+                      _setSelectedLightColorHueExpression,
+                  onSetNodeLightMask: _setNodeLightMask,
+                  onSetNodeLightLinkEnabled: _setNodeLightLinkEnabled,
                   onFrameAll: () => _runSceneCommand(frameAll),
                   onResetScene: () => _runSceneCommand(resetScene),
                   onFocusSelected: () => _runSceneCommand(focusSelected),
@@ -1734,6 +1968,28 @@ class _InspectorPanel extends StatelessWidget {
     required this.onSetSculptBrushStrength,
     required this.onSetSculptSymmetryAxis,
     required this.onSetSelectedSculptResolution,
+    required this.onSetSelectedLightType,
+    required this.onSetSelectedLightColor,
+    required this.onSetSelectedLightIntensity,
+    required this.onSetSelectedLightRange,
+    required this.onSetSelectedLightSpotAngle,
+    required this.onSetSelectedLightCastShadows,
+    required this.onSetSelectedLightShadowSoftness,
+    required this.onSetSelectedLightShadowColor,
+    required this.onSetSelectedLightVolumetric,
+    required this.onSetSelectedLightVolumetricDensity,
+    required this.onSetSelectedLightCookie,
+    required this.onClearSelectedLightCookie,
+    required this.onSetSelectedLightProximityMode,
+    required this.onSetSelectedLightProximityRange,
+    required this.onSetSelectedLightArrayPattern,
+    required this.onSetSelectedLightArrayCount,
+    required this.onSetSelectedLightArrayRadius,
+    required this.onSetSelectedLightArrayColorVariation,
+    required this.onSetSelectedLightIntensityExpression,
+    required this.onSetSelectedLightColorHueExpression,
+    required this.onSetNodeLightMask,
+    required this.onSetNodeLightLinkEnabled,
     required this.onFrameAll,
     required this.onResetScene,
     required this.onFocusSelected,
@@ -1812,6 +2068,29 @@ class _InspectorPanel extends StatelessWidget {
   final ValueChanged<double> onSetSculptBrushStrength;
   final ValueChanged<String> onSetSculptSymmetryAxis;
   final ValueChanged<int> onSetSelectedSculptResolution;
+  final ValueChanged<String> onSetSelectedLightType;
+  final ValueChanged<AppVec3> onSetSelectedLightColor;
+  final ValueChanged<double> onSetSelectedLightIntensity;
+  final ValueChanged<double> onSetSelectedLightRange;
+  final ValueChanged<double> onSetSelectedLightSpotAngle;
+  final ValueChanged<bool> onSetSelectedLightCastShadows;
+  final ValueChanged<double> onSetSelectedLightShadowSoftness;
+  final ValueChanged<AppVec3> onSetSelectedLightShadowColor;
+  final ValueChanged<bool> onSetSelectedLightVolumetric;
+  final ValueChanged<double> onSetSelectedLightVolumetricDensity;
+  final ValueChanged<int> onSetSelectedLightCookie;
+  final VoidCallback onClearSelectedLightCookie;
+  final ValueChanged<String> onSetSelectedLightProximityMode;
+  final ValueChanged<double> onSetSelectedLightProximityRange;
+  final ValueChanged<String> onSetSelectedLightArrayPattern;
+  final ValueChanged<int> onSetSelectedLightArrayCount;
+  final ValueChanged<double> onSetSelectedLightArrayRadius;
+  final ValueChanged<double> onSetSelectedLightArrayColorVariation;
+  final ValueChanged<String> onSetSelectedLightIntensityExpression;
+  final ValueChanged<String> onSetSelectedLightColorHueExpression;
+  final void Function(int nodeId, int mask) onSetNodeLightMask;
+  final void Function(int nodeId, int lightId, bool enabled)
+  onSetNodeLightLinkEnabled;
   final VoidCallback onFrameAll;
   final VoidCallback onResetScene;
   final VoidCallback onFocusSelected;
@@ -1964,6 +2243,42 @@ class _InspectorPanel extends StatelessWidget {
                   ? null
                   : () => onToggleSceneNodeLock(selectedNodeProperties.nodeId),
             ),
+          const SizedBox(height: ShellTokens.sectionGap),
+          Text(
+            'Light Inspector',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: ShellTokens.controlGap),
+          LightInspectorPanel(
+            properties: selectedNodeProperties,
+            lightLinking: snapshot?.lightLinking,
+            enabled: !commandInFlight,
+            onSetLightType: onSetSelectedLightType,
+            onSetLightColor: onSetSelectedLightColor,
+            onSetLightIntensity: onSetSelectedLightIntensity,
+            onSetLightRange: onSetSelectedLightRange,
+            onSetLightSpotAngle: onSetSelectedLightSpotAngle,
+            onSetLightCastShadows: onSetSelectedLightCastShadows,
+            onSetLightShadowSoftness: onSetSelectedLightShadowSoftness,
+            onSetLightShadowColor: onSetSelectedLightShadowColor,
+            onSetLightVolumetric: onSetSelectedLightVolumetric,
+            onSetLightVolumetricDensity: onSetSelectedLightVolumetricDensity,
+            onSetLightCookie: onSetSelectedLightCookie,
+            onClearLightCookie: onClearSelectedLightCookie,
+            onSetLightProximityMode: onSetSelectedLightProximityMode,
+            onSetLightProximityRange: onSetSelectedLightProximityRange,
+            onSetLightArrayPattern: onSetSelectedLightArrayPattern,
+            onSetLightArrayCount: onSetSelectedLightArrayCount,
+            onSetLightArrayRadius: onSetSelectedLightArrayRadius,
+            onSetLightArrayColorVariation:
+                onSetSelectedLightArrayColorVariation,
+            onSetLightIntensityExpression:
+                onSetSelectedLightIntensityExpression,
+            onSetLightColorHueExpression:
+                onSetSelectedLightColorHueExpression,
+            onSetNodeLightMask: onSetNodeLightMask,
+            onSetNodeLightLinkEnabled: onSetNodeLightLinkEnabled,
+          ),
           const SizedBox(height: ShellTokens.sectionGap),
           Text(
             'Transform Inspector',

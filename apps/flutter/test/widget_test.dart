@@ -411,6 +411,171 @@ class _MockRustApi extends RustLibApi {
     },
   );
 
+  static final String _advancedLightSnapshot = _withFields(
+    _lightSnapshot,
+    <String, Object?>{
+      'selected_node_properties': <String, Object?>{
+        'node_id': 8,
+        'name': 'Transform 4',
+        'kind_label': 'Transform',
+        'visible': true,
+        'locked': false,
+        'transform': <String, Object?>{
+          'position_label': 'Translation',
+          'position': <String, double>{'x': 0.0, 'y': 1.5, 'z': 0.0},
+          'rotation_degrees': <String, double>{'x': 0.0, 'y': 15.0, 'z': 0.0},
+          'scale': <String, double>{'x': 1.0, 'y': 1.0, 'z': 1.0},
+        },
+        'primitive': null,
+        'material': null,
+        'light': <String, Object?>{
+          'node_id': 9,
+          'transform_node_id': 8,
+          'light_type_id': 'spot',
+          'light_type_label': 'Spot',
+          'color': <String, double>{'x': 0.7, 'y': 0.8, 'z': 0.9},
+          'intensity': 2.5,
+          'range': 12.0,
+          'spot_angle': 35.0,
+          'cast_shadows': true,
+          'shadow_softness': 8.0,
+          'shadow_color': <String, double>{'x': 0.1, 'y': 0.2, 'z': 0.3},
+          'volumetric': true,
+          'volumetric_density': 0.4,
+          'cookie_node_id': 12,
+          'cookie_node_name': 'Noise Cookie',
+          'cookie_candidates': <Object?>[
+            <String, Object?>{
+              'node_id': 12,
+              'name': 'Noise Cookie',
+              'kind_label': 'Plane',
+            },
+            <String, Object?>{
+              'node_id': 13,
+              'name': 'Grid Cookie',
+              'kind_label': 'Plane',
+            },
+          ],
+          'proximity_mode_id': 'brighten',
+          'proximity_mode_label': 'Brighten',
+          'proximity_range': 3.0,
+          'array_pattern_id': null,
+          'array_pattern_label': null,
+          'array_count': null,
+          'array_radius': null,
+          'array_color_variation': null,
+          'intensity_expression': 'time * 2.0',
+          'intensity_expression_error': null,
+          'color_hue_expression': 'sin(time)',
+          'color_hue_expression_error': null,
+          'supports_range': true,
+          'supports_spot_angle': true,
+          'supports_shadows': true,
+          'supports_volumetric': true,
+          'supports_cookie': true,
+          'supports_proximity': true,
+          'supports_expressions': true,
+          'supports_array': false,
+        },
+      },
+      'light_linking': <String, Object?>{
+        'lights': <Object?>[
+          <String, Object?>{
+            'light_node_id': 9,
+            'light_name': 'Key Spot',
+            'light_type_label': 'Spot',
+            'active': true,
+            'mask_bit': 0,
+            'color': <String, double>{'x': 0.7, 'y': 0.8, 'z': 0.9},
+          },
+          <String, Object?>{
+            'light_node_id': 11,
+            'light_name': 'Fill Point',
+            'light_type_label': 'Point',
+            'active': true,
+            'mask_bit': 1,
+            'color': <String, double>{'x': 0.5, 'y': 0.4, 'z': 0.7},
+          },
+        ],
+        'geometry_nodes': <Object?>[
+          <String, Object?>{
+            'node_id': 1,
+            'node_name': 'Sphere',
+            'kind_label': 'Sphere',
+            'light_mask': 1,
+          },
+          <String, Object?>{
+            'node_id': 14,
+            'node_name': 'Sculpt',
+            'kind_label': 'Sculpt',
+            'light_mask': 3,
+          },
+        ],
+        'total_visible_light_count': 2,
+        'max_light_count': 8,
+      },
+    },
+  );
+
+  static final String _arrayLightSnapshot = _withFields(
+    _advancedLightSnapshot,
+    <String, Object?>{
+      'selected_node_properties': <String, Object?>{
+        'node_id': 8,
+        'name': 'Transform 4',
+        'kind_label': 'Transform',
+        'visible': true,
+        'locked': false,
+        'transform': <String, Object?>{
+          'position_label': 'Translation',
+          'position': <String, double>{'x': 0.0, 'y': 1.5, 'z': 0.0},
+          'rotation_degrees': <String, double>{'x': 0.0, 'y': 15.0, 'z': 0.0},
+          'scale': <String, double>{'x': 1.0, 'y': 1.0, 'z': 1.0},
+        },
+        'primitive': null,
+        'material': null,
+        'light': <String, Object?>{
+          'node_id': 9,
+          'transform_node_id': 8,
+          'light_type_id': 'array',
+          'light_type_label': 'Array',
+          'color': <String, double>{'x': 0.7, 'y': 0.8, 'z': 0.9},
+          'intensity': 2.5,
+          'range': 12.0,
+          'spot_angle': 35.0,
+          'cast_shadows': false,
+          'shadow_softness': 8.0,
+          'shadow_color': <String, double>{'x': 0.1, 'y': 0.2, 'z': 0.3},
+          'volumetric': false,
+          'volumetric_density': 0.4,
+          'cookie_node_id': null,
+          'cookie_node_name': null,
+          'cookie_candidates': <Object?>[],
+          'proximity_mode_id': 'off',
+          'proximity_mode_label': 'Off',
+          'proximity_range': 3.0,
+          'array_pattern_id': 'ring',
+          'array_pattern_label': 'Ring',
+          'array_count': 6,
+          'array_radius': 4.0,
+          'array_color_variation': 0.2,
+          'intensity_expression': null,
+          'intensity_expression_error': null,
+          'color_hue_expression': null,
+          'color_hue_expression_error': null,
+          'supports_range': true,
+          'supports_spot_angle': false,
+          'supports_shadows': false,
+          'supports_volumetric': false,
+          'supports_cookie': false,
+          'supports_proximity': false,
+          'supports_expressions': false,
+          'supports_array': true,
+        },
+      },
+    },
+  );
+
   String currentSnapshot = _baseSnapshot;
   int sceneSnapshotJsonCalls = 0;
   int addBoxCalls = 0;
@@ -426,6 +591,28 @@ class _MockRustApi extends RustLibApi {
   int setSculptBrushStrengthCalls = 0;
   int setSculptSymmetryAxisCalls = 0;
   int setSelectedSculptResolutionCalls = 0;
+  int clearSelectedLightCookieCalls = 0;
+  int setNodeLightLinkEnabledCalls = 0;
+  int setNodeLightMaskCalls = 0;
+  int setSelectedLightArrayColorVariationCalls = 0;
+  int setSelectedLightArrayCountCalls = 0;
+  int setSelectedLightArrayPatternCalls = 0;
+  int setSelectedLightArrayRadiusCalls = 0;
+  int setSelectedLightCastShadowsCalls = 0;
+  int setSelectedLightColorCalls = 0;
+  int setSelectedLightColorHueExpressionCalls = 0;
+  int setSelectedLightCookieCalls = 0;
+  int setSelectedLightIntensityCalls = 0;
+  int setSelectedLightIntensityExpressionCalls = 0;
+  int setSelectedLightProximityModeCalls = 0;
+  int setSelectedLightProximityRangeCalls = 0;
+  int setSelectedLightRangeCalls = 0;
+  int setSelectedLightShadowColorCalls = 0;
+  int setSelectedLightShadowSoftnessCalls = 0;
+  int setSelectedLightSpotAngleCalls = 0;
+  int setSelectedLightTypeCalls = 0;
+  int setSelectedLightVolumetricCalls = 0;
+  int setSelectedLightVolumetricDensityCalls = 0;
   int duplicateSelectedCalls = 0;
   int newSceneCalls = 0;
   int openSceneCalls = 0;
@@ -489,6 +676,28 @@ class _MockRustApi extends RustLibApi {
     setSculptBrushStrengthCalls = 0;
     setSculptSymmetryAxisCalls = 0;
     setSelectedSculptResolutionCalls = 0;
+    clearSelectedLightCookieCalls = 0;
+    setNodeLightLinkEnabledCalls = 0;
+    setNodeLightMaskCalls = 0;
+    setSelectedLightArrayColorVariationCalls = 0;
+    setSelectedLightArrayCountCalls = 0;
+    setSelectedLightArrayPatternCalls = 0;
+    setSelectedLightArrayRadiusCalls = 0;
+    setSelectedLightCastShadowsCalls = 0;
+    setSelectedLightColorCalls = 0;
+    setSelectedLightColorHueExpressionCalls = 0;
+    setSelectedLightCookieCalls = 0;
+    setSelectedLightIntensityCalls = 0;
+    setSelectedLightIntensityExpressionCalls = 0;
+    setSelectedLightProximityModeCalls = 0;
+    setSelectedLightProximityRangeCalls = 0;
+    setSelectedLightRangeCalls = 0;
+    setSelectedLightShadowColorCalls = 0;
+    setSelectedLightShadowSoftnessCalls = 0;
+    setSelectedLightSpotAngleCalls = 0;
+    setSelectedLightTypeCalls = 0;
+    setSelectedLightVolumetricCalls = 0;
+    setSelectedLightVolumetricDensityCalls = 0;
     duplicateSelectedCalls = 0;
     newSceneCalls = 0;
     openSceneCalls = 0;
@@ -886,6 +1095,7 @@ class _MockRustApi extends RustLibApi {
 
   @override
   String crateApiSimpleClearSelectedLightCookie() {
+    clearSelectedLightCookieCalls += 1;
     return currentSnapshot;
   }
 
@@ -895,6 +1105,7 @@ class _MockRustApi extends RustLibApi {
     required BigInt lightId,
     required bool enabled,
   }) {
+    setNodeLightLinkEnabledCalls += 1;
     return currentSnapshot;
   }
 
@@ -903,6 +1114,7 @@ class _MockRustApi extends RustLibApi {
     required BigInt nodeId,
     required int mask,
   }) {
+    setNodeLightMaskCalls += 1;
     return currentSnapshot;
   }
 
@@ -910,11 +1122,13 @@ class _MockRustApi extends RustLibApi {
   String crateApiSimpleSetSelectedLightArrayColorVariation({
     required double value,
   }) {
+    setSelectedLightArrayColorVariationCalls += 1;
     return currentSnapshot;
   }
 
   @override
   String crateApiSimpleSetSelectedLightArrayCount({required int count}) {
+    setSelectedLightArrayCountCalls += 1;
     return currentSnapshot;
   }
 
@@ -922,16 +1136,19 @@ class _MockRustApi extends RustLibApi {
   String crateApiSimpleSetSelectedLightArrayPattern({
     required String patternId,
   }) {
+    setSelectedLightArrayPatternCalls += 1;
     return currentSnapshot;
   }
 
   @override
   String crateApiSimpleSetSelectedLightArrayRadius({required double radius}) {
+    setSelectedLightArrayRadiusCalls += 1;
     return currentSnapshot;
   }
 
   @override
   String crateApiSimpleSetSelectedLightCastShadows({required bool enabled}) {
+    setSelectedLightCastShadowsCalls += 1;
     return currentSnapshot;
   }
 
@@ -941,6 +1158,7 @@ class _MockRustApi extends RustLibApi {
     required double green,
     required double blue,
   }) {
+    setSelectedLightColorCalls += 1;
     return currentSnapshot;
   }
 
@@ -948,16 +1166,19 @@ class _MockRustApi extends RustLibApi {
   String crateApiSimpleSetSelectedLightColorHueExpression({
     required String expression,
   }) {
+    setSelectedLightColorHueExpressionCalls += 1;
     return currentSnapshot;
   }
 
   @override
   String crateApiSimpleSetSelectedLightCookie({required BigInt cookieNodeId}) {
+    setSelectedLightCookieCalls += 1;
     return currentSnapshot;
   }
 
   @override
   String crateApiSimpleSetSelectedLightIntensity({required double intensity}) {
+    setSelectedLightIntensityCalls += 1;
     return currentSnapshot;
   }
 
@@ -965,21 +1186,25 @@ class _MockRustApi extends RustLibApi {
   String crateApiSimpleSetSelectedLightIntensityExpression({
     required String expression,
   }) {
+    setSelectedLightIntensityExpressionCalls += 1;
     return currentSnapshot;
   }
 
   @override
   String crateApiSimpleSetSelectedLightProximityMode({required String modeId}) {
+    setSelectedLightProximityModeCalls += 1;
     return currentSnapshot;
   }
 
   @override
   String crateApiSimpleSetSelectedLightProximityRange({required double range}) {
+    setSelectedLightProximityRangeCalls += 1;
     return currentSnapshot;
   }
 
   @override
   String crateApiSimpleSetSelectedLightRange({required double range}) {
+    setSelectedLightRangeCalls += 1;
     return currentSnapshot;
   }
 
@@ -989,6 +1214,7 @@ class _MockRustApi extends RustLibApi {
     required double green,
     required double blue,
   }) {
+    setSelectedLightShadowColorCalls += 1;
     return currentSnapshot;
   }
 
@@ -996,6 +1222,7 @@ class _MockRustApi extends RustLibApi {
   String crateApiSimpleSetSelectedLightShadowSoftness({
     required double softness,
   }) {
+    setSelectedLightShadowSoftnessCalls += 1;
     return currentSnapshot;
   }
 
@@ -1003,16 +1230,22 @@ class _MockRustApi extends RustLibApi {
   String crateApiSimpleSetSelectedLightSpotAngle({
     required double angleDegrees,
   }) {
+    setSelectedLightSpotAngleCalls += 1;
     return currentSnapshot;
   }
 
   @override
   String crateApiSimpleSetSelectedLightType({required String lightTypeId}) {
+    setSelectedLightTypeCalls += 1;
+    currentSnapshot = lightTypeId == 'array'
+        ? _arrayLightSnapshot
+        : _advancedLightSnapshot;
     return currentSnapshot;
   }
 
   @override
   String crateApiSimpleSetSelectedLightVolumetric({required bool enabled}) {
+    setSelectedLightVolumetricCalls += 1;
     return currentSnapshot;
   }
 
@@ -1020,6 +1253,7 @@ class _MockRustApi extends RustLibApi {
   String crateApiSimpleSetSelectedLightVolumetricDensity({
     required double density,
   }) {
+    setSelectedLightVolumetricDensityCalls += 1;
     return currentSnapshot;
   }
 
@@ -2158,6 +2392,81 @@ void main() {
     expect(mockApi.stopSculptingCalls, 1);
     expect(mockApi.resumeSculptingSelectedCalls, 1);
   });
+
+  testWidgets(
+    'routes advanced light inspector and linking controls through the Rust facade',
+    (WidgetTester tester) async {
+      mockApi.currentSnapshot = _MockRustApi._advancedLightSnapshot;
+
+      await pumpApp(tester, logicalSize: const Size(1400, 900));
+
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('selected-light-intensity-increase')),
+        200,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('selected-light-intensity-increase')));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('selected-light-cast-shadows-toggle')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('selected-light-cast-shadows-toggle')));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('selected-light-intensity-expression-field')),
+      );
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey('selected-light-intensity-expression-field')),
+        'time * 4.0',
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('selected-light-intensity-expression-apply')),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('light-link-node-1-light-11')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('light-link-node-1-light-11')));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('selected-light-type-array')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('selected-light-type-array')));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('selected-light-array-pattern-grid')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('selected-light-array-pattern-grid')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('selected-light-array-count-increase')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(mockApi.setSelectedLightIntensityCalls, 1);
+      expect(mockApi.setSelectedLightCastShadowsCalls, 1);
+      expect(mockApi.setSelectedLightIntensityExpressionCalls, 1);
+      expect(mockApi.setNodeLightLinkEnabledCalls, 1);
+      expect(mockApi.setNodeLightMaskCalls, 0);
+      expect(mockApi.setSelectedLightTypeCalls, 1);
+      expect(mockApi.setSelectedLightArrayPatternCalls, 1);
+      expect(mockApi.setSelectedLightArrayCountCalls, 1);
+      expect(mockApi.currentSnapshot, _MockRustApi._arrayLightSnapshot);
+      expect(requestFrameCalls, greaterThan(0));
+    },
+  );
 
   testWidgets(
     'routes create sculpt through the Rust facade and refreshes snapshot state',
