@@ -2809,3 +2809,45 @@ Manual verification:
 Result:
 - PRD #37 is fully verified and complete.
 
+--- Migration Iteration 31: PRD #38 - Flutter render settings parity ---
+COMPLETED. Added backend-owned render settings snapshots and commands plus a touch-first Flutter render panel, so renderer quality, shading, AO, shadows, and post-processing no longer depend on the egui render settings window.
+
+Changes:
+- src/settings.rs
+- src/ui/render_settings.rs
+- src/app_bridge/dto.rs
+- src/app_bridge/mod.rs
+- src/app_bridge/session.rs
+- apps/flutter/rust/src/api/simple.rs
+- apps/flutter/rust/src/frb_generated.rs
+- apps/flutter/lib/src/rust/api/simple.dart
+- apps/flutter/lib/src/rust/frb_generated.dart
+- apps/flutter/lib/src/scene/scene_snapshot.dart
+- apps/flutter/lib/src/render/render_settings_panel.dart
+- apps/flutter/lib/app.dart
+- apps/flutter/test/widget_test.dart
+- docs/egui_parity_audit.md
+- plans/prd.json
+- plans/progress.txt
+  - Moved render preset semantics into shared Rust `RenderConfig` helpers and exposed a backend-owned render snapshot on the scene payload so Flutter reads renderer state from Rust instead of mirroring egui-local state.
+  - Added backend render commands for presets, shading mode, boolean toggles, integer controls, and scalar controls, then exposed that command surface through FRB with coverage for persistence and scene snapshot round-trips.
+  - Added a dedicated Flutter render settings panel for presets, shading, quality, shadows/AO, post-processing, and cross-section controls, and wired it into both the desktop inspector and tablet command sheet.
+  - Extended the Flutter widget harness with render snapshot mocks and command counters, added end-to-end render settings coverage, and hardened existing scroll-based tests to target the vertical command-panel scroller explicitly.
+  - Updated the parity audit so render settings are no longer a decommission blocker; the remaining gaps are settings/keymap editing plus the retained-vs-dropped diagnostics and reference-image decisions in PRD `#39`-`#41`.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS
+- cargo build: PASS
+- FRB codegen: PASS (`flutter_rust_bridge_codegen generate --rust-input crate::api --rust-root rust --dart-output lib/src/rust --dart-root . --dart-entrypoint-class-name RustLib --stop-on-error`)
+- Flutter analyze: PASS
+- Flutter test: PASS
+- Flutter build windows --debug: PASS
+
+Manual verification:
+- Windows debug host smoke launch: PASS (`apps/flutter/build/windows/x64/runner/Debug/sdf_modeler_flutter.exe` launched and stayed running for 8 seconds without an early exit)
+
+Result:
+- PRD #38 is fully verified and complete.
+

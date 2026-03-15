@@ -15,6 +15,10 @@ import 'package:sdf_modeler_flutter/src/texture/texture_viewport_event.dart';
 import 'package:sdf_modeler_flutter/src/viewport/viewport_feedback_overlay.dart';
 import 'package:sdf_modeler_flutter/src/viewport/viewport_surface.dart';
 
+Finder _commandPanelScrollable() => find.byWidgetPredicate(
+  (widget) => widget is Scrollable && widget.axisDirection == AxisDirection.down,
+).first;
+
 class _MockRustApi extends RustLibApi {
   static const String _baseSnapshot = '''{"selected_node":null,"top_level_nodes":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false}],"history":{"can_undo":false,"can_redo":false},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":7,"visible_nodes":7,"top_level_nodes":1,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":1,"structure_key":11,"data_fingerprint":22,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
   static const String _documentSnapshot = '''{"selected_node":null,"top_level_nodes":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false}],"history":{"can_undo":false,"can_redo":false},"document":{"current_file_path":"C:\\\\Scenes\\\\hero.sdf","current_file_name":"hero.sdf","has_unsaved_changes":true,"recent_files":["C:\\\\Scenes\\\\hero.sdf","C:\\\\Scenes\\\\blockout.sdf"],"recovery_available":true,"recovery_summary":"Recovered unsaved work found."},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":7,"visible_nodes":7,"top_level_nodes":1,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":1,"structure_key":11,"data_fingerprint":22,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
@@ -576,6 +580,44 @@ class _MockRustApi extends RustLibApi {
     },
   );
 
+  static Map<String, Object?> _defaultRenderPayload() => <String, Object?>{
+        'shading_modes': <Map<String, String>>[
+          <String, String>{'id': 'full', 'label': 'Full'},
+          <String, String>{'id': 'solid', 'label': 'Solid'},
+          <String, String>{'id': 'clay', 'label': 'Clay'},
+          <String, String>{'id': 'normals', 'label': 'Normals'},
+          <String, String>{'id': 'matcap', 'label': 'Matcap'},
+          <String, String>{'id': 'step_heatmap', 'label': 'Step Heatmap'},
+          <String, String>{'id': 'cross_section', 'label': 'Cross-Section'},
+        ],
+        'shading_mode_id': 'full',
+        'shading_mode_label': 'Full',
+        'show_grid': true,
+        'shadows_enabled': false,
+        'shadow_steps': 32,
+        'ao_enabled': true,
+        'ao_samples': 5,
+        'ao_intensity': 3.0,
+        'march_max_steps': 128,
+        'sculpt_fast_mode': false,
+        'auto_reduce_steps': true,
+        'interaction_render_scale': 0.5,
+        'rest_render_scale': 1.0,
+        'fog_enabled': false,
+        'fog_density': 0.02,
+        'bloom_enabled': false,
+        'bloom_intensity': 0.3,
+        'gamma': 2.2,
+        'tonemapping_aces': false,
+        'cross_section_axis': 0,
+        'cross_section_position': 0.0,
+      };
+
+  static final String _renderSnapshot = _withFields(
+    _baseSnapshot,
+    <String, Object?>{'render': _defaultRenderPayload()},
+  );
+
   String currentSnapshot = _baseSnapshot;
   int sceneSnapshotJsonCalls = 0;
   int addBoxCalls = 0;
@@ -621,6 +663,11 @@ class _MockRustApi extends RustLibApi {
   int saveSceneAsCalls = 0;
   int recoverAutosaveCalls = 0;
   int discardRecoveryCalls = 0;
+  int applyRenderPresetCalls = 0;
+  int setRenderShadingModeCalls = 0;
+  int setRenderToggleCalls = 0;
+  int setRenderIntegerCalls = 0;
+  int setRenderScalarCalls = 0;
   int setExportResolutionCalls = 0;
   int setAdaptiveExportCalls = 0;
   int startExportCalls = 0;
@@ -706,6 +753,11 @@ class _MockRustApi extends RustLibApi {
     saveSceneAsCalls = 0;
     recoverAutosaveCalls = 0;
     discardRecoveryCalls = 0;
+    applyRenderPresetCalls = 0;
+    setRenderShadingModeCalls = 0;
+    setRenderToggleCalls = 0;
+    setRenderIntegerCalls = 0;
+    setRenderScalarCalls = 0;
     setExportResolutionCalls = 0;
     setAdaptiveExportCalls = 0;
     startExportCalls = 0;
@@ -746,6 +798,80 @@ class _MockRustApi extends RustLibApi {
     redoCalls = 0;
   }
 
+  String _updateRenderSnapshot(void Function(Map<String, dynamic> render) apply) {
+    final snapshot = jsonDecode(currentSnapshot) as Map<String, dynamic>;
+    final render = Map<String, dynamic>.from(
+      snapshot['render'] as Map<String, dynamic>? ?? _defaultRenderPayload(),
+    );
+    apply(render);
+    snapshot['render'] = render;
+    final tool = Map<String, dynamic>.from(snapshot['tool'] as Map<String, dynamic>? ?? <String, Object?>{
+      'active_tool_label': 'Select',
+      'shading_mode_label': 'Full',
+      'grid_enabled': true,
+    });
+    tool['shading_mode_label'] = render['shading_mode_label'];
+    tool['grid_enabled'] = render['show_grid'];
+    snapshot['tool'] = tool;
+    currentSnapshot = jsonEncode(snapshot);
+    return currentSnapshot;
+  }
+
+  static String _renderModeLabel(String modeId) {
+    return switch (modeId) {
+      'solid' => 'Solid',
+      'clay' => 'Clay',
+      'normals' => 'Normals',
+      'matcap' => 'Matcap',
+      'step_heatmap' => 'Step Heatmap',
+      'cross_section' => 'Cross-Section',
+      _ => 'Full',
+    };
+  }
+
+  static void _applyRenderPresetToPayload(
+    Map<String, dynamic> render,
+    String presetId,
+  ) {
+    switch (presetId) {
+      case 'fast':
+        render['shadows_enabled'] = false;
+        render['ao_enabled'] = false;
+        render['march_max_steps'] = 64;
+        render['fog_enabled'] = false;
+        render['tonemapping_aces'] = false;
+        render['sculpt_fast_mode'] = true;
+        render['auto_reduce_steps'] = true;
+        render['interaction_render_scale'] = 0.35;
+        render['rest_render_scale'] = 0.75;
+        break;
+      case 'quality':
+        render['shadows_enabled'] = true;
+        render['shadow_steps'] = 64;
+        render['ao_enabled'] = true;
+        render['ao_samples'] = 8;
+        render['ao_intensity'] = 4.0;
+        render['march_max_steps'] = 256;
+        render['tonemapping_aces'] = true;
+        render['sculpt_fast_mode'] = false;
+        render['auto_reduce_steps'] = false;
+        render['interaction_render_scale'] = 0.5;
+        render['rest_render_scale'] = 1.0;
+        break;
+      default:
+        render['shadows_enabled'] = false;
+        render['ao_enabled'] = true;
+        render['ao_samples'] = 5;
+        render['ao_intensity'] = 3.0;
+        render['march_max_steps'] = 128;
+        render['sculpt_fast_mode'] = false;
+        render['auto_reduce_steps'] = true;
+        render['interaction_render_scale'] = 0.5;
+        render['rest_render_scale'] = 1.0;
+        break;
+    }
+  }
+
   @override
   String crateApiSimpleAddBox() {
     addBoxCalls += 1;
@@ -772,6 +898,84 @@ class _MockRustApi extends RustLibApi {
   String crateApiSimpleDiscardRecovery() {
     discardRecoveryCalls += 1;
     return currentSnapshot;
+  }
+
+  @override
+  String crateApiSimpleApplyRenderPreset({required String presetId}) {
+    applyRenderPresetCalls += 1;
+    return _updateRenderSnapshot(
+      (render) => _applyRenderPresetToPayload(render, presetId),
+    );
+  }
+
+  @override
+  String crateApiSimpleSetRenderShadingMode({required String modeId}) {
+    setRenderShadingModeCalls += 1;
+    return _updateRenderSnapshot((render) {
+      render['shading_mode_id'] = modeId;
+      render['shading_mode_label'] = _renderModeLabel(modeId);
+    });
+  }
+
+  @override
+  String crateApiSimpleSetRenderToggle({
+    required String fieldId,
+    required bool enabled,
+  }) {
+    setRenderToggleCalls += 1;
+    return _updateRenderSnapshot((render) {
+      render[fieldId] = enabled;
+    });
+  }
+
+  @override
+  String crateApiSimpleSetRenderInteger({
+    required String fieldId,
+    required int value,
+  }) {
+    setRenderIntegerCalls += 1;
+    return _updateRenderSnapshot((render) {
+      switch (fieldId) {
+        case 'shadow_steps':
+          render[fieldId] = value.clamp(8, 128);
+        case 'ao_samples':
+          render[fieldId] = value.clamp(1, 16);
+        case 'march_max_steps':
+          render[fieldId] = value.clamp(32, 512);
+        case 'cross_section_axis':
+          render[fieldId] = value.clamp(0, 2);
+        default:
+          render[fieldId] = value;
+      }
+    });
+  }
+
+  @override
+  String crateApiSimpleSetRenderScalar({
+    required String fieldId,
+    required double value,
+  }) {
+    setRenderScalarCalls += 1;
+    return _updateRenderSnapshot((render) {
+      switch (fieldId) {
+        case 'ao_intensity':
+          render[fieldId] = value.clamp(0.5, 10.0);
+        case 'fog_density':
+          render[fieldId] = value.clamp(0.001, 0.2);
+        case 'bloom_intensity':
+          render[fieldId] = value.clamp(0.05, 2.0);
+        case 'gamma':
+          render[fieldId] = value.clamp(1.0, 3.0);
+        case 'interaction_render_scale':
+          render[fieldId] = value.clamp(0.25, 1.0);
+        case 'rest_render_scale':
+          render[fieldId] = value.clamp(0.5, 1.0);
+        case 'cross_section_position':
+          render[fieldId] = value.clamp(-5.0, 5.0);
+        default:
+          render[fieldId] = value;
+      }
+    });
   }
 
   @override
@@ -1523,7 +1727,7 @@ void main() {
     await tester.scrollUntilVisible(
       finder,
       200,
-      scrollable: find.byType(Scrollable).last,
+      scrollable: _commandPanelScrollable(),
     );
     await tester.pumpAndSettle();
   }
@@ -1660,7 +1864,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('transform-position-x-slider')),
       200,
-      scrollable: find.byType(Scrollable).last,
+      scrollable: _commandPanelScrollable(),
     );
     await tester.pumpAndSettle();
 
@@ -1676,7 +1880,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('transform-rotation-z-slider')),
       200,
-      scrollable: find.byType(Scrollable).last,
+      scrollable: _commandPanelScrollable(),
     );
     await tester.pumpAndSettle();
 
@@ -1695,7 +1899,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('transform-scale-x-slider')),
       200,
-      scrollable: find.byType(Scrollable).last,
+      scrollable: _commandPanelScrollable(),
     );
     await tester.pumpAndSettle();
 
@@ -1849,7 +2053,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('document-new-command')),
       200,
-      scrollable: find.byType(Scrollable).last,
+      scrollable: _commandPanelScrollable(),
     );
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('document-new-command')));
@@ -1863,7 +2067,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('document-recover-command')),
       200,
-      scrollable: find.byType(Scrollable).last,
+      scrollable: _commandPanelScrollable(),
     );
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('document-recover-command')));
@@ -1899,7 +2103,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('scene-tree-node-1')),
       200,
-      scrollable: find.byType(Scrollable).last,
+      scrollable: _commandPanelScrollable(),
     );
     await tester.pump();
 
@@ -1910,7 +2114,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.text('Box'),
       -200,
-      scrollable: find.byType(Scrollable).last,
+      scrollable: _commandPanelScrollable(),
     );
     await tester.pump();
     await tester.tap(find.text('Box'));
@@ -1932,13 +2136,13 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('node-basics-visible-toggle')),
       200,
-      scrollable: find.byType(Scrollable).last,
+      scrollable: _commandPanelScrollable(),
     );
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.text('Radius: 1.00'),
       -120,
-      scrollable: find.byType(Scrollable).last,
+      scrollable: _commandPanelScrollable(),
     );
     await tester.pumpAndSettle();
 
@@ -1965,7 +2169,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('node-basics-lock-toggle')),
       200,
-      scrollable: find.byType(Scrollable).last,
+      scrollable: _commandPanelScrollable(),
     );
     await tester.pumpAndSettle();
 
@@ -1986,7 +2190,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('primitive-parameter-radius-slider')),
       200,
-      scrollable: find.byType(Scrollable).last,
+      scrollable: _commandPanelScrollable(),
     );
     await tester.pumpAndSettle();
 
@@ -2010,7 +2214,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('material-roughness-slider')),
       200,
-      scrollable: find.byType(Scrollable).last,
+      scrollable: _commandPanelScrollable(),
     );
     await tester.pumpAndSettle();
 
@@ -2034,7 +2238,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('material-color-red-slider')),
       200,
-      scrollable: find.byType(Scrollable).last,
+      scrollable: _commandPanelScrollable(),
     );
     await tester.pumpAndSettle();
 
@@ -2058,7 +2262,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('export-resolution-field')),
       200,
-      scrollable: find.byType(Scrollable).last,
+      scrollable: _commandPanelScrollable(),
     );
     await tester.enterText(
       find.byKey(const ValueKey('export-resolution-field')),
@@ -2087,6 +2291,68 @@ void main() {
     expect(find.byKey(const ValueKey('export-progress-indicator')), findsNothing);
   });
 
+  testWidgets('routes render settings controls through the Rust facade', (
+    WidgetTester tester,
+  ) async {
+    mockApi.currentSnapshot = _MockRustApi._renderSnapshot;
+
+    await pumpApp(tester, logicalSize: const Size(1400, 900));
+    final verticalScrollable = find.byWidgetPredicate(
+      (widget) => widget is Scrollable && widget.axisDirection == AxisDirection.down,
+    ).first;
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('render-preset-quality')),
+      200,
+      scrollable: verticalScrollable,
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('render-preset-quality')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('render-shading-cross_section')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('render-grid-toggle')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('render-shadow-steps-increase')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('render-shadow-steps-increase')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey('render-bloom-toggle')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('render-bloom-toggle')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('render-bloom-intensity-increase')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('render-bloom-intensity-increase')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('render-cross-section-axis-z')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('render-cross-section-axis-z')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('render-cross-section-position-increase')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(mockApi.applyRenderPresetCalls, 1);
+    expect(mockApi.setRenderShadingModeCalls, 1);
+    expect(mockApi.setRenderToggleCalls, 2);
+    expect(mockApi.setRenderIntegerCalls, 2);
+    expect(mockApi.setRenderScalarCalls, 2);
+    expect(mockApi.currentSnapshot, contains('"show_grid":false'));
+    expect(mockApi.currentSnapshot, contains('"shadow_steps":72'));
+    expect(mockApi.currentSnapshot, contains('"bloom_enabled":true'));
+    expect(mockApi.currentSnapshot, contains('"cross_section_axis":2'));
+    expect(requestFrameCalls, greaterThan(0));
+  });
+
   testWidgets('routes import settings and import start through the Rust facade', (
     WidgetTester tester,
   ) async {
@@ -2095,7 +2361,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('open-import-dialog-command')),
       200,
-      scrollable: find.byType(Scrollable).last,
+      scrollable: _commandPanelScrollable(),
     );
     await tester.pumpAndSettle();
 
@@ -2137,7 +2403,7 @@ void main() {
       await tester.scrollUntilVisible(
         find.byKey(const ValueKey('open-sculpt-convert-dialog-command')),
         200,
-        scrollable: find.byType(Scrollable).last,
+        scrollable: _commandPanelScrollable(),
       );
       await tester.pumpAndSettle();
 
@@ -2190,7 +2456,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('undo-command')),
       200,
-      scrollable: find.byType(Scrollable).last,
+      scrollable: _commandPanelScrollable(),
     );
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('undo-command')));
@@ -2208,11 +2474,14 @@ void main() {
       mockApi.currentSnapshot = _MockRustApi._selectedSnapshot;
 
       await pumpApp(tester, logicalSize: const Size(1400, 900));
+      final verticalScrollable = find.byWidgetPredicate(
+        (widget) => widget is Scrollable && widget.axisDirection == AxisDirection.down,
+      ).first;
 
       await tester.scrollUntilVisible(
         find.byKey(const ValueKey('rename-command')),
         200,
-        scrollable: find.byType(Scrollable).last,
+        scrollable: verticalScrollable,
       );
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('rename-command')));
@@ -2227,7 +2496,7 @@ void main() {
       await tester.scrollUntilVisible(
         find.text('Selected: Hero Sphere'),
         200,
-        scrollable: find.byType(Scrollable).last,
+        scrollable: verticalScrollable,
       );
       await tester.pumpAndSettle();
 
@@ -2248,7 +2517,7 @@ void main() {
       await tester.scrollUntilVisible(
         find.byKey(const ValueKey('duplicate-command')),
         200,
-        scrollable: find.byType(Scrollable).last,
+        scrollable: _commandPanelScrollable(),
       );
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('duplicate-command')));
@@ -2403,7 +2672,7 @@ void main() {
       await tester.scrollUntilVisible(
         find.byKey(const ValueKey('selected-light-intensity-increase')),
         200,
-        scrollable: find.byType(Scrollable).last,
+        scrollable: _commandPanelScrollable(),
       );
       await tester.pumpAndSettle();
 
@@ -2478,7 +2747,7 @@ void main() {
       await tester.scrollUntilVisible(
         find.byKey(const ValueKey('create-sculpt-command')),
         200,
-        scrollable: find.byType(Scrollable).last,
+        scrollable: _commandPanelScrollable(),
       );
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('create-sculpt-command')));
@@ -2500,7 +2769,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('undo-command')),
       200,
-      scrollable: find.byType(Scrollable).last,
+      scrollable: _commandPanelScrollable(),
     );
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('undo-command')));
@@ -2508,7 +2777,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('redo-command')),
       200,
-      scrollable: find.byType(Scrollable).last,
+      scrollable: _commandPanelScrollable(),
     );
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('redo-command')));
@@ -2715,7 +2984,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.text('Focus Selected'),
       200,
-      scrollable: find.byType(Scrollable).last,
+      scrollable: _commandPanelScrollable(),
     );
     await tester.pump();
 

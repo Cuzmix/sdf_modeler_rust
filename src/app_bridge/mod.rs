@@ -6,13 +6,14 @@ pub mod workflows;
 pub use dto::{
     AppCameraSnapshot, AppDocumentSnapshot, AppExportPresetSnapshot, AppExportSnapshot,
     AppExportStatusSnapshot, AppHistorySnapshot, AppImportDialogSnapshot, AppImportSnapshot,
-    AppImportStatusSnapshot, AppLightCookieCandidateSnapshot, AppLightLinkingSnapshot,
-    AppLightLinkNodeSnapshot, AppLightLinkTargetSnapshot, AppLightPropertiesSnapshot,
+    AppImportStatusSnapshot, AppLightCookieCandidateSnapshot, AppLightLinkNodeSnapshot,
+    AppLightLinkTargetSnapshot, AppLightLinkingSnapshot, AppLightPropertiesSnapshot,
     AppMaterialPropertiesSnapshot, AppNodeSnapshot, AppPrimitivePropertiesSnapshot,
-    AppScalarPropertySnapshot, AppSceneSnapshot, AppSceneStatsSnapshot,
-    AppSceneTreeNodeSnapshot, AppSculptConvertDialogSnapshot, AppSculptConvertSnapshot,
-    AppSculptConvertStatusSnapshot, AppSculptSessionSnapshot, AppSculptSnapshot,
-    AppSelectedSculptSnapshot, AppSelectedNodePropertiesSnapshot, AppToolSnapshot,
-    AppTransformPropertiesSnapshot, AppVec3, AppViewportFeedbackSnapshot,
+    AppRenderOptionSnapshot, AppRenderSettingsSnapshot, AppScalarPropertySnapshot,
+    AppSceneSnapshot, AppSceneStatsSnapshot, AppSceneTreeNodeSnapshot,
+    AppSculptConvertDialogSnapshot, AppSculptConvertSnapshot, AppSculptConvertStatusSnapshot,
+    AppSculptSessionSnapshot, AppSculptSnapshot, AppSelectedNodePropertiesSnapshot,
+    AppSelectedSculptSnapshot, AppToolSnapshot, AppTransformPropertiesSnapshot, AppVec3,
+    AppViewportFeedbackSnapshot,
 };
 pub use session::AppBridge;

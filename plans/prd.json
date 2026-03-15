@@ -263,7 +263,7 @@
     "category": "rendering",
     "description": "Port render settings into backend-owned snapshots and a Flutter panel.\n\nSteps:\n1. Expose backend-neutral render settings snapshots and commands for the active renderer configuration.\n2. Keep render-quality, shading, AO, shadow, and post-processing semantics in Rust.\n3. Add a Flutter render settings panel that reads and writes those backend-owned values.\n4. Remove egui-only render-settings ownership once parity is in place.",
     "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build`. If the bridge API changes, run `apps/flutter/scripts/frb_codegen.ps1`. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, and `fvm flutter build windows --debug`.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 39,

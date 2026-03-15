@@ -171,6 +171,41 @@ pub fn cancel_export() -> String {
     snapshot_json(&mut bridge)
 }
 
+#[flutter_rust_bridge::frb(sync)]
+pub fn apply_render_preset(preset_id: String) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.apply_render_preset(&preset_id);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_render_shading_mode(mode_id: String) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_render_shading_mode(&mode_id);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_render_toggle(field_id: String, enabled: bool) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_render_toggle(&field_id, enabled);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_render_integer(field_id: String, value: u32) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_render_integer(&field_id, value);
+    snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_render_scalar(field_id: String, value: f32) -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_render_scalar(&field_id, value);
+    snapshot_json(&mut bridge)
+}
+
 pub fn render_preview_frame(width: u32, height: u32, time_seconds: f32) -> Vec<u8> {
     app_bridge()
         .lock()

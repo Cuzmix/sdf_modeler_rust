@@ -7,6 +7,7 @@ import 'package:sdf_modeler_flutter/src/rust/api/simple.dart';
 import 'package:sdf_modeler_flutter/src/export/export_panel.dart';
 import 'package:sdf_modeler_flutter/src/import/import_panel.dart';
 import 'package:sdf_modeler_flutter/src/light/light_inspector_panel.dart';
+import 'package:sdf_modeler_flutter/src/render/render_settings_panel.dart';
 import 'package:sdf_modeler_flutter/src/scene/scene_snapshot.dart';
 import 'package:sdf_modeler_flutter/src/scene/scene_tree_panel.dart';
 import 'package:sdf_modeler_flutter/src/sculpt/sculpt_convert_panel.dart';
@@ -812,6 +813,32 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     return _runSceneCommand(cancelExport, requestNativeFrame: false);
   }
 
+  Future<void> _applyRenderPreset(String presetId) {
+    return _runSceneCommand(() => applyRenderPreset(presetId: presetId));
+  }
+
+  Future<void> _setRenderShadingMode(String modeId) {
+    return _runSceneCommand(() => setRenderShadingMode(modeId: modeId));
+  }
+
+  Future<void> _setRenderToggle(String fieldId, bool enabled) {
+    return _runSceneCommand(
+      () => setRenderToggle(fieldId: fieldId, enabled: enabled),
+    );
+  }
+
+  Future<void> _setRenderInteger(String fieldId, int value) {
+    return _runSceneCommand(
+      () => setRenderInteger(fieldId: fieldId, value: value),
+    );
+  }
+
+  Future<void> _setRenderScalar(String fieldId, double value) {
+    return _runSceneCommand(
+      () => setRenderScalar(fieldId: fieldId, value: value),
+    );
+  }
+
   Future<void> _openImportDialog() {
     return _runSceneCommand(openImportDialog, requestNativeFrame: false);
   }
@@ -1398,6 +1425,11 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                       onOpenRecentScene: _openRecentScene,
                       onRecoverAutosave: _recoverAutosave,
                       onDiscardRecovery: _discardRecovery,
+                      onApplyRenderPreset: _applyRenderPreset,
+                      onSetRenderShadingMode: _setRenderShadingMode,
+                      onSetRenderToggle: _setRenderToggle,
+                      onSetRenderInteger: _setRenderInteger,
+                      onSetRenderScalar: _setRenderScalar,
                       onSetExportResolution: _setExportResolution,
                       onSetAdaptiveExport: _setAdaptiveExport,
                       onStartExport: _startExport,
@@ -1511,6 +1543,35 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                             _runModalSceneCommand(recoverAutosave),
                         onDiscardRecovery: () =>
                             _runModalSceneCommand(discardRecovery),
+                        onApplyRenderPreset: (presetId) =>
+                            _runModalSceneCommand(
+                              () => applyRenderPreset(presetId: presetId),
+                            ),
+                        onSetRenderShadingMode: (modeId) =>
+                            _runModalSceneCommand(
+                              () => setRenderShadingMode(modeId: modeId),
+                            ),
+                        onSetRenderToggle: (fieldId, enabled) =>
+                            _runModalSceneCommand(
+                              () => setRenderToggle(
+                                fieldId: fieldId,
+                                enabled: enabled,
+                              ),
+                            ),
+                        onSetRenderInteger: (fieldId, value) =>
+                            _runModalSceneCommand(
+                              () => setRenderInteger(
+                                fieldId: fieldId,
+                                value: value,
+                              ),
+                            ),
+                        onSetRenderScalar: (fieldId, value) =>
+                            _runModalSceneCommand(
+                              () => setRenderScalar(
+                                fieldId: fieldId,
+                                value: value,
+                              ),
+                            ),
                         onSetExportResolution: (resolution) =>
                             _runModalSceneCommand(
                               () => setExportResolution(resolution: resolution),
@@ -1727,6 +1788,11 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                   onOpenRecentScene: _openRecentScene,
                   onRecoverAutosave: _recoverAutosave,
                   onDiscardRecovery: _discardRecovery,
+                  onApplyRenderPreset: _applyRenderPreset,
+                  onSetRenderShadingMode: _setRenderShadingMode,
+                  onSetRenderToggle: _setRenderToggle,
+                  onSetRenderInteger: _setRenderInteger,
+                  onSetRenderScalar: _setRenderScalar,
                   onSetExportResolution: _setExportResolution,
                   onSetAdaptiveExport: _setAdaptiveExport,
                   onStartExport: _startExport,
@@ -1946,6 +2012,11 @@ class _InspectorPanel extends StatelessWidget {
     required this.onOpenRecentScene,
     required this.onRecoverAutosave,
     required this.onDiscardRecovery,
+    required this.onApplyRenderPreset,
+    required this.onSetRenderShadingMode,
+    required this.onSetRenderToggle,
+    required this.onSetRenderInteger,
+    required this.onSetRenderScalar,
     required this.onSetExportResolution,
     required this.onSetAdaptiveExport,
     required this.onStartExport,
@@ -2046,6 +2117,11 @@ class _InspectorPanel extends StatelessWidget {
   final ValueChanged<String> onOpenRecentScene;
   final VoidCallback onRecoverAutosave;
   final VoidCallback onDiscardRecovery;
+  final ValueChanged<String> onApplyRenderPreset;
+  final ValueChanged<String> onSetRenderShadingMode;
+  final void Function(String fieldId, bool enabled) onSetRenderToggle;
+  final void Function(String fieldId, int value) onSetRenderInteger;
+  final void Function(String fieldId, double value) onSetRenderScalar;
   final ValueChanged<int> onSetExportResolution;
   final ValueChanged<bool> onSetAdaptiveExport;
   final VoidCallback onStartExport;
@@ -2323,6 +2399,21 @@ class _InspectorPanel extends StatelessWidget {
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
+          const SizedBox(height: ShellTokens.sectionGap),
+          Text(
+            'Render Settings',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: ShellTokens.controlGap),
+          RenderSettingsPanel(
+            renderSettings: snapshot?.render,
+            enabled: !commandInFlight,
+            onApplyPreset: onApplyRenderPreset,
+            onSetShadingMode: onSetRenderShadingMode,
+            onSetToggle: onSetRenderToggle,
+            onSetInteger: onSetRenderInteger,
+            onSetScalar: onSetRenderScalar,
+          ),
           const SizedBox(height: ShellTokens.sectionGap),
           DocumentSessionPanel(
             document: snapshot?.document,
@@ -3293,6 +3384,11 @@ class _CommandSheetContent extends StatelessWidget {
     required this.onOpenRecentScene,
     required this.onRecoverAutosave,
     required this.onDiscardRecovery,
+    required this.onApplyRenderPreset,
+    required this.onSetRenderShadingMode,
+    required this.onSetRenderToggle,
+    required this.onSetRenderInteger,
+    required this.onSetRenderScalar,
     required this.onSetExportResolution,
     required this.onSetAdaptiveExport,
     required this.onStartExport,
@@ -3352,6 +3448,11 @@ class _CommandSheetContent extends StatelessWidget {
   final ValueChanged<String> onOpenRecentScene;
   final VoidCallback onRecoverAutosave;
   final VoidCallback onDiscardRecovery;
+  final ValueChanged<String> onApplyRenderPreset;
+  final ValueChanged<String> onSetRenderShadingMode;
+  final void Function(String fieldId, bool enabled) onSetRenderToggle;
+  final void Function(String fieldId, int value) onSetRenderInteger;
+  final void Function(String fieldId, double value) onSetRenderScalar;
   final ValueChanged<int> onSetExportResolution;
   final ValueChanged<bool> onSetAdaptiveExport;
   final VoidCallback onStartExport;
@@ -3453,6 +3554,21 @@ class _CommandSheetContent extends StatelessWidget {
           onCameraBack: onCameraBack,
           onCameraLeft: onCameraLeft,
           onCameraBottom: onCameraBottom,
+        ),
+        const SizedBox(height: ShellTokens.sectionGap),
+        Text(
+          'Render Settings',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: ShellTokens.controlGap),
+        RenderSettingsPanel(
+          renderSettings: snapshot?.render,
+          enabled: sceneCommandsEnabled,
+          onApplyPreset: onApplyRenderPreset,
+          onSetShadingMode: onSetRenderShadingMode,
+          onSetToggle: onSetRenderToggle,
+          onSetInteger: onSetRenderInteger,
+          onSetScalar: onSetRenderScalar,
         ),
         const SizedBox(height: ShellTokens.sectionGap),
         DocumentSessionPanel(

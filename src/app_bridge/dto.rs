@@ -78,6 +78,38 @@ pub struct AppToolSnapshot {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppRenderOptionSnapshot {
+    pub id: String,
+    pub label: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppRenderSettingsSnapshot {
+    pub shading_modes: Vec<AppRenderOptionSnapshot>,
+    pub shading_mode_id: String,
+    pub shading_mode_label: String,
+    pub show_grid: bool,
+    pub shadows_enabled: bool,
+    pub shadow_steps: u32,
+    pub ao_enabled: bool,
+    pub ao_samples: u32,
+    pub ao_intensity: f32,
+    pub march_max_steps: u32,
+    pub sculpt_fast_mode: bool,
+    pub auto_reduce_steps: bool,
+    pub interaction_render_scale: f32,
+    pub rest_render_scale: f32,
+    pub fog_enabled: bool,
+    pub fog_density: f32,
+    pub bloom_enabled: bool,
+    pub bloom_intensity: f32,
+    pub gamma: f32,
+    pub tonemapping_aces: bool,
+    pub cross_section_axis: u8,
+    pub cross_section_position: f32,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AppHistorySnapshot {
     pub can_undo: bool,
     pub can_redo: bool,
@@ -335,6 +367,7 @@ pub struct AppSceneSnapshot {
     pub scene_tree_roots: Vec<AppSceneTreeNodeSnapshot>,
     pub history: AppHistorySnapshot,
     pub document: AppDocumentSnapshot,
+    pub render: AppRenderSettingsSnapshot,
     pub export: AppExportSnapshot,
     pub import: AppImportSnapshot,
     pub sculpt_convert: AppSculptConvertSnapshot,

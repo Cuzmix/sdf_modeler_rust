@@ -75,6 +75,30 @@ String startExport() => RustLib.instance.api.crateApiSimpleStartExport();
 
 String cancelExport() => RustLib.instance.api.crateApiSimpleCancelExport();
 
+String applyRenderPreset({required String presetId}) =>
+    RustLib.instance.api.crateApiSimpleApplyRenderPreset(presetId: presetId);
+
+String setRenderShadingMode({required String modeId}) =>
+    RustLib.instance.api.crateApiSimpleSetRenderShadingMode(modeId: modeId);
+
+String setRenderToggle({required String fieldId, required bool enabled}) =>
+    RustLib.instance.api.crateApiSimpleSetRenderToggle(
+      fieldId: fieldId,
+      enabled: enabled,
+    );
+
+String setRenderInteger({required String fieldId, required int value}) =>
+    RustLib.instance.api.crateApiSimpleSetRenderInteger(
+      fieldId: fieldId,
+      value: value,
+    );
+
+String setRenderScalar({required String fieldId, required double value}) =>
+    RustLib.instance.api.crateApiSimpleSetRenderScalar(
+      fieldId: fieldId,
+      value: value,
+    );
+
 Future<Uint8List> renderPreviewFrame({
   required int width,
   required int height,

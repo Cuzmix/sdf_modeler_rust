@@ -223,6 +223,106 @@ class AppToolSnapshot {
   }
 }
 
+class AppRenderOptionSnapshot {
+  const AppRenderOptionSnapshot({required this.id, required this.label});
+
+  final String id;
+  final String label;
+
+  factory AppRenderOptionSnapshot.fromJson(Map<String, dynamic> json) {
+    return AppRenderOptionSnapshot(
+      id: json['id'] as String? ?? 'option',
+      label: json['label'] as String? ?? 'Option',
+    );
+  }
+}
+
+class AppRenderSettingsSnapshot {
+  const AppRenderSettingsSnapshot({
+    required this.shadingModes,
+    required this.shadingModeId,
+    required this.shadingModeLabel,
+    required this.showGrid,
+    required this.shadowsEnabled,
+    required this.shadowSteps,
+    required this.aoEnabled,
+    required this.aoSamples,
+    required this.aoIntensity,
+    required this.marchMaxSteps,
+    required this.sculptFastMode,
+    required this.autoReduceSteps,
+    required this.interactionRenderScale,
+    required this.restRenderScale,
+    required this.fogEnabled,
+    required this.fogDensity,
+    required this.bloomEnabled,
+    required this.bloomIntensity,
+    required this.gamma,
+    required this.tonemappingAces,
+    required this.crossSectionAxis,
+    required this.crossSectionPosition,
+  });
+
+  final List<AppRenderOptionSnapshot> shadingModes;
+  final String shadingModeId;
+  final String shadingModeLabel;
+  final bool showGrid;
+  final bool shadowsEnabled;
+  final int shadowSteps;
+  final bool aoEnabled;
+  final int aoSamples;
+  final double aoIntensity;
+  final int marchMaxSteps;
+  final bool sculptFastMode;
+  final bool autoReduceSteps;
+  final double interactionRenderScale;
+  final double restRenderScale;
+  final bool fogEnabled;
+  final double fogDensity;
+  final bool bloomEnabled;
+  final double bloomIntensity;
+  final double gamma;
+  final bool tonemappingAces;
+  final int crossSectionAxis;
+  final double crossSectionPosition;
+
+  factory AppRenderSettingsSnapshot.fromJson(Map<String, dynamic> json) {
+    return AppRenderSettingsSnapshot(
+      shadingModes: (json['shading_modes'] as List<dynamic>? ?? const [])
+          .map(
+            (item) => AppRenderOptionSnapshot.fromJson(
+              item as Map<String, dynamic>,
+            ),
+          )
+          .toList(growable: false),
+      shadingModeId: json['shading_mode_id'] as String? ?? 'full',
+      shadingModeLabel: json['shading_mode_label'] as String? ?? 'Full',
+      showGrid: json['show_grid'] as bool? ?? true,
+      shadowsEnabled: json['shadows_enabled'] as bool? ?? false,
+      shadowSteps: (json['shadow_steps'] as num?)?.toInt() ?? 32,
+      aoEnabled: json['ao_enabled'] as bool? ?? true,
+      aoSamples: (json['ao_samples'] as num?)?.toInt() ?? 5,
+      aoIntensity: (json['ao_intensity'] as num?)?.toDouble() ?? 3.0,
+      marchMaxSteps: (json['march_max_steps'] as num?)?.toInt() ?? 128,
+      sculptFastMode: json['sculpt_fast_mode'] as bool? ?? false,
+      autoReduceSteps: json['auto_reduce_steps'] as bool? ?? true,
+      interactionRenderScale:
+          (json['interaction_render_scale'] as num?)?.toDouble() ?? 0.5,
+      restRenderScale:
+          (json['rest_render_scale'] as num?)?.toDouble() ?? 1.0,
+      fogEnabled: json['fog_enabled'] as bool? ?? false,
+      fogDensity: (json['fog_density'] as num?)?.toDouble() ?? 0.02,
+      bloomEnabled: json['bloom_enabled'] as bool? ?? false,
+      bloomIntensity: (json['bloom_intensity'] as num?)?.toDouble() ?? 0.3,
+      gamma: (json['gamma'] as num?)?.toDouble() ?? 2.2,
+      tonemappingAces: json['tonemapping_aces'] as bool? ?? false,
+      crossSectionAxis: (json['cross_section_axis'] as num?)?.toInt() ?? 0,
+      crossSectionPosition:
+          (json['cross_section_position'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+}
+
 class AppHistorySnapshot {
   const AppHistorySnapshot({required this.canUndo, required this.canRedo});
 
@@ -1062,6 +1162,7 @@ class AppSceneSnapshot {
     required this.sceneTreeRoots,
     required this.history,
     required this.document,
+    required this.render,
     required this.export,
     required this.import,
     required this.sculptConvert,
@@ -1078,6 +1179,7 @@ class AppSceneSnapshot {
   final List<AppSceneTreeNodeSnapshot> sceneTreeRoots;
   final AppHistorySnapshot history;
   final AppDocumentSnapshot document;
+  final AppRenderSettingsSnapshot render;
   final AppExportSnapshot export;
   final AppImportSnapshot import;
   final AppSculptConvertSnapshot sculptConvert;
@@ -1129,6 +1231,34 @@ class AppSceneSnapshot {
               recoverySummary: null,
             )
           : AppDocumentSnapshot.fromJson(json['document'] as Map<String, dynamic>),
+      render: json['render'] == null
+          ? const AppRenderSettingsSnapshot(
+              shadingModes: <AppRenderOptionSnapshot>[],
+              shadingModeId: 'full',
+              shadingModeLabel: 'Full',
+              showGrid: true,
+              shadowsEnabled: false,
+              shadowSteps: 32,
+              aoEnabled: true,
+              aoSamples: 5,
+              aoIntensity: 3.0,
+              marchMaxSteps: 128,
+              sculptFastMode: false,
+              autoReduceSteps: true,
+              interactionRenderScale: 0.5,
+              restRenderScale: 1.0,
+              fogEnabled: false,
+              fogDensity: 0.02,
+              bloomEnabled: false,
+              bloomIntensity: 0.3,
+              gamma: 2.2,
+              tonemappingAces: false,
+              crossSectionAxis: 0,
+              crossSectionPosition: 0.0,
+            )
+          : AppRenderSettingsSnapshot.fromJson(
+              json['render'] as Map<String, dynamic>,
+            ),
       export: json['export'] == null
           ? const AppExportSnapshot(
               resolution: 128,

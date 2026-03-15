@@ -26,6 +26,16 @@ pub enum ShadingMode {
 }
 
 impl ShadingMode {
+    pub const ALL: [Self; 7] = [
+        Self::Full,
+        Self::Solid,
+        Self::Clay,
+        Self::Normals,
+        Self::Matcap,
+        Self::StepHeatmap,
+        Self::CrossSection,
+    ];
+
     pub fn gpu_value(&self) -> f32 {
         match self {
             Self::Full => 0.0,
@@ -48,6 +58,32 @@ impl ShadingMode {
             Self::CrossSection => "Cross-Section",
         }
     }
+
+    pub fn id(&self) -> &'static str {
+        match self {
+            Self::Full => "full",
+            Self::Solid => "solid",
+            Self::Clay => "clay",
+            Self::Normals => "normals",
+            Self::Matcap => "matcap",
+            Self::StepHeatmap => "step_heatmap",
+            Self::CrossSection => "cross_section",
+        }
+    }
+
+    pub fn from_id(mode_id: &str) -> Option<Self> {
+        Some(match mode_id {
+            "full" => Self::Full,
+            "solid" => Self::Solid,
+            "clay" => Self::Clay,
+            "normals" => Self::Normals,
+            "matcap" => Self::Matcap,
+            "step_heatmap" => Self::StepHeatmap,
+            "cross_section" => Self::CrossSection,
+            _ => return None,
+        })
+    }
+
     pub fn cycle(&self) -> Self {
         match self {
             Self::Full => Self::Solid,
@@ -602,6 +638,51 @@ impl Default for RenderConfig {
 }
 
 impl RenderConfig {
+    pub fn apply_fast_preset(&mut self) {
+        self.shadows_enabled = false;
+        self.ao_enabled = false;
+        self.march_max_steps = 64;
+        self.march_epsilon = 0.005;
+        self.fog_enabled = false;
+        self.tonemapping_aces = false;
+        self.sculpt_fast_mode = true;
+        self.auto_reduce_steps = true;
+        self.interaction_render_scale = 0.35;
+        self.rest_render_scale = 0.75;
+    }
+
+    pub fn apply_balanced_preset(&mut self) {
+        self.shadows_enabled = false;
+        self.ao_enabled = true;
+        self.ao_samples = 5;
+        self.ao_step = 0.08;
+        self.march_max_steps = 128;
+        self.march_epsilon = 0.002;
+        self.march_step_multiplier = 0.9;
+        self.sculpt_fast_mode = false;
+        self.auto_reduce_steps = true;
+        self.interaction_render_scale = 0.5;
+        self.rest_render_scale = 1.0;
+    }
+
+    pub fn apply_quality_preset(&mut self) {
+        self.shadows_enabled = true;
+        self.shadow_steps = 64;
+        self.shadow_penumbra_k = 8.0;
+        self.ao_enabled = true;
+        self.ao_samples = 8;
+        self.ao_step = 0.06;
+        self.ao_intensity = 4.0;
+        self.march_max_steps = 256;
+        self.march_epsilon = 0.001;
+        self.march_step_multiplier = 0.9;
+        self.tonemapping_aces = true;
+        self.sculpt_fast_mode = false;
+        self.auto_reduce_steps = false;
+        self.interaction_render_scale = 0.5;
+        self.rest_render_scale = 1.0;
+    }
+
     pub fn reset_shadows(&mut self) {
         let d = Self::default();
         self.shadows_enabled = d.shadows_enabled;

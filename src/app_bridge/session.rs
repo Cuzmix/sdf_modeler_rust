@@ -6,28 +6,29 @@ use std::sync::Arc;
 use glam::Vec3;
 
 use crate::compat::{Duration, Instant};
+use crate::gpu::buffers::identify_active_lights;
 use crate::gpu::camera::Camera;
 use crate::graph::history::History;
-use crate::gpu::buffers::identify_active_lights;
 use crate::graph::scene::{
     ArrayPattern, CsgOp, LightType, ModifierKind, NodeData, NodeId, ProximityMode, Scene,
     SceneNode, SdfPrimitive, MAX_SCENE_LIGHTS,
 };
 use crate::graph::voxel::create_displacement_grid_for_subtree;
 use crate::sculpt::{BrushMode, SculptState, DEFAULT_BRUSH_STRENGTH};
-use crate::settings::{RenderConfig, Settings};
+use crate::settings::{RenderConfig, Settings, ShadingMode};
 
 use super::dto::{
     AppCameraSnapshot, AppDocumentSnapshot, AppExportPresetSnapshot, AppExportSnapshot,
     AppExportStatusSnapshot, AppHistorySnapshot, AppImportDialogSnapshot, AppImportSnapshot,
-    AppImportStatusSnapshot, AppLightCookieCandidateSnapshot, AppLightLinkingSnapshot,
-    AppLightLinkNodeSnapshot, AppLightLinkTargetSnapshot, AppLightPropertiesSnapshot,
+    AppImportStatusSnapshot, AppLightCookieCandidateSnapshot, AppLightLinkNodeSnapshot,
+    AppLightLinkTargetSnapshot, AppLightLinkingSnapshot, AppLightPropertiesSnapshot,
     AppMaterialPropertiesSnapshot, AppNodeSnapshot, AppPrimitivePropertiesSnapshot,
-    AppScalarPropertySnapshot, AppSceneSnapshot, AppSceneStatsSnapshot,
-    AppSceneTreeNodeSnapshot, AppSculptConvertDialogSnapshot, AppSculptConvertSnapshot,
-    AppSculptConvertStatusSnapshot, AppSculptSessionSnapshot, AppSculptSnapshot,
-    AppSelectedNodePropertiesSnapshot, AppSelectedSculptSnapshot, AppToolSnapshot,
-    AppTransformPropertiesSnapshot, AppVec3, AppViewportFeedbackSnapshot,
+    AppRenderOptionSnapshot, AppRenderSettingsSnapshot, AppScalarPropertySnapshot,
+    AppSceneSnapshot, AppSceneStatsSnapshot, AppSceneTreeNodeSnapshot,
+    AppSculptConvertDialogSnapshot, AppSculptConvertSnapshot, AppSculptConvertStatusSnapshot,
+    AppSculptSessionSnapshot, AppSculptSnapshot, AppSelectedNodePropertiesSnapshot,
+    AppSelectedSculptSnapshot, AppToolSnapshot, AppTransformPropertiesSnapshot, AppVec3,
+    AppViewportFeedbackSnapshot,
 };
 use super::renderer::{HeadlessPickRequest, HeadlessRenderRequest, HeadlessViewportRenderer};
 use super::workflows::{
@@ -228,7 +229,7 @@ impl AppBridge {
         let scene = Scene::new();
         let camera = Camera::default();
         let settings = Settings::load();
-        let render_config = RenderConfig::default();
+        let render_config = settings.render.clone();
         let renderer = HeadlessViewportRenderer::new(&scene, &render_config);
         let initial_saved_fingerprint = scene.data_fingerprint();
         let recovery_summary = if crate::io::has_recovery_file() {
@@ -301,6 +302,7 @@ impl AppBridge {
                 can_redo: self.history.redo_count() > 0,
             },
             document: self.document_snapshot(),
+            render: self.render_settings_snapshot(),
             export: self.export_snapshot(),
             import: self.import_snapshot(),
             sculpt_convert: self.sculpt_convert_snapshot(),
@@ -517,6 +519,96 @@ impl AppBridge {
 
     pub fn reset_manipulator_pivot(&mut self) {
         self.pivot_offset = Vec3::ZERO;
+    }
+
+    pub fn apply_render_preset(&mut self, preset_id: &str) -> bool {
+        let changed = match preset_id {
+            "fast" => {
+                self.render_config.apply_fast_preset();
+                true
+            }
+            "balanced" => {
+                self.render_config.apply_balanced_preset();
+                true
+            }
+            "quality" => {
+                self.render_config.apply_quality_preset();
+                true
+            }
+            _ => false,
+        };
+
+        if changed {
+            self.persist_render_config();
+        }
+
+        changed
+    }
+
+    pub fn set_render_shading_mode(&mut self, mode_id: &str) -> bool {
+        let Some(shading_mode) = ShadingMode::from_id(mode_id) else {
+            return false;
+        };
+
+        self.render_config.shading_mode = shading_mode;
+        self.persist_render_config();
+        true
+    }
+
+    pub fn set_render_toggle(&mut self, field_id: &str, enabled: bool) -> bool {
+        match field_id {
+            "show_grid" => self.render_config.show_grid = enabled,
+            "shadows_enabled" => self.render_config.shadows_enabled = enabled,
+            "ao_enabled" => self.render_config.ao_enabled = enabled,
+            "fog_enabled" => self.render_config.fog_enabled = enabled,
+            "bloom_enabled" => self.render_config.bloom_enabled = enabled,
+            "tonemapping_aces" => self.render_config.tonemapping_aces = enabled,
+            "sculpt_fast_mode" => self.render_config.sculpt_fast_mode = enabled,
+            "auto_reduce_steps" => self.render_config.auto_reduce_steps = enabled,
+            _ => return false,
+        }
+
+        self.persist_render_config();
+        true
+    }
+
+    pub fn set_render_integer(&mut self, field_id: &str, value: u32) -> bool {
+        match field_id {
+            "shadow_steps" => self.render_config.shadow_steps = value.clamp(8, 128) as i32,
+            "ao_samples" => self.render_config.ao_samples = value.clamp(1, 16) as i32,
+            "march_max_steps" => self.render_config.march_max_steps = value.clamp(32, 512) as i32,
+            "cross_section_axis" => self.render_config.cross_section_axis = value.clamp(0, 2) as u8,
+            _ => return false,
+        }
+
+        self.persist_render_config();
+        true
+    }
+
+    pub fn set_render_scalar(&mut self, field_id: &str, value: f32) -> bool {
+        if !value.is_finite() {
+            return false;
+        }
+
+        match field_id {
+            "ao_intensity" => self.render_config.ao_intensity = value.clamp(0.5, 10.0),
+            "fog_density" => self.render_config.fog_density = value.clamp(0.001, 0.2),
+            "bloom_intensity" => self.render_config.bloom_intensity = value.clamp(0.05, 2.0),
+            "gamma" => self.render_config.gamma = value.clamp(1.0, 3.0),
+            "interaction_render_scale" => {
+                self.render_config.interaction_render_scale = value.clamp(0.25, 1.0);
+            }
+            "rest_render_scale" => {
+                self.render_config.rest_render_scale = value.clamp(0.5, 1.0);
+            }
+            "cross_section_position" => {
+                self.render_config.cross_section_position = value.clamp(-5.0, 5.0);
+            }
+            _ => return false,
+        }
+
+        self.persist_render_config();
+        true
     }
 
     pub fn new_scene(&mut self) {
@@ -767,7 +859,10 @@ impl AppBridge {
     }
 
     pub fn start_sculpt_convert(&mut self) -> bool {
-        if matches!(self.sculpt_convert_state.task, SculptConvertTask::InProgress { .. }) {
+        if matches!(
+            self.sculpt_convert_state.task,
+            SculptConvertTask::InProgress { .. }
+        ) {
             return false;
         }
 
@@ -1384,9 +1479,7 @@ impl AppBridge {
         let clamped_range = range.clamp(LIGHT_RANGE_MIN, LIGHT_RANGE_MAX);
         self.run_selected_light_command(|data| match data {
             NodeData::Light {
-                light_type,
-                range,
-                ..
+                light_type, range, ..
             } if light_type_supports_range(light_type) => {
                 *range = clamped_range;
                 true
@@ -1433,8 +1526,7 @@ impl AppBridge {
             return false;
         }
 
-        let clamped_softness =
-            softness.clamp(LIGHT_SHADOW_SOFTNESS_MIN, LIGHT_SHADOW_SOFTNESS_MAX);
+        let clamped_softness = softness.clamp(LIGHT_SHADOW_SOFTNESS_MIN, LIGHT_SHADOW_SOFTNESS_MAX);
         self.run_selected_light_command(|data| match data {
             NodeData::Light {
                 light_type,
@@ -1850,10 +1942,7 @@ impl AppBridge {
         self.sync_sculpt_session();
     }
 
-    fn run_selected_light_command(
-        &mut self,
-        command: impl FnOnce(&mut NodeData) -> bool,
-    ) -> bool {
+    fn run_selected_light_command(&mut self, command: impl FnOnce(&mut NodeData) -> bool) -> bool {
         self.run_document_command(|bridge| {
             let Some(light_id) = bridge.selected_light_node_id() else {
                 return false;
@@ -1874,11 +1963,9 @@ impl AppBridge {
             NodeData::Transform {
                 input: Some(light_id),
                 ..
-            } => self
-                .scene
-                .nodes
-                .get(light_id)
-                .and_then(|child| matches!(child.data, NodeData::Light { .. }).then_some(*light_id)),
+            } => self.scene.nodes.get(light_id).and_then(|child| {
+                matches!(child.data, NodeData::Light { .. }).then_some(*light_id)
+            }),
             _ => None,
         }
     }
@@ -1902,9 +1989,10 @@ impl AppBridge {
             NodeData::Light { .. } => {
                 let parent_map = self.scene.build_parent_map();
                 parent_map.get(&selected_node).copied().filter(|parent_id| {
-                    self.scene.nodes.get(parent_id).is_some_and(
-                        |parent| matches!(parent.data, NodeData::Transform { .. }),
-                    )
+                    self.scene
+                        .nodes
+                        .get(parent_id)
+                        .is_some_and(|parent| matches!(parent.data, NodeData::Transform { .. }))
                 })
             }
             _ => None,
@@ -1972,9 +2060,7 @@ impl AppBridge {
                 .map(|config| config.pattern.label().to_string()),
             array_count: array_config.as_ref().map(|config| config.count),
             array_radius: array_config.as_ref().map(|config| config.radius),
-            array_color_variation: array_config
-                .as_ref()
-                .map(|config| config.color_variation),
+            array_color_variation: array_config.as_ref().map(|config| config.color_variation),
             intensity_expression: intensity_expression.clone(),
             intensity_expression_error: expression_error_message(intensity_expression.as_deref()),
             color_hue_expression: color_hue_expression.clone(),
@@ -2002,12 +2088,16 @@ impl AppBridge {
                 )
             })
             .map(|(&node_id, node)| AppLightCookieCandidateSnapshot {
-                    node_id,
-                    name: node.name.clone(),
-                    kind_label: node_kind_label(node),
-                })
+                node_id,
+                name: node.name.clone(),
+                kind_label: node_kind_label(node),
+            })
             .collect();
-        candidates.sort_by(|left, right| left.name.cmp(&right.name).then(left.node_id.cmp(&right.node_id)));
+        candidates.sort_by(|left, right| {
+            left.name
+                .cmp(&right.name)
+                .then(left.node_id.cmp(&right.node_id))
+        });
         candidates
     }
 
@@ -2071,11 +2161,11 @@ impl AppBridge {
             .iter()
             .filter(|(_, node)| node_supports_light_linking(&node.data))
             .map(|(&node_id, node)| AppLightLinkNodeSnapshot {
-                    node_id,
-                    node_name: node.name.clone(),
-                    kind_label: node_kind_label(node),
-                    light_mask: self.scene.get_light_mask(node_id),
-                })
+                node_id,
+                node_name: node.name.clone(),
+                kind_label: node_kind_label(node),
+                light_mask: self.scene.get_light_mask(node_id),
+            })
             .collect();
         geometry_nodes.sort_by_key(|node| node.node_id);
 
@@ -2381,7 +2471,9 @@ impl AppBridge {
     ) {
         self.run_document_command(|bridge| {
             if flatten {
-                let sculpt_id = bridge.scene.flatten_subtree(subtree_root, grid, center, color);
+                let sculpt_id = bridge
+                    .scene
+                    .flatten_subtree(subtree_root, grid, center, color);
                 bridge.selected_node = Some(sculpt_id);
                 bridge.hovered_node = Some(sculpt_id);
                 bridge.activate_sculpt_session(sculpt_id);
@@ -2480,6 +2572,44 @@ impl AppBridge {
         })
     }
 
+    fn persist_render_config(&mut self) {
+        self.settings.render = self.render_config.clone();
+        self.settings.save();
+    }
+
+    fn render_settings_snapshot(&self) -> AppRenderSettingsSnapshot {
+        AppRenderSettingsSnapshot {
+            shading_modes: ShadingMode::ALL
+                .into_iter()
+                .map(|mode| AppRenderOptionSnapshot {
+                    id: mode.id().to_string(),
+                    label: mode.label().to_string(),
+                })
+                .collect(),
+            shading_mode_id: self.render_config.shading_mode.id().to_string(),
+            shading_mode_label: self.render_config.shading_mode.label().to_string(),
+            show_grid: self.render_config.show_grid,
+            shadows_enabled: self.render_config.shadows_enabled,
+            shadow_steps: self.render_config.shadow_steps.max(0) as u32,
+            ao_enabled: self.render_config.ao_enabled,
+            ao_samples: self.render_config.ao_samples.max(0) as u32,
+            ao_intensity: self.render_config.ao_intensity,
+            march_max_steps: self.render_config.march_max_steps.max(0) as u32,
+            sculpt_fast_mode: self.render_config.sculpt_fast_mode,
+            auto_reduce_steps: self.render_config.auto_reduce_steps,
+            interaction_render_scale: self.render_config.interaction_render_scale,
+            rest_render_scale: self.render_config.rest_render_scale,
+            fog_enabled: self.render_config.fog_enabled,
+            fog_density: self.render_config.fog_density,
+            bloom_enabled: self.render_config.bloom_enabled,
+            bloom_intensity: self.render_config.bloom_intensity,
+            gamma: self.render_config.gamma,
+            tonemapping_aces: self.render_config.tonemapping_aces,
+            cross_section_axis: self.render_config.cross_section_axis.min(2),
+            cross_section_position: self.render_config.cross_section_position,
+        }
+    }
+
     fn document_snapshot(&self) -> AppDocumentSnapshot {
         let current_file_path = self
             .persistence
@@ -2570,17 +2700,21 @@ impl AppBridge {
     }
 
     fn import_snapshot(&self) -> AppImportSnapshot {
-        let dialog = self.import_state.dialog.as_ref().map(|dialog| AppImportDialogSnapshot {
-            filename: dialog.filename.clone(),
-            resolution: dialog.resolution,
-            auto_resolution: dialog.auto_resolution,
-            use_auto: dialog.use_auto,
-            vertex_count: dialog.vertex_count,
-            triangle_count: dialog.triangle_count,
-            bounds_size: app_vec3(dialog.bounds_size),
-            min_resolution: dialog.min_resolution,
-            max_resolution: dialog.max_resolution,
-        });
+        let dialog = self
+            .import_state
+            .dialog
+            .as_ref()
+            .map(|dialog| AppImportDialogSnapshot {
+                filename: dialog.filename.clone(),
+                resolution: dialog.resolution,
+                auto_resolution: dialog.auto_resolution,
+                use_auto: dialog.use_auto,
+                vertex_count: dialog.vertex_count,
+                triangle_count: dialog.triangle_count,
+                bounds_size: app_vec3(dialog.bounds_size),
+                min_resolution: dialog.min_resolution,
+                max_resolution: dialog.max_resolution,
+            });
         let status = match &self.import_state.task {
             ImportTask::Idle => AppImportStatusSnapshot {
                 state: "idle".to_string(),
@@ -2611,10 +2745,7 @@ impl AppBridge {
                     progress: completed_steps,
                     total: *total,
                     filename: Some(filename.clone()),
-                    phase_label: Some(format!(
-                        "Voxelizing slice {}/{}",
-                        completed_steps, total
-                    )),
+                    phase_label: Some(format!("Voxelizing slice {}/{}", completed_steps, total)),
                     message: None,
                     is_error: false,
                 }
@@ -2625,11 +2756,8 @@ impl AppBridge {
     }
 
     fn sculpt_convert_snapshot(&self) -> AppSculptConvertSnapshot {
-        let dialog = self
-            .sculpt_convert_state
-            .dialog
-            .as_ref()
-            .map(|dialog| AppSculptConvertDialogSnapshot {
+        let dialog = self.sculpt_convert_state.dialog.as_ref().map(|dialog| {
+            AppSculptConvertDialogSnapshot {
                 target_node_id: dialog.target,
                 target_name: dialog.target_name.clone(),
                 mode_id: dialog.mode.id().to_string(),
@@ -2637,7 +2765,8 @@ impl AppBridge {
                 resolution: dialog.resolution,
                 min_resolution: dialog.min_resolution,
                 max_resolution: dialog.max_resolution,
-            });
+            }
+        });
         let status = match &self.sculpt_convert_state.task {
             SculptConvertTask::Idle => AppSculptConvertStatusSnapshot {
                 state: "idle".to_string(),
@@ -3057,7 +3186,10 @@ fn parse_array_pattern_id(pattern_id: &str) -> Option<ArrayPattern> {
 }
 
 fn light_type_supports_range(light_type: &LightType) -> bool {
-    matches!(light_type, LightType::Point | LightType::Spot | LightType::Array)
+    matches!(
+        light_type,
+        LightType::Point | LightType::Spot | LightType::Array
+    )
 }
 
 fn light_type_supports_shadows(light_type: &LightType) -> bool {
@@ -3226,17 +3358,17 @@ fn sculpt_symmetry_axis_label(axis: Option<u8>) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::{
-        AppBridge, DEFAULT_SCULPT_ENTRY_RESOLUTION, EMISSIVE_INTENSITY_MAX,
-        LIGHT_INTENSITY_MAX, LIGHT_PROXIMITY_RANGE_MAX, LIGHT_RANGE_MIN,
-        LIGHT_VOLUMETRIC_DENSITY_MAX, MATERIAL_FACTOR_MIN, PRIMITIVE_PARAMETER_MAX,
-        PRIMITIVE_PARAMETER_MIN,
+        AppBridge, DEFAULT_SCULPT_ENTRY_RESOLUTION, EMISSIVE_INTENSITY_MAX, LIGHT_INTENSITY_MAX,
+        LIGHT_PROXIMITY_RANGE_MAX, LIGHT_RANGE_MIN, LIGHT_VOLUMETRIC_DENSITY_MAX,
+        MATERIAL_FACTOR_MIN, PRIMITIVE_PARAMETER_MAX, PRIMITIVE_PARAMETER_MIN,
     };
-    use crate::app_bridge::{AppScalarPropertySnapshot, AppVec3};
     use crate::app_bridge::workflows::{ImportDialogState, SculptConvertMode};
+    use crate::app_bridge::{AppScalarPropertySnapshot, AppVec3};
     use crate::graph::scene::{
         CsgOp, LightType, ModifierKind, NodeData, SdfPrimitive, MAX_SCENE_LIGHTS,
     };
     use crate::mesh_import::TriMesh;
+    use crate::settings::ShadingMode;
     use glam::Vec3;
 
     #[test]
@@ -3267,7 +3399,10 @@ mod tests {
 
         let export = bridge.scene_snapshot().export;
         assert_eq!(export.min_resolution, 16);
-        assert_eq!(export.max_resolution, bridge.settings.max_export_resolution.max(16));
+        assert_eq!(
+            export.max_resolution,
+            bridge.settings.max_export_resolution.max(16)
+        );
         assert_eq!(
             export.resolution,
             bridge
@@ -3284,6 +3419,27 @@ mod tests {
     }
 
     #[test]
+    fn scene_snapshot_includes_render_settings() {
+        let bridge = AppBridge::new();
+
+        let render = bridge.scene_snapshot().render;
+        assert_eq!(
+            render.shading_mode_id,
+            bridge.render_config.shading_mode.id()
+        );
+        assert_eq!(
+            render.shading_mode_label,
+            bridge.render_config.shading_mode.label()
+        );
+        assert_eq!(render.show_grid, bridge.render_config.show_grid);
+        assert_eq!(render.shading_modes.len(), ShadingMode::ALL.len());
+        assert!(render
+            .shading_modes
+            .iter()
+            .any(|option| option.id == "cross_section" && option.label == "Cross-Section"));
+    }
+
+    #[test]
     fn export_setting_commands_update_snapshot_and_clamp() {
         let mut bridge = AppBridge::new();
 
@@ -3294,6 +3450,29 @@ mod tests {
         assert_eq!(resolution, 2048);
         assert_eq!(export.resolution, 2048);
         assert!(export.adaptive);
+    }
+
+    #[test]
+    fn render_setting_commands_update_snapshot_and_persist() {
+        let mut bridge = AppBridge::new();
+
+        assert!(bridge.apply_render_preset("quality"));
+        assert!(bridge.set_render_shading_mode("cross_section"));
+        assert!(bridge.set_render_toggle("show_grid", false));
+        assert!(bridge.set_render_integer("shadow_steps", 999));
+        assert!(bridge.set_render_integer("ao_samples", 0));
+        assert!(bridge.set_render_scalar("bloom_intensity", 9.0));
+        assert!(bridge.set_render_scalar("cross_section_position", -9.0));
+
+        let render = bridge.scene_snapshot().render;
+        assert_eq!(render.shading_mode_id, "cross_section");
+        assert!(!render.show_grid);
+        assert!(render.shadows_enabled);
+        assert_eq!(render.shadow_steps, 128);
+        assert_eq!(render.ao_samples, 1);
+        assert_eq!(render.bloom_intensity, 2.0);
+        assert_eq!(render.cross_section_position, -5.0);
+        assert!(bridge.settings.render == bridge.render_config);
     }
 
     #[test]
@@ -3345,8 +3524,18 @@ mod tests {
             "hero_mesh.obj".to_string(),
             128,
         ));
-        bridge.import_state.dialog.as_mut().unwrap().set_use_auto(false);
-        bridge.import_state.dialog.as_mut().unwrap().set_resolution(32);
+        bridge
+            .import_state
+            .dialog
+            .as_mut()
+            .unwrap()
+            .set_use_auto(false);
+        bridge
+            .import_state
+            .dialog
+            .as_mut()
+            .unwrap()
+            .set_resolution(32);
 
         assert!(bridge.start_import());
         assert_eq!(bridge.scene_snapshot().import.status.state, "in_progress");
@@ -3377,8 +3566,20 @@ mod tests {
             Some("Sculpt")
         );
         let sculpt = bridge.scene_snapshot().sculpt;
-        assert_eq!(sculpt.selected.as_ref().map(|selected| selected.node_name.as_str()), Some("Import"));
-        assert_eq!(sculpt.session.as_ref().map(|session| session.brush_mode_id.as_str()), Some("add"));
+        assert_eq!(
+            sculpt
+                .selected
+                .as_ref()
+                .map(|selected| selected.node_name.as_str()),
+            Some("Import")
+        );
+        assert_eq!(
+            sculpt
+                .session
+                .as_ref()
+                .map(|session| session.brush_mode_id.as_str()),
+            Some("add")
+        );
     }
 
     #[test]
@@ -3426,7 +3627,10 @@ mod tests {
         let snapshot = bridge.scene_snapshot();
         assert_eq!(snapshot.tool.active_tool_label, "Sculpt");
         assert_eq!(
-            snapshot.selected_node.as_ref().map(|node| node.kind_label.as_str()),
+            snapshot
+                .selected_node
+                .as_ref()
+                .map(|node| node.kind_label.as_str()),
             Some("Sculpt")
         );
         assert_eq!(snapshot.sculpt_convert.status.state, "idle");
@@ -3553,7 +3757,10 @@ mod tests {
         assert!(light.supports_range);
         assert!(light.supports_spot_angle);
         assert!(light.supports_cookie);
-        assert!(light.cookie_candidates.iter().any(|candidate| candidate.name == "Sphere"));
+        assert!(light
+            .cookie_candidates
+            .iter()
+            .any(|candidate| candidate.name == "Sphere"));
     }
 
     #[test]
@@ -3626,17 +3833,16 @@ mod tests {
         let light_linking_before = bridge.scene_snapshot().light_linking;
         assert_eq!(light_linking_before.geometry_nodes.len(), 1);
         assert_eq!(light_linking_before.geometry_nodes[0].light_mask, 0xFF);
-        assert_eq!(light_linking_before.max_light_count, MAX_SCENE_LIGHTS as u32);
+        assert_eq!(
+            light_linking_before.max_light_count,
+            MAX_SCENE_LIGHTS as u32
+        );
         let first_light = light_linking_before
             .lights
             .first()
             .expect("first light target");
 
-        assert!(bridge.set_node_light_link_enabled(
-            sphere_id,
-            first_light.light_node_id,
-            false,
-        ));
+        assert!(bridge.set_node_light_link_enabled(sphere_id, first_light.light_node_id, false,));
         let light_linking_after_toggle = bridge.scene_snapshot().light_linking;
         assert_eq!(
             light_linking_after_toggle.geometry_nodes[0].light_mask,
@@ -4358,7 +4564,12 @@ mod tests {
             can_undo_before_reuse
         );
         assert_eq!(
-            bridge.scene_snapshot().sculpt.session.as_ref().map(|session| session.node_id),
+            bridge
+                .scene_snapshot()
+                .sculpt
+                .session
+                .as_ref()
+                .map(|session| session.node_id),
             Some(sculpt_id)
         );
     }

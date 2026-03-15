@@ -21,21 +21,21 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
             .on_hover_text("Low quality, high performance")
             .clicked()
         {
-            apply_preset_fast(&mut settings.render);
+            settings.render.apply_fast_preset();
         }
         if ui
             .small_button("Balanced")
             .on_hover_text("Good balance of quality and speed")
             .clicked()
         {
-            apply_preset_balanced(&mut settings.render);
+            settings.render.apply_balanced_preset();
         }
         if ui
             .small_button("Quality")
             .on_hover_text("Maximum visual quality (slower)")
             .clicked()
         {
-            apply_preset_quality(&mut settings.render);
+            settings.render.apply_quality_preset();
         }
     });
 
@@ -502,49 +502,4 @@ fn labeled_slider_i32(
         }
         ui.add(egui::Slider::new(value, range));
     });
-}
-
-fn apply_preset_fast(config: &mut crate::settings::RenderConfig) {
-    config.shadows_enabled = false;
-    config.ao_enabled = false;
-    config.march_max_steps = 64;
-    config.march_epsilon = 0.005;
-    config.fog_enabled = false;
-    config.tonemapping_aces = false;
-    config.sculpt_fast_mode = true;
-    config.auto_reduce_steps = true;
-    config.interaction_render_scale = 0.35;
-    config.rest_render_scale = 0.75;
-}
-
-fn apply_preset_balanced(config: &mut crate::settings::RenderConfig) {
-    config.shadows_enabled = false;
-    config.ao_enabled = true;
-    config.ao_samples = 5;
-    config.ao_step = 0.08;
-    config.march_max_steps = 128;
-    config.march_epsilon = 0.002;
-    config.march_step_multiplier = 0.9;
-    config.sculpt_fast_mode = false;
-    config.auto_reduce_steps = true;
-    config.interaction_render_scale = 0.5;
-    config.rest_render_scale = 1.0;
-}
-
-fn apply_preset_quality(config: &mut crate::settings::RenderConfig) {
-    config.shadows_enabled = true;
-    config.shadow_steps = 64;
-    config.shadow_penumbra_k = 8.0;
-    config.ao_enabled = true;
-    config.ao_samples = 8;
-    config.ao_step = 0.06;
-    config.ao_intensity = 4.0;
-    config.march_max_steps = 256;
-    config.march_epsilon = 0.001;
-    config.march_step_multiplier = 0.9;
-    config.tonemapping_aces = true;
-    config.sculpt_fast_mode = false;
-    config.auto_reduce_steps = false;
-    config.interaction_render_scale = 0.5;
-    config.rest_render_scale = 1.0;
 }
