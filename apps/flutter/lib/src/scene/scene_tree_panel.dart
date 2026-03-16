@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:sdf_modeler_flutter/src/scene/scene_snapshot.dart';
+import 'package:sdf_modeler_flutter/src/rust/api/mirrors.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_contract.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_theme.dart';
 
@@ -15,11 +15,11 @@ class SceneTreePanel extends StatelessWidget {
   });
 
   final List<AppSceneTreeNodeSnapshot> roots;
-  final int? selectedNodeId;
+  final BigInt? selectedNodeId;
   final bool enabled;
-  final ValueChanged<int> onSelectNode;
-  final ValueChanged<int> onToggleNodeVisibility;
-  final ValueChanged<int> onToggleNodeLock;
+  final ValueChanged<BigInt> onSelectNode;
+  final ValueChanged<BigInt> onToggleNodeVisibility;
+  final ValueChanged<BigInt> onToggleNodeLock;
 
   @override
   Widget build(BuildContext context) {
@@ -59,11 +59,11 @@ class _SceneTreeNodeTile extends StatelessWidget {
 
   final AppSceneTreeNodeSnapshot node;
   final int depth;
-  final int? selectedNodeId;
+  final BigInt? selectedNodeId;
   final bool enabled;
-  final ValueChanged<int> onSelectNode;
-  final ValueChanged<int> onToggleNodeVisibility;
-  final ValueChanged<int> onToggleNodeLock;
+  final ValueChanged<BigInt> onSelectNode;
+  final ValueChanged<BigInt> onToggleNodeVisibility;
+  final ValueChanged<BigInt> onToggleNodeLock;
 
   @override
   Widget build(BuildContext context) {

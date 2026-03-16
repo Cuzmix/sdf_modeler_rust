@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:sdf_modeler_flutter/src/scene/scene_snapshot.dart';
+import 'package:sdf_modeler_flutter/src/rust/api/mirrors.dart';
 
 class TextureViewportFeedback {
   const TextureViewportFeedback({
@@ -15,7 +15,7 @@ class TextureViewportFeedback {
 
   factory TextureViewportFeedback.fromJson(Map<String, dynamic> json) {
     return TextureViewportFeedback(
-      camera: AppCameraSnapshot.fromJson(json['camera'] as Map<String, dynamic>),
+      camera: _readCamera(json['camera'] as Map<String, dynamic>),
       selectedNode: _readNode(json['selected_node']),
       hoveredNode: _readNode(json['hovered_node']),
     );
@@ -43,6 +43,34 @@ class TextureViewportFeedback {
       return null;
     }
 
-    return AppNodeSnapshot.fromJson(rawNode as Map<String, dynamic>);
+    final json = rawNode as Map<String, dynamic>;
+    return AppNodeSnapshot(
+      id: BigInt.from((json['id'] as num).toInt()),
+      name: json['name'] as String,
+      kindLabel: json['kind_label'] as String,
+      visible: json['visible'] as bool,
+      locked: json['locked'] as bool,
+    );
+  }
+
+  static AppCameraSnapshot _readCamera(Map<String, dynamic> json) {
+    return AppCameraSnapshot(
+      yaw: (json['yaw'] as num).toDouble(),
+      pitch: (json['pitch'] as num).toDouble(),
+      roll: (json['roll'] as num).toDouble(),
+      distance: (json['distance'] as num).toDouble(),
+      fovDegrees: (json['fov_degrees'] as num).toDouble(),
+      orthographic: json['orthographic'] as bool,
+      target: _readVec3(json['target'] as Map<String, dynamic>),
+      eye: _readVec3(json['eye'] as Map<String, dynamic>),
+    );
+  }
+
+  static AppVec3 _readVec3(Map<String, dynamic> json) {
+    return AppVec3(
+      x: (json['x'] as num).toDouble(),
+      y: (json['y'] as num).toDouble(),
+      z: (json['z'] as num).toDouble(),
+    );
   }
 }

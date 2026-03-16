@@ -1,16 +1,16 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:sdf_modeler_flutter/src/bridge/bridge_snapshot_extensions.dart';
 import 'package:sdf_modeler_flutter/src/rust/api/simple.dart';
 import 'package:sdf_modeler_flutter/src/export/export_panel.dart';
 import 'package:sdf_modeler_flutter/src/import/import_panel.dart';
 import 'package:sdf_modeler_flutter/src/light/light_inspector_panel.dart';
 import 'package:sdf_modeler_flutter/src/render/render_settings_panel.dart';
-import 'package:sdf_modeler_flutter/src/scene/scene_snapshot.dart';
+import 'package:sdf_modeler_flutter/src/rust/api/mirrors.dart';
 import 'package:sdf_modeler_flutter/src/scene/scene_tree_panel.dart';
-import 'package:sdf_modeler_flutter/src/scene/workflow_status.dart';
 import 'package:sdf_modeler_flutter/src/sculpt/sculpt_convert_panel.dart';
 import 'package:sdf_modeler_flutter/src/sculpt/sculpt_session_panel.dart';
 import 'package:sdf_modeler_flutter/src/settings/settings_panel.dart';
@@ -37,6 +37,66 @@ class _CreateNodeOption {
   final String id;
   final String label;
 }
+
+class _BridgeHeaderModel {
+  const _BridgeHeaderModel({
+    required this.statusLine,
+    required this.versionLine,
+    required this.previewLine,
+  });
+
+  final String statusLine;
+  final String versionLine;
+  final String previewLine;
+
+  _BridgeHeaderModel copyWith({
+    String? statusLine,
+    String? versionLine,
+    String? previewLine,
+  }) {
+    return _BridgeHeaderModel(
+      statusLine: statusLine ?? this.statusLine,
+      versionLine: versionLine ?? this.versionLine,
+      previewLine: previewLine ?? this.previewLine,
+    );
+  }
+}
+
+class _ViewportOverlayModel {
+  const _ViewportOverlayModel({
+    this.feedback,
+    this.interactionPhase = 'idle',
+    this.frameTimeMs,
+    this.framesPerSecond,
+    this.droppedFrameCount = 0,
+    this.hostError,
+  });
+
+  final TextureViewportFeedback? feedback;
+  final String interactionPhase;
+  final double? frameTimeMs;
+  final double? framesPerSecond;
+  final int droppedFrameCount;
+  final String? hostError;
+}
+
+class _HoverRequest {
+  const _HoverRequest.hover({
+    required this.normalizedX,
+    required this.normalizedY,
+  }) : clearOnly = false;
+
+  const _HoverRequest.clear()
+    : clearOnly = true,
+      normalizedX = 0.0,
+      normalizedY = 0.0;
+
+  final bool clearOnly;
+  final double normalizedX;
+  final double normalizedY;
+}
+
+const Object _overlayHostErrorNoChange = Object();
 
 const List<_CreateNodeOption> _operationOptions = <_CreateNodeOption>[
   _CreateNodeOption(id: 'union', label: 'Union'),
@@ -129,12 +189,18 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
   static const double _interactionRenderScaleCap = 0.65;
   static const double _frameRateSmoothingFactor = 0.18;
 
-  String _statusLine = 'Checking Rust bridge...';
-  String _versionLine = '';
-  String _previewLine = 'Initializing viewport texture...';
-
-  AppSceneSnapshot? _sceneSnapshot;
-  TextureViewportFeedback? _viewportFeedback;
+  final ValueNotifier<_BridgeHeaderModel> _bridgeHeaderNotifier =
+      ValueNotifier<_BridgeHeaderModel>(
+        const _BridgeHeaderModel(
+          statusLine: 'Checking Rust bridge...',
+          versionLine: '',
+          previewLine: 'Initializing viewport texture...',
+        ),
+      );
+  final ValueNotifier<AppSceneSnapshot?> _sceneSnapshotNotifier =
+      ValueNotifier<AppSceneSnapshot?>(null);
+  final ValueNotifier<_ViewportOverlayModel> _viewportOverlayNotifier =
+      ValueNotifier<_ViewportOverlayModel>(const _ViewportOverlayModel());
   int? _textureId;
   StreamSubscription<TextureViewportEvent>? _textureEventSubscription;
   Timer? _workflowPollTimer;
@@ -143,6 +209,10 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
   bool _commandInFlight = false;
   bool _adaptiveInteractionResolutionEnabled = false;
   bool _viewportInteractionActive = false;
+  bool _nativeFrameRequestPending = false;
+  bool _queuedNativeFrameRequest = false;
+  bool _hoverRequestPending = false;
+  _HoverRequest? _queuedHoverRequest;
   int _frameWidth = _defaultFrameWidth;
   int _frameHeight = _defaultFrameHeight;
   int _nativeFrameWidth = 0;
@@ -152,7 +222,6 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
   double? _lastNativeFrameTimeMs;
   double? _smoothedFramesPerSecond;
   String _interactionPhase = 'idle';
-  String? _lastViewportHostError;
   Size _lastLogicalViewportSize = Size.zero;
   double _lastDevicePixelRatio = 1.0;
   _BridgeModalPanel? _activeModalPanel;
@@ -175,8 +244,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
         width: _frameWidth,
         height: _frameHeight,
       );
-      final snapshot = _decodeSnapshot(sceneSnapshotJson());
-      final viewportFeedback = TextureViewportFeedback.fromSceneSnapshot(snapshot);
+      final snapshot = _readSceneSnapshot();
 
       if (!mounted) {
         await TextureBridge.instance.disposeTexture(createdTextureId);
@@ -184,54 +252,95 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
       }
 
       setState(() {
-        _statusLine = 'Rust ping: $pingValue';
-        _versionLine = 'Bridge crate version: $versionValue';
         _textureId = createdTextureId;
-        _applySnapshotState(snapshot);
-        _viewportFeedback = viewportFeedback;
-        _previewLine = _buildPreviewLine();
       });
+      _applySceneSnapshot(snapshot);
+      _updateBridgeHeader(
+        statusLine: 'Rust ping: $pingValue',
+        versionLine: 'Bridge crate version: $versionValue',
+        previewLine: _buildPreviewLine(),
+      );
 
       _requestNativeFrame(textureId: createdTextureId);
     } catch (error) {
       if (!mounted) {
         return;
       }
-      setState(() {
-        _statusLine = 'Rust bridge error: $error';
-        _versionLine = '';
-        _previewLine = 'Viewport stopped because initialization failed.';
-      });
+      _updateBridgeHeader(
+        statusLine: 'Rust bridge error: $error',
+        versionLine: '',
+        previewLine: 'Viewport stopped because initialization failed.',
+      );
     }
   }
 
-  AppSceneSnapshot _decodeSnapshot(String rawJson) {
-    final decoded = jsonDecode(rawJson) as Map<String, dynamic>;
-    return AppSceneSnapshot.fromJson(decoded);
+  AppSceneSnapshot _readSceneSnapshot() {
+    return sceneSnapshot();
   }
 
-  AppWorkflowStatusSnapshot _decodeWorkflowStatus(String rawJson) {
-    final decoded = jsonDecode(rawJson) as Map<String, dynamic>;
-    return AppWorkflowStatusSnapshot.fromJson(decoded);
+  AppWorkflowStatusSnapshot _readWorkflowStatus() {
+    return workflowStatus();
   }
 
   AppSceneSnapshot _mergeWorkflowStatus(
     AppSceneSnapshot snapshot,
     AppWorkflowStatusSnapshot workflowStatus,
   ) {
-    return snapshot.copyWith(
-      export: snapshot.export.copyWith(status: workflowStatus.exportStatus),
-      import: snapshot.import.copyWith(status: workflowStatus.importStatus),
-      sculptConvert: snapshot.sculptConvert.copyWith(
-        status: workflowStatus.sculptConvertStatus,
-      ),
+    return mergeWorkflowStatusIntoScene(snapshot, workflowStatus);
+  }
+
+  AppSceneSnapshot? get _sceneSnapshot => _sceneSnapshotNotifier.value;
+
+  void _updateBridgeHeader({
+    String? statusLine,
+    String? versionLine,
+    String? previewLine,
+  }) {
+    _bridgeHeaderNotifier.value = _bridgeHeaderNotifier.value.copyWith(
+      statusLine: statusLine,
+      versionLine: versionLine,
+      previewLine: previewLine,
     );
+  }
+
+  void _updateViewportOverlay({
+    TextureViewportFeedback? feedback,
+    String? interactionPhase,
+    double? frameTimeMs,
+    double? framesPerSecond,
+    int? droppedFrameCount,
+    Object? hostError = _overlayHostErrorNoChange,
+  }) {
+    final currentOverlay = _viewportOverlayNotifier.value;
+    _viewportOverlayNotifier.value = _ViewportOverlayModel(
+      feedback: feedback ?? currentOverlay.feedback,
+      interactionPhase: interactionPhase ?? currentOverlay.interactionPhase,
+      frameTimeMs: frameTimeMs ?? currentOverlay.frameTimeMs,
+      framesPerSecond: framesPerSecond ?? currentOverlay.framesPerSecond,
+      droppedFrameCount: droppedFrameCount ?? currentOverlay.droppedFrameCount,
+      hostError: identical(hostError, _overlayHostErrorNoChange)
+          ? currentOverlay.hostError
+          : hostError as String?,
+    );
+  }
+
+  void _applySceneSnapshot(
+    AppSceneSnapshot snapshot, {
+    bool syncViewportFeedback = true,
+  }) {
+    _syncWorkflowPolling(snapshot);
+    _sceneSnapshotNotifier.value = snapshot;
+    if (syncViewportFeedback) {
+      _updateViewportOverlay(
+        feedback: TextureViewportFeedback.fromSceneSnapshot(snapshot),
+      );
+    }
   }
 
   void _syncWorkflowPolling(AppSceneSnapshot? snapshot) {
     final shouldPoll =
-        (snapshot?.export.status.isInProgress ?? false) ||
-        (snapshot?.import.status.isInProgress ?? false) ||
+        (snapshot?.export_.status.isInProgress ?? false) ||
+        (snapshot?.import_.status.isInProgress ?? false) ||
         (snapshot?.sculptConvert.status.isInProgress ?? false);
     if (shouldPoll) {
       _workflowPollTimer ??= Timer.periodic(
@@ -245,17 +354,6 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     _workflowPollTimer = null;
   }
 
-  void _applySnapshotState(
-    AppSceneSnapshot snapshot, {
-    bool updateViewportFeedback = true,
-  }) {
-    _syncWorkflowPolling(snapshot);
-    _sceneSnapshot = snapshot;
-    if (updateViewportFeedback) {
-      _viewportFeedback = TextureViewportFeedback.fromSceneSnapshot(snapshot);
-    }
-  }
-
   Future<void> _pollWorkflowStatus() async {
     if (!mounted || _workflowPollInFlight) {
       return;
@@ -263,19 +361,17 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
 
     _workflowPollInFlight = true;
     try {
-      final workflowStatus = _decodeWorkflowStatus(workflowStatusJson());
+      final workflowStatus = _readWorkflowStatus();
       if (!mounted) {
         return;
       }
       final currentSnapshot = _sceneSnapshot;
       if (currentSnapshot == null || workflowStatus.sceneChanged) {
-        final snapshot = _decodeSnapshot(sceneSnapshotJson());
+        final snapshot = _readSceneSnapshot();
         if (!mounted) {
           return;
         }
-        setState(() {
-          _applySnapshotState(snapshot);
-        });
+        _applySceneSnapshot(snapshot);
         if (workflowStatus.sceneChanged) {
           _requestNativeFrame();
         }
@@ -283,16 +379,12 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
       }
 
       final snapshot = _mergeWorkflowStatus(currentSnapshot, workflowStatus);
-      setState(() {
-        _applySnapshotState(snapshot, updateViewportFeedback: false);
-      });
+      _applySceneSnapshot(snapshot, syncViewportFeedback: false);
     } catch (error) {
       if (!mounted) {
         return;
       }
-      setState(() {
-        _previewLine = 'Workflow polling error: $error';
-      });
+      _updateBridgeHeader(previewLine: 'Workflow polling error: $error');
     } finally {
       _workflowPollInFlight = false;
     }
@@ -343,42 +435,50 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
 
     if (event.sceneStateChanged) {
       try {
-        refreshedSnapshot = _decodeSnapshot(sceneSnapshotJson());
+        refreshedSnapshot = _readSceneSnapshot();
       } catch (error) {
         snapshotRefreshError = 'Scene snapshot refresh error: $error';
       }
     }
 
-    setState(() {
-      _nativeFrameWidth = event.frameWidth;
-      _nativeFrameHeight = event.frameHeight;
-      _nativeFrameCount = event.frameCount;
-      _droppedFrameCount = event.droppedFrameCount;
-      _lastNativeFrameTimeMs = event.frameTimeMs;
-      _smoothedFramesPerSecond = _nextSmoothedFramesPerSecond(
-        _smoothedFramesPerSecond,
-        instantaneousFramesPerSecond,
-      );
-      _interactionPhase = event.interactionPhase;
-      _lastViewportHostError = hostError;
-      if (refreshedSnapshot != null) {
-        _applySnapshotState(refreshedSnapshot, updateViewportFeedback: false);
-      }
-      if (event.feedback != null) {
-        _viewportFeedback = event.feedback;
-      } else if (refreshedSnapshot != null) {
-        _viewportFeedback = TextureViewportFeedback.fromSceneSnapshot(
-          refreshedSnapshot,
-        );
-      }
-      if (snapshotRefreshError != null) {
-        _previewLine = snapshotRefreshError;
-      } else if (hostError != null) {
-        _previewLine = 'Viewport host error: $hostError';
-      } else {
-        _previewLine = _buildPreviewLine();
-      }
-    });
+    _nativeFrameWidth = event.frameWidth;
+    _nativeFrameHeight = event.frameHeight;
+    _nativeFrameCount = event.frameCount;
+    _droppedFrameCount = event.droppedFrameCount;
+    _lastNativeFrameTimeMs = event.frameTimeMs;
+    _smoothedFramesPerSecond = _nextSmoothedFramesPerSecond(
+      _smoothedFramesPerSecond,
+      instantaneousFramesPerSecond,
+    );
+    _interactionPhase = event.interactionPhase;
+
+    if (refreshedSnapshot != null) {
+      _applySceneSnapshot(refreshedSnapshot, syncViewportFeedback: false);
+    }
+
+    final overlayFeedback =
+        event.feedback ??
+        (refreshedSnapshot == null
+            ? null
+            : TextureViewportFeedback.fromSceneSnapshot(refreshedSnapshot));
+    _updateViewportOverlay(
+      feedback: overlayFeedback,
+      interactionPhase: event.interactionPhase,
+      frameTimeMs: event.frameTimeMs,
+      framesPerSecond: _smoothedFramesPerSecond,
+      droppedFrameCount: event.droppedFrameCount,
+      hostError: hostError,
+    );
+    _completePendingNativeFrameRequest();
+    _completePendingHoverRequest();
+
+    if (snapshotRefreshError != null) {
+      _updateBridgeHeader(previewLine: snapshotRefreshError);
+    } else if (hostError != null) {
+      _updateBridgeHeader(previewLine: 'Viewport host error: $hostError');
+    } else {
+      _updateBridgeHeader(previewLine: _buildPreviewLine());
+    }
   }
 
   void debugHandleTextureEvent(TextureViewportEvent event) {
@@ -413,26 +513,24 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
       return;
     }
 
-    setState(() {
-      _previewLine = 'Viewport event error: $error';
-    });
+    _updateBridgeHeader(previewLine: 'Viewport event error: $error');
   }
 
   void _refreshBridgeStatus() {
     try {
       final pingValue = ping();
       final versionValue = bridgeVersion();
-      final snapshot = _decodeSnapshot(sceneSnapshotJson());
-      setState(() {
-        _statusLine = 'Rust ping: $pingValue';
-        _versionLine = 'Bridge crate version: $versionValue';
-        _applySnapshotState(snapshot);
-      });
+      final snapshot = _readSceneSnapshot();
+      _applySceneSnapshot(snapshot);
+      _updateBridgeHeader(
+        statusLine: 'Rust ping: $pingValue',
+        versionLine: 'Bridge crate version: $versionValue',
+      );
     } catch (error) {
-      setState(() {
-        _statusLine = 'Rust bridge error: $error';
-        _versionLine = '';
-      });
+      _updateBridgeHeader(
+        statusLine: 'Rust bridge error: $error',
+        versionLine: '',
+      );
     }
   }
 
@@ -442,10 +540,8 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     if (!_viewportInteractionActive) {
       _viewportInteractionActive = true;
       final renderTargetChanged = _updateRenderTargetSize();
-      if (!renderTargetChanged && mounted) {
-        setState(() {
-          _previewLine = _buildPreviewLine();
-        });
+      if (!renderTargetChanged) {
+        _updateBridgeHeader(previewLine: _buildPreviewLine());
       }
     }
 
@@ -465,10 +561,8 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
 
     _viewportInteractionActive = false;
     final renderTargetChanged = _updateRenderTargetSize();
-    if (!renderTargetChanged && mounted) {
-      setState(() {
-        _previewLine = _buildPreviewLine();
-      });
+    if (!renderTargetChanged) {
+      _updateBridgeHeader(previewLine: _buildPreviewLine());
     }
   }
 
@@ -482,10 +576,8 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     });
 
     final renderTargetChanged = _updateRenderTargetSize();
-    if (!renderTargetChanged && mounted) {
-      setState(() {
-        _previewLine = _buildPreviewLine();
-      });
+    if (!renderTargetChanged) {
+      _updateBridgeHeader(previewLine: _buildPreviewLine());
     }
   }
 
@@ -493,39 +585,70 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     required Future<void> Function(int textureId) command,
     required String errorPrefix,
     int? textureId,
+    VoidCallback? onError,
   }) {
     final activeTextureId = textureId ?? _textureId;
     if (activeTextureId == null) {
       return;
     }
 
-    unawaited(_performTextureCommand(activeTextureId, command, errorPrefix));
+    unawaited(
+      _performTextureCommand(
+        activeTextureId,
+        command,
+        errorPrefix,
+        onError: onError,
+      ),
+    );
   }
 
   Future<void> _performTextureCommand(
     int textureId,
     Future<void> Function(int textureId) command,
     String errorPrefix,
+    {
+    VoidCallback? onError,
+  }
   ) async {
     try {
       await command(textureId);
     } catch (error) {
+      onError?.call();
       if (!mounted) {
         return;
       }
-      setState(() {
-        _previewLine = '$errorPrefix: $error';
-      });
+      _updateBridgeHeader(previewLine: '$errorPrefix: $error');
     }
   }
 
   void _requestNativeFrame({int? textureId}) {
+    final activeTextureId = textureId ?? _textureId;
+    if (activeTextureId == null) {
+      return;
+    }
+    if (_nativeFrameRequestPending) {
+      _queuedNativeFrameRequest = true;
+      return;
+    }
+
+    _nativeFrameRequestPending = true;
     _dispatchTextureCommand(
-      textureId: textureId,
+      textureId: activeTextureId,
       errorPrefix: 'Viewport request error',
       command: (activeTextureId) =>
           TextureBridge.instance.requestFrame(textureId: activeTextureId),
+      onError: _completePendingNativeFrameRequest,
     );
+  }
+
+  void _completePendingNativeFrameRequest() {
+    _nativeFrameRequestPending = false;
+    if (!_queuedNativeFrameRequest) {
+      return;
+    }
+
+    _queuedNativeFrameRequest = false;
+    _requestNativeFrame();
   }
 
   void _syncNativeViewportSize() {
@@ -545,7 +668,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
           width: targetWidth,
           height: targetHeight,
         );
-        await TextureBridge.instance.requestFrame(textureId: textureId);
+        _requestNativeFrame(textureId: textureId);
       },
     );
   }
@@ -621,23 +744,46 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
       logicalViewportSize.height,
     );
 
-    _dispatchTextureCommand(
-      errorPrefix: 'Viewport hover error',
-      command: (textureId) => TextureBridge.instance.hoverNode(
-        textureId: textureId,
-        normalizedX: normalizedX,
-        normalizedY: normalizedY,
-      ),
+    _queueHoverRequest(
+      _HoverRequest.hover(normalizedX: normalizedX, normalizedY: normalizedY),
     );
   }
 
   void _handleViewportHoverExit() {
+    _queueHoverRequest(const _HoverRequest.clear());
+  }
+
+  void _queueHoverRequest(_HoverRequest request) {
+    if (_hoverRequestPending) {
+      _queuedHoverRequest = request;
+      return;
+    }
+
+    _hoverRequestPending = true;
     _dispatchTextureCommand(
-      errorPrefix: 'Viewport hover clear error',
-      command: (textureId) => TextureBridge.instance.clearHover(
-        textureId: textureId,
-      ),
+      errorPrefix: request.clearOnly
+          ? 'Viewport hover clear error'
+          : 'Viewport hover error',
+      command: (textureId) => request.clearOnly
+          ? TextureBridge.instance.clearHover(textureId: textureId)
+          : TextureBridge.instance.hoverNode(
+              textureId: textureId,
+              normalizedX: request.normalizedX,
+              normalizedY: request.normalizedY,
+            ),
+      onError: _completePendingHoverRequest,
     );
+  }
+
+  void _completePendingHoverRequest() {
+    _hoverRequestPending = false;
+    final queuedRequest = _queuedHoverRequest;
+    _queuedHoverRequest = null;
+    if (queuedRequest == null) {
+      return;
+    }
+
+    _queueHoverRequest(queuedRequest);
   }
 
   void _handleViewportInteractionEnd() {}
@@ -663,7 +809,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
   }
 
   void _runModalSceneCommand(
-    String Function() command, {
+    AppSceneSnapshot Function() command, {
     bool requestNativeFrame = true,
   }) {
     _closeCommandPanel();
@@ -738,15 +884,15 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     if (!mounted) {
       _frameWidth = nextRenderSize.width;
       _frameHeight = nextRenderSize.height;
-      _previewLine = _buildPreviewLine();
+      _updateBridgeHeader(previewLine: _buildPreviewLine());
       return true;
     }
 
     setState(() {
       _frameWidth = nextRenderSize.width;
       _frameHeight = nextRenderSize.height;
-      _previewLine = _buildPreviewLine();
     });
+    _updateBridgeHeader(previewLine: _buildPreviewLine());
     _syncNativeViewportSize();
     return true;
   }
@@ -762,7 +908,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
   }
 
   Future<void> _runSceneCommand(
-    String Function() command, {
+    AppSceneSnapshot Function() command, {
     bool requestNativeFrame = true,
   }) async {
     if (_commandInFlight) {
@@ -774,13 +920,11 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     });
 
     try {
-      final snapshot = _decodeSnapshot(command());
+      final snapshot = command();
       if (!mounted) {
         return;
       }
-      setState(() {
-        _applySnapshotState(snapshot);
-      });
+      _applySceneSnapshot(snapshot);
       if (requestNativeFrame) {
         _requestNativeFrame();
       }
@@ -788,9 +932,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
       if (!mounted) {
         return;
       }
-      setState(() {
-        _previewLine = 'Scene command error: $error';
-      });
+      _updateBridgeHeader(previewLine: 'Scene command error: $error');
     } finally {
       if (mounted) {
         setState(() {
@@ -817,9 +959,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
       if (!mounted) {
         return;
       }
-      setState(() {
-        _previewLine = 'Scene preview error: $error';
-      });
+      _updateBridgeHeader(previewLine: 'Scene preview error: $error');
     }
   }
 
@@ -1221,9 +1361,9 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     );
   }
 
-  Future<void> _setSelectedLightCookie(int cookieNodeId) {
+  Future<void> _setSelectedLightCookie(BigInt cookieNodeId) {
     return _runSceneCommand(
-      () => setSelectedLightCookie(cookieNodeId: BigInt.from(cookieNodeId)),
+      () => setSelectedLightCookie(cookieNodeId: cookieNodeId),
       requestNativeFrame: false,
     );
   }
@@ -1288,18 +1428,22 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     );
   }
 
-  Future<void> _setNodeLightMask(int nodeId, int mask) {
+  Future<void> _setNodeLightMask(BigInt nodeId, int mask) {
     return _runSceneCommand(
-      () => setNodeLightMask(nodeId: BigInt.from(nodeId), mask: mask),
+      () => setNodeLightMask(nodeId: nodeId, mask: mask),
       requestNativeFrame: false,
     );
   }
 
-  Future<void> _setNodeLightLinkEnabled(int nodeId, int lightId, bool enabled) {
+  Future<void> _setNodeLightLinkEnabled(
+    BigInt nodeId,
+    BigInt lightId,
+    bool enabled,
+  ) {
     return _runSceneCommand(
       () => setNodeLightLinkEnabled(
-        nodeId: BigInt.from(nodeId),
-        lightId: BigInt.from(lightId),
+        nodeId: nodeId,
+        lightId: lightId,
         enabled: enabled,
       ),
       requestNativeFrame: false,
@@ -1376,7 +1520,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
       return;
     }
 
-    final selectedNode = _viewportFeedback?.selectedNode ?? _sceneSnapshot?.selectedNode;
+    final selectedNode = _sceneSnapshot?.selectedNode;
     if (selectedNode == null) {
       return;
     }
@@ -1396,7 +1540,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
 
     await _runSceneCommand(
       () => renameNode(
-        nodeId: BigInt.from(selectedNode.id),
+        nodeId: selectedNode.id,
         name: submittedName,
       ),
     );
@@ -1471,6 +1615,408 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     );
   }
 
+  Widget _buildViewportCard(int? activeTextureId) {
+    return ListenableBuilder(
+      listenable: Listenable.merge(<Listenable>[
+        _sceneSnapshotNotifier,
+        _viewportOverlayNotifier,
+      ]),
+      builder: (context, child) {
+        final snapshot = _sceneSnapshotNotifier.value;
+        final overlayState = _viewportOverlayNotifier.value;
+        final showPerformanceOverlay =
+            snapshot?.settings.showFpsOverlay ?? true;
+        return ViewportSurface(
+          textureId: activeTextureId,
+          onViewportSizeChanged: _handleViewportSizeChanged,
+          onOrbitDrag: _handleViewportOrbitDrag,
+          onPanDrag: _handleViewportPanDrag,
+          onPrimaryTap: _handleViewportPrimaryTap,
+          onHover: _handleViewportHover,
+          onHoverExit: _handleViewportHoverExit,
+          onScroll: _handleViewportScroll,
+          onInteractionEnd: _handleViewportInteractionEnd,
+          overlay: ViewportFeedbackOverlay(
+            feedback: overlayState.feedback,
+            interactionPhase: showPerformanceOverlay
+                ? overlayState.interactionPhase
+                : 'idle',
+            frameTimeMs: showPerformanceOverlay ? overlayState.frameTimeMs : null,
+            framesPerSecond: showPerformanceOverlay
+                ? overlayState.framesPerSecond
+                : null,
+            droppedFrameCount: showPerformanceOverlay
+                ? overlayState.droppedFrameCount
+                : 0,
+            hostError: overlayState.hostError,
+          ),
+          controlsOverlay: ViewportToolOverlay(
+            tool: snapshot?.tool,
+            hasSelection: snapshot?.selectedNode != null,
+            enabled: !_commandInFlight,
+            onSetManipulatorMode: (modeId) =>
+                unawaited(_setManipulatorMode(modeId)),
+            onToggleManipulatorSpace: () =>
+                unawaited(_toggleManipulatorSpace()),
+            onResetManipulatorPivot: () =>
+                unawaited(_resetManipulatorPivot()),
+            onNudgeManipulatorAxis: (modeId, axisId, direction) =>
+                unawaited(_nudgeManipulatorAxis(modeId, axisId, direction)),
+            onNudgeManipulatorPivot: (axisId, direction) =>
+                unawaited(_nudgeManipulatorPivot(axisId, direction)),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildInspectorPanel(
+    ShellLayout shellLayout, {
+    ScrollController? scrollController,
+  }) {
+    return ValueListenableBuilder<AppSceneSnapshot?>(
+      valueListenable: _sceneSnapshotNotifier,
+      builder: (context, snapshot, child) {
+        return _InspectorPanel(
+          shellLayout: shellLayout,
+          scrollController: scrollController,
+          headerListenable: _bridgeHeaderNotifier,
+          snapshot: snapshot,
+          commandInFlight: _commandInFlight,
+          adaptiveInteractionResolutionEnabled:
+              _adaptiveInteractionResolutionEnabled,
+          onToggleAdaptiveInteractionResolution:
+              _toggleAdaptiveInteractionResolution,
+          onRefresh: _refreshBridgeStatus,
+          onAddSphere: () => _runSceneCommand(addSphere),
+          onAddBox: () => _runSceneCommand(addBox),
+          onAddCylinder: () => _runSceneCommand(addCylinder),
+          onAddTorus: () => _runSceneCommand(addTorus),
+          onCreateOperation: _promptCreateOperation,
+          onCreateTransform: () => _runSceneCommand(createTransform),
+          onCreateModifier: _promptCreateModifier,
+          onCreateLight: _promptCreateLight,
+          onCreateSculpt: () => _runSceneCommand(createSculpt),
+          onRenameSelected: _promptRenameSelectedNode,
+          onBeginInteractiveEdit: _beginInteractiveEditSession,
+          onPreviewPrimitiveParameter: _previewSelectedPrimitiveParameter,
+          onSetPrimitiveParameter: (parameterKey, value) => _runSceneCommand(
+            () => setSelectedPrimitiveParameter(
+              parameterKey: parameterKey,
+              value: value,
+            ),
+          ),
+          onPreviewMaterialFloat: _previewSelectedMaterialFloat,
+          onSetMaterialFloat: (fieldId, value) => _runSceneCommand(
+            () => setSelectedMaterialFloat(fieldId: fieldId, value: value),
+          ),
+          onPreviewMaterialColor: _previewSelectedMaterialColor,
+          onSetMaterialColor: (fieldId, color) => _runSceneCommand(
+            () => setSelectedMaterialColor(
+              fieldId: fieldId,
+              red: color.x,
+              green: color.y,
+              blue: color.z,
+            ),
+          ),
+          onPreviewTransformPosition: _previewSelectedTransformPosition,
+          onSetTransformPosition: (x, y, z) => _runSceneCommand(
+            () => setSelectedTransformPosition(x: x, y: y, z: z),
+          ),
+          onPreviewTransformRotationDegrees:
+              _previewSelectedTransformRotationDegrees,
+          onSetTransformRotationDegrees: (x, y, z) => _runSceneCommand(
+            () => setSelectedTransformRotationDegrees(
+              xDegrees: x,
+              yDegrees: y,
+              zDegrees: z,
+            ),
+          ),
+          onPreviewTransformScale: _previewSelectedTransformScale,
+          onSetTransformScale: (x, y, z) =>
+              _runSceneCommand(() => setSelectedTransformScale(x: x, y: y, z: z)),
+          onDuplicateSelected: () => _runSceneCommand(duplicateSelected),
+          onUndo: () => _runSceneCommand(undo),
+          onRedo: () => _runSceneCommand(redo),
+          onDeleteSelected: () => _runSceneCommand(deleteSelected),
+          onSelectSceneNode: (nodeId) =>
+              _runSceneCommand(() => selectNode(nodeId: nodeId)),
+          onToggleSceneNodeVisibility: (nodeId) => _runSceneCommand(
+            () => toggleNodeVisibility(nodeId: nodeId),
+          ),
+          onToggleSceneNodeLock: (nodeId) =>
+              _runSceneCommand(() => toggleNodeLock(nodeId: nodeId)),
+          onNewScene: _newScene,
+          onOpenScene: _openScene,
+          onSaveScene: _saveScene,
+          onSaveSceneAs: _saveSceneAs,
+          onOpenRecentScene: _openRecentScene,
+          onRecoverAutosave: _recoverAutosave,
+          onDiscardRecovery: _discardRecovery,
+          onApplyRenderPreset: _applyRenderPreset,
+          onSetRenderShadingMode: _setRenderShadingMode,
+          onSetRenderToggle: _setRenderToggle,
+          onSetRenderInteger: _setRenderInteger,
+          onSetRenderScalar: _setRenderScalar,
+          onResetSettings: _resetSettings,
+          onExportSettings: _exportSettings,
+          onImportSettings: _importSettings,
+          onSetSettingsToggle: _setSettingsToggle,
+          onSetSettingsInteger: _setSettingsInteger,
+          onSaveCameraBookmark: _saveCameraBookmark,
+          onRestoreCameraBookmark: _restoreCameraBookmark,
+          onClearCameraBookmark: _clearCameraBookmark,
+          onResetKeymap: _resetKeymap,
+          onExportKeymap: _exportKeymap,
+          onImportKeymap: _importKeymap,
+          onClearKeybinding: _clearKeybinding,
+          onSetKeybinding: _setKeybinding,
+          onSetExportResolution: _setExportResolution,
+          onSetAdaptiveExport: _setAdaptiveExport,
+          onStartExport: _startExport,
+          onCancelExport: _cancelExport,
+          onOpenImportDialog: _openImportDialog,
+          onCancelImportDialog: _cancelImportDialog,
+          onSetImportUseAuto: _setImportUseAuto,
+          onSetImportResolution: _setImportResolution,
+          onStartImport: _startImport,
+          onCancelImport: _cancelImport,
+          onOpenSculptConvertDialog: _openSculptConvertDialog,
+          onCancelSculptConvertDialog: _cancelSculptConvertDialog,
+          onSetSculptConvertMode: _setSculptConvertMode,
+          onSetSculptConvertResolution: _setSculptConvertResolution,
+          onStartSculptConvert: _startSculptConvert,
+          onResumeSculptingSelected: _resumeSculptingSelected,
+          onStopSculpting: _stopSculpting,
+          onSetSculptBrushMode: _setSculptBrushMode,
+          onSetSculptBrushRadius: _setSculptBrushRadius,
+          onSetSculptBrushStrength: _setSculptBrushStrength,
+          onSetSculptSymmetryAxis: _setSculptSymmetryAxis,
+          onSetSelectedSculptResolution: _setSelectedSculptResolution,
+          onSetSelectedLightType: _setSelectedLightType,
+          onSetSelectedLightColor: _setSelectedLightColor,
+          onSetSelectedLightIntensity: _setSelectedLightIntensity,
+          onSetSelectedLightRange: _setSelectedLightRange,
+          onSetSelectedLightSpotAngle: _setSelectedLightSpotAngle,
+          onSetSelectedLightCastShadows: _setSelectedLightCastShadows,
+          onSetSelectedLightShadowSoftness: _setSelectedLightShadowSoftness,
+          onSetSelectedLightShadowColor: _setSelectedLightShadowColor,
+          onSetSelectedLightVolumetric: _setSelectedLightVolumetric,
+          onSetSelectedLightVolumetricDensity:
+              _setSelectedLightVolumetricDensity,
+          onSetSelectedLightCookie: _setSelectedLightCookie,
+          onClearSelectedLightCookie: _clearSelectedLightCookie,
+          onSetSelectedLightProximityMode: _setSelectedLightProximityMode,
+          onSetSelectedLightProximityRange: _setSelectedLightProximityRange,
+          onSetSelectedLightArrayPattern: _setSelectedLightArrayPattern,
+          onSetSelectedLightArrayCount: _setSelectedLightArrayCount,
+          onSetSelectedLightArrayRadius: _setSelectedLightArrayRadius,
+          onSetSelectedLightArrayColorVariation:
+              _setSelectedLightArrayColorVariation,
+          onSetSelectedLightIntensityExpression:
+              _setSelectedLightIntensityExpression,
+          onSetSelectedLightColorHueExpression:
+              _setSelectedLightColorHueExpression,
+          onSetNodeLightMask: _setNodeLightMask,
+          onSetNodeLightLinkEnabled: _setNodeLightLinkEnabled,
+          onFrameAll: () => _runSceneCommand(frameAll),
+          onResetScene: () => _runSceneCommand(resetScene),
+          onFocusSelected: () => _runSceneCommand(focusSelected),
+          onCameraFront: () => _runSceneCommand(cameraFront),
+          onCameraTop: () => _runSceneCommand(cameraTop),
+          onCameraRight: () => _runSceneCommand(cameraRight),
+          onCameraBack: () => _runSceneCommand(cameraBack),
+          onCameraLeft: () => _runSceneCommand(cameraLeft),
+          onCameraBottom: () => _runSceneCommand(cameraBottom),
+          onToggleProjection: () => _runSceneCommand(toggleOrthographic),
+          onOpenCommandPanel: _openCommandPanel,
+        );
+      },
+    );
+  }
+
+  Widget _buildCommandSheetContent() {
+    return ValueListenableBuilder<AppSceneSnapshot?>(
+      valueListenable: _sceneSnapshotNotifier,
+      builder: (context, snapshot, child) {
+        return _CommandSheetContent(
+          commandInFlight: _commandInFlight,
+          snapshot: snapshot,
+          onAddSphere: () => _runModalSceneCommand(addSphere),
+          onAddBox: () => _runModalSceneCommand(addBox),
+          onAddCylinder: () => _runModalSceneCommand(addCylinder),
+          onAddTorus: () => _runModalSceneCommand(addTorus),
+          onCreateOperation: _promptCreateOperation,
+          onCreateTransform: () => _runModalSceneCommand(createTransform),
+          onCreateModifier: _promptCreateModifier,
+          onCreateLight: _promptCreateLight,
+          onCreateSculpt: () => _runModalSceneCommand(createSculpt),
+          onRenameSelected: _promptRenameSelectedNode,
+          onDuplicateSelected: () => _runModalSceneCommand(duplicateSelected),
+          onUndo: () => _runModalSceneCommand(undo),
+          onRedo: () => _runModalSceneCommand(redo),
+          onDeleteSelected: () => _runModalSceneCommand(deleteSelected),
+          onNewScene: () => _runModalSceneCommand(newScene),
+          onOpenScene: () => _runModalSceneCommand(openScene),
+          onSaveScene: () => _runModalSceneCommand(saveScene),
+          onSaveSceneAs: () => _runModalSceneCommand(saveSceneAs),
+          onOpenRecentScene: (path) =>
+              _runModalSceneCommand(() => openRecentScene(path: path)),
+          onRecoverAutosave: () => _runModalSceneCommand(recoverAutosave),
+          onDiscardRecovery: () => _runModalSceneCommand(discardRecovery),
+          onApplyRenderPreset: (presetId) => _runModalSceneCommand(
+            () => applyRenderPreset(presetId: presetId),
+          ),
+          onSetRenderShadingMode: (modeId) => _runModalSceneCommand(
+            () => setRenderShadingMode(modeId: modeId),
+          ),
+          onSetRenderToggle: (fieldId, enabled) => _runModalSceneCommand(
+            () => setRenderToggle(fieldId: fieldId, enabled: enabled),
+          ),
+          onSetRenderInteger: (fieldId, value) => _runModalSceneCommand(
+            () => setRenderInteger(fieldId: fieldId, value: value),
+          ),
+          onSetRenderScalar: (fieldId, value) => _runModalSceneCommand(
+            () => setRenderScalar(fieldId: fieldId, value: value),
+          ),
+          onResetSettings: () => _runModalSceneCommand(resetSettings),
+          onExportSettings: () => _runModalSceneCommand(
+            exportSettings,
+            requestNativeFrame: false,
+          ),
+          onImportSettings: () => _runModalSceneCommand(importSettings),
+          onSetSettingsToggle: (fieldId, enabled) => _runModalSceneCommand(
+            () => setSettingsToggle(fieldId: fieldId, enabled: enabled),
+          ),
+          onSetSettingsInteger: (fieldId, value) => _runModalSceneCommand(
+            () => setSettingsInteger(fieldId: fieldId, value: value),
+          ),
+          onSaveCameraBookmark: (slotIndex) => _runModalSceneCommand(
+            () => saveCameraBookmark(slotIndex: slotIndex),
+            requestNativeFrame: false,
+          ),
+          onRestoreCameraBookmark: (slotIndex) =>
+              _runModalSceneCommand(() => restoreCameraBookmark(slotIndex: slotIndex)),
+          onClearCameraBookmark: (slotIndex) => _runModalSceneCommand(
+            () => clearCameraBookmark(slotIndex: slotIndex),
+            requestNativeFrame: false,
+          ),
+          onResetKeymap: () =>
+              _runModalSceneCommand(resetKeymap, requestNativeFrame: false),
+          onExportKeymap: () =>
+              _runModalSceneCommand(exportKeymap, requestNativeFrame: false),
+          onImportKeymap: () =>
+              _runModalSceneCommand(importKeymap, requestNativeFrame: false),
+          onClearKeybinding: (actionId) => _runModalSceneCommand(
+            () => clearKeybinding(actionId: actionId),
+            requestNativeFrame: false,
+          ),
+          onSetKeybinding: (actionId, keyId, ctrl, shift, alt) =>
+              _runModalSceneCommand(
+                () => setKeybinding(
+                  actionId: actionId,
+                  keyId: keyId,
+                  ctrl: ctrl,
+                  shift: shift,
+                  alt: alt,
+                ),
+                requestNativeFrame: false,
+              ),
+          onSetExportResolution: (resolution) => _runModalSceneCommand(
+            () => setExportResolution(resolution: resolution),
+            requestNativeFrame: false,
+          ),
+          onSetAdaptiveExport: (enabled) => _runModalSceneCommand(
+            () => setAdaptiveExport(enabled: enabled),
+            requestNativeFrame: false,
+          ),
+          onStartExport: () =>
+              _runModalSceneCommand(startExport, requestNativeFrame: false),
+          onCancelExport: () =>
+              _runModalSceneCommand(cancelExport, requestNativeFrame: false),
+          onOpenImportDialog: () =>
+              _runModalSceneCommand(openImportDialog, requestNativeFrame: false),
+          onCancelImportDialog: () => _runModalSceneCommand(
+            cancelImportDialog,
+            requestNativeFrame: false,
+          ),
+          onSetImportUseAuto: (useAuto) => _runModalSceneCommand(
+            () => setImportUseAuto(useAuto: useAuto),
+            requestNativeFrame: false,
+          ),
+          onSetImportResolution: (resolution) => _runModalSceneCommand(
+            () => setImportResolution(resolution: resolution),
+            requestNativeFrame: false,
+          ),
+          onStartImport: () =>
+              _runModalSceneCommand(startImport, requestNativeFrame: false),
+          onCancelImport: () =>
+              _runModalSceneCommand(cancelImport, requestNativeFrame: false),
+          onOpenSculptConvertDialog: () => _runModalSceneCommand(
+            openSculptConvertDialogForSelected,
+            requestNativeFrame: false,
+          ),
+          onCancelSculptConvertDialog: () => _runModalSceneCommand(
+            cancelSculptConvertDialog,
+            requestNativeFrame: false,
+          ),
+          onSetSculptConvertMode: (modeId) => _runModalSceneCommand(
+            () => setSculptConvertMode(modeId: modeId),
+            requestNativeFrame: false,
+          ),
+          onSetSculptConvertResolution: (resolution) => _runModalSceneCommand(
+            () => setSculptConvertResolution(resolution: resolution),
+            requestNativeFrame: false,
+          ),
+          onStartSculptConvert: () => _runModalSceneCommand(
+            startSculptConvert,
+            requestNativeFrame: false,
+          ),
+          onResumeSculptingSelected: () => _runModalSceneCommand(
+            resumeSculptingSelected,
+            requestNativeFrame: false,
+          ),
+          onStopSculpting: () =>
+              _runModalSceneCommand(stopSculpting, requestNativeFrame: false),
+          onSetSculptBrushMode: (modeId) => _runModalSceneCommand(
+            () => setSculptBrushMode(modeId: modeId),
+            requestNativeFrame: false,
+          ),
+          onSetSculptBrushRadius: (radius) => _runModalSceneCommand(
+            () => setSculptBrushRadius(radius: radius),
+            requestNativeFrame: false,
+          ),
+          onSetSculptBrushStrength: (strength) => _runModalSceneCommand(
+            () => setSculptBrushStrength(strength: strength),
+            requestNativeFrame: false,
+          ),
+          onSetSculptSymmetryAxis: (axisId) => _runModalSceneCommand(
+            () => setSculptSymmetryAxis(axisId: axisId),
+            requestNativeFrame: false,
+          ),
+          onSetSelectedSculptResolution: (resolution) => _runModalSceneCommand(
+            () => setSelectedSculptResolution(resolution: resolution),
+            requestNativeFrame: false,
+          ),
+          onFrameAll: () => _runModalSceneCommand(frameAll),
+          onResetScene: () => _runModalSceneCommand(resetScene),
+          onFocusSelected: () => _runModalSceneCommand(focusSelected),
+          onCameraFront: () => _runModalSceneCommand(cameraFront),
+          onCameraTop: () => _runModalSceneCommand(cameraTop),
+          onCameraRight: () => _runModalSceneCommand(cameraRight),
+          onCameraBack: () => _runModalSceneCommand(cameraBack),
+          onCameraLeft: () => _runModalSceneCommand(cameraLeft),
+          onCameraBottom: () => _runModalSceneCommand(cameraBottom),
+          onToggleProjection: () => _runModalSceneCommand(toggleOrthographic),
+          onRefresh: () {
+            _closeCommandPanel();
+            _refreshBridgeStatus();
+          },
+        );
+      },
+    );
+  }
+
   @override
   void dispose() {
     _textureEventSubscription?.cancel();
@@ -1486,7 +2032,6 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
   @override
   Widget build(BuildContext context) {
     final activeTextureId = _textureId;
-    final snapshot = _sceneSnapshot;
     final shellBackground = ShellSurfaceStyles.canvas(context);
 
     return Scaffold(
@@ -1501,695 +2046,39 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
           child: LayoutBuilder(
             builder: (context, constraints) {
               final shellLayout = ShellLayout.forWidth(constraints.maxWidth);
-              final selectedNode =
-                  _viewportFeedback?.selectedNode ?? snapshot?.selectedNode;
-              final showPerformanceOverlay =
-                  snapshot?.settings.showFpsOverlay ?? true;
-              final viewportCard = ViewportSurface(
-                textureId: activeTextureId,
-                onViewportSizeChanged: _handleViewportSizeChanged,
-                onOrbitDrag: _handleViewportOrbitDrag,
-                onPanDrag: _handleViewportPanDrag,
-                onPrimaryTap: _handleViewportPrimaryTap,
-                onHover: _handleViewportHover,
-                onHoverExit: _handleViewportHoverExit,
-                onScroll: _handleViewportScroll,
-                onInteractionEnd: _handleViewportInteractionEnd,
-                overlay: ViewportFeedbackOverlay(
-                  feedback: _viewportFeedback,
-                  interactionPhase: showPerformanceOverlay
-                      ? _interactionPhase
-                      : 'idle',
-                  frameTimeMs: showPerformanceOverlay
-                      ? _lastNativeFrameTimeMs
-                      : null,
-                  framesPerSecond: showPerformanceOverlay
-                      ? _smoothedFramesPerSecond
-                      : null,
-                  droppedFrameCount: showPerformanceOverlay
-                      ? _droppedFrameCount
-                      : 0,
-                  hostError: _lastViewportHostError,
-                ),
-                controlsOverlay: ViewportToolOverlay(
-                  tool: snapshot?.tool,
-                  hasSelection: selectedNode != null,
-                  enabled: !_commandInFlight,
-                  onSetManipulatorMode: (modeId) =>
-                      unawaited(_setManipulatorMode(modeId)),
-                  onToggleManipulatorSpace: () =>
-                      unawaited(_toggleManipulatorSpace()),
-                  onResetManipulatorPivot: () =>
-                      unawaited(_resetManipulatorPivot()),
-                  onNudgeManipulatorAxis: (modeId, axisId, direction) =>
-                      unawaited(_nudgeManipulatorAxis(modeId, axisId, direction)),
-                  onNudgeManipulatorPivot: (axisId, direction) =>
-                      unawaited(_nudgeManipulatorPivot(axisId, direction)),
-                ),
-              );
+              final viewportCard = _buildViewportCard(activeTextureId);
+              final commandSheetContent = _buildCommandSheetContent();
 
-            if (shellLayout.useSidePanel) {
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(flex: 3, child: viewportCard),
-                  SizedBox(width: shellLayout.panelGap),
-                  ShellDesktopSidePanel(
-                    width: shellLayout.inspectorPanelExtent,
-                    child: _InspectorPanel(
-                      shellLayout: shellLayout,
-                      snapshot: snapshot,
-                      viewportFeedback: _viewportFeedback,
-                      statusLine: _statusLine,
-                      versionLine: _versionLine,
-                      previewLine: _previewLine,
-                      commandInFlight: _commandInFlight,
-                      adaptiveInteractionResolutionEnabled:
-                          _adaptiveInteractionResolutionEnabled,
-                      onToggleAdaptiveInteractionResolution:
-                          _toggleAdaptiveInteractionResolution,
-                      onRefresh: _refreshBridgeStatus,
-                      onAddSphere: () => _runSceneCommand(addSphere),
-                      onAddBox: () => _runSceneCommand(addBox),
-                      onAddCylinder: () => _runSceneCommand(addCylinder),
-                      onAddTorus: () => _runSceneCommand(addTorus),
-                      onCreateOperation: _promptCreateOperation,
-                      onCreateTransform: () => _runSceneCommand(createTransform),
-                      onCreateModifier: _promptCreateModifier,
-                      onCreateLight: _promptCreateLight,
-                      onCreateSculpt: () => _runSceneCommand(createSculpt),
-                      onRenameSelected: _promptRenameSelectedNode,
-                      onBeginInteractiveEdit: _beginInteractiveEditSession,
-                      onPreviewPrimitiveParameter:
-                          _previewSelectedPrimitiveParameter,
-                      onSetPrimitiveParameter: (parameterKey, value) =>
-                          _runSceneCommand(
-                            () => setSelectedPrimitiveParameter(
-                              parameterKey: parameterKey,
-                              value: value,
-                            ),
-                          ),
-                      onPreviewMaterialFloat: _previewSelectedMaterialFloat,
-                      onSetMaterialFloat: (fieldId, value) => _runSceneCommand(
-                        () => setSelectedMaterialFloat(
-                          fieldId: fieldId,
-                          value: value,
-                        ),
-                      ),
-                      onPreviewMaterialColor: _previewSelectedMaterialColor,
-                      onSetMaterialColor: (fieldId, color) => _runSceneCommand(
-                        () => setSelectedMaterialColor(
-                          fieldId: fieldId,
-                          red: color.x,
-                          green: color.y,
-                          blue: color.z,
-                        ),
-                      ),
-                      onPreviewTransformPosition:
-                          _previewSelectedTransformPosition,
-                      onSetTransformPosition: (x, y, z) => _runSceneCommand(
-                        () => setSelectedTransformPosition(x: x, y: y, z: z),
-                      ),
-                      onPreviewTransformRotationDegrees:
-                          _previewSelectedTransformRotationDegrees,
-                      onSetTransformRotationDegrees: (x, y, z) =>
-                          _runSceneCommand(
-                            () => setSelectedTransformRotationDegrees(
-                              xDegrees: x,
-                              yDegrees: y,
-                              zDegrees: z,
-                            ),
-                          ),
-                      onPreviewTransformScale: _previewSelectedTransformScale,
-                      onSetTransformScale: (x, y, z) => _runSceneCommand(
-                        () => setSelectedTransformScale(x: x, y: y, z: z),
-                      ),
-                      onDuplicateSelected: () =>
-                          _runSceneCommand(duplicateSelected),
-                      onUndo: () => _runSceneCommand(undo),
-                      onRedo: () => _runSceneCommand(redo),
-                      onDeleteSelected: () => _runSceneCommand(deleteSelected),
-                      onSelectSceneNode: (nodeId) => _runSceneCommand(
-                        () => selectNode(nodeId: BigInt.from(nodeId)),
-                      ),
-                      onToggleSceneNodeVisibility: (nodeId) => _runSceneCommand(
-                        () => toggleNodeVisibility(nodeId: BigInt.from(nodeId)),
-                      ),
-                      onToggleSceneNodeLock: (nodeId) => _runSceneCommand(
-                        () => toggleNodeLock(nodeId: BigInt.from(nodeId)),
-                      ),
-                      onNewScene: _newScene,
-                      onOpenScene: _openScene,
-                      onSaveScene: _saveScene,
-                      onSaveSceneAs: _saveSceneAs,
-                      onOpenRecentScene: _openRecentScene,
-                      onRecoverAutosave: _recoverAutosave,
-                      onDiscardRecovery: _discardRecovery,
-                      onApplyRenderPreset: _applyRenderPreset,
-                      onSetRenderShadingMode: _setRenderShadingMode,
-                      onSetRenderToggle: _setRenderToggle,
-                      onSetRenderInteger: _setRenderInteger,
-                      onSetRenderScalar: _setRenderScalar,
-                      onResetSettings: _resetSettings,
-                      onExportSettings: _exportSettings,
-                      onImportSettings: _importSettings,
-                      onSetSettingsToggle: _setSettingsToggle,
-                      onSetSettingsInteger: _setSettingsInteger,
-                      onSaveCameraBookmark: _saveCameraBookmark,
-                      onRestoreCameraBookmark: _restoreCameraBookmark,
-                      onClearCameraBookmark: _clearCameraBookmark,
-                      onResetKeymap: _resetKeymap,
-                      onExportKeymap: _exportKeymap,
-                      onImportKeymap: _importKeymap,
-                      onClearKeybinding: _clearKeybinding,
-                      onSetKeybinding: _setKeybinding,
-                      onSetExportResolution: _setExportResolution,
-                      onSetAdaptiveExport: _setAdaptiveExport,
-                      onStartExport: _startExport,
-                      onCancelExport: _cancelExport,
-                      onOpenImportDialog: _openImportDialog,
-                      onCancelImportDialog: _cancelImportDialog,
-                      onSetImportUseAuto: _setImportUseAuto,
-                      onSetImportResolution: _setImportResolution,
-                      onStartImport: _startImport,
-                      onCancelImport: _cancelImport,
-                      onOpenSculptConvertDialog: _openSculptConvertDialog,
-                      onCancelSculptConvertDialog: _cancelSculptConvertDialog,
-                      onSetSculptConvertMode: _setSculptConvertMode,
-                      onSetSculptConvertResolution: _setSculptConvertResolution,
-                      onStartSculptConvert: _startSculptConvert,
-                      onResumeSculptingSelected: _resumeSculptingSelected,
-                      onStopSculpting: _stopSculpting,
-                      onSetSculptBrushMode: _setSculptBrushMode,
-                      onSetSculptBrushRadius: _setSculptBrushRadius,
-                      onSetSculptBrushStrength: _setSculptBrushStrength,
-                      onSetSculptSymmetryAxis: _setSculptSymmetryAxis,
-                      onSetSelectedSculptResolution: _setSelectedSculptResolution,
-                      onSetSelectedLightType: _setSelectedLightType,
-                      onSetSelectedLightColor: _setSelectedLightColor,
-                      onSetSelectedLightIntensity: _setSelectedLightIntensity,
-                      onSetSelectedLightRange: _setSelectedLightRange,
-                      onSetSelectedLightSpotAngle: _setSelectedLightSpotAngle,
-                      onSetSelectedLightCastShadows:
-                          _setSelectedLightCastShadows,
-                      onSetSelectedLightShadowSoftness:
-                          _setSelectedLightShadowSoftness,
-                      onSetSelectedLightShadowColor:
-                          _setSelectedLightShadowColor,
-                      onSetSelectedLightVolumetric:
-                          _setSelectedLightVolumetric,
-                      onSetSelectedLightVolumetricDensity:
-                          _setSelectedLightVolumetricDensity,
-                      onSetSelectedLightCookie: _setSelectedLightCookie,
-                      onClearSelectedLightCookie: _clearSelectedLightCookie,
-                      onSetSelectedLightProximityMode:
-                          _setSelectedLightProximityMode,
-                      onSetSelectedLightProximityRange:
-                          _setSelectedLightProximityRange,
-                      onSetSelectedLightArrayPattern:
-                          _setSelectedLightArrayPattern,
-                      onSetSelectedLightArrayCount:
-                          _setSelectedLightArrayCount,
-                      onSetSelectedLightArrayRadius:
-                          _setSelectedLightArrayRadius,
-                      onSetSelectedLightArrayColorVariation:
-                          _setSelectedLightArrayColorVariation,
-                      onSetSelectedLightIntensityExpression:
-                          _setSelectedLightIntensityExpression,
-                      onSetSelectedLightColorHueExpression:
-                          _setSelectedLightColorHueExpression,
-                      onSetNodeLightMask: _setNodeLightMask,
-                      onSetNodeLightLinkEnabled: _setNodeLightLinkEnabled,
-                      onFrameAll: () => _runSceneCommand(frameAll),
-                      onResetScene: () => _runSceneCommand(resetScene),
-                      onFocusSelected: () => _runSceneCommand(focusSelected),
-                      onCameraFront: () => _runSceneCommand(cameraFront),
-                      onCameraTop: () => _runSceneCommand(cameraTop),
-                      onCameraRight: () => _runSceneCommand(cameraRight),
-                      onCameraBack: () => _runSceneCommand(cameraBack),
-                      onCameraLeft: () => _runSceneCommand(cameraLeft),
-                      onCameraBottom: () => _runSceneCommand(cameraBottom),
-                      onToggleProjection: () =>
-                          _runSceneCommand(toggleOrthographic),
+              if (shellLayout.useSidePanel) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(flex: 3, child: viewportCard),
+                    SizedBox(width: shellLayout.panelGap),
+                    ShellDesktopSidePanel(
+                      width: shellLayout.inspectorPanelExtent,
+                      child: _buildInspectorPanel(shellLayout),
                     ),
-                  ),
-                ],
-              );
-            }
-
-            return ShellStackedPaneLayout(
-              viewport: viewportCard,
-              modalPanel: _activeModalPanel == _BridgeModalPanel.commands
-                  ? ShellModalPanel(
-                      title: 'Workspace Commands',
-                      onDismiss: _closeCommandPanel,
-                      child: _CommandSheetContent(
-                        commandInFlight: _commandInFlight,
-                        viewportFeedback: _viewportFeedback,
-                        snapshot: snapshot,
-                        onAddSphere: () => _runModalSceneCommand(addSphere),
-                        onAddBox: () => _runModalSceneCommand(addBox),
-                        onAddCylinder: () =>
-                            _runModalSceneCommand(addCylinder),
-                        onAddTorus: () => _runModalSceneCommand(addTorus),
-                        onCreateOperation: _promptCreateOperation,
-                        onCreateTransform: () =>
-                            _runModalSceneCommand(createTransform),
-                        onCreateModifier: _promptCreateModifier,
-                        onCreateLight: _promptCreateLight,
-                        onCreateSculpt: () =>
-                            _runModalSceneCommand(createSculpt),
-                        onRenameSelected: _promptRenameSelectedNode,
-                        onDuplicateSelected: () =>
-                            _runModalSceneCommand(duplicateSelected),
-                        onUndo: () => _runModalSceneCommand(undo),
-                        onRedo: () => _runModalSceneCommand(redo),
-                        onDeleteSelected: () =>
-                            _runModalSceneCommand(deleteSelected),
-                        onNewScene: () => _runModalSceneCommand(newScene),
-                        onOpenScene: () => _runModalSceneCommand(openScene),
-                        onSaveScene: () => _runModalSceneCommand(saveScene),
-                        onSaveSceneAs: () => _runModalSceneCommand(saveSceneAs),
-                        onOpenRecentScene: (path) =>
-                            _runModalSceneCommand(() => openRecentScene(path: path)),
-                        onRecoverAutosave: () =>
-                            _runModalSceneCommand(recoverAutosave),
-                        onDiscardRecovery: () =>
-                            _runModalSceneCommand(discardRecovery),
-                        onApplyRenderPreset: (presetId) =>
-                            _runModalSceneCommand(
-                              () => applyRenderPreset(presetId: presetId),
-                            ),
-                        onSetRenderShadingMode: (modeId) =>
-                            _runModalSceneCommand(
-                              () => setRenderShadingMode(modeId: modeId),
-                            ),
-                        onSetRenderToggle: (fieldId, enabled) =>
-                            _runModalSceneCommand(
-                              () => setRenderToggle(
-                                fieldId: fieldId,
-                                enabled: enabled,
-                              ),
-                            ),
-                        onSetRenderInteger: (fieldId, value) =>
-                            _runModalSceneCommand(
-                              () => setRenderInteger(
-                                fieldId: fieldId,
-                                value: value,
-                              ),
-                            ),
-                        onSetRenderScalar: (fieldId, value) =>
-                            _runModalSceneCommand(
-                              () => setRenderScalar(
-                                fieldId: fieldId,
-                                value: value,
-                              ),
-                            ),
-                        onResetSettings: () =>
-                            _runModalSceneCommand(resetSettings),
-                        onExportSettings: () =>
-                            _runModalSceneCommand(
-                              exportSettings,
-                              requestNativeFrame: false,
-                            ),
-                        onImportSettings: () =>
-                            _runModalSceneCommand(importSettings),
-                        onSetSettingsToggle: (fieldId, enabled) =>
-                            _runModalSceneCommand(
-                              () => setSettingsToggle(
-                                fieldId: fieldId,
-                                enabled: enabled,
-                              ),
-                            ),
-                        onSetSettingsInteger: (fieldId, value) =>
-                            _runModalSceneCommand(
-                              () => setSettingsInteger(
-                                fieldId: fieldId,
-                                value: value,
-                              ),
-                            ),
-                        onSaveCameraBookmark: (slotIndex) =>
-                            _runModalSceneCommand(
-                              () => saveCameraBookmark(slotIndex: slotIndex),
-                              requestNativeFrame: false,
-                            ),
-                        onRestoreCameraBookmark: (slotIndex) =>
-                            _runModalSceneCommand(
-                              () => restoreCameraBookmark(slotIndex: slotIndex),
-                            ),
-                        onClearCameraBookmark: (slotIndex) =>
-                            _runModalSceneCommand(
-                              () => clearCameraBookmark(slotIndex: slotIndex),
-                              requestNativeFrame: false,
-                            ),
-                        onResetKeymap: () =>
-                            _runModalSceneCommand(
-                              resetKeymap,
-                              requestNativeFrame: false,
-                            ),
-                        onExportKeymap: () =>
-                            _runModalSceneCommand(
-                              exportKeymap,
-                              requestNativeFrame: false,
-                            ),
-                        onImportKeymap: () =>
-                            _runModalSceneCommand(
-                              importKeymap,
-                              requestNativeFrame: false,
-                            ),
-                        onClearKeybinding: (actionId) =>
-                            _runModalSceneCommand(
-                              () => clearKeybinding(actionId: actionId),
-                              requestNativeFrame: false,
-                            ),
-                        onSetKeybinding:
-                            (actionId, keyId, ctrl, shift, alt) =>
-                                _runModalSceneCommand(
-                                  () => setKeybinding(
-                                    actionId: actionId,
-                                    keyId: keyId,
-                                    ctrl: ctrl,
-                                    shift: shift,
-                                    alt: alt,
-                                  ),
-                                  requestNativeFrame: false,
-                                ),
-                        onSetExportResolution: (resolution) =>
-                            _runModalSceneCommand(
-                              () => setExportResolution(resolution: resolution),
-                              requestNativeFrame: false,
-                            ),
-                        onSetAdaptiveExport: (enabled) =>
-                            _runModalSceneCommand(
-                              () => setAdaptiveExport(enabled: enabled),
-                              requestNativeFrame: false,
-                            ),
-                        onStartExport: () =>
-                            _runModalSceneCommand(
-                              startExport,
-                              requestNativeFrame: false,
-                            ),
-                        onCancelExport: () =>
-                            _runModalSceneCommand(
-                              cancelExport,
-                              requestNativeFrame: false,
-                            ),
-                        onOpenImportDialog: () =>
-                            _runModalSceneCommand(
-                              openImportDialog,
-                              requestNativeFrame: false,
-                            ),
-                        onCancelImportDialog: () =>
-                            _runModalSceneCommand(
-                              cancelImportDialog,
-                              requestNativeFrame: false,
-                            ),
-                        onSetImportUseAuto: (useAuto) =>
-                            _runModalSceneCommand(
-                              () => setImportUseAuto(useAuto: useAuto),
-                              requestNativeFrame: false,
-                            ),
-                        onSetImportResolution: (resolution) =>
-                            _runModalSceneCommand(
-                              () => setImportResolution(resolution: resolution),
-                              requestNativeFrame: false,
-                            ),
-                        onStartImport: () =>
-                            _runModalSceneCommand(
-                              startImport,
-                              requestNativeFrame: false,
-                            ),
-                        onCancelImport: () =>
-                            _runModalSceneCommand(
-                              cancelImport,
-                              requestNativeFrame: false,
-                            ),
-                        onOpenSculptConvertDialog: () =>
-                            _runModalSceneCommand(
-                              openSculptConvertDialogForSelected,
-                              requestNativeFrame: false,
-                            ),
-                        onCancelSculptConvertDialog: () =>
-                            _runModalSceneCommand(
-                              cancelSculptConvertDialog,
-                              requestNativeFrame: false,
-                            ),
-                        onSetSculptConvertMode: (modeId) =>
-                            _runModalSceneCommand(
-                              () => setSculptConvertMode(modeId: modeId),
-                              requestNativeFrame: false,
-                            ),
-                        onSetSculptConvertResolution: (resolution) =>
-                            _runModalSceneCommand(
-                              () => setSculptConvertResolution(
-                                resolution: resolution,
-                              ),
-                              requestNativeFrame: false,
-                            ),
-                        onStartSculptConvert: () =>
-                            _runModalSceneCommand(
-                              startSculptConvert,
-                              requestNativeFrame: false,
-                            ),
-                        onResumeSculptingSelected: () =>
-                            _runModalSceneCommand(
-                              resumeSculptingSelected,
-                              requestNativeFrame: false,
-                            ),
-                        onStopSculpting: () =>
-                            _runModalSceneCommand(
-                              stopSculpting,
-                              requestNativeFrame: false,
-                            ),
-                        onSetSculptBrushMode: (modeId) =>
-                            _runModalSceneCommand(
-                              () => setSculptBrushMode(modeId: modeId),
-                              requestNativeFrame: false,
-                            ),
-                        onSetSculptBrushRadius: (radius) =>
-                            _runModalSceneCommand(
-                              () => setSculptBrushRadius(radius: radius),
-                              requestNativeFrame: false,
-                            ),
-                        onSetSculptBrushStrength: (strength) =>
-                            _runModalSceneCommand(
-                              () => setSculptBrushStrength(strength: strength),
-                              requestNativeFrame: false,
-                            ),
-                        onSetSculptSymmetryAxis: (axisId) =>
-                            _runModalSceneCommand(
-                              () => setSculptSymmetryAxis(axisId: axisId),
-                              requestNativeFrame: false,
-                            ),
-                        onSetSelectedSculptResolution: (resolution) =>
-                            _runModalSceneCommand(
-                              () => setSelectedSculptResolution(
-                                resolution: resolution,
-                              ),
-                              requestNativeFrame: false,
-                            ),
-                        onFrameAll: () => _runModalSceneCommand(frameAll),
-                        onResetScene: () => _runModalSceneCommand(resetScene),
-                        onFocusSelected: () =>
-                            _runModalSceneCommand(focusSelected),
-                        onCameraFront: () =>
-                            _runModalSceneCommand(cameraFront),
-                        onCameraTop: () => _runModalSceneCommand(cameraTop),
-                        onCameraRight: () =>
-                            _runModalSceneCommand(cameraRight),
-                        onCameraBack: () => _runModalSceneCommand(cameraBack),
-                        onCameraLeft: () => _runModalSceneCommand(cameraLeft),
-                        onCameraBottom: () =>
-                            _runModalSceneCommand(cameraBottom),
-                        onToggleProjection: () =>
-                            _runModalSceneCommand(toggleOrthographic),
-                        onRefresh: () {
-                          _closeCommandPanel();
-                          _refreshBridgeStatus();
-                        },
-                      ),
-                    )
-                  : null,
-              bottomSheetBuilder: (context, scrollController) {
-                return _InspectorPanel(
-                  shellLayout: shellLayout,
-                  scrollController: scrollController,
-                  snapshot: snapshot,
-                  viewportFeedback: _viewportFeedback,
-                  statusLine: _statusLine,
-                  versionLine: _versionLine,
-                  previewLine: _previewLine,
-                  commandInFlight: _commandInFlight,
-                  adaptiveInteractionResolutionEnabled:
-                      _adaptiveInteractionResolutionEnabled,
-                  onToggleAdaptiveInteractionResolution:
-                      _toggleAdaptiveInteractionResolution,
-                  onRefresh: _refreshBridgeStatus,
-                  onAddSphere: () => _runSceneCommand(addSphere),
-                  onAddBox: () => _runSceneCommand(addBox),
-                  onAddCylinder: () => _runSceneCommand(addCylinder),
-                  onAddTorus: () => _runSceneCommand(addTorus),
-                  onCreateOperation: _promptCreateOperation,
-                  onCreateTransform: () => _runSceneCommand(createTransform),
-                  onCreateModifier: _promptCreateModifier,
-                  onCreateLight: _promptCreateLight,
-                  onCreateSculpt: () => _runSceneCommand(createSculpt),
-                  onRenameSelected: _promptRenameSelectedNode,
-                  onBeginInteractiveEdit: _beginInteractiveEditSession,
-                  onPreviewPrimitiveParameter:
-                      _previewSelectedPrimitiveParameter,
-                  onSetPrimitiveParameter: (parameterKey, value) =>
-                      _runSceneCommand(
-                        () => setSelectedPrimitiveParameter(
-                          parameterKey: parameterKey,
-                          value: value,
-                        ),
-                      ),
-                  onPreviewMaterialFloat: _previewSelectedMaterialFloat,
-                  onSetMaterialFloat: (fieldId, value) => _runSceneCommand(
-                    () => setSelectedMaterialFloat(
-                      fieldId: fieldId,
-                      value: value,
-                    ),
-                  ),
-                  onPreviewMaterialColor: _previewSelectedMaterialColor,
-                  onSetMaterialColor: (fieldId, color) => _runSceneCommand(
-                    () => setSelectedMaterialColor(
-                      fieldId: fieldId,
-                      red: color.x,
-                      green: color.y,
-                      blue: color.z,
-                    ),
-                  ),
-                  onPreviewTransformPosition:
-                      _previewSelectedTransformPosition,
-                  onSetTransformPosition: (x, y, z) => _runSceneCommand(
-                    () => setSelectedTransformPosition(x: x, y: y, z: z),
-                  ),
-                  onPreviewTransformRotationDegrees:
-                      _previewSelectedTransformRotationDegrees,
-                  onSetTransformRotationDegrees: (x, y, z) => _runSceneCommand(
-                    () => setSelectedTransformRotationDegrees(
-                      xDegrees: x,
-                      yDegrees: y,
-                      zDegrees: z,
-                    ),
-                  ),
-                  onPreviewTransformScale: _previewSelectedTransformScale,
-                  onSetTransformScale: (x, y, z) => _runSceneCommand(
-                    () => setSelectedTransformScale(x: x, y: y, z: z),
-                  ),
-                  onDuplicateSelected: () =>
-                      _runSceneCommand(duplicateSelected),
-                  onUndo: () => _runSceneCommand(undo),
-                  onRedo: () => _runSceneCommand(redo),
-                  onDeleteSelected: () => _runSceneCommand(deleteSelected),
-                  onSelectSceneNode: (nodeId) => _runSceneCommand(
-                    () => selectNode(nodeId: BigInt.from(nodeId)),
-                  ),
-                  onToggleSceneNodeVisibility: (nodeId) => _runSceneCommand(
-                    () => toggleNodeVisibility(nodeId: BigInt.from(nodeId)),
-                  ),
-                  onToggleSceneNodeLock: (nodeId) => _runSceneCommand(
-                    () => toggleNodeLock(nodeId: BigInt.from(nodeId)),
-                  ),
-                  onNewScene: _newScene,
-                  onOpenScene: _openScene,
-                  onSaveScene: _saveScene,
-                  onSaveSceneAs: _saveSceneAs,
-                  onOpenRecentScene: _openRecentScene,
-                  onRecoverAutosave: _recoverAutosave,
-                  onDiscardRecovery: _discardRecovery,
-                  onApplyRenderPreset: _applyRenderPreset,
-                  onSetRenderShadingMode: _setRenderShadingMode,
-                  onSetRenderToggle: _setRenderToggle,
-                  onSetRenderInteger: _setRenderInteger,
-                  onSetRenderScalar: _setRenderScalar,
-                  onResetSettings: _resetSettings,
-                  onExportSettings: _exportSettings,
-                  onImportSettings: _importSettings,
-                  onSetSettingsToggle: _setSettingsToggle,
-                  onSetSettingsInteger: _setSettingsInteger,
-                  onSaveCameraBookmark: _saveCameraBookmark,
-                  onRestoreCameraBookmark: _restoreCameraBookmark,
-                  onClearCameraBookmark: _clearCameraBookmark,
-                  onResetKeymap: _resetKeymap,
-                  onExportKeymap: _exportKeymap,
-                  onImportKeymap: _importKeymap,
-                  onClearKeybinding: _clearKeybinding,
-                  onSetKeybinding: _setKeybinding,
-                  onSetExportResolution: _setExportResolution,
-                  onSetAdaptiveExport: _setAdaptiveExport,
-                  onStartExport: _startExport,
-                  onCancelExport: _cancelExport,
-                  onOpenImportDialog: _openImportDialog,
-                  onCancelImportDialog: _cancelImportDialog,
-                  onSetImportUseAuto: _setImportUseAuto,
-                  onSetImportResolution: _setImportResolution,
-                  onStartImport: _startImport,
-                  onCancelImport: _cancelImport,
-                  onOpenSculptConvertDialog: _openSculptConvertDialog,
-                  onCancelSculptConvertDialog: _cancelSculptConvertDialog,
-                  onSetSculptConvertMode: _setSculptConvertMode,
-                  onSetSculptConvertResolution: _setSculptConvertResolution,
-                  onStartSculptConvert: _startSculptConvert,
-                  onResumeSculptingSelected: _resumeSculptingSelected,
-                  onStopSculpting: _stopSculpting,
-                  onSetSculptBrushMode: _setSculptBrushMode,
-                  onSetSculptBrushRadius: _setSculptBrushRadius,
-                  onSetSculptBrushStrength: _setSculptBrushStrength,
-                  onSetSculptSymmetryAxis: _setSculptSymmetryAxis,
-                  onSetSelectedSculptResolution: _setSelectedSculptResolution,
-                  onSetSelectedLightType: _setSelectedLightType,
-                  onSetSelectedLightColor: _setSelectedLightColor,
-                  onSetSelectedLightIntensity: _setSelectedLightIntensity,
-                  onSetSelectedLightRange: _setSelectedLightRange,
-                  onSetSelectedLightSpotAngle: _setSelectedLightSpotAngle,
-                  onSetSelectedLightCastShadows:
-                      _setSelectedLightCastShadows,
-                  onSetSelectedLightShadowSoftness:
-                      _setSelectedLightShadowSoftness,
-                  onSetSelectedLightShadowColor:
-                      _setSelectedLightShadowColor,
-                  onSetSelectedLightVolumetric:
-                      _setSelectedLightVolumetric,
-                  onSetSelectedLightVolumetricDensity:
-                      _setSelectedLightVolumetricDensity,
-                  onSetSelectedLightCookie: _setSelectedLightCookie,
-                  onClearSelectedLightCookie: _clearSelectedLightCookie,
-                  onSetSelectedLightProximityMode:
-                      _setSelectedLightProximityMode,
-                  onSetSelectedLightProximityRange:
-                      _setSelectedLightProximityRange,
-                  onSetSelectedLightArrayPattern:
-                      _setSelectedLightArrayPattern,
-                  onSetSelectedLightArrayCount:
-                      _setSelectedLightArrayCount,
-                  onSetSelectedLightArrayRadius:
-                      _setSelectedLightArrayRadius,
-                  onSetSelectedLightArrayColorVariation:
-                      _setSelectedLightArrayColorVariation,
-                  onSetSelectedLightIntensityExpression:
-                      _setSelectedLightIntensityExpression,
-                  onSetSelectedLightColorHueExpression:
-                      _setSelectedLightColorHueExpression,
-                  onSetNodeLightMask: _setNodeLightMask,
-                  onSetNodeLightLinkEnabled: _setNodeLightLinkEnabled,
-                  onFrameAll: () => _runSceneCommand(frameAll),
-                  onResetScene: () => _runSceneCommand(resetScene),
-                  onFocusSelected: () => _runSceneCommand(focusSelected),
-                  onCameraFront: () => _runSceneCommand(cameraFront),
-                  onCameraTop: () => _runSceneCommand(cameraTop),
-                  onCameraRight: () => _runSceneCommand(cameraRight),
-                  onCameraBack: () => _runSceneCommand(cameraBack),
-                  onCameraLeft: () => _runSceneCommand(cameraLeft),
-                  onCameraBottom: () => _runSceneCommand(cameraBottom),
-                  onToggleProjection: () =>
-                      _runSceneCommand(toggleOrthographic),
-                  onOpenCommandPanel: _openCommandPanel,
+                  ],
                 );
-              },
-            );
+              }
+
+              return ShellStackedPaneLayout(
+                viewport: viewportCard,
+                modalPanel: _activeModalPanel == _BridgeModalPanel.commands
+                    ? ShellModalPanel(
+                        title: 'Workspace Commands',
+                        onDismiss: _closeCommandPanel,
+                        child: commandSheetContent,
+                      )
+                    : null,
+                bottomSheetBuilder: (context, scrollController) {
+                  return _buildInspectorPanel(
+                    shellLayout,
+                    scrollController: scrollController,
+                  );
+                },
+              );
             },
           ),
         ),
@@ -2300,10 +2189,7 @@ class _InspectorPanel extends StatelessWidget {
   const _InspectorPanel({
     required this.shellLayout,
     required this.snapshot,
-    required this.viewportFeedback,
-    required this.statusLine,
-    required this.versionLine,
-    required this.previewLine,
+    required this.headerListenable,
     required this.commandInFlight,
     required this.adaptiveInteractionResolutionEnabled,
     required this.onToggleAdaptiveInteractionResolution,
@@ -2424,10 +2310,7 @@ class _InspectorPanel extends StatelessWidget {
   final ShellLayout shellLayout;
   final ScrollController? scrollController;
   final AppSceneSnapshot? snapshot;
-  final TextureViewportFeedback? viewportFeedback;
-  final String statusLine;
-  final String versionLine;
-  final String previewLine;
+  final ValueListenable<_BridgeHeaderModel> headerListenable;
   final bool commandInFlight;
   final bool adaptiveInteractionResolutionEnabled;
   final ValueChanged<bool> onToggleAdaptiveInteractionResolution;
@@ -2462,9 +2345,9 @@ class _InspectorPanel extends StatelessWidget {
   final VoidCallback onUndo;
   final VoidCallback onRedo;
   final VoidCallback onDeleteSelected;
-  final ValueChanged<int> onSelectSceneNode;
-  final ValueChanged<int> onToggleSceneNodeVisibility;
-  final ValueChanged<int> onToggleSceneNodeLock;
+  final ValueChanged<BigInt> onSelectSceneNode;
+  final ValueChanged<BigInt> onToggleSceneNodeVisibility;
+  final ValueChanged<BigInt> onToggleSceneNodeLock;
   final VoidCallback onNewScene;
   final VoidCallback onOpenScene;
   final VoidCallback onSaveScene;
@@ -2529,7 +2412,7 @@ class _InspectorPanel extends StatelessWidget {
   final ValueChanged<AppVec3> onSetSelectedLightShadowColor;
   final ValueChanged<bool> onSetSelectedLightVolumetric;
   final ValueChanged<double> onSetSelectedLightVolumetricDensity;
-  final ValueChanged<int> onSetSelectedLightCookie;
+  final ValueChanged<BigInt> onSetSelectedLightCookie;
   final VoidCallback onClearSelectedLightCookie;
   final ValueChanged<String> onSetSelectedLightProximityMode;
   final ValueChanged<double> onSetSelectedLightProximityRange;
@@ -2539,8 +2422,8 @@ class _InspectorPanel extends StatelessWidget {
   final ValueChanged<double> onSetSelectedLightArrayColorVariation;
   final ValueChanged<String> onSetSelectedLightIntensityExpression;
   final ValueChanged<String> onSetSelectedLightColorHueExpression;
-  final void Function(int nodeId, int mask) onSetNodeLightMask;
-  final void Function(int nodeId, int lightId, bool enabled)
+  final void Function(BigInt nodeId, int mask) onSetNodeLightMask;
+  final void Function(BigInt nodeId, BigInt lightId, bool enabled)
   onSetNodeLightLinkEnabled;
   final VoidCallback onFrameAll;
   final VoidCallback onResetScene;
@@ -2556,10 +2439,9 @@ class _InspectorPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final currentCamera = viewportFeedback?.camera ?? snapshot?.camera;
-    final selectedNode = viewportFeedback?.selectedNode ?? snapshot?.selectedNode;
+    final currentCamera = snapshot?.camera;
+    final selectedNode = snapshot?.selectedNode;
     final selectedNodeProperties = snapshot?.selectedNodeProperties;
-    final hoveredNode = viewportFeedback?.hoveredNode;
     final selectedNodeId = selectedNode?.id;
     final cameraControlsEnabled = !commandInFlight && currentCamera != null;
     final focusSelectedEnabled = !commandInFlight && selectedNode != null;
@@ -2579,13 +2461,23 @@ class _InspectorPanel extends StatelessWidget {
       child: ListView(
         controller: scrollController,
         children: [
-          Text(statusLine),
-          if (versionLine.isNotEmpty) ...[
-            const SizedBox(height: ShellTokens.compactGap),
-            Text(versionLine),
-          ],
-          const SizedBox(height: ShellTokens.compactGap),
-          Text(previewLine),
+          ValueListenableBuilder<_BridgeHeaderModel>(
+            valueListenable: headerListenable,
+            builder: (context, header, child) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(header.statusLine),
+                  if (header.versionLine.isNotEmpty) ...[
+                    const SizedBox(height: ShellTokens.compactGap),
+                    Text(header.versionLine),
+                  ],
+                  const SizedBox(height: ShellTokens.compactGap),
+                  Text(header.previewLine),
+                ],
+              );
+            },
+          ),
           const SizedBox(height: ShellTokens.sectionGap),
           SwitchListTile.adaptive(
             contentPadding: EdgeInsets.zero,
@@ -2840,7 +2732,7 @@ class _InspectorPanel extends StatelessWidget {
           ),
           const SizedBox(height: ShellTokens.controlGap),
           ExportPanel(
-            export: snapshot?.export,
+            export: snapshot?.export_,
             enabled: !commandInFlight,
             onSetResolution: onSetExportResolution,
             onSetAdaptive: onSetAdaptiveExport,
@@ -2854,7 +2746,7 @@ class _InspectorPanel extends StatelessWidget {
           ),
           const SizedBox(height: ShellTokens.controlGap),
           ImportPanel(
-            importSnapshot: snapshot?.import,
+            importSnapshot: snapshot?.import_,
             enabled: !commandInFlight,
             onOpenImportDialog: onOpenImportDialog,
             onCancelImportDialog: onCancelImportDialog,
@@ -2908,7 +2800,7 @@ class _InspectorPanel extends StatelessWidget {
             const Text('Scene snapshot is still loading.')
           else ...[
             Text('Selected: ${selectedNode?.name ?? 'None'}'),
-            Text('Hovered: ${hoveredNode?.name ?? 'None'}'),
+            const Text('Hovered: None'),
             Text(
               'Tool: ${snapshot!.tool.activeToolLabel} - ${snapshot!.tool.shadingModeLabel}',
             ),
@@ -3844,7 +3736,6 @@ class _CameraCommandButtons extends StatelessWidget {
 class _CommandSheetContent extends StatelessWidget {
   const _CommandSheetContent({
     required this.commandInFlight,
-    required this.viewportFeedback,
     required this.snapshot,
     required this.onAddSphere,
     required this.onAddBox,
@@ -3921,7 +3812,6 @@ class _CommandSheetContent extends StatelessWidget {
   });
 
   final bool commandInFlight;
-  final TextureViewportFeedback? viewportFeedback;
   final AppSceneSnapshot? snapshot;
   final VoidCallback onAddSphere;
   final VoidCallback onAddBox;
@@ -4005,8 +3895,8 @@ class _CommandSheetContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final currentCamera = viewportFeedback?.camera ?? snapshot?.camera;
-    final selectedNode = viewportFeedback?.selectedNode ?? snapshot?.selectedNode;
+    final currentCamera = snapshot?.camera;
+    final selectedNode = snapshot?.selectedNode;
     final sceneCommandsEnabled = !commandInFlight;
     final undoEnabled = !commandInFlight && (snapshot?.history.canUndo ?? false);
     final redoEnabled = !commandInFlight && (snapshot?.history.canRedo ?? false);
@@ -4128,7 +4018,7 @@ class _CommandSheetContent extends StatelessWidget {
         ),
         const SizedBox(height: ShellTokens.controlGap),
         ExportPanel(
-          export: snapshot?.export,
+          export: snapshot?.export_,
           enabled: sceneCommandsEnabled,
           onSetResolution: onSetExportResolution,
           onSetAdaptive: onSetAdaptiveExport,
@@ -4142,7 +4032,7 @@ class _CommandSheetContent extends StatelessWidget {
         ),
         const SizedBox(height: ShellTokens.controlGap),
         ImportPanel(
-          importSnapshot: snapshot?.import,
+          importSnapshot: snapshot?.import_,
           enabled: sceneCommandsEnabled,
           onOpenImportDialog: onOpenImportDialog,
           onCancelImportDialog: onCancelImportDialog,

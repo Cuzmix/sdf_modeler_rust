@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:sdf_modeler_flutter/src/scene/scene_snapshot.dart';
+import 'package:sdf_modeler_flutter/src/rust/api/mirrors.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_contract.dart';
 
 class LightInspectorPanel extends StatefulWidget {
@@ -45,7 +45,7 @@ class LightInspectorPanel extends StatefulWidget {
   final ValueChanged<AppVec3> onSetLightShadowColor;
   final ValueChanged<bool> onSetLightVolumetric;
   final ValueChanged<double> onSetLightVolumetricDensity;
-  final ValueChanged<int> onSetLightCookie;
+  final ValueChanged<BigInt> onSetLightCookie;
   final VoidCallback onClearLightCookie;
   final ValueChanged<String> onSetLightProximityMode;
   final ValueChanged<double> onSetLightProximityRange;
@@ -55,8 +55,8 @@ class LightInspectorPanel extends StatefulWidget {
   final ValueChanged<double> onSetLightArrayColorVariation;
   final ValueChanged<String> onSetLightIntensityExpression;
   final ValueChanged<String> onSetLightColorHueExpression;
-  final void Function(int nodeId, int mask) onSetNodeLightMask;
-  final void Function(int nodeId, int lightId, bool enabled) onSetNodeLightLinkEnabled;
+  final void Function(BigInt nodeId, int mask) onSetNodeLightMask;
+  final void Function(BigInt nodeId, BigInt lightId, bool enabled) onSetNodeLightLinkEnabled;
 
   @override
   State<LightInspectorPanel> createState() => _LightInspectorPanelState();
@@ -204,7 +204,7 @@ class _LightDetailsCard extends StatelessWidget {
   final ValueChanged<AppVec3> onSetLightShadowColor;
   final ValueChanged<bool> onSetLightVolumetric;
   final ValueChanged<double> onSetLightVolumetricDensity;
-  final ValueChanged<int> onSetLightCookie;
+  final ValueChanged<BigInt> onSetLightCookie;
   final VoidCallback onClearLightCookie;
   final ValueChanged<String> onSetLightProximityMode;
   final ValueChanged<double> onSetLightProximityRange;
@@ -365,18 +365,18 @@ class _LightDetailsCard extends StatelessWidget {
             ],
             if (light.supportsCookie) ...[
               const SizedBox(height: ShellTokens.controlGap),
-              DropdownButtonFormField<int?>(
+              DropdownButtonFormField<BigInt?>(
                 key: const ValueKey('selected-light-cookie-dropdown'),
                 initialValue: light.cookieNodeId,
                 isExpanded: true,
                 decoration: const InputDecoration(labelText: 'Cookie Source'),
                 items: [
-                  const DropdownMenuItem<int?>(
+                  const DropdownMenuItem<BigInt?>(
                     value: null,
                     child: Text('None', overflow: TextOverflow.ellipsis),
                   ),
                   for (final candidate in light.cookieCandidates)
-                    DropdownMenuItem<int?>(
+                    DropdownMenuItem<BigInt?>(
                       value: candidate.nodeId,
                       child: Text(
                         '${candidate.name} (${candidate.kindLabel})',
@@ -540,8 +540,9 @@ class _LightLinkingCard extends StatelessWidget {
 
   final AppLightLinkingSnapshot? lightLinking;
   final bool enabled;
-  final void Function(int nodeId, int mask) onSetNodeLightMask;
-  final void Function(int nodeId, int lightId, bool enabled) onSetNodeLightLinkEnabled;
+  final void Function(BigInt nodeId, int mask) onSetNodeLightMask;
+  final void Function(BigInt nodeId, BigInt lightId, bool enabled)
+  onSetNodeLightLinkEnabled;
 
   @override
   Widget build(BuildContext context) {

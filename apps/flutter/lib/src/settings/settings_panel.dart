@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:sdf_modeler_flutter/src/scene/scene_snapshot.dart';
+import 'package:sdf_modeler_flutter/src/rust/api/mirrors.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_contract.dart';
 
 class SettingsPanel extends StatelessWidget {

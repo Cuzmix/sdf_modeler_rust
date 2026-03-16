@@ -4,6 +4,7 @@
 // ignore_for_file: invalid_use_of_internal_member, unused_import, unnecessary_import
 
 import '../frb_generated.dart';
+import 'mirrors.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `parse_light_id`, `parse_modifier_id`, `parse_operation_id`
@@ -15,130 +16,165 @@ String bridgeVersion() => RustLib.instance.api.crateApiSimpleBridgeVersion();
 String sceneSnapshotJson() =>
     RustLib.instance.api.crateApiSimpleSceneSnapshotJson();
 
+AppSceneSnapshot sceneSnapshot() =>
+    RustLib.instance.api.crateApiSimpleSceneSnapshot();
+
 String workflowStatusJson() =>
     RustLib.instance.api.crateApiSimpleWorkflowStatusJson();
 
-String newScene() => RustLib.instance.api.crateApiSimpleNewScene();
+AppWorkflowStatusSnapshot workflowStatus() =>
+    RustLib.instance.api.crateApiSimpleWorkflowStatus();
 
-String openScene() => RustLib.instance.api.crateApiSimpleOpenScene();
+AppSceneSnapshot newScene() => RustLib.instance.api.crateApiSimpleNewScene();
 
-String openRecentScene({required String path}) =>
+AppSceneSnapshot openScene() => RustLib.instance.api.crateApiSimpleOpenScene();
+
+AppSceneSnapshot openRecentScene({required String path}) =>
     RustLib.instance.api.crateApiSimpleOpenRecentScene(path: path);
 
-String saveScene() => RustLib.instance.api.crateApiSimpleSaveScene();
+AppSceneSnapshot saveScene() => RustLib.instance.api.crateApiSimpleSaveScene();
 
-String saveSceneAs() => RustLib.instance.api.crateApiSimpleSaveSceneAs();
+AppSceneSnapshot saveSceneAs() =>
+    RustLib.instance.api.crateApiSimpleSaveSceneAs();
 
-String recoverAutosave() =>
+AppSceneSnapshot recoverAutosave() =>
     RustLib.instance.api.crateApiSimpleRecoverAutosave();
 
-String discardRecovery() =>
+AppSceneSnapshot discardRecovery() =>
     RustLib.instance.api.crateApiSimpleDiscardRecovery();
 
-String openImportDialog() =>
+AppSceneSnapshot openImportDialog() =>
     RustLib.instance.api.crateApiSimpleOpenImportDialog();
 
-String cancelImportDialog() =>
+AppSceneSnapshot cancelImportDialog() =>
     RustLib.instance.api.crateApiSimpleCancelImportDialog();
 
-String setImportUseAuto({required bool useAuto}) =>
+AppSceneSnapshot setImportUseAuto({required bool useAuto}) =>
     RustLib.instance.api.crateApiSimpleSetImportUseAuto(useAuto: useAuto);
 
-String setImportResolution({required int resolution}) => RustLib.instance.api
-    .crateApiSimpleSetImportResolution(resolution: resolution);
-
-String startImport() => RustLib.instance.api.crateApiSimpleStartImport();
-
-String cancelImport() => RustLib.instance.api.crateApiSimpleCancelImport();
-
-String openSculptConvertDialogForSelected() =>
-    RustLib.instance.api.crateApiSimpleOpenSculptConvertDialogForSelected();
-
-String cancelSculptConvertDialog() =>
-    RustLib.instance.api.crateApiSimpleCancelSculptConvertDialog();
-
-String setSculptConvertMode({required String modeId}) =>
-    RustLib.instance.api.crateApiSimpleSetSculptConvertMode(modeId: modeId);
-
-String setSculptConvertResolution({required int resolution}) => RustLib
+AppSceneSnapshot setImportResolution({required int resolution}) => RustLib
     .instance
     .api
-    .crateApiSimpleSetSculptConvertResolution(resolution: resolution);
+    .crateApiSimpleSetImportResolution(resolution: resolution);
 
-String startSculptConvert() =>
+AppSceneSnapshot startImport() =>
+    RustLib.instance.api.crateApiSimpleStartImport();
+
+AppSceneSnapshot cancelImport() =>
+    RustLib.instance.api.crateApiSimpleCancelImport();
+
+AppSceneSnapshot openSculptConvertDialogForSelected() =>
+    RustLib.instance.api.crateApiSimpleOpenSculptConvertDialogForSelected();
+
+AppSceneSnapshot cancelSculptConvertDialog() =>
+    RustLib.instance.api.crateApiSimpleCancelSculptConvertDialog();
+
+AppSceneSnapshot setSculptConvertMode({required String modeId}) =>
+    RustLib.instance.api.crateApiSimpleSetSculptConvertMode(modeId: modeId);
+
+AppSceneSnapshot setSculptConvertResolution({required int resolution}) =>
+    RustLib.instance.api.crateApiSimpleSetSculptConvertResolution(
+      resolution: resolution,
+    );
+
+AppSceneSnapshot startSculptConvert() =>
     RustLib.instance.api.crateApiSimpleStartSculptConvert();
 
-String setExportResolution({required int resolution}) => RustLib.instance.api
+AppSceneSnapshot setExportResolution({required int resolution}) => RustLib
+    .instance
+    .api
     .crateApiSimpleSetExportResolution(resolution: resolution);
 
-String setAdaptiveExport({required bool enabled}) =>
+AppSceneSnapshot setAdaptiveExport({required bool enabled}) =>
     RustLib.instance.api.crateApiSimpleSetAdaptiveExport(enabled: enabled);
 
-String startExport() => RustLib.instance.api.crateApiSimpleStartExport();
+AppSceneSnapshot startExport() =>
+    RustLib.instance.api.crateApiSimpleStartExport();
 
-String cancelExport() => RustLib.instance.api.crateApiSimpleCancelExport();
+AppSceneSnapshot cancelExport() =>
+    RustLib.instance.api.crateApiSimpleCancelExport();
 
-String applyRenderPreset({required String presetId}) =>
+AppSceneSnapshot applyRenderPreset({required String presetId}) =>
     RustLib.instance.api.crateApiSimpleApplyRenderPreset(presetId: presetId);
 
-String setRenderShadingMode({required String modeId}) =>
+AppSceneSnapshot setRenderShadingMode({required String modeId}) =>
     RustLib.instance.api.crateApiSimpleSetRenderShadingMode(modeId: modeId);
 
-String setRenderToggle({required String fieldId, required bool enabled}) =>
-    RustLib.instance.api.crateApiSimpleSetRenderToggle(
-      fieldId: fieldId,
-      enabled: enabled,
-    );
+AppSceneSnapshot setRenderToggle({
+  required String fieldId,
+  required bool enabled,
+}) => RustLib.instance.api.crateApiSimpleSetRenderToggle(
+  fieldId: fieldId,
+  enabled: enabled,
+);
 
-String setRenderInteger({required String fieldId, required int value}) =>
-    RustLib.instance.api.crateApiSimpleSetRenderInteger(
-      fieldId: fieldId,
-      value: value,
-    );
+AppSceneSnapshot setRenderInteger({
+  required String fieldId,
+  required int value,
+}) => RustLib.instance.api.crateApiSimpleSetRenderInteger(
+  fieldId: fieldId,
+  value: value,
+);
 
-String setRenderScalar({required String fieldId, required double value}) =>
-    RustLib.instance.api.crateApiSimpleSetRenderScalar(
-      fieldId: fieldId,
-      value: value,
-    );
+AppSceneSnapshot setRenderScalar({
+  required String fieldId,
+  required double value,
+}) => RustLib.instance.api.crateApiSimpleSetRenderScalar(
+  fieldId: fieldId,
+  value: value,
+);
 
-String resetSettings() => RustLib.instance.api.crateApiSimpleResetSettings();
+AppSceneSnapshot resetSettings() =>
+    RustLib.instance.api.crateApiSimpleResetSettings();
 
-String exportSettings() => RustLib.instance.api.crateApiSimpleExportSettings();
+AppSceneSnapshot exportSettings() =>
+    RustLib.instance.api.crateApiSimpleExportSettings();
 
-String importSettings() => RustLib.instance.api.crateApiSimpleImportSettings();
+AppSceneSnapshot importSettings() =>
+    RustLib.instance.api.crateApiSimpleImportSettings();
 
-String setSettingsToggle({required String fieldId, required bool enabled}) =>
-    RustLib.instance.api.crateApiSimpleSetSettingsToggle(
-      fieldId: fieldId,
-      enabled: enabled,
-    );
+AppSceneSnapshot setSettingsToggle({
+  required String fieldId,
+  required bool enabled,
+}) => RustLib.instance.api.crateApiSimpleSetSettingsToggle(
+  fieldId: fieldId,
+  enabled: enabled,
+);
 
-String setSettingsInteger({required String fieldId, required int value}) =>
-    RustLib.instance.api.crateApiSimpleSetSettingsInteger(
-      fieldId: fieldId,
-      value: value,
-    );
+AppSceneSnapshot setSettingsInteger({
+  required String fieldId,
+  required int value,
+}) => RustLib.instance.api.crateApiSimpleSetSettingsInteger(
+  fieldId: fieldId,
+  value: value,
+);
 
-String saveCameraBookmark({required int slotIndex}) =>
+AppSceneSnapshot saveCameraBookmark({required int slotIndex}) =>
     RustLib.instance.api.crateApiSimpleSaveCameraBookmark(slotIndex: slotIndex);
 
-String restoreCameraBookmark({required int slotIndex}) => RustLib.instance.api
+AppSceneSnapshot restoreCameraBookmark({required int slotIndex}) => RustLib
+    .instance
+    .api
     .crateApiSimpleRestoreCameraBookmark(slotIndex: slotIndex);
 
-String clearCameraBookmark({required int slotIndex}) => RustLib.instance.api
+AppSceneSnapshot clearCameraBookmark({required int slotIndex}) => RustLib
+    .instance
+    .api
     .crateApiSimpleClearCameraBookmark(slotIndex: slotIndex);
 
-String resetKeymap() => RustLib.instance.api.crateApiSimpleResetKeymap();
+AppSceneSnapshot resetKeymap() =>
+    RustLib.instance.api.crateApiSimpleResetKeymap();
 
-String exportKeymap() => RustLib.instance.api.crateApiSimpleExportKeymap();
+AppSceneSnapshot exportKeymap() =>
+    RustLib.instance.api.crateApiSimpleExportKeymap();
 
-String importKeymap() => RustLib.instance.api.crateApiSimpleImportKeymap();
+AppSceneSnapshot importKeymap() =>
+    RustLib.instance.api.crateApiSimpleImportKeymap();
 
-String clearKeybinding({required String actionId}) =>
+AppSceneSnapshot clearKeybinding({required String actionId}) =>
     RustLib.instance.api.crateApiSimpleClearKeybinding(actionId: actionId);
 
-String setKeybinding({
+AppSceneSnapshot setKeybinding({
   required String actionId,
   required String keyId,
   required bool ctrl,
@@ -178,10 +214,10 @@ void zoomCamera({required double delta}) =>
 void beginInteractiveEdit() =>
     RustLib.instance.api.crateApiSimpleBeginInteractiveEdit();
 
-String selectNode({BigInt? nodeId}) =>
+AppSceneSnapshot selectNode({BigInt? nodeId}) =>
     RustLib.instance.api.crateApiSimpleSelectNode(nodeId: nodeId);
 
-String selectNodeAtViewport({
+AppSceneSnapshot selectNodeAtViewport({
   required double mouseX,
   required double mouseY,
   required int width,
@@ -195,59 +231,64 @@ String selectNodeAtViewport({
   timeSeconds: timeSeconds,
 );
 
-String toggleNodeVisibility({required BigInt nodeId}) =>
+AppSceneSnapshot toggleNodeVisibility({required BigInt nodeId}) =>
     RustLib.instance.api.crateApiSimpleToggleNodeVisibility(nodeId: nodeId);
 
-String toggleNodeLock({required BigInt nodeId}) =>
+AppSceneSnapshot toggleNodeLock({required BigInt nodeId}) =>
     RustLib.instance.api.crateApiSimpleToggleNodeLock(nodeId: nodeId);
 
-String deleteSelected() => RustLib.instance.api.crateApiSimpleDeleteSelected();
+AppSceneSnapshot deleteSelected() =>
+    RustLib.instance.api.crateApiSimpleDeleteSelected();
 
-String duplicateSelected() =>
+AppSceneSnapshot duplicateSelected() =>
     RustLib.instance.api.crateApiSimpleDuplicateSelected();
 
-String renameNode({required BigInt nodeId, required String name}) =>
+AppSceneSnapshot renameNode({required BigInt nodeId, required String name}) =>
     RustLib.instance.api.crateApiSimpleRenameNode(nodeId: nodeId, name: name);
 
-String createOperation({required String operationId}) => RustLib.instance.api
+AppSceneSnapshot createOperation({required String operationId}) => RustLib
+    .instance
+    .api
     .crateApiSimpleCreateOperation(operationId: operationId);
 
-String createTransform() =>
+AppSceneSnapshot createTransform() =>
     RustLib.instance.api.crateApiSimpleCreateTransform();
 
-String createModifier({required String modifierId}) =>
+AppSceneSnapshot createModifier({required String modifierId}) =>
     RustLib.instance.api.crateApiSimpleCreateModifier(modifierId: modifierId);
 
-String createLight({required String lightId}) =>
+AppSceneSnapshot createLight({required String lightId}) =>
     RustLib.instance.api.crateApiSimpleCreateLight(lightId: lightId);
 
-String createSculpt() => RustLib.instance.api.crateApiSimpleCreateSculpt();
+AppSceneSnapshot createSculpt() =>
+    RustLib.instance.api.crateApiSimpleCreateSculpt();
 
-String resumeSculptingSelected() =>
+AppSceneSnapshot resumeSculptingSelected() =>
     RustLib.instance.api.crateApiSimpleResumeSculptingSelected();
 
-String stopSculpting() => RustLib.instance.api.crateApiSimpleStopSculpting();
+AppSceneSnapshot stopSculpting() =>
+    RustLib.instance.api.crateApiSimpleStopSculpting();
 
-String setSculptBrushMode({required String modeId}) =>
+AppSceneSnapshot setSculptBrushMode({required String modeId}) =>
     RustLib.instance.api.crateApiSimpleSetSculptBrushMode(modeId: modeId);
 
-String setSculptBrushRadius({required double radius}) =>
+AppSceneSnapshot setSculptBrushRadius({required double radius}) =>
     RustLib.instance.api.crateApiSimpleSetSculptBrushRadius(radius: radius);
 
-String setSculptBrushStrength({required double strength}) => RustLib
+AppSceneSnapshot setSculptBrushStrength({required double strength}) => RustLib
     .instance
     .api
     .crateApiSimpleSetSculptBrushStrength(strength: strength);
 
-String setSculptSymmetryAxis({required String axisId}) =>
+AppSceneSnapshot setSculptSymmetryAxis({required String axisId}) =>
     RustLib.instance.api.crateApiSimpleSetSculptSymmetryAxis(axisId: axisId);
 
-String setSelectedSculptResolution({required int resolution}) => RustLib
-    .instance
-    .api
-    .crateApiSimpleSetSelectedSculptResolution(resolution: resolution);
+AppSceneSnapshot setSelectedSculptResolution({required int resolution}) =>
+    RustLib.instance.api.crateApiSimpleSetSelectedSculptResolution(
+      resolution: resolution,
+    );
 
-String setSelectedPrimitiveParameter({
+AppSceneSnapshot setSelectedPrimitiveParameter({
   required String parameterKey,
   required double value,
 }) => RustLib.instance.api.crateApiSimpleSetSelectedPrimitiveParameter(
@@ -263,7 +304,7 @@ void previewSelectedPrimitiveParameter({
   value: value,
 );
 
-String setSelectedMaterialFloat({
+AppSceneSnapshot setSelectedMaterialFloat({
   required String fieldId,
   required double value,
 }) => RustLib.instance.api.crateApiSimpleSetSelectedMaterialFloat(
@@ -279,7 +320,7 @@ void previewSelectedMaterialFloat({
   value: value,
 );
 
-String setSelectedMaterialColor({
+AppSceneSnapshot setSelectedMaterialColor({
   required String fieldId,
   required double red,
   required double green,
@@ -303,7 +344,7 @@ void previewSelectedMaterialColor({
   blue: blue,
 );
 
-String setSelectedTransformPosition({
+AppSceneSnapshot setSelectedTransformPosition({
   required double x,
   required double y,
   required double z,
@@ -323,7 +364,7 @@ void previewSelectedTransformPosition({
   z: z,
 );
 
-String setSelectedTransformRotationDegrees({
+AppSceneSnapshot setSelectedTransformRotationDegrees({
   required double xDegrees,
   required double yDegrees,
   required double zDegrees,
@@ -344,7 +385,7 @@ void previewSelectedTransformRotationDegrees({
       zDegrees: zDegrees,
     );
 
-String setSelectedTransformScale({
+AppSceneSnapshot setSelectedTransformScale({
   required double x,
   required double y,
   required double z,
@@ -364,12 +405,12 @@ void previewSelectedTransformScale({
   z: z,
 );
 
-String setSelectedLightType({required String lightTypeId}) => RustLib
+AppSceneSnapshot setSelectedLightType({required String lightTypeId}) => RustLib
     .instance
     .api
     .crateApiSimpleSetSelectedLightType(lightTypeId: lightTypeId);
 
-String setSelectedLightColor({
+AppSceneSnapshot setSelectedLightColor({
   required double red,
   required double green,
   required double blue,
@@ -379,30 +420,30 @@ String setSelectedLightColor({
   blue: blue,
 );
 
-String setSelectedLightIntensity({required double intensity}) => RustLib
-    .instance
-    .api
-    .crateApiSimpleSetSelectedLightIntensity(intensity: intensity);
+AppSceneSnapshot setSelectedLightIntensity({required double intensity}) =>
+    RustLib.instance.api.crateApiSimpleSetSelectedLightIntensity(
+      intensity: intensity,
+    );
 
-String setSelectedLightRange({required double range}) =>
+AppSceneSnapshot setSelectedLightRange({required double range}) =>
     RustLib.instance.api.crateApiSimpleSetSelectedLightRange(range: range);
 
-String setSelectedLightSpotAngle({required double angleDegrees}) => RustLib
-    .instance
-    .api
-    .crateApiSimpleSetSelectedLightSpotAngle(angleDegrees: angleDegrees);
+AppSceneSnapshot setSelectedLightSpotAngle({required double angleDegrees}) =>
+    RustLib.instance.api.crateApiSimpleSetSelectedLightSpotAngle(
+      angleDegrees: angleDegrees,
+    );
 
-String setSelectedLightCastShadows({required bool enabled}) => RustLib
+AppSceneSnapshot setSelectedLightCastShadows({required bool enabled}) => RustLib
     .instance
     .api
     .crateApiSimpleSetSelectedLightCastShadows(enabled: enabled);
 
-String setSelectedLightShadowSoftness({required double softness}) => RustLib
-    .instance
-    .api
-    .crateApiSimpleSetSelectedLightShadowSoftness(softness: softness);
+AppSceneSnapshot setSelectedLightShadowSoftness({required double softness}) =>
+    RustLib.instance.api.crateApiSimpleSetSelectedLightShadowSoftness(
+      softness: softness,
+    );
 
-String setSelectedLightShadowColor({
+AppSceneSnapshot setSelectedLightShadowColor({
   required double red,
   required double green,
   required double blue,
@@ -412,68 +453,73 @@ String setSelectedLightShadowColor({
   blue: blue,
 );
 
-String setSelectedLightVolumetric({required bool enabled}) => RustLib
+AppSceneSnapshot setSelectedLightVolumetric({required bool enabled}) => RustLib
     .instance
     .api
     .crateApiSimpleSetSelectedLightVolumetric(enabled: enabled);
 
-String setSelectedLightVolumetricDensity({required double density}) => RustLib
-    .instance
-    .api
-    .crateApiSimpleSetSelectedLightVolumetricDensity(density: density);
+AppSceneSnapshot setSelectedLightVolumetricDensity({required double density}) =>
+    RustLib.instance.api.crateApiSimpleSetSelectedLightVolumetricDensity(
+      density: density,
+    );
 
-String setSelectedLightCookie({required BigInt cookieNodeId}) => RustLib
-    .instance
-    .api
-    .crateApiSimpleSetSelectedLightCookie(cookieNodeId: cookieNodeId);
+AppSceneSnapshot setSelectedLightCookie({required BigInt cookieNodeId}) =>
+    RustLib.instance.api.crateApiSimpleSetSelectedLightCookie(
+      cookieNodeId: cookieNodeId,
+    );
 
-String clearSelectedLightCookie() =>
+AppSceneSnapshot clearSelectedLightCookie() =>
     RustLib.instance.api.crateApiSimpleClearSelectedLightCookie();
 
-String setSelectedLightProximityMode({required String modeId}) => RustLib
-    .instance
-    .api
-    .crateApiSimpleSetSelectedLightProximityMode(modeId: modeId);
+AppSceneSnapshot setSelectedLightProximityMode({required String modeId}) =>
+    RustLib.instance.api.crateApiSimpleSetSelectedLightProximityMode(
+      modeId: modeId,
+    );
 
-String setSelectedLightProximityRange({required double range}) => RustLib
-    .instance
-    .api
-    .crateApiSimpleSetSelectedLightProximityRange(range: range);
+AppSceneSnapshot setSelectedLightProximityRange({required double range}) =>
+    RustLib.instance.api.crateApiSimpleSetSelectedLightProximityRange(
+      range: range,
+    );
 
-String setSelectedLightArrayPattern({required String patternId}) => RustLib
-    .instance
-    .api
-    .crateApiSimpleSetSelectedLightArrayPattern(patternId: patternId);
+AppSceneSnapshot setSelectedLightArrayPattern({required String patternId}) =>
+    RustLib.instance.api.crateApiSimpleSetSelectedLightArrayPattern(
+      patternId: patternId,
+    );
 
-String setSelectedLightArrayCount({required int count}) =>
+AppSceneSnapshot setSelectedLightArrayCount({required int count}) =>
     RustLib.instance.api.crateApiSimpleSetSelectedLightArrayCount(count: count);
 
-String setSelectedLightArrayRadius({required double radius}) => RustLib
-    .instance
-    .api
-    .crateApiSimpleSetSelectedLightArrayRadius(radius: radius);
-
-String setSelectedLightArrayColorVariation({required double value}) => RustLib
-    .instance
-    .api
-    .crateApiSimpleSetSelectedLightArrayColorVariation(value: value);
-
-String setSelectedLightIntensityExpression({required String expression}) =>
-    RustLib.instance.api.crateApiSimpleSetSelectedLightIntensityExpression(
-      expression: expression,
+AppSceneSnapshot setSelectedLightArrayRadius({required double radius}) =>
+    RustLib.instance.api.crateApiSimpleSetSelectedLightArrayRadius(
+      radius: radius,
     );
 
-String setSelectedLightColorHueExpression({required String expression}) =>
-    RustLib.instance.api.crateApiSimpleSetSelectedLightColorHueExpression(
-      expression: expression,
+AppSceneSnapshot setSelectedLightArrayColorVariation({required double value}) =>
+    RustLib.instance.api.crateApiSimpleSetSelectedLightArrayColorVariation(
+      value: value,
     );
 
-String setNodeLightMask({required BigInt nodeId, required int mask}) => RustLib
-    .instance
-    .api
-    .crateApiSimpleSetNodeLightMask(nodeId: nodeId, mask: mask);
+AppSceneSnapshot setSelectedLightIntensityExpression({
+  required String expression,
+}) => RustLib.instance.api.crateApiSimpleSetSelectedLightIntensityExpression(
+  expression: expression,
+);
 
-String setNodeLightLinkEnabled({
+AppSceneSnapshot setSelectedLightColorHueExpression({
+  required String expression,
+}) => RustLib.instance.api.crateApiSimpleSetSelectedLightColorHueExpression(
+  expression: expression,
+);
+
+AppSceneSnapshot setNodeLightMask({
+  required BigInt nodeId,
+  required int mask,
+}) => RustLib.instance.api.crateApiSimpleSetNodeLightMask(
+  nodeId: nodeId,
+  mask: mask,
+);
+
+AppSceneSnapshot setNodeLightLinkEnabled({
   required BigInt nodeId,
   required BigInt lightId,
   required bool enabled,
@@ -483,13 +529,13 @@ String setNodeLightLinkEnabled({
   enabled: enabled,
 );
 
-String setManipulatorMode({required String modeId}) =>
+AppSceneSnapshot setManipulatorMode({required String modeId}) =>
     RustLib.instance.api.crateApiSimpleSetManipulatorMode(modeId: modeId);
 
-String toggleManipulatorSpace() =>
+AppSceneSnapshot toggleManipulatorSpace() =>
     RustLib.instance.api.crateApiSimpleToggleManipulatorSpace();
 
-String nudgeManipulatorPivotOffset({
+AppSceneSnapshot nudgeManipulatorPivotOffset({
   required double x,
   required double y,
   required double z,
@@ -499,10 +545,10 @@ String nudgeManipulatorPivotOffset({
   z: z,
 );
 
-String resetManipulatorPivot() =>
+AppSceneSnapshot resetManipulatorPivot() =>
     RustLib.instance.api.crateApiSimpleResetManipulatorPivot();
 
-String nudgeSelectedTranslation({
+AppSceneSnapshot nudgeSelectedTranslation({
   required double deltaX,
   required double deltaY,
   required double deltaZ,
@@ -512,7 +558,7 @@ String nudgeSelectedTranslation({
   deltaZ: deltaZ,
 );
 
-String nudgeSelectedRotationDegrees({
+AppSceneSnapshot nudgeSelectedRotationDegrees({
   required double deltaXDegrees,
   required double deltaYDegrees,
   required double deltaZDegrees,
@@ -522,7 +568,7 @@ String nudgeSelectedRotationDegrees({
   deltaZDegrees: deltaZDegrees,
 );
 
-String nudgeSelectedScale({
+AppSceneSnapshot nudgeSelectedScale({
   required double deltaX,
   required double deltaY,
   required double deltaZ,
@@ -532,35 +578,43 @@ String nudgeSelectedScale({
   deltaZ: deltaZ,
 );
 
-String undo() => RustLib.instance.api.crateApiSimpleUndo();
+AppSceneSnapshot undo() => RustLib.instance.api.crateApiSimpleUndo();
 
-String redo() => RustLib.instance.api.crateApiSimpleRedo();
+AppSceneSnapshot redo() => RustLib.instance.api.crateApiSimpleRedo();
 
-String focusSelected() => RustLib.instance.api.crateApiSimpleFocusSelected();
+AppSceneSnapshot focusSelected() =>
+    RustLib.instance.api.crateApiSimpleFocusSelected();
 
-String frameAll() => RustLib.instance.api.crateApiSimpleFrameAll();
+AppSceneSnapshot frameAll() => RustLib.instance.api.crateApiSimpleFrameAll();
 
-String cameraFront() => RustLib.instance.api.crateApiSimpleCameraFront();
+AppSceneSnapshot cameraFront() =>
+    RustLib.instance.api.crateApiSimpleCameraFront();
 
-String cameraTop() => RustLib.instance.api.crateApiSimpleCameraTop();
+AppSceneSnapshot cameraTop() => RustLib.instance.api.crateApiSimpleCameraTop();
 
-String cameraRight() => RustLib.instance.api.crateApiSimpleCameraRight();
+AppSceneSnapshot cameraRight() =>
+    RustLib.instance.api.crateApiSimpleCameraRight();
 
-String cameraBack() => RustLib.instance.api.crateApiSimpleCameraBack();
+AppSceneSnapshot cameraBack() =>
+    RustLib.instance.api.crateApiSimpleCameraBack();
 
-String cameraLeft() => RustLib.instance.api.crateApiSimpleCameraLeft();
+AppSceneSnapshot cameraLeft() =>
+    RustLib.instance.api.crateApiSimpleCameraLeft();
 
-String cameraBottom() => RustLib.instance.api.crateApiSimpleCameraBottom();
+AppSceneSnapshot cameraBottom() =>
+    RustLib.instance.api.crateApiSimpleCameraBottom();
 
-String toggleOrthographic() =>
+AppSceneSnapshot toggleOrthographic() =>
     RustLib.instance.api.crateApiSimpleToggleOrthographic();
 
-String addSphere() => RustLib.instance.api.crateApiSimpleAddSphere();
+AppSceneSnapshot addSphere() => RustLib.instance.api.crateApiSimpleAddSphere();
 
-String addBox() => RustLib.instance.api.crateApiSimpleAddBox();
+AppSceneSnapshot addBox() => RustLib.instance.api.crateApiSimpleAddBox();
 
-String addCylinder() => RustLib.instance.api.crateApiSimpleAddCylinder();
+AppSceneSnapshot addCylinder() =>
+    RustLib.instance.api.crateApiSimpleAddCylinder();
 
-String addTorus() => RustLib.instance.api.crateApiSimpleAddTorus();
+AppSceneSnapshot addTorus() => RustLib.instance.api.crateApiSimpleAddTorus();
 
-String resetScene() => RustLib.instance.api.crateApiSimpleResetScene();
+AppSceneSnapshot resetScene() =>
+    RustLib.instance.api.crateApiSimpleResetScene();

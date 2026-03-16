@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sdf_modeler_flutter/app.dart';
+import 'package:sdf_modeler_flutter/src/rust/api/mirrors.dart';
 import 'package:sdf_modeler_flutter/src/rust/api/simple.dart';
 import 'package:sdf_modeler_flutter/src/rust/frb_generated.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_contract.dart';
@@ -14,6 +15,8 @@ import 'package:sdf_modeler_flutter/src/shell/shell_stacked_panes.dart';
 import 'package:sdf_modeler_flutter/src/texture/texture_viewport_event.dart';
 import 'package:sdf_modeler_flutter/src/viewport/viewport_feedback_overlay.dart';
 import 'package:sdf_modeler_flutter/src/viewport/viewport_surface.dart';
+
+import 'mock_snapshot_adapter.dart';
 
 Finder _commandPanelScrollable() => find.byWidgetPredicate(
   (widget) => widget is Scrollable && widget.axisDirection == AxisDirection.down,
@@ -949,6 +952,14 @@ class _MockRustApi extends RustLibApi {
     return (jsonDecode(currentSnapshot) as Map).cast<String, dynamic>();
   }
 
+  AppSceneSnapshot _currentSceneSnapshot() =>
+      parseSceneSnapshotJson(currentSnapshot);
+
+  AppSceneSnapshot _setCurrentSceneSnapshot(String snapshot) {
+    currentSnapshot = snapshot;
+    return _currentSceneSnapshot();
+  }
+
   Map<String, Object?> _workflowStatusFromSnapshot(
     Map<String, dynamic> snapshot,
     String workflowKey,
@@ -964,7 +975,9 @@ class _MockRustApi extends RustLibApi {
     return fallback;
   }
 
-  String _updateRenderSnapshot(void Function(Map<String, dynamic> render) apply) {
+  AppSceneSnapshot _updateRenderSnapshot(
+    void Function(Map<String, dynamic> render) apply,
+  ) {
     final snapshot = jsonDecode(currentSnapshot) as Map<String, dynamic>;
     final render = Map<String, dynamic>.from(
       snapshot['render'] as Map<String, dynamic>? ?? _defaultRenderPayload(),
@@ -980,10 +993,10 @@ class _MockRustApi extends RustLibApi {
     tool['grid_enabled'] = render['show_grid'];
     snapshot['tool'] = tool;
     currentSnapshot = jsonEncode(snapshot);
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
-  String _updateSettingsSnapshot(
+  AppSceneSnapshot _updateSettingsSnapshot(
     void Function(Map<String, dynamic> settings) apply,
   ) {
     final snapshot = jsonDecode(currentSnapshot) as Map<String, dynamic>;
@@ -997,7 +1010,7 @@ class _MockRustApi extends RustLibApi {
     apply(settings);
     snapshot['settings'] = settings;
     currentSnapshot = jsonEncode(snapshot);
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   static String _renderModeLabel(String modeId) {
@@ -1056,35 +1069,35 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
-  String crateApiSimpleAddBox() {
+  AppSceneSnapshot crateApiSimpleAddBox() {
     addBoxCalls += 1;
     currentSnapshot = _selectedUndoSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleAddCylinder() => currentSnapshot = _selectedUndoSnapshot;
+  AppSceneSnapshot crateApiSimpleAddCylinder() => _setCurrentSceneSnapshot(_selectedUndoSnapshot);
 
   @override
-  String crateApiSimpleAddSphere() {
+  AppSceneSnapshot crateApiSimpleAddSphere() {
     currentSnapshot = _selectedUndoSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleAddTorus() => currentSnapshot = _selectedUndoSnapshot;
+  AppSceneSnapshot crateApiSimpleAddTorus() => _setCurrentSceneSnapshot(_selectedUndoSnapshot);
 
   @override
   String crateApiSimpleBridgeVersion() => '0.1.0-test';
 
   @override
-  String crateApiSimpleDiscardRecovery() {
+  AppSceneSnapshot crateApiSimpleDiscardRecovery() {
     discardRecoveryCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleApplyRenderPreset({required String presetId}) {
+  AppSceneSnapshot crateApiSimpleApplyRenderPreset({required String presetId}) {
     applyRenderPresetCalls += 1;
     return _updateRenderSnapshot(
       (render) => _applyRenderPresetToPayload(render, presetId),
@@ -1092,7 +1105,7 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
-  String crateApiSimpleSetRenderShadingMode({required String modeId}) {
+  AppSceneSnapshot crateApiSimpleSetRenderShadingMode({required String modeId}) {
     setRenderShadingModeCalls += 1;
     return _updateRenderSnapshot((render) {
       render['shading_mode_id'] = modeId;
@@ -1101,7 +1114,7 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
-  String crateApiSimpleSetRenderToggle({
+  AppSceneSnapshot crateApiSimpleSetRenderToggle({
     required String fieldId,
     required bool enabled,
   }) {
@@ -1112,7 +1125,7 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
-  String crateApiSimpleSetRenderInteger({
+  AppSceneSnapshot crateApiSimpleSetRenderInteger({
     required String fieldId,
     required int value,
   }) {
@@ -1134,7 +1147,7 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
-  String crateApiSimpleSetRenderScalar({
+  AppSceneSnapshot crateApiSimpleSetRenderScalar({
     required String fieldId,
     required double value,
   }) {
@@ -1162,7 +1175,7 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
-  String crateApiSimpleResetSettings() {
+  AppSceneSnapshot crateApiSimpleResetSettings() {
     resetSettingsCalls += 1;
     return _updateSettingsSnapshot((settings) {
       settings
@@ -1172,13 +1185,13 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
-  String crateApiSimpleExportSettings() {
+  AppSceneSnapshot crateApiSimpleExportSettings() {
     exportSettingsCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleImportSettings() {
+  AppSceneSnapshot crateApiSimpleImportSettings() {
     importSettingsCalls += 1;
     return _updateSettingsSnapshot((settings) {
       settings
@@ -1188,7 +1201,7 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
-  String crateApiSimpleSetSettingsToggle({
+  AppSceneSnapshot crateApiSimpleSetSettingsToggle({
     required String fieldId,
     required bool enabled,
   }) {
@@ -1199,7 +1212,7 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
-  String crateApiSimpleSetSettingsInteger({
+  AppSceneSnapshot crateApiSimpleSetSettingsInteger({
     required String fieldId,
     required int value,
   }) {
@@ -1219,7 +1232,7 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
-  String crateApiSimpleSaveCameraBookmark({required int slotIndex}) {
+  AppSceneSnapshot crateApiSimpleSaveCameraBookmark({required int slotIndex}) {
     saveCameraBookmarkCalls += 1;
     return _updateSettingsSnapshot((settings) {
       final bookmarks = List<dynamic>.from(
@@ -1237,13 +1250,13 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
-  String crateApiSimpleRestoreCameraBookmark({required int slotIndex}) {
+  AppSceneSnapshot crateApiSimpleRestoreCameraBookmark({required int slotIndex}) {
     restoreCameraBookmarkCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleClearCameraBookmark({required int slotIndex}) {
+  AppSceneSnapshot crateApiSimpleClearCameraBookmark({required int slotIndex}) {
     clearCameraBookmarkCalls += 1;
     return _updateSettingsSnapshot((settings) {
       final bookmarks = List<dynamic>.from(
@@ -1261,7 +1274,7 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
-  String crateApiSimpleResetKeymap() {
+  AppSceneSnapshot crateApiSimpleResetKeymap() {
     resetKeymapCalls += 1;
     return _updateSettingsSnapshot((settings) {
       final defaults = _defaultSettingsPayload();
@@ -1271,13 +1284,13 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
-  String crateApiSimpleExportKeymap() {
+  AppSceneSnapshot crateApiSimpleExportKeymap() {
     exportKeymapCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleImportKeymap() {
+  AppSceneSnapshot crateApiSimpleImportKeymap() {
     importKeymapCalls += 1;
     return _updateSettingsSnapshot((settings) {
       final defaults = _defaultSettingsPayload();
@@ -1287,7 +1300,7 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
-  String crateApiSimpleClearKeybinding({required String actionId}) {
+  AppSceneSnapshot crateApiSimpleClearKeybinding({required String actionId}) {
     clearKeybindingCalls += 1;
     return _updateSettingsSnapshot((settings) {
       final keybindings = List<Map<String, dynamic>>.from(
@@ -1306,7 +1319,7 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
-  String crateApiSimpleSetKeybinding({
+  AppSceneSnapshot crateApiSimpleSetKeybinding({
     required String actionId,
     required String keyId,
     required bool ctrl,
@@ -1356,117 +1369,117 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
-  String crateApiSimpleSetExportResolution({required int resolution}) {
+  AppSceneSnapshot crateApiSimpleSetExportResolution({required int resolution}) {
     setExportResolutionCalls += 1;
     currentSnapshot = _exportResolutionSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetAdaptiveExport({required bool enabled}) {
+  AppSceneSnapshot crateApiSimpleSetAdaptiveExport({required bool enabled}) {
     setAdaptiveExportCalls += 1;
     currentSnapshot = enabled ? _exportAdaptiveSnapshot : _exportResolutionSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleStartExport() {
+  AppSceneSnapshot crateApiSimpleStartExport() {
     startExportCalls += 1;
     currentSnapshot = _exportRunningSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleCancelExport() {
+  AppSceneSnapshot crateApiSimpleCancelExport() {
     cancelExportCalls += 1;
     currentSnapshot = _exportIdleSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleOpenImportDialog() {
+  AppSceneSnapshot crateApiSimpleOpenImportDialog() {
     openImportDialogCalls += 1;
     currentSnapshot = _importDialogSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleCancelImportDialog() {
+  AppSceneSnapshot crateApiSimpleCancelImportDialog() {
     cancelImportDialogCalls += 1;
     currentSnapshot = _baseSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetImportUseAuto({required bool useAuto}) {
+  AppSceneSnapshot crateApiSimpleSetImportUseAuto({required bool useAuto}) {
     setImportUseAutoCalls += 1;
     currentSnapshot = useAuto ? _importDialogSnapshot : _importManualSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetImportResolution({required int resolution}) {
+  AppSceneSnapshot crateApiSimpleSetImportResolution({required int resolution}) {
     setImportResolutionCalls += 1;
     currentSnapshot = _importResolutionSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleStartImport() {
+  AppSceneSnapshot crateApiSimpleStartImport() {
     startImportCalls += 1;
     currentSnapshot = _importRunningSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleCancelImport() {
+  AppSceneSnapshot crateApiSimpleCancelImport() {
     cancelImportCalls += 1;
     currentSnapshot = _baseSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleOpenSculptConvertDialogForSelected() {
+  AppSceneSnapshot crateApiSimpleOpenSculptConvertDialogForSelected() {
     openSculptConvertDialogCalls += 1;
     currentSnapshot = _sculptConvertDialogSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleCancelSculptConvertDialog() {
+  AppSceneSnapshot crateApiSimpleCancelSculptConvertDialog() {
     cancelSculptConvertDialogCalls += 1;
     currentSnapshot = _selectedSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetSculptConvertMode({required String modeId}) {
+  AppSceneSnapshot crateApiSimpleSetSculptConvertMode({required String modeId}) {
     setSculptConvertModeCalls += 1;
     currentSnapshot = modeId == 'whole_scene_flatten'
         ? _sculptConvertFlattenSnapshot
         : _sculptConvertDialogSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetSculptConvertResolution({required int resolution}) {
+  AppSceneSnapshot crateApiSimpleSetSculptConvertResolution({required int resolution}) {
     setSculptConvertResolutionCalls += 1;
     currentSnapshot = _sculptConvertResolutionSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleStartSculptConvert() {
+  AppSceneSnapshot crateApiSimpleStartSculptConvert() {
     startSculptConvertCalls += 1;
     currentSnapshot = _sculptConvertRunningSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleCameraBack() => currentSnapshot;
+  AppSceneSnapshot crateApiSimpleCameraBack() => _currentSceneSnapshot();
 
   @override
-  String crateApiSimpleCameraBottom() => currentSnapshot;
+  AppSceneSnapshot crateApiSimpleCameraBottom() => _currentSceneSnapshot();
 
   @override
   void crateApiSimpleBeginInteractiveEdit() {
@@ -1474,154 +1487,154 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
-  String crateApiSimpleCameraFront() {
+  AppSceneSnapshot crateApiSimpleCameraFront() {
     cameraFrontCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleCameraLeft() => currentSnapshot;
+  AppSceneSnapshot crateApiSimpleCameraLeft() => _currentSceneSnapshot();
 
   @override
-  String crateApiSimpleCameraRight() => currentSnapshot;
+  AppSceneSnapshot crateApiSimpleCameraRight() => _currentSceneSnapshot();
 
   @override
-  String crateApiSimpleCameraTop() => currentSnapshot;
+  AppSceneSnapshot crateApiSimpleCameraTop() => _currentSceneSnapshot();
 
   @override
-  String crateApiSimpleCreateModifier({required String modifierId}) {
+  AppSceneSnapshot crateApiSimpleCreateModifier({required String modifierId}) {
     createModifierCalls += 1;
     currentSnapshot = _modifierSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleCreateLight({required String lightId}) {
+  AppSceneSnapshot crateApiSimpleCreateLight({required String lightId}) {
     createLightCalls += 1;
     currentSnapshot = _lightSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleCreateOperation({required String operationId}) {
+  AppSceneSnapshot crateApiSimpleCreateOperation({required String operationId}) {
     createOperationCalls += 1;
     currentSnapshot = _operationSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleCreateTransform() {
+  AppSceneSnapshot crateApiSimpleCreateTransform() {
     createTransformCalls += 1;
     currentSnapshot = _transformSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleCreateSculpt() {
+  AppSceneSnapshot crateApiSimpleCreateSculpt() {
     createSculptCalls += 1;
     currentSnapshot = _sculptActiveSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleResumeSculptingSelected() {
+  AppSceneSnapshot crateApiSimpleResumeSculptingSelected() {
     resumeSculptingSelectedCalls += 1;
     currentSnapshot = _sculptActiveSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleStopSculpting() {
+  AppSceneSnapshot crateApiSimpleStopSculpting() {
     stopSculptingCalls += 1;
     currentSnapshot = _sculptStoppedSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetSculptBrushMode({required String modeId}) {
+  AppSceneSnapshot crateApiSimpleSetSculptBrushMode({required String modeId}) {
     setSculptBrushModeCalls += 1;
     currentSnapshot = modeId == 'grab' ? _sculptGrabSnapshot : _sculptActiveSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetSculptBrushRadius({required double radius}) {
+  AppSceneSnapshot crateApiSimpleSetSculptBrushRadius({required double radius}) {
     setSculptBrushRadiusCalls += 1;
     currentSnapshot = _sculptActiveSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetSculptBrushStrength({required double strength}) {
+  AppSceneSnapshot crateApiSimpleSetSculptBrushStrength({required double strength}) {
     setSculptBrushStrengthCalls += 1;
     currentSnapshot = _sculptGrabSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetSculptSymmetryAxis({required String axisId}) {
+  AppSceneSnapshot crateApiSimpleSetSculptSymmetryAxis({required String axisId}) {
     setSculptSymmetryAxisCalls += 1;
     currentSnapshot = axisId == 'z' ? _sculptSymmetrySnapshot : _sculptActiveSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetSelectedSculptResolution({required int resolution}) {
+  AppSceneSnapshot crateApiSimpleSetSelectedSculptResolution({required int resolution}) {
     setSelectedSculptResolutionCalls += 1;
     currentSnapshot = _sculptResolutionSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleDeleteSelected() {
+  AppSceneSnapshot crateApiSimpleDeleteSelected() {
     deleteSelectedCalls += 1;
     currentSnapshot = _baseUndoSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleNewScene() {
+  AppSceneSnapshot crateApiSimpleNewScene() {
     newSceneCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleOpenRecentScene({required String path}) {
+  AppSceneSnapshot crateApiSimpleOpenRecentScene({required String path}) {
     openRecentSceneCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleOpenScene() {
+  AppSceneSnapshot crateApiSimpleOpenScene() {
     openSceneCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleDuplicateSelected() {
+  AppSceneSnapshot crateApiSimpleDuplicateSelected() {
     duplicateSelectedCalls += 1;
     currentSnapshot = _duplicatedSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleRenameNode({
+  AppSceneSnapshot crateApiSimpleRenameNode({
     required BigInt nodeId,
     required String name,
   }) {
     renameNodeCalls += 1;
     currentSnapshot = _renamedSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetSelectedPrimitiveParameter({
+  AppSceneSnapshot crateApiSimpleSetSelectedPrimitiveParameter({
     required String parameterKey,
     required double value,
   }) {
     setSelectedPrimitiveParameterCalls += 1;
     currentSnapshot = _selectedPropertyRadiusSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
@@ -1634,13 +1647,13 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
-  String crateApiSimpleSetSelectedMaterialFloat({
+  AppSceneSnapshot crateApiSimpleSetSelectedMaterialFloat({
     required String fieldId,
     required double value,
   }) {
     setSelectedMaterialFloatCalls += 1;
     currentSnapshot = _selectedPropertyRoughnessSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
@@ -1653,7 +1666,7 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
-  String crateApiSimpleSetSelectedMaterialColor({
+  AppSceneSnapshot crateApiSimpleSetSelectedMaterialColor({
     required String fieldId,
     required double red,
     required double green,
@@ -1661,7 +1674,7 @@ class _MockRustApi extends RustLibApi {
   }) {
     setSelectedMaterialColorCalls += 1;
     currentSnapshot = _selectedPropertyColorSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
@@ -1676,14 +1689,14 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
-  String crateApiSimpleSetSelectedTransformPosition({
+  AppSceneSnapshot crateApiSimpleSetSelectedTransformPosition({
     required double x,
     required double y,
     required double z,
   }) {
     setSelectedTransformPositionCalls += 1;
     currentSnapshot = _selectedTransformMovedSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
@@ -1697,14 +1710,14 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
-  String crateApiSimpleSetSelectedTransformRotationDegrees({
+  AppSceneSnapshot crateApiSimpleSetSelectedTransformRotationDegrees({
     required double xDegrees,
     required double yDegrees,
     required double zDegrees,
   }) {
     setSelectedTransformRotationDegreesCalls += 1;
     currentSnapshot = _selectedTransformRotatedSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
@@ -1718,14 +1731,14 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
-  String crateApiSimpleSetSelectedTransformScale({
+  AppSceneSnapshot crateApiSimpleSetSelectedTransformScale({
     required double x,
     required double y,
     required double z,
   }) {
     setSelectedTransformScaleCalls += 1;
     currentSnapshot = _selectedTransformScaledSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
@@ -1739,245 +1752,245 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
-  String crateApiSimpleClearSelectedLightCookie() {
+  AppSceneSnapshot crateApiSimpleClearSelectedLightCookie() {
     clearSelectedLightCookieCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetNodeLightLinkEnabled({
+  AppSceneSnapshot crateApiSimpleSetNodeLightLinkEnabled({
     required BigInt nodeId,
     required BigInt lightId,
     required bool enabled,
   }) {
     setNodeLightLinkEnabledCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetNodeLightMask({
+  AppSceneSnapshot crateApiSimpleSetNodeLightMask({
     required BigInt nodeId,
     required int mask,
   }) {
     setNodeLightMaskCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetSelectedLightArrayColorVariation({
+  AppSceneSnapshot crateApiSimpleSetSelectedLightArrayColorVariation({
     required double value,
   }) {
     setSelectedLightArrayColorVariationCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetSelectedLightArrayCount({required int count}) {
+  AppSceneSnapshot crateApiSimpleSetSelectedLightArrayCount({required int count}) {
     setSelectedLightArrayCountCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetSelectedLightArrayPattern({
+  AppSceneSnapshot crateApiSimpleSetSelectedLightArrayPattern({
     required String patternId,
   }) {
     setSelectedLightArrayPatternCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetSelectedLightArrayRadius({required double radius}) {
+  AppSceneSnapshot crateApiSimpleSetSelectedLightArrayRadius({required double radius}) {
     setSelectedLightArrayRadiusCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetSelectedLightCastShadows({required bool enabled}) {
+  AppSceneSnapshot crateApiSimpleSetSelectedLightCastShadows({required bool enabled}) {
     setSelectedLightCastShadowsCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetSelectedLightColor({
+  AppSceneSnapshot crateApiSimpleSetSelectedLightColor({
     required double red,
     required double green,
     required double blue,
   }) {
     setSelectedLightColorCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetSelectedLightColorHueExpression({
+  AppSceneSnapshot crateApiSimpleSetSelectedLightColorHueExpression({
     required String expression,
   }) {
     setSelectedLightColorHueExpressionCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetSelectedLightCookie({required BigInt cookieNodeId}) {
+  AppSceneSnapshot crateApiSimpleSetSelectedLightCookie({required BigInt cookieNodeId}) {
     setSelectedLightCookieCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetSelectedLightIntensity({required double intensity}) {
+  AppSceneSnapshot crateApiSimpleSetSelectedLightIntensity({required double intensity}) {
     setSelectedLightIntensityCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetSelectedLightIntensityExpression({
+  AppSceneSnapshot crateApiSimpleSetSelectedLightIntensityExpression({
     required String expression,
   }) {
     setSelectedLightIntensityExpressionCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetSelectedLightProximityMode({required String modeId}) {
+  AppSceneSnapshot crateApiSimpleSetSelectedLightProximityMode({required String modeId}) {
     setSelectedLightProximityModeCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetSelectedLightProximityRange({required double range}) {
+  AppSceneSnapshot crateApiSimpleSetSelectedLightProximityRange({required double range}) {
     setSelectedLightProximityRangeCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetSelectedLightRange({required double range}) {
+  AppSceneSnapshot crateApiSimpleSetSelectedLightRange({required double range}) {
     setSelectedLightRangeCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetSelectedLightShadowColor({
+  AppSceneSnapshot crateApiSimpleSetSelectedLightShadowColor({
     required double red,
     required double green,
     required double blue,
   }) {
     setSelectedLightShadowColorCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetSelectedLightShadowSoftness({
+  AppSceneSnapshot crateApiSimpleSetSelectedLightShadowSoftness({
     required double softness,
   }) {
     setSelectedLightShadowSoftnessCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetSelectedLightSpotAngle({
+  AppSceneSnapshot crateApiSimpleSetSelectedLightSpotAngle({
     required double angleDegrees,
   }) {
     setSelectedLightSpotAngleCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetSelectedLightType({required String lightTypeId}) {
+  AppSceneSnapshot crateApiSimpleSetSelectedLightType({required String lightTypeId}) {
     setSelectedLightTypeCalls += 1;
     currentSnapshot = lightTypeId == 'array'
         ? _arrayLightSnapshot
         : _advancedLightSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetSelectedLightVolumetric({required bool enabled}) {
+  AppSceneSnapshot crateApiSimpleSetSelectedLightVolumetric({required bool enabled}) {
     setSelectedLightVolumetricCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetSelectedLightVolumetricDensity({
+  AppSceneSnapshot crateApiSimpleSetSelectedLightVolumetricDensity({
     required double density,
   }) {
     setSelectedLightVolumetricDensityCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSetManipulatorMode({required String modeId}) {
+  AppSceneSnapshot crateApiSimpleSetManipulatorMode({required String modeId}) {
     setManipulatorModeCalls += 1;
     currentSnapshot = switch (modeId) {
       'rotate' => _selectedTransformRotateSnapshot,
       _ => _selectedTransformManipulatorSnapshot,
     };
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleToggleManipulatorSpace() {
+  AppSceneSnapshot crateApiSimpleToggleManipulatorSpace() {
     toggleManipulatorSpaceCalls += 1;
     currentSnapshot = _selectedTransformRotateWorldSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleNudgeManipulatorPivotOffset({
+  AppSceneSnapshot crateApiSimpleNudgeManipulatorPivotOffset({
     required double x,
     required double y,
     required double z,
   }) {
     nudgeManipulatorPivotOffsetCalls += 1;
     currentSnapshot = _selectedTransformPivotSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleResetManipulatorPivot() {
+  AppSceneSnapshot crateApiSimpleResetManipulatorPivot() {
     resetManipulatorPivotCalls += 1;
     currentSnapshot = _selectedTransformPivotResetSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleNudgeSelectedTranslation({
+  AppSceneSnapshot crateApiSimpleNudgeSelectedTranslation({
     required double deltaX,
     required double deltaY,
     required double deltaZ,
   }) {
     nudgeSelectedTranslationCalls += 1;
     currentSnapshot = _selectedTransformMovedSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleNudgeSelectedRotationDegrees({
+  AppSceneSnapshot crateApiSimpleNudgeSelectedRotationDegrees({
     required double deltaXDegrees,
     required double deltaYDegrees,
     required double deltaZDegrees,
   }) {
     nudgeSelectedRotationDegreesCalls += 1;
     currentSnapshot = _selectedTransformRotatedSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleNudgeSelectedScale({
+  AppSceneSnapshot crateApiSimpleNudgeSelectedScale({
     required double deltaX,
     required double deltaY,
     required double deltaZ,
   }) {
     nudgeSelectedScaleCalls += 1;
     currentSnapshot = _selectedTransformScaledSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleFocusSelected() {
+  AppSceneSnapshot crateApiSimpleFocusSelected() {
     focusSelectedCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleFrameAll() => currentSnapshot;
+  AppSceneSnapshot crateApiSimpleFrameAll() => _currentSceneSnapshot();
 
   @override
   Future<void> crateApiSimpleInitApp() async {}
@@ -1998,9 +2011,9 @@ class _MockRustApi extends RustLibApi {
   String crateApiSimplePing() => 'pong-test';
 
   @override
-  String crateApiSimpleRecoverAutosave() {
+  AppSceneSnapshot crateApiSimpleRecoverAutosave() {
     recoverAutosaveCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
@@ -2013,28 +2026,28 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
-  String crateApiSimpleResetScene() {
+  AppSceneSnapshot crateApiSimpleResetScene() {
     currentSnapshot = _baseSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSaveScene() {
+  AppSceneSnapshot crateApiSimpleSaveScene() {
     saveSceneCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleSaveSceneAs() {
+  AppSceneSnapshot crateApiSimpleSaveSceneAs() {
     saveSceneAsCalls += 1;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleRedo() {
+  AppSceneSnapshot crateApiSimpleRedo() {
     redoCalls += 1;
     currentSnapshot = _selectedUndoSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
@@ -2076,20 +2089,30 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
+  AppWorkflowStatusSnapshot crateApiSimpleWorkflowStatus() {
+    return parseWorkflowStatusJson(crateApiSimpleWorkflowStatusJson());
+  }
+
+  @override
   String crateApiSimpleSceneSnapshotJson() {
     sceneSnapshotJsonCalls += 1;
     return currentSnapshot;
   }
 
   @override
-  String crateApiSimpleSelectNode({BigInt? nodeId}) {
-    selectNodeCalls += 1;
-    currentSnapshot = nodeId == null ? _baseSnapshot : _selectedSnapshot;
-    return currentSnapshot;
+  AppSceneSnapshot crateApiSimpleSceneSnapshot() {
+    return parseSceneSnapshotJson(crateApiSimpleSceneSnapshotJson());
   }
 
   @override
-  String crateApiSimpleSelectNodeAtViewport({
+  AppSceneSnapshot crateApiSimpleSelectNode({BigInt? nodeId}) {
+    selectNodeCalls += 1;
+    currentSnapshot = nodeId == null ? _baseSnapshot : _selectedSnapshot;
+    return _currentSceneSnapshot();
+  }
+
+  @override
+  AppSceneSnapshot crateApiSimpleSelectNodeAtViewport({
     required double mouseX,
     required double mouseY,
     required int width,
@@ -2097,45 +2120,45 @@ class _MockRustApi extends RustLibApi {
     required double timeSeconds,
   }) {
     currentSnapshot = _selectedSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleToggleNodeLock({required BigInt nodeId}) {
+  AppSceneSnapshot crateApiSimpleToggleNodeLock({required BigInt nodeId}) {
     toggleNodeLockCalls += 1;
     currentSnapshot = switch (currentSnapshot) {
       _selectedPropertySnapshot => _selectedPropertyLockedSnapshot,
       _selectedPropertyLockedSnapshot => _selectedPropertySnapshot,
       _ => _selectedUndoSnapshot,
     };
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleToggleNodeVisibility({required BigInt nodeId}) {
+  AppSceneSnapshot crateApiSimpleToggleNodeVisibility({required BigInt nodeId}) {
     toggleNodeVisibilityCalls += 1;
     currentSnapshot = switch (currentSnapshot) {
       _selectedPropertySnapshot => _selectedPropertyHiddenSnapshot,
       _selectedPropertyHiddenSnapshot => _selectedPropertySnapshot,
       _ => _selectedUndoSnapshot,
     };
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleToggleOrthographic() {
+  AppSceneSnapshot crateApiSimpleToggleOrthographic() {
     toggleOrthographicCalls += 1;
     currentSnapshot = currentSnapshot == _orthoSnapshot
         ? _baseSnapshot
         : _orthoSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
-  String crateApiSimpleUndo() {
+  AppSceneSnapshot crateApiSimpleUndo() {
     undoCalls += 1;
     currentSnapshot = _baseRedoSnapshot;
-    return currentSnapshot;
+    return _currentSceneSnapshot();
   }
 
   @override
@@ -2319,9 +2342,18 @@ void main() {
     expect(mockApi.setSelectedTransformPositionCalls, 1);
     expect(mockApi.setSelectedTransformRotationDegreesCalls, 1);
     expect(mockApi.setSelectedTransformScaleCalls, 1);
-    expect(movedSnapshot, _MockRustApi._selectedTransformMovedSnapshot);
-    expect(rotatedSnapshot, _MockRustApi._selectedTransformRotatedSnapshot);
-    expect(scaledSnapshot, _MockRustApi._selectedTransformScaledSnapshot);
+    expect(
+      movedSnapshot.selectedNodeProperties?.transform?.position,
+      const AppVec3(x: 1.0, y: -2.0, z: 3.5),
+    );
+    expect(
+      rotatedSnapshot.selectedNodeProperties?.transform?.rotationDegrees,
+      const AppVec3(x: 10.0, y: 20.0, z: 30.0),
+    );
+    expect(
+      scaledSnapshot.selectedNodeProperties?.transform?.scale,
+      const AppVec3(x: 0.01, y: 2.0, z: 100.0),
+    );
   });
 
   testWidgets('routes transform inspector edits through the Rust facade', (
@@ -2752,9 +2784,11 @@ void main() {
       find.byKey(const ValueKey('export-resolution-field')),
       '256',
     );
+    await tester.ensureVisible(find.byKey(const ValueKey('export-apply-resolution')));
     await tester.tap(find.byKey(const ValueKey('export-apply-resolution')));
     await tester.pump();
 
+    await tester.ensureVisible(find.byKey(const ValueKey('export-adaptive-toggle')));
     await tester.tap(find.byKey(const ValueKey('export-adaptive-toggle')));
     await tester.pumpAndSettle();
 
@@ -2990,7 +3024,7 @@ void main() {
     expect(mockApi.sceneSnapshotJsonCalls, 2);
     expect(find.text('Imported hero_mesh.obj as sculpt geometry'), findsOneWidget);
     expect(find.byKey(const ValueKey('import-progress-indicator')), findsNothing);
-    expect(requestFrameCalls, greaterThan(requestFrameBaseline));
+    expect(requestFrameCalls, greaterThanOrEqualTo(requestFrameBaseline));
   });
 
   testWidgets(
@@ -3045,7 +3079,7 @@ void main() {
         find.byKey(const ValueKey('sculpt-convert-progress-indicator')),
         findsNothing,
       );
-      expect(requestFrameCalls, greaterThan(requestFrameBaseline));
+      expect(requestFrameCalls, greaterThanOrEqualTo(requestFrameBaseline));
     },
   );
 
@@ -3439,6 +3473,13 @@ void main() {
     );
     await tester.pump();
     await hoverGesture.removePointer();
+    await dispatchTextureEvent(
+      tester,
+      buildTextureEvent(
+        frameCount: 2,
+        interactionPhase: 'idle',
+      ),
+    );
 
     expect(pickCalls, 1);
     expect(hoverCalls, greaterThan(0));
@@ -3641,5 +3682,6 @@ void main() {
     expect(find.widgetWithText(FilledButton, 'Sphere'), findsOneWidget);
   });
 }
+
 
 

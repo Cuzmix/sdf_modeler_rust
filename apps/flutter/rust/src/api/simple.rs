@@ -3,7 +3,17 @@ use crate::bridge_state::{
     snapshot_json,
     workflow_status_json as bridge_workflow_status_json,
 };
+use crate::api::mirrors::{AppSceneSnapshot, AppWorkflowStatusSnapshot};
+use sdf_modeler::app_bridge::AppBridge as HostAppBridge;
 use sdf_modeler::{CsgOp, LightType, ModifierKind};
+
+fn current_scene_snapshot(bridge: &mut HostAppBridge) -> AppSceneSnapshot {
+    bridge.scene_snapshot().into()
+}
+
+fn current_workflow_status(bridge: &mut HostAppBridge) -> AppWorkflowStatusSnapshot {
+    bridge.workflow_status_snapshot().into()
+}
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn ping() -> String {
@@ -22,282 +32,294 @@ pub fn scene_snapshot_json() -> String {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn scene_snapshot() -> AppSceneSnapshot {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    current_scene_snapshot(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn workflow_status_json() -> String {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge_workflow_status_json(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn new_scene() -> String {
+pub fn workflow_status() -> AppWorkflowStatusSnapshot {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    current_workflow_status(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn new_scene() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.new_scene();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn open_scene() -> String {
+pub fn open_scene() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.open_scene();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn open_recent_scene(path: String) -> String {
+pub fn open_recent_scene(path: String) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.open_recent_scene(&path);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn save_scene() -> String {
+pub fn save_scene() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.save_scene();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn save_scene_as() -> String {
+pub fn save_scene_as() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.save_scene_as();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn recover_autosave() -> String {
+pub fn recover_autosave() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.recover_autosave();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn discard_recovery() -> String {
+pub fn discard_recovery() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.discard_recovery();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn open_import_dialog() -> String {
+pub fn open_import_dialog() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.open_import_dialog();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn cancel_import_dialog() -> String {
+pub fn cancel_import_dialog() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.cancel_import_dialog();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_import_use_auto(use_auto: bool) -> String {
+pub fn set_import_use_auto(use_auto: bool) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_import_use_auto(use_auto);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_import_resolution(resolution: u32) -> String {
+pub fn set_import_resolution(resolution: u32) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_import_resolution(resolution);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn start_import() -> String {
+pub fn start_import() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.start_import();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn cancel_import() -> String {
+pub fn cancel_import() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.cancel_import();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn open_sculpt_convert_dialog_for_selected() -> String {
+pub fn open_sculpt_convert_dialog_for_selected() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.open_sculpt_convert_dialog_for_selected();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn cancel_sculpt_convert_dialog() -> String {
+pub fn cancel_sculpt_convert_dialog() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.cancel_sculpt_convert_dialog();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_sculpt_convert_mode(mode_id: String) -> String {
+pub fn set_sculpt_convert_mode(mode_id: String) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_sculpt_convert_mode(&mode_id);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_sculpt_convert_resolution(resolution: u32) -> String {
+pub fn set_sculpt_convert_resolution(resolution: u32) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_sculpt_convert_resolution(resolution);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn start_sculpt_convert() -> String {
+pub fn start_sculpt_convert() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.start_sculpt_convert();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_export_resolution(resolution: u32) -> String {
+pub fn set_export_resolution(resolution: u32) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_export_resolution(resolution);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_adaptive_export(enabled: bool) -> String {
+pub fn set_adaptive_export(enabled: bool) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_adaptive_export(enabled);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn start_export() -> String {
+pub fn start_export() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.start_export();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn cancel_export() -> String {
+pub fn cancel_export() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.cancel_export();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn apply_render_preset(preset_id: String) -> String {
+pub fn apply_render_preset(preset_id: String) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.apply_render_preset(&preset_id);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_render_shading_mode(mode_id: String) -> String {
+pub fn set_render_shading_mode(mode_id: String) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_render_shading_mode(&mode_id);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_render_toggle(field_id: String, enabled: bool) -> String {
+pub fn set_render_toggle(field_id: String, enabled: bool) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_render_toggle(&field_id, enabled);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_render_integer(field_id: String, value: u32) -> String {
+pub fn set_render_integer(field_id: String, value: u32) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_render_integer(&field_id, value);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_render_scalar(field_id: String, value: f32) -> String {
+pub fn set_render_scalar(field_id: String, value: f32) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_render_scalar(&field_id, value);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn reset_settings() -> String {
+pub fn reset_settings() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.reset_settings();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn export_settings() -> String {
+pub fn export_settings() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.export_settings();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn import_settings() -> String {
+pub fn import_settings() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.import_settings();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_settings_toggle(field_id: String, enabled: bool) -> String {
+pub fn set_settings_toggle(field_id: String, enabled: bool) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_settings_toggle(&field_id, enabled);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_settings_integer(field_id: String, value: u32) -> String {
+pub fn set_settings_integer(field_id: String, value: u32) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_settings_integer(&field_id, value);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn save_camera_bookmark(slot_index: u8) -> String {
+pub fn save_camera_bookmark(slot_index: u8) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.save_camera_bookmark(slot_index);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn restore_camera_bookmark(slot_index: u8) -> String {
+pub fn restore_camera_bookmark(slot_index: u8) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.restore_camera_bookmark(slot_index);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn clear_camera_bookmark(slot_index: u8) -> String {
+pub fn clear_camera_bookmark(slot_index: u8) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.clear_camera_bookmark(slot_index);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn reset_keymap() -> String {
+pub fn reset_keymap() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.reset_keymap();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn export_keymap() -> String {
+pub fn export_keymap() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.export_keymap();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn import_keymap() -> String {
+pub fn import_keymap() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.import_keymap();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn clear_keybinding(action_id: String) -> String {
+pub fn clear_keybinding(action_id: String) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.clear_keybinding(&action_id);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
@@ -307,10 +329,10 @@ pub fn set_keybinding(
     ctrl: bool,
     shift: bool,
     alt: bool,
-) -> String {
+) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_keybinding(&action_id, &key_id, ctrl, shift, alt);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 pub fn render_preview_frame(width: u32, height: u32, time_seconds: f32) -> Vec<u8> {
@@ -346,10 +368,10 @@ pub fn begin_interactive_edit() {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn select_node(node_id: Option<u64>) -> String {
+pub fn select_node(node_id: Option<u64>) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.select_node(node_id);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
@@ -359,142 +381,142 @@ pub fn select_node_at_viewport(
     width: u32,
     height: u32,
     time_seconds: f32,
-) -> String {
+) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.select_node_at_viewport(mouse_x, mouse_y, width, height, time_seconds);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn toggle_node_visibility(node_id: u64) -> String {
+pub fn toggle_node_visibility(node_id: u64) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.toggle_node_visibility(node_id);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn toggle_node_lock(node_id: u64) -> String {
+pub fn toggle_node_lock(node_id: u64) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.toggle_node_lock(node_id);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn delete_selected() -> String {
+pub fn delete_selected() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.delete_selected();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn duplicate_selected() -> String {
+pub fn duplicate_selected() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.duplicate_selected();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn rename_node(node_id: u64, name: String) -> String {
+pub fn rename_node(node_id: u64, name: String) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.rename_node(node_id, &name);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn create_operation(operation_id: String) -> String {
+pub fn create_operation(operation_id: String) -> AppSceneSnapshot {
     let operation = parse_operation_id(&operation_id)
         .unwrap_or_else(|| panic!("unknown operation id: {operation_id}"));
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.create_operation(operation);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn create_transform() -> String {
+pub fn create_transform() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.create_transform();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn create_modifier(modifier_id: String) -> String {
+pub fn create_modifier(modifier_id: String) -> AppSceneSnapshot {
     let modifier = parse_modifier_id(&modifier_id)
         .unwrap_or_else(|| panic!("unknown modifier id: {modifier_id}"));
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.create_modifier(modifier);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn create_light(light_id: String) -> String {
+pub fn create_light(light_id: String) -> AppSceneSnapshot {
     let light_type =
         parse_light_id(&light_id).unwrap_or_else(|| panic!("unknown light id: {light_id}"));
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.create_light(light_type);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn create_sculpt() -> String {
+pub fn create_sculpt() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.create_sculpt();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn resume_sculpting_selected() -> String {
+pub fn resume_sculpting_selected() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.resume_sculpting_selected();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn stop_sculpting() -> String {
+pub fn stop_sculpting() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.stop_sculpting();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_sculpt_brush_mode(mode_id: String) -> String {
+pub fn set_sculpt_brush_mode(mode_id: String) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_sculpt_brush_mode(&mode_id);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_sculpt_brush_radius(radius: f32) -> String {
+pub fn set_sculpt_brush_radius(radius: f32) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_sculpt_brush_radius(radius);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_sculpt_brush_strength(strength: f32) -> String {
+pub fn set_sculpt_brush_strength(strength: f32) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_sculpt_brush_strength(strength);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_sculpt_symmetry_axis(axis_id: String) -> String {
+pub fn set_sculpt_symmetry_axis(axis_id: String) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_sculpt_symmetry_axis(&axis_id);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_selected_sculpt_resolution(resolution: u32) -> String {
+pub fn set_selected_sculpt_resolution(resolution: u32) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_selected_sculpt_resolution(resolution);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_selected_primitive_parameter(parameter_key: String, value: f32) -> String {
+pub fn set_selected_primitive_parameter(parameter_key: String, value: f32) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_selected_primitive_parameter(&parameter_key, value);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
@@ -504,10 +526,10 @@ pub fn preview_selected_primitive_parameter(parameter_key: String, value: f32) {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_selected_material_float(field_id: String, value: f32) -> String {
+pub fn set_selected_material_float(field_id: String, value: f32) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_selected_material_float(&field_id, value);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
@@ -522,10 +544,10 @@ pub fn set_selected_material_color(
     red: f32,
     green: f32,
     blue: f32,
-) -> String {
+) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_selected_material_color(&field_id, red, green, blue);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
@@ -535,10 +557,10 @@ pub fn preview_selected_material_color(field_id: String, red: f32, green: f32, b
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_selected_transform_position(x: f32, y: f32, z: f32) -> String {
+pub fn set_selected_transform_position(x: f32, y: f32, z: f32) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_selected_transform_position(x, y, z);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
@@ -552,10 +574,10 @@ pub fn set_selected_transform_rotation_degrees(
     x_degrees: f32,
     y_degrees: f32,
     z_degrees: f32,
-) -> String {
+) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_selected_transform_rotation_degrees(x_degrees, y_degrees, z_degrees);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
@@ -569,10 +591,10 @@ pub fn preview_selected_transform_rotation_degrees(
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_selected_transform_scale(x: f32, y: f32, z: f32) -> String {
+pub fn set_selected_transform_scale(x: f32, y: f32, z: f32) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_selected_transform_scale(x, y, z);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
@@ -582,192 +604,192 @@ pub fn preview_selected_transform_scale(x: f32, y: f32, z: f32) {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_selected_light_type(light_type_id: String) -> String {
+pub fn set_selected_light_type(light_type_id: String) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_selected_light_type(&light_type_id);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_selected_light_color(red: f32, green: f32, blue: f32) -> String {
+pub fn set_selected_light_color(red: f32, green: f32, blue: f32) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_selected_light_color(red, green, blue);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_selected_light_intensity(intensity: f32) -> String {
+pub fn set_selected_light_intensity(intensity: f32) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_selected_light_intensity(intensity);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_selected_light_range(range: f32) -> String {
+pub fn set_selected_light_range(range: f32) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_selected_light_range(range);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_selected_light_spot_angle(angle_degrees: f32) -> String {
+pub fn set_selected_light_spot_angle(angle_degrees: f32) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_selected_light_spot_angle(angle_degrees);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_selected_light_cast_shadows(enabled: bool) -> String {
+pub fn set_selected_light_cast_shadows(enabled: bool) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_selected_light_cast_shadows(enabled);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_selected_light_shadow_softness(softness: f32) -> String {
+pub fn set_selected_light_shadow_softness(softness: f32) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_selected_light_shadow_softness(softness);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_selected_light_shadow_color(red: f32, green: f32, blue: f32) -> String {
+pub fn set_selected_light_shadow_color(red: f32, green: f32, blue: f32) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_selected_light_shadow_color(red, green, blue);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_selected_light_volumetric(enabled: bool) -> String {
+pub fn set_selected_light_volumetric(enabled: bool) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_selected_light_volumetric(enabled);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_selected_light_volumetric_density(density: f32) -> String {
+pub fn set_selected_light_volumetric_density(density: f32) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_selected_light_volumetric_density(density);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_selected_light_cookie(cookie_node_id: u64) -> String {
+pub fn set_selected_light_cookie(cookie_node_id: u64) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_selected_light_cookie(cookie_node_id);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn clear_selected_light_cookie() -> String {
+pub fn clear_selected_light_cookie() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.clear_selected_light_cookie();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_selected_light_proximity_mode(mode_id: String) -> String {
+pub fn set_selected_light_proximity_mode(mode_id: String) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_selected_light_proximity_mode(&mode_id);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_selected_light_proximity_range(range: f32) -> String {
+pub fn set_selected_light_proximity_range(range: f32) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_selected_light_proximity_range(range);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_selected_light_array_pattern(pattern_id: String) -> String {
+pub fn set_selected_light_array_pattern(pattern_id: String) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_selected_light_array_pattern(&pattern_id);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_selected_light_array_count(count: u32) -> String {
+pub fn set_selected_light_array_count(count: u32) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_selected_light_array_count(count);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_selected_light_array_radius(radius: f32) -> String {
+pub fn set_selected_light_array_radius(radius: f32) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_selected_light_array_radius(radius);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_selected_light_array_color_variation(value: f32) -> String {
+pub fn set_selected_light_array_color_variation(value: f32) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_selected_light_array_color_variation(value);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_selected_light_intensity_expression(expression: String) -> String {
+pub fn set_selected_light_intensity_expression(expression: String) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_selected_light_intensity_expression(&expression);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_selected_light_color_hue_expression(expression: String) -> String {
+pub fn set_selected_light_color_hue_expression(expression: String) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_selected_light_color_hue_expression(&expression);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_node_light_mask(node_id: u64, mask: u8) -> String {
+pub fn set_node_light_mask(node_id: u64, mask: u8) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_node_light_mask(node_id, mask);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_node_light_link_enabled(node_id: u64, light_id: u64, enabled: bool) -> String {
+pub fn set_node_light_link_enabled(node_id: u64, light_id: u64, enabled: bool) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_node_light_link_enabled(node_id, light_id, enabled);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn set_manipulator_mode(mode_id: String) -> String {
+pub fn set_manipulator_mode(mode_id: String) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_manipulator_mode(&mode_id);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn toggle_manipulator_space() -> String {
+pub fn toggle_manipulator_space() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.toggle_manipulator_space();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn nudge_manipulator_pivot_offset(x: f32, y: f32, z: f32) -> String {
+pub fn nudge_manipulator_pivot_offset(x: f32, y: f32, z: f32) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.nudge_manipulator_pivot_offset(x, y, z);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn reset_manipulator_pivot() -> String {
+pub fn reset_manipulator_pivot() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.reset_manipulator_pivot();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn nudge_selected_translation(delta_x: f32, delta_y: f32, delta_z: f32) -> String {
+pub fn nudge_selected_translation(delta_x: f32, delta_y: f32, delta_z: f32) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.nudge_selected_translation(delta_x, delta_y, delta_z);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
@@ -775,129 +797,129 @@ pub fn nudge_selected_rotation_degrees(
     delta_x_degrees: f32,
     delta_y_degrees: f32,
     delta_z_degrees: f32,
-) -> String {
+) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.nudge_selected_rotation_degrees(delta_x_degrees, delta_y_degrees, delta_z_degrees);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn nudge_selected_scale(delta_x: f32, delta_y: f32, delta_z: f32) -> String {
+pub fn nudge_selected_scale(delta_x: f32, delta_y: f32, delta_z: f32) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.nudge_selected_scale(delta_x, delta_y, delta_z);
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn undo() -> String {
+pub fn undo() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.undo();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn redo() -> String {
+pub fn redo() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.redo();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn focus_selected() -> String {
+pub fn focus_selected() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.focus_selected();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn frame_all() -> String {
+pub fn frame_all() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.frame_all();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn camera_front() -> String {
+pub fn camera_front() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.camera_front();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn camera_top() -> String {
+pub fn camera_top() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.camera_top();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn camera_right() -> String {
+pub fn camera_right() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.camera_right();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn camera_back() -> String {
+pub fn camera_back() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.camera_back();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn camera_left() -> String {
+pub fn camera_left() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.camera_left();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn camera_bottom() -> String {
+pub fn camera_bottom() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.camera_bottom();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn toggle_orthographic() -> String {
+pub fn toggle_orthographic() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.toggle_orthographic();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn add_sphere() -> String {
+pub fn add_sphere() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.add_sphere();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn add_box() -> String {
+pub fn add_box() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.add_box();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn add_cylinder() -> String {
+pub fn add_cylinder() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.add_cylinder();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn add_torus() -> String {
+pub fn add_torus() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.add_torus();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn reset_scene() -> String {
+pub fn reset_scene() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.reset_scene();
-    snapshot_json(&mut bridge)
+    current_scene_snapshot(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(init)]
