@@ -767,6 +767,13 @@ class _MockRustApi extends RustLibApi {
   int setSculptConvertModeCalls = 0;
   int setSculptConvertResolutionCalls = 0;
   int startSculptConvertCalls = 0;
+  int beginInteractiveEditCalls = 0;
+  int previewSelectedPrimitiveParameterCalls = 0;
+  int previewSelectedMaterialFloatCalls = 0;
+  int previewSelectedMaterialColorCalls = 0;
+  int previewSelectedTransformPositionCalls = 0;
+  int previewSelectedTransformRotationDegreesCalls = 0;
+  int previewSelectedTransformScaleCalls = 0;
   int renameNodeCalls = 0;
   int setSelectedPrimitiveParameterCalls = 0;
   int setSelectedMaterialFloatCalls = 0;
@@ -870,6 +877,13 @@ class _MockRustApi extends RustLibApi {
     setSculptConvertModeCalls = 0;
     setSculptConvertResolutionCalls = 0;
     startSculptConvertCalls = 0;
+    beginInteractiveEditCalls = 0;
+    previewSelectedPrimitiveParameterCalls = 0;
+    previewSelectedMaterialFloatCalls = 0;
+    previewSelectedMaterialColorCalls = 0;
+    previewSelectedTransformPositionCalls = 0;
+    previewSelectedTransformRotationDegreesCalls = 0;
+    previewSelectedTransformScaleCalls = 0;
     renameNodeCalls = 0;
     setSelectedPrimitiveParameterCalls = 0;
     setSelectedMaterialFloatCalls = 0;
@@ -1400,6 +1414,11 @@ class _MockRustApi extends RustLibApi {
   String crateApiSimpleCameraBottom() => currentSnapshot;
 
   @override
+  void crateApiSimpleBeginInteractiveEdit() {
+    beginInteractiveEditCalls += 1;
+  }
+
+  @override
   String crateApiSimpleCameraFront() {
     cameraFrontCalls += 1;
     return currentSnapshot;
@@ -1551,6 +1570,15 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
+  void crateApiSimplePreviewSelectedPrimitiveParameter({
+    required String parameterKey,
+    required double value,
+  }) {
+    previewSelectedPrimitiveParameterCalls += 1;
+    currentSnapshot = _selectedPropertyRadiusSnapshot;
+  }
+
+  @override
   String crateApiSimpleSetSelectedMaterialFloat({
     required String fieldId,
     required double value,
@@ -1558,6 +1586,15 @@ class _MockRustApi extends RustLibApi {
     setSelectedMaterialFloatCalls += 1;
     currentSnapshot = _selectedPropertyRoughnessSnapshot;
     return currentSnapshot;
+  }
+
+  @override
+  void crateApiSimplePreviewSelectedMaterialFloat({
+    required String fieldId,
+    required double value,
+  }) {
+    previewSelectedMaterialFloatCalls += 1;
+    currentSnapshot = _selectedPropertyRoughnessSnapshot;
   }
 
   @override
@@ -1573,6 +1610,17 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
+  void crateApiSimplePreviewSelectedMaterialColor({
+    required String fieldId,
+    required double red,
+    required double green,
+    required double blue,
+  }) {
+    previewSelectedMaterialColorCalls += 1;
+    currentSnapshot = _selectedPropertyColorSnapshot;
+  }
+
+  @override
   String crateApiSimpleSetSelectedTransformPosition({
     required double x,
     required double y,
@@ -1581,6 +1629,16 @@ class _MockRustApi extends RustLibApi {
     setSelectedTransformPositionCalls += 1;
     currentSnapshot = _selectedTransformMovedSnapshot;
     return currentSnapshot;
+  }
+
+  @override
+  void crateApiSimplePreviewSelectedTransformPosition({
+    required double x,
+    required double y,
+    required double z,
+  }) {
+    previewSelectedTransformPositionCalls += 1;
+    currentSnapshot = _selectedTransformMovedSnapshot;
   }
 
   @override
@@ -1595,6 +1653,16 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
+  void crateApiSimplePreviewSelectedTransformRotationDegrees({
+    required double xDegrees,
+    required double yDegrees,
+    required double zDegrees,
+  }) {
+    previewSelectedTransformRotationDegreesCalls += 1;
+    currentSnapshot = _selectedTransformRotatedSnapshot;
+  }
+
+  @override
   String crateApiSimpleSetSelectedTransformScale({
     required double x,
     required double y,
@@ -1603,6 +1671,16 @@ class _MockRustApi extends RustLibApi {
     setSelectedTransformScaleCalls += 1;
     currentSnapshot = _selectedTransformScaledSnapshot;
     return currentSnapshot;
+  }
+
+  @override
+  void crateApiSimplePreviewSelectedTransformScale({
+    required double x,
+    required double y,
+    required double z,
+  }) {
+    previewSelectedTransformScaleCalls += 1;
+    currentSnapshot = _selectedTransformScaledSnapshot;
   }
 
   @override
@@ -2182,6 +2260,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(mockApi.beginInteractiveEditCalls, greaterThan(0));
+    expect(mockApi.previewSelectedTransformPositionCalls, greaterThan(0));
     expect(mockApi.setSelectedTransformPositionCalls, 1);
     expect(mockApi.currentSnapshot, _MockRustApi._selectedTransformMovedSnapshot);
 
@@ -2198,6 +2278,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(
+      mockApi.previewSelectedTransformRotationDegreesCalls,
+      greaterThan(0),
+    );
     expect(mockApi.setSelectedTransformRotationDegreesCalls, 1);
     expect(
       mockApi.currentSnapshot,
@@ -2217,6 +2301,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(mockApi.previewSelectedTransformScaleCalls, greaterThan(0));
     expect(mockApi.setSelectedTransformScaleCalls, 1);
     expect(mockApi.currentSnapshot, _MockRustApi._selectedTransformScaledSnapshot);
   });
@@ -2508,6 +2593,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(mockApi.beginInteractiveEditCalls, greaterThan(0));
+    expect(mockApi.previewSelectedPrimitiveParameterCalls, greaterThan(0));
     expect(mockApi.setSelectedPrimitiveParameterCalls, 1);
     expect(mockApi.currentSnapshot, _MockRustApi._selectedPropertyRadiusSnapshot);
   });
@@ -2532,6 +2619,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(mockApi.beginInteractiveEditCalls, greaterThan(0));
+    expect(mockApi.previewSelectedMaterialFloatCalls, greaterThan(0));
     expect(mockApi.setSelectedMaterialFloatCalls, 1);
     expect(mockApi.currentSnapshot, _MockRustApi._selectedPropertyRoughnessSnapshot);
   });
@@ -2556,6 +2645,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(mockApi.beginInteractiveEditCalls, greaterThan(0));
+    expect(mockApi.previewSelectedMaterialColorCalls, greaterThan(0));
     expect(mockApi.setSelectedMaterialColorCalls, 1);
     expect(mockApi.currentSnapshot, _MockRustApi._selectedPropertyColorSnapshot);
   });

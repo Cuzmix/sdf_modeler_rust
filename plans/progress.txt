@@ -2949,3 +2949,40 @@ Result:
 - PRD `#1` is closed for the active migration workflow.
 - All items in `plans/prd.json` now pass.
 
+--- Migration Iteration 35: PRD #42 - Live-edit responsiveness for bridge-driven property changes ---
+COMPLETED. Added a lightweight interactive edit path for hot property drags so Flutter can push preview updates during slider movement without paying for a full scene snapshot on every tick, while still coalescing each drag into one undo entry.
+
+Changes:
+- src/app_bridge/session.rs
+- apps/flutter/rust/src/api/simple.rs
+- apps/flutter/rust/src/frb_generated.rs
+- apps/flutter/lib/src/rust/api/simple.dart
+- apps/flutter/lib/src/rust/frb_generated.dart
+- apps/flutter/lib/app.dart
+- apps/flutter/test/widget_test.dart
+- plans/prd.json
+- plans/progress.txt
+  - Added bridge-side interactive edit session support plus preview setters for primitive parameter, material float/color, and transform position/rotation/scale hot edits.
+  - Reused the existing history drag semantics underneath that session flow so preview ticks do not create undo entries and the release-time commit collapses to one logical edit per drag.
+  - Skipped autosave during preview ticks while still updating dirty-state tracking, then allowed the normal persistence path to resume at commit time.
+  - Added a Dart-side preview command path that calls FRB void preview APIs during `onChanged`, requests native frames for live viewport feedback, and keeps the full snapshot round-trip only on `onChangeEnd`.
+  - Extended the inspector widgets so slider drags explicitly begin interactive edit sessions and exercise the live-preview route in the Flutter widget harness.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS
+- cargo build: PASS
+- FRB codegen: PASS (`flutter_rust_bridge_codegen generate --rust-input crate::api --rust-root rust --dart-output lib/src/rust --dart-root . --dart-entrypoint-class-name RustLib --stop-on-error`)
+- Flutter analyze: PASS
+- Flutter test: PASS
+- Flutter build windows --debug: PASS
+- Flutter test integration_test -d windows: PASS
+
+Manual verification:
+- Windows debug host smoke launch: PASS (`apps/flutter/build/windows/x64/runner/Debug/sdf_modeler_flutter.exe` stayed running for 8 seconds before the scripted stop)
+
+Result:
+- PRD `#42` is fully verified and complete.
+- The remaining open migration item is PRD `#43`.
+

@@ -172,6 +172,9 @@ void panCamera({required double deltaX, required double deltaY}) => RustLib
 void zoomCamera({required double delta}) =>
     RustLib.instance.api.crateApiSimpleZoomCamera(delta: delta);
 
+void beginInteractiveEdit() =>
+    RustLib.instance.api.crateApiSimpleBeginInteractiveEdit();
+
 String selectNode({BigInt? nodeId}) =>
     RustLib.instance.api.crateApiSimpleSelectNode(nodeId: nodeId);
 
@@ -249,10 +252,26 @@ String setSelectedPrimitiveParameter({
   value: value,
 );
 
+void previewSelectedPrimitiveParameter({
+  required String parameterKey,
+  required double value,
+}) => RustLib.instance.api.crateApiSimplePreviewSelectedPrimitiveParameter(
+  parameterKey: parameterKey,
+  value: value,
+);
+
 String setSelectedMaterialFloat({
   required String fieldId,
   required double value,
 }) => RustLib.instance.api.crateApiSimpleSetSelectedMaterialFloat(
+  fieldId: fieldId,
+  value: value,
+);
+
+void previewSelectedMaterialFloat({
+  required String fieldId,
+  required double value,
+}) => RustLib.instance.api.crateApiSimplePreviewSelectedMaterialFloat(
   fieldId: fieldId,
   value: value,
 );
@@ -269,11 +288,33 @@ String setSelectedMaterialColor({
   blue: blue,
 );
 
+void previewSelectedMaterialColor({
+  required String fieldId,
+  required double red,
+  required double green,
+  required double blue,
+}) => RustLib.instance.api.crateApiSimplePreviewSelectedMaterialColor(
+  fieldId: fieldId,
+  red: red,
+  green: green,
+  blue: blue,
+);
+
 String setSelectedTransformPosition({
   required double x,
   required double y,
   required double z,
 }) => RustLib.instance.api.crateApiSimpleSetSelectedTransformPosition(
+  x: x,
+  y: y,
+  z: z,
+);
+
+void previewSelectedTransformPosition({
+  required double x,
+  required double y,
+  required double z,
+}) => RustLib.instance.api.crateApiSimplePreviewSelectedTransformPosition(
   x: x,
   y: y,
   z: z,
@@ -289,11 +330,32 @@ String setSelectedTransformRotationDegrees({
   zDegrees: zDegrees,
 );
 
+void previewSelectedTransformRotationDegrees({
+  required double xDegrees,
+  required double yDegrees,
+  required double zDegrees,
+}) =>
+    RustLib.instance.api.crateApiSimplePreviewSelectedTransformRotationDegrees(
+      xDegrees: xDegrees,
+      yDegrees: yDegrees,
+      zDegrees: zDegrees,
+    );
+
 String setSelectedTransformScale({
   required double x,
   required double y,
   required double z,
 }) => RustLib.instance.api.crateApiSimpleSetSelectedTransformScale(
+  x: x,
+  y: y,
+  z: z,
+);
+
+void previewSelectedTransformScale({
+  required double x,
+  required double y,
+  required double z,
+}) => RustLib.instance.api.crateApiSimplePreviewSelectedTransformScale(
   x: x,
   y: y,
   z: z,

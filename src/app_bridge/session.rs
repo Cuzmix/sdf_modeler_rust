@@ -61,6 +61,7 @@ pub struct AppBridge {
     pivot_offset: Vec3,
     renderer: HeadlessViewportRenderer,
     last_viewport_time_seconds: Option<f32>,
+    interactive_edit_active: bool,
 }
 
 struct DocumentPersistence {
@@ -279,6 +280,7 @@ impl AppBridge {
             pivot_offset: Vec3::ZERO,
             renderer,
             last_viewport_time_seconds: None,
+            interactive_edit_active: false,
         }
     }
 
@@ -794,6 +796,7 @@ impl AppBridge {
         self.selected_node = None;
         self.hovered_node = None;
         self.last_viewport_time_seconds = None;
+        self.interactive_edit_active = false;
         self.clear_workflow_state();
         self.persistence.current_file_path = None;
         self.persistence.saved_fingerprint = self.scene.data_fingerprint();
@@ -855,6 +858,7 @@ impl AppBridge {
         self.selected_node = None;
         self.hovered_node = None;
         self.last_viewport_time_seconds = None;
+        self.interactive_edit_active = false;
         self.clear_workflow_state();
         self.persistence.current_file_path = None;
         self.persistence.saved_fingerprint = 0;
@@ -1432,8 +1436,97 @@ impl AppBridge {
         })
     }
 
+    pub fn begin_interactive_edit(&mut self) {
+        if self.interactive_edit_active {
+            return;
+        }
+
+        self.history.begin_frame(&self.scene, self.selected_node);
+        self.interactive_edit_active = true;
+    }
+
+    pub fn preview_selected_primitive_parameter(
+        &mut self,
+        parameter_key: &str,
+        value: f32,
+    ) -> bool {
+        let clamped_value = value.clamp(PRIMITIVE_PARAMETER_MIN, PRIMITIVE_PARAMETER_MAX);
+
+        self.run_interactive_preview_command(|bridge| {
+            let Some(selected_node) = bridge.selected_node else {
+                return false;
+            };
+            let Some(node) = bridge.scene.nodes.get_mut(&selected_node) else {
+                return false;
+            };
+
+            match &mut node.data {
+                NodeData::Primitive { kind, scale, .. } => {
+                    let axis = kind.scale_params().iter().find_map(|(label, axis)| {
+                        (property_key(label) == parameter_key).then_some(*axis)
+                    });
+                    let Some(axis) = axis else {
+                        return false;
+                    };
+
+                    set_scale_component(scale, axis, clamped_value);
+                    true
+                }
+                _ => false,
+            }
+        })
+    }
+
     pub fn set_selected_material_float(&mut self, field_id: &str, value: f32) -> bool {
         self.run_document_command(|bridge| {
+            let Some(selected_node) = bridge.selected_node else {
+                return false;
+            };
+            let Some(node) = bridge.scene.nodes.get_mut(&selected_node) else {
+                return false;
+            };
+
+            match &mut node.data {
+                NodeData::Primitive {
+                    roughness,
+                    metallic,
+                    emissive_intensity,
+                    fresnel,
+                    ..
+                }
+                | NodeData::Sculpt {
+                    roughness,
+                    metallic,
+                    emissive_intensity,
+                    fresnel,
+                    ..
+                } => {
+                    match field_id {
+                        "roughness" => {
+                            *roughness = value.clamp(MATERIAL_FACTOR_MIN, MATERIAL_FACTOR_MAX)
+                        }
+                        "metallic" => {
+                            *metallic = value.clamp(MATERIAL_FACTOR_MIN, MATERIAL_FACTOR_MAX)
+                        }
+                        "fresnel" => {
+                            *fresnel = value.clamp(MATERIAL_FACTOR_MIN, MATERIAL_FACTOR_MAX)
+                        }
+                        "emissive_intensity" => {
+                            *emissive_intensity =
+                                value.clamp(MATERIAL_FACTOR_MIN, EMISSIVE_INTENSITY_MAX)
+                        }
+                        _ => return false,
+                    }
+
+                    true
+                }
+                _ => false,
+            }
+        })
+    }
+
+    pub fn preview_selected_material_float(&mut self, field_id: &str, value: f32) -> bool {
+        self.run_interactive_preview_command(|bridge| {
             let Some(selected_node) = bridge.selected_node else {
                 return false;
             };
@@ -1517,10 +1610,72 @@ impl AppBridge {
         })
     }
 
+    pub fn preview_selected_material_color(
+        &mut self,
+        field_id: &str,
+        red: f32,
+        green: f32,
+        blue: f32,
+    ) -> bool {
+        let clamped_color = clamp_color(Vec3::new(red, green, blue));
+
+        self.run_interactive_preview_command(|bridge| {
+            let Some(selected_node) = bridge.selected_node else {
+                return false;
+            };
+            let Some(node) = bridge.scene.nodes.get_mut(&selected_node) else {
+                return false;
+            };
+
+            match &mut node.data {
+                NodeData::Primitive {
+                    color, emissive, ..
+                }
+                | NodeData::Sculpt {
+                    color, emissive, ..
+                } => {
+                    match field_id {
+                        "color" => *color = clamped_color,
+                        "emissive" => *emissive = clamped_color,
+                        _ => return false,
+                    }
+
+                    true
+                }
+                _ => false,
+            }
+        })
+    }
+
     pub fn set_selected_transform_position(&mut self, x: f32, y: f32, z: f32) -> bool {
         let next_position = Vec3::new(x, y, z);
 
         self.run_document_command(|bridge| {
+            let Some(selected_node) = bridge.selected_node else {
+                return false;
+            };
+            let Some(node) = bridge.scene.nodes.get_mut(&selected_node) else {
+                return false;
+            };
+
+            match &mut node.data {
+                NodeData::Primitive { position, .. } | NodeData::Sculpt { position, .. } => {
+                    *position = next_position;
+                    true
+                }
+                NodeData::Transform { translation, .. } => {
+                    *translation = next_position;
+                    true
+                }
+                _ => false,
+            }
+        })
+    }
+
+    pub fn preview_selected_transform_position(&mut self, x: f32, y: f32, z: f32) -> bool {
+        let next_position = Vec3::new(x, y, z);
+
+        self.run_interactive_preview_command(|bridge| {
             let Some(selected_node) = bridge.selected_node else {
                 return false;
             };
@@ -1574,6 +1729,38 @@ impl AppBridge {
         })
     }
 
+    pub fn preview_selected_transform_rotation_degrees(
+        &mut self,
+        x_degrees: f32,
+        y_degrees: f32,
+        z_degrees: f32,
+    ) -> bool {
+        let next_rotation = Vec3::new(
+            x_degrees.to_radians(),
+            y_degrees.to_radians(),
+            z_degrees.to_radians(),
+        );
+
+        self.run_interactive_preview_command(|bridge| {
+            let Some(selected_node) = bridge.selected_node else {
+                return false;
+            };
+            let Some(node) = bridge.scene.nodes.get_mut(&selected_node) else {
+                return false;
+            };
+
+            match &mut node.data {
+                NodeData::Primitive { rotation, .. }
+                | NodeData::Sculpt { rotation, .. }
+                | NodeData::Transform { rotation, .. } => {
+                    *rotation = next_rotation;
+                    true
+                }
+                _ => false,
+            }
+        })
+    }
+
     pub fn set_selected_transform_scale(&mut self, x: f32, y: f32, z: f32) -> bool {
         let next_scale = Vec3::new(
             x.clamp(PRIMITIVE_PARAMETER_MIN, PRIMITIVE_PARAMETER_MAX),
@@ -1582,6 +1769,31 @@ impl AppBridge {
         );
 
         self.run_document_command(|bridge| {
+            let Some(selected_node) = bridge.selected_node else {
+                return false;
+            };
+            let Some(node) = bridge.scene.nodes.get_mut(&selected_node) else {
+                return false;
+            };
+
+            match &mut node.data {
+                NodeData::Transform { scale, .. } => {
+                    *scale = next_scale;
+                    true
+                }
+                _ => false,
+            }
+        })
+    }
+
+    pub fn preview_selected_transform_scale(&mut self, x: f32, y: f32, z: f32) -> bool {
+        let next_scale = Vec3::new(
+            x.clamp(PRIMITIVE_PARAMETER_MIN, PRIMITIVE_PARAMETER_MAX),
+            y.clamp(PRIMITIVE_PARAMETER_MIN, PRIMITIVE_PARAMETER_MAX),
+            z.clamp(PRIMITIVE_PARAMETER_MIN, PRIMITIVE_PARAMETER_MAX),
+        );
+
+        self.run_interactive_preview_command(|bridge| {
             let Some(selected_node) = bridge.selected_node else {
                 return false;
             };
@@ -2062,8 +2274,9 @@ impl AppBridge {
         self.selected_node = None;
         self.hovered_node = None;
         self.last_viewport_time_seconds = None;
+        self.interactive_edit_active = false;
         self.clear_workflow_state();
-        self.sync_document_persistence();
+        self.sync_document_persistence(true);
     }
 
     pub fn undo(&mut self) {
@@ -2100,13 +2313,35 @@ impl AppBridge {
     }
 
     fn run_document_command<T>(&mut self, command: impl FnOnce(&mut Self) -> T) -> T {
+        if self.interactive_edit_active {
+            let result = command(self);
+            self.finish_interactive_edit();
+            return result;
+        }
+
         self.history.begin_frame(&self.scene, self.selected_node);
         let result = command(self);
-        self.history
-            .end_frame(&self.scene, self.selected_node, false);
-        self.sync_document_persistence();
-        self.sync_sculpt_session();
+        self.finish_document_command(false, true);
         result
+    }
+
+    fn run_interactive_preview_command<T>(&mut self, command: impl FnOnce(&mut Self) -> T) -> T {
+        self.begin_interactive_edit();
+        let result = command(self);
+        self.finish_document_command(true, false);
+        result
+    }
+
+    fn finish_interactive_edit(&mut self) {
+        self.finish_document_command(false, true);
+        self.interactive_edit_active = false;
+    }
+
+    fn finish_document_command(&mut self, is_dragging: bool, allow_auto_save: bool) {
+        self.history
+            .end_frame(&self.scene, self.selected_node, is_dragging);
+        self.sync_document_persistence(allow_auto_save);
+        self.sync_sculpt_session();
     }
 
     fn restore_history_state(&mut self, restored_scene: Scene, restored_selected: Option<NodeId>) {
@@ -2114,7 +2349,8 @@ impl AppBridge {
         self.selected_node =
             restored_selected.filter(|node_id| self.scene.nodes.contains_key(node_id));
         self.hovered_node = self.selected_node;
-        self.sync_document_persistence();
+        self.interactive_edit_active = false;
+        self.sync_document_persistence(true);
         self.sync_sculpt_session();
     }
 
@@ -2394,6 +2630,7 @@ impl AppBridge {
         self.selected_node = None;
         self.hovered_node = None;
         self.last_viewport_time_seconds = None;
+        self.interactive_edit_active = false;
         self.clear_workflow_state();
         self.persistence.current_file_path = Some(path.to_path_buf());
         self.persistence.saved_fingerprint = self.scene.data_fingerprint();
@@ -2418,11 +2655,12 @@ impl AppBridge {
         true
     }
 
-    fn sync_document_persistence(&mut self) {
+    fn sync_document_persistence(&mut self, allow_auto_save: bool) {
         let current_fingerprint = self.scene.data_fingerprint();
         self.persistence.scene_dirty = current_fingerprint != self.persistence.saved_fingerprint;
 
-        if !self.settings.auto_save_enabled
+        if !allow_auto_save
+            || !self.settings.auto_save_enabled
             || !self.persistence.scene_dirty
             || self.persistence.last_auto_save.elapsed()
                 < Duration::from_secs(self.settings.auto_save_interval_secs as u64)
@@ -4479,6 +4717,123 @@ mod tests {
                 PRIMITIVE_PARAMETER_MAX
             ))
         );
+    }
+
+    #[test]
+    fn interactive_primitive_preview_commits_single_undo_entry() {
+        let mut bridge = AppBridge::new();
+        let sphere_id = bridge
+            .scene
+            .top_level_nodes()
+            .into_iter()
+            .find(|node_id| {
+                matches!(
+                    bridge.scene.nodes[node_id].data,
+                    NodeData::Primitive {
+                        kind: SdfPrimitive::Sphere,
+                        ..
+                    }
+                )
+            })
+            .expect("default sphere");
+        bridge.select_node(Some(sphere_id));
+
+        bridge.begin_interactive_edit();
+        assert!(bridge.preview_selected_primitive_parameter("radius", 1.5));
+        assert!(bridge.preview_selected_primitive_parameter("radius", 2.0));
+        assert_eq!(bridge.history.undo_count(), 0);
+
+        assert!(bridge.set_selected_primitive_parameter("radius", 2.5));
+        assert_eq!(bridge.history.undo_count(), 1);
+        assert!(bridge.scene_snapshot().history.can_undo);
+
+        bridge.undo();
+
+        let primitive = bridge
+            .scene_snapshot()
+            .selected_node_properties
+            .expect("selected properties")
+            .primitive
+            .expect("primitive properties");
+        assert_eq!(primitive.parameters[0].value, 1.0);
+    }
+
+    #[test]
+    fn interactive_material_preview_commits_single_undo_entry() {
+        let mut bridge = AppBridge::new();
+        let sphere_id = bridge
+            .scene
+            .top_level_nodes()
+            .into_iter()
+            .find(|node_id| {
+                matches!(
+                    bridge.scene.nodes[node_id].data,
+                    NodeData::Primitive {
+                        kind: SdfPrimitive::Sphere,
+                        ..
+                    }
+                )
+            })
+            .expect("default sphere");
+        bridge.select_node(Some(sphere_id));
+
+        bridge.begin_interactive_edit();
+        assert!(bridge.preview_selected_material_float("roughness", 0.7));
+        assert!(bridge.preview_selected_material_color("color", 0.9, 0.2, 0.1));
+        assert_eq!(bridge.history.undo_count(), 0);
+
+        assert!(bridge.set_selected_material_float("roughness", 0.8));
+        assert_eq!(bridge.history.undo_count(), 1);
+
+        bridge.undo();
+
+        let material = bridge
+            .scene_snapshot()
+            .selected_node_properties
+            .expect("selected properties")
+            .material
+            .expect("material properties");
+        assert!((material.roughness - 0.5).abs() < 1e-3);
+        assert_eq!(material.color, AppVec3::new(0.8, 0.3, 0.2));
+    }
+
+    #[test]
+    fn interactive_transform_preview_commits_single_undo_entry() {
+        let mut bridge = AppBridge::new();
+        let sphere_id = bridge
+            .scene
+            .top_level_nodes()
+            .into_iter()
+            .find(|node_id| {
+                matches!(
+                    bridge.scene.nodes[node_id].data,
+                    NodeData::Primitive {
+                        kind: SdfPrimitive::Sphere,
+                        ..
+                    }
+                )
+            })
+            .expect("default sphere");
+        bridge.select_node(Some(sphere_id));
+        bridge.create_transform();
+
+        bridge.begin_interactive_edit();
+        assert!(bridge.preview_selected_transform_position(0.5, -1.0, 2.0));
+        assert!(bridge.preview_selected_transform_position(1.0, -2.0, 3.0));
+        assert_eq!(bridge.history.undo_count(), 1);
+
+        assert!(bridge.set_selected_transform_position(1.5, -2.0, 3.25));
+        assert_eq!(bridge.history.undo_count(), 2);
+
+        bridge.undo();
+
+        let transform = bridge
+            .scene_snapshot()
+            .selected_node_properties
+            .expect("selected properties")
+            .transform
+            .expect("transform properties");
+        assert_eq!(transform.position, AppVec3::new(0.0, 0.0, 0.0));
     }
 
     #[test]

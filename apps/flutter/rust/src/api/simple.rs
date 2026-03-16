@@ -330,6 +330,12 @@ pub fn zoom_camera(delta: f32) {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn begin_interactive_edit() {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.begin_interactive_edit();
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn select_node(node_id: Option<u64>) -> String {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.select_node(node_id);
@@ -482,10 +488,22 @@ pub fn set_selected_primitive_parameter(parameter_key: String, value: f32) -> St
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn preview_selected_primitive_parameter(parameter_key: String, value: f32) {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.preview_selected_primitive_parameter(&parameter_key, value);
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn set_selected_material_float(field_id: String, value: f32) -> String {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_selected_material_float(&field_id, value);
     snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn preview_selected_material_float(field_id: String, value: f32) {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.preview_selected_material_float(&field_id, value);
 }
 
 #[flutter_rust_bridge::frb(sync)]
@@ -501,10 +519,22 @@ pub fn set_selected_material_color(
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn preview_selected_material_color(field_id: String, red: f32, green: f32, blue: f32) {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.preview_selected_material_color(&field_id, red, green, blue);
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn set_selected_transform_position(x: f32, y: f32, z: f32) -> String {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_selected_transform_position(x, y, z);
     snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn preview_selected_transform_position(x: f32, y: f32, z: f32) {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.preview_selected_transform_position(x, y, z);
 }
 
 #[flutter_rust_bridge::frb(sync)]
@@ -519,10 +549,26 @@ pub fn set_selected_transform_rotation_degrees(
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn preview_selected_transform_rotation_degrees(
+    x_degrees: f32,
+    y_degrees: f32,
+    z_degrees: f32,
+) {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.preview_selected_transform_rotation_degrees(x_degrees, y_degrees, z_degrees);
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn set_selected_transform_scale(x: f32, y: f32, z: f32) -> String {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_selected_transform_scale(x, y, z);
     snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn preview_selected_transform_scale(x: f32, y: f32, z: f32) {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.preview_selected_transform_scale(x, y, z);
 }
 
 #[flutter_rust_bridge::frb(sync)]

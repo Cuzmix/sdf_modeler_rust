@@ -764,6 +764,85 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     }
   }
 
+  void _runPreviewSceneCommand(
+    void Function() command, {
+    bool requestNativeFrame = true,
+  }) {
+    if (_commandInFlight || !mounted) {
+      return;
+    }
+
+    try {
+      command();
+      if (requestNativeFrame) {
+        _requestNativeFrame();
+      }
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _previewLine = 'Scene preview error: $error';
+      });
+    }
+  }
+
+  void _beginInteractiveEditSession() {
+    _runPreviewSceneCommand(beginInteractiveEdit, requestNativeFrame: false);
+  }
+
+  void _previewSelectedPrimitiveParameter(String parameterKey, double value) {
+    _runPreviewSceneCommand(
+      () => previewSelectedPrimitiveParameter(
+        parameterKey: parameterKey,
+        value: value,
+      ),
+    );
+  }
+
+  void _previewSelectedMaterialFloat(String fieldId, double value) {
+    _runPreviewSceneCommand(
+      () => previewSelectedMaterialFloat(fieldId: fieldId, value: value),
+    );
+  }
+
+  void _previewSelectedMaterialColor(String fieldId, AppVec3 color) {
+    _runPreviewSceneCommand(
+      () => previewSelectedMaterialColor(
+        fieldId: fieldId,
+        red: color.x,
+        green: color.y,
+        blue: color.z,
+      ),
+    );
+  }
+
+  void _previewSelectedTransformPosition(double x, double y, double z) {
+    _runPreviewSceneCommand(
+      () => previewSelectedTransformPosition(x: x, y: y, z: z),
+    );
+  }
+
+  void _previewSelectedTransformRotationDegrees(
+    double x,
+    double y,
+    double z,
+  ) {
+    _runPreviewSceneCommand(
+      () => previewSelectedTransformRotationDegrees(
+        xDegrees: x,
+        yDegrees: y,
+        zDegrees: z,
+      ),
+    );
+  }
+
+  void _previewSelectedTransformScale(double x, double y, double z) {
+    _runPreviewSceneCommand(
+      () => previewSelectedTransformScale(x: x, y: y, z: z),
+    );
+  }
+
   Future<void> _newScene() {
     return _runSceneCommand(newScene);
   }
@@ -1455,6 +1534,9 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                       onCreateLight: _promptCreateLight,
                       onCreateSculpt: () => _runSceneCommand(createSculpt),
                       onRenameSelected: _promptRenameSelectedNode,
+                      onBeginInteractiveEdit: _beginInteractiveEditSession,
+                      onPreviewPrimitiveParameter:
+                          _previewSelectedPrimitiveParameter,
                       onSetPrimitiveParameter: (parameterKey, value) =>
                           _runSceneCommand(
                             () => setSelectedPrimitiveParameter(
@@ -1462,12 +1544,14 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                               value: value,
                             ),
                           ),
+                      onPreviewMaterialFloat: _previewSelectedMaterialFloat,
                       onSetMaterialFloat: (fieldId, value) => _runSceneCommand(
                         () => setSelectedMaterialFloat(
                           fieldId: fieldId,
                           value: value,
                         ),
                       ),
+                      onPreviewMaterialColor: _previewSelectedMaterialColor,
                       onSetMaterialColor: (fieldId, color) => _runSceneCommand(
                         () => setSelectedMaterialColor(
                           fieldId: fieldId,
@@ -1476,9 +1560,13 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                           blue: color.z,
                         ),
                       ),
+                      onPreviewTransformPosition:
+                          _previewSelectedTransformPosition,
                       onSetTransformPosition: (x, y, z) => _runSceneCommand(
                         () => setSelectedTransformPosition(x: x, y: y, z: z),
                       ),
+                      onPreviewTransformRotationDegrees:
+                          _previewSelectedTransformRotationDegrees,
                       onSetTransformRotationDegrees: (x, y, z) =>
                           _runSceneCommand(
                             () => setSelectedTransformRotationDegrees(
@@ -1487,6 +1575,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                               zDegrees: z,
                             ),
                           ),
+                      onPreviewTransformScale: _previewSelectedTransformScale,
                       onSetTransformScale: (x, y, z) => _runSceneCommand(
                         () => setSelectedTransformScale(x: x, y: y, z: z),
                       ),
@@ -1901,6 +1990,9 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                   onCreateLight: _promptCreateLight,
                   onCreateSculpt: () => _runSceneCommand(createSculpt),
                   onRenameSelected: _promptRenameSelectedNode,
+                  onBeginInteractiveEdit: _beginInteractiveEditSession,
+                  onPreviewPrimitiveParameter:
+                      _previewSelectedPrimitiveParameter,
                   onSetPrimitiveParameter: (parameterKey, value) =>
                       _runSceneCommand(
                         () => setSelectedPrimitiveParameter(
@@ -1908,12 +2000,14 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                           value: value,
                         ),
                       ),
+                  onPreviewMaterialFloat: _previewSelectedMaterialFloat,
                   onSetMaterialFloat: (fieldId, value) => _runSceneCommand(
                     () => setSelectedMaterialFloat(
                       fieldId: fieldId,
                       value: value,
                     ),
                   ),
+                  onPreviewMaterialColor: _previewSelectedMaterialColor,
                   onSetMaterialColor: (fieldId, color) => _runSceneCommand(
                     () => setSelectedMaterialColor(
                       fieldId: fieldId,
@@ -1922,9 +2016,13 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                       blue: color.z,
                     ),
                   ),
+                  onPreviewTransformPosition:
+                      _previewSelectedTransformPosition,
                   onSetTransformPosition: (x, y, z) => _runSceneCommand(
                     () => setSelectedTransformPosition(x: x, y: y, z: z),
                   ),
+                  onPreviewTransformRotationDegrees:
+                      _previewSelectedTransformRotationDegrees,
                   onSetTransformRotationDegrees: (x, y, z) => _runSceneCommand(
                     () => setSelectedTransformRotationDegrees(
                       xDegrees: x,
@@ -1932,6 +2030,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                       zDegrees: z,
                     ),
                   ),
+                  onPreviewTransformScale: _previewSelectedTransformScale,
                   onSetTransformScale: (x, y, z) => _runSceneCommand(
                     () => setSelectedTransformScale(x: x, y: y, z: z),
                   ),
@@ -2173,11 +2272,18 @@ class _InspectorPanel extends StatelessWidget {
     required this.onCreateLight,
     required this.onCreateSculpt,
     required this.onRenameSelected,
+    required this.onBeginInteractiveEdit,
+    required this.onPreviewPrimitiveParameter,
     required this.onSetPrimitiveParameter,
+    required this.onPreviewMaterialFloat,
     required this.onSetMaterialFloat,
+    required this.onPreviewMaterialColor,
     required this.onSetMaterialColor,
+    required this.onPreviewTransformPosition,
     required this.onSetTransformPosition,
+    required this.onPreviewTransformRotationDegrees,
     required this.onSetTransformRotationDegrees,
+    required this.onPreviewTransformScale,
     required this.onSetTransformScale,
     required this.onDuplicateSelected,
     required this.onUndo,
@@ -2290,12 +2396,21 @@ class _InspectorPanel extends StatelessWidget {
   final VoidCallback onCreateLight;
   final VoidCallback onCreateSculpt;
   final VoidCallback onRenameSelected;
+  final VoidCallback onBeginInteractiveEdit;
+  final void Function(String parameterKey, double value)
+  onPreviewPrimitiveParameter;
   final void Function(String parameterKey, double value) onSetPrimitiveParameter;
+  final void Function(String fieldId, double value) onPreviewMaterialFloat;
   final void Function(String fieldId, double value) onSetMaterialFloat;
+  final void Function(String fieldId, AppVec3 color) onPreviewMaterialColor;
   final void Function(String fieldId, AppVec3 color) onSetMaterialColor;
+  final void Function(double x, double y, double z) onPreviewTransformPosition;
   final void Function(double x, double y, double z) onSetTransformPosition;
   final void Function(double x, double y, double z)
+  onPreviewTransformRotationDegrees;
+  final void Function(double x, double y, double z)
   onSetTransformRotationDegrees;
+  final void Function(double x, double y, double z) onPreviewTransformScale;
   final void Function(double x, double y, double z) onSetTransformScale;
   final VoidCallback onDuplicateSelected;
   final VoidCallback onUndo;
@@ -2521,8 +2636,12 @@ class _InspectorPanel extends StatelessWidget {
               properties: selectedNodeProperties,
               enabled: !commandInFlight,
               onRenameSelected: onRenameSelected,
+              onBeginInteractiveEdit: onBeginInteractiveEdit,
+              onPreviewPrimitiveParameter: onPreviewPrimitiveParameter,
               onSetPrimitiveParameter: onSetPrimitiveParameter,
+              onPreviewMaterialFloat: onPreviewMaterialFloat,
               onSetMaterialFloat: onSetMaterialFloat,
+              onPreviewMaterialColor: onPreviewMaterialColor,
               onSetMaterialColor: onSetMaterialColor,
               onToggleVisibility: selectedNodeProperties == null
                   ? null
@@ -2581,8 +2700,13 @@ class _InspectorPanel extends StatelessWidget {
             _TransformInspectorPanel(
               properties: selectedNodeProperties,
               enabled: !commandInFlight,
+              onBeginInteractiveEdit: onBeginInteractiveEdit,
+              onPreviewTransformPosition: onPreviewTransformPosition,
               onSetTransformPosition: onSetTransformPosition,
+              onPreviewTransformRotationDegrees:
+                  onPreviewTransformRotationDegrees,
               onSetTransformRotationDegrees: onSetTransformRotationDegrees,
+              onPreviewTransformScale: onPreviewTransformScale,
               onSetTransformScale: onSetTransformScale,
             ),
           const SizedBox(height: ShellTokens.sectionGap),
@@ -2780,8 +2904,12 @@ class _NodeBasicsPanel extends StatefulWidget {
     required this.properties,
     required this.enabled,
     required this.onRenameSelected,
+    required this.onBeginInteractiveEdit,
+    required this.onPreviewPrimitiveParameter,
     required this.onSetPrimitiveParameter,
+    required this.onPreviewMaterialFloat,
     required this.onSetMaterialFloat,
+    required this.onPreviewMaterialColor,
     required this.onSetMaterialColor,
     required this.onToggleVisibility,
     required this.onToggleLock,
@@ -2790,8 +2918,13 @@ class _NodeBasicsPanel extends StatefulWidget {
   final AppSelectedNodePropertiesSnapshot? properties;
   final bool enabled;
   final VoidCallback onRenameSelected;
+  final VoidCallback onBeginInteractiveEdit;
+  final void Function(String parameterKey, double value)
+  onPreviewPrimitiveParameter;
   final void Function(String parameterKey, double value) onSetPrimitiveParameter;
+  final void Function(String fieldId, double value) onPreviewMaterialFloat;
   final void Function(String fieldId, double value) onSetMaterialFloat;
+  final void Function(String fieldId, AppVec3 color) onPreviewMaterialColor;
   final void Function(String fieldId, AppVec3 color) onSetMaterialColor;
   final VoidCallback? onToggleVisibility;
   final VoidCallback? onToggleLock;
@@ -2947,10 +3080,11 @@ class _NodeBasicsPanelState extends State<_NodeBasicsPanel> {
                   min: _primitiveParameterMin,
                   max: _primitiveParameterMax,
                   enabled: widget.enabled,
-                  onChanged: (value) => _setScalarValue(
-                    'primitive:${parameter.key}',
-                    value,
-                  ),
+                  onChangeStart: widget.onBeginInteractiveEdit,
+                  onChanged: (value) {
+                    _setScalarValue('primitive:${parameter.key}', value);
+                    widget.onPreviewPrimitiveParameter(parameter.key, value);
+                  },
                   onChangeEnd: (value) => widget.onSetPrimitiveParameter(
                     parameter.key,
                     value,
@@ -2969,12 +3103,19 @@ class _NodeBasicsPanelState extends State<_NodeBasicsPanel> {
                 keyPrefix: 'material-color',
                 value: _colorValue('material:color', material.color),
                 enabled: widget.enabled,
-                onChanged: (component, value) => _setColorComponent(
-                  'material:color',
-                  material.color,
-                  component,
-                  value,
-                ),
+                onChangeStart: widget.onBeginInteractiveEdit,
+                onChanged: (component, value) {
+                  _setColorComponent(
+                    'material:color',
+                    material.color,
+                    component,
+                    value,
+                  );
+                  widget.onPreviewMaterialColor(
+                    'color',
+                    _colorValue('material:color', material.color),
+                  );
+                },
                 onChangeEnd: (_) => widget.onSetMaterialColor(
                   'color',
                   _colorValue('material:color', material.color),
@@ -2987,8 +3128,11 @@ class _NodeBasicsPanelState extends State<_NodeBasicsPanel> {
                 min: _materialFactorMin,
                 max: _materialFactorMax,
                 enabled: widget.enabled,
-                onChanged: (value) =>
-                    _setScalarValue('material:metallic', value),
+                onChangeStart: widget.onBeginInteractiveEdit,
+                onChanged: (value) {
+                  _setScalarValue('material:metallic', value);
+                  widget.onPreviewMaterialFloat('metallic', value);
+                },
                 onChangeEnd: (value) =>
                     widget.onSetMaterialFloat('metallic', value),
               ),
@@ -2999,8 +3143,11 @@ class _NodeBasicsPanelState extends State<_NodeBasicsPanel> {
                 min: _materialFactorMin,
                 max: _materialFactorMax,
                 enabled: widget.enabled,
-                onChanged: (value) =>
-                    _setScalarValue('material:roughness', value),
+                onChangeStart: widget.onBeginInteractiveEdit,
+                onChanged: (value) {
+                  _setScalarValue('material:roughness', value);
+                  widget.onPreviewMaterialFloat('roughness', value);
+                },
                 onChangeEnd: (value) =>
                     widget.onSetMaterialFloat('roughness', value),
               ),
@@ -3011,8 +3158,11 @@ class _NodeBasicsPanelState extends State<_NodeBasicsPanel> {
                 min: _materialFactorMin,
                 max: _materialFactorMax,
                 enabled: widget.enabled,
-                onChanged: (value) =>
-                    _setScalarValue('material:fresnel', value),
+                onChangeStart: widget.onBeginInteractiveEdit,
+                onChanged: (value) {
+                  _setScalarValue('material:fresnel', value);
+                  widget.onPreviewMaterialFloat('fresnel', value);
+                },
                 onChangeEnd: (value) =>
                     widget.onSetMaterialFloat('fresnel', value),
               ),
@@ -3021,12 +3171,19 @@ class _NodeBasicsPanelState extends State<_NodeBasicsPanel> {
                 keyPrefix: 'material-emissive',
                 value: _colorValue('material:emissive', material.emissive),
                 enabled: widget.enabled,
-                onChanged: (component, value) => _setColorComponent(
-                  'material:emissive',
-                  material.emissive,
-                  component,
-                  value,
-                ),
+                onChangeStart: widget.onBeginInteractiveEdit,
+                onChanged: (component, value) {
+                  _setColorComponent(
+                    'material:emissive',
+                    material.emissive,
+                    component,
+                    value,
+                  );
+                  widget.onPreviewMaterialColor(
+                    'emissive',
+                    _colorValue('material:emissive', material.emissive),
+                  );
+                },
                 onChangeEnd: (_) => widget.onSetMaterialColor(
                   'emissive',
                   _colorValue('material:emissive', material.emissive),
@@ -3042,8 +3199,11 @@ class _NodeBasicsPanelState extends State<_NodeBasicsPanel> {
                 min: _materialFactorMin,
                 max: _emissiveIntensityMax,
                 enabled: widget.enabled,
-                onChanged: (value) =>
-                    _setScalarValue('material:emissive_intensity', value),
+                onChangeStart: widget.onBeginInteractiveEdit,
+                onChanged: (value) {
+                  _setScalarValue('material:emissive_intensity', value);
+                  widget.onPreviewMaterialFloat('emissive_intensity', value);
+                },
                 onChangeEnd: (value) =>
                     widget.onSetMaterialFloat('emissive_intensity', value),
               ),
@@ -3059,16 +3219,25 @@ class _TransformInspectorPanel extends StatefulWidget {
   const _TransformInspectorPanel({
     required this.properties,
     required this.enabled,
+    required this.onBeginInteractiveEdit,
+    required this.onPreviewTransformPosition,
     required this.onSetTransformPosition,
+    required this.onPreviewTransformRotationDegrees,
     required this.onSetTransformRotationDegrees,
+    required this.onPreviewTransformScale,
     required this.onSetTransformScale,
   });
 
   final AppSelectedNodePropertiesSnapshot? properties;
   final bool enabled;
+  final VoidCallback onBeginInteractiveEdit;
+  final void Function(double x, double y, double z) onPreviewTransformPosition;
   final void Function(double x, double y, double z) onSetTransformPosition;
   final void Function(double x, double y, double z)
+  onPreviewTransformRotationDegrees;
+  final void Function(double x, double y, double z)
   onSetTransformRotationDegrees;
+  final void Function(double x, double y, double z) onPreviewTransformScale;
   final void Function(double x, double y, double z) onSetTransformScale;
 
   @override
@@ -3171,8 +3340,15 @@ class _TransformInspectorPanelState extends State<_TransformInspectorPanel> {
               min: _transformTranslationMin,
               max: _transformTranslationMax,
               enabled: widget.enabled,
-              onChanged: (axis, value) =>
-                  _setDraftValue('position:$axis', value),
+              onChangeStart: widget.onBeginInteractiveEdit,
+              onChanged: (axis, value) {
+                _setDraftValue('position:$axis', value);
+                widget.onPreviewTransformPosition(
+                  _draftValue('position:x', transform.position.x),
+                  _draftValue('position:y', transform.position.y),
+                  _draftValue('position:z', transform.position.z),
+                );
+              },
               onChangeEnd: () => widget.onSetTransformPosition(
                 _draftValue('position:x', transform.position.x),
                 _draftValue('position:y', transform.position.y),
@@ -3192,8 +3368,15 @@ class _TransformInspectorPanelState extends State<_TransformInspectorPanel> {
               min: _transformRotationDegreesMin,
               max: _transformRotationDegreesMax,
               enabled: widget.enabled,
-              onChanged: (axis, value) =>
-                  _setDraftValue('rotation:$axis', value),
+              onChangeStart: widget.onBeginInteractiveEdit,
+              onChanged: (axis, value) {
+                _setDraftValue('rotation:$axis', value);
+                widget.onPreviewTransformRotationDegrees(
+                  _draftValue('rotation:x', transform.rotationDegrees.x),
+                  _draftValue('rotation:y', transform.rotationDegrees.y),
+                  _draftValue('rotation:z', transform.rotationDegrees.z),
+                );
+              },
               onChangeEnd: () => widget.onSetTransformRotationDegrees(
                 _draftValue('rotation:x', transform.rotationDegrees.x),
                 _draftValue('rotation:y', transform.rotationDegrees.y),
@@ -3219,7 +3402,15 @@ class _TransformInspectorPanelState extends State<_TransformInspectorPanel> {
                 min: _primitiveParameterMin,
                 max: _primitiveParameterMax,
                 enabled: widget.enabled,
-                onChanged: (axis, value) => _setDraftValue('scale:$axis', value),
+                onChangeStart: widget.onBeginInteractiveEdit,
+                onChanged: (axis, value) {
+                  _setDraftValue('scale:$axis', value);
+                  widget.onPreviewTransformScale(
+                    _draftValue('scale:x', scale.x),
+                    _draftValue('scale:y', scale.y),
+                    _draftValue('scale:z', scale.z),
+                  );
+                },
                 onChangeEnd: () => widget.onSetTransformScale(
                   _draftValue('scale:x', scale.x),
                   _draftValue('scale:y', scale.y),
@@ -3247,6 +3438,7 @@ class _Vector3PropertyEditor extends StatelessWidget {
     required this.min,
     required this.max,
     required this.enabled,
+    required this.onChangeStart,
     required this.onChanged,
     required this.onChangeEnd,
   });
@@ -3258,6 +3450,7 @@ class _Vector3PropertyEditor extends StatelessWidget {
   final double min;
   final double max;
   final bool enabled;
+  final VoidCallback onChangeStart;
   final void Function(String axis, double value) onChanged;
   final VoidCallback onChangeEnd;
 
@@ -3287,6 +3480,7 @@ class _Vector3PropertyEditor extends StatelessWidget {
               min: min,
               max: max,
               enabled: enabled,
+              onChangeStart: onChangeStart,
               onChanged: (value) => onChanged(axis.$3, value),
               onChangeEnd: (_) => onChangeEnd(),
             ),
@@ -3304,6 +3498,7 @@ class _ScalarPropertyEditor extends StatelessWidget {
     required this.min,
     required this.max,
     required this.enabled,
+    required this.onChangeStart,
     required this.onChanged,
     required this.onChangeEnd,
   });
@@ -3313,6 +3508,7 @@ class _ScalarPropertyEditor extends StatelessWidget {
   final double min;
   final double max;
   final bool enabled;
+  final VoidCallback onChangeStart;
   final ValueChanged<double> onChanged;
   final ValueChanged<double> onChangeEnd;
 
@@ -3328,6 +3524,7 @@ class _ScalarPropertyEditor extends StatelessWidget {
             value: value.clamp(min, max),
             min: min,
             max: max,
+            onChangeStart: enabled ? (_) => onChangeStart() : null,
             onChanged: enabled ? onChanged : null,
             onChangeEnd: enabled ? onChangeEnd : null,
           ),
@@ -3343,6 +3540,7 @@ class _ColorPropertyEditor extends StatelessWidget {
     required this.keyPrefix,
     required this.value,
     required this.enabled,
+    required this.onChangeStart,
     required this.onChanged,
     required this.onChangeEnd,
   });
@@ -3351,6 +3549,7 @@ class _ColorPropertyEditor extends StatelessWidget {
   final String keyPrefix;
   final AppVec3 value;
   final bool enabled;
+  final VoidCallback onChangeStart;
   final void Function(int component, double value) onChanged;
   final ValueChanged<AppVec3> onChangeEnd;
 
@@ -3383,6 +3582,7 @@ class _ColorPropertyEditor extends StatelessWidget {
                   ),
                   min: _materialFactorMin,
                   max: _materialFactorMax,
+                  onChangeStart: enabled ? (_) => onChangeStart() : null,
                   onChanged: enabled
                       ? (nextValue) => onChanged(index, nextValue)
                       : null,

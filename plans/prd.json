@@ -291,7 +291,7 @@
     "category": "performance",
     "description": "Close Flutter-vs-egui live-edit responsiveness regressions for bridge-driven property changes.\n\nSteps:\n1. Measure end-to-end latency for representative hot edits in egui and Flutter: primitive parameter, material scalar, material color, and transform slider changes.\n2. Add an incremental bridge update path and interactive edit-session flow so Flutter can push preview changes during drag without returning a full scene snapshot.\n3. Keep undo/history semantics coalesced to one logical edit per drag while keeping viewport feedback live during the drag.\n4. Remove full snapshot fetches from migrated live-edit commands and confirm Flutter visual feedback updates during the drag, not after release.",
     "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build`. If the bridge API changes, run `apps/flutter/scripts/frb_codegen.ps1`. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, `fvm flutter build windows --debug`, and `fvm flutter test integration_test -d windows` when viewport or interaction paths change. Manual: drag color, material, render, and transform controls in Flutter and confirm the viewport responds during the drag with no post-release pause versus the current behavior.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 43,
