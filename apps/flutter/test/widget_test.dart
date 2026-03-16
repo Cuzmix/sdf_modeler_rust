@@ -777,6 +777,7 @@ class _MockRustApi extends RustLibApi {
   int previewSelectedTransformPositionCalls = 0;
   int previewSelectedTransformRotationDegreesCalls = 0;
   int previewSelectedTransformScaleCalls = 0;
+  int previewSelectedTransformCalls = 0;
   int renameNodeCalls = 0;
   int setSelectedPrimitiveParameterCalls = 0;
   int setSelectedMaterialFloatCalls = 0;
@@ -784,6 +785,7 @@ class _MockRustApi extends RustLibApi {
   int setSelectedTransformPositionCalls = 0;
   int setSelectedTransformRotationDegreesCalls = 0;
   int setSelectedTransformScaleCalls = 0;
+  int setSelectedTransformCalls = 0;
   int setManipulatorModeCalls = 0;
   int toggleManipulatorSpaceCalls = 0;
   int nudgeManipulatorPivotOffsetCalls = 0;
@@ -888,6 +890,7 @@ class _MockRustApi extends RustLibApi {
     previewSelectedTransformPositionCalls = 0;
     previewSelectedTransformRotationDegreesCalls = 0;
     previewSelectedTransformScaleCalls = 0;
+    previewSelectedTransformCalls = 0;
     renameNodeCalls = 0;
     setSelectedPrimitiveParameterCalls = 0;
     setSelectedMaterialFloatCalls = 0;
@@ -895,6 +898,7 @@ class _MockRustApi extends RustLibApi {
     setSelectedTransformPositionCalls = 0;
     setSelectedTransformRotationDegreesCalls = 0;
     setSelectedTransformScaleCalls = 0;
+    setSelectedTransformCalls = 0;
     setManipulatorModeCalls = 0;
     toggleManipulatorSpaceCalls = 0;
     nudgeManipulatorPivotOffsetCalls = 0;
@@ -955,6 +959,43 @@ class _MockRustApi extends RustLibApi {
         as Map<String, dynamic>;
     apply(settings);
     snapshot['settings'] = settings;
+    currentSnapshot = jsonEncode(snapshot);
+    return _currentSceneSnapshot();
+  }
+
+  static Map<String, Object?> _vec3Payload(AppVec3 value) => <String, Object?>{
+        'x': value.x,
+        'y': value.y,
+        'z': value.z,
+      };
+
+  AppSceneSnapshot _updateTransformSnapshot({
+    required AppVec3 position,
+    required AppVec3 rotationDegrees,
+    AppVec3? scale,
+  }) {
+    final snapshot = jsonDecode(currentSnapshot) as Map<String, dynamic>;
+    final selectedNodeProperties = Map<String, dynamic>.from(
+      snapshot['selected_node_properties'] as Map<String, dynamic>? ??
+          <String, dynamic>{},
+    );
+    final transform = Map<String, dynamic>.from(
+      selectedNodeProperties['transform'] as Map<String, dynamic>? ??
+          <String, dynamic>{
+            'position_label': 'Translation',
+            'position': _vec3Payload(const AppVec3(x: 0, y: 0, z: 0)),
+            'rotation_degrees': _vec3Payload(const AppVec3(x: 0, y: 0, z: 0)),
+          },
+    );
+
+    transform['position'] = _vec3Payload(position);
+    transform['rotation_degrees'] = _vec3Payload(rotationDegrees);
+    if (scale != null) {
+      transform['scale'] = _vec3Payload(scale);
+    }
+
+    selectedNodeProperties['transform'] = transform;
+    snapshot['selected_node_properties'] = selectedNodeProperties;
     currentSnapshot = jsonEncode(snapshot);
     return _currentSceneSnapshot();
   }
@@ -1698,6 +1739,34 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
+  AppSceneSnapshot crateApiSimpleSetSelectedTransform({
+    required AppVec3 position,
+    required AppVec3 rotationDegrees,
+    AppVec3? scale,
+  }) {
+    setSelectedTransformCalls += 1;
+    return _updateTransformSnapshot(
+      position: position,
+      rotationDegrees: rotationDegrees,
+      scale: scale,
+    );
+  }
+
+  @override
+  void crateApiSimplePreviewSelectedTransform({
+    required AppVec3 position,
+    required AppVec3 rotationDegrees,
+    AppVec3? scale,
+  }) {
+    previewSelectedTransformCalls += 1;
+    _updateTransformSnapshot(
+      position: position,
+      rotationDegrees: rotationDegrees,
+      scale: scale,
+    );
+  }
+
+  @override
   AppSceneSnapshot crateApiSimpleClearSelectedLightCookie() {
     clearSelectedLightCookieCalls += 1;
     return _currentSceneSnapshot();
@@ -2397,6 +2466,92 @@ void main() {
 
     expect(mockApi.nudgeSelectedRotationDegreesCalls, 1);
     expect(mockApi.currentSnapshot, _MockRustApi._selectedTransformRotatedSnapshot);
+    expect(requestFrameCalls, greaterThan(0));
+  });
+
+  testWidgets('viewport gizmo drags preview and commit without orbiting', (
+    WidgetTester tester,
+  ) async {
+    mockApi.currentSnapshot = _MockRustApi._selectedTransformManipulatorSnapshot;
+
+    await pumpApp(tester, logicalSize: const Size(1400, 900));
+
+    final dynamic state = tester.state(find.byType(BridgeStatusPage));
+    final viewportRect = tester.getRect(find.byType(ViewportSurface));
+    var viewportWidth = viewportRect.width;
+    var viewportHeight = viewportWidth / (16.0 / 9.0);
+    if (viewportHeight > viewportRect.height) {
+      viewportHeight = viewportRect.height;
+      viewportWidth = viewportHeight * (16.0 / 9.0);
+    }
+    final innerViewportTopLeft = Offset(
+      viewportRect.left + (viewportRect.width - viewportWidth) * 0.5,
+      viewportRect.top + (viewportRect.height - viewportHeight) * 0.5,
+    );
+    final localViewportCenter = Offset(
+      viewportWidth * 0.5,
+      viewportHeight * 0.5,
+    );
+    final localHandlePosition = <Offset?>[
+      state.debugViewportGizmoAxisHandlePosition('x') as Offset?,
+      state.debugViewportGizmoAxisHandlePosition('y') as Offset?,
+      state.debugViewportGizmoAxisHandlePosition('z') as Offset?,
+    ]
+        .whereType<Offset>()
+        .fold<Offset?>(
+          null,
+          (bestHandle, candidate) {
+            if (bestHandle == null) {
+              return candidate;
+            }
+            final candidateDistance =
+                (candidate - localViewportCenter).distance;
+            final bestDistance = (bestHandle - localViewportCenter).distance;
+            return candidateDistance > bestDistance ? candidate : bestHandle;
+          },
+        );
+    expect(localHandlePosition, isNotNull);
+
+    final globalHandlePosition = innerViewportTopLeft + localHandlePosition!;
+    final dragDirection =
+        globalHandlePosition - (innerViewportTopLeft + localViewportCenter);
+    final dragDistance = dragDirection.distance;
+    expect(dragDistance, greaterThan(0.0));
+    final dragStep = Offset(
+      dragDirection.dx / dragDistance * 36.0,
+      dragDirection.dy / dragDistance * 36.0,
+    );
+
+    final gesture = await tester.startGesture(
+      globalHandlePosition,
+      kind: PointerDeviceKind.mouse,
+      buttons: kPrimaryMouseButton,
+    );
+    await tester.pump();
+    await gesture.moveBy(dragStep);
+    await tester.pump();
+    await gesture.moveBy(dragStep);
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    expect(mockApi.beginInteractiveEditCalls, greaterThan(0));
+    expect(mockApi.previewSelectedTransformCalls, greaterThan(0));
+    expect(mockApi.setSelectedTransformCalls, 1);
+    expect(mockApi.previewSelectedTransformPositionCalls, 0);
+    expect(mockApi.setSelectedTransformPositionCalls, 0);
+    expect(orbitCalls, 0);
+
+    final transform = parseSceneSnapshotJson(
+      mockApi.currentSnapshot,
+    ).selectedNodeProperties?.transform;
+    expect(transform, isNotNull);
+    expect(
+      transform!.position.x.abs() +
+          transform.position.y.abs() +
+          transform.position.z.abs(),
+      greaterThan(0.01),
+    );
     expect(requestFrameCalls, greaterThan(0));
   });
 

@@ -1,6 +1,6 @@
 use crate::bridge_state::app_bridge;
-use crate::api::mirrors::{AppSceneSnapshot, AppWorkflowStatusSnapshot};
-use sdf_modeler::app_bridge::AppBridge as HostAppBridge;
+use crate::api::mirrors::{AppSceneSnapshot, AppVec3, AppWorkflowStatusSnapshot};
+use sdf_modeler::app_bridge::{AppBridge as HostAppBridge, AppVec3 as HostAppVec3};
 use sdf_modeler::{CsgOp, LightType, ModifierKind};
 
 fn current_scene_snapshot(bridge: &mut HostAppBridge) -> AppSceneSnapshot {
@@ -585,6 +585,43 @@ pub fn set_selected_transform_scale(x: f32, y: f32, z: f32) -> AppSceneSnapshot 
 pub fn preview_selected_transform_scale(x: f32, y: f32, z: f32) {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.preview_selected_transform_scale(x, y, z);
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_selected_transform(
+    position: AppVec3,
+    rotation_degrees: AppVec3,
+    scale: Option<AppVec3>,
+) -> AppSceneSnapshot {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_selected_transform(
+        HostAppVec3::new(position.x, position.y, position.z),
+        HostAppVec3::new(
+            rotation_degrees.x,
+            rotation_degrees.y,
+            rotation_degrees.z,
+        ),
+        scale.map(|value| HostAppVec3::new(value.x, value.y, value.z)),
+    );
+    current_scene_snapshot(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn preview_selected_transform(
+    position: AppVec3,
+    rotation_degrees: AppVec3,
+    scale: Option<AppVec3>,
+) {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.preview_selected_transform(
+        HostAppVec3::new(position.x, position.y, position.z),
+        HostAppVec3::new(
+            rotation_degrees.x,
+            rotation_degrees.y,
+            rotation_degrees.z,
+        ),
+        scale.map(|value| HostAppVec3::new(value.x, value.y, value.z)),
+    );
 }
 
 #[flutter_rust_bridge::frb(sync)]

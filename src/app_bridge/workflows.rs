@@ -61,7 +61,10 @@ impl SculptConvertDialogState {
             target,
             target_name,
             mode: SculptConvertMode::BakeActiveNode,
-            resolution: 64u32.clamp(MIN_VOXEL_RESOLUTION, max_resolution.max(MIN_VOXEL_RESOLUTION)),
+            resolution: 64u32.clamp(
+                MIN_VOXEL_RESOLUTION,
+                max_resolution.max(MIN_VOXEL_RESOLUTION),
+            ),
             min_resolution: MIN_VOXEL_RESOLUTION,
             max_resolution: max_resolution.max(MIN_VOXEL_RESOLUTION),
         }

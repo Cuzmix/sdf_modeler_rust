@@ -19,6 +19,10 @@ typedef ViewportHoverCallback = void Function(
   Size logicalViewportSize,
 );
 typedef ViewportScrollCallback = void Function(double deltaY);
+typedef ViewportPointerInterceptCallback = bool Function(
+  PointerEvent event,
+  Size logicalViewportSize,
+);
 
 class ViewportSurface extends StatefulWidget {
   const ViewportSurface({
@@ -32,6 +36,7 @@ class ViewportSurface extends StatefulWidget {
     required this.onHoverExit,
     required this.onScroll,
     required this.onInteractionEnd,
+    this.onPointerIntercept,
     this.overlay,
     this.controlsOverlay,
   });
@@ -45,6 +50,7 @@ class ViewportSurface extends StatefulWidget {
   final VoidCallback onHoverExit;
   final ViewportScrollCallback onScroll;
   final VoidCallback onInteractionEnd;
+  final ViewportPointerInterceptCallback? onPointerIntercept;
   final Widget? overlay;
   final Widget? controlsOverlay;
 
@@ -69,6 +75,10 @@ class _ViewportSurfaceState extends State<ViewportSurface> {
   bool _touchTapCanceled = false;
 
   void _handlePointerDown(PointerDownEvent event) {
+    if (_interceptPointerEvent(event)) {
+      _resetMouseState();
+      return;
+    }
     if (ShellGestureContract.isTouchLike(event.kind)) {
       _handleTouchPointerDown(event);
       return;
@@ -84,6 +94,9 @@ class _ViewportSurfaceState extends State<ViewportSurface> {
   }
 
   void _handlePointerMove(PointerMoveEvent event) {
+    if (_interceptPointerEvent(event)) {
+      return;
+    }
     if (ShellGestureContract.isTouchLike(event.kind)) {
       _handleTouchPointerMove(event);
       return;
@@ -146,6 +159,11 @@ class _ViewportSurfaceState extends State<ViewportSurface> {
   }
 
   void _handlePointerUp(PointerUpEvent event) {
+    if (_interceptPointerEvent(event)) {
+      _resetMouseState();
+      widget.onInteractionEnd();
+      return;
+    }
     if (ShellGestureContract.isTouchLike(event.kind)) {
       _handleTouchPointerUp(event);
       return;
@@ -171,22 +189,25 @@ class _ViewportSurfaceState extends State<ViewportSurface> {
   }
 
   void _handlePointerCancel(PointerCancelEvent event) {
+    if (_interceptPointerEvent(event)) {
+      _resetMouseState();
+      widget.onInteractionEnd();
+      return;
+    }
     if (ShellGestureContract.isTouchLike(event.kind)) {
       _handleTouchPointerCancel(event);
       return;
     }
 
-    _pressLocalPosition = null;
-    _lastDragLocalPosition = null;
-    _pressPointerKind = null;
-    _pressButtons = 0;
-    _dragGestureStarted = false;
-    _tapCanceled = false;
-    _lastHoverLocalPosition = null;
+    _resetMouseState();
     widget.onInteractionEnd();
   }
 
   void _handlePointerSignal(PointerSignalEvent event) {
+    if (_interceptPointerEvent(event)) {
+      widget.onInteractionEnd();
+      return;
+    }
     if (event is! PointerScrollEvent) {
       return;
     }
@@ -196,6 +217,9 @@ class _ViewportSurfaceState extends State<ViewportSurface> {
   }
 
   void _handleMouseHover(PointerHoverEvent event) {
+    if (_interceptPointerEvent(event)) {
+      return;
+    }
     if (_pressButtons != 0) {
       return;
     }
@@ -212,12 +236,33 @@ class _ViewportSurfaceState extends State<ViewportSurface> {
   }
 
   void _handleMouseExit(PointerExitEvent event) {
+    if (_interceptPointerEvent(event)) {
+      return;
+    }
     _lastHoverLocalPosition = null;
     if (_pressButtons != 0) {
       return;
     }
 
     widget.onHoverExit();
+  }
+
+  bool _interceptPointerEvent(PointerEvent event) {
+    final intercept = widget.onPointerIntercept;
+    if (intercept == null) {
+      return false;
+    }
+    return intercept(event, _currentViewportSize);
+  }
+
+  void _resetMouseState() {
+    _pressLocalPosition = null;
+    _lastDragLocalPosition = null;
+    _pressPointerKind = null;
+    _pressButtons = 0;
+    _dragGestureStarted = false;
+    _tapCanceled = false;
+    _lastHoverLocalPosition = null;
   }
 
   void _handleTouchPointerDown(PointerDownEvent event) {

@@ -26,6 +26,7 @@ import 'package:sdf_modeler_flutter/src/texture/texture_bridge.dart';
 import 'package:sdf_modeler_flutter/src/texture/texture_viewport_event.dart';
 import 'package:sdf_modeler_flutter/src/texture/texture_viewport_feedback.dart';
 import 'package:sdf_modeler_flutter/src/viewport/viewport_feedback_overlay.dart';
+import 'package:sdf_modeler_flutter/src/viewport/viewport_transform_gizmo.dart';
 import 'package:sdf_modeler_flutter/src/viewport/viewport_surface.dart';
 import 'package:sdf_modeler_flutter/src/viewport/viewport_tool_overlay.dart';
 
@@ -201,6 +202,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
       ValueNotifier<AppSceneSnapshot?>(null);
   final ValueNotifier<_ViewportOverlayModel> _viewportOverlayNotifier =
       ValueNotifier<_ViewportOverlayModel>(const _ViewportOverlayModel());
+  late final ViewportTransformGizmoController _viewportTransformGizmoController;
   int? _textureId;
   StreamSubscription<TextureViewportEvent>? _textureEventSubscription;
   Timer? _workflowPollTimer;
@@ -229,6 +231,12 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
   @override
   void initState() {
     super.initState();
+    _viewportTransformGizmoController = ViewportTransformGizmoController(
+      beginInteractiveEdit: _beginInteractiveEditSession,
+      previewTransform: _previewSelectedTransform,
+      commitTransform: _setSelectedTransform,
+      onViewportInteraction: _beginViewportInteraction,
+    );
     _textureEventSubscription = TextureBridge.instance.events.listen(
       _handleTextureEvent,
       onError: _handleTextureEventError,
@@ -483,6 +491,15 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
 
   void debugHandleTextureEvent(TextureViewportEvent event) {
     _handleTextureEvent(event);
+  }
+
+  Offset? debugViewportGizmoAxisHandlePosition(String axisId) {
+    return _viewportTransformGizmoController.debugAxisHandlePosition(
+      axisId,
+      _lastLogicalViewportSize,
+      snapshot: _sceneSnapshot,
+      feedback: _viewportOverlayNotifier.value.feedback,
+    );
   }
 
   double? _framesPerSecondFromFrameTime(double frameTimeMs) {
@@ -1016,6 +1033,26 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
   void _previewSelectedTransformScale(double x, double y, double z) {
     _runPreviewSceneCommand(
       () => previewSelectedTransformScale(x: x, y: y, z: z),
+    );
+  }
+
+  void _previewSelectedTransform(ViewportGizmoTransformData transform) {
+    _runPreviewSceneCommand(
+      () => previewSelectedTransform(
+        position: transform.position,
+        rotationDegrees: transform.rotationDegrees,
+        scale: transform.scale,
+      ),
+    );
+  }
+
+  Future<void> _setSelectedTransform(ViewportGizmoTransformData transform) {
+    return _runSceneCommand(
+      () => setSelectedTransform(
+        position: transform.position,
+        rotationDegrees: transform.rotationDegrees,
+        scale: transform.scale,
+      ),
     );
   }
 
@@ -1636,19 +1673,40 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
           onHoverExit: _handleViewportHoverExit,
           onScroll: _handleViewportScroll,
           onInteractionEnd: _handleViewportInteractionEnd,
-          overlay: ViewportFeedbackOverlay(
-            feedback: overlayState.feedback,
-            interactionPhase: showPerformanceOverlay
-                ? overlayState.interactionPhase
-                : 'idle',
-            frameTimeMs: showPerformanceOverlay ? overlayState.frameTimeMs : null,
-            framesPerSecond: showPerformanceOverlay
-                ? overlayState.framesPerSecond
-                : null,
-            droppedFrameCount: showPerformanceOverlay
-                ? overlayState.droppedFrameCount
-                : 0,
-            hostError: overlayState.hostError,
+          onPointerIntercept: (event, logicalViewportSize) =>
+              _viewportTransformGizmoController.handlePointerEvent(
+                event,
+                logicalViewportSize,
+                snapshot: snapshot,
+                feedback: overlayState.feedback,
+                enabled: !_commandInFlight,
+              ),
+          overlay: Stack(
+            fit: StackFit.expand,
+            children: [
+              ViewportTransformGizmoOverlay(
+                controller: _viewportTransformGizmoController,
+                snapshot: snapshot,
+                feedback: overlayState.feedback,
+                enabled: !_commandInFlight,
+              ),
+              ViewportFeedbackOverlay(
+                feedback: overlayState.feedback,
+                interactionPhase: showPerformanceOverlay
+                    ? overlayState.interactionPhase
+                    : 'idle',
+                frameTimeMs: showPerformanceOverlay
+                    ? overlayState.frameTimeMs
+                    : null,
+                framesPerSecond: showPerformanceOverlay
+                    ? overlayState.framesPerSecond
+                    : null,
+                droppedFrameCount: showPerformanceOverlay
+                    ? overlayState.droppedFrameCount
+                    : 0,
+                hostError: overlayState.hostError,
+              ),
+            ],
           ),
           controlsOverlay: ViewportToolOverlay(
             tool: snapshot?.tool,
@@ -2022,6 +2080,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     _textureEventSubscription?.cancel();
     _workflowPollTimer?.cancel();
     _interactionCooldownTimer?.cancel();
+    _viewportTransformGizmoController.dispose();
     final activeTextureId = _textureId;
     if (activeTextureId != null) {
       unawaited(TextureBridge.instance.disposeTexture(activeTextureId));

@@ -399,6 +399,26 @@ void previewSelectedTransformScale({
   z: z,
 );
 
+AppSceneSnapshot setSelectedTransform({
+  required AppVec3 position,
+  required AppVec3 rotationDegrees,
+  AppVec3? scale,
+}) => RustLib.instance.api.crateApiSimpleSetSelectedTransform(
+  position: position,
+  rotationDegrees: rotationDegrees,
+  scale: scale,
+);
+
+void previewSelectedTransform({
+  required AppVec3 position,
+  required AppVec3 rotationDegrees,
+  AppVec3? scale,
+}) => RustLib.instance.api.crateApiSimplePreviewSelectedTransform(
+  position: position,
+  rotationDegrees: rotationDegrees,
+  scale: scale,
+);
+
 AppSceneSnapshot setSelectedLightType({required String lightTypeId}) => RustLib
     .instance
     .api

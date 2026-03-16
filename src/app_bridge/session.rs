@@ -1824,6 +1824,24 @@ impl AppBridge {
         })
     }
 
+    pub fn set_selected_transform(
+        &mut self,
+        position: AppVec3,
+        rotation_degrees: AppVec3,
+        scale: Option<AppVec3>,
+    ) -> bool {
+        self.apply_selected_transform_update(position, rotation_degrees, scale, false)
+    }
+
+    pub fn preview_selected_transform(
+        &mut self,
+        position: AppVec3,
+        rotation_degrees: AppVec3,
+        scale: Option<AppVec3>,
+    ) -> bool {
+        self.apply_selected_transform_update(position, rotation_degrees, scale, true)
+    }
+
     pub fn set_selected_light_type(&mut self, light_type_id: &str) -> bool {
         let Some(next_light_type) = parse_light_type_id(light_type_id) else {
             return false;
@@ -2248,6 +2266,76 @@ impl AppBridge {
         };
 
         self.set_selected_transform_scale(scale.x + delta_x, scale.y + delta_y, scale.z + delta_z)
+    }
+
+    fn apply_selected_transform_update(
+        &mut self,
+        position: AppVec3,
+        rotation_degrees: AppVec3,
+        scale: Option<AppVec3>,
+        interactive_preview: bool,
+    ) -> bool {
+        let next_position = Vec3::new(position.x, position.y, position.z);
+        let next_rotation = Vec3::new(
+            rotation_degrees.x.to_radians(),
+            rotation_degrees.y.to_radians(),
+            rotation_degrees.z.to_radians(),
+        );
+        let next_scale = scale.map(|value| {
+            Vec3::new(
+                value
+                    .x
+                    .clamp(PRIMITIVE_PARAMETER_MIN, PRIMITIVE_PARAMETER_MAX),
+                value
+                    .y
+                    .clamp(PRIMITIVE_PARAMETER_MIN, PRIMITIVE_PARAMETER_MAX),
+                value
+                    .z
+                    .clamp(PRIMITIVE_PARAMETER_MIN, PRIMITIVE_PARAMETER_MAX),
+            )
+        });
+
+        let apply_update = move |bridge: &mut Self| {
+            let Some(selected_node) = bridge.selected_node else {
+                return false;
+            };
+            let Some(node) = bridge.scene.nodes.get_mut(&selected_node) else {
+                return false;
+            };
+
+            match &mut node.data {
+                NodeData::Primitive {
+                    position, rotation, ..
+                }
+                | NodeData::Sculpt {
+                    position, rotation, ..
+                } => {
+                    *position = next_position;
+                    *rotation = next_rotation;
+                    true
+                }
+                NodeData::Transform {
+                    translation,
+                    rotation,
+                    scale,
+                    ..
+                } => {
+                    *translation = next_position;
+                    *rotation = next_rotation;
+                    if let Some(next_scale) = next_scale {
+                        *scale = next_scale;
+                    }
+                    true
+                }
+                _ => false,
+            }
+        };
+
+        if interactive_preview {
+            self.run_interactive_preview_command(apply_update)
+        } else {
+            self.run_document_command(apply_update)
+        }
     }
 
     pub fn toggle_node_visibility(&mut self, node_id: u64) {
