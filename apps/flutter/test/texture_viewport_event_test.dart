@@ -12,8 +12,32 @@ void main() {
       'droppedFrameCount': 3,
       'interactionPhase': 'interacting',
       'sceneStateChanged': true,
-      'feedbackJson':
-          '{"camera":{"yaw":0.5,"pitch":0.25,"roll":0.0,"distance":5.5,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":1.0,"y":2.0,"z":3.0}},"selected_node":{"id":9,"name":"Sphere 2","kind_label":"Sphere","visible":true,"locked":false},"hovered_node":{"id":10,"name":"Box 1","kind_label":"Box","visible":true,"locked":false}}',
+      'feedback': <String, Object?>{
+        'camera': <String, Object?>{
+          'yaw': 0.5,
+          'pitch': 0.25,
+          'roll': 0.0,
+          'distance': 5.5,
+          'fov_degrees': 45.0,
+          'orthographic': false,
+          'target': <String, Object?>{'x': 0.0, 'y': 0.0, 'z': 0.0},
+          'eye': <String, Object?>{'x': 1.0, 'y': 2.0, 'z': 3.0},
+        },
+        'selected_node': <String, Object?>{
+          'id': 9,
+          'name': 'Sphere 2',
+          'kind_label': 'Sphere',
+          'visible': true,
+          'locked': false,
+        },
+        'hovered_node': <String, Object?>{
+          'id': 10,
+          'name': 'Box 1',
+          'kind_label': 'Box',
+          'visible': true,
+          'locked': false,
+        },
+      },
     });
 
     expect(event.textureId, 7);
@@ -41,7 +65,6 @@ void main() {
       'droppedFrameCount': 0,
       'interactionActive': false,
       'sceneStateChanged': false,
-      'feedbackJson': '',
     });
 
     expect(event.interactionPhase, 'idle');

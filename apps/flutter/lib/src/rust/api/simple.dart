@@ -7,20 +7,14 @@ import '../frb_generated.dart';
 import 'mirrors.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `parse_light_id`, `parse_modifier_id`, `parse_operation_id`
+// These functions are ignored because they are not marked as `pub`: `current_scene_snapshot`, `current_workflow_status`, `parse_light_id`, `parse_modifier_id`, `parse_operation_id`
 
 String ping() => RustLib.instance.api.crateApiSimplePing();
 
 String bridgeVersion() => RustLib.instance.api.crateApiSimpleBridgeVersion();
 
-String sceneSnapshotJson() =>
-    RustLib.instance.api.crateApiSimpleSceneSnapshotJson();
-
 AppSceneSnapshot sceneSnapshot() =>
     RustLib.instance.api.crateApiSimpleSceneSnapshot();
-
-String workflowStatusJson() =>
-    RustLib.instance.api.crateApiSimpleWorkflowStatusJson();
 
 AppWorkflowStatusSnapshot workflowStatus() =>
     RustLib.instance.api.crateApiSimpleWorkflowStatus();

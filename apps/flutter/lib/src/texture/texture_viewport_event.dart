@@ -43,7 +43,7 @@ class TextureViewportEvent {
       interactionPhase: _readInteractionPhase(eventMap),
       sceneStateChanged: _readBool(eventMap, 'sceneStateChanged'),
       hostError: _readOptionalString(eventMap, 'hostError'),
-      feedback: _readFeedback(eventMap, 'feedbackJson'),
+      feedback: _readFeedback(eventMap, 'feedback'),
     );
   }
 
@@ -109,17 +109,6 @@ class TextureViewportEvent {
     if (value == null) {
       return null;
     }
-
-    if (value is! String) {
-      throw FormatException(
-        'Texture viewport event key "$key" must be a JSON string.',
-      );
-    }
-
-    if (value.isEmpty) {
-      return null;
-    }
-
-    return TextureViewportFeedback.fromJsonString(value);
+    return TextureViewportFeedback.fromDynamic(value);
   }
 }

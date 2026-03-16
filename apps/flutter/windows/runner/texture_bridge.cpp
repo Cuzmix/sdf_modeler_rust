@@ -26,6 +26,56 @@ void InsertMapValue(flutter::EncodableMap& map,
                     flutter::EncodableValue value) {
   map[flutter::EncodableValue(std::string(key))] = std::move(value);
 }
+
+flutter::EncodableMap BuildVec3Map(const NativeViewportVec3& value) {
+  flutter::EncodableMap result;
+  InsertMapValue(result, "x", flutter::EncodableValue(static_cast<double>(value.x)));
+  InsertMapValue(result, "y", flutter::EncodableValue(static_cast<double>(value.y)));
+  InsertMapValue(result, "z", flutter::EncodableValue(static_cast<double>(value.z)));
+  return result;
+}
+
+flutter::EncodableMap BuildCameraMap(const NativeViewportCameraSnapshot& value) {
+  flutter::EncodableMap result;
+  InsertMapValue(result, "yaw", flutter::EncodableValue(static_cast<double>(value.yaw)));
+  InsertMapValue(result, "pitch", flutter::EncodableValue(static_cast<double>(value.pitch)));
+  InsertMapValue(result, "roll", flutter::EncodableValue(static_cast<double>(value.roll)));
+  InsertMapValue(result, "distance",
+                 flutter::EncodableValue(static_cast<double>(value.distance)));
+  InsertMapValue(result, "fov_degrees",
+                 flutter::EncodableValue(static_cast<double>(value.fov_degrees)));
+  InsertMapValue(result, "orthographic", flutter::EncodableValue(value.orthographic != 0));
+  InsertMapValue(result, "target", flutter::EncodableValue(BuildVec3Map(value.target)));
+  InsertMapValue(result, "eye", flutter::EncodableValue(BuildVec3Map(value.eye)));
+  return result;
+}
+
+flutter::EncodableMap BuildNodeMap(const NativeViewportNode& value) {
+  flutter::EncodableMap result;
+  InsertMapValue(result, "id", flutter::EncodableValue(static_cast<int64_t>(value.id)));
+  InsertMapValue(result, "name", flutter::EncodableValue(value.name));
+  InsertMapValue(result, "kind_label", flutter::EncodableValue(value.kind_label));
+  InsertMapValue(result, "visible", flutter::EncodableValue(value.visible));
+  InsertMapValue(result, "locked", flutter::EncodableValue(value.locked));
+  return result;
+}
+
+flutter::EncodableValue BuildOptionalNodeValue(
+    const std::optional<NativeViewportNode>& value) {
+  if (!value.has_value()) {
+    return flutter::EncodableValue();
+  }
+
+  return flutter::EncodableValue(BuildNodeMap(*value));
+}
+
+flutter::EncodableMap BuildFeedbackMap(const NativeViewportFeedback& value) {
+  flutter::EncodableMap result;
+  InsertMapValue(result, "camera", flutter::EncodableValue(BuildCameraMap(value.camera)));
+  InsertMapValue(result, "selected_node", BuildOptionalNodeValue(value.selected_node));
+  InsertMapValue(result, "hovered_node", BuildOptionalNodeValue(value.hovered_node));
+  return result;
+}
 }  // namespace
 
 bool TextureBridge::PendingCommands::HasWork() const {
@@ -278,7 +328,7 @@ void TextureBridge::ManagedTexture::PublishFrameEvent(int width,
                                                       double frame_time_ms,
                                                       const std::string& interaction_phase,
                                                       bool scene_state_changed,
-                                                      const std::string& feedback_json,
+                                                      const NativeViewportFeedback& feedback,
                                                       const std::string& host_error) {
   if (!texture_id_.has_value()) {
     return;
@@ -295,7 +345,7 @@ void TextureBridge::ManagedTexture::PublishFrameEvent(int width,
                  flutter::EncodableValue(interaction_phase));
   InsertMapValue(event, "sceneStateChanged",
                  flutter::EncodableValue(scene_state_changed));
-  InsertMapValue(event, "feedbackJson", flutter::EncodableValue(feedback_json));
+  InsertMapValue(event, "feedback", flutter::EncodableValue(BuildFeedbackMap(feedback)));
   if (!host_error.empty()) {
     InsertMapValue(event, "hostError", flutter::EncodableValue(host_error));
   }
@@ -383,7 +433,7 @@ void TextureBridge::ManagedTexture::RenderLoop() {
                         frame_time_ms,
                         interaction_phase,
                         scene_snapshot_refresh_requested,
-                        "",
+                        NativeViewportFeedback{},
                         "Native viewport frame render failed.");
       continue;
     }
@@ -399,7 +449,7 @@ void TextureBridge::ManagedTexture::RenderLoop() {
                       frame_time_ms,
                       interaction_phase,
                       scene_snapshot_refresh_requested,
-                      render_result->feedback_json,
+                      render_result->feedback,
                       "");
   }
 }

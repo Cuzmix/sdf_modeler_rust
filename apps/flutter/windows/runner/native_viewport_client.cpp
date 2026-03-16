@@ -15,6 +15,25 @@ std::wstring ResolveBridgeLibraryPath() {
   std::filesystem::path executable_path(module_path);
   return (executable_path.parent_path() / L"sdf_modeler_bridge.dll").wstring();
 }
+
+std::string CopyNativeString(const NativeViewportString& value) {
+  if (value.ptr == nullptr || value.len == 0) {
+    return {};
+  }
+
+  return std::string(reinterpret_cast<const char*>(value.ptr), value.len);
+}
+
+NativeViewportNode CopyNodeSnapshot(
+    const NativeViewportNodeSnapshot& value) {
+  NativeViewportNode copy;
+  copy.id = value.id;
+  copy.visible = value.visible != 0;
+  copy.locked = value.locked != 0;
+  copy.name = CopyNativeString(value.name);
+  copy.kind_label = CopyNativeString(value.kind_label);
+  return copy;
+}
 }  // namespace
 
 std::shared_ptr<NativeViewportClient> NativeViewportClient::TryCreate() {
@@ -64,9 +83,12 @@ std::optional<NativeViewportRenderResult> NativeViewportClient::RenderFrame(
 
   NativeViewportRenderResult result;
   result.pixels.assign(frame.pixels_ptr, frame.pixels_ptr + frame.pixels_len);
-  if (frame.feedback_ptr != nullptr && frame.feedback_len > 0) {
-    result.feedback_json.assign(reinterpret_cast<const char*>(frame.feedback_ptr),
-                                frame.feedback_len);
+  result.feedback.camera = frame.camera;
+  if (frame.selected_node_present != 0) {
+    result.feedback.selected_node = CopyNodeSnapshot(frame.selected_node);
+  }
+  if (frame.hovered_node_present != 0) {
+    result.feedback.hovered_node = CopyNodeSnapshot(frame.hovered_node);
   }
   result.camera_animating = frame.camera_animating != 0;
 

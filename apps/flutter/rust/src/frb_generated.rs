@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1126036408;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -991070391;
 
 // Section: executor
 
@@ -2109,35 +2109,6 @@ fn wire__crate__api__simple__scene_snapshot_impl(
         },
     )
 }
-fn wire__crate__api__simple__scene_snapshot_json_impl(
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "scene_snapshot_json",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            deserializer.end();
-            transform_result_sse::<_, ()>((move || {
-                let output_ok = Result::<_, ()>::Ok(crate::api::simple::scene_snapshot_json())?;
-                Ok(output_ok)
-            })())
-        },
-    )
-}
 fn wire__crate__api__simple__select_node_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -4015,35 +3986,6 @@ fn wire__crate__api__simple__workflow_status_impl(
         },
     )
 }
-fn wire__crate__api__simple__workflow_status_json_impl(
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "workflow_status_json",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            deserializer.end();
-            transform_result_sse::<_, ()>((move || {
-                let output_ok = Result::<_, ()>::Ok(crate::api::simple::workflow_status_json())?;
-                Ok(output_ok)
-            })())
-        },
-    )
-}
 fn wire__crate__api__simple__zoom_camera_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -5528,153 +5470,151 @@ fn pde_ffi_dispatcher_sync_impl(
         65 => wire__crate__api__simple__save_scene_impl(ptr, rust_vec_len, data_len),
         66 => wire__crate__api__simple__save_scene_as_impl(ptr, rust_vec_len, data_len),
         67 => wire__crate__api__simple__scene_snapshot_impl(ptr, rust_vec_len, data_len),
-        68 => wire__crate__api__simple__scene_snapshot_json_impl(ptr, rust_vec_len, data_len),
-        69 => wire__crate__api__simple__select_node_impl(ptr, rust_vec_len, data_len),
-        70 => wire__crate__api__simple__select_node_at_viewport_impl(ptr, rust_vec_len, data_len),
-        71 => wire__crate__api__simple__set_adaptive_export_impl(ptr, rust_vec_len, data_len),
-        72 => wire__crate__api__simple__set_export_resolution_impl(ptr, rust_vec_len, data_len),
-        73 => wire__crate__api__simple__set_import_resolution_impl(ptr, rust_vec_len, data_len),
-        74 => wire__crate__api__simple__set_import_use_auto_impl(ptr, rust_vec_len, data_len),
-        75 => wire__crate__api__simple__set_keybinding_impl(ptr, rust_vec_len, data_len),
-        76 => wire__crate__api__simple__set_manipulator_mode_impl(ptr, rust_vec_len, data_len),
-        77 => {
+        68 => wire__crate__api__simple__select_node_impl(ptr, rust_vec_len, data_len),
+        69 => wire__crate__api__simple__select_node_at_viewport_impl(ptr, rust_vec_len, data_len),
+        70 => wire__crate__api__simple__set_adaptive_export_impl(ptr, rust_vec_len, data_len),
+        71 => wire__crate__api__simple__set_export_resolution_impl(ptr, rust_vec_len, data_len),
+        72 => wire__crate__api__simple__set_import_resolution_impl(ptr, rust_vec_len, data_len),
+        73 => wire__crate__api__simple__set_import_use_auto_impl(ptr, rust_vec_len, data_len),
+        74 => wire__crate__api__simple__set_keybinding_impl(ptr, rust_vec_len, data_len),
+        75 => wire__crate__api__simple__set_manipulator_mode_impl(ptr, rust_vec_len, data_len),
+        76 => {
             wire__crate__api__simple__set_node_light_link_enabled_impl(ptr, rust_vec_len, data_len)
         }
-        78 => wire__crate__api__simple__set_node_light_mask_impl(ptr, rust_vec_len, data_len),
-        79 => wire__crate__api__simple__set_render_integer_impl(ptr, rust_vec_len, data_len),
-        80 => wire__crate__api__simple__set_render_scalar_impl(ptr, rust_vec_len, data_len),
-        81 => wire__crate__api__simple__set_render_shading_mode_impl(ptr, rust_vec_len, data_len),
-        82 => wire__crate__api__simple__set_render_toggle_impl(ptr, rust_vec_len, data_len),
-        83 => wire__crate__api__simple__set_sculpt_brush_mode_impl(ptr, rust_vec_len, data_len),
-        84 => wire__crate__api__simple__set_sculpt_brush_radius_impl(ptr, rust_vec_len, data_len),
-        85 => wire__crate__api__simple__set_sculpt_brush_strength_impl(ptr, rust_vec_len, data_len),
-        86 => wire__crate__api__simple__set_sculpt_convert_mode_impl(ptr, rust_vec_len, data_len),
-        87 => wire__crate__api__simple__set_sculpt_convert_resolution_impl(
+        77 => wire__crate__api__simple__set_node_light_mask_impl(ptr, rust_vec_len, data_len),
+        78 => wire__crate__api__simple__set_render_integer_impl(ptr, rust_vec_len, data_len),
+        79 => wire__crate__api__simple__set_render_scalar_impl(ptr, rust_vec_len, data_len),
+        80 => wire__crate__api__simple__set_render_shading_mode_impl(ptr, rust_vec_len, data_len),
+        81 => wire__crate__api__simple__set_render_toggle_impl(ptr, rust_vec_len, data_len),
+        82 => wire__crate__api__simple__set_sculpt_brush_mode_impl(ptr, rust_vec_len, data_len),
+        83 => wire__crate__api__simple__set_sculpt_brush_radius_impl(ptr, rust_vec_len, data_len),
+        84 => wire__crate__api__simple__set_sculpt_brush_strength_impl(ptr, rust_vec_len, data_len),
+        85 => wire__crate__api__simple__set_sculpt_convert_mode_impl(ptr, rust_vec_len, data_len),
+        86 => wire__crate__api__simple__set_sculpt_convert_resolution_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        88 => wire__crate__api__simple__set_sculpt_symmetry_axis_impl(ptr, rust_vec_len, data_len),
-        89 => wire__crate__api__simple__set_selected_light_array_color_variation_impl(
+        87 => wire__crate__api__simple__set_sculpt_symmetry_axis_impl(ptr, rust_vec_len, data_len),
+        88 => wire__crate__api__simple__set_selected_light_array_color_variation_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        90 => wire__crate__api__simple__set_selected_light_array_count_impl(
+        89 => wire__crate__api__simple__set_selected_light_array_count_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        91 => wire__crate__api__simple__set_selected_light_array_pattern_impl(
+        90 => wire__crate__api__simple__set_selected_light_array_pattern_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        92 => wire__crate__api__simple__set_selected_light_array_radius_impl(
+        91 => wire__crate__api__simple__set_selected_light_array_radius_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        93 => wire__crate__api__simple__set_selected_light_cast_shadows_impl(
+        92 => wire__crate__api__simple__set_selected_light_cast_shadows_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        94 => wire__crate__api__simple__set_selected_light_color_impl(ptr, rust_vec_len, data_len),
-        95 => wire__crate__api__simple__set_selected_light_color_hue_expression_impl(
+        93 => wire__crate__api__simple__set_selected_light_color_impl(ptr, rust_vec_len, data_len),
+        94 => wire__crate__api__simple__set_selected_light_color_hue_expression_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        96 => wire__crate__api__simple__set_selected_light_cookie_impl(ptr, rust_vec_len, data_len),
-        97 => {
+        95 => wire__crate__api__simple__set_selected_light_cookie_impl(ptr, rust_vec_len, data_len),
+        96 => {
             wire__crate__api__simple__set_selected_light_intensity_impl(ptr, rust_vec_len, data_len)
         }
-        98 => wire__crate__api__simple__set_selected_light_intensity_expression_impl(
+        97 => wire__crate__api__simple__set_selected_light_intensity_expression_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        99 => wire__crate__api__simple__set_selected_light_proximity_mode_impl(
+        98 => wire__crate__api__simple__set_selected_light_proximity_mode_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        100 => wire__crate__api__simple__set_selected_light_proximity_range_impl(
+        99 => wire__crate__api__simple__set_selected_light_proximity_range_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        101 => wire__crate__api__simple__set_selected_light_range_impl(ptr, rust_vec_len, data_len),
-        102 => wire__crate__api__simple__set_selected_light_shadow_color_impl(
+        100 => wire__crate__api__simple__set_selected_light_range_impl(ptr, rust_vec_len, data_len),
+        101 => wire__crate__api__simple__set_selected_light_shadow_color_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        103 => wire__crate__api__simple__set_selected_light_shadow_softness_impl(
+        102 => wire__crate__api__simple__set_selected_light_shadow_softness_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        104 => wire__crate__api__simple__set_selected_light_spot_angle_impl(
+        103 => wire__crate__api__simple__set_selected_light_spot_angle_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        105 => wire__crate__api__simple__set_selected_light_type_impl(ptr, rust_vec_len, data_len),
-        106 => wire__crate__api__simple__set_selected_light_volumetric_impl(
+        104 => wire__crate__api__simple__set_selected_light_type_impl(ptr, rust_vec_len, data_len),
+        105 => wire__crate__api__simple__set_selected_light_volumetric_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        107 => wire__crate__api__simple__set_selected_light_volumetric_density_impl(
+        106 => wire__crate__api__simple__set_selected_light_volumetric_density_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        108 => {
+        107 => {
             wire__crate__api__simple__set_selected_material_color_impl(ptr, rust_vec_len, data_len)
         }
-        109 => {
+        108 => {
             wire__crate__api__simple__set_selected_material_float_impl(ptr, rust_vec_len, data_len)
         }
-        110 => wire__crate__api__simple__set_selected_primitive_parameter_impl(
+        109 => wire__crate__api__simple__set_selected_primitive_parameter_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        111 => wire__crate__api__simple__set_selected_sculpt_resolution_impl(
+        110 => wire__crate__api__simple__set_selected_sculpt_resolution_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        112 => wire__crate__api__simple__set_selected_transform_position_impl(
+        111 => wire__crate__api__simple__set_selected_transform_position_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        113 => wire__crate__api__simple__set_selected_transform_rotation_degrees_impl(
+        112 => wire__crate__api__simple__set_selected_transform_rotation_degrees_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        114 => {
+        113 => {
             wire__crate__api__simple__set_selected_transform_scale_impl(ptr, rust_vec_len, data_len)
         }
-        115 => wire__crate__api__simple__set_settings_integer_impl(ptr, rust_vec_len, data_len),
-        116 => wire__crate__api__simple__set_settings_toggle_impl(ptr, rust_vec_len, data_len),
-        117 => wire__crate__api__simple__start_export_impl(ptr, rust_vec_len, data_len),
-        118 => wire__crate__api__simple__start_import_impl(ptr, rust_vec_len, data_len),
-        119 => wire__crate__api__simple__start_sculpt_convert_impl(ptr, rust_vec_len, data_len),
-        120 => wire__crate__api__simple__stop_sculpting_impl(ptr, rust_vec_len, data_len),
-        121 => wire__crate__api__simple__toggle_manipulator_space_impl(ptr, rust_vec_len, data_len),
-        122 => wire__crate__api__simple__toggle_node_lock_impl(ptr, rust_vec_len, data_len),
-        123 => wire__crate__api__simple__toggle_node_visibility_impl(ptr, rust_vec_len, data_len),
-        124 => wire__crate__api__simple__toggle_orthographic_impl(ptr, rust_vec_len, data_len),
-        125 => wire__crate__api__simple__undo_impl(ptr, rust_vec_len, data_len),
-        126 => wire__crate__api__simple__workflow_status_impl(ptr, rust_vec_len, data_len),
-        127 => wire__crate__api__simple__workflow_status_json_impl(ptr, rust_vec_len, data_len),
-        128 => wire__crate__api__simple__zoom_camera_impl(ptr, rust_vec_len, data_len),
+        114 => wire__crate__api__simple__set_settings_integer_impl(ptr, rust_vec_len, data_len),
+        115 => wire__crate__api__simple__set_settings_toggle_impl(ptr, rust_vec_len, data_len),
+        116 => wire__crate__api__simple__start_export_impl(ptr, rust_vec_len, data_len),
+        117 => wire__crate__api__simple__start_import_impl(ptr, rust_vec_len, data_len),
+        118 => wire__crate__api__simple__start_sculpt_convert_impl(ptr, rust_vec_len, data_len),
+        119 => wire__crate__api__simple__stop_sculpting_impl(ptr, rust_vec_len, data_len),
+        120 => wire__crate__api__simple__toggle_manipulator_space_impl(ptr, rust_vec_len, data_len),
+        121 => wire__crate__api__simple__toggle_node_lock_impl(ptr, rust_vec_len, data_len),
+        122 => wire__crate__api__simple__toggle_node_visibility_impl(ptr, rust_vec_len, data_len),
+        123 => wire__crate__api__simple__toggle_orthographic_impl(ptr, rust_vec_len, data_len),
+        124 => wire__crate__api__simple__undo_impl(ptr, rust_vec_len, data_len),
+        125 => wire__crate__api__simple__workflow_status_impl(ptr, rust_vec_len, data_len),
+        126 => wire__crate__api__simple__zoom_camera_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }

@@ -1,13 +1,11 @@
-import 'dart:convert';
-
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sdf_modeler_flutter/src/scene/scene_snapshot.dart';
+
+import 'mock_snapshot_adapter.dart';
 
 void main() {
   test('parses selected node property snapshots', () {
-    final snapshot = AppSceneSnapshot.fromJson(
-      jsonDecode(
-            '''
+    final snapshot = parseSceneSnapshotJson(
+      '''
 {
   "selected_node": {
     "id": 1,
@@ -88,13 +86,11 @@ void main() {
   }
 }
 ''',
-          )
-          as Map<String, dynamic>,
     );
 
     final properties = snapshot.selectedNodeProperties;
     expect(properties, isNotNull);
-    expect(properties!.nodeId, 1);
+    expect(properties!.nodeId, BigInt.from(1));
     expect(properties.kindLabel, 'Sphere');
     expect(properties.transform!.positionLabel, 'Position');
     expect(properties.transform!.rotationDegrees.y, 45.0);
@@ -104,9 +100,8 @@ void main() {
   });
 
   test('keeps selected node properties optional for older snapshots', () {
-    final snapshot = AppSceneSnapshot.fromJson(
-      jsonDecode(
-            '''
+    final snapshot = parseSceneSnapshotJson(
+      '''
 {
   "selected_node": null,
   "top_level_nodes": [],
@@ -146,8 +141,6 @@ void main() {
   }
 }
 ''',
-          )
-          as Map<String, dynamic>,
     );
 
     expect(snapshot.selectedNodeProperties, isNull);
@@ -157,9 +150,8 @@ void main() {
   });
 
   test('parses sculpt snapshot payloads', () {
-    final snapshot = AppSceneSnapshot.fromJson(
-      jsonDecode(
-            '''
+    final snapshot = parseSceneSnapshotJson(
+      '''
 {
   "selected_node": {
     "id": 8,
@@ -226,8 +218,6 @@ void main() {
   }
 }
 ''',
-          )
-          as Map<String, dynamic>,
     );
 
     expect(snapshot.sculpt.selected, isNotNull);
@@ -240,9 +230,8 @@ void main() {
   });
 
   test('parses advanced light and light-linking snapshots', () {
-    final snapshot = AppSceneSnapshot.fromJson(
-      jsonDecode(
-            '''
+    final snapshot = parseSceneSnapshotJson(
+      '''
 {
   "selected_node": {
     "id": 10,
@@ -365,14 +354,12 @@ void main() {
   }
 }
 ''',
-          )
-          as Map<String, dynamic>,
     );
 
     final light = snapshot.selectedNodeProperties!.light;
     expect(light, isNotNull);
-    expect(light!.nodeId, 11);
-    expect(light.transformNodeId, 10);
+    expect(light!.nodeId, BigInt.from(11));
+    expect(light.transformNodeId, BigInt.from(10));
     expect(light.lightTypeId, 'spot');
     expect(light.castShadows, isTrue);
     expect(light.cookieCandidates.single.name, 'Cookie Sphere');
@@ -383,9 +370,8 @@ void main() {
   });
 
   test('parses settings and keymap snapshots', () {
-    final snapshot = AppSceneSnapshot.fromJson(
-      jsonDecode(
-            '''
+    final snapshot = parseSceneSnapshotJson(
+      '''
 {
   "selected_node": null,
   "top_level_nodes": [],
@@ -464,8 +450,6 @@ void main() {
   }
 }
 ''',
-          )
-          as Map<String, dynamic>,
     );
 
     expect(snapshot.settings.showFpsOverlay, isFalse);

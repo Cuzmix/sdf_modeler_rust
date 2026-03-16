@@ -1,8 +1,4 @@
-use crate::bridge_state::{
-    app_bridge,
-    snapshot_json,
-    workflow_status_json as bridge_workflow_status_json,
-};
+use crate::bridge_state::app_bridge;
 use crate::api::mirrors::{AppSceneSnapshot, AppWorkflowStatusSnapshot};
 use sdf_modeler::app_bridge::AppBridge as HostAppBridge;
 use sdf_modeler::{CsgOp, LightType, ModifierKind};
@@ -26,21 +22,9 @@ pub fn bridge_version() -> String {
 }
 
 #[flutter_rust_bridge::frb(sync)]
-pub fn scene_snapshot_json() -> String {
-    let mut bridge = app_bridge().lock().expect("app bridge mutex");
-    snapshot_json(&mut bridge)
-}
-
-#[flutter_rust_bridge::frb(sync)]
 pub fn scene_snapshot() -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     current_scene_snapshot(&mut bridge)
-}
-
-#[flutter_rust_bridge::frb(sync)]
-pub fn workflow_status_json() -> String {
-    let mut bridge = app_bridge().lock().expect("app bridge mutex");
-    bridge_workflow_status_json(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]

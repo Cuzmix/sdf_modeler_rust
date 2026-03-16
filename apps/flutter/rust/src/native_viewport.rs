@@ -1,6 +1,13 @@
 use std::mem::ManuallyDrop;
+use std::ptr::null_mut;
 
-use crate::bridge_state::{app_bridge, viewport_feedback_json};
+use crate::api::mirrors::{
+    AppCameraSnapshot,
+    AppNodeSnapshot,
+    AppVec3,
+    AppViewportFeedbackSnapshot,
+};
+use crate::bridge_state::app_bridge;
 
 const NATIVE_VIEWPORT_COMMAND_PICK: u32 = 1;
 const NATIVE_VIEWPORT_COMMAND_HOVER: u32 = 1 << 1;
@@ -22,14 +29,136 @@ pub struct NativeViewportCommands {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct NativeViewportVec3 {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+}
+
+impl From<AppVec3> for NativeViewportVec3 {
+    fn from(value: AppVec3) -> Self {
+        Self {
+            x: value.x,
+            y: value.y,
+            z: value.z,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct NativeViewportCameraSnapshot {
+    pub yaw: f32,
+    pub pitch: f32,
+    pub roll: f32,
+    pub distance: f32,
+    pub fov_degrees: f32,
+    pub orthographic: u8,
+    pub target: NativeViewportVec3,
+    pub eye: NativeViewportVec3,
+}
+
+impl From<AppCameraSnapshot> for NativeViewportCameraSnapshot {
+    fn from(value: AppCameraSnapshot) -> Self {
+        Self {
+            yaw: value.yaw,
+            pitch: value.pitch,
+            roll: value.roll,
+            distance: value.distance,
+            fov_degrees: value.fov_degrees,
+            orthographic: u8::from(value.orthographic),
+            target: value.target.into(),
+            eye: value.eye.into(),
+        }
+    }
+}
+
+#[repr(C)]
+pub struct NativeViewportString {
+    pub ptr: *mut u8,
+    pub len: usize,
+    pub capacity: usize,
+}
+
+impl Default for NativeViewportString {
+    fn default() -> Self {
+        Self {
+            ptr: null_mut(),
+            len: 0,
+            capacity: 0,
+        }
+    }
+}
+
+impl NativeViewportString {
+    fn from_string(value: String) -> Self {
+        let mut bytes = ManuallyDrop::new(value.into_bytes());
+        Self {
+            ptr: bytes.as_mut_ptr(),
+            len: bytes.len(),
+            capacity: bytes.capacity(),
+        }
+    }
+}
+
+#[repr(C)]
+pub struct NativeViewportNodeSnapshot {
+    pub id: u64,
+    pub visible: u8,
+    pub locked: u8,
+    pub name: NativeViewportString,
+    pub kind_label: NativeViewportString,
+}
+
+impl Default for NativeViewportNodeSnapshot {
+    fn default() -> Self {
+        Self {
+            id: 0,
+            visible: 0,
+            locked: 0,
+            name: NativeViewportString::default(),
+            kind_label: NativeViewportString::default(),
+        }
+    }
+}
+
+impl From<AppNodeSnapshot> for NativeViewportNodeSnapshot {
+    fn from(value: AppNodeSnapshot) -> Self {
+        Self {
+            id: value.id,
+            visible: u8::from(value.visible),
+            locked: u8::from(value.locked),
+            name: NativeViewportString::from_string(value.name),
+            kind_label: NativeViewportString::from_string(value.kind_label),
+        }
+    }
+}
+
+#[repr(C)]
 pub struct NativeViewportFrame {
     pub pixels_ptr: *mut u8,
     pub pixels_len: usize,
     pub pixels_capacity: usize,
-    pub feedback_ptr: *mut u8,
-    pub feedback_len: usize,
-    pub feedback_capacity: usize,
+    pub camera: NativeViewportCameraSnapshot,
+    pub selected_node_present: u8,
+    pub selected_node: NativeViewportNodeSnapshot,
+    pub hovered_node_present: u8,
+    pub hovered_node: NativeViewportNodeSnapshot,
     pub camera_animating: u8,
+}
+
+fn free_native_string(value: NativeViewportString) {
+    if !value.ptr.is_null() && value.capacity > 0 {
+        unsafe {
+            drop(Vec::from_raw_parts(value.ptr, value.len, value.capacity));
+        }
+    }
+}
+
+fn free_native_node_snapshot(value: NativeViewportNodeSnapshot) {
+    free_native_string(value.name);
+    free_native_string(value.kind_label);
 }
 
 #[unsafe(no_mangle)]
@@ -74,17 +203,24 @@ pub extern "C" fn sdf_modeler_native_process_viewport_frame(
     }
 
     let rendered_frame = bridge.render_viewport_frame(width, height, time_seconds);
-    let feedback = viewport_feedback_json(&bridge).into_bytes();
+    let AppViewportFeedbackSnapshot {
+        camera,
+        selected_node,
+        hovered_node,
+    } = bridge.viewport_feedback().into();
+    let selected_node = selected_node.map(Into::into);
+    let hovered_node = hovered_node.map(Into::into);
     let mut pixels = ManuallyDrop::new(rendered_frame.pixels);
-    let mut feedback = ManuallyDrop::new(feedback);
 
     NativeViewportFrame {
         pixels_ptr: pixels.as_mut_ptr(),
         pixels_len: pixels.len(),
         pixels_capacity: pixels.capacity(),
-        feedback_ptr: feedback.as_mut_ptr(),
-        feedback_len: feedback.len(),
-        feedback_capacity: feedback.capacity(),
+        camera: camera.into(),
+        selected_node_present: u8::from(selected_node.is_some()),
+        selected_node: selected_node.unwrap_or_default(),
+        hovered_node_present: u8::from(hovered_node.is_some()),
+        hovered_node: hovered_node.unwrap_or_default(),
         camera_animating: u8::from(rendered_frame.camera_animating),
     }
 }
@@ -101,13 +237,6 @@ pub extern "C" fn sdf_modeler_native_free_viewport_frame(frame: NativeViewportFr
         }
     }
 
-    if !frame.feedback_ptr.is_null() && frame.feedback_capacity > 0 {
-        unsafe {
-            drop(Vec::from_raw_parts(
-                frame.feedback_ptr,
-                frame.feedback_len,
-                frame.feedback_capacity,
-            ));
-        }
-    }
+    free_native_node_snapshot(frame.selected_node);
+    free_native_node_snapshot(frame.hovered_node);
 }

@@ -79,7 +79,7 @@ class TextureBridge {
                            double frame_time_ms,
                            const std::string& interaction_phase,
                            bool scene_state_changed,
-                           const std::string& feedback_json,
+                           const NativeViewportFeedback& feedback,
                            const std::string& host_error);
     void RenderLoop();
 

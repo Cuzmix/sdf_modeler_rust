@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sdf_modeler_flutter/app.dart';
 import 'package:sdf_modeler_flutter/src/rust/api/mirrors.dart';
-import 'package:sdf_modeler_flutter/src/rust/api/simple.dart';
 import 'package:sdf_modeler_flutter/src/rust/frb_generated.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_contract.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_desktop_side_panel.dart';
@@ -693,8 +692,8 @@ class _MockRustApi extends RustLibApi {
   );
 
   String currentSnapshot = _baseSnapshot;
-  int sceneSnapshotJsonCalls = 0;
-  int workflowStatusJsonCalls = 0;
+  int sceneSnapshotCalls = 0;
+  int workflowStatusCalls = 0;
   int addBoxCalls = 0;
   int createOperationCalls = 0;
   int createTransformCalls = 0;
@@ -804,8 +803,8 @@ class _MockRustApi extends RustLibApi {
 
   void resetState() {
     currentSnapshot = _baseSnapshot;
-    sceneSnapshotJsonCalls = 0;
-    workflowStatusJsonCalls = 0;
+    sceneSnapshotCalls = 0;
+    workflowStatusCalls = 0;
     addBoxCalls = 0;
     createOperationCalls = 0;
     createTransformCalls = 0;
@@ -914,65 +913,12 @@ class _MockRustApi extends RustLibApi {
     redoCalls = 0;
   }
 
-  static const Map<String, Object?> _idleExportStatus = <String, Object?>{
-    'state': 'idle',
-    'progress': 0,
-    'total': 0,
-    'resolution': 128,
-    'phase_label': null,
-    'target_file_name': null,
-    'target_file_path': null,
-    'format_label': null,
-    'message': null,
-    'is_error': false,
-  };
-
-  static const Map<String, Object?> _idleImportStatus = <String, Object?>{
-    'state': 'idle',
-    'progress': 0,
-    'total': 0,
-    'filename': null,
-    'phase_label': null,
-    'message': null,
-    'is_error': false,
-  };
-
-  static const Map<String, Object?> _idleSculptConvertStatus =
-      <String, Object?>{
-        'state': 'idle',
-        'progress': 0,
-        'total': 0,
-        'target_name': null,
-        'phase_label': null,
-        'message': null,
-        'is_error': false,
-      };
-
-  Map<String, dynamic> _decodeCurrentSnapshot() {
-    return (jsonDecode(currentSnapshot) as Map).cast<String, dynamic>();
-  }
-
   AppSceneSnapshot _currentSceneSnapshot() =>
       parseSceneSnapshotJson(currentSnapshot);
 
   AppSceneSnapshot _setCurrentSceneSnapshot(String snapshot) {
     currentSnapshot = snapshot;
     return _currentSceneSnapshot();
-  }
-
-  Map<String, Object?> _workflowStatusFromSnapshot(
-    Map<String, dynamic> snapshot,
-    String workflowKey,
-    Map<String, Object?> fallback,
-  ) {
-    final workflow = snapshot[workflowKey];
-    if (workflow is Map) {
-      final status = workflow['status'];
-      if (status is Map) {
-        return status.cast<String, Object?>();
-      }
-    }
-    return fallback;
   }
 
   AppSceneSnapshot _updateRenderSnapshot(
@@ -2051,57 +1997,35 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
-  String crateApiSimpleWorkflowStatusJson() {
-    workflowStatusJsonCalls += 1;
+  AppWorkflowStatusSnapshot crateApiSimpleWorkflowStatus() {
+    workflowStatusCalls += 1;
     var sceneChanged = false;
 
-    if (currentSnapshot == _exportRunningSnapshot && workflowStatusJsonCalls >= 3) {
+    if (currentSnapshot == _exportRunningSnapshot && workflowStatusCalls >= 3) {
       currentSnapshot = _exportDoneSnapshot;
     } else if (currentSnapshot == _importRunningSnapshot &&
-        workflowStatusJsonCalls >= 3) {
+        workflowStatusCalls >= 3) {
       currentSnapshot = _importDoneSnapshot;
       sceneChanged = true;
     } else if (currentSnapshot == _sculptConvertRunningSnapshot &&
-        workflowStatusJsonCalls >= 3) {
+        workflowStatusCalls >= 3) {
       currentSnapshot = _sculptConvertDoneSnapshot;
       sceneChanged = true;
     }
 
-    final snapshot = _decodeCurrentSnapshot();
-    return jsonEncode(<String, Object?>{
-      'export_status': _workflowStatusFromSnapshot(
-        snapshot,
-        'export',
-        _idleExportStatus,
-      ),
-      'import_status': _workflowStatusFromSnapshot(
-        snapshot,
-        'import',
-        _idleImportStatus,
-      ),
-      'sculpt_convert_status': _workflowStatusFromSnapshot(
-        snapshot,
-        'sculpt_convert',
-        _idleSculptConvertStatus,
-      ),
-      'scene_changed': sceneChanged,
-    });
-  }
-
-  @override
-  AppWorkflowStatusSnapshot crateApiSimpleWorkflowStatus() {
-    return parseWorkflowStatusJson(crateApiSimpleWorkflowStatusJson());
-  }
-
-  @override
-  String crateApiSimpleSceneSnapshotJson() {
-    sceneSnapshotJsonCalls += 1;
-    return currentSnapshot;
+    final snapshot = parseSceneSnapshotJson(currentSnapshot);
+    return AppWorkflowStatusSnapshot(
+      exportStatus: snapshot.export_.status,
+      importStatus: snapshot.import_.status,
+      sculptConvertStatus: snapshot.sculptConvert.status,
+      sceneChanged: sceneChanged,
+    );
   }
 
   @override
   AppSceneSnapshot crateApiSimpleSceneSnapshot() {
-    return parseSceneSnapshotJson(crateApiSimpleSceneSnapshotJson());
+    sceneSnapshotCalls += 1;
+    return parseSceneSnapshotJson(currentSnapshot);
   }
 
   @override
@@ -2241,7 +2165,7 @@ void main() {
     int droppedFrameCount = 0,
     String interactionPhase = 'idle',
     bool sceneStateChanged = false,
-    String feedbackJson = '',
+    Object? feedback,
     String? hostError,
   }) {
     return <Object?, Object?>{
@@ -2253,8 +2177,8 @@ void main() {
       'droppedFrameCount': droppedFrameCount,
       'interactionPhase': interactionPhase,
       'sceneStateChanged': sceneStateChanged,
-      'feedbackJson': feedbackJson,
-      if (hostError case final String error) 'hostError': error,
+      ...?feedback == null ? null : <Object?, Object?>{'feedback': feedback},
+      ...?hostError == null ? null : <Object?, Object?>{'hostError': hostError},
     };
   }
 
@@ -2331,13 +2255,22 @@ void main() {
   test('routes direct transform commands through the generated Rust facade', () {
     mockApi.currentSnapshot = _MockRustApi._selectedTransformPropertySnapshot;
 
-    final movedSnapshot = setSelectedTransformPosition(x: 1.0, y: -2.0, z: 3.5);
-    final rotatedSnapshot = setSelectedTransformRotationDegrees(
+    final movedSnapshot = mockApi.crateApiSimpleSetSelectedTransformPosition(
+      x: 1.0,
+      y: -2.0,
+      z: 3.5,
+    );
+    final rotatedSnapshot =
+        mockApi.crateApiSimpleSetSelectedTransformRotationDegrees(
       xDegrees: 10.0,
       yDegrees: 20.0,
       zDegrees: 30.0,
     );
-    final scaledSnapshot = setSelectedTransformScale(x: -1.0, y: 2.0, z: 500.0);
+    final scaledSnapshot = mockApi.crateApiSimpleSetSelectedTransformScale(
+      x: -1.0,
+      y: 2.0,
+      z: 500.0,
+    );
 
     expect(mockApi.setSelectedTransformPositionCalls, 1);
     expect(mockApi.setSelectedTransformRotationDegreesCalls, 1);
@@ -2804,8 +2737,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pumpAndSettle();
 
-    expect(mockApi.workflowStatusJsonCalls, greaterThanOrEqualTo(3));
-    expect(mockApi.sceneSnapshotJsonCalls, 1);
+    expect(mockApi.workflowStatusCalls, greaterThanOrEqualTo(3));
+    expect(mockApi.sceneSnapshotCalls, 1);
     expect(find.text('Exported OBJ (128 verts, 64 tris)'), findsOneWidget);
     expect(find.byKey(const ValueKey('export-progress-indicator')), findsNothing);
     expect(requestFrameCalls, requestFrameBaseline);
@@ -3020,8 +2953,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pumpAndSettle();
 
-    expect(mockApi.workflowStatusJsonCalls, greaterThanOrEqualTo(3));
-    expect(mockApi.sceneSnapshotJsonCalls, 2);
+    expect(mockApi.workflowStatusCalls, greaterThanOrEqualTo(3));
+    expect(mockApi.sceneSnapshotCalls, 2);
     expect(find.text('Imported hero_mesh.obj as sculpt geometry'), findsOneWidget);
     expect(find.byKey(const ValueKey('import-progress-indicator')), findsNothing);
     expect(requestFrameCalls, greaterThanOrEqualTo(requestFrameBaseline));
@@ -3072,8 +3005,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pumpAndSettle();
 
-      expect(mockApi.workflowStatusJsonCalls, greaterThanOrEqualTo(3));
-      expect(mockApi.sceneSnapshotJsonCalls, 2);
+      expect(mockApi.workflowStatusCalls, greaterThanOrEqualTo(3));
+      expect(mockApi.sceneSnapshotCalls, 2);
       expect(find.text('Converted Sphere to sculpt'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('sculpt-convert-progress-indicator')),
@@ -3494,19 +3427,20 @@ void main() {
     (WidgetTester tester) async {
       await pumpApp(tester);
 
-      expect(mockApi.sceneSnapshotJsonCalls, 1);
+      expect(mockApi.sceneSnapshotCalls, 1);
 
       await dispatchTextureEvent(
         tester,
         buildTextureEvent(
           frameCount: 2,
           interactionPhase: 'interacting',
-          feedbackJson:
-              '{"camera":{"yaw":0.9,"pitch":0.5,"roll":0.0,"distance":4.5,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.4,"y":2.1,"z":3.1}},"selected_node":null,"hovered_node":{"id":99,"name":"Hover Probe","kind_label":"Box","visible":true,"locked":false}}',
+          feedback: jsonDecode(
+            '{"camera":{"yaw":0.9,"pitch":0.5,"roll":0.0,"distance":4.5,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.4,"y":2.1,"z":3.1}},"selected_node":null,"hovered_node":{"id":99,"name":"Hover Probe","kind_label":"Box","visible":true,"locked":false}}',
+          ),
         ),
       );
 
-      expect(mockApi.sceneSnapshotJsonCalls, 1);
+      expect(mockApi.sceneSnapshotCalls, 1);
       expect(find.textContaining('phase interacting'), findsOneWidget);
     },
   );
@@ -3523,12 +3457,13 @@ void main() {
         buildTextureEvent(
           frameCount: 2,
           sceneStateChanged: true,
-          feedbackJson:
-              '{"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"selected_node":{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false},"hovered_node":null}',
+          feedback: jsonDecode(
+            '{"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"selected_node":{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false},"hovered_node":null}',
+          ),
         ),
       );
 
-      expect(mockApi.sceneSnapshotJsonCalls, 2);
+      expect(mockApi.sceneSnapshotCalls, 2);
     },
   );
 
