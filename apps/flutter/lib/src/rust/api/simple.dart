@@ -15,6 +15,9 @@ String bridgeVersion() => RustLib.instance.api.crateApiSimpleBridgeVersion();
 String sceneSnapshotJson() =>
     RustLib.instance.api.crateApiSimpleSceneSnapshotJson();
 
+String workflowStatusJson() =>
+    RustLib.instance.api.crateApiSimpleWorkflowStatusJson();
+
 String newScene() => RustLib.instance.api.crateApiSimpleNewScene();
 
 String openScene() => RustLib.instance.api.crateApiSimpleOpenScene();

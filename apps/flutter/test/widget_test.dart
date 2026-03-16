@@ -691,6 +691,7 @@ class _MockRustApi extends RustLibApi {
 
   String currentSnapshot = _baseSnapshot;
   int sceneSnapshotJsonCalls = 0;
+  int workflowStatusJsonCalls = 0;
   int addBoxCalls = 0;
   int createOperationCalls = 0;
   int createTransformCalls = 0;
@@ -801,6 +802,7 @@ class _MockRustApi extends RustLibApi {
   void resetState() {
     currentSnapshot = _baseSnapshot;
     sceneSnapshotJsonCalls = 0;
+    workflowStatusJsonCalls = 0;
     addBoxCalls = 0;
     createOperationCalls = 0;
     createTransformCalls = 0;
@@ -907,6 +909,59 @@ class _MockRustApi extends RustLibApi {
     toggleOrthographicCalls = 0;
     undoCalls = 0;
     redoCalls = 0;
+  }
+
+  static const Map<String, Object?> _idleExportStatus = <String, Object?>{
+    'state': 'idle',
+    'progress': 0,
+    'total': 0,
+    'resolution': 128,
+    'phase_label': null,
+    'target_file_name': null,
+    'target_file_path': null,
+    'format_label': null,
+    'message': null,
+    'is_error': false,
+  };
+
+  static const Map<String, Object?> _idleImportStatus = <String, Object?>{
+    'state': 'idle',
+    'progress': 0,
+    'total': 0,
+    'filename': null,
+    'phase_label': null,
+    'message': null,
+    'is_error': false,
+  };
+
+  static const Map<String, Object?> _idleSculptConvertStatus =
+      <String, Object?>{
+        'state': 'idle',
+        'progress': 0,
+        'total': 0,
+        'target_name': null,
+        'phase_label': null,
+        'message': null,
+        'is_error': false,
+      };
+
+  Map<String, dynamic> _decodeCurrentSnapshot() {
+    return (jsonDecode(currentSnapshot) as Map).cast<String, dynamic>();
+  }
+
+  Map<String, Object?> _workflowStatusFromSnapshot(
+    Map<String, dynamic> snapshot,
+    String workflowKey,
+    Map<String, Object?> fallback,
+  ) {
+    final workflow = snapshot[workflowKey];
+    if (workflow is Map) {
+      final status = workflow['status'];
+      if (status is Map) {
+        return status.cast<String, Object?>();
+      }
+    }
+    return fallback;
   }
 
   String _updateRenderSnapshot(void Function(Map<String, dynamic> render) apply) {
@@ -1983,17 +2038,46 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
-  String crateApiSimpleSceneSnapshotJson() {
-    sceneSnapshotJsonCalls += 1;
-    if (currentSnapshot == _exportRunningSnapshot && sceneSnapshotJsonCalls >= 3) {
+  String crateApiSimpleWorkflowStatusJson() {
+    workflowStatusJsonCalls += 1;
+    var sceneChanged = false;
+
+    if (currentSnapshot == _exportRunningSnapshot && workflowStatusJsonCalls >= 3) {
       currentSnapshot = _exportDoneSnapshot;
     } else if (currentSnapshot == _importRunningSnapshot &&
-        sceneSnapshotJsonCalls >= 3) {
+        workflowStatusJsonCalls >= 3) {
       currentSnapshot = _importDoneSnapshot;
+      sceneChanged = true;
     } else if (currentSnapshot == _sculptConvertRunningSnapshot &&
-        sceneSnapshotJsonCalls >= 3) {
+        workflowStatusJsonCalls >= 3) {
       currentSnapshot = _sculptConvertDoneSnapshot;
+      sceneChanged = true;
     }
+
+    final snapshot = _decodeCurrentSnapshot();
+    return jsonEncode(<String, Object?>{
+      'export_status': _workflowStatusFromSnapshot(
+        snapshot,
+        'export',
+        _idleExportStatus,
+      ),
+      'import_status': _workflowStatusFromSnapshot(
+        snapshot,
+        'import',
+        _idleImportStatus,
+      ),
+      'sculpt_convert_status': _workflowStatusFromSnapshot(
+        snapshot,
+        'sculpt_convert',
+        _idleSculptConvertStatus,
+      ),
+      'scene_changed': sceneChanged,
+    });
+  }
+
+  @override
+  String crateApiSimpleSceneSnapshotJson() {
+    sceneSnapshotJsonCalls += 1;
     return currentSnapshot;
   }
 
@@ -2657,6 +2741,7 @@ void main() {
     mockApi.currentSnapshot = _MockRustApi._exportIdleSnapshot;
 
     await pumpApp(tester, logicalSize: const Size(1400, 900));
+    final requestFrameBaseline = requestFrameCalls;
 
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('export-resolution-field')),
@@ -2685,9 +2770,11 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pumpAndSettle();
 
-    expect(mockApi.sceneSnapshotJsonCalls, greaterThanOrEqualTo(3));
+    expect(mockApi.workflowStatusJsonCalls, greaterThanOrEqualTo(3));
+    expect(mockApi.sceneSnapshotJsonCalls, 1);
     expect(find.text('Exported OBJ (128 verts, 64 tris)'), findsOneWidget);
     expect(find.byKey(const ValueKey('export-progress-indicator')), findsNothing);
+    expect(requestFrameCalls, requestFrameBaseline);
   });
 
   testWidgets('routes render settings controls through the Rust facade', (
@@ -2867,6 +2954,7 @@ void main() {
     WidgetTester tester,
   ) async {
     await pumpApp(tester, logicalSize: const Size(1400, 900));
+    final requestFrameBaseline = requestFrameCalls;
 
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('open-import-dialog-command')),
@@ -2898,9 +2986,11 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pumpAndSettle();
 
-    expect(mockApi.sceneSnapshotJsonCalls, greaterThanOrEqualTo(3));
+    expect(mockApi.workflowStatusJsonCalls, greaterThanOrEqualTo(3));
+    expect(mockApi.sceneSnapshotJsonCalls, 2);
     expect(find.text('Imported hero_mesh.obj as sculpt geometry'), findsOneWidget);
     expect(find.byKey(const ValueKey('import-progress-indicator')), findsNothing);
+    expect(requestFrameCalls, greaterThan(requestFrameBaseline));
   });
 
   testWidgets(
@@ -2909,6 +2999,7 @@ void main() {
       mockApi.currentSnapshot = _MockRustApi._selectedSnapshot;
 
       await pumpApp(tester, logicalSize: const Size(1400, 900));
+      final requestFrameBaseline = requestFrameCalls;
 
       await tester.scrollUntilVisible(
         find.byKey(const ValueKey('open-sculpt-convert-dialog-command')),
@@ -2947,12 +3038,14 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pumpAndSettle();
 
-      expect(mockApi.sceneSnapshotJsonCalls, greaterThanOrEqualTo(3));
+      expect(mockApi.workflowStatusJsonCalls, greaterThanOrEqualTo(3));
+      expect(mockApi.sceneSnapshotJsonCalls, 2);
       expect(find.text('Converted Sphere to sculpt'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('sculpt-convert-progress-indicator')),
         findsNothing,
       );
+      expect(requestFrameCalls, greaterThan(requestFrameBaseline));
     },
   );
 

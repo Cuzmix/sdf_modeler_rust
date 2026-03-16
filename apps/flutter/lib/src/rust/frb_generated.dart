@@ -66,7 +66,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => 1206042673;
+  int get rustContentHash => 688953045;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -455,6 +455,8 @@ abstract class RustLibApi extends BaseApi {
   String crateApiSimpleToggleOrthographic();
 
   String crateApiSimpleUndo();
+
+  String crateApiSimpleWorkflowStatusJson();
 
   void crateApiSimpleZoomCamera({required double delta});
 }
@@ -3785,6 +3787,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "undo", argNames: []);
 
   @override
+  String crateApiSimpleWorkflowStatusJson() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 125,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleWorkflowStatusJsonConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleWorkflowStatusJsonConstMeta =>
+      const TaskConstMeta(debugName: "workflow_status_json", argNames: []);
+
+  @override
   void crateApiSimpleZoomCamera({required double delta}) {
     return handler.executeSync(
       SyncTask(
@@ -3794,7 +3822,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           return pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 125,
+            funcId: 126,
           )!;
         },
         codec: SseCodec(

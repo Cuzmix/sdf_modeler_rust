@@ -259,6 +259,14 @@ pub struct AppSculptConvertSnapshot {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppWorkflowStatusSnapshot {
+    pub export_status: AppExportStatusSnapshot,
+    pub import_status: AppImportStatusSnapshot,
+    pub sculpt_convert_status: AppSculptConvertStatusSnapshot,
+    pub scene_changed: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AppSelectedSculptSnapshot {
     pub node_id: u64,
     pub node_name: String,

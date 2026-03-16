@@ -1,4 +1,8 @@
-use crate::bridge_state::{app_bridge, snapshot_json};
+use crate::bridge_state::{
+    app_bridge,
+    snapshot_json,
+    workflow_status_json as bridge_workflow_status_json,
+};
 use sdf_modeler::{CsgOp, LightType, ModifierKind};
 
 #[flutter_rust_bridge::frb(sync)]
@@ -15,6 +19,12 @@ pub fn bridge_version() -> String {
 pub fn scene_snapshot_json() -> String {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     snapshot_json(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn workflow_status_json() -> String {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge_workflow_status_json(&mut bridge)
 }
 
 #[flutter_rust_bridge::frb(sync)]

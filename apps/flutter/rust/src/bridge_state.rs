@@ -12,6 +12,10 @@ pub(crate) fn snapshot_json(bridge: &mut AppBridge) -> String {
     serde_json::to_string(&bridge.scene_snapshot()).expect("scene snapshot json")
 }
 
+pub(crate) fn workflow_status_json(bridge: &mut AppBridge) -> String {
+    serde_json::to_string(&bridge.workflow_status_snapshot()).expect("workflow status json")
+}
+
 pub(crate) fn viewport_feedback_json(bridge: &AppBridge) -> String {
     serde_json::to_string(&bridge.viewport_feedback()).expect("viewport feedback json")
 }

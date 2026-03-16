@@ -593,6 +593,24 @@ class AppExportSnapshot {
   final List<AppExportPresetSnapshot> presets;
   final AppExportStatusSnapshot status;
 
+  AppExportSnapshot copyWith({
+    int? resolution,
+    int? minResolution,
+    int? maxResolution,
+    bool? adaptive,
+    List<AppExportPresetSnapshot>? presets,
+    AppExportStatusSnapshot? status,
+  }) {
+    return AppExportSnapshot(
+      resolution: resolution ?? this.resolution,
+      minResolution: minResolution ?? this.minResolution,
+      maxResolution: maxResolution ?? this.maxResolution,
+      adaptive: adaptive ?? this.adaptive,
+      presets: presets ?? this.presets,
+      status: status ?? this.status,
+    );
+  }
+
   factory AppExportSnapshot.fromJson(Map<String, dynamic> json) {
     return AppExportSnapshot(
       resolution: (json['resolution'] as num?)?.toInt() ?? 128,
@@ -706,6 +724,17 @@ class AppImportSnapshot {
   final AppImportDialogSnapshot? dialog;
   final AppImportStatusSnapshot status;
 
+  AppImportSnapshot copyWith({
+    AppImportDialogSnapshot? dialog,
+    AppImportStatusSnapshot? status,
+    bool useExistingDialog = true,
+  }) {
+    return AppImportSnapshot(
+      dialog: useExistingDialog ? (dialog ?? this.dialog) : dialog,
+      status: status ?? this.status,
+    );
+  }
+
   factory AppImportSnapshot.fromJson(Map<String, dynamic> json) {
     return AppImportSnapshot(
       dialog: json['dialog'] == null
@@ -801,6 +830,17 @@ class AppSculptConvertSnapshot {
 
   final AppSculptConvertDialogSnapshot? dialog;
   final AppSculptConvertStatusSnapshot status;
+
+  AppSculptConvertSnapshot copyWith({
+    AppSculptConvertDialogSnapshot? dialog,
+    AppSculptConvertStatusSnapshot? status,
+    bool useExistingDialog = true,
+  }) {
+    return AppSculptConvertSnapshot(
+      dialog: useExistingDialog ? (dialog ?? this.dialog) : dialog,
+      status: status ?? this.status,
+    );
+  }
 
   factory AppSculptConvertSnapshot.fromJson(Map<String, dynamic> json) {
     return AppSculptConvertSnapshot(
@@ -1341,6 +1381,45 @@ class AppSceneSnapshot {
   final AppCameraSnapshot camera;
   final AppSceneStatsSnapshot stats;
   final AppToolSnapshot tool;
+
+  AppSceneSnapshot copyWith({
+    AppNodeSnapshot? selectedNode,
+    AppSelectedNodePropertiesSnapshot? selectedNodeProperties,
+    List<AppNodeSnapshot>? topLevelNodes,
+    List<AppSceneTreeNodeSnapshot>? sceneTreeRoots,
+    AppHistorySnapshot? history,
+    AppDocumentSnapshot? document,
+    AppRenderSettingsSnapshot? render,
+    AppSettingsSnapshot? settings,
+    AppExportSnapshot? export,
+    AppImportSnapshot? import,
+    AppSculptConvertSnapshot? sculptConvert,
+    AppSculptSnapshot? sculpt,
+    AppLightLinkingSnapshot? lightLinking,
+    AppCameraSnapshot? camera,
+    AppSceneStatsSnapshot? stats,
+    AppToolSnapshot? tool,
+  }) {
+    return AppSceneSnapshot(
+      selectedNode: selectedNode ?? this.selectedNode,
+      selectedNodeProperties:
+          selectedNodeProperties ?? this.selectedNodeProperties,
+      topLevelNodes: topLevelNodes ?? this.topLevelNodes,
+      sceneTreeRoots: sceneTreeRoots ?? this.sceneTreeRoots,
+      history: history ?? this.history,
+      document: document ?? this.document,
+      render: render ?? this.render,
+      settings: settings ?? this.settings,
+      export: export ?? this.export,
+      import: import ?? this.import,
+      sculptConvert: sculptConvert ?? this.sculptConvert,
+      sculpt: sculpt ?? this.sculpt,
+      lightLinking: lightLinking ?? this.lightLinking,
+      camera: camera ?? this.camera,
+      stats: stats ?? this.stats,
+      tool: tool ?? this.tool,
+    );
+  }
 
   factory AppSceneSnapshot.fromJson(Map<String, dynamic> json) {
     final topLevelNodes = (json['top_level_nodes'] as List<dynamic>)

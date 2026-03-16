@@ -2986,3 +2986,46 @@ Result:
 - PRD `#42` is fully verified and complete.
 - The remaining open migration item is PRD `#43`.
 
+--- Migration Iteration 36: PRD #43 - Workflow delta polling for import/export/sculpt-convert completion ---
+COMPLETED. Replaced Flutter's repeated full-scene workflow polling with a lightweight workflow-status delta path and only fetches a full scene snapshot plus one native frame refresh when a workflow completion actually mutates the scene.
+
+Changes:
+- src/app_bridge/dto.rs
+- src/app_bridge/mod.rs
+- src/app_bridge/session.rs
+- apps/flutter/rust/src/bridge_state.rs
+- apps/flutter/rust/src/api/simple.rs
+- apps/flutter/rust/src/frb_generated.rs
+- apps/flutter/lib/src/rust/api/simple.dart
+- apps/flutter/lib/src/rust/frb_generated.dart
+- apps/flutter/lib/src/scene/scene_snapshot.dart
+- apps/flutter/lib/src/scene/workflow_status.dart
+- apps/flutter/lib/app.dart
+- apps/flutter/test/widget_test.dart
+- plans/prd.json
+- plans/progress.txt
+  - Added a bridge-side workflow status snapshot that reports export, import, and sculpt-convert state along with a `scene_changed` bit for completion paths that actually mutate backend scene state.
+  - Moved the Flutter workflow timer off repeated `sceneSnapshotJson()` polling and onto a lightweight `workflowStatusJson()` call.
+  - Kept export completion on the workflow-only path with no extra full snapshot fetch or viewport refresh because export does not change the scene.
+  - Forced exactly one full snapshot refresh and one native frame request when import or sculpt-convert completion lands new scene state.
+  - Updated widget tests to assert the reduced full-snapshot count and the new workflow-status polling path.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS
+- cargo build: PASS
+- FRB codegen: PASS (`flutter_rust_bridge_codegen generate --rust-input crate::api --rust-root rust --dart-output lib/src/rust --dart-root . --dart-entrypoint-class-name RustLib --stop-on-error`)
+- Flutter analyze: PASS
+- Flutter test: PASS
+- Flutter build windows --debug: PASS
+- Flutter test integration_test -d windows: PASS
+
+Manual verification:
+- Windows debug host smoke launch: PASS (`apps/flutter/build/windows/x64/runner/Debug/sdf_modeler_flutter.exe` stayed running for 8 seconds before the scripted stop)
+- Direct interactive egui-vs-Flutter import timing comparison was not automated in this terminal session.
+
+Result:
+- PRD `#43` is fully verified and complete.
+- All items in `plans/prd.json` now pass.
+

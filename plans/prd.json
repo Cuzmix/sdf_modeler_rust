@@ -298,6 +298,6 @@
     "category": "performance",
     "description": "Close Flutter-vs-egui import and workflow completion latency regressions.\n\nSteps:\n1. Measure import timing split between dialog/bridge overhead, background import work, progress propagation, completion propagation, and viewport refresh in egui versus Flutter.\n2. Replace full-snapshot workflow polling with a smaller delta or event path for import, export, and sculpt-convert status and completion.\n3. Keep the Rust import/export workers unchanged unless measurement shows backend work itself regressed; prioritize host and bridge overhead first.\n4. Verify import start, progress, completion state, and resulting viewport refresh land without the extra lag currently visible in Flutter.",
     "verification": "Rust: run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, and `cargo build`. If the bridge API changes, run `apps/flutter/scripts/frb_codegen.ps1`. Flutter: from `apps/flutter`, run `fvm flutter analyze`, `fvm flutter test`, `fvm flutter build windows --debug`, and `fvm flutter test integration_test -d windows` when workflow or host event paths change. Manual: import the same representative mesh in egui and Flutter and confirm Flutter no longer shows a material extra delay in progress/completion/viewport update.",
-    "passes": false
+    "passes": true
   }
 ]

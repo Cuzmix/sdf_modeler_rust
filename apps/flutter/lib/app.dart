@@ -10,6 +10,7 @@ import 'package:sdf_modeler_flutter/src/light/light_inspector_panel.dart';
 import 'package:sdf_modeler_flutter/src/render/render_settings_panel.dart';
 import 'package:sdf_modeler_flutter/src/scene/scene_snapshot.dart';
 import 'package:sdf_modeler_flutter/src/scene/scene_tree_panel.dart';
+import 'package:sdf_modeler_flutter/src/scene/workflow_status.dart';
 import 'package:sdf_modeler_flutter/src/sculpt/sculpt_convert_panel.dart';
 import 'package:sdf_modeler_flutter/src/sculpt/sculpt_session_panel.dart';
 import 'package:sdf_modeler_flutter/src/settings/settings_panel.dart';
@@ -208,6 +209,24 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     return AppSceneSnapshot.fromJson(decoded);
   }
 
+  AppWorkflowStatusSnapshot _decodeWorkflowStatus(String rawJson) {
+    final decoded = jsonDecode(rawJson) as Map<String, dynamic>;
+    return AppWorkflowStatusSnapshot.fromJson(decoded);
+  }
+
+  AppSceneSnapshot _mergeWorkflowStatus(
+    AppSceneSnapshot snapshot,
+    AppWorkflowStatusSnapshot workflowStatus,
+  ) {
+    return snapshot.copyWith(
+      export: snapshot.export.copyWith(status: workflowStatus.exportStatus),
+      import: snapshot.import.copyWith(status: workflowStatus.importStatus),
+      sculptConvert: snapshot.sculptConvert.copyWith(
+        status: workflowStatus.sculptConvertStatus,
+      ),
+    );
+  }
+
   void _syncWorkflowPolling(AppSceneSnapshot? snapshot) {
     final shouldPoll =
         (snapshot?.export.status.isInProgress ?? false) ||
@@ -215,8 +234,8 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
         (snapshot?.sculptConvert.status.isInProgress ?? false);
     if (shouldPoll) {
       _workflowPollTimer ??= Timer.periodic(
-        const Duration(milliseconds: 150),
-        (_) => _pollWorkflowSnapshot(),
+        const Duration(milliseconds: 50),
+        (_) => _pollWorkflowStatus(),
       );
       return;
     }
@@ -236,17 +255,33 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     }
   }
 
-  Future<void> _pollWorkflowSnapshot() async {
+  Future<void> _pollWorkflowStatus() async {
     if (!mounted || _workflowPollInFlight) {
       return;
     }
 
     _workflowPollInFlight = true;
     try {
-      final snapshot = _decodeSnapshot(sceneSnapshotJson());
+      final workflowStatus = _decodeWorkflowStatus(workflowStatusJson());
       if (!mounted) {
         return;
       }
+      final currentSnapshot = _sceneSnapshot;
+      if (currentSnapshot == null || workflowStatus.sceneChanged) {
+        final snapshot = _decodeSnapshot(sceneSnapshotJson());
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _applySnapshotState(snapshot);
+        });
+        if (workflowStatus.sceneChanged) {
+          _requestNativeFrame();
+        }
+        return;
+      }
+
+      final snapshot = _mergeWorkflowStatus(currentSnapshot, workflowStatus);
       setState(() {
         _applySnapshotState(snapshot, updateViewportFeedback: false);
       });
