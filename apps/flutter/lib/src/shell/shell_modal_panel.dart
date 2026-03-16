@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_contract.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_panel_surface.dart';
+import 'package:sdf_modeler_flutter/src/shell/shell_theme.dart';
 
 class ShellModalPanel extends StatelessWidget {
   const ShellModalPanel({
@@ -16,8 +17,10 @@ class ShellModalPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final shellPalette = context.shellPalette;
+
     return ColoredBox(
-      color: Colors.black54,
+      color: shellPalette.overlayScrim,
       child: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {

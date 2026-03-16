@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_contract.dart';
+import 'package:sdf_modeler_flutter/src/shell/shell_theme.dart';
 import 'package:sdf_modeler_flutter/src/texture/texture_viewport_feedback.dart';
 
 class ViewportFeedbackOverlay extends StatelessWidget {
@@ -25,6 +26,8 @@ class ViewportFeedbackOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final shellPalette = context.shellPalette;
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final selectedNode = feedback?.selectedNode;
@@ -64,14 +67,14 @@ class ViewportFeedbackOverlay extends StatelessWidget {
                         _OverlayChip(
                           label: 'Selected',
                           value: selectedNode.name,
-                          accentColor: const Color(0xFF8DE1D5),
+                          accentColor: shellPalette.infoAccent,
                         ),
                       if (shouldShowHoveredNode) ...[
                         const SizedBox(height: ShellTokens.compactGap),
                         _OverlayChip(
                           label: 'Hover',
                           value: hoveredNode.name,
-                          accentColor: const Color(0xFFF3E6A7),
+                          accentColor: shellPalette.warningAccent,
                         ),
                       ],
                     ],
@@ -92,7 +95,7 @@ class ViewportFeedbackOverlay extends StatelessWidget {
                           _OverlayChip(
                             label: 'Host',
                             value: hostError!,
-                            accentColor: const Color(0xFFFFA18B),
+                            accentColor: shellPalette.dangerAccent,
                           ),
                         if (shouldShowHostError && shouldShowStats)
                           const SizedBox(height: ShellTokens.compactGap),
@@ -126,17 +129,18 @@ class ViewportFeedbackOverlay extends StatelessWidget {
   }
 
   Color _statsAccentColor() {
+    final shellPalette = ShellPalette.dusk;
     final measuredFramesPerSecond = framesPerSecond;
     if (measuredFramesPerSecond == null) {
-      return const Color(0xFFE4B37B);
+      return shellPalette.warningAccent;
     }
     if (measuredFramesPerSecond >= _targetFramesPerSecond) {
-      return const Color(0xFF80E6A8);
+      return shellPalette.successAccent;
     }
     if (measuredFramesPerSecond >= _warningFramesPerSecond) {
-      return const Color(0xFFF3E6A7);
+      return shellPalette.warningAccent;
     }
-    return const Color(0xFFFFA18B);
+    return shellPalette.dangerAccent;
   }
 }
 
@@ -153,11 +157,13 @@ class _OverlayChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final shellPalette = context.shellPalette;
+
     return DecoratedBox(
-      decoration: BoxDecoration(
-        color: const Color(0xCC111111),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: accentColor.withValues(alpha: 0.7)),
+      decoration: ShellSurfaceStyles.overlayPanel(
+        context,
+        accentColor: accentColor,
+        pill: true,
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(
@@ -167,7 +173,7 @@ class _OverlayChip extends StatelessWidget {
         child: RichText(
           text: TextSpan(
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Colors.white,
+              color: shellPalette.overlayText,
               fontWeight: FontWeight.w500,
             ),
             children: [

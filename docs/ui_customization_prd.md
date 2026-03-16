@@ -79,6 +79,11 @@ This PRD assumes the following migration foundations are already in place:
 - Motion guidance for panel and overlay transitions
 - A rollout plan for applying the visual language without bundling unrelated functionality
 
+## Execution Status
+
+- Slice 1 complete: shared Flutter shell color, typography, spacing, and surface tokens now live in a dedicated theme module, and the core shell containers plus viewport overlays consume that shared styling foundation.
+- Next slice: restyle inspector sections, command sheets, and other shell containers against the shared tokens instead of one-off Material defaults.
+
 ## Rollout Order
 
 1. Tokenize color, type, spacing, and surface primitives.

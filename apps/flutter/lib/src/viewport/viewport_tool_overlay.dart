@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sdf_modeler_flutter/src/scene/scene_snapshot.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_contract.dart';
+import 'package:sdf_modeler_flutter/src/shell/shell_theme.dart';
 
 class ViewportToolOverlay extends StatelessWidget {
   const ViewportToolOverlay({
@@ -32,6 +33,8 @@ class ViewportToolOverlay extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
+    final shellPalette = context.shellPalette;
+
     return Padding(
       padding: const EdgeInsets.all(ShellTokens.overlayPadding),
       child: Align(
@@ -39,10 +42,9 @@ class ViewportToolOverlay extends StatelessWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 360),
           child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: const Color(0xCC111111),
-              borderRadius: BorderRadius.circular(ShellTokens.surfaceRadius),
-              border: Border.all(color: const Color(0x668DE1D5)),
+            decoration: ShellSurfaceStyles.overlayPanel(
+              context,
+              accentColor: shellPalette.infoAccent,
             ),
             child: Padding(
               padding: const EdgeInsets.all(ShellTokens.overlayChipHorizontalPadding),
@@ -53,7 +55,7 @@ class ViewportToolOverlay extends StatelessWidget {
                   Text(
                     'Viewport Tools',
                     style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: Colors.white,
+                      color: shellPalette.overlayText,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -62,7 +64,9 @@ class ViewportToolOverlay extends StatelessWidget {
                     '${currentTool.manipulatorModeLabel} · ${currentTool.manipulatorSpaceLabel} · Pivot ${_formatVec3(currentTool.pivotOffset)}',
                     style: Theme.of(
                       context,
-                    ).textTheme.bodySmall?.copyWith(color: Colors.white70),
+                    ).textTheme.bodySmall?.copyWith(
+                      color: shellPalette.overlayMutedText,
+                    ),
                   ),
                   const SizedBox(height: ShellTokens.controlGap),
                   Wrap(
@@ -116,7 +120,7 @@ class ViewportToolOverlay extends StatelessWidget {
                   Text(
                     '${currentTool.manipulatorModeLabel} Nudges',
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: Colors.white,
+                      color: shellPalette.overlayText,
                     ),
                   ),
                   const SizedBox(height: ShellTokens.compactGap),
@@ -152,7 +156,7 @@ class ViewportToolOverlay extends StatelessWidget {
                   Text(
                     'Pivot Nudges',
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: Colors.white,
+                      color: shellPalette.overlayText,
                     ),
                   ),
                   const SizedBox(height: ShellTokens.compactGap),

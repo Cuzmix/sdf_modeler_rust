@@ -1,6 +1,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_contract.dart';
+import 'package:sdf_modeler_flutter/src/shell/shell_theme.dart';
 
 const double _viewportAspectRatio = 16.0 / 9.0;
 
@@ -396,6 +397,8 @@ class _ViewportSurfaceState extends State<ViewportSurface> {
 
   @override
   Widget build(BuildContext context) {
+    final shellPalette = context.shellPalette;
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final viewportSize = _containedViewportSize(
@@ -411,11 +414,7 @@ class _ViewportSurfaceState extends State<ViewportSurface> {
         });
 
         return DecoratedBox(
-          decoration: BoxDecoration(
-            color: Colors.black,
-            borderRadius: BorderRadius.circular(ShellTokens.surfaceRadius),
-            border: Border.all(color: Colors.white24),
-          ),
+          decoration: ShellSurfaceStyles.viewportFrame(context),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(ShellTokens.surfaceRadius),
             child: Center(
@@ -437,10 +436,13 @@ class _ViewportSurfaceState extends State<ViewportSurface> {
                       fit: StackFit.expand,
                       children: [
                         widget.textureId == null
-                            ? const Center(
+                            ? Center(
                                 child: Text(
                                   'Preparing real viewport...',
-                                  style: TextStyle(color: Colors.white70),
+                                  style: Theme.of(context).textTheme.bodyMedium
+                                      ?.copyWith(
+                                        color: shellPalette.overlayMutedText,
+                                      ),
                                 ),
                               )
                             : Texture(textureId: widget.textureId!),

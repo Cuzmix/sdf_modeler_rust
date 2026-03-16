@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:sdf_modeler_flutter/src/scene/scene_snapshot.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_contract.dart';
+import 'package:sdf_modeler_flutter/src/shell/shell_theme.dart';
 
 class SceneTreePanel extends StatelessWidget {
   const SceneTreePanel({
@@ -81,16 +82,9 @@ class _SceneTreeNodeTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           DecoratedBox(
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? theme.colorScheme.primaryContainer.withValues(alpha: 0.55)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(ShellTokens.surfaceRadius),
-              border: Border.all(
-                color: isSelected
-                    ? theme.colorScheme.primary.withValues(alpha: 0.5)
-                    : theme.colorScheme.outlineVariant,
-              ),
+            decoration: ShellSurfaceStyles.sceneTreeTile(
+              context,
+              selected: isSelected,
             ),
             child: Row(
               children: [

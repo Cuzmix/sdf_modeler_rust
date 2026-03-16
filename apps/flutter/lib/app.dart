@@ -21,6 +21,7 @@ import 'package:sdf_modeler_flutter/src/shell/shell_desktop_side_panel.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_modal_panel.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_panel_surface.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_stacked_panes.dart';
+import 'package:sdf_modeler_flutter/src/shell/shell_theme.dart';
 import 'package:sdf_modeler_flutter/src/texture/texture_bridge.dart';
 import 'package:sdf_modeler_flutter/src/texture/texture_viewport_event.dart';
 import 'package:sdf_modeler_flutter/src/texture/texture_viewport_feedback.dart';
@@ -1486,57 +1487,66 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
   Widget build(BuildContext context) {
     final activeTextureId = _textureId;
     final snapshot = _sceneSnapshot;
+    final shellBackground = ShellSurfaceStyles.canvas(context);
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(title: const Text('SDF Modeler Flutter Host')),
-      body: Padding(
-        padding: EdgeInsets.all(
-          ShellLayout.forWidth(MediaQuery.sizeOf(context).width).screenPadding,
-        ),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final shellLayout = ShellLayout.forWidth(constraints.maxWidth);
-            final selectedNode =
-                _viewportFeedback?.selectedNode ?? snapshot?.selectedNode;
-            final showPerformanceOverlay = snapshot?.settings.showFpsOverlay ?? true;
-            final viewportCard = ViewportSurface(
-              textureId: activeTextureId,
-              onViewportSizeChanged: _handleViewportSizeChanged,
-              onOrbitDrag: _handleViewportOrbitDrag,
-              onPanDrag: _handleViewportPanDrag,
-              onPrimaryTap: _handleViewportPrimaryTap,
-              onHover: _handleViewportHover,
-              onHoverExit: _handleViewportHoverExit,
-              onScroll: _handleViewportScroll,
-              onInteractionEnd: _handleViewportInteractionEnd,
-              overlay: ViewportFeedbackOverlay(
-                feedback: _viewportFeedback,
-                interactionPhase: showPerformanceOverlay
-                    ? _interactionPhase
-                    : 'idle',
-                frameTimeMs: showPerformanceOverlay ? _lastNativeFrameTimeMs : null,
-                framesPerSecond: showPerformanceOverlay
-                    ? _smoothedFramesPerSecond
-                    : null,
-                droppedFrameCount: showPerformanceOverlay ? _droppedFrameCount : 0,
-                hostError: _lastViewportHostError,
-              ),
-              controlsOverlay: ViewportToolOverlay(
-                tool: snapshot?.tool,
-                hasSelection: selectedNode != null,
-                enabled: !_commandInFlight,
-                onSetManipulatorMode: (modeId) =>
-                    unawaited(_setManipulatorMode(modeId)),
-                onToggleManipulatorSpace: () =>
-                    unawaited(_toggleManipulatorSpace()),
-                onResetManipulatorPivot: () =>
-                    unawaited(_resetManipulatorPivot()),
-                onNudgeManipulatorAxis: (modeId, axisId, direction) =>
-                    unawaited(_nudgeManipulatorAxis(modeId, axisId, direction)),
-                onNudgeManipulatorPivot: (axisId, direction) =>
-                    unawaited(_nudgeManipulatorPivot(axisId, direction)),
-              ),
-            );
+      body: DecoratedBox(
+        decoration: shellBackground,
+        child: Padding(
+          padding: EdgeInsets.all(
+            ShellLayout.forWidth(MediaQuery.sizeOf(context).width).screenPadding,
+          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final shellLayout = ShellLayout.forWidth(constraints.maxWidth);
+              final selectedNode =
+                  _viewportFeedback?.selectedNode ?? snapshot?.selectedNode;
+              final showPerformanceOverlay =
+                  snapshot?.settings.showFpsOverlay ?? true;
+              final viewportCard = ViewportSurface(
+                textureId: activeTextureId,
+                onViewportSizeChanged: _handleViewportSizeChanged,
+                onOrbitDrag: _handleViewportOrbitDrag,
+                onPanDrag: _handleViewportPanDrag,
+                onPrimaryTap: _handleViewportPrimaryTap,
+                onHover: _handleViewportHover,
+                onHoverExit: _handleViewportHoverExit,
+                onScroll: _handleViewportScroll,
+                onInteractionEnd: _handleViewportInteractionEnd,
+                overlay: ViewportFeedbackOverlay(
+                  feedback: _viewportFeedback,
+                  interactionPhase: showPerformanceOverlay
+                      ? _interactionPhase
+                      : 'idle',
+                  frameTimeMs: showPerformanceOverlay
+                      ? _lastNativeFrameTimeMs
+                      : null,
+                  framesPerSecond: showPerformanceOverlay
+                      ? _smoothedFramesPerSecond
+                      : null,
+                  droppedFrameCount: showPerformanceOverlay
+                      ? _droppedFrameCount
+                      : 0,
+                  hostError: _lastViewportHostError,
+                ),
+                controlsOverlay: ViewportToolOverlay(
+                  tool: snapshot?.tool,
+                  hasSelection: selectedNode != null,
+                  enabled: !_commandInFlight,
+                  onSetManipulatorMode: (modeId) =>
+                      unawaited(_setManipulatorMode(modeId)),
+                  onToggleManipulatorSpace: () =>
+                      unawaited(_toggleManipulatorSpace()),
+                  onResetManipulatorPivot: () =>
+                      unawaited(_resetManipulatorPivot()),
+                  onNudgeManipulatorAxis: (modeId, axisId, direction) =>
+                      unawaited(_nudgeManipulatorAxis(modeId, axisId, direction)),
+                  onNudgeManipulatorPivot: (axisId, direction) =>
+                      unawaited(_nudgeManipulatorPivot(axisId, direction)),
+                ),
+              );
 
             if (shellLayout.useSidePanel) {
               return Row(
@@ -2180,7 +2190,8 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                 );
               },
             );
-          },
+            },
+          ),
         ),
       ),
     );

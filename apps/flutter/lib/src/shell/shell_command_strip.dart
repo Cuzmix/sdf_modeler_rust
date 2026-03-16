@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_contract.dart';
+import 'package:sdf_modeler_flutter/src/shell/shell_theme.dart';
 
 class ShellCommandStrip extends StatelessWidget {
   const ShellCommandStrip({
@@ -15,13 +16,8 @@ class ShellCommandStrip extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    final theme = Theme.of(context);
     return DecoratedBox(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(ShellTokens.surfaceRadius),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
-      ),
+      decoration: ShellSurfaceStyles.commandStrip(context),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Padding(
