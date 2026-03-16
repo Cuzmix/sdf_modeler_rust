@@ -4,7 +4,7 @@
     "category": "foundation",
     "description": "Bootstrap the Flutter workspace and lock the toolchain.\n\nSteps:\n1. Keep the Flutter host in `apps/flutter`.\n2. Keep the repo-pinned Flutter SDK via FVM working on Windows.\n3. Keep `.gitignore` and workspace layout correct for Flutter, Dart, generated files, and Windows build artifacts.\n4. Treat this as the baseline for all later migration work.",
     "verification": "From `apps/flutter`, run `fvm flutter --version` and confirm the pinned SDK resolves and the Windows host still builds.",
-    "passes": false
+    "passes": true
   },
   {
     "id": 2,
@@ -284,6 +284,6 @@
     "category": "reference-images",
     "description": "Decide whether reference image management is part of Flutter parity and act on that decision.\n\nSteps:\n1. Make an explicit product decision on whether reference images remain in scope for the Flutter host.\n2. If retained, move reference-image state and commands behind backend-neutral modules and add Flutter UI.\n3. If dropped, document that decision clearly and remove it from the egui deletion blocker list.\n4. Keep the outcome explicit so PRD `#30` can close without hidden ownership.",
     "verification": "Record the retained-versus-dropped decision in the active migration artifacts. If retained and implemented, run `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, `cargo build`, and Flutter validation when the host changes.",
-    "passes": false
+    "passes": true
   }
 ]

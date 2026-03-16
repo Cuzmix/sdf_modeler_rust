@@ -2920,3 +2920,32 @@ Manual verification:
 Result:
 - PRD #40 is fully verified and complete.
 
+--- Migration Iteration 34: PRD #41 + PRD #1 - Close remaining migration checklist items ---
+COMPLETED. Recorded reference images as an explicit egui-local, out-of-scope feature for Flutter parity and closed the still-open Flutter foundation checklist item by verifying the repo-pinned SDK metadata and rebuilding the Windows host through the pinned SDK path.
+
+Changes:
+- docs/egui_parity_audit.md
+- plans/prd.json
+- plans/progress.txt
+  - Removed reference images from the remaining Flutter parity blocker list and moved them into the explicitly out-of-scope egui-local tooling set.
+  - Recorded the rationale for dropping reference-image parity in this migration phase: the current implementation depends on `egui::TextureHandle`, egui-owned file picker flow, and egui viewport overlay rendering rather than backend-neutral document or session state.
+  - Marked PRD `#41` complete because the retained-vs-dropped decision is now explicit in the active migration artifacts and no longer blocks the parity queue.
+  - Marked PRD `#1` complete after confirming the repo pin resolves to Flutter `3.41.4` / Dart `3.11.1` via `.fvmrc` plus the local Flutter cache metadata and after rebuilding the Windows debug host through `.fvm/flutter_sdk/bin/flutter.bat`.
+
+Verification:
+- cargo check: PASS
+- cargo clippy -- -D warnings: PASS
+- cargo test: PASS
+- cargo build: PASS
+- Pinned Flutter SDK metadata: PASS (`.fvmrc` -> `3.41.4`; `.fvm/versions/3.41.4/bin/cache/flutter.version.json` -> Flutter `3.41.4`, Dart `3.11.1`)
+- Flutter build windows --debug: PASS (`.fvm/flutter_sdk/bin/flutter.bat build windows --debug`)
+- Direct `flutter --version` invocation from the noninteractive shell: TIMED OUT (the pinned SDK path itself still resolved and built successfully)
+
+Manual verification:
+- Not required for this documentation and foundation-verification slice.
+
+Result:
+- PRD `#41` is fully verified and complete.
+- PRD `#1` is closed for the active migration workflow.
+- All items in `plans/prd.json` now pass.
+

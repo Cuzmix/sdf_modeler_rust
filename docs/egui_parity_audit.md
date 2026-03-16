@@ -28,11 +28,9 @@ These areas already have backend-neutral ownership through `src/app_bridge/` and
 
 ## Remaining Egui-Only Surface That Still Needs Migration
 
-These behaviors are still product-relevant and should not be deleted until they move into backend-neutral modules or get an explicit product decision.
-
-| Area | Current egui files | Why it still blocks decommission | Required migration direction |
-| --- | --- | --- | --- |
-| Reference image management | `src/ui/reference_image.rs`, `src/ui/dock.rs` | Reference images are still configured entirely inside egui. | Decide whether they are part of the Flutter parity target; if yes, move state ownership out of egui. |
+No additional egui-owned workflows remain in the active Flutter parity target.
+Reference images were the last unresolved product decision and are now handled
+explicitly in the PRD `#41` decision below.
 
 ## PRD #40 Diagnostics Decision
 
@@ -46,6 +44,18 @@ The Flutter parity target keeps only the diagnostics that already support the ac
 | Drop | Scene statistics window | `src/ui/scene_stats.rs` | Existing backend stats snapshots may remain available for debugging or future use, but no dedicated Flutter stats panel is part of the parity target. |
 | Drop | Deep profiler views and debug-toggle-driven diagnostics windows | `src/ui/profiler.rs`, debug/profile hooks in egui menus | Treat as native egui developer tooling, not a Flutter product requirement. They do not block decommission of the Flutter parity queue. |
 
+## PRD #41 Reference Images Decision
+
+Reference images are explicitly dropped from the current Flutter parity target.
+The existing implementation is an egui-local modeling aid built around
+`ReferenceImageManager`, `egui::TextureHandle`, and egui-side file-dialog action
+handling in `src/app/action_handler.rs`, so it does not yet behave like
+backend-neutral document or session state.
+
+| Decision | Surface | Current owner | Outcome |
+| --- | --- | --- | --- |
+| Drop | Reference image management and viewport overlays | `src/ui/reference_image.rs`, `src/app/action_handler.rs`, `src/ui/dock.rs`, `src/ui/viewport/draw.rs` | Keep as native egui-local tooling only. It is not a Flutter parity blocker and should be revisited only if a future PRD funds backend-owned viewport overlay state and cross-toolkit texture/file-picker plumbing. |
+
 ## Egui-Only Surface That Is Out Of The Current Flutter Parity Target
 
 These features are not covered by the current migration PRD and should be treated as intentionally out of scope until a new PRD item says otherwise.
@@ -54,6 +64,7 @@ These features are not covered by the current migration PRD and should be treate
 | --- | --- | --- |
 | History inspection panel | `src/ui/history_panel.rs` | Flutter keeps undo/redo availability only. The labeled history list is explicitly out of the parity target. |
 | Scene statistics and profiler windows | `src/ui/scene_stats.rs`, `src/ui/profiler.rs` | Flutter keeps only the migration-facing viewport overlay diagnostics. Dedicated stats/profiler windows are explicitly out of scope. |
+| Reference image management | `src/ui/reference_image.rs`, `src/ui/dock.rs`, `src/ui/viewport/draw.rs` | Keep as native egui-local tooling. The current implementation depends on egui textures and egui-owned file dialog flow, so it is explicitly out of the Flutter parity target. |
 | Dock layout, tab management, and workspace presets | `src/ui/dock.rs`, `src/app/ui_panels.rs` | Flutter intentionally uses a touch-first shell instead of reproducing egui docking semantics. Keep only if the desktop native app continues to need them. |
 | Command palette | `src/ui/command_palette.rs`, `src/app/egui_frontend.rs` | No Flutter parity target exists today. Replace with Flutter-specific shell affordances only if later needed. |
 | Quick toolbar | `src/ui/quick_toolbar.rs` | The Flutter shell already owns its command presentation model. Treat egui quick access as toolkit-specific sugar. |
@@ -77,7 +88,7 @@ These are the high-signal duplicate ownership points to cut before touching larg
 ## PRD #27 Deletion Order
 
 1. Remove duplicate egui menu and panel command wiring for document, history, camera, scene-tree, and basic property edits.
-2. Keep egui-only workflows that still block parity isolated and explicit: only the reference-image workflow if it remains in scope.
+2. Keep intentionally retained egui-local tooling explicit instead of mixing it into duplicate-ownership deletions.
 3. Decide whether out-of-scope egui-only features are intentionally retained for the native egui app or formally dropped.
 4. Only after the remaining required workflows move behind backend-neutral modules should the egui adapter modules themselves be deleted.
 
@@ -87,5 +98,6 @@ These are the high-signal duplicate ownership points to cut before touching larg
 - Render settings now round-trip through backend-neutral snapshots and Flutter surfaces instead of depending on egui ownership.
 - Application settings, bookmarks, and keymap editing now round-trip through backend-neutral snapshots and Flutter surfaces instead of depending on the egui settings window.
 - The retained Flutter diagnostics subset is now explicit: command availability plus the existing viewport overlay. The labeled history panel, scene stats window, and deep profiler views are out of parity scope.
-- The last unresolved product decision in the parity queue is reference-image management.
+- Reference image management is explicitly out of the Flutter parity target and remains native egui-local tooling until a future PRD says otherwise.
+- There are no remaining unresolved parity decisions in the active migration queue.
 - The biggest duplicate-ownership cleanup targets are `src/app/ui_panels.rs`, `src/ui/scene_tree.rs`, `src/ui/properties.rs`, and `src/ui/quick_toolbar.rs`.
