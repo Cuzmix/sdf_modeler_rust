@@ -11,648 +11,1429 @@ import 'dart:ffi' as ffi;
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated_io.dart';
 
+abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
+  RustLibApiImplPlatform({
+    required super.handler,
+    required super.wire,
+    required super.generalizedFrbRustBinding,
+    required super.portManager,
+  });
 
+  @protected
+  String dco_decode_String(dynamic raw);
 
+  @protected
+  AppCameraBookmarkSnapshot dco_decode_app_camera_bookmark_snapshot(
+    dynamic raw,
+  );
 
-                abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
-                  RustLibApiImplPlatform({
-                    required super.handler,
-                    required super.wire,
-                    required super.generalizedFrbRustBinding,
-                    required super.portManager,
-                  });
+  @protected
+  AppCameraSnapshot dco_decode_app_camera_snapshot(dynamic raw);
 
-                  
+  @protected
+  AppCommandSnapshot dco_decode_app_command_snapshot(dynamic raw);
 
-                  @protected String dco_decode_String(dynamic raw);
+  @protected
+  AppDocumentSnapshot dco_decode_app_document_snapshot(dynamic raw);
 
-@protected AppCameraBookmarkSnapshot dco_decode_app_camera_bookmark_snapshot(dynamic raw);
+  @protected
+  AppExportPresetSnapshot dco_decode_app_export_preset_snapshot(dynamic raw);
 
-@protected AppCameraSnapshot dco_decode_app_camera_snapshot(dynamic raw);
+  @protected
+  AppExportSnapshot dco_decode_app_export_snapshot(dynamic raw);
 
-@protected AppCommandSnapshot dco_decode_app_command_snapshot(dynamic raw);
+  @protected
+  AppExportStatusSnapshot dco_decode_app_export_status_snapshot(dynamic raw);
 
-@protected AppDocumentSnapshot dco_decode_app_document_snapshot(dynamic raw);
+  @protected
+  AppHistorySnapshot dco_decode_app_history_snapshot(dynamic raw);
 
-@protected AppExportPresetSnapshot dco_decode_app_export_preset_snapshot(dynamic raw);
+  @protected
+  AppImportDialogSnapshot dco_decode_app_import_dialog_snapshot(dynamic raw);
 
-@protected AppExportSnapshot dco_decode_app_export_snapshot(dynamic raw);
+  @protected
+  AppImportSnapshot dco_decode_app_import_snapshot(dynamic raw);
 
-@protected AppExportStatusSnapshot dco_decode_app_export_status_snapshot(dynamic raw);
+  @protected
+  AppImportStatusSnapshot dco_decode_app_import_status_snapshot(dynamic raw);
 
-@protected AppHistorySnapshot dco_decode_app_history_snapshot(dynamic raw);
+  @protected
+  AppKeyComboSnapshot dco_decode_app_key_combo_snapshot(dynamic raw);
 
-@protected AppImportDialogSnapshot dco_decode_app_import_dialog_snapshot(dynamic raw);
+  @protected
+  AppKeyOptionSnapshot dco_decode_app_key_option_snapshot(dynamic raw);
 
-@protected AppImportSnapshot dco_decode_app_import_snapshot(dynamic raw);
+  @protected
+  AppKeybindingSnapshot dco_decode_app_keybinding_snapshot(dynamic raw);
 
-@protected AppImportStatusSnapshot dco_decode_app_import_status_snapshot(dynamic raw);
+  @protected
+  AppLightCookieCandidateSnapshot
+  dco_decode_app_light_cookie_candidate_snapshot(dynamic raw);
 
-@protected AppKeyComboSnapshot dco_decode_app_key_combo_snapshot(dynamic raw);
+  @protected
+  AppLightLinkNodeSnapshot dco_decode_app_light_link_node_snapshot(dynamic raw);
 
-@protected AppKeyOptionSnapshot dco_decode_app_key_option_snapshot(dynamic raw);
+  @protected
+  AppLightLinkTargetSnapshot dco_decode_app_light_link_target_snapshot(
+    dynamic raw,
+  );
 
-@protected AppKeybindingSnapshot dco_decode_app_keybinding_snapshot(dynamic raw);
+  @protected
+  AppLightLinkingSnapshot dco_decode_app_light_linking_snapshot(dynamic raw);
 
-@protected AppLightCookieCandidateSnapshot dco_decode_app_light_cookie_candidate_snapshot(dynamic raw);
+  @protected
+  AppLightPropertiesSnapshot dco_decode_app_light_properties_snapshot(
+    dynamic raw,
+  );
 
-@protected AppLightLinkNodeSnapshot dco_decode_app_light_link_node_snapshot(dynamic raw);
+  @protected
+  AppMaterialPropertiesSnapshot dco_decode_app_material_properties_snapshot(
+    dynamic raw,
+  );
 
-@protected AppLightLinkTargetSnapshot dco_decode_app_light_link_target_snapshot(dynamic raw);
+  @protected
+  AppNodeSnapshot dco_decode_app_node_snapshot(dynamic raw);
 
-@protected AppLightLinkingSnapshot dco_decode_app_light_linking_snapshot(dynamic raw);
+  @protected
+  AppPrimitivePropertiesSnapshot dco_decode_app_primitive_properties_snapshot(
+    dynamic raw,
+  );
 
-@protected AppLightPropertiesSnapshot dco_decode_app_light_properties_snapshot(dynamic raw);
+  @protected
+  AppQuickActionSnapshot dco_decode_app_quick_action_snapshot(dynamic raw);
 
-@protected AppMaterialPropertiesSnapshot dco_decode_app_material_properties_snapshot(dynamic raw);
+  @protected
+  AppRenderOptionSnapshot dco_decode_app_render_option_snapshot(dynamic raw);
 
-@protected AppNodeSnapshot dco_decode_app_node_snapshot(dynamic raw);
+  @protected
+  AppRenderSettingsSnapshot dco_decode_app_render_settings_snapshot(
+    dynamic raw,
+  );
 
-@protected AppPrimitivePropertiesSnapshot dco_decode_app_primitive_properties_snapshot(dynamic raw);
+  @protected
+  AppScalarPropertySnapshot dco_decode_app_scalar_property_snapshot(
+    dynamic raw,
+  );
 
-@protected AppQuickActionSnapshot dco_decode_app_quick_action_snapshot(dynamic raw);
+  @protected
+  AppSceneSnapshot dco_decode_app_scene_snapshot(dynamic raw);
 
-@protected AppRenderOptionSnapshot dco_decode_app_render_option_snapshot(dynamic raw);
+  @protected
+  AppSceneStatsSnapshot dco_decode_app_scene_stats_snapshot(dynamic raw);
 
-@protected AppRenderSettingsSnapshot dco_decode_app_render_settings_snapshot(dynamic raw);
+  @protected
+  AppSceneTreeNodeSnapshot dco_decode_app_scene_tree_node_snapshot(dynamic raw);
 
-@protected AppScalarPropertySnapshot dco_decode_app_scalar_property_snapshot(dynamic raw);
+  @protected
+  AppSculptConvertDialogSnapshot dco_decode_app_sculpt_convert_dialog_snapshot(
+    dynamic raw,
+  );
 
-@protected AppSceneSnapshot dco_decode_app_scene_snapshot(dynamic raw);
+  @protected
+  AppSculptConvertSnapshot dco_decode_app_sculpt_convert_snapshot(dynamic raw);
 
-@protected AppSceneStatsSnapshot dco_decode_app_scene_stats_snapshot(dynamic raw);
+  @protected
+  AppSculptConvertStatusSnapshot dco_decode_app_sculpt_convert_status_snapshot(
+    dynamic raw,
+  );
 
-@protected AppSceneTreeNodeSnapshot dco_decode_app_scene_tree_node_snapshot(dynamic raw);
+  @protected
+  AppSculptSessionSnapshot dco_decode_app_sculpt_session_snapshot(dynamic raw);
 
-@protected AppSculptConvertDialogSnapshot dco_decode_app_sculpt_convert_dialog_snapshot(dynamic raw);
+  @protected
+  AppSculptSnapshot dco_decode_app_sculpt_snapshot(dynamic raw);
 
-@protected AppSculptConvertSnapshot dco_decode_app_sculpt_convert_snapshot(dynamic raw);
+  @protected
+  AppSelectedNodePropertiesSnapshot
+  dco_decode_app_selected_node_properties_snapshot(dynamic raw);
 
-@protected AppSculptConvertStatusSnapshot dco_decode_app_sculpt_convert_status_snapshot(dynamic raw);
+  @protected
+  AppSelectedSculptSnapshot dco_decode_app_selected_sculpt_snapshot(
+    dynamic raw,
+  );
 
-@protected AppSculptSessionSnapshot dco_decode_app_sculpt_session_snapshot(dynamic raw);
+  @protected
+  AppSelectionContextSnapshot dco_decode_app_selection_context_snapshot(
+    dynamic raw,
+  );
 
-@protected AppSculptSnapshot dco_decode_app_sculpt_snapshot(dynamic raw);
+  @protected
+  AppSettingsSnapshot dco_decode_app_settings_snapshot(dynamic raw);
 
-@protected AppSelectedNodePropertiesSnapshot dco_decode_app_selected_node_properties_snapshot(dynamic raw);
+  @protected
+  AppToolSnapshot dco_decode_app_tool_snapshot(dynamic raw);
 
-@protected AppSelectedSculptSnapshot dco_decode_app_selected_sculpt_snapshot(dynamic raw);
+  @protected
+  AppTransformPropertiesSnapshot dco_decode_app_transform_properties_snapshot(
+    dynamic raw,
+  );
 
-@protected AppSelectionContextSnapshot dco_decode_app_selection_context_snapshot(dynamic raw);
+  @protected
+  AppVec3 dco_decode_app_vec_3(dynamic raw);
 
-@protected AppSettingsSnapshot dco_decode_app_settings_snapshot(dynamic raw);
+  @protected
+  AppViewportLightSnapshot dco_decode_app_viewport_light_snapshot(dynamic raw);
 
-@protected AppToolSnapshot dco_decode_app_tool_snapshot(dynamic raw);
+  @protected
+  AppWorkflowStatusSnapshot dco_decode_app_workflow_status_snapshot(
+    dynamic raw,
+  );
 
-@protected AppTransformPropertiesSnapshot dco_decode_app_transform_properties_snapshot(dynamic raw);
+  @protected
+  AppWorkspaceSnapshot dco_decode_app_workspace_snapshot(dynamic raw);
 
-@protected AppVec3 dco_decode_app_vec_3(dynamic raw);
+  @protected
+  bool dco_decode_bool(dynamic raw);
 
-@protected AppViewportLightSnapshot dco_decode_app_viewport_light_snapshot(dynamic raw);
+  @protected
+  AppImportDialogSnapshot dco_decode_box_autoadd_app_import_dialog_snapshot(
+    dynamic raw,
+  );
 
-@protected AppWorkflowStatusSnapshot dco_decode_app_workflow_status_snapshot(dynamic raw);
+  @protected
+  AppKeyComboSnapshot dco_decode_box_autoadd_app_key_combo_snapshot(
+    dynamic raw,
+  );
 
-@protected AppWorkspaceSnapshot dco_decode_app_workspace_snapshot(dynamic raw);
+  @protected
+  AppLightPropertiesSnapshot
+  dco_decode_box_autoadd_app_light_properties_snapshot(dynamic raw);
 
-@protected bool dco_decode_bool(dynamic raw);
+  @protected
+  AppMaterialPropertiesSnapshot
+  dco_decode_box_autoadd_app_material_properties_snapshot(dynamic raw);
 
-@protected AppImportDialogSnapshot dco_decode_box_autoadd_app_import_dialog_snapshot(dynamic raw);
+  @protected
+  AppNodeSnapshot dco_decode_box_autoadd_app_node_snapshot(dynamic raw);
 
-@protected AppKeyComboSnapshot dco_decode_box_autoadd_app_key_combo_snapshot(dynamic raw);
+  @protected
+  AppPrimitivePropertiesSnapshot
+  dco_decode_box_autoadd_app_primitive_properties_snapshot(dynamic raw);
 
-@protected AppLightPropertiesSnapshot dco_decode_box_autoadd_app_light_properties_snapshot(dynamic raw);
+  @protected
+  AppSculptConvertDialogSnapshot
+  dco_decode_box_autoadd_app_sculpt_convert_dialog_snapshot(dynamic raw);
 
-@protected AppMaterialPropertiesSnapshot dco_decode_box_autoadd_app_material_properties_snapshot(dynamic raw);
+  @protected
+  AppSculptSessionSnapshot dco_decode_box_autoadd_app_sculpt_session_snapshot(
+    dynamic raw,
+  );
 
-@protected AppNodeSnapshot dco_decode_box_autoadd_app_node_snapshot(dynamic raw);
+  @protected
+  AppSelectedNodePropertiesSnapshot
+  dco_decode_box_autoadd_app_selected_node_properties_snapshot(dynamic raw);
 
-@protected AppPrimitivePropertiesSnapshot dco_decode_box_autoadd_app_primitive_properties_snapshot(dynamic raw);
+  @protected
+  AppSelectedSculptSnapshot dco_decode_box_autoadd_app_selected_sculpt_snapshot(
+    dynamic raw,
+  );
 
-@protected AppSculptConvertDialogSnapshot dco_decode_box_autoadd_app_sculpt_convert_dialog_snapshot(dynamic raw);
+  @protected
+  AppTransformPropertiesSnapshot
+  dco_decode_box_autoadd_app_transform_properties_snapshot(dynamic raw);
 
-@protected AppSculptSessionSnapshot dco_decode_box_autoadd_app_sculpt_session_snapshot(dynamic raw);
+  @protected
+  AppVec3 dco_decode_box_autoadd_app_vec_3(dynamic raw);
 
-@protected AppSelectedNodePropertiesSnapshot dco_decode_box_autoadd_app_selected_node_properties_snapshot(dynamic raw);
+  @protected
+  double dco_decode_box_autoadd_f_32(dynamic raw);
 
-@protected AppSelectedSculptSnapshot dco_decode_box_autoadd_app_selected_sculpt_snapshot(dynamic raw);
+  @protected
+  int dco_decode_box_autoadd_u_32(dynamic raw);
 
-@protected AppTransformPropertiesSnapshot dco_decode_box_autoadd_app_transform_properties_snapshot(dynamic raw);
+  @protected
+  BigInt dco_decode_box_autoadd_u_64(dynamic raw);
 
-@protected AppVec3 dco_decode_box_autoadd_app_vec_3(dynamic raw);
+  @protected
+  double dco_decode_f_32(dynamic raw);
 
-@protected double dco_decode_box_autoadd_f_32(dynamic raw);
+  @protected
+  List<String> dco_decode_list_String(dynamic raw);
 
-@protected int dco_decode_box_autoadd_u_32(dynamic raw);
+  @protected
+  List<AppCameraBookmarkSnapshot> dco_decode_list_app_camera_bookmark_snapshot(
+    dynamic raw,
+  );
 
-@protected BigInt dco_decode_box_autoadd_u_64(dynamic raw);
+  @protected
+  List<AppCommandSnapshot> dco_decode_list_app_command_snapshot(dynamic raw);
 
-@protected double dco_decode_f_32(dynamic raw);
+  @protected
+  List<AppExportPresetSnapshot> dco_decode_list_app_export_preset_snapshot(
+    dynamic raw,
+  );
 
-@protected List<String> dco_decode_list_String(dynamic raw);
+  @protected
+  List<AppKeyOptionSnapshot> dco_decode_list_app_key_option_snapshot(
+    dynamic raw,
+  );
 
-@protected List<AppCameraBookmarkSnapshot> dco_decode_list_app_camera_bookmark_snapshot(dynamic raw);
+  @protected
+  List<AppKeybindingSnapshot> dco_decode_list_app_keybinding_snapshot(
+    dynamic raw,
+  );
 
-@protected List<AppCommandSnapshot> dco_decode_list_app_command_snapshot(dynamic raw);
+  @protected
+  List<AppLightCookieCandidateSnapshot>
+  dco_decode_list_app_light_cookie_candidate_snapshot(dynamic raw);
 
-@protected List<AppExportPresetSnapshot> dco_decode_list_app_export_preset_snapshot(dynamic raw);
+  @protected
+  List<AppLightLinkNodeSnapshot> dco_decode_list_app_light_link_node_snapshot(
+    dynamic raw,
+  );
 
-@protected List<AppKeyOptionSnapshot> dco_decode_list_app_key_option_snapshot(dynamic raw);
+  @protected
+  List<AppLightLinkTargetSnapshot>
+  dco_decode_list_app_light_link_target_snapshot(dynamic raw);
 
-@protected List<AppKeybindingSnapshot> dco_decode_list_app_keybinding_snapshot(dynamic raw);
+  @protected
+  List<AppNodeSnapshot> dco_decode_list_app_node_snapshot(dynamic raw);
 
-@protected List<AppLightCookieCandidateSnapshot> dco_decode_list_app_light_cookie_candidate_snapshot(dynamic raw);
+  @protected
+  List<AppQuickActionSnapshot> dco_decode_list_app_quick_action_snapshot(
+    dynamic raw,
+  );
 
-@protected List<AppLightLinkNodeSnapshot> dco_decode_list_app_light_link_node_snapshot(dynamic raw);
+  @protected
+  List<AppRenderOptionSnapshot> dco_decode_list_app_render_option_snapshot(
+    dynamic raw,
+  );
 
-@protected List<AppLightLinkTargetSnapshot> dco_decode_list_app_light_link_target_snapshot(dynamic raw);
+  @protected
+  List<AppScalarPropertySnapshot> dco_decode_list_app_scalar_property_snapshot(
+    dynamic raw,
+  );
 
-@protected List<AppNodeSnapshot> dco_decode_list_app_node_snapshot(dynamic raw);
+  @protected
+  List<AppSceneTreeNodeSnapshot> dco_decode_list_app_scene_tree_node_snapshot(
+    dynamic raw,
+  );
 
-@protected List<AppQuickActionSnapshot> dco_decode_list_app_quick_action_snapshot(dynamic raw);
+  @protected
+  List<AppVec3> dco_decode_list_app_vec_3(dynamic raw);
 
-@protected List<AppRenderOptionSnapshot> dco_decode_list_app_render_option_snapshot(dynamic raw);
+  @protected
+  List<AppViewportLightSnapshot> dco_decode_list_app_viewport_light_snapshot(
+    dynamic raw,
+  );
 
-@protected List<AppScalarPropertySnapshot> dco_decode_list_app_scalar_property_snapshot(dynamic raw);
+  @protected
+  Uint64List dco_decode_list_prim_u_64_strict(dynamic raw);
 
-@protected List<AppSceneTreeNodeSnapshot> dco_decode_list_app_scene_tree_node_snapshot(dynamic raw);
+  @protected
+  Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
-@protected List<AppVec3> dco_decode_list_app_vec_3(dynamic raw);
+  @protected
+  String? dco_decode_opt_String(dynamic raw);
 
-@protected List<AppViewportLightSnapshot> dco_decode_list_app_viewport_light_snapshot(dynamic raw);
+  @protected
+  AppImportDialogSnapshot?
+  dco_decode_opt_box_autoadd_app_import_dialog_snapshot(dynamic raw);
 
-@protected Uint64List dco_decode_list_prim_u_64_strict(dynamic raw);
+  @protected
+  AppKeyComboSnapshot? dco_decode_opt_box_autoadd_app_key_combo_snapshot(
+    dynamic raw,
+  );
 
-@protected Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
+  @protected
+  AppLightPropertiesSnapshot?
+  dco_decode_opt_box_autoadd_app_light_properties_snapshot(dynamic raw);
 
-@protected String? dco_decode_opt_String(dynamic raw);
+  @protected
+  AppMaterialPropertiesSnapshot?
+  dco_decode_opt_box_autoadd_app_material_properties_snapshot(dynamic raw);
 
-@protected AppImportDialogSnapshot? dco_decode_opt_box_autoadd_app_import_dialog_snapshot(dynamic raw);
+  @protected
+  AppNodeSnapshot? dco_decode_opt_box_autoadd_app_node_snapshot(dynamic raw);
 
-@protected AppKeyComboSnapshot? dco_decode_opt_box_autoadd_app_key_combo_snapshot(dynamic raw);
+  @protected
+  AppPrimitivePropertiesSnapshot?
+  dco_decode_opt_box_autoadd_app_primitive_properties_snapshot(dynamic raw);
 
-@protected AppLightPropertiesSnapshot? dco_decode_opt_box_autoadd_app_light_properties_snapshot(dynamic raw);
+  @protected
+  AppSculptConvertDialogSnapshot?
+  dco_decode_opt_box_autoadd_app_sculpt_convert_dialog_snapshot(dynamic raw);
 
-@protected AppMaterialPropertiesSnapshot? dco_decode_opt_box_autoadd_app_material_properties_snapshot(dynamic raw);
+  @protected
+  AppSculptSessionSnapshot?
+  dco_decode_opt_box_autoadd_app_sculpt_session_snapshot(dynamic raw);
 
-@protected AppNodeSnapshot? dco_decode_opt_box_autoadd_app_node_snapshot(dynamic raw);
+  @protected
+  AppSelectedNodePropertiesSnapshot?
+  dco_decode_opt_box_autoadd_app_selected_node_properties_snapshot(dynamic raw);
 
-@protected AppPrimitivePropertiesSnapshot? dco_decode_opt_box_autoadd_app_primitive_properties_snapshot(dynamic raw);
+  @protected
+  AppSelectedSculptSnapshot?
+  dco_decode_opt_box_autoadd_app_selected_sculpt_snapshot(dynamic raw);
 
-@protected AppSculptConvertDialogSnapshot? dco_decode_opt_box_autoadd_app_sculpt_convert_dialog_snapshot(dynamic raw);
+  @protected
+  AppTransformPropertiesSnapshot?
+  dco_decode_opt_box_autoadd_app_transform_properties_snapshot(dynamic raw);
+
+  @protected
+  AppVec3? dco_decode_opt_box_autoadd_app_vec_3(dynamic raw);
+
+  @protected
+  double? dco_decode_opt_box_autoadd_f_32(dynamic raw);
 
-@protected AppSculptSessionSnapshot? dco_decode_opt_box_autoadd_app_sculpt_session_snapshot(dynamic raw);
-
-@protected AppSelectedNodePropertiesSnapshot? dco_decode_opt_box_autoadd_app_selected_node_properties_snapshot(dynamic raw);
-
-@protected AppSelectedSculptSnapshot? dco_decode_opt_box_autoadd_app_selected_sculpt_snapshot(dynamic raw);
-
-@protected AppTransformPropertiesSnapshot? dco_decode_opt_box_autoadd_app_transform_properties_snapshot(dynamic raw);
-
-@protected AppVec3? dco_decode_opt_box_autoadd_app_vec_3(dynamic raw);
-
-@protected double? dco_decode_opt_box_autoadd_f_32(dynamic raw);
-
-@protected int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
-
-@protected BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
-
-@protected int dco_decode_u_32(dynamic raw);
-
-@protected BigInt dco_decode_u_64(dynamic raw);
-
-@protected int dco_decode_u_8(dynamic raw);
-
-@protected void dco_decode_unit(dynamic raw);
-
-@protected BigInt dco_decode_usize(dynamic raw);
-
-@protected String sse_decode_String(SseDeserializer deserializer);
-
-@protected AppCameraBookmarkSnapshot sse_decode_app_camera_bookmark_snapshot(SseDeserializer deserializer);
-
-@protected AppCameraSnapshot sse_decode_app_camera_snapshot(SseDeserializer deserializer);
-
-@protected AppCommandSnapshot sse_decode_app_command_snapshot(SseDeserializer deserializer);
-
-@protected AppDocumentSnapshot sse_decode_app_document_snapshot(SseDeserializer deserializer);
-
-@protected AppExportPresetSnapshot sse_decode_app_export_preset_snapshot(SseDeserializer deserializer);
-
-@protected AppExportSnapshot sse_decode_app_export_snapshot(SseDeserializer deserializer);
-
-@protected AppExportStatusSnapshot sse_decode_app_export_status_snapshot(SseDeserializer deserializer);
-
-@protected AppHistorySnapshot sse_decode_app_history_snapshot(SseDeserializer deserializer);
-
-@protected AppImportDialogSnapshot sse_decode_app_import_dialog_snapshot(SseDeserializer deserializer);
-
-@protected AppImportSnapshot sse_decode_app_import_snapshot(SseDeserializer deserializer);
-
-@protected AppImportStatusSnapshot sse_decode_app_import_status_snapshot(SseDeserializer deserializer);
-
-@protected AppKeyComboSnapshot sse_decode_app_key_combo_snapshot(SseDeserializer deserializer);
-
-@protected AppKeyOptionSnapshot sse_decode_app_key_option_snapshot(SseDeserializer deserializer);
-
-@protected AppKeybindingSnapshot sse_decode_app_keybinding_snapshot(SseDeserializer deserializer);
-
-@protected AppLightCookieCandidateSnapshot sse_decode_app_light_cookie_candidate_snapshot(SseDeserializer deserializer);
-
-@protected AppLightLinkNodeSnapshot sse_decode_app_light_link_node_snapshot(SseDeserializer deserializer);
-
-@protected AppLightLinkTargetSnapshot sse_decode_app_light_link_target_snapshot(SseDeserializer deserializer);
-
-@protected AppLightLinkingSnapshot sse_decode_app_light_linking_snapshot(SseDeserializer deserializer);
-
-@protected AppLightPropertiesSnapshot sse_decode_app_light_properties_snapshot(SseDeserializer deserializer);
-
-@protected AppMaterialPropertiesSnapshot sse_decode_app_material_properties_snapshot(SseDeserializer deserializer);
-
-@protected AppNodeSnapshot sse_decode_app_node_snapshot(SseDeserializer deserializer);
-
-@protected AppPrimitivePropertiesSnapshot sse_decode_app_primitive_properties_snapshot(SseDeserializer deserializer);
-
-@protected AppQuickActionSnapshot sse_decode_app_quick_action_snapshot(SseDeserializer deserializer);
-
-@protected AppRenderOptionSnapshot sse_decode_app_render_option_snapshot(SseDeserializer deserializer);
-
-@protected AppRenderSettingsSnapshot sse_decode_app_render_settings_snapshot(SseDeserializer deserializer);
-
-@protected AppScalarPropertySnapshot sse_decode_app_scalar_property_snapshot(SseDeserializer deserializer);
-
-@protected AppSceneSnapshot sse_decode_app_scene_snapshot(SseDeserializer deserializer);
-
-@protected AppSceneStatsSnapshot sse_decode_app_scene_stats_snapshot(SseDeserializer deserializer);
-
-@protected AppSceneTreeNodeSnapshot sse_decode_app_scene_tree_node_snapshot(SseDeserializer deserializer);
-
-@protected AppSculptConvertDialogSnapshot sse_decode_app_sculpt_convert_dialog_snapshot(SseDeserializer deserializer);
-
-@protected AppSculptConvertSnapshot sse_decode_app_sculpt_convert_snapshot(SseDeserializer deserializer);
-
-@protected AppSculptConvertStatusSnapshot sse_decode_app_sculpt_convert_status_snapshot(SseDeserializer deserializer);
-
-@protected AppSculptSessionSnapshot sse_decode_app_sculpt_session_snapshot(SseDeserializer deserializer);
-
-@protected AppSculptSnapshot sse_decode_app_sculpt_snapshot(SseDeserializer deserializer);
-
-@protected AppSelectedNodePropertiesSnapshot sse_decode_app_selected_node_properties_snapshot(SseDeserializer deserializer);
-
-@protected AppSelectedSculptSnapshot sse_decode_app_selected_sculpt_snapshot(SseDeserializer deserializer);
-
-@protected AppSelectionContextSnapshot sse_decode_app_selection_context_snapshot(SseDeserializer deserializer);
-
-@protected AppSettingsSnapshot sse_decode_app_settings_snapshot(SseDeserializer deserializer);
-
-@protected AppToolSnapshot sse_decode_app_tool_snapshot(SseDeserializer deserializer);
-
-@protected AppTransformPropertiesSnapshot sse_decode_app_transform_properties_snapshot(SseDeserializer deserializer);
-
-@protected AppVec3 sse_decode_app_vec_3(SseDeserializer deserializer);
-
-@protected AppViewportLightSnapshot sse_decode_app_viewport_light_snapshot(SseDeserializer deserializer);
-
-@protected AppWorkflowStatusSnapshot sse_decode_app_workflow_status_snapshot(SseDeserializer deserializer);
-
-@protected AppWorkspaceSnapshot sse_decode_app_workspace_snapshot(SseDeserializer deserializer);
-
-@protected bool sse_decode_bool(SseDeserializer deserializer);
-
-@protected AppImportDialogSnapshot sse_decode_box_autoadd_app_import_dialog_snapshot(SseDeserializer deserializer);
-
-@protected AppKeyComboSnapshot sse_decode_box_autoadd_app_key_combo_snapshot(SseDeserializer deserializer);
-
-@protected AppLightPropertiesSnapshot sse_decode_box_autoadd_app_light_properties_snapshot(SseDeserializer deserializer);
-
-@protected AppMaterialPropertiesSnapshot sse_decode_box_autoadd_app_material_properties_snapshot(SseDeserializer deserializer);
-
-@protected AppNodeSnapshot sse_decode_box_autoadd_app_node_snapshot(SseDeserializer deserializer);
-
-@protected AppPrimitivePropertiesSnapshot sse_decode_box_autoadd_app_primitive_properties_snapshot(SseDeserializer deserializer);
-
-@protected AppSculptConvertDialogSnapshot sse_decode_box_autoadd_app_sculpt_convert_dialog_snapshot(SseDeserializer deserializer);
-
-@protected AppSculptSessionSnapshot sse_decode_box_autoadd_app_sculpt_session_snapshot(SseDeserializer deserializer);
-
-@protected AppSelectedNodePropertiesSnapshot sse_decode_box_autoadd_app_selected_node_properties_snapshot(SseDeserializer deserializer);
-
-@protected AppSelectedSculptSnapshot sse_decode_box_autoadd_app_selected_sculpt_snapshot(SseDeserializer deserializer);
-
-@protected AppTransformPropertiesSnapshot sse_decode_box_autoadd_app_transform_properties_snapshot(SseDeserializer deserializer);
-
-@protected AppVec3 sse_decode_box_autoadd_app_vec_3(SseDeserializer deserializer);
-
-@protected double sse_decode_box_autoadd_f_32(SseDeserializer deserializer);
-
-@protected int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
-
-@protected BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
-
-@protected double sse_decode_f_32(SseDeserializer deserializer);
-
-@protected List<String> sse_decode_list_String(SseDeserializer deserializer);
-
-@protected List<AppCameraBookmarkSnapshot> sse_decode_list_app_camera_bookmark_snapshot(SseDeserializer deserializer);
-
-@protected List<AppCommandSnapshot> sse_decode_list_app_command_snapshot(SseDeserializer deserializer);
-
-@protected List<AppExportPresetSnapshot> sse_decode_list_app_export_preset_snapshot(SseDeserializer deserializer);
-
-@protected List<AppKeyOptionSnapshot> sse_decode_list_app_key_option_snapshot(SseDeserializer deserializer);
-
-@protected List<AppKeybindingSnapshot> sse_decode_list_app_keybinding_snapshot(SseDeserializer deserializer);
-
-@protected List<AppLightCookieCandidateSnapshot> sse_decode_list_app_light_cookie_candidate_snapshot(SseDeserializer deserializer);
-
-@protected List<AppLightLinkNodeSnapshot> sse_decode_list_app_light_link_node_snapshot(SseDeserializer deserializer);
-
-@protected List<AppLightLinkTargetSnapshot> sse_decode_list_app_light_link_target_snapshot(SseDeserializer deserializer);
-
-@protected List<AppNodeSnapshot> sse_decode_list_app_node_snapshot(SseDeserializer deserializer);
-
-@protected List<AppQuickActionSnapshot> sse_decode_list_app_quick_action_snapshot(SseDeserializer deserializer);
-
-@protected List<AppRenderOptionSnapshot> sse_decode_list_app_render_option_snapshot(SseDeserializer deserializer);
-
-@protected List<AppScalarPropertySnapshot> sse_decode_list_app_scalar_property_snapshot(SseDeserializer deserializer);
-
-@protected List<AppSceneTreeNodeSnapshot> sse_decode_list_app_scene_tree_node_snapshot(SseDeserializer deserializer);
-
-@protected List<AppVec3> sse_decode_list_app_vec_3(SseDeserializer deserializer);
-
-@protected List<AppViewportLightSnapshot> sse_decode_list_app_viewport_light_snapshot(SseDeserializer deserializer);
-
-@protected Uint64List sse_decode_list_prim_u_64_strict(SseDeserializer deserializer);
-
-@protected Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
-
-@protected String? sse_decode_opt_String(SseDeserializer deserializer);
-
-@protected AppImportDialogSnapshot? sse_decode_opt_box_autoadd_app_import_dialog_snapshot(SseDeserializer deserializer);
-
-@protected AppKeyComboSnapshot? sse_decode_opt_box_autoadd_app_key_combo_snapshot(SseDeserializer deserializer);
-
-@protected AppLightPropertiesSnapshot? sse_decode_opt_box_autoadd_app_light_properties_snapshot(SseDeserializer deserializer);
-
-@protected AppMaterialPropertiesSnapshot? sse_decode_opt_box_autoadd_app_material_properties_snapshot(SseDeserializer deserializer);
-
-@protected AppNodeSnapshot? sse_decode_opt_box_autoadd_app_node_snapshot(SseDeserializer deserializer);
-
-@protected AppPrimitivePropertiesSnapshot? sse_decode_opt_box_autoadd_app_primitive_properties_snapshot(SseDeserializer deserializer);
-
-@protected AppSculptConvertDialogSnapshot? sse_decode_opt_box_autoadd_app_sculpt_convert_dialog_snapshot(SseDeserializer deserializer);
-
-@protected AppSculptSessionSnapshot? sse_decode_opt_box_autoadd_app_sculpt_session_snapshot(SseDeserializer deserializer);
-
-@protected AppSelectedNodePropertiesSnapshot? sse_decode_opt_box_autoadd_app_selected_node_properties_snapshot(SseDeserializer deserializer);
-
-@protected AppSelectedSculptSnapshot? sse_decode_opt_box_autoadd_app_selected_sculpt_snapshot(SseDeserializer deserializer);
-
-@protected AppTransformPropertiesSnapshot? sse_decode_opt_box_autoadd_app_transform_properties_snapshot(SseDeserializer deserializer);
-
-@protected AppVec3? sse_decode_opt_box_autoadd_app_vec_3(SseDeserializer deserializer);
-
-@protected double? sse_decode_opt_box_autoadd_f_32(SseDeserializer deserializer);
-
-@protected int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
-
-@protected BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
-
-@protected int sse_decode_u_32(SseDeserializer deserializer);
-
-@protected BigInt sse_decode_u_64(SseDeserializer deserializer);
-
-@protected int sse_decode_u_8(SseDeserializer deserializer);
-
-@protected void sse_decode_unit(SseDeserializer deserializer);
-
-@protected BigInt sse_decode_usize(SseDeserializer deserializer);
-
-@protected int sse_decode_i_32(SseDeserializer deserializer);
-
-@protected void sse_encode_String(String self, SseSerializer serializer);
-
-@protected void sse_encode_app_camera_bookmark_snapshot(AppCameraBookmarkSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_camera_snapshot(AppCameraSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_command_snapshot(AppCommandSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_document_snapshot(AppDocumentSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_export_preset_snapshot(AppExportPresetSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_export_snapshot(AppExportSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_export_status_snapshot(AppExportStatusSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_history_snapshot(AppHistorySnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_import_dialog_snapshot(AppImportDialogSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_import_snapshot(AppImportSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_import_status_snapshot(AppImportStatusSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_key_combo_snapshot(AppKeyComboSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_key_option_snapshot(AppKeyOptionSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_keybinding_snapshot(AppKeybindingSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_light_cookie_candidate_snapshot(AppLightCookieCandidateSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_light_link_node_snapshot(AppLightLinkNodeSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_light_link_target_snapshot(AppLightLinkTargetSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_light_linking_snapshot(AppLightLinkingSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_light_properties_snapshot(AppLightPropertiesSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_material_properties_snapshot(AppMaterialPropertiesSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_node_snapshot(AppNodeSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_primitive_properties_snapshot(AppPrimitivePropertiesSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_quick_action_snapshot(AppQuickActionSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_render_option_snapshot(AppRenderOptionSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_render_settings_snapshot(AppRenderSettingsSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_scalar_property_snapshot(AppScalarPropertySnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_scene_snapshot(AppSceneSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_scene_stats_snapshot(AppSceneStatsSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_scene_tree_node_snapshot(AppSceneTreeNodeSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_sculpt_convert_dialog_snapshot(AppSculptConvertDialogSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_sculpt_convert_snapshot(AppSculptConvertSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_sculpt_convert_status_snapshot(AppSculptConvertStatusSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_sculpt_session_snapshot(AppSculptSessionSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_sculpt_snapshot(AppSculptSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_selected_node_properties_snapshot(AppSelectedNodePropertiesSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_selected_sculpt_snapshot(AppSelectedSculptSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_selection_context_snapshot(AppSelectionContextSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_settings_snapshot(AppSettingsSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_tool_snapshot(AppToolSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_transform_properties_snapshot(AppTransformPropertiesSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_vec_3(AppVec3 self, SseSerializer serializer);
-
-@protected void sse_encode_app_viewport_light_snapshot(AppViewportLightSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_workflow_status_snapshot(AppWorkflowStatusSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_app_workspace_snapshot(AppWorkspaceSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_bool(bool self, SseSerializer serializer);
-
-@protected void sse_encode_box_autoadd_app_import_dialog_snapshot(AppImportDialogSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_box_autoadd_app_key_combo_snapshot(AppKeyComboSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_box_autoadd_app_light_properties_snapshot(AppLightPropertiesSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_box_autoadd_app_material_properties_snapshot(AppMaterialPropertiesSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_box_autoadd_app_node_snapshot(AppNodeSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_box_autoadd_app_primitive_properties_snapshot(AppPrimitivePropertiesSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_box_autoadd_app_sculpt_convert_dialog_snapshot(AppSculptConvertDialogSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_box_autoadd_app_sculpt_session_snapshot(AppSculptSessionSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_box_autoadd_app_selected_node_properties_snapshot(AppSelectedNodePropertiesSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_box_autoadd_app_selected_sculpt_snapshot(AppSelectedSculptSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_box_autoadd_app_transform_properties_snapshot(AppTransformPropertiesSnapshot self, SseSerializer serializer);
-
-@protected void sse_encode_box_autoadd_app_vec_3(AppVec3 self, SseSerializer serializer);
-
-@protected void sse_encode_box_autoadd_f_32(double self, SseSerializer serializer);
-
-@protected void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
-
-@protected void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
-
-@protected void sse_encode_f_32(double self, SseSerializer serializer);
-
-@protected void sse_encode_list_String(List<String> self, SseSerializer serializer);
-
-@protected void sse_encode_list_app_camera_bookmark_snapshot(List<AppCameraBookmarkSnapshot> self, SseSerializer serializer);
-
-@protected void sse_encode_list_app_command_snapshot(List<AppCommandSnapshot> self, SseSerializer serializer);
-
-@protected void sse_encode_list_app_export_preset_snapshot(List<AppExportPresetSnapshot> self, SseSerializer serializer);
-
-@protected void sse_encode_list_app_key_option_snapshot(List<AppKeyOptionSnapshot> self, SseSerializer serializer);
-
-@protected void sse_encode_list_app_keybinding_snapshot(List<AppKeybindingSnapshot> self, SseSerializer serializer);
-
-@protected void sse_encode_list_app_light_cookie_candidate_snapshot(List<AppLightCookieCandidateSnapshot> self, SseSerializer serializer);
-
-@protected void sse_encode_list_app_light_link_node_snapshot(List<AppLightLinkNodeSnapshot> self, SseSerializer serializer);
-
-@protected void sse_encode_list_app_light_link_target_snapshot(List<AppLightLinkTargetSnapshot> self, SseSerializer serializer);
-
-@protected void sse_encode_list_app_node_snapshot(List<AppNodeSnapshot> self, SseSerializer serializer);
-
-@protected void sse_encode_list_app_quick_action_snapshot(List<AppQuickActionSnapshot> self, SseSerializer serializer);
-
-@protected void sse_encode_list_app_render_option_snapshot(List<AppRenderOptionSnapshot> self, SseSerializer serializer);
-
-@protected void sse_encode_list_app_scalar_property_snapshot(List<AppScalarPropertySnapshot> self, SseSerializer serializer);
-
-@protected void sse_encode_list_app_scene_tree_node_snapshot(List<AppSceneTreeNodeSnapshot> self, SseSerializer serializer);
-
-@protected void sse_encode_list_app_vec_3(List<AppVec3> self, SseSerializer serializer);
-
-@protected void sse_encode_list_app_viewport_light_snapshot(List<AppViewportLightSnapshot> self, SseSerializer serializer);
-
-@protected void sse_encode_list_prim_u_64_strict(Uint64List self, SseSerializer serializer);
-
-@protected void sse_encode_list_prim_u_8_strict(Uint8List self, SseSerializer serializer);
-
-@protected void sse_encode_opt_String(String? self, SseSerializer serializer);
-
-@protected void sse_encode_opt_box_autoadd_app_import_dialog_snapshot(AppImportDialogSnapshot? self, SseSerializer serializer);
-
-@protected void sse_encode_opt_box_autoadd_app_key_combo_snapshot(AppKeyComboSnapshot? self, SseSerializer serializer);
-
-@protected void sse_encode_opt_box_autoadd_app_light_properties_snapshot(AppLightPropertiesSnapshot? self, SseSerializer serializer);
-
-@protected void sse_encode_opt_box_autoadd_app_material_properties_snapshot(AppMaterialPropertiesSnapshot? self, SseSerializer serializer);
-
-@protected void sse_encode_opt_box_autoadd_app_node_snapshot(AppNodeSnapshot? self, SseSerializer serializer);
-
-@protected void sse_encode_opt_box_autoadd_app_primitive_properties_snapshot(AppPrimitivePropertiesSnapshot? self, SseSerializer serializer);
-
-@protected void sse_encode_opt_box_autoadd_app_sculpt_convert_dialog_snapshot(AppSculptConvertDialogSnapshot? self, SseSerializer serializer);
-
-@protected void sse_encode_opt_box_autoadd_app_sculpt_session_snapshot(AppSculptSessionSnapshot? self, SseSerializer serializer);
-
-@protected void sse_encode_opt_box_autoadd_app_selected_node_properties_snapshot(AppSelectedNodePropertiesSnapshot? self, SseSerializer serializer);
-
-@protected void sse_encode_opt_box_autoadd_app_selected_sculpt_snapshot(AppSelectedSculptSnapshot? self, SseSerializer serializer);
-
-@protected void sse_encode_opt_box_autoadd_app_transform_properties_snapshot(AppTransformPropertiesSnapshot? self, SseSerializer serializer);
-
-@protected void sse_encode_opt_box_autoadd_app_vec_3(AppVec3? self, SseSerializer serializer);
-
-@protected void sse_encode_opt_box_autoadd_f_32(double? self, SseSerializer serializer);
-
-@protected void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
-
-@protected void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
-
-@protected void sse_encode_u_32(int self, SseSerializer serializer);
-
-@protected void sse_encode_u_64(BigInt self, SseSerializer serializer);
-
-@protected void sse_encode_u_8(int self, SseSerializer serializer);
-
-@protected void sse_encode_unit(void self, SseSerializer serializer);
-
-@protected void sse_encode_usize(BigInt self, SseSerializer serializer);
-
-@protected void sse_encode_i_32(int self, SseSerializer serializer);
-                }
-                
-
+  @protected
+  int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
+
+  @protected
+  BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
+
+  @protected
+  int dco_decode_u_32(dynamic raw);
+
+  @protected
+  BigInt dco_decode_u_64(dynamic raw);
+
+  @protected
+  int dco_decode_u_8(dynamic raw);
+
+  @protected
+  void dco_decode_unit(dynamic raw);
+
+  @protected
+  BigInt dco_decode_usize(dynamic raw);
+
+  @protected
+  String sse_decode_String(SseDeserializer deserializer);
+
+  @protected
+  AppCameraBookmarkSnapshot sse_decode_app_camera_bookmark_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppCameraSnapshot sse_decode_app_camera_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppCommandSnapshot sse_decode_app_command_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppDocumentSnapshot sse_decode_app_document_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppExportPresetSnapshot sse_decode_app_export_preset_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppExportSnapshot sse_decode_app_export_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppExportStatusSnapshot sse_decode_app_export_status_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppHistorySnapshot sse_decode_app_history_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppImportDialogSnapshot sse_decode_app_import_dialog_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppImportSnapshot sse_decode_app_import_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppImportStatusSnapshot sse_decode_app_import_status_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppKeyComboSnapshot sse_decode_app_key_combo_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppKeyOptionSnapshot sse_decode_app_key_option_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppKeybindingSnapshot sse_decode_app_keybinding_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppLightCookieCandidateSnapshot
+  sse_decode_app_light_cookie_candidate_snapshot(SseDeserializer deserializer);
+
+  @protected
+  AppLightLinkNodeSnapshot sse_decode_app_light_link_node_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppLightLinkTargetSnapshot sse_decode_app_light_link_target_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppLightLinkingSnapshot sse_decode_app_light_linking_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppLightPropertiesSnapshot sse_decode_app_light_properties_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppMaterialPropertiesSnapshot sse_decode_app_material_properties_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppNodeSnapshot sse_decode_app_node_snapshot(SseDeserializer deserializer);
+
+  @protected
+  AppPrimitivePropertiesSnapshot sse_decode_app_primitive_properties_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppQuickActionSnapshot sse_decode_app_quick_action_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppRenderOptionSnapshot sse_decode_app_render_option_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppRenderSettingsSnapshot sse_decode_app_render_settings_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppScalarPropertySnapshot sse_decode_app_scalar_property_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppSceneSnapshot sse_decode_app_scene_snapshot(SseDeserializer deserializer);
+
+  @protected
+  AppSceneStatsSnapshot sse_decode_app_scene_stats_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppSceneTreeNodeSnapshot sse_decode_app_scene_tree_node_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppSculptConvertDialogSnapshot sse_decode_app_sculpt_convert_dialog_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppSculptConvertSnapshot sse_decode_app_sculpt_convert_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppSculptConvertStatusSnapshot sse_decode_app_sculpt_convert_status_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppSculptSessionSnapshot sse_decode_app_sculpt_session_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppSculptSnapshot sse_decode_app_sculpt_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppSelectedNodePropertiesSnapshot
+  sse_decode_app_selected_node_properties_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppSelectedSculptSnapshot sse_decode_app_selected_sculpt_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppSelectionContextSnapshot sse_decode_app_selection_context_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppSettingsSnapshot sse_decode_app_settings_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppToolSnapshot sse_decode_app_tool_snapshot(SseDeserializer deserializer);
+
+  @protected
+  AppTransformPropertiesSnapshot sse_decode_app_transform_properties_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppVec3 sse_decode_app_vec_3(SseDeserializer deserializer);
+
+  @protected
+  AppViewportLightSnapshot sse_decode_app_viewport_light_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppWorkflowStatusSnapshot sse_decode_app_workflow_status_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppWorkspaceSnapshot sse_decode_app_workspace_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  bool sse_decode_bool(SseDeserializer deserializer);
+
+  @protected
+  AppImportDialogSnapshot sse_decode_box_autoadd_app_import_dialog_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppKeyComboSnapshot sse_decode_box_autoadd_app_key_combo_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppLightPropertiesSnapshot
+  sse_decode_box_autoadd_app_light_properties_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppMaterialPropertiesSnapshot
+  sse_decode_box_autoadd_app_material_properties_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppNodeSnapshot sse_decode_box_autoadd_app_node_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppPrimitivePropertiesSnapshot
+  sse_decode_box_autoadd_app_primitive_properties_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppSculptConvertDialogSnapshot
+  sse_decode_box_autoadd_app_sculpt_convert_dialog_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppSculptSessionSnapshot sse_decode_box_autoadd_app_sculpt_session_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppSelectedNodePropertiesSnapshot
+  sse_decode_box_autoadd_app_selected_node_properties_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppSelectedSculptSnapshot sse_decode_box_autoadd_app_selected_sculpt_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppTransformPropertiesSnapshot
+  sse_decode_box_autoadd_app_transform_properties_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppVec3 sse_decode_box_autoadd_app_vec_3(SseDeserializer deserializer);
+
+  @protected
+  double sse_decode_box_autoadd_f_32(SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
+
+  @protected
+  BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
+  double sse_decode_f_32(SseDeserializer deserializer);
+
+  @protected
+  List<String> sse_decode_list_String(SseDeserializer deserializer);
+
+  @protected
+  List<AppCameraBookmarkSnapshot> sse_decode_list_app_camera_bookmark_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<AppCommandSnapshot> sse_decode_list_app_command_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<AppExportPresetSnapshot> sse_decode_list_app_export_preset_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<AppKeyOptionSnapshot> sse_decode_list_app_key_option_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<AppKeybindingSnapshot> sse_decode_list_app_keybinding_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<AppLightCookieCandidateSnapshot>
+  sse_decode_list_app_light_cookie_candidate_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<AppLightLinkNodeSnapshot> sse_decode_list_app_light_link_node_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<AppLightLinkTargetSnapshot>
+  sse_decode_list_app_light_link_target_snapshot(SseDeserializer deserializer);
+
+  @protected
+  List<AppNodeSnapshot> sse_decode_list_app_node_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<AppQuickActionSnapshot> sse_decode_list_app_quick_action_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<AppRenderOptionSnapshot> sse_decode_list_app_render_option_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<AppScalarPropertySnapshot> sse_decode_list_app_scalar_property_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<AppSceneTreeNodeSnapshot> sse_decode_list_app_scene_tree_node_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<AppVec3> sse_decode_list_app_vec_3(SseDeserializer deserializer);
+
+  @protected
+  List<AppViewportLightSnapshot> sse_decode_list_app_viewport_light_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  Uint64List sse_decode_list_prim_u_64_strict(SseDeserializer deserializer);
+
+  @protected
+  Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  String? sse_decode_opt_String(SseDeserializer deserializer);
+
+  @protected
+  AppImportDialogSnapshot?
+  sse_decode_opt_box_autoadd_app_import_dialog_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppKeyComboSnapshot? sse_decode_opt_box_autoadd_app_key_combo_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppLightPropertiesSnapshot?
+  sse_decode_opt_box_autoadd_app_light_properties_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppMaterialPropertiesSnapshot?
+  sse_decode_opt_box_autoadd_app_material_properties_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppNodeSnapshot? sse_decode_opt_box_autoadd_app_node_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppPrimitivePropertiesSnapshot?
+  sse_decode_opt_box_autoadd_app_primitive_properties_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppSculptConvertDialogSnapshot?
+  sse_decode_opt_box_autoadd_app_sculpt_convert_dialog_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppSculptSessionSnapshot?
+  sse_decode_opt_box_autoadd_app_sculpt_session_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppSelectedNodePropertiesSnapshot?
+  sse_decode_opt_box_autoadd_app_selected_node_properties_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppSelectedSculptSnapshot?
+  sse_decode_opt_box_autoadd_app_selected_sculpt_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppTransformPropertiesSnapshot?
+  sse_decode_opt_box_autoadd_app_transform_properties_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  AppVec3? sse_decode_opt_box_autoadd_app_vec_3(SseDeserializer deserializer);
+
+  @protected
+  double? sse_decode_opt_box_autoadd_f_32(SseDeserializer deserializer);
+
+  @protected
+  int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
+
+  @protected
+  BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_u_32(SseDeserializer deserializer);
+
+  @protected
+  BigInt sse_decode_u_64(SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_u_8(SseDeserializer deserializer);
+
+  @protected
+  void sse_decode_unit(SseDeserializer deserializer);
+
+  @protected
+  BigInt sse_decode_usize(SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_i_32(SseDeserializer deserializer);
+
+  @protected
+  void sse_encode_String(String self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_app_camera_bookmark_snapshot(
+    AppCameraBookmarkSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_camera_snapshot(
+    AppCameraSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_command_snapshot(
+    AppCommandSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_document_snapshot(
+    AppDocumentSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_export_preset_snapshot(
+    AppExportPresetSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_export_snapshot(
+    AppExportSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_export_status_snapshot(
+    AppExportStatusSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_history_snapshot(
+    AppHistorySnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_import_dialog_snapshot(
+    AppImportDialogSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_import_snapshot(
+    AppImportSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_import_status_snapshot(
+    AppImportStatusSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_key_combo_snapshot(
+    AppKeyComboSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_key_option_snapshot(
+    AppKeyOptionSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_keybinding_snapshot(
+    AppKeybindingSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_light_cookie_candidate_snapshot(
+    AppLightCookieCandidateSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_light_link_node_snapshot(
+    AppLightLinkNodeSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_light_link_target_snapshot(
+    AppLightLinkTargetSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_light_linking_snapshot(
+    AppLightLinkingSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_light_properties_snapshot(
+    AppLightPropertiesSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_material_properties_snapshot(
+    AppMaterialPropertiesSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_node_snapshot(
+    AppNodeSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_primitive_properties_snapshot(
+    AppPrimitivePropertiesSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_quick_action_snapshot(
+    AppQuickActionSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_render_option_snapshot(
+    AppRenderOptionSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_render_settings_snapshot(
+    AppRenderSettingsSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_scalar_property_snapshot(
+    AppScalarPropertySnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_scene_snapshot(
+    AppSceneSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_scene_stats_snapshot(
+    AppSceneStatsSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_scene_tree_node_snapshot(
+    AppSceneTreeNodeSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_sculpt_convert_dialog_snapshot(
+    AppSculptConvertDialogSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_sculpt_convert_snapshot(
+    AppSculptConvertSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_sculpt_convert_status_snapshot(
+    AppSculptConvertStatusSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_sculpt_session_snapshot(
+    AppSculptSessionSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_sculpt_snapshot(
+    AppSculptSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_selected_node_properties_snapshot(
+    AppSelectedNodePropertiesSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_selected_sculpt_snapshot(
+    AppSelectedSculptSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_selection_context_snapshot(
+    AppSelectionContextSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_settings_snapshot(
+    AppSettingsSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_tool_snapshot(
+    AppToolSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_transform_properties_snapshot(
+    AppTransformPropertiesSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_vec_3(AppVec3 self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_app_viewport_light_snapshot(
+    AppViewportLightSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_workflow_status_snapshot(
+    AppWorkflowStatusSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_app_workspace_snapshot(
+    AppWorkspaceSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_bool(bool self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_app_import_dialog_snapshot(
+    AppImportDialogSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_app_key_combo_snapshot(
+    AppKeyComboSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_app_light_properties_snapshot(
+    AppLightPropertiesSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_app_material_properties_snapshot(
+    AppMaterialPropertiesSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_app_node_snapshot(
+    AppNodeSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_app_primitive_properties_snapshot(
+    AppPrimitivePropertiesSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_app_sculpt_convert_dialog_snapshot(
+    AppSculptConvertDialogSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_app_sculpt_session_snapshot(
+    AppSculptSessionSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_app_selected_node_properties_snapshot(
+    AppSelectedNodePropertiesSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_app_selected_sculpt_snapshot(
+    AppSelectedSculptSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_app_transform_properties_snapshot(
+    AppTransformPropertiesSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_box_autoadd_app_vec_3(AppVec3 self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_f_32(double self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_f_32(double self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_String(List<String> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_app_camera_bookmark_snapshot(
+    List<AppCameraBookmarkSnapshot> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_app_command_snapshot(
+    List<AppCommandSnapshot> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_app_export_preset_snapshot(
+    List<AppExportPresetSnapshot> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_app_key_option_snapshot(
+    List<AppKeyOptionSnapshot> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_app_keybinding_snapshot(
+    List<AppKeybindingSnapshot> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_app_light_cookie_candidate_snapshot(
+    List<AppLightCookieCandidateSnapshot> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_app_light_link_node_snapshot(
+    List<AppLightLinkNodeSnapshot> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_app_light_link_target_snapshot(
+    List<AppLightLinkTargetSnapshot> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_app_node_snapshot(
+    List<AppNodeSnapshot> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_app_quick_action_snapshot(
+    List<AppQuickActionSnapshot> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_app_render_option_snapshot(
+    List<AppRenderOptionSnapshot> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_app_scalar_property_snapshot(
+    List<AppScalarPropertySnapshot> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_app_scene_tree_node_snapshot(
+    List<AppSceneTreeNodeSnapshot> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_app_vec_3(List<AppVec3> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_app_viewport_light_snapshot(
+    List<AppViewportLightSnapshot> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_prim_u_64_strict(
+    Uint64List self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_prim_u_8_strict(
+    Uint8List self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_String(String? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_app_import_dialog_snapshot(
+    AppImportDialogSnapshot? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_app_key_combo_snapshot(
+    AppKeyComboSnapshot? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_app_light_properties_snapshot(
+    AppLightPropertiesSnapshot? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_app_material_properties_snapshot(
+    AppMaterialPropertiesSnapshot? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_app_node_snapshot(
+    AppNodeSnapshot? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_app_primitive_properties_snapshot(
+    AppPrimitivePropertiesSnapshot? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_app_sculpt_convert_dialog_snapshot(
+    AppSculptConvertDialogSnapshot? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_app_sculpt_session_snapshot(
+    AppSculptSessionSnapshot? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_app_selected_node_properties_snapshot(
+    AppSelectedNodePropertiesSnapshot? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_app_selected_sculpt_snapshot(
+    AppSelectedSculptSnapshot? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_app_transform_properties_snapshot(
+    AppTransformPropertiesSnapshot? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_app_vec_3(
+    AppVec3? self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_opt_box_autoadd_f_32(double? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_u_32(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_u_64(BigInt self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_u_8(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_unit(void self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_usize(BigInt self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_i_32(int self, SseSerializer serializer);
+}
 
 // Section: wire_class
 
+class RustLibWire implements BaseWire {
+  factory RustLibWire.fromExternalLibrary(ExternalLibrary lib) =>
+      RustLibWire(lib.ffiDynamicLibrary);
 
-        class RustLibWire implements BaseWire {
+  /// Holds the symbol lookup function.
+  final ffi.Pointer<T> Function<T extends ffi.NativeType>(String symbolName)
+  _lookup;
 
-            factory RustLibWire.fromExternalLibrary(ExternalLibrary lib) =>
-              RustLibWire(lib.ffiDynamicLibrary);
-        
-            /// Holds the symbol lookup function.
-            final ffi.Pointer<T> Function<T extends ffi.NativeType>(String symbolName)
-                _lookup;
-  
-            /// The symbols are looked up in [dynamicLibrary].
-            RustLibWire(ffi.DynamicLibrary dynamicLibrary)
-                : _lookup = dynamicLibrary.lookup;
-
-            
-        }
-        
+  /// The symbols are looked up in [dynamicLibrary].
+  RustLibWire(ffi.DynamicLibrary dynamicLibrary)
+    : _lookup = dynamicLibrary.lookup;
+}

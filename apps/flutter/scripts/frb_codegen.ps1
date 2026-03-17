@@ -36,6 +36,18 @@ if ($Watch) {
 Push-Location $projectRoot
 try {
     & $codegenCommand.Path @arguments
+
+    $generatedDartEntrypoint = Join-Path $projectRoot 'lib/src/rust/frb_generated.dart'
+    $generatedDartContents = Get-Content $generatedDartEntrypoint -Raw
+    $unknownLoaderStem = "stem: 'UNKNOWN'"
+    $expectedLoaderStem = "stem: 'sdf_modeler_bridge'"
+
+    if ($generatedDartContents.Contains($unknownLoaderStem)) {
+        $generatedDartContents = $generatedDartContents.Replace($unknownLoaderStem, $expectedLoaderStem)
+        [System.IO.File]::WriteAllText($generatedDartEntrypoint, $generatedDartContents)
+    } elseif (-not $generatedDartContents.Contains($expectedLoaderStem)) {
+        throw "Could not find the generated FRB external library loader stem in '$generatedDartEntrypoint'."
+    }
 } finally {
     Pop-Location
 }

@@ -6,1292 +6,1868 @@
 import '../frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-
-            // These functions are ignored because they are not marked as `pub`: `convert_opt`, `convert_vec`
+// These functions are ignored because they are not marked as `pub`: `convert_opt`, `convert_vec`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `AppViewportFeedbackSnapshot`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
-
-
-            
-
-            class AppCameraBookmarkSnapshot  {
-                final int slotIndex;
-final bool saved;
-
-                const AppCameraBookmarkSnapshot({required this.slotIndex ,required this.saved ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => slotIndex.hashCode^saved.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppCameraBookmarkSnapshot &&
-                runtimeType == other.runtimeType
-                && slotIndex == other.slotIndex&& saved == other.saved;
-        
-            }
-
-class AppCameraSnapshot  {
-                final double yaw;
-final double pitch;
-final double roll;
-final double distance;
-final double fovDegrees;
-final bool orthographic;
-final AppVec3 target;
-final AppVec3 eye;
-
-                const AppCameraSnapshot({required this.yaw ,required this.pitch ,required this.roll ,required this.distance ,required this.fovDegrees ,required this.orthographic ,required this.target ,required this.eye ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => yaw.hashCode^pitch.hashCode^roll.hashCode^distance.hashCode^fovDegrees.hashCode^orthographic.hashCode^target.hashCode^eye.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppCameraSnapshot &&
-                runtimeType == other.runtimeType
-                && yaw == other.yaw&& pitch == other.pitch&& roll == other.roll&& distance == other.distance&& fovDegrees == other.fovDegrees&& orthographic == other.orthographic&& target == other.target&& eye == other.eye;
-        
-            }
-
-class AppCommandSnapshot  {
-                final String id;
-final String label;
-final String category;
-final bool enabled;
-final List<String> workspaceIds;
-final String? shortcutLabel;
-
-                const AppCommandSnapshot({required this.id ,required this.label ,required this.category ,required this.enabled ,required this.workspaceIds ,this.shortcutLabel ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => id.hashCode^label.hashCode^category.hashCode^enabled.hashCode^workspaceIds.hashCode^shortcutLabel.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppCommandSnapshot &&
-                runtimeType == other.runtimeType
-                && id == other.id&& label == other.label&& category == other.category&& enabled == other.enabled&& workspaceIds == other.workspaceIds&& shortcutLabel == other.shortcutLabel;
-        
-            }
-
-class AppDocumentSnapshot  {
-                final String? currentFilePath;
-final String? currentFileName;
-final bool hasUnsavedChanges;
-final List<String> recentFiles;
-final bool recoveryAvailable;
-final String? recoverySummary;
-
-                const AppDocumentSnapshot({this.currentFilePath ,this.currentFileName ,required this.hasUnsavedChanges ,required this.recentFiles ,required this.recoveryAvailable ,this.recoverySummary ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => currentFilePath.hashCode^currentFileName.hashCode^hasUnsavedChanges.hashCode^recentFiles.hashCode^recoveryAvailable.hashCode^recoverySummary.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppDocumentSnapshot &&
-                runtimeType == other.runtimeType
-                && currentFilePath == other.currentFilePath&& currentFileName == other.currentFileName&& hasUnsavedChanges == other.hasUnsavedChanges&& recentFiles == other.recentFiles&& recoveryAvailable == other.recoveryAvailable&& recoverySummary == other.recoverySummary;
-        
-            }
-
-class AppExportPresetSnapshot  {
-                final String name;
-final int resolution;
-
-                const AppExportPresetSnapshot({required this.name ,required this.resolution ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => name.hashCode^resolution.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppExportPresetSnapshot &&
-                runtimeType == other.runtimeType
-                && name == other.name&& resolution == other.resolution;
-        
-            }
-
-class AppExportSnapshot  {
-                final int resolution;
-final int minResolution;
-final int maxResolution;
-final bool adaptive;
-final List<AppExportPresetSnapshot> presets;
-final AppExportStatusSnapshot status;
-
-                const AppExportSnapshot({required this.resolution ,required this.minResolution ,required this.maxResolution ,required this.adaptive ,required this.presets ,required this.status ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => resolution.hashCode^minResolution.hashCode^maxResolution.hashCode^adaptive.hashCode^presets.hashCode^status.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppExportSnapshot &&
-                runtimeType == other.runtimeType
-                && resolution == other.resolution&& minResolution == other.minResolution&& maxResolution == other.maxResolution&& adaptive == other.adaptive&& presets == other.presets&& status == other.status;
-        
-            }
-
-class AppExportStatusSnapshot  {
-                final String state;
-final int progress;
-final int total;
-final int resolution;
-final String? phaseLabel;
-final String? targetFileName;
-final String? targetFilePath;
-final String? formatLabel;
-final String? message;
-final bool isError;
-
-                const AppExportStatusSnapshot({required this.state ,required this.progress ,required this.total ,required this.resolution ,this.phaseLabel ,this.targetFileName ,this.targetFilePath ,this.formatLabel ,this.message ,required this.isError ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => state.hashCode^progress.hashCode^total.hashCode^resolution.hashCode^phaseLabel.hashCode^targetFileName.hashCode^targetFilePath.hashCode^formatLabel.hashCode^message.hashCode^isError.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppExportStatusSnapshot &&
-                runtimeType == other.runtimeType
-                && state == other.state&& progress == other.progress&& total == other.total&& resolution == other.resolution&& phaseLabel == other.phaseLabel&& targetFileName == other.targetFileName&& targetFilePath == other.targetFilePath&& formatLabel == other.formatLabel&& message == other.message&& isError == other.isError;
-        
-            }
-
-class AppHistorySnapshot  {
-                final bool canUndo;
-final bool canRedo;
-
-                const AppHistorySnapshot({required this.canUndo ,required this.canRedo ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => canUndo.hashCode^canRedo.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppHistorySnapshot &&
-                runtimeType == other.runtimeType
-                && canUndo == other.canUndo&& canRedo == other.canRedo;
-        
-            }
-
-class AppImportDialogSnapshot  {
-                final String filename;
-final int resolution;
-final int autoResolution;
-final bool useAuto;
-final BigInt vertexCount;
-final BigInt triangleCount;
-final AppVec3 boundsSize;
-final int minResolution;
-final int maxResolution;
-
-                const AppImportDialogSnapshot({required this.filename ,required this.resolution ,required this.autoResolution ,required this.useAuto ,required this.vertexCount ,required this.triangleCount ,required this.boundsSize ,required this.minResolution ,required this.maxResolution ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => filename.hashCode^resolution.hashCode^autoResolution.hashCode^useAuto.hashCode^vertexCount.hashCode^triangleCount.hashCode^boundsSize.hashCode^minResolution.hashCode^maxResolution.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppImportDialogSnapshot &&
-                runtimeType == other.runtimeType
-                && filename == other.filename&& resolution == other.resolution&& autoResolution == other.autoResolution&& useAuto == other.useAuto&& vertexCount == other.vertexCount&& triangleCount == other.triangleCount&& boundsSize == other.boundsSize&& minResolution == other.minResolution&& maxResolution == other.maxResolution;
-        
-            }
-
-class AppImportSnapshot  {
-                final AppImportDialogSnapshot? dialog;
-final AppImportStatusSnapshot status;
-
-                const AppImportSnapshot({this.dialog ,required this.status ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => dialog.hashCode^status.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppImportSnapshot &&
-                runtimeType == other.runtimeType
-                && dialog == other.dialog&& status == other.status;
-        
-            }
-
-class AppImportStatusSnapshot  {
-                final String state;
-final int progress;
-final int total;
-final String? filename;
-final String? phaseLabel;
-final String? message;
-final bool isError;
-
-                const AppImportStatusSnapshot({required this.state ,required this.progress ,required this.total ,this.filename ,this.phaseLabel ,this.message ,required this.isError ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => state.hashCode^progress.hashCode^total.hashCode^filename.hashCode^phaseLabel.hashCode^message.hashCode^isError.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppImportStatusSnapshot &&
-                runtimeType == other.runtimeType
-                && state == other.state&& progress == other.progress&& total == other.total&& filename == other.filename&& phaseLabel == other.phaseLabel&& message == other.message&& isError == other.isError;
-        
-            }
-
-class AppKeyComboSnapshot  {
-                final String keyId;
-final String keyLabel;
-final bool ctrl;
-final bool shift;
-final bool alt;
-final String shortcutLabel;
-
-                const AppKeyComboSnapshot({required this.keyId ,required this.keyLabel ,required this.ctrl ,required this.shift ,required this.alt ,required this.shortcutLabel ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => keyId.hashCode^keyLabel.hashCode^ctrl.hashCode^shift.hashCode^alt.hashCode^shortcutLabel.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppKeyComboSnapshot &&
-                runtimeType == other.runtimeType
-                && keyId == other.keyId&& keyLabel == other.keyLabel&& ctrl == other.ctrl&& shift == other.shift&& alt == other.alt&& shortcutLabel == other.shortcutLabel;
-        
-            }
-
-class AppKeyOptionSnapshot  {
-                final String id;
-final String label;
-
-                const AppKeyOptionSnapshot({required this.id ,required this.label ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => id.hashCode^label.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppKeyOptionSnapshot &&
-                runtimeType == other.runtimeType
-                && id == other.id&& label == other.label;
-        
-            }
-
-class AppKeybindingSnapshot  {
-                final String actionId;
-final String actionLabel;
-final String category;
-final AppKeyComboSnapshot? binding;
-
-                const AppKeybindingSnapshot({required this.actionId ,required this.actionLabel ,required this.category ,this.binding ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => actionId.hashCode^actionLabel.hashCode^category.hashCode^binding.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppKeybindingSnapshot &&
-                runtimeType == other.runtimeType
-                && actionId == other.actionId&& actionLabel == other.actionLabel&& category == other.category&& binding == other.binding;
-        
-            }
-
-class AppLightCookieCandidateSnapshot  {
-                final BigInt nodeId;
-final String name;
-final String kindLabel;
-
-                const AppLightCookieCandidateSnapshot({required this.nodeId ,required this.name ,required this.kindLabel ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => nodeId.hashCode^name.hashCode^kindLabel.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppLightCookieCandidateSnapshot &&
-                runtimeType == other.runtimeType
-                && nodeId == other.nodeId&& name == other.name&& kindLabel == other.kindLabel;
-        
-            }
-
-class AppLightLinkNodeSnapshot  {
-                final BigInt nodeId;
-final String nodeName;
-final String kindLabel;
-final int lightMask;
-
-                const AppLightLinkNodeSnapshot({required this.nodeId ,required this.nodeName ,required this.kindLabel ,required this.lightMask ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => nodeId.hashCode^nodeName.hashCode^kindLabel.hashCode^lightMask.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppLightLinkNodeSnapshot &&
-                runtimeType == other.runtimeType
-                && nodeId == other.nodeId&& nodeName == other.nodeName&& kindLabel == other.kindLabel&& lightMask == other.lightMask;
-        
-            }
-
-class AppLightLinkTargetSnapshot  {
-                final BigInt lightNodeId;
-final String lightName;
-final String lightTypeLabel;
-final bool active;
-final int maskBit;
-final AppVec3 color;
-
-                const AppLightLinkTargetSnapshot({required this.lightNodeId ,required this.lightName ,required this.lightTypeLabel ,required this.active ,required this.maskBit ,required this.color ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => lightNodeId.hashCode^lightName.hashCode^lightTypeLabel.hashCode^active.hashCode^maskBit.hashCode^color.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppLightLinkTargetSnapshot &&
-                runtimeType == other.runtimeType
-                && lightNodeId == other.lightNodeId&& lightName == other.lightName&& lightTypeLabel == other.lightTypeLabel&& active == other.active&& maskBit == other.maskBit&& color == other.color;
-        
-            }
-
-class AppLightLinkingSnapshot  {
-                final List<AppLightLinkTargetSnapshot> lights;
-final List<AppLightLinkNodeSnapshot> geometryNodes;
-final int totalVisibleLightCount;
-final int maxLightCount;
-
-                const AppLightLinkingSnapshot({required this.lights ,required this.geometryNodes ,required this.totalVisibleLightCount ,required this.maxLightCount ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => lights.hashCode^geometryNodes.hashCode^totalVisibleLightCount.hashCode^maxLightCount.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppLightLinkingSnapshot &&
-                runtimeType == other.runtimeType
-                && lights == other.lights&& geometryNodes == other.geometryNodes&& totalVisibleLightCount == other.totalVisibleLightCount&& maxLightCount == other.maxLightCount;
-        
-            }
-
-class AppLightPropertiesSnapshot  {
-                final BigInt nodeId;
-final BigInt? transformNodeId;
-final String lightTypeId;
-final String lightTypeLabel;
-final AppVec3 color;
-final double intensity;
-final double range;
-final double spotAngle;
-final bool castShadows;
-final double shadowSoftness;
-final AppVec3 shadowColor;
-final bool volumetric;
-final double volumetricDensity;
-final BigInt? cookieNodeId;
-final String? cookieNodeName;
-final List<AppLightCookieCandidateSnapshot> cookieCandidates;
-final String proximityModeId;
-final String proximityModeLabel;
-final double proximityRange;
-final String? arrayPatternId;
-final String? arrayPatternLabel;
-final int? arrayCount;
-final double? arrayRadius;
-final double? arrayColorVariation;
-final String? intensityExpression;
-final String? intensityExpressionError;
-final String? colorHueExpression;
-final String? colorHueExpressionError;
-final bool supportsRange;
-final bool supportsSpotAngle;
-final bool supportsShadows;
-final bool supportsVolumetric;
-final bool supportsCookie;
-final bool supportsProximity;
-final bool supportsExpressions;
-final bool supportsArray;
-
-                const AppLightPropertiesSnapshot({required this.nodeId ,this.transformNodeId ,required this.lightTypeId ,required this.lightTypeLabel ,required this.color ,required this.intensity ,required this.range ,required this.spotAngle ,required this.castShadows ,required this.shadowSoftness ,required this.shadowColor ,required this.volumetric ,required this.volumetricDensity ,this.cookieNodeId ,this.cookieNodeName ,required this.cookieCandidates ,required this.proximityModeId ,required this.proximityModeLabel ,required this.proximityRange ,this.arrayPatternId ,this.arrayPatternLabel ,this.arrayCount ,this.arrayRadius ,this.arrayColorVariation ,this.intensityExpression ,this.intensityExpressionError ,this.colorHueExpression ,this.colorHueExpressionError ,required this.supportsRange ,required this.supportsSpotAngle ,required this.supportsShadows ,required this.supportsVolumetric ,required this.supportsCookie ,required this.supportsProximity ,required this.supportsExpressions ,required this.supportsArray ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => nodeId.hashCode^transformNodeId.hashCode^lightTypeId.hashCode^lightTypeLabel.hashCode^color.hashCode^intensity.hashCode^range.hashCode^spotAngle.hashCode^castShadows.hashCode^shadowSoftness.hashCode^shadowColor.hashCode^volumetric.hashCode^volumetricDensity.hashCode^cookieNodeId.hashCode^cookieNodeName.hashCode^cookieCandidates.hashCode^proximityModeId.hashCode^proximityModeLabel.hashCode^proximityRange.hashCode^arrayPatternId.hashCode^arrayPatternLabel.hashCode^arrayCount.hashCode^arrayRadius.hashCode^arrayColorVariation.hashCode^intensityExpression.hashCode^intensityExpressionError.hashCode^colorHueExpression.hashCode^colorHueExpressionError.hashCode^supportsRange.hashCode^supportsSpotAngle.hashCode^supportsShadows.hashCode^supportsVolumetric.hashCode^supportsCookie.hashCode^supportsProximity.hashCode^supportsExpressions.hashCode^supportsArray.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppLightPropertiesSnapshot &&
-                runtimeType == other.runtimeType
-                && nodeId == other.nodeId&& transformNodeId == other.transformNodeId&& lightTypeId == other.lightTypeId&& lightTypeLabel == other.lightTypeLabel&& color == other.color&& intensity == other.intensity&& range == other.range&& spotAngle == other.spotAngle&& castShadows == other.castShadows&& shadowSoftness == other.shadowSoftness&& shadowColor == other.shadowColor&& volumetric == other.volumetric&& volumetricDensity == other.volumetricDensity&& cookieNodeId == other.cookieNodeId&& cookieNodeName == other.cookieNodeName&& cookieCandidates == other.cookieCandidates&& proximityModeId == other.proximityModeId&& proximityModeLabel == other.proximityModeLabel&& proximityRange == other.proximityRange&& arrayPatternId == other.arrayPatternId&& arrayPatternLabel == other.arrayPatternLabel&& arrayCount == other.arrayCount&& arrayRadius == other.arrayRadius&& arrayColorVariation == other.arrayColorVariation&& intensityExpression == other.intensityExpression&& intensityExpressionError == other.intensityExpressionError&& colorHueExpression == other.colorHueExpression&& colorHueExpressionError == other.colorHueExpressionError&& supportsRange == other.supportsRange&& supportsSpotAngle == other.supportsSpotAngle&& supportsShadows == other.supportsShadows&& supportsVolumetric == other.supportsVolumetric&& supportsCookie == other.supportsCookie&& supportsProximity == other.supportsProximity&& supportsExpressions == other.supportsExpressions&& supportsArray == other.supportsArray;
-        
-            }
-
-class AppMaterialPropertiesSnapshot  {
-                final AppVec3 color;
-final double roughness;
-final double metallic;
-final AppVec3 emissive;
-final double emissiveIntensity;
-final double fresnel;
-
-                const AppMaterialPropertiesSnapshot({required this.color ,required this.roughness ,required this.metallic ,required this.emissive ,required this.emissiveIntensity ,required this.fresnel ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => color.hashCode^roughness.hashCode^metallic.hashCode^emissive.hashCode^emissiveIntensity.hashCode^fresnel.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppMaterialPropertiesSnapshot &&
-                runtimeType == other.runtimeType
-                && color == other.color&& roughness == other.roughness&& metallic == other.metallic&& emissive == other.emissive&& emissiveIntensity == other.emissiveIntensity&& fresnel == other.fresnel;
-        
-            }
-
-class AppNodeSnapshot  {
-                final BigInt id;
-final String name;
-final String kindLabel;
-final bool visible;
-final bool locked;
-
-                const AppNodeSnapshot({required this.id ,required this.name ,required this.kindLabel ,required this.visible ,required this.locked ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => id.hashCode^name.hashCode^kindLabel.hashCode^visible.hashCode^locked.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppNodeSnapshot &&
-                runtimeType == other.runtimeType
-                && id == other.id&& name == other.name&& kindLabel == other.kindLabel&& visible == other.visible&& locked == other.locked;
-        
-            }
-
-class AppPrimitivePropertiesSnapshot  {
-                final String primitiveKind;
-final List<AppScalarPropertySnapshot> parameters;
-
-                const AppPrimitivePropertiesSnapshot({required this.primitiveKind ,required this.parameters ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => primitiveKind.hashCode^parameters.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppPrimitivePropertiesSnapshot &&
-                runtimeType == other.runtimeType
-                && primitiveKind == other.primitiveKind&& parameters == other.parameters;
-        
-            }
-
-class AppQuickActionSnapshot  {
-                final String id;
-final String label;
-final String category;
-final bool enabled;
-final bool prominent;
-final String? shortcutLabel;
-
-                const AppQuickActionSnapshot({required this.id ,required this.label ,required this.category ,required this.enabled ,required this.prominent ,this.shortcutLabel ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => id.hashCode^label.hashCode^category.hashCode^enabled.hashCode^prominent.hashCode^shortcutLabel.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppQuickActionSnapshot &&
-                runtimeType == other.runtimeType
-                && id == other.id&& label == other.label&& category == other.category&& enabled == other.enabled&& prominent == other.prominent&& shortcutLabel == other.shortcutLabel;
-        
-            }
-
-class AppRenderOptionSnapshot  {
-                final String id;
-final String label;
-
-                const AppRenderOptionSnapshot({required this.id ,required this.label ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => id.hashCode^label.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppRenderOptionSnapshot &&
-                runtimeType == other.runtimeType
-                && id == other.id&& label == other.label;
-        
-            }
-
-class AppRenderSettingsSnapshot  {
-                final List<AppRenderOptionSnapshot> shadingModes;
-final String shadingModeId;
-final String shadingModeLabel;
-final bool showGrid;
-final bool shadowsEnabled;
-final int shadowSteps;
-final bool aoEnabled;
-final int aoSamples;
-final double aoIntensity;
-final int marchMaxSteps;
-final bool sculptFastMode;
-final bool autoReduceSteps;
-final double interactionRenderScale;
-final double restRenderScale;
-final bool fogEnabled;
-final double fogDensity;
-final bool bloomEnabled;
-final double bloomIntensity;
-final double gamma;
-final bool tonemappingAces;
-final int crossSectionAxis;
-final double crossSectionPosition;
-
-                const AppRenderSettingsSnapshot({required this.shadingModes ,required this.shadingModeId ,required this.shadingModeLabel ,required this.showGrid ,required this.shadowsEnabled ,required this.shadowSteps ,required this.aoEnabled ,required this.aoSamples ,required this.aoIntensity ,required this.marchMaxSteps ,required this.sculptFastMode ,required this.autoReduceSteps ,required this.interactionRenderScale ,required this.restRenderScale ,required this.fogEnabled ,required this.fogDensity ,required this.bloomEnabled ,required this.bloomIntensity ,required this.gamma ,required this.tonemappingAces ,required this.crossSectionAxis ,required this.crossSectionPosition ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => shadingModes.hashCode^shadingModeId.hashCode^shadingModeLabel.hashCode^showGrid.hashCode^shadowsEnabled.hashCode^shadowSteps.hashCode^aoEnabled.hashCode^aoSamples.hashCode^aoIntensity.hashCode^marchMaxSteps.hashCode^sculptFastMode.hashCode^autoReduceSteps.hashCode^interactionRenderScale.hashCode^restRenderScale.hashCode^fogEnabled.hashCode^fogDensity.hashCode^bloomEnabled.hashCode^bloomIntensity.hashCode^gamma.hashCode^tonemappingAces.hashCode^crossSectionAxis.hashCode^crossSectionPosition.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppRenderSettingsSnapshot &&
-                runtimeType == other.runtimeType
-                && shadingModes == other.shadingModes&& shadingModeId == other.shadingModeId&& shadingModeLabel == other.shadingModeLabel&& showGrid == other.showGrid&& shadowsEnabled == other.shadowsEnabled&& shadowSteps == other.shadowSteps&& aoEnabled == other.aoEnabled&& aoSamples == other.aoSamples&& aoIntensity == other.aoIntensity&& marchMaxSteps == other.marchMaxSteps&& sculptFastMode == other.sculptFastMode&& autoReduceSteps == other.autoReduceSteps&& interactionRenderScale == other.interactionRenderScale&& restRenderScale == other.restRenderScale&& fogEnabled == other.fogEnabled&& fogDensity == other.fogDensity&& bloomEnabled == other.bloomEnabled&& bloomIntensity == other.bloomIntensity&& gamma == other.gamma&& tonemappingAces == other.tonemappingAces&& crossSectionAxis == other.crossSectionAxis&& crossSectionPosition == other.crossSectionPosition;
-        
-            }
-
-class AppScalarPropertySnapshot  {
-                final String key;
-final String label;
-final double value;
-
-                const AppScalarPropertySnapshot({required this.key ,required this.label ,required this.value ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => key.hashCode^label.hashCode^value.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppScalarPropertySnapshot &&
-                runtimeType == other.runtimeType
-                && key == other.key&& label == other.label&& value == other.value;
-        
-            }
-
-class AppSceneSnapshot  {
-                final AppNodeSnapshot? selectedNode;
-final AppSelectedNodePropertiesSnapshot? selectedNodeProperties;
-final Uint64List selectedNodeIds;
-final List<AppNodeSnapshot> topLevelNodes;
-final List<AppSceneTreeNodeSnapshot> sceneTreeRoots;
-final List<AppViewportLightSnapshot> viewportLights;
-final AppWorkspaceSnapshot workspace;
-final AppSelectionContextSnapshot selectionContext;
-final List<AppCommandSnapshot> commands;
-final AppHistorySnapshot history;
-final AppDocumentSnapshot document;
-final AppRenderSettingsSnapshot render;
-final AppSettingsSnapshot settings;
-final AppExportSnapshot export_;
-final AppImportSnapshot import_;
-final AppSculptConvertSnapshot sculptConvert;
-final AppSculptSnapshot sculpt;
-final AppLightLinkingSnapshot lightLinking;
-final AppCameraSnapshot camera;
-final AppSceneStatsSnapshot stats;
-final AppToolSnapshot tool;
-
-                const AppSceneSnapshot({this.selectedNode ,this.selectedNodeProperties ,required this.selectedNodeIds ,required this.topLevelNodes ,required this.sceneTreeRoots ,required this.viewportLights ,required this.workspace ,required this.selectionContext ,required this.commands ,required this.history ,required this.document ,required this.render ,required this.settings ,required this.export_ ,required this.import_ ,required this.sculptConvert ,required this.sculpt ,required this.lightLinking ,required this.camera ,required this.stats ,required this.tool ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => selectedNode.hashCode^selectedNodeProperties.hashCode^selectedNodeIds.hashCode^topLevelNodes.hashCode^sceneTreeRoots.hashCode^viewportLights.hashCode^workspace.hashCode^selectionContext.hashCode^commands.hashCode^history.hashCode^document.hashCode^render.hashCode^settings.hashCode^export_.hashCode^import_.hashCode^sculptConvert.hashCode^sculpt.hashCode^lightLinking.hashCode^camera.hashCode^stats.hashCode^tool.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppSceneSnapshot &&
-                runtimeType == other.runtimeType
-                && selectedNode == other.selectedNode&& selectedNodeProperties == other.selectedNodeProperties&& selectedNodeIds == other.selectedNodeIds&& topLevelNodes == other.topLevelNodes&& sceneTreeRoots == other.sceneTreeRoots&& viewportLights == other.viewportLights&& workspace == other.workspace&& selectionContext == other.selectionContext&& commands == other.commands&& history == other.history&& document == other.document&& render == other.render&& settings == other.settings&& export_ == other.export_&& import_ == other.import_&& sculptConvert == other.sculptConvert&& sculpt == other.sculpt&& lightLinking == other.lightLinking&& camera == other.camera&& stats == other.stats&& tool == other.tool;
-        
-            }
-
-class AppSceneStatsSnapshot  {
-                final int totalNodes;
-final int visibleNodes;
-final int topLevelNodes;
-final int primitiveNodes;
-final int operationNodes;
-final int transformNodes;
-final int modifierNodes;
-final int sculptNodes;
-final int lightNodes;
-final BigInt voxelMemoryBytes;
-final int sdfEvalComplexity;
-final BigInt structureKey;
-final BigInt dataFingerprint;
-final AppVec3 boundsMin;
-final AppVec3 boundsMax;
-
-                const AppSceneStatsSnapshot({required this.totalNodes ,required this.visibleNodes ,required this.topLevelNodes ,required this.primitiveNodes ,required this.operationNodes ,required this.transformNodes ,required this.modifierNodes ,required this.sculptNodes ,required this.lightNodes ,required this.voxelMemoryBytes ,required this.sdfEvalComplexity ,required this.structureKey ,required this.dataFingerprint ,required this.boundsMin ,required this.boundsMax ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => totalNodes.hashCode^visibleNodes.hashCode^topLevelNodes.hashCode^primitiveNodes.hashCode^operationNodes.hashCode^transformNodes.hashCode^modifierNodes.hashCode^sculptNodes.hashCode^lightNodes.hashCode^voxelMemoryBytes.hashCode^sdfEvalComplexity.hashCode^structureKey.hashCode^dataFingerprint.hashCode^boundsMin.hashCode^boundsMax.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppSceneStatsSnapshot &&
-                runtimeType == other.runtimeType
-                && totalNodes == other.totalNodes&& visibleNodes == other.visibleNodes&& topLevelNodes == other.topLevelNodes&& primitiveNodes == other.primitiveNodes&& operationNodes == other.operationNodes&& transformNodes == other.transformNodes&& modifierNodes == other.modifierNodes&& sculptNodes == other.sculptNodes&& lightNodes == other.lightNodes&& voxelMemoryBytes == other.voxelMemoryBytes&& sdfEvalComplexity == other.sdfEvalComplexity&& structureKey == other.structureKey&& dataFingerprint == other.dataFingerprint&& boundsMin == other.boundsMin&& boundsMax == other.boundsMax;
-        
-            }
-
-class AppSceneTreeNodeSnapshot  {
-                final BigInt id;
-final String name;
-final String kindLabel;
-final bool visible;
-final bool locked;
-final String workflowStatusId;
-final String workflowStatusLabel;
-final List<AppSceneTreeNodeSnapshot> children;
-
-                const AppSceneTreeNodeSnapshot({required this.id ,required this.name ,required this.kindLabel ,required this.visible ,required this.locked ,required this.workflowStatusId ,required this.workflowStatusLabel ,required this.children ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => id.hashCode^name.hashCode^kindLabel.hashCode^visible.hashCode^locked.hashCode^workflowStatusId.hashCode^workflowStatusLabel.hashCode^children.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppSceneTreeNodeSnapshot &&
-                runtimeType == other.runtimeType
-                && id == other.id&& name == other.name&& kindLabel == other.kindLabel&& visible == other.visible&& locked == other.locked&& workflowStatusId == other.workflowStatusId&& workflowStatusLabel == other.workflowStatusLabel&& children == other.children;
-        
-            }
-
-class AppSculptConvertDialogSnapshot  {
-                final BigInt targetNodeId;
-final String targetName;
-final String modeId;
-final String modeLabel;
-final int resolution;
-final int minResolution;
-final int maxResolution;
-
-                const AppSculptConvertDialogSnapshot({required this.targetNodeId ,required this.targetName ,required this.modeId ,required this.modeLabel ,required this.resolution ,required this.minResolution ,required this.maxResolution ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => targetNodeId.hashCode^targetName.hashCode^modeId.hashCode^modeLabel.hashCode^resolution.hashCode^minResolution.hashCode^maxResolution.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppSculptConvertDialogSnapshot &&
-                runtimeType == other.runtimeType
-                && targetNodeId == other.targetNodeId&& targetName == other.targetName&& modeId == other.modeId&& modeLabel == other.modeLabel&& resolution == other.resolution&& minResolution == other.minResolution&& maxResolution == other.maxResolution;
-        
-            }
-
-class AppSculptConvertSnapshot  {
-                final AppSculptConvertDialogSnapshot? dialog;
-final AppSculptConvertStatusSnapshot status;
-
-                const AppSculptConvertSnapshot({this.dialog ,required this.status ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => dialog.hashCode^status.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppSculptConvertSnapshot &&
-                runtimeType == other.runtimeType
-                && dialog == other.dialog&& status == other.status;
-        
-            }
-
-class AppSculptConvertStatusSnapshot  {
-                final String state;
-final int progress;
-final int total;
-final String? targetName;
-final String? phaseLabel;
-final String? message;
-final bool isError;
-
-                const AppSculptConvertStatusSnapshot({required this.state ,required this.progress ,required this.total ,this.targetName ,this.phaseLabel ,this.message ,required this.isError ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => state.hashCode^progress.hashCode^total.hashCode^targetName.hashCode^phaseLabel.hashCode^message.hashCode^isError.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppSculptConvertStatusSnapshot &&
-                runtimeType == other.runtimeType
-                && state == other.state&& progress == other.progress&& total == other.total&& targetName == other.targetName&& phaseLabel == other.phaseLabel&& message == other.message&& isError == other.isError;
-        
-            }
-
-class AppSculptSessionSnapshot  {
-                final BigInt nodeId;
-final String nodeName;
-final String brushModeId;
-final String brushModeLabel;
-final double brushRadius;
-final double brushStrength;
-final String symmetryAxisId;
-final String symmetryAxisLabel;
-
-                const AppSculptSessionSnapshot({required this.nodeId ,required this.nodeName ,required this.brushModeId ,required this.brushModeLabel ,required this.brushRadius ,required this.brushStrength ,required this.symmetryAxisId ,required this.symmetryAxisLabel ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => nodeId.hashCode^nodeName.hashCode^brushModeId.hashCode^brushModeLabel.hashCode^brushRadius.hashCode^brushStrength.hashCode^symmetryAxisId.hashCode^symmetryAxisLabel.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppSculptSessionSnapshot &&
-                runtimeType == other.runtimeType
-                && nodeId == other.nodeId&& nodeName == other.nodeName&& brushModeId == other.brushModeId&& brushModeLabel == other.brushModeLabel&& brushRadius == other.brushRadius&& brushStrength == other.brushStrength&& symmetryAxisId == other.symmetryAxisId&& symmetryAxisLabel == other.symmetryAxisLabel;
-        
-            }
-
-class AppSculptSnapshot  {
-                final AppSelectedSculptSnapshot? selected;
-final AppSculptSessionSnapshot? session;
-final bool canResumeSelected;
-final bool canStop;
-final int maxResolution;
-
-                const AppSculptSnapshot({this.selected ,this.session ,required this.canResumeSelected ,required this.canStop ,required this.maxResolution ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => selected.hashCode^session.hashCode^canResumeSelected.hashCode^canStop.hashCode^maxResolution.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppSculptSnapshot &&
-                runtimeType == other.runtimeType
-                && selected == other.selected&& session == other.session&& canResumeSelected == other.canResumeSelected&& canStop == other.canStop&& maxResolution == other.maxResolution;
-        
-            }
-
-class AppSelectedNodePropertiesSnapshot  {
-                final BigInt nodeId;
-final String name;
-final String kindLabel;
-final bool visible;
-final bool locked;
-final AppTransformPropertiesSnapshot? transform;
-final AppPrimitivePropertiesSnapshot? primitive;
-final AppMaterialPropertiesSnapshot? material;
-final AppLightPropertiesSnapshot? light;
-
-                const AppSelectedNodePropertiesSnapshot({required this.nodeId ,required this.name ,required this.kindLabel ,required this.visible ,required this.locked ,this.transform ,this.primitive ,this.material ,this.light ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => nodeId.hashCode^name.hashCode^kindLabel.hashCode^visible.hashCode^locked.hashCode^transform.hashCode^primitive.hashCode^material.hashCode^light.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppSelectedNodePropertiesSnapshot &&
-                runtimeType == other.runtimeType
-                && nodeId == other.nodeId&& name == other.name&& kindLabel == other.kindLabel&& visible == other.visible&& locked == other.locked&& transform == other.transform&& primitive == other.primitive&& material == other.material&& light == other.light;
-        
-            }
-
-class AppSelectedSculptSnapshot  {
-                final BigInt nodeId;
-final String nodeName;
-final int currentResolution;
-final int desiredResolution;
-
-                const AppSelectedSculptSnapshot({required this.nodeId ,required this.nodeName ,required this.currentResolution ,required this.desiredResolution ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => nodeId.hashCode^nodeName.hashCode^currentResolution.hashCode^desiredResolution.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppSelectedSculptSnapshot &&
-                runtimeType == other.runtimeType
-                && nodeId == other.nodeId&& nodeName == other.nodeName&& currentResolution == other.currentResolution&& desiredResolution == other.desiredResolution;
-        
-            }
-
-class AppSelectionContextSnapshot  {
-                final String headline;
-final String detail;
-final int selectionCount;
-final String selectionKindId;
-final String selectionKindLabel;
-final String workflowStatusId;
-final String workflowStatusLabel;
-final List<AppQuickActionSnapshot> quickActions;
-
-                const AppSelectionContextSnapshot({required this.headline ,required this.detail ,required this.selectionCount ,required this.selectionKindId ,required this.selectionKindLabel ,required this.workflowStatusId ,required this.workflowStatusLabel ,required this.quickActions ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => headline.hashCode^detail.hashCode^selectionCount.hashCode^selectionKindId.hashCode^selectionKindLabel.hashCode^workflowStatusId.hashCode^workflowStatusLabel.hashCode^quickActions.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppSelectionContextSnapshot &&
-                runtimeType == other.runtimeType
-                && headline == other.headline&& detail == other.detail&& selectionCount == other.selectionCount&& selectionKindId == other.selectionKindId&& selectionKindLabel == other.selectionKindLabel&& workflowStatusId == other.workflowStatusId&& workflowStatusLabel == other.workflowStatusLabel&& quickActions == other.quickActions;
-        
-            }
-
-class AppSettingsSnapshot  {
-                final bool showFpsOverlay;
-final bool showNodeLabels;
-final bool showBoundingBox;
-final bool showLightGizmos;
-final bool autoSaveEnabled;
-final int autoSaveIntervalSecs;
-final int maxExportResolution;
-final int maxSculptResolution;
-final List<AppCameraBookmarkSnapshot> cameraBookmarks;
-final List<AppKeyOptionSnapshot> keyOptions;
-final List<AppKeybindingSnapshot> keybindings;
-
-                const AppSettingsSnapshot({required this.showFpsOverlay ,required this.showNodeLabels ,required this.showBoundingBox ,required this.showLightGizmos ,required this.autoSaveEnabled ,required this.autoSaveIntervalSecs ,required this.maxExportResolution ,required this.maxSculptResolution ,required this.cameraBookmarks ,required this.keyOptions ,required this.keybindings ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => showFpsOverlay.hashCode^showNodeLabels.hashCode^showBoundingBox.hashCode^showLightGizmos.hashCode^autoSaveEnabled.hashCode^autoSaveIntervalSecs.hashCode^maxExportResolution.hashCode^maxSculptResolution.hashCode^cameraBookmarks.hashCode^keyOptions.hashCode^keybindings.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppSettingsSnapshot &&
-                runtimeType == other.runtimeType
-                && showFpsOverlay == other.showFpsOverlay&& showNodeLabels == other.showNodeLabels&& showBoundingBox == other.showBoundingBox&& showLightGizmos == other.showLightGizmos&& autoSaveEnabled == other.autoSaveEnabled&& autoSaveIntervalSecs == other.autoSaveIntervalSecs&& maxExportResolution == other.maxExportResolution&& maxSculptResolution == other.maxSculptResolution&& cameraBookmarks == other.cameraBookmarks&& keyOptions == other.keyOptions&& keybindings == other.keybindings;
-        
-            }
-
-class AppToolSnapshot  {
-                final String activeToolLabel;
-final String shadingModeLabel;
-final bool gridEnabled;
-final String manipulatorModeId;
-final String manipulatorModeLabel;
-final String manipulatorSpaceId;
-final String manipulatorSpaceLabel;
-final bool manipulatorVisible;
-final bool canResetPivot;
-final AppVec3 pivotOffset;
-
-                const AppToolSnapshot({required this.activeToolLabel ,required this.shadingModeLabel ,required this.gridEnabled ,required this.manipulatorModeId ,required this.manipulatorModeLabel ,required this.manipulatorSpaceId ,required this.manipulatorSpaceLabel ,required this.manipulatorVisible ,required this.canResetPivot ,required this.pivotOffset ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => activeToolLabel.hashCode^shadingModeLabel.hashCode^gridEnabled.hashCode^manipulatorModeId.hashCode^manipulatorModeLabel.hashCode^manipulatorSpaceId.hashCode^manipulatorSpaceLabel.hashCode^manipulatorVisible.hashCode^canResetPivot.hashCode^pivotOffset.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppToolSnapshot &&
-                runtimeType == other.runtimeType
-                && activeToolLabel == other.activeToolLabel&& shadingModeLabel == other.shadingModeLabel&& gridEnabled == other.gridEnabled&& manipulatorModeId == other.manipulatorModeId&& manipulatorModeLabel == other.manipulatorModeLabel&& manipulatorSpaceId == other.manipulatorSpaceId&& manipulatorSpaceLabel == other.manipulatorSpaceLabel&& manipulatorVisible == other.manipulatorVisible&& canResetPivot == other.canResetPivot&& pivotOffset == other.pivotOffset;
-        
-            }
-
-class AppTransformPropertiesSnapshot  {
-                final String positionLabel;
-final AppVec3 position;
-final AppVec3 rotationDegrees;
-final AppVec3? scale;
-
-                const AppTransformPropertiesSnapshot({required this.positionLabel ,required this.position ,required this.rotationDegrees ,this.scale ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => positionLabel.hashCode^position.hashCode^rotationDegrees.hashCode^scale.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppTransformPropertiesSnapshot &&
-                runtimeType == other.runtimeType
-                && positionLabel == other.positionLabel&& position == other.position&& rotationDegrees == other.rotationDegrees&& scale == other.scale;
-        
-            }
-
-class AppVec3  {
-                final double x;
-final double y;
-final double z;
-
-                const AppVec3({required this.x ,required this.y ,required this.z ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => x.hashCode^y.hashCode^z.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppVec3 &&
-                runtimeType == other.runtimeType
-                && x == other.x&& y == other.y&& z == other.z;
-        
-            }
-
-class AppViewportLightSnapshot  {
-                final BigInt lightNodeId;
-final BigInt transformNodeId;
-final String lightTypeId;
-final String lightTypeLabel;
-final AppVec3 worldPosition;
-final AppVec3 direction;
-final AppVec3 color;
-final double intensity;
-final double range;
-final double spotAngle;
-final bool active;
-final List<AppVec3> arrayPositions;
-final List<AppVec3> arrayColors;
-
-                const AppViewportLightSnapshot({required this.lightNodeId ,required this.transformNodeId ,required this.lightTypeId ,required this.lightTypeLabel ,required this.worldPosition ,required this.direction ,required this.color ,required this.intensity ,required this.range ,required this.spotAngle ,required this.active ,required this.arrayPositions ,required this.arrayColors ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => lightNodeId.hashCode^transformNodeId.hashCode^lightTypeId.hashCode^lightTypeLabel.hashCode^worldPosition.hashCode^direction.hashCode^color.hashCode^intensity.hashCode^range.hashCode^spotAngle.hashCode^active.hashCode^arrayPositions.hashCode^arrayColors.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppViewportLightSnapshot &&
-                runtimeType == other.runtimeType
-                && lightNodeId == other.lightNodeId&& transformNodeId == other.transformNodeId&& lightTypeId == other.lightTypeId&& lightTypeLabel == other.lightTypeLabel&& worldPosition == other.worldPosition&& direction == other.direction&& color == other.color&& intensity == other.intensity&& range == other.range&& spotAngle == other.spotAngle&& active == other.active&& arrayPositions == other.arrayPositions&& arrayColors == other.arrayColors;
-        
-            }
-
-class AppWorkflowStatusSnapshot  {
-                final AppExportStatusSnapshot exportStatus;
-final AppImportStatusSnapshot importStatus;
-final AppSculptConvertStatusSnapshot sculptConvertStatus;
-final bool sceneChanged;
-
-                const AppWorkflowStatusSnapshot({required this.exportStatus ,required this.importStatus ,required this.sculptConvertStatus ,required this.sceneChanged ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => exportStatus.hashCode^importStatus.hashCode^sculptConvertStatus.hashCode^sceneChanged.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppWorkflowStatusSnapshot &&
-                runtimeType == other.runtimeType
-                && exportStatus == other.exportStatus&& importStatus == other.importStatus&& sculptConvertStatus == other.sculptConvertStatus&& sceneChanged == other.sceneChanged;
-        
-            }
-
-class AppWorkspaceSnapshot  {
-                final String id;
-final String label;
-final String description;
-
-                const AppWorkspaceSnapshot({required this.id ,required this.label ,required this.description ,});
-
-                
-                
-
-                
-        @override
-        int get hashCode => id.hashCode^label.hashCode^description.hashCode;
-        
-
-                
-        @override
-        bool operator ==(Object other) =>
-            identical(this, other) ||
-            other is AppWorkspaceSnapshot &&
-                runtimeType == other.runtimeType
-                && id == other.id&& label == other.label&& description == other.description;
-        
-            }
-            
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+
+class AppCameraBookmarkSnapshot {
+  final int slotIndex;
+  final bool saved;
+
+  const AppCameraBookmarkSnapshot({
+    required this.slotIndex,
+    required this.saved,
+  });
+
+  @override
+  int get hashCode => slotIndex.hashCode ^ saved.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppCameraBookmarkSnapshot &&
+          runtimeType == other.runtimeType &&
+          slotIndex == other.slotIndex &&
+          saved == other.saved;
+}
+
+class AppCameraSnapshot {
+  final double yaw;
+  final double pitch;
+  final double roll;
+  final double distance;
+  final double fovDegrees;
+  final bool orthographic;
+  final AppVec3 target;
+  final AppVec3 eye;
+
+  const AppCameraSnapshot({
+    required this.yaw,
+    required this.pitch,
+    required this.roll,
+    required this.distance,
+    required this.fovDegrees,
+    required this.orthographic,
+    required this.target,
+    required this.eye,
+  });
+
+  @override
+  int get hashCode =>
+      yaw.hashCode ^
+      pitch.hashCode ^
+      roll.hashCode ^
+      distance.hashCode ^
+      fovDegrees.hashCode ^
+      orthographic.hashCode ^
+      target.hashCode ^
+      eye.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppCameraSnapshot &&
+          runtimeType == other.runtimeType &&
+          yaw == other.yaw &&
+          pitch == other.pitch &&
+          roll == other.roll &&
+          distance == other.distance &&
+          fovDegrees == other.fovDegrees &&
+          orthographic == other.orthographic &&
+          target == other.target &&
+          eye == other.eye;
+}
+
+class AppCommandSnapshot {
+  final String id;
+  final String label;
+  final String category;
+  final bool enabled;
+  final List<String> workspaceIds;
+  final String? shortcutLabel;
+
+  const AppCommandSnapshot({
+    required this.id,
+    required this.label,
+    required this.category,
+    required this.enabled,
+    required this.workspaceIds,
+    this.shortcutLabel,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      label.hashCode ^
+      category.hashCode ^
+      enabled.hashCode ^
+      workspaceIds.hashCode ^
+      shortcutLabel.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppCommandSnapshot &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          label == other.label &&
+          category == other.category &&
+          enabled == other.enabled &&
+          workspaceIds == other.workspaceIds &&
+          shortcutLabel == other.shortcutLabel;
+}
+
+class AppDocumentSnapshot {
+  final String? currentFilePath;
+  final String? currentFileName;
+  final bool hasUnsavedChanges;
+  final List<String> recentFiles;
+  final bool recoveryAvailable;
+  final String? recoverySummary;
+
+  const AppDocumentSnapshot({
+    this.currentFilePath,
+    this.currentFileName,
+    required this.hasUnsavedChanges,
+    required this.recentFiles,
+    required this.recoveryAvailable,
+    this.recoverySummary,
+  });
+
+  @override
+  int get hashCode =>
+      currentFilePath.hashCode ^
+      currentFileName.hashCode ^
+      hasUnsavedChanges.hashCode ^
+      recentFiles.hashCode ^
+      recoveryAvailable.hashCode ^
+      recoverySummary.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppDocumentSnapshot &&
+          runtimeType == other.runtimeType &&
+          currentFilePath == other.currentFilePath &&
+          currentFileName == other.currentFileName &&
+          hasUnsavedChanges == other.hasUnsavedChanges &&
+          recentFiles == other.recentFiles &&
+          recoveryAvailable == other.recoveryAvailable &&
+          recoverySummary == other.recoverySummary;
+}
+
+class AppExportPresetSnapshot {
+  final String name;
+  final int resolution;
+
+  const AppExportPresetSnapshot({required this.name, required this.resolution});
+
+  @override
+  int get hashCode => name.hashCode ^ resolution.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppExportPresetSnapshot &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          resolution == other.resolution;
+}
+
+class AppExportSnapshot {
+  final int resolution;
+  final int minResolution;
+  final int maxResolution;
+  final bool adaptive;
+  final List<AppExportPresetSnapshot> presets;
+  final AppExportStatusSnapshot status;
+
+  const AppExportSnapshot({
+    required this.resolution,
+    required this.minResolution,
+    required this.maxResolution,
+    required this.adaptive,
+    required this.presets,
+    required this.status,
+  });
+
+  @override
+  int get hashCode =>
+      resolution.hashCode ^
+      minResolution.hashCode ^
+      maxResolution.hashCode ^
+      adaptive.hashCode ^
+      presets.hashCode ^
+      status.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppExportSnapshot &&
+          runtimeType == other.runtimeType &&
+          resolution == other.resolution &&
+          minResolution == other.minResolution &&
+          maxResolution == other.maxResolution &&
+          adaptive == other.adaptive &&
+          presets == other.presets &&
+          status == other.status;
+}
+
+class AppExportStatusSnapshot {
+  final String state;
+  final int progress;
+  final int total;
+  final int resolution;
+  final String? phaseLabel;
+  final String? targetFileName;
+  final String? targetFilePath;
+  final String? formatLabel;
+  final String? message;
+  final bool isError;
+
+  const AppExportStatusSnapshot({
+    required this.state,
+    required this.progress,
+    required this.total,
+    required this.resolution,
+    this.phaseLabel,
+    this.targetFileName,
+    this.targetFilePath,
+    this.formatLabel,
+    this.message,
+    required this.isError,
+  });
+
+  @override
+  int get hashCode =>
+      state.hashCode ^
+      progress.hashCode ^
+      total.hashCode ^
+      resolution.hashCode ^
+      phaseLabel.hashCode ^
+      targetFileName.hashCode ^
+      targetFilePath.hashCode ^
+      formatLabel.hashCode ^
+      message.hashCode ^
+      isError.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppExportStatusSnapshot &&
+          runtimeType == other.runtimeType &&
+          state == other.state &&
+          progress == other.progress &&
+          total == other.total &&
+          resolution == other.resolution &&
+          phaseLabel == other.phaseLabel &&
+          targetFileName == other.targetFileName &&
+          targetFilePath == other.targetFilePath &&
+          formatLabel == other.formatLabel &&
+          message == other.message &&
+          isError == other.isError;
+}
+
+class AppHistorySnapshot {
+  final bool canUndo;
+  final bool canRedo;
+
+  const AppHistorySnapshot({required this.canUndo, required this.canRedo});
+
+  @override
+  int get hashCode => canUndo.hashCode ^ canRedo.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppHistorySnapshot &&
+          runtimeType == other.runtimeType &&
+          canUndo == other.canUndo &&
+          canRedo == other.canRedo;
+}
+
+class AppImportDialogSnapshot {
+  final String filename;
+  final int resolution;
+  final int autoResolution;
+  final bool useAuto;
+  final BigInt vertexCount;
+  final BigInt triangleCount;
+  final AppVec3 boundsSize;
+  final int minResolution;
+  final int maxResolution;
+
+  const AppImportDialogSnapshot({
+    required this.filename,
+    required this.resolution,
+    required this.autoResolution,
+    required this.useAuto,
+    required this.vertexCount,
+    required this.triangleCount,
+    required this.boundsSize,
+    required this.minResolution,
+    required this.maxResolution,
+  });
+
+  @override
+  int get hashCode =>
+      filename.hashCode ^
+      resolution.hashCode ^
+      autoResolution.hashCode ^
+      useAuto.hashCode ^
+      vertexCount.hashCode ^
+      triangleCount.hashCode ^
+      boundsSize.hashCode ^
+      minResolution.hashCode ^
+      maxResolution.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppImportDialogSnapshot &&
+          runtimeType == other.runtimeType &&
+          filename == other.filename &&
+          resolution == other.resolution &&
+          autoResolution == other.autoResolution &&
+          useAuto == other.useAuto &&
+          vertexCount == other.vertexCount &&
+          triangleCount == other.triangleCount &&
+          boundsSize == other.boundsSize &&
+          minResolution == other.minResolution &&
+          maxResolution == other.maxResolution;
+}
+
+class AppImportSnapshot {
+  final AppImportDialogSnapshot? dialog;
+  final AppImportStatusSnapshot status;
+
+  const AppImportSnapshot({this.dialog, required this.status});
+
+  @override
+  int get hashCode => dialog.hashCode ^ status.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppImportSnapshot &&
+          runtimeType == other.runtimeType &&
+          dialog == other.dialog &&
+          status == other.status;
+}
+
+class AppImportStatusSnapshot {
+  final String state;
+  final int progress;
+  final int total;
+  final String? filename;
+  final String? phaseLabel;
+  final String? message;
+  final bool isError;
+
+  const AppImportStatusSnapshot({
+    required this.state,
+    required this.progress,
+    required this.total,
+    this.filename,
+    this.phaseLabel,
+    this.message,
+    required this.isError,
+  });
+
+  @override
+  int get hashCode =>
+      state.hashCode ^
+      progress.hashCode ^
+      total.hashCode ^
+      filename.hashCode ^
+      phaseLabel.hashCode ^
+      message.hashCode ^
+      isError.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppImportStatusSnapshot &&
+          runtimeType == other.runtimeType &&
+          state == other.state &&
+          progress == other.progress &&
+          total == other.total &&
+          filename == other.filename &&
+          phaseLabel == other.phaseLabel &&
+          message == other.message &&
+          isError == other.isError;
+}
+
+class AppKeyComboSnapshot {
+  final String keyId;
+  final String keyLabel;
+  final bool ctrl;
+  final bool shift;
+  final bool alt;
+  final String shortcutLabel;
+
+  const AppKeyComboSnapshot({
+    required this.keyId,
+    required this.keyLabel,
+    required this.ctrl,
+    required this.shift,
+    required this.alt,
+    required this.shortcutLabel,
+  });
+
+  @override
+  int get hashCode =>
+      keyId.hashCode ^
+      keyLabel.hashCode ^
+      ctrl.hashCode ^
+      shift.hashCode ^
+      alt.hashCode ^
+      shortcutLabel.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppKeyComboSnapshot &&
+          runtimeType == other.runtimeType &&
+          keyId == other.keyId &&
+          keyLabel == other.keyLabel &&
+          ctrl == other.ctrl &&
+          shift == other.shift &&
+          alt == other.alt &&
+          shortcutLabel == other.shortcutLabel;
+}
+
+class AppKeyOptionSnapshot {
+  final String id;
+  final String label;
+
+  const AppKeyOptionSnapshot({required this.id, required this.label});
+
+  @override
+  int get hashCode => id.hashCode ^ label.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppKeyOptionSnapshot &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          label == other.label;
+}
+
+class AppKeybindingSnapshot {
+  final String actionId;
+  final String actionLabel;
+  final String category;
+  final AppKeyComboSnapshot? binding;
+
+  const AppKeybindingSnapshot({
+    required this.actionId,
+    required this.actionLabel,
+    required this.category,
+    this.binding,
+  });
+
+  @override
+  int get hashCode =>
+      actionId.hashCode ^
+      actionLabel.hashCode ^
+      category.hashCode ^
+      binding.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppKeybindingSnapshot &&
+          runtimeType == other.runtimeType &&
+          actionId == other.actionId &&
+          actionLabel == other.actionLabel &&
+          category == other.category &&
+          binding == other.binding;
+}
+
+class AppLightCookieCandidateSnapshot {
+  final BigInt nodeId;
+  final String name;
+  final String kindLabel;
+
+  const AppLightCookieCandidateSnapshot({
+    required this.nodeId,
+    required this.name,
+    required this.kindLabel,
+  });
+
+  @override
+  int get hashCode => nodeId.hashCode ^ name.hashCode ^ kindLabel.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppLightCookieCandidateSnapshot &&
+          runtimeType == other.runtimeType &&
+          nodeId == other.nodeId &&
+          name == other.name &&
+          kindLabel == other.kindLabel;
+}
+
+class AppLightLinkNodeSnapshot {
+  final BigInt nodeId;
+  final String nodeName;
+  final String kindLabel;
+  final int lightMask;
+
+  const AppLightLinkNodeSnapshot({
+    required this.nodeId,
+    required this.nodeName,
+    required this.kindLabel,
+    required this.lightMask,
+  });
+
+  @override
+  int get hashCode =>
+      nodeId.hashCode ^
+      nodeName.hashCode ^
+      kindLabel.hashCode ^
+      lightMask.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppLightLinkNodeSnapshot &&
+          runtimeType == other.runtimeType &&
+          nodeId == other.nodeId &&
+          nodeName == other.nodeName &&
+          kindLabel == other.kindLabel &&
+          lightMask == other.lightMask;
+}
+
+class AppLightLinkTargetSnapshot {
+  final BigInt lightNodeId;
+  final String lightName;
+  final String lightTypeLabel;
+  final bool active;
+  final int maskBit;
+  final AppVec3 color;
+
+  const AppLightLinkTargetSnapshot({
+    required this.lightNodeId,
+    required this.lightName,
+    required this.lightTypeLabel,
+    required this.active,
+    required this.maskBit,
+    required this.color,
+  });
+
+  @override
+  int get hashCode =>
+      lightNodeId.hashCode ^
+      lightName.hashCode ^
+      lightTypeLabel.hashCode ^
+      active.hashCode ^
+      maskBit.hashCode ^
+      color.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppLightLinkTargetSnapshot &&
+          runtimeType == other.runtimeType &&
+          lightNodeId == other.lightNodeId &&
+          lightName == other.lightName &&
+          lightTypeLabel == other.lightTypeLabel &&
+          active == other.active &&
+          maskBit == other.maskBit &&
+          color == other.color;
+}
+
+class AppLightLinkingSnapshot {
+  final List<AppLightLinkTargetSnapshot> lights;
+  final List<AppLightLinkNodeSnapshot> geometryNodes;
+  final int totalVisibleLightCount;
+  final int maxLightCount;
+
+  const AppLightLinkingSnapshot({
+    required this.lights,
+    required this.geometryNodes,
+    required this.totalVisibleLightCount,
+    required this.maxLightCount,
+  });
+
+  @override
+  int get hashCode =>
+      lights.hashCode ^
+      geometryNodes.hashCode ^
+      totalVisibleLightCount.hashCode ^
+      maxLightCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppLightLinkingSnapshot &&
+          runtimeType == other.runtimeType &&
+          lights == other.lights &&
+          geometryNodes == other.geometryNodes &&
+          totalVisibleLightCount == other.totalVisibleLightCount &&
+          maxLightCount == other.maxLightCount;
+}
+
+class AppLightPropertiesSnapshot {
+  final BigInt nodeId;
+  final BigInt? transformNodeId;
+  final String lightTypeId;
+  final String lightTypeLabel;
+  final AppVec3 color;
+  final double intensity;
+  final double range;
+  final double spotAngle;
+  final bool castShadows;
+  final double shadowSoftness;
+  final AppVec3 shadowColor;
+  final bool volumetric;
+  final double volumetricDensity;
+  final BigInt? cookieNodeId;
+  final String? cookieNodeName;
+  final List<AppLightCookieCandidateSnapshot> cookieCandidates;
+  final String proximityModeId;
+  final String proximityModeLabel;
+  final double proximityRange;
+  final String? arrayPatternId;
+  final String? arrayPatternLabel;
+  final int? arrayCount;
+  final double? arrayRadius;
+  final double? arrayColorVariation;
+  final String? intensityExpression;
+  final String? intensityExpressionError;
+  final String? colorHueExpression;
+  final String? colorHueExpressionError;
+  final bool supportsRange;
+  final bool supportsSpotAngle;
+  final bool supportsShadows;
+  final bool supportsVolumetric;
+  final bool supportsCookie;
+  final bool supportsProximity;
+  final bool supportsExpressions;
+  final bool supportsArray;
+
+  const AppLightPropertiesSnapshot({
+    required this.nodeId,
+    this.transformNodeId,
+    required this.lightTypeId,
+    required this.lightTypeLabel,
+    required this.color,
+    required this.intensity,
+    required this.range,
+    required this.spotAngle,
+    required this.castShadows,
+    required this.shadowSoftness,
+    required this.shadowColor,
+    required this.volumetric,
+    required this.volumetricDensity,
+    this.cookieNodeId,
+    this.cookieNodeName,
+    required this.cookieCandidates,
+    required this.proximityModeId,
+    required this.proximityModeLabel,
+    required this.proximityRange,
+    this.arrayPatternId,
+    this.arrayPatternLabel,
+    this.arrayCount,
+    this.arrayRadius,
+    this.arrayColorVariation,
+    this.intensityExpression,
+    this.intensityExpressionError,
+    this.colorHueExpression,
+    this.colorHueExpressionError,
+    required this.supportsRange,
+    required this.supportsSpotAngle,
+    required this.supportsShadows,
+    required this.supportsVolumetric,
+    required this.supportsCookie,
+    required this.supportsProximity,
+    required this.supportsExpressions,
+    required this.supportsArray,
+  });
+
+  @override
+  int get hashCode =>
+      nodeId.hashCode ^
+      transformNodeId.hashCode ^
+      lightTypeId.hashCode ^
+      lightTypeLabel.hashCode ^
+      color.hashCode ^
+      intensity.hashCode ^
+      range.hashCode ^
+      spotAngle.hashCode ^
+      castShadows.hashCode ^
+      shadowSoftness.hashCode ^
+      shadowColor.hashCode ^
+      volumetric.hashCode ^
+      volumetricDensity.hashCode ^
+      cookieNodeId.hashCode ^
+      cookieNodeName.hashCode ^
+      cookieCandidates.hashCode ^
+      proximityModeId.hashCode ^
+      proximityModeLabel.hashCode ^
+      proximityRange.hashCode ^
+      arrayPatternId.hashCode ^
+      arrayPatternLabel.hashCode ^
+      arrayCount.hashCode ^
+      arrayRadius.hashCode ^
+      arrayColorVariation.hashCode ^
+      intensityExpression.hashCode ^
+      intensityExpressionError.hashCode ^
+      colorHueExpression.hashCode ^
+      colorHueExpressionError.hashCode ^
+      supportsRange.hashCode ^
+      supportsSpotAngle.hashCode ^
+      supportsShadows.hashCode ^
+      supportsVolumetric.hashCode ^
+      supportsCookie.hashCode ^
+      supportsProximity.hashCode ^
+      supportsExpressions.hashCode ^
+      supportsArray.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppLightPropertiesSnapshot &&
+          runtimeType == other.runtimeType &&
+          nodeId == other.nodeId &&
+          transformNodeId == other.transformNodeId &&
+          lightTypeId == other.lightTypeId &&
+          lightTypeLabel == other.lightTypeLabel &&
+          color == other.color &&
+          intensity == other.intensity &&
+          range == other.range &&
+          spotAngle == other.spotAngle &&
+          castShadows == other.castShadows &&
+          shadowSoftness == other.shadowSoftness &&
+          shadowColor == other.shadowColor &&
+          volumetric == other.volumetric &&
+          volumetricDensity == other.volumetricDensity &&
+          cookieNodeId == other.cookieNodeId &&
+          cookieNodeName == other.cookieNodeName &&
+          cookieCandidates == other.cookieCandidates &&
+          proximityModeId == other.proximityModeId &&
+          proximityModeLabel == other.proximityModeLabel &&
+          proximityRange == other.proximityRange &&
+          arrayPatternId == other.arrayPatternId &&
+          arrayPatternLabel == other.arrayPatternLabel &&
+          arrayCount == other.arrayCount &&
+          arrayRadius == other.arrayRadius &&
+          arrayColorVariation == other.arrayColorVariation &&
+          intensityExpression == other.intensityExpression &&
+          intensityExpressionError == other.intensityExpressionError &&
+          colorHueExpression == other.colorHueExpression &&
+          colorHueExpressionError == other.colorHueExpressionError &&
+          supportsRange == other.supportsRange &&
+          supportsSpotAngle == other.supportsSpotAngle &&
+          supportsShadows == other.supportsShadows &&
+          supportsVolumetric == other.supportsVolumetric &&
+          supportsCookie == other.supportsCookie &&
+          supportsProximity == other.supportsProximity &&
+          supportsExpressions == other.supportsExpressions &&
+          supportsArray == other.supportsArray;
+}
+
+class AppMaterialPropertiesSnapshot {
+  final AppVec3 color;
+  final double roughness;
+  final double metallic;
+  final AppVec3 emissive;
+  final double emissiveIntensity;
+  final double fresnel;
+
+  const AppMaterialPropertiesSnapshot({
+    required this.color,
+    required this.roughness,
+    required this.metallic,
+    required this.emissive,
+    required this.emissiveIntensity,
+    required this.fresnel,
+  });
+
+  @override
+  int get hashCode =>
+      color.hashCode ^
+      roughness.hashCode ^
+      metallic.hashCode ^
+      emissive.hashCode ^
+      emissiveIntensity.hashCode ^
+      fresnel.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppMaterialPropertiesSnapshot &&
+          runtimeType == other.runtimeType &&
+          color == other.color &&
+          roughness == other.roughness &&
+          metallic == other.metallic &&
+          emissive == other.emissive &&
+          emissiveIntensity == other.emissiveIntensity &&
+          fresnel == other.fresnel;
+}
+
+class AppNodeSnapshot {
+  final BigInt id;
+  final String name;
+  final String kindLabel;
+  final bool visible;
+  final bool locked;
+
+  const AppNodeSnapshot({
+    required this.id,
+    required this.name,
+    required this.kindLabel,
+    required this.visible,
+    required this.locked,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      kindLabel.hashCode ^
+      visible.hashCode ^
+      locked.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppNodeSnapshot &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          kindLabel == other.kindLabel &&
+          visible == other.visible &&
+          locked == other.locked;
+}
+
+class AppPrimitivePropertiesSnapshot {
+  final String primitiveKind;
+  final List<AppScalarPropertySnapshot> parameters;
+
+  const AppPrimitivePropertiesSnapshot({
+    required this.primitiveKind,
+    required this.parameters,
+  });
+
+  @override
+  int get hashCode => primitiveKind.hashCode ^ parameters.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppPrimitivePropertiesSnapshot &&
+          runtimeType == other.runtimeType &&
+          primitiveKind == other.primitiveKind &&
+          parameters == other.parameters;
+}
+
+class AppQuickActionSnapshot {
+  final String id;
+  final String label;
+  final String category;
+  final bool enabled;
+  final bool prominent;
+  final String? shortcutLabel;
+
+  const AppQuickActionSnapshot({
+    required this.id,
+    required this.label,
+    required this.category,
+    required this.enabled,
+    required this.prominent,
+    this.shortcutLabel,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      label.hashCode ^
+      category.hashCode ^
+      enabled.hashCode ^
+      prominent.hashCode ^
+      shortcutLabel.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppQuickActionSnapshot &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          label == other.label &&
+          category == other.category &&
+          enabled == other.enabled &&
+          prominent == other.prominent &&
+          shortcutLabel == other.shortcutLabel;
+}
+
+class AppRenderOptionSnapshot {
+  final String id;
+  final String label;
+
+  const AppRenderOptionSnapshot({required this.id, required this.label});
+
+  @override
+  int get hashCode => id.hashCode ^ label.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppRenderOptionSnapshot &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          label == other.label;
+}
+
+class AppRenderSettingsSnapshot {
+  final List<AppRenderOptionSnapshot> shadingModes;
+  final String shadingModeId;
+  final String shadingModeLabel;
+  final bool showGrid;
+  final bool shadowsEnabled;
+  final int shadowSteps;
+  final bool aoEnabled;
+  final int aoSamples;
+  final double aoIntensity;
+  final int marchMaxSteps;
+  final bool sculptFastMode;
+  final bool autoReduceSteps;
+  final double interactionRenderScale;
+  final double restRenderScale;
+  final bool fogEnabled;
+  final double fogDensity;
+  final bool bloomEnabled;
+  final double bloomIntensity;
+  final double gamma;
+  final bool tonemappingAces;
+  final int crossSectionAxis;
+  final double crossSectionPosition;
+
+  const AppRenderSettingsSnapshot({
+    required this.shadingModes,
+    required this.shadingModeId,
+    required this.shadingModeLabel,
+    required this.showGrid,
+    required this.shadowsEnabled,
+    required this.shadowSteps,
+    required this.aoEnabled,
+    required this.aoSamples,
+    required this.aoIntensity,
+    required this.marchMaxSteps,
+    required this.sculptFastMode,
+    required this.autoReduceSteps,
+    required this.interactionRenderScale,
+    required this.restRenderScale,
+    required this.fogEnabled,
+    required this.fogDensity,
+    required this.bloomEnabled,
+    required this.bloomIntensity,
+    required this.gamma,
+    required this.tonemappingAces,
+    required this.crossSectionAxis,
+    required this.crossSectionPosition,
+  });
+
+  @override
+  int get hashCode =>
+      shadingModes.hashCode ^
+      shadingModeId.hashCode ^
+      shadingModeLabel.hashCode ^
+      showGrid.hashCode ^
+      shadowsEnabled.hashCode ^
+      shadowSteps.hashCode ^
+      aoEnabled.hashCode ^
+      aoSamples.hashCode ^
+      aoIntensity.hashCode ^
+      marchMaxSteps.hashCode ^
+      sculptFastMode.hashCode ^
+      autoReduceSteps.hashCode ^
+      interactionRenderScale.hashCode ^
+      restRenderScale.hashCode ^
+      fogEnabled.hashCode ^
+      fogDensity.hashCode ^
+      bloomEnabled.hashCode ^
+      bloomIntensity.hashCode ^
+      gamma.hashCode ^
+      tonemappingAces.hashCode ^
+      crossSectionAxis.hashCode ^
+      crossSectionPosition.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppRenderSettingsSnapshot &&
+          runtimeType == other.runtimeType &&
+          shadingModes == other.shadingModes &&
+          shadingModeId == other.shadingModeId &&
+          shadingModeLabel == other.shadingModeLabel &&
+          showGrid == other.showGrid &&
+          shadowsEnabled == other.shadowsEnabled &&
+          shadowSteps == other.shadowSteps &&
+          aoEnabled == other.aoEnabled &&
+          aoSamples == other.aoSamples &&
+          aoIntensity == other.aoIntensity &&
+          marchMaxSteps == other.marchMaxSteps &&
+          sculptFastMode == other.sculptFastMode &&
+          autoReduceSteps == other.autoReduceSteps &&
+          interactionRenderScale == other.interactionRenderScale &&
+          restRenderScale == other.restRenderScale &&
+          fogEnabled == other.fogEnabled &&
+          fogDensity == other.fogDensity &&
+          bloomEnabled == other.bloomEnabled &&
+          bloomIntensity == other.bloomIntensity &&
+          gamma == other.gamma &&
+          tonemappingAces == other.tonemappingAces &&
+          crossSectionAxis == other.crossSectionAxis &&
+          crossSectionPosition == other.crossSectionPosition;
+}
+
+class AppScalarPropertySnapshot {
+  final String key;
+  final String label;
+  final double value;
+
+  const AppScalarPropertySnapshot({
+    required this.key,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  int get hashCode => key.hashCode ^ label.hashCode ^ value.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppScalarPropertySnapshot &&
+          runtimeType == other.runtimeType &&
+          key == other.key &&
+          label == other.label &&
+          value == other.value;
+}
+
+class AppSceneSnapshot {
+  final AppNodeSnapshot? selectedNode;
+  final AppSelectedNodePropertiesSnapshot? selectedNodeProperties;
+  final Uint64List selectedNodeIds;
+  final List<AppNodeSnapshot> topLevelNodes;
+  final List<AppSceneTreeNodeSnapshot> sceneTreeRoots;
+  final List<AppViewportLightSnapshot> viewportLights;
+  final AppWorkspaceSnapshot workspace;
+  final AppSelectionContextSnapshot selectionContext;
+  final List<AppCommandSnapshot> commands;
+  final AppHistorySnapshot history;
+  final AppDocumentSnapshot document;
+  final AppRenderSettingsSnapshot render;
+  final AppSettingsSnapshot settings;
+  final AppExportSnapshot export_;
+  final AppImportSnapshot import_;
+  final AppSculptConvertSnapshot sculptConvert;
+  final AppSculptSnapshot sculpt;
+  final AppLightLinkingSnapshot lightLinking;
+  final AppCameraSnapshot camera;
+  final AppSceneStatsSnapshot stats;
+  final AppToolSnapshot tool;
+
+  const AppSceneSnapshot({
+    this.selectedNode,
+    this.selectedNodeProperties,
+    required this.selectedNodeIds,
+    required this.topLevelNodes,
+    required this.sceneTreeRoots,
+    required this.viewportLights,
+    required this.workspace,
+    required this.selectionContext,
+    required this.commands,
+    required this.history,
+    required this.document,
+    required this.render,
+    required this.settings,
+    required this.export_,
+    required this.import_,
+    required this.sculptConvert,
+    required this.sculpt,
+    required this.lightLinking,
+    required this.camera,
+    required this.stats,
+    required this.tool,
+  });
+
+  @override
+  int get hashCode =>
+      selectedNode.hashCode ^
+      selectedNodeProperties.hashCode ^
+      selectedNodeIds.hashCode ^
+      topLevelNodes.hashCode ^
+      sceneTreeRoots.hashCode ^
+      viewportLights.hashCode ^
+      workspace.hashCode ^
+      selectionContext.hashCode ^
+      commands.hashCode ^
+      history.hashCode ^
+      document.hashCode ^
+      render.hashCode ^
+      settings.hashCode ^
+      export_.hashCode ^
+      import_.hashCode ^
+      sculptConvert.hashCode ^
+      sculpt.hashCode ^
+      lightLinking.hashCode ^
+      camera.hashCode ^
+      stats.hashCode ^
+      tool.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppSceneSnapshot &&
+          runtimeType == other.runtimeType &&
+          selectedNode == other.selectedNode &&
+          selectedNodeProperties == other.selectedNodeProperties &&
+          selectedNodeIds == other.selectedNodeIds &&
+          topLevelNodes == other.topLevelNodes &&
+          sceneTreeRoots == other.sceneTreeRoots &&
+          viewportLights == other.viewportLights &&
+          workspace == other.workspace &&
+          selectionContext == other.selectionContext &&
+          commands == other.commands &&
+          history == other.history &&
+          document == other.document &&
+          render == other.render &&
+          settings == other.settings &&
+          export_ == other.export_ &&
+          import_ == other.import_ &&
+          sculptConvert == other.sculptConvert &&
+          sculpt == other.sculpt &&
+          lightLinking == other.lightLinking &&
+          camera == other.camera &&
+          stats == other.stats &&
+          tool == other.tool;
+}
+
+class AppSceneStatsSnapshot {
+  final int totalNodes;
+  final int visibleNodes;
+  final int topLevelNodes;
+  final int primitiveNodes;
+  final int operationNodes;
+  final int transformNodes;
+  final int modifierNodes;
+  final int sculptNodes;
+  final int lightNodes;
+  final BigInt voxelMemoryBytes;
+  final int sdfEvalComplexity;
+  final BigInt structureKey;
+  final BigInt dataFingerprint;
+  final AppVec3 boundsMin;
+  final AppVec3 boundsMax;
+
+  const AppSceneStatsSnapshot({
+    required this.totalNodes,
+    required this.visibleNodes,
+    required this.topLevelNodes,
+    required this.primitiveNodes,
+    required this.operationNodes,
+    required this.transformNodes,
+    required this.modifierNodes,
+    required this.sculptNodes,
+    required this.lightNodes,
+    required this.voxelMemoryBytes,
+    required this.sdfEvalComplexity,
+    required this.structureKey,
+    required this.dataFingerprint,
+    required this.boundsMin,
+    required this.boundsMax,
+  });
+
+  @override
+  int get hashCode =>
+      totalNodes.hashCode ^
+      visibleNodes.hashCode ^
+      topLevelNodes.hashCode ^
+      primitiveNodes.hashCode ^
+      operationNodes.hashCode ^
+      transformNodes.hashCode ^
+      modifierNodes.hashCode ^
+      sculptNodes.hashCode ^
+      lightNodes.hashCode ^
+      voxelMemoryBytes.hashCode ^
+      sdfEvalComplexity.hashCode ^
+      structureKey.hashCode ^
+      dataFingerprint.hashCode ^
+      boundsMin.hashCode ^
+      boundsMax.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppSceneStatsSnapshot &&
+          runtimeType == other.runtimeType &&
+          totalNodes == other.totalNodes &&
+          visibleNodes == other.visibleNodes &&
+          topLevelNodes == other.topLevelNodes &&
+          primitiveNodes == other.primitiveNodes &&
+          operationNodes == other.operationNodes &&
+          transformNodes == other.transformNodes &&
+          modifierNodes == other.modifierNodes &&
+          sculptNodes == other.sculptNodes &&
+          lightNodes == other.lightNodes &&
+          voxelMemoryBytes == other.voxelMemoryBytes &&
+          sdfEvalComplexity == other.sdfEvalComplexity &&
+          structureKey == other.structureKey &&
+          dataFingerprint == other.dataFingerprint &&
+          boundsMin == other.boundsMin &&
+          boundsMax == other.boundsMax;
+}
+
+class AppSceneTreeNodeSnapshot {
+  final BigInt id;
+  final String name;
+  final String kindLabel;
+  final bool visible;
+  final bool locked;
+  final String workflowStatusId;
+  final String workflowStatusLabel;
+  final List<AppSceneTreeNodeSnapshot> children;
+
+  const AppSceneTreeNodeSnapshot({
+    required this.id,
+    required this.name,
+    required this.kindLabel,
+    required this.visible,
+    required this.locked,
+    required this.workflowStatusId,
+    required this.workflowStatusLabel,
+    required this.children,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      kindLabel.hashCode ^
+      visible.hashCode ^
+      locked.hashCode ^
+      workflowStatusId.hashCode ^
+      workflowStatusLabel.hashCode ^
+      children.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppSceneTreeNodeSnapshot &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          kindLabel == other.kindLabel &&
+          visible == other.visible &&
+          locked == other.locked &&
+          workflowStatusId == other.workflowStatusId &&
+          workflowStatusLabel == other.workflowStatusLabel &&
+          children == other.children;
+}
+
+class AppSculptConvertDialogSnapshot {
+  final BigInt targetNodeId;
+  final String targetName;
+  final String modeId;
+  final String modeLabel;
+  final int resolution;
+  final int minResolution;
+  final int maxResolution;
+
+  const AppSculptConvertDialogSnapshot({
+    required this.targetNodeId,
+    required this.targetName,
+    required this.modeId,
+    required this.modeLabel,
+    required this.resolution,
+    required this.minResolution,
+    required this.maxResolution,
+  });
+
+  @override
+  int get hashCode =>
+      targetNodeId.hashCode ^
+      targetName.hashCode ^
+      modeId.hashCode ^
+      modeLabel.hashCode ^
+      resolution.hashCode ^
+      minResolution.hashCode ^
+      maxResolution.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppSculptConvertDialogSnapshot &&
+          runtimeType == other.runtimeType &&
+          targetNodeId == other.targetNodeId &&
+          targetName == other.targetName &&
+          modeId == other.modeId &&
+          modeLabel == other.modeLabel &&
+          resolution == other.resolution &&
+          minResolution == other.minResolution &&
+          maxResolution == other.maxResolution;
+}
+
+class AppSculptConvertSnapshot {
+  final AppSculptConvertDialogSnapshot? dialog;
+  final AppSculptConvertStatusSnapshot status;
+
+  const AppSculptConvertSnapshot({this.dialog, required this.status});
+
+  @override
+  int get hashCode => dialog.hashCode ^ status.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppSculptConvertSnapshot &&
+          runtimeType == other.runtimeType &&
+          dialog == other.dialog &&
+          status == other.status;
+}
+
+class AppSculptConvertStatusSnapshot {
+  final String state;
+  final int progress;
+  final int total;
+  final String? targetName;
+  final String? phaseLabel;
+  final String? message;
+  final bool isError;
+
+  const AppSculptConvertStatusSnapshot({
+    required this.state,
+    required this.progress,
+    required this.total,
+    this.targetName,
+    this.phaseLabel,
+    this.message,
+    required this.isError,
+  });
+
+  @override
+  int get hashCode =>
+      state.hashCode ^
+      progress.hashCode ^
+      total.hashCode ^
+      targetName.hashCode ^
+      phaseLabel.hashCode ^
+      message.hashCode ^
+      isError.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppSculptConvertStatusSnapshot &&
+          runtimeType == other.runtimeType &&
+          state == other.state &&
+          progress == other.progress &&
+          total == other.total &&
+          targetName == other.targetName &&
+          phaseLabel == other.phaseLabel &&
+          message == other.message &&
+          isError == other.isError;
+}
+
+class AppSculptSessionSnapshot {
+  final BigInt nodeId;
+  final String nodeName;
+  final String brushModeId;
+  final String brushModeLabel;
+  final double brushRadius;
+  final double brushStrength;
+  final String symmetryAxisId;
+  final String symmetryAxisLabel;
+
+  const AppSculptSessionSnapshot({
+    required this.nodeId,
+    required this.nodeName,
+    required this.brushModeId,
+    required this.brushModeLabel,
+    required this.brushRadius,
+    required this.brushStrength,
+    required this.symmetryAxisId,
+    required this.symmetryAxisLabel,
+  });
+
+  @override
+  int get hashCode =>
+      nodeId.hashCode ^
+      nodeName.hashCode ^
+      brushModeId.hashCode ^
+      brushModeLabel.hashCode ^
+      brushRadius.hashCode ^
+      brushStrength.hashCode ^
+      symmetryAxisId.hashCode ^
+      symmetryAxisLabel.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppSculptSessionSnapshot &&
+          runtimeType == other.runtimeType &&
+          nodeId == other.nodeId &&
+          nodeName == other.nodeName &&
+          brushModeId == other.brushModeId &&
+          brushModeLabel == other.brushModeLabel &&
+          brushRadius == other.brushRadius &&
+          brushStrength == other.brushStrength &&
+          symmetryAxisId == other.symmetryAxisId &&
+          symmetryAxisLabel == other.symmetryAxisLabel;
+}
+
+class AppSculptSnapshot {
+  final AppSelectedSculptSnapshot? selected;
+  final AppSculptSessionSnapshot? session;
+  final bool canResumeSelected;
+  final bool canStop;
+  final int maxResolution;
+
+  const AppSculptSnapshot({
+    this.selected,
+    this.session,
+    required this.canResumeSelected,
+    required this.canStop,
+    required this.maxResolution,
+  });
+
+  @override
+  int get hashCode =>
+      selected.hashCode ^
+      session.hashCode ^
+      canResumeSelected.hashCode ^
+      canStop.hashCode ^
+      maxResolution.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppSculptSnapshot &&
+          runtimeType == other.runtimeType &&
+          selected == other.selected &&
+          session == other.session &&
+          canResumeSelected == other.canResumeSelected &&
+          canStop == other.canStop &&
+          maxResolution == other.maxResolution;
+}
+
+class AppSelectedNodePropertiesSnapshot {
+  final BigInt nodeId;
+  final String name;
+  final String kindLabel;
+  final bool visible;
+  final bool locked;
+  final AppTransformPropertiesSnapshot? transform;
+  final AppPrimitivePropertiesSnapshot? primitive;
+  final AppMaterialPropertiesSnapshot? material;
+  final AppLightPropertiesSnapshot? light;
+
+  const AppSelectedNodePropertiesSnapshot({
+    required this.nodeId,
+    required this.name,
+    required this.kindLabel,
+    required this.visible,
+    required this.locked,
+    this.transform,
+    this.primitive,
+    this.material,
+    this.light,
+  });
+
+  @override
+  int get hashCode =>
+      nodeId.hashCode ^
+      name.hashCode ^
+      kindLabel.hashCode ^
+      visible.hashCode ^
+      locked.hashCode ^
+      transform.hashCode ^
+      primitive.hashCode ^
+      material.hashCode ^
+      light.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppSelectedNodePropertiesSnapshot &&
+          runtimeType == other.runtimeType &&
+          nodeId == other.nodeId &&
+          name == other.name &&
+          kindLabel == other.kindLabel &&
+          visible == other.visible &&
+          locked == other.locked &&
+          transform == other.transform &&
+          primitive == other.primitive &&
+          material == other.material &&
+          light == other.light;
+}
+
+class AppSelectedSculptSnapshot {
+  final BigInt nodeId;
+  final String nodeName;
+  final int currentResolution;
+  final int desiredResolution;
+
+  const AppSelectedSculptSnapshot({
+    required this.nodeId,
+    required this.nodeName,
+    required this.currentResolution,
+    required this.desiredResolution,
+  });
+
+  @override
+  int get hashCode =>
+      nodeId.hashCode ^
+      nodeName.hashCode ^
+      currentResolution.hashCode ^
+      desiredResolution.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppSelectedSculptSnapshot &&
+          runtimeType == other.runtimeType &&
+          nodeId == other.nodeId &&
+          nodeName == other.nodeName &&
+          currentResolution == other.currentResolution &&
+          desiredResolution == other.desiredResolution;
+}
+
+class AppSelectionContextSnapshot {
+  final String headline;
+  final String detail;
+  final int selectionCount;
+  final String selectionKindId;
+  final String selectionKindLabel;
+  final String workflowStatusId;
+  final String workflowStatusLabel;
+  final List<AppQuickActionSnapshot> quickActions;
+
+  const AppSelectionContextSnapshot({
+    required this.headline,
+    required this.detail,
+    required this.selectionCount,
+    required this.selectionKindId,
+    required this.selectionKindLabel,
+    required this.workflowStatusId,
+    required this.workflowStatusLabel,
+    required this.quickActions,
+  });
+
+  @override
+  int get hashCode =>
+      headline.hashCode ^
+      detail.hashCode ^
+      selectionCount.hashCode ^
+      selectionKindId.hashCode ^
+      selectionKindLabel.hashCode ^
+      workflowStatusId.hashCode ^
+      workflowStatusLabel.hashCode ^
+      quickActions.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppSelectionContextSnapshot &&
+          runtimeType == other.runtimeType &&
+          headline == other.headline &&
+          detail == other.detail &&
+          selectionCount == other.selectionCount &&
+          selectionKindId == other.selectionKindId &&
+          selectionKindLabel == other.selectionKindLabel &&
+          workflowStatusId == other.workflowStatusId &&
+          workflowStatusLabel == other.workflowStatusLabel &&
+          quickActions == other.quickActions;
+}
+
+class AppSettingsSnapshot {
+  final bool showFpsOverlay;
+  final bool showNodeLabels;
+  final bool showBoundingBox;
+  final bool showLightGizmos;
+  final bool autoSaveEnabled;
+  final int autoSaveIntervalSecs;
+  final int maxExportResolution;
+  final int maxSculptResolution;
+  final List<AppCameraBookmarkSnapshot> cameraBookmarks;
+  final List<AppKeyOptionSnapshot> keyOptions;
+  final List<AppKeybindingSnapshot> keybindings;
+
+  const AppSettingsSnapshot({
+    required this.showFpsOverlay,
+    required this.showNodeLabels,
+    required this.showBoundingBox,
+    required this.showLightGizmos,
+    required this.autoSaveEnabled,
+    required this.autoSaveIntervalSecs,
+    required this.maxExportResolution,
+    required this.maxSculptResolution,
+    required this.cameraBookmarks,
+    required this.keyOptions,
+    required this.keybindings,
+  });
+
+  @override
+  int get hashCode =>
+      showFpsOverlay.hashCode ^
+      showNodeLabels.hashCode ^
+      showBoundingBox.hashCode ^
+      showLightGizmos.hashCode ^
+      autoSaveEnabled.hashCode ^
+      autoSaveIntervalSecs.hashCode ^
+      maxExportResolution.hashCode ^
+      maxSculptResolution.hashCode ^
+      cameraBookmarks.hashCode ^
+      keyOptions.hashCode ^
+      keybindings.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppSettingsSnapshot &&
+          runtimeType == other.runtimeType &&
+          showFpsOverlay == other.showFpsOverlay &&
+          showNodeLabels == other.showNodeLabels &&
+          showBoundingBox == other.showBoundingBox &&
+          showLightGizmos == other.showLightGizmos &&
+          autoSaveEnabled == other.autoSaveEnabled &&
+          autoSaveIntervalSecs == other.autoSaveIntervalSecs &&
+          maxExportResolution == other.maxExportResolution &&
+          maxSculptResolution == other.maxSculptResolution &&
+          cameraBookmarks == other.cameraBookmarks &&
+          keyOptions == other.keyOptions &&
+          keybindings == other.keybindings;
+}
+
+class AppToolSnapshot {
+  final String activeToolLabel;
+  final String shadingModeLabel;
+  final bool gridEnabled;
+  final String manipulatorModeId;
+  final String manipulatorModeLabel;
+  final String manipulatorSpaceId;
+  final String manipulatorSpaceLabel;
+  final bool manipulatorVisible;
+  final bool canResetPivot;
+  final AppVec3 pivotOffset;
+
+  const AppToolSnapshot({
+    required this.activeToolLabel,
+    required this.shadingModeLabel,
+    required this.gridEnabled,
+    required this.manipulatorModeId,
+    required this.manipulatorModeLabel,
+    required this.manipulatorSpaceId,
+    required this.manipulatorSpaceLabel,
+    required this.manipulatorVisible,
+    required this.canResetPivot,
+    required this.pivotOffset,
+  });
+
+  @override
+  int get hashCode =>
+      activeToolLabel.hashCode ^
+      shadingModeLabel.hashCode ^
+      gridEnabled.hashCode ^
+      manipulatorModeId.hashCode ^
+      manipulatorModeLabel.hashCode ^
+      manipulatorSpaceId.hashCode ^
+      manipulatorSpaceLabel.hashCode ^
+      manipulatorVisible.hashCode ^
+      canResetPivot.hashCode ^
+      pivotOffset.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppToolSnapshot &&
+          runtimeType == other.runtimeType &&
+          activeToolLabel == other.activeToolLabel &&
+          shadingModeLabel == other.shadingModeLabel &&
+          gridEnabled == other.gridEnabled &&
+          manipulatorModeId == other.manipulatorModeId &&
+          manipulatorModeLabel == other.manipulatorModeLabel &&
+          manipulatorSpaceId == other.manipulatorSpaceId &&
+          manipulatorSpaceLabel == other.manipulatorSpaceLabel &&
+          manipulatorVisible == other.manipulatorVisible &&
+          canResetPivot == other.canResetPivot &&
+          pivotOffset == other.pivotOffset;
+}
+
+class AppTransformPropertiesSnapshot {
+  final String positionLabel;
+  final AppVec3 position;
+  final AppVec3 rotationDegrees;
+  final AppVec3? scale;
+
+  const AppTransformPropertiesSnapshot({
+    required this.positionLabel,
+    required this.position,
+    required this.rotationDegrees,
+    this.scale,
+  });
+
+  @override
+  int get hashCode =>
+      positionLabel.hashCode ^
+      position.hashCode ^
+      rotationDegrees.hashCode ^
+      scale.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppTransformPropertiesSnapshot &&
+          runtimeType == other.runtimeType &&
+          positionLabel == other.positionLabel &&
+          position == other.position &&
+          rotationDegrees == other.rotationDegrees &&
+          scale == other.scale;
+}
+
+class AppVec3 {
+  final double x;
+  final double y;
+  final double z;
+
+  const AppVec3({required this.x, required this.y, required this.z});
+
+  @override
+  int get hashCode => x.hashCode ^ y.hashCode ^ z.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppVec3 &&
+          runtimeType == other.runtimeType &&
+          x == other.x &&
+          y == other.y &&
+          z == other.z;
+}
+
+class AppViewportLightSnapshot {
+  final BigInt lightNodeId;
+  final BigInt transformNodeId;
+  final String lightTypeId;
+  final String lightTypeLabel;
+  final AppVec3 worldPosition;
+  final AppVec3 direction;
+  final AppVec3 color;
+  final double intensity;
+  final double range;
+  final double spotAngle;
+  final bool active;
+  final List<AppVec3> arrayPositions;
+  final List<AppVec3> arrayColors;
+
+  const AppViewportLightSnapshot({
+    required this.lightNodeId,
+    required this.transformNodeId,
+    required this.lightTypeId,
+    required this.lightTypeLabel,
+    required this.worldPosition,
+    required this.direction,
+    required this.color,
+    required this.intensity,
+    required this.range,
+    required this.spotAngle,
+    required this.active,
+    required this.arrayPositions,
+    required this.arrayColors,
+  });
+
+  @override
+  int get hashCode =>
+      lightNodeId.hashCode ^
+      transformNodeId.hashCode ^
+      lightTypeId.hashCode ^
+      lightTypeLabel.hashCode ^
+      worldPosition.hashCode ^
+      direction.hashCode ^
+      color.hashCode ^
+      intensity.hashCode ^
+      range.hashCode ^
+      spotAngle.hashCode ^
+      active.hashCode ^
+      arrayPositions.hashCode ^
+      arrayColors.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppViewportLightSnapshot &&
+          runtimeType == other.runtimeType &&
+          lightNodeId == other.lightNodeId &&
+          transformNodeId == other.transformNodeId &&
+          lightTypeId == other.lightTypeId &&
+          lightTypeLabel == other.lightTypeLabel &&
+          worldPosition == other.worldPosition &&
+          direction == other.direction &&
+          color == other.color &&
+          intensity == other.intensity &&
+          range == other.range &&
+          spotAngle == other.spotAngle &&
+          active == other.active &&
+          arrayPositions == other.arrayPositions &&
+          arrayColors == other.arrayColors;
+}
+
+class AppWorkflowStatusSnapshot {
+  final AppExportStatusSnapshot exportStatus;
+  final AppImportStatusSnapshot importStatus;
+  final AppSculptConvertStatusSnapshot sculptConvertStatus;
+  final bool sceneChanged;
+
+  const AppWorkflowStatusSnapshot({
+    required this.exportStatus,
+    required this.importStatus,
+    required this.sculptConvertStatus,
+    required this.sceneChanged,
+  });
+
+  @override
+  int get hashCode =>
+      exportStatus.hashCode ^
+      importStatus.hashCode ^
+      sculptConvertStatus.hashCode ^
+      sceneChanged.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppWorkflowStatusSnapshot &&
+          runtimeType == other.runtimeType &&
+          exportStatus == other.exportStatus &&
+          importStatus == other.importStatus &&
+          sculptConvertStatus == other.sculptConvertStatus &&
+          sceneChanged == other.sceneChanged;
+}
+
+class AppWorkspaceSnapshot {
+  final String id;
+  final String label;
+  final String description;
+
+  const AppWorkspaceSnapshot({
+    required this.id,
+    required this.label,
+    required this.description,
+  });
+
+  @override
+  int get hashCode => id.hashCode ^ label.hashCode ^ description.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppWorkspaceSnapshot &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          label == other.label &&
+          description == other.description;
+}

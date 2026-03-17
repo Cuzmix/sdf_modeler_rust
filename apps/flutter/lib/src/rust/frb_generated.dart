@@ -8,5888 +8,8325 @@ import 'api/simple.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'frb_generated.dart';
-import 'frb_generated.io.dart' if (dart.library.js_interop) 'frb_generated.web.dart';
+import 'frb_generated.io.dart'
+    if (dart.library.js_interop) 'frb_generated.web.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
+/// Main entrypoint of the Rust API
+class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
+  @internal
+  static final instance = RustLib._();
 
-                /// Main entrypoint of the Rust API
-                class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
-                  @internal
-                  static final instance = RustLib._();
+  RustLib._();
 
-                  RustLib._();
+  /// Initialize flutter_rust_bridge
+  static Future<void> init({
+    RustLibApi? api,
+    BaseHandler? handler,
+    ExternalLibrary? externalLibrary,
+    bool forceSameCodegenVersion = true,
+  }) async {
+    await instance.initImpl(
+      api: api,
+      handler: handler,
+      externalLibrary: externalLibrary,
+      forceSameCodegenVersion: forceSameCodegenVersion,
+    );
+  }
 
-                  /// Initialize flutter_rust_bridge
-                  static Future<void> init({
-                    RustLibApi? api,
-                    BaseHandler? handler,
-                    ExternalLibrary? externalLibrary,
-                    bool forceSameCodegenVersion = true,
-                  }) async {
-                    await instance.initImpl(
-                      api: api,
-                      handler: handler,
-                      externalLibrary: externalLibrary,
-                      forceSameCodegenVersion: forceSameCodegenVersion,
-                    );
-                  }
+  /// Initialize flutter_rust_bridge in mock mode.
+  /// No libraries for FFI are loaded.
+  static void initMock({required RustLibApi api}) {
+    instance.initMockImpl(api: api);
+  }
 
-                  /// Initialize flutter_rust_bridge in mock mode.
-                  /// No libraries for FFI are loaded.
-                  static void initMock({
-                    required RustLibApi api,
-                  }) {
-                    instance.initMockImpl(
-                      api: api,
-                    );
-                  }
+  /// Dispose flutter_rust_bridge
+  ///
+  /// The call to this function is optional, since flutter_rust_bridge (and everything else)
+  /// is automatically disposed when the app stops.
+  static void dispose() => instance.disposeImpl();
 
-                  /// Dispose flutter_rust_bridge
-                  ///
-                  /// The call to this function is optional, since flutter_rust_bridge (and everything else)
-                  /// is automatically disposed when the app stops.
-                  static void dispose() => instance.disposeImpl();
+  @override
+  ApiImplConstructor<RustLibApiImpl, RustLibWire> get apiImplConstructor =>
+      RustLibApiImpl.new;
 
-                  @override
-                  ApiImplConstructor<RustLibApiImpl, RustLibWire> get apiImplConstructor => RustLibApiImpl.new;
+  @override
+  WireConstructor<RustLibWire> get wireConstructor =>
+      RustLibWire.fromExternalLibrary;
 
-                  @override
-                  WireConstructor<RustLibWire> get wireConstructor => RustLibWire.fromExternalLibrary;
+  @override
+  Future<void> executeRustInitializers() async {
+    await api.crateApiSimpleInitApp();
+  }
 
-                  @override
-                  Future<void> executeRustInitializers() async {
-                    await api.crateApiSimpleInitApp();
+  @override
+  ExternalLibraryLoaderConfig get defaultExternalLibraryLoaderConfig =>
+      kDefaultExternalLibraryLoaderConfig;
 
-                  }
+  @override
+  String get codegenVersion => '2.11.1';
 
-                  @override
-                  ExternalLibraryLoaderConfig get defaultExternalLibraryLoaderConfig => kDefaultExternalLibraryLoaderConfig;
+  @override
+  int get rustContentHash => -684641965;
 
-                  @override
-                  String get codegenVersion => '2.11.1';
+  static const kDefaultExternalLibraryLoaderConfig =
+      ExternalLibraryLoaderConfig(
+        stem: 'sdf_modeler_bridge',
+        ioDirectory: 'rust/target/release/',
+        webPrefix: 'pkg/',
+      );
+}
 
-                  @override
-                  int get rustContentHash => -684641965;
+abstract class RustLibApi extends BaseApi {
+  AppSceneSnapshot crateApiSimpleAddBox();
 
-                  static const kDefaultExternalLibraryLoaderConfig = ExternalLibraryLoaderConfig(
-                    stem: 'UNKNOWN',
-                    ioDirectory: 'rust/target/release/',
-                    webPrefix: 'pkg/',
-                  );
-                }
-                
+  AppSceneSnapshot crateApiSimpleAddCylinder();
 
-                abstract class RustLibApi extends BaseApi {
-                  AppSceneSnapshot crateApiSimpleAddBox();
+  AppSceneSnapshot crateApiSimpleAddSphere();
 
-AppSceneSnapshot crateApiSimpleAddCylinder();
+  AppSceneSnapshot crateApiSimpleAddTorus();
 
-AppSceneSnapshot crateApiSimpleAddSphere();
+  AppSceneSnapshot crateApiSimpleApplyRenderPreset({required String presetId});
 
-AppSceneSnapshot crateApiSimpleAddTorus();
+  void crateApiSimpleBeginInteractiveEdit();
 
-AppSceneSnapshot crateApiSimpleApplyRenderPreset({required String presetId });
+  String crateApiSimpleBridgeVersion();
 
-void crateApiSimpleBeginInteractiveEdit();
+  AppSceneSnapshot crateApiSimpleCameraBack();
 
-String crateApiSimpleBridgeVersion();
+  AppSceneSnapshot crateApiSimpleCameraBottom();
 
-AppSceneSnapshot crateApiSimpleCameraBack();
+  AppSceneSnapshot crateApiSimpleCameraFront();
 
-AppSceneSnapshot crateApiSimpleCameraBottom();
+  AppSceneSnapshot crateApiSimpleCameraLeft();
 
-AppSceneSnapshot crateApiSimpleCameraFront();
+  AppSceneSnapshot crateApiSimpleCameraRight();
 
-AppSceneSnapshot crateApiSimpleCameraLeft();
+  AppSceneSnapshot crateApiSimpleCameraTop();
 
-AppSceneSnapshot crateApiSimpleCameraRight();
+  AppSceneSnapshot crateApiSimpleCancelExport();
 
-AppSceneSnapshot crateApiSimpleCameraTop();
+  AppSceneSnapshot crateApiSimpleCancelImport();
 
-AppSceneSnapshot crateApiSimpleCancelExport();
+  AppSceneSnapshot crateApiSimpleCancelImportDialog();
 
-AppSceneSnapshot crateApiSimpleCancelImport();
+  AppSceneSnapshot crateApiSimpleCancelSculptConvertDialog();
 
-AppSceneSnapshot crateApiSimpleCancelImportDialog();
+  AppSceneSnapshot crateApiSimpleClearCameraBookmark({required int slotIndex});
 
-AppSceneSnapshot crateApiSimpleCancelSculptConvertDialog();
+  AppSceneSnapshot crateApiSimpleClearKeybinding({required String actionId});
 
-AppSceneSnapshot crateApiSimpleClearCameraBookmark({required int slotIndex });
+  AppSceneSnapshot crateApiSimpleClearSelectedLightCookie();
 
-AppSceneSnapshot crateApiSimpleClearKeybinding({required String actionId });
+  AppSceneSnapshot crateApiSimpleClearSelection();
 
-AppSceneSnapshot crateApiSimpleClearSelectedLightCookie();
+  AppSceneSnapshot crateApiSimpleCreateLight({required String lightId});
 
-AppSceneSnapshot crateApiSimpleClearSelection();
+  AppSceneSnapshot crateApiSimpleCreateModifier({required String modifierId});
 
-AppSceneSnapshot crateApiSimpleCreateLight({required String lightId });
+  AppSceneSnapshot crateApiSimpleCreateOperation({required String operationId});
 
-AppSceneSnapshot crateApiSimpleCreateModifier({required String modifierId });
+  AppSceneSnapshot crateApiSimpleCreateSculpt();
 
-AppSceneSnapshot crateApiSimpleCreateOperation({required String operationId });
+  AppSceneSnapshot crateApiSimpleCreateTransform();
 
-AppSceneSnapshot crateApiSimpleCreateSculpt();
+  AppSceneSnapshot crateApiSimpleDeleteSelected();
 
-AppSceneSnapshot crateApiSimpleCreateTransform();
+  AppSceneSnapshot crateApiSimpleDiscardRecovery();
 
-AppSceneSnapshot crateApiSimpleDeleteSelected();
+  AppSceneSnapshot crateApiSimpleDuplicateSelected();
 
-AppSceneSnapshot crateApiSimpleDiscardRecovery();
+  AppSceneSnapshot crateApiSimpleExecuteCommand({required String commandId});
 
-AppSceneSnapshot crateApiSimpleDuplicateSelected();
+  AppSceneSnapshot crateApiSimpleExportKeymap();
 
-AppSceneSnapshot crateApiSimpleExecuteCommand({required String commandId });
+  AppSceneSnapshot crateApiSimpleExportSettings();
 
-AppSceneSnapshot crateApiSimpleExportKeymap();
+  AppSceneSnapshot crateApiSimpleFocusSelected();
 
-AppSceneSnapshot crateApiSimpleExportSettings();
+  AppSceneSnapshot crateApiSimpleFrameAll();
 
-AppSceneSnapshot crateApiSimpleFocusSelected();
+  AppSceneSnapshot crateApiSimpleImportKeymap();
 
-AppSceneSnapshot crateApiSimpleFrameAll();
+  AppSceneSnapshot crateApiSimpleImportSettings();
 
-AppSceneSnapshot crateApiSimpleImportKeymap();
+  Future<void> crateApiSimpleInitApp();
 
-AppSceneSnapshot crateApiSimpleImportSettings();
+  AppSceneSnapshot crateApiSimpleNewScene();
 
-Future<void> crateApiSimpleInitApp();
+  AppSceneSnapshot crateApiSimpleNudgeManipulatorPivotOffset({
+    required double x,
+    required double y,
+    required double z,
+  });
 
-AppSceneSnapshot crateApiSimpleNewScene();
+  AppSceneSnapshot crateApiSimpleNudgeSelectedRotationDegrees({
+    required double deltaXDegrees,
+    required double deltaYDegrees,
+    required double deltaZDegrees,
+  });
 
-AppSceneSnapshot crateApiSimpleNudgeManipulatorPivotOffset({required double x , required double y , required double z });
+  AppSceneSnapshot crateApiSimpleNudgeSelectedScale({
+    required double deltaX,
+    required double deltaY,
+    required double deltaZ,
+  });
 
-AppSceneSnapshot crateApiSimpleNudgeSelectedRotationDegrees({required double deltaXDegrees , required double deltaYDegrees , required double deltaZDegrees });
+  AppSceneSnapshot crateApiSimpleNudgeSelectedTranslation({
+    required double deltaX,
+    required double deltaY,
+    required double deltaZ,
+  });
 
-AppSceneSnapshot crateApiSimpleNudgeSelectedScale({required double deltaX , required double deltaY , required double deltaZ });
+  AppSceneSnapshot crateApiSimpleOpenImportDialog();
 
-AppSceneSnapshot crateApiSimpleNudgeSelectedTranslation({required double deltaX , required double deltaY , required double deltaZ });
+  AppSceneSnapshot crateApiSimpleOpenRecentScene({required String path});
 
-AppSceneSnapshot crateApiSimpleOpenImportDialog();
+  AppSceneSnapshot crateApiSimpleOpenScene();
 
-AppSceneSnapshot crateApiSimpleOpenRecentScene({required String path });
+  AppSceneSnapshot crateApiSimpleOpenSculptConvertDialogForSelected();
 
-AppSceneSnapshot crateApiSimpleOpenScene();
+  void crateApiSimpleOrbitCamera({
+    required double deltaX,
+    required double deltaY,
+  });
 
-AppSceneSnapshot crateApiSimpleOpenSculptConvertDialogForSelected();
+  void crateApiSimplePanCamera({
+    required double deltaX,
+    required double deltaY,
+  });
 
-void crateApiSimpleOrbitCamera({required double deltaX , required double deltaY });
+  String crateApiSimplePing();
 
-void crateApiSimplePanCamera({required double deltaX , required double deltaY });
+  void crateApiSimplePreviewSelectedMaterialColor({
+    required String fieldId,
+    required double red,
+    required double green,
+    required double blue,
+  });
 
-String crateApiSimplePing();
+  void crateApiSimplePreviewSelectedMaterialFloat({
+    required String fieldId,
+    required double value,
+  });
 
-void crateApiSimplePreviewSelectedMaterialColor({required String fieldId , required double red , required double green , required double blue });
+  void crateApiSimplePreviewSelectedPrimitiveParameter({
+    required String parameterKey,
+    required double value,
+  });
 
-void crateApiSimplePreviewSelectedMaterialFloat({required String fieldId , required double value });
+  void crateApiSimplePreviewSelectedTransform({
+    required AppVec3 position,
+    required AppVec3 rotationDegrees,
+    AppVec3? scale,
+  });
 
-void crateApiSimplePreviewSelectedPrimitiveParameter({required String parameterKey , required double value });
+  void crateApiSimplePreviewSelectedTransformPosition({
+    required double x,
+    required double y,
+    required double z,
+  });
 
-void crateApiSimplePreviewSelectedTransform({required AppVec3 position , required AppVec3 rotationDegrees , AppVec3? scale });
+  void crateApiSimplePreviewSelectedTransformRotationDegrees({
+    required double xDegrees,
+    required double yDegrees,
+    required double zDegrees,
+  });
 
-void crateApiSimplePreviewSelectedTransformPosition({required double x , required double y , required double z });
+  void crateApiSimplePreviewSelectedTransformScale({
+    required double x,
+    required double y,
+    required double z,
+  });
 
-void crateApiSimplePreviewSelectedTransformRotationDegrees({required double xDegrees , required double yDegrees , required double zDegrees });
+  AppSceneSnapshot crateApiSimpleRecoverAutosave();
 
-void crateApiSimplePreviewSelectedTransformScale({required double x , required double y , required double z });
+  AppSceneSnapshot crateApiSimpleRedo();
 
-AppSceneSnapshot crateApiSimpleRecoverAutosave();
+  AppSceneSnapshot crateApiSimpleRenameNode({
+    required BigInt nodeId,
+    required String name,
+  });
 
-AppSceneSnapshot crateApiSimpleRedo();
+  Future<Uint8List> crateApiSimpleRenderPreviewFrame({
+    required int width,
+    required int height,
+    required double timeSeconds,
+  });
 
-AppSceneSnapshot crateApiSimpleRenameNode({required BigInt nodeId , required String name });
+  AppSceneSnapshot crateApiSimpleResetKeymap();
 
-Future<Uint8List> crateApiSimpleRenderPreviewFrame({required int width , required int height , required double timeSeconds });
+  AppSceneSnapshot crateApiSimpleResetManipulatorPivot();
 
-AppSceneSnapshot crateApiSimpleResetKeymap();
+  AppSceneSnapshot crateApiSimpleResetScene();
 
-AppSceneSnapshot crateApiSimpleResetManipulatorPivot();
+  AppSceneSnapshot crateApiSimpleResetSettings();
 
-AppSceneSnapshot crateApiSimpleResetScene();
+  AppSceneSnapshot crateApiSimpleRestoreCameraBookmark({
+    required int slotIndex,
+  });
 
-AppSceneSnapshot crateApiSimpleResetSettings();
+  AppSceneSnapshot crateApiSimpleResumeSculptingSelected();
 
-AppSceneSnapshot crateApiSimpleRestoreCameraBookmark({required int slotIndex });
+  AppSceneSnapshot crateApiSimpleSaveCameraBookmark({required int slotIndex});
 
-AppSceneSnapshot crateApiSimpleResumeSculptingSelected();
+  AppSceneSnapshot crateApiSimpleSaveScene();
 
-AppSceneSnapshot crateApiSimpleSaveCameraBookmark({required int slotIndex });
+  AppSceneSnapshot crateApiSimpleSaveSceneAs();
 
-AppSceneSnapshot crateApiSimpleSaveScene();
+  AppSceneSnapshot crateApiSimpleSceneSnapshot();
 
-AppSceneSnapshot crateApiSimpleSaveSceneAs();
+  AppSceneSnapshot crateApiSimpleSelectNode({BigInt? nodeId});
 
-AppSceneSnapshot crateApiSimpleSceneSnapshot();
+  AppSceneSnapshot crateApiSimpleSelectNodeAtViewport({
+    required double mouseX,
+    required double mouseY,
+    required int width,
+    required int height,
+    required double timeSeconds,
+  });
 
-AppSceneSnapshot crateApiSimpleSelectNode({BigInt? nodeId });
+  AppSceneSnapshot crateApiSimpleSetAdaptiveExport({required bool enabled});
 
-AppSceneSnapshot crateApiSimpleSelectNodeAtViewport({required double mouseX , required double mouseY , required int width , required int height , required double timeSeconds });
+  AppSceneSnapshot crateApiSimpleSetExportResolution({required int resolution});
 
-AppSceneSnapshot crateApiSimpleSetAdaptiveExport({required bool enabled });
+  AppSceneSnapshot crateApiSimpleSetImportResolution({required int resolution});
 
-AppSceneSnapshot crateApiSimpleSetExportResolution({required int resolution });
+  AppSceneSnapshot crateApiSimpleSetImportUseAuto({required bool useAuto});
 
-AppSceneSnapshot crateApiSimpleSetImportResolution({required int resolution });
+  AppSceneSnapshot crateApiSimpleSetKeybinding({
+    required String actionId,
+    required String keyId,
+    required bool ctrl,
+    required bool shift,
+    required bool alt,
+  });
 
-AppSceneSnapshot crateApiSimpleSetImportUseAuto({required bool useAuto });
+  AppSceneSnapshot crateApiSimpleSetManipulatorMode({required String modeId});
 
-AppSceneSnapshot crateApiSimpleSetKeybinding({required String actionId , required String keyId , required bool ctrl , required bool shift , required bool alt });
+  AppSceneSnapshot crateApiSimpleSetNodeLightLinkEnabled({
+    required BigInt nodeId,
+    required BigInt lightId,
+    required bool enabled,
+  });
 
-AppSceneSnapshot crateApiSimpleSetManipulatorMode({required String modeId });
+  AppSceneSnapshot crateApiSimpleSetNodeLightMask({
+    required BigInt nodeId,
+    required int mask,
+  });
 
-AppSceneSnapshot crateApiSimpleSetNodeLightLinkEnabled({required BigInt nodeId , required BigInt lightId , required bool enabled });
+  AppSceneSnapshot crateApiSimpleSetRenderInteger({
+    required String fieldId,
+    required int value,
+  });
 
-AppSceneSnapshot crateApiSimpleSetNodeLightMask({required BigInt nodeId , required int mask });
+  AppSceneSnapshot crateApiSimpleSetRenderScalar({
+    required String fieldId,
+    required double value,
+  });
 
-AppSceneSnapshot crateApiSimpleSetRenderInteger({required String fieldId , required int value });
+  AppSceneSnapshot crateApiSimpleSetRenderShadingMode({required String modeId});
 
-AppSceneSnapshot crateApiSimpleSetRenderScalar({required String fieldId , required double value });
+  AppSceneSnapshot crateApiSimpleSetRenderToggle({
+    required String fieldId,
+    required bool enabled,
+  });
 
-AppSceneSnapshot crateApiSimpleSetRenderShadingMode({required String modeId });
+  AppSceneSnapshot crateApiSimpleSetSculptBrushMode({required String modeId});
 
-AppSceneSnapshot crateApiSimpleSetRenderToggle({required String fieldId , required bool enabled });
+  AppSceneSnapshot crateApiSimpleSetSculptBrushRadius({required double radius});
 
-AppSceneSnapshot crateApiSimpleSetSculptBrushMode({required String modeId });
+  AppSceneSnapshot crateApiSimpleSetSculptBrushStrength({
+    required double strength,
+  });
 
-AppSceneSnapshot crateApiSimpleSetSculptBrushRadius({required double radius });
+  AppSceneSnapshot crateApiSimpleSetSculptConvertMode({required String modeId});
 
-AppSceneSnapshot crateApiSimpleSetSculptBrushStrength({required double strength });
+  AppSceneSnapshot crateApiSimpleSetSculptConvertResolution({
+    required int resolution,
+  });
 
-AppSceneSnapshot crateApiSimpleSetSculptConvertMode({required String modeId });
+  AppSceneSnapshot crateApiSimpleSetSculptSymmetryAxis({
+    required String axisId,
+  });
 
-AppSceneSnapshot crateApiSimpleSetSculptConvertResolution({required int resolution });
+  AppSceneSnapshot crateApiSimpleSetSelectedLightArrayColorVariation({
+    required double value,
+  });
 
-AppSceneSnapshot crateApiSimpleSetSculptSymmetryAxis({required String axisId });
+  AppSceneSnapshot crateApiSimpleSetSelectedLightArrayCount({
+    required int count,
+  });
 
-AppSceneSnapshot crateApiSimpleSetSelectedLightArrayColorVariation({required double value });
+  AppSceneSnapshot crateApiSimpleSetSelectedLightArrayPattern({
+    required String patternId,
+  });
 
-AppSceneSnapshot crateApiSimpleSetSelectedLightArrayCount({required int count });
+  AppSceneSnapshot crateApiSimpleSetSelectedLightArrayRadius({
+    required double radius,
+  });
 
-AppSceneSnapshot crateApiSimpleSetSelectedLightArrayPattern({required String patternId });
+  AppSceneSnapshot crateApiSimpleSetSelectedLightCastShadows({
+    required bool enabled,
+  });
 
-AppSceneSnapshot crateApiSimpleSetSelectedLightArrayRadius({required double radius });
+  AppSceneSnapshot crateApiSimpleSetSelectedLightColor({
+    required double red,
+    required double green,
+    required double blue,
+  });
 
-AppSceneSnapshot crateApiSimpleSetSelectedLightCastShadows({required bool enabled });
+  AppSceneSnapshot crateApiSimpleSetSelectedLightColorHueExpression({
+    required String expression,
+  });
 
-AppSceneSnapshot crateApiSimpleSetSelectedLightColor({required double red , required double green , required double blue });
+  AppSceneSnapshot crateApiSimpleSetSelectedLightCookie({
+    required BigInt cookieNodeId,
+  });
 
-AppSceneSnapshot crateApiSimpleSetSelectedLightColorHueExpression({required String expression });
+  AppSceneSnapshot crateApiSimpleSetSelectedLightIntensity({
+    required double intensity,
+  });
 
-AppSceneSnapshot crateApiSimpleSetSelectedLightCookie({required BigInt cookieNodeId });
+  AppSceneSnapshot crateApiSimpleSetSelectedLightIntensityExpression({
+    required String expression,
+  });
 
-AppSceneSnapshot crateApiSimpleSetSelectedLightIntensity({required double intensity });
+  AppSceneSnapshot crateApiSimpleSetSelectedLightProximityMode({
+    required String modeId,
+  });
 
-AppSceneSnapshot crateApiSimpleSetSelectedLightIntensityExpression({required String expression });
+  AppSceneSnapshot crateApiSimpleSetSelectedLightProximityRange({
+    required double range,
+  });
 
-AppSceneSnapshot crateApiSimpleSetSelectedLightProximityMode({required String modeId });
+  AppSceneSnapshot crateApiSimpleSetSelectedLightRange({required double range});
 
-AppSceneSnapshot crateApiSimpleSetSelectedLightProximityRange({required double range });
+  AppSceneSnapshot crateApiSimpleSetSelectedLightShadowColor({
+    required double red,
+    required double green,
+    required double blue,
+  });
 
-AppSceneSnapshot crateApiSimpleSetSelectedLightRange({required double range });
+  AppSceneSnapshot crateApiSimpleSetSelectedLightShadowSoftness({
+    required double softness,
+  });
 
-AppSceneSnapshot crateApiSimpleSetSelectedLightShadowColor({required double red , required double green , required double blue });
+  AppSceneSnapshot crateApiSimpleSetSelectedLightSpotAngle({
+    required double angleDegrees,
+  });
 
-AppSceneSnapshot crateApiSimpleSetSelectedLightShadowSoftness({required double softness });
+  AppSceneSnapshot crateApiSimpleSetSelectedLightType({
+    required String lightTypeId,
+  });
 
-AppSceneSnapshot crateApiSimpleSetSelectedLightSpotAngle({required double angleDegrees });
+  AppSceneSnapshot crateApiSimpleSetSelectedLightVolumetric({
+    required bool enabled,
+  });
 
-AppSceneSnapshot crateApiSimpleSetSelectedLightType({required String lightTypeId });
+  AppSceneSnapshot crateApiSimpleSetSelectedLightVolumetricDensity({
+    required double density,
+  });
 
-AppSceneSnapshot crateApiSimpleSetSelectedLightVolumetric({required bool enabled });
+  AppSceneSnapshot crateApiSimpleSetSelectedMaterialColor({
+    required String fieldId,
+    required double red,
+    required double green,
+    required double blue,
+  });
 
-AppSceneSnapshot crateApiSimpleSetSelectedLightVolumetricDensity({required double density });
+  AppSceneSnapshot crateApiSimpleSetSelectedMaterialFloat({
+    required String fieldId,
+    required double value,
+  });
 
-AppSceneSnapshot crateApiSimpleSetSelectedMaterialColor({required String fieldId , required double red , required double green , required double blue });
+  AppSceneSnapshot crateApiSimpleSetSelectedPrimitiveParameter({
+    required String parameterKey,
+    required double value,
+  });
 
-AppSceneSnapshot crateApiSimpleSetSelectedMaterialFloat({required String fieldId , required double value });
+  AppSceneSnapshot crateApiSimpleSetSelectedSculptResolution({
+    required int resolution,
+  });
 
-AppSceneSnapshot crateApiSimpleSetSelectedPrimitiveParameter({required String parameterKey , required double value });
+  AppSceneSnapshot crateApiSimpleSetSelectedTransform({
+    required AppVec3 position,
+    required AppVec3 rotationDegrees,
+    AppVec3? scale,
+  });
 
-AppSceneSnapshot crateApiSimpleSetSelectedSculptResolution({required int resolution });
+  AppSceneSnapshot crateApiSimpleSetSelectedTransformPosition({
+    required double x,
+    required double y,
+    required double z,
+  });
 
-AppSceneSnapshot crateApiSimpleSetSelectedTransform({required AppVec3 position , required AppVec3 rotationDegrees , AppVec3? scale });
+  AppSceneSnapshot crateApiSimpleSetSelectedTransformRotationDegrees({
+    required double xDegrees,
+    required double yDegrees,
+    required double zDegrees,
+  });
 
-AppSceneSnapshot crateApiSimpleSetSelectedTransformPosition({required double x , required double y , required double z });
+  AppSceneSnapshot crateApiSimpleSetSelectedTransformScale({
+    required double x,
+    required double y,
+    required double z,
+  });
 
-AppSceneSnapshot crateApiSimpleSetSelectedTransformRotationDegrees({required double xDegrees , required double yDegrees , required double zDegrees });
+  AppSceneSnapshot crateApiSimpleSetSettingsInteger({
+    required String fieldId,
+    required int value,
+  });
 
-AppSceneSnapshot crateApiSimpleSetSelectedTransformScale({required double x , required double y , required double z });
+  AppSceneSnapshot crateApiSimpleSetSettingsToggle({
+    required String fieldId,
+    required bool enabled,
+  });
 
-AppSceneSnapshot crateApiSimpleSetSettingsInteger({required String fieldId , required int value });
+  AppSceneSnapshot crateApiSimpleSetWorkspace({required String workspaceId});
 
-AppSceneSnapshot crateApiSimpleSetSettingsToggle({required String fieldId , required bool enabled });
+  AppSceneSnapshot crateApiSimpleStartExport();
 
-AppSceneSnapshot crateApiSimpleSetWorkspace({required String workspaceId });
+  AppSceneSnapshot crateApiSimpleStartImport();
 
-AppSceneSnapshot crateApiSimpleStartExport();
+  AppSceneSnapshot crateApiSimpleStartSculptConvert();
 
-AppSceneSnapshot crateApiSimpleStartImport();
+  AppSceneSnapshot crateApiSimpleStopSculpting();
 
-AppSceneSnapshot crateApiSimpleStartSculptConvert();
+  AppSceneSnapshot crateApiSimpleToggleManipulatorSpace();
 
-AppSceneSnapshot crateApiSimpleStopSculpting();
+  AppSceneSnapshot crateApiSimpleToggleNodeLock({required BigInt nodeId});
 
-AppSceneSnapshot crateApiSimpleToggleManipulatorSpace();
+  AppSceneSnapshot crateApiSimpleToggleNodeSelection({required BigInt nodeId});
 
-AppSceneSnapshot crateApiSimpleToggleNodeLock({required BigInt nodeId });
+  AppSceneSnapshot crateApiSimpleToggleNodeVisibility({required BigInt nodeId});
 
-AppSceneSnapshot crateApiSimpleToggleNodeSelection({required BigInt nodeId });
+  AppSceneSnapshot crateApiSimpleToggleOrthographic();
 
-AppSceneSnapshot crateApiSimpleToggleNodeVisibility({required BigInt nodeId });
+  AppSceneSnapshot crateApiSimpleUndo();
 
-AppSceneSnapshot crateApiSimpleToggleOrthographic();
+  AppWorkflowStatusSnapshot crateApiSimpleWorkflowStatus();
 
-AppSceneSnapshot crateApiSimpleUndo();
+  void crateApiSimpleZoomCamera({required double delta});
+}
 
-AppWorkflowStatusSnapshot crateApiSimpleWorkflowStatus();
+class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
+  RustLibApiImpl({
+    required super.handler,
+    required super.wire,
+    required super.generalizedFrbRustBinding,
+    required super.portManager,
+  });
 
-void crateApiSimpleZoomCamera({required double delta });
-
-
-                }
-                
-
-                class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
-                  RustLibApiImpl({
-                    required super.handler,
-                    required super.wire,
-                    required super.generalizedFrbRustBinding,
-                    required super.portManager,
-                  });
-
-                  @override AppSceneSnapshot crateApiSimpleAddBox()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 1)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleAddBox() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 1)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleAddBoxConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleAddBoxConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleAddBoxConstMeta =>
+      const TaskConstMeta(debugName: "add_box", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleAddBoxConstMeta => const TaskConstMeta(
-            debugName: "add_box",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleAddCylinder()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 2)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleAddCylinder() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 2)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleAddCylinderConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleAddCylinderConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleAddCylinderConstMeta =>
+      const TaskConstMeta(debugName: "add_cylinder", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleAddCylinderConstMeta => const TaskConstMeta(
-            debugName: "add_cylinder",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleAddSphere()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 3)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleAddSphere() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 3)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleAddSphereConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleAddSphereConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleAddSphereConstMeta =>
+      const TaskConstMeta(debugName: "add_sphere", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleAddSphereConstMeta => const TaskConstMeta(
-            debugName: "add_sphere",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleAddTorus()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 4)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleAddTorus() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 4)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleAddTorusConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleAddTorusConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleAddTorusConstMeta =>
+      const TaskConstMeta(debugName: "add_torus", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleAddTorusConstMeta => const TaskConstMeta(
-            debugName: "add_torus",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleApplyRenderPreset({required String presetId })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(presetId, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleApplyRenderPreset({required String presetId}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(presetId, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleApplyRenderPresetConstMeta,
-            argValues: [presetId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleApplyRenderPresetConstMeta,
+        argValues: [presetId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleApplyRenderPresetConstMeta =>
+      const TaskConstMeta(
+        debugName: "apply_render_preset",
+        argNames: ["presetId"],
+      );
 
-        TaskConstMeta get kCrateApiSimpleApplyRenderPresetConstMeta => const TaskConstMeta(
-            debugName: "apply_render_preset",
-            argNames: ["presetId"],
-        );
-        
-
-@override void crateApiSimpleBeginInteractiveEdit()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 6)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  void crateApiSimpleBeginInteractiveEdit() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 6)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleBeginInteractiveEditConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleBeginInteractiveEditConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleBeginInteractiveEditConstMeta =>
+      const TaskConstMeta(debugName: "begin_interactive_edit", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleBeginInteractiveEditConstMeta => const TaskConstMeta(
-            debugName: "begin_interactive_edit",
-            argNames: [],
-        );
-        
-
-@override String crateApiSimpleBridgeVersion()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 7)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  String crateApiSimpleBridgeVersion() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 7)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_String,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleBridgeVersionConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleBridgeVersionConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleBridgeVersionConstMeta =>
+      const TaskConstMeta(debugName: "bridge_version", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleBridgeVersionConstMeta => const TaskConstMeta(
-            debugName: "bridge_version",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleCameraBack()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleCameraBack() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleCameraBackConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleCameraBackConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleCameraBackConstMeta =>
+      const TaskConstMeta(debugName: "camera_back", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleCameraBackConstMeta => const TaskConstMeta(
-            debugName: "camera_back",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleCameraBottom()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 9)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleCameraBottom() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 9)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleCameraBottomConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleCameraBottomConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleCameraBottomConstMeta =>
+      const TaskConstMeta(debugName: "camera_bottom", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleCameraBottomConstMeta => const TaskConstMeta(
-            debugName: "camera_bottom",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleCameraFront()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 10)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleCameraFront() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 10)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleCameraFrontConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleCameraFrontConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleCameraFrontConstMeta =>
+      const TaskConstMeta(debugName: "camera_front", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleCameraFrontConstMeta => const TaskConstMeta(
-            debugName: "camera_front",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleCameraLeft()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 11)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleCameraLeft() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 11)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleCameraLeftConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleCameraLeftConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleCameraLeftConstMeta =>
+      const TaskConstMeta(debugName: "camera_left", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleCameraLeftConstMeta => const TaskConstMeta(
-            debugName: "camera_left",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleCameraRight()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 12)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleCameraRight() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 12)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleCameraRightConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleCameraRightConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleCameraRightConstMeta =>
+      const TaskConstMeta(debugName: "camera_right", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleCameraRightConstMeta => const TaskConstMeta(
-            debugName: "camera_right",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleCameraTop()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 13)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleCameraTop() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 13)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleCameraTopConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleCameraTopConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleCameraTopConstMeta =>
+      const TaskConstMeta(debugName: "camera_top", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleCameraTopConstMeta => const TaskConstMeta(
-            debugName: "camera_top",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleCancelExport()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 14)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleCancelExport() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 14)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleCancelExportConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleCancelExportConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleCancelExportConstMeta =>
+      const TaskConstMeta(debugName: "cancel_export", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleCancelExportConstMeta => const TaskConstMeta(
-            debugName: "cancel_export",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleCancelImport()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 15)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleCancelImport() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 15)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleCancelImportConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleCancelImportConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleCancelImportConstMeta =>
+      const TaskConstMeta(debugName: "cancel_import", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleCancelImportConstMeta => const TaskConstMeta(
-            debugName: "cancel_import",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleCancelImportDialog()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 16)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleCancelImportDialog() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 16)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleCancelImportDialogConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleCancelImportDialogConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleCancelImportDialogConstMeta =>
+      const TaskConstMeta(debugName: "cancel_import_dialog", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleCancelImportDialogConstMeta => const TaskConstMeta(
-            debugName: "cancel_import_dialog",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleCancelSculptConvertDialog()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 17)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleCancelSculptConvertDialog() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 17)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleCancelSculptConvertDialogConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleCancelSculptConvertDialogConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleCancelSculptConvertDialogConstMeta =>
+      const TaskConstMeta(
+        debugName: "cancel_sculpt_convert_dialog",
+        argNames: [],
+      );
 
-        TaskConstMeta get kCrateApiSimpleCancelSculptConvertDialogConstMeta => const TaskConstMeta(
-            debugName: "cancel_sculpt_convert_dialog",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleClearCameraBookmark({required int slotIndex })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_8(slotIndex, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 18)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleClearCameraBookmark({required int slotIndex}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_8(slotIndex, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 18)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleClearCameraBookmarkConstMeta,
-            argValues: [slotIndex],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleClearCameraBookmarkConstMeta,
+        argValues: [slotIndex],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleClearCameraBookmarkConstMeta =>
+      const TaskConstMeta(
+        debugName: "clear_camera_bookmark",
+        argNames: ["slotIndex"],
+      );
 
-        TaskConstMeta get kCrateApiSimpleClearCameraBookmarkConstMeta => const TaskConstMeta(
-            debugName: "clear_camera_bookmark",
-            argNames: ["slotIndex"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleClearKeybinding({required String actionId })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(actionId, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 19)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleClearKeybinding({required String actionId}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(actionId, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 19)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleClearKeybindingConstMeta,
-            argValues: [actionId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleClearKeybindingConstMeta,
+        argValues: [actionId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleClearKeybindingConstMeta =>
+      const TaskConstMeta(
+        debugName: "clear_keybinding",
+        argNames: ["actionId"],
+      );
 
-        TaskConstMeta get kCrateApiSimpleClearKeybindingConstMeta => const TaskConstMeta(
-            debugName: "clear_keybinding",
-            argNames: ["actionId"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleClearSelectedLightCookie()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 20)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleClearSelectedLightCookie() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 20)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleClearSelectedLightCookieConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleClearSelectedLightCookieConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleClearSelectedLightCookieConstMeta =>
+      const TaskConstMeta(
+        debugName: "clear_selected_light_cookie",
+        argNames: [],
+      );
 
-        TaskConstMeta get kCrateApiSimpleClearSelectedLightCookieConstMeta => const TaskConstMeta(
-            debugName: "clear_selected_light_cookie",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleClearSelection()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 21)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleClearSelection() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 21)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleClearSelectionConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleClearSelectionConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleClearSelectionConstMeta =>
+      const TaskConstMeta(debugName: "clear_selection", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleClearSelectionConstMeta => const TaskConstMeta(
-            debugName: "clear_selection",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleCreateLight({required String lightId })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(lightId, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 22)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleCreateLight({required String lightId}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(lightId, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 22)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleCreateLightConstMeta,
-            argValues: [lightId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleCreateLightConstMeta,
+        argValues: [lightId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleCreateLightConstMeta =>
+      const TaskConstMeta(debugName: "create_light", argNames: ["lightId"]);
 
-        TaskConstMeta get kCrateApiSimpleCreateLightConstMeta => const TaskConstMeta(
-            debugName: "create_light",
-            argNames: ["lightId"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleCreateModifier({required String modifierId })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(modifierId, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 23)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleCreateModifier({required String modifierId}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(modifierId, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 23)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleCreateModifierConstMeta,
-            argValues: [modifierId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleCreateModifierConstMeta,
+        argValues: [modifierId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleCreateModifierConstMeta =>
+      const TaskConstMeta(
+        debugName: "create_modifier",
+        argNames: ["modifierId"],
+      );
 
-        TaskConstMeta get kCrateApiSimpleCreateModifierConstMeta => const TaskConstMeta(
-            debugName: "create_modifier",
-            argNames: ["modifierId"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleCreateOperation({required String operationId })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(operationId, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 24)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleCreateOperation({
+    required String operationId,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(operationId, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 24)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleCreateOperationConstMeta,
-            argValues: [operationId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleCreateOperationConstMeta,
+        argValues: [operationId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleCreateOperationConstMeta =>
+      const TaskConstMeta(
+        debugName: "create_operation",
+        argNames: ["operationId"],
+      );
 
-        TaskConstMeta get kCrateApiSimpleCreateOperationConstMeta => const TaskConstMeta(
-            debugName: "create_operation",
-            argNames: ["operationId"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleCreateSculpt()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 25)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleCreateSculpt() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 25)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleCreateSculptConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleCreateSculptConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleCreateSculptConstMeta =>
+      const TaskConstMeta(debugName: "create_sculpt", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleCreateSculptConstMeta => const TaskConstMeta(
-            debugName: "create_sculpt",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleCreateTransform()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 26)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleCreateTransform() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 26)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleCreateTransformConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleCreateTransformConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleCreateTransformConstMeta =>
+      const TaskConstMeta(debugName: "create_transform", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleCreateTransformConstMeta => const TaskConstMeta(
-            debugName: "create_transform",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleDeleteSelected()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 27)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleDeleteSelected() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 27)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleDeleteSelectedConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleDeleteSelectedConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleDeleteSelectedConstMeta =>
+      const TaskConstMeta(debugName: "delete_selected", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleDeleteSelectedConstMeta => const TaskConstMeta(
-            debugName: "delete_selected",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleDiscardRecovery()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 28)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleDiscardRecovery() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 28)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleDiscardRecoveryConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleDiscardRecoveryConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleDiscardRecoveryConstMeta =>
+      const TaskConstMeta(debugName: "discard_recovery", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleDiscardRecoveryConstMeta => const TaskConstMeta(
-            debugName: "discard_recovery",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleDuplicateSelected()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 29)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleDuplicateSelected() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 29)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleDuplicateSelectedConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleDuplicateSelectedConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleDuplicateSelectedConstMeta =>
+      const TaskConstMeta(debugName: "duplicate_selected", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleDuplicateSelectedConstMeta => const TaskConstMeta(
-            debugName: "duplicate_selected",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleExecuteCommand({required String commandId })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(commandId, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 30)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleExecuteCommand({required String commandId}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(commandId, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 30)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleExecuteCommandConstMeta,
-            argValues: [commandId],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleExecuteCommandConstMeta,
+        argValues: [commandId],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleExecuteCommandConstMeta =>
+      const TaskConstMeta(
+        debugName: "execute_command",
+        argNames: ["commandId"],
+      );
 
-        TaskConstMeta get kCrateApiSimpleExecuteCommandConstMeta => const TaskConstMeta(
-            debugName: "execute_command",
-            argNames: ["commandId"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleExportKeymap()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 31)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleExportKeymap() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 31)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleExportKeymapConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleExportKeymapConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleExportKeymapConstMeta =>
+      const TaskConstMeta(debugName: "export_keymap", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleExportKeymapConstMeta => const TaskConstMeta(
-            debugName: "export_keymap",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleExportSettings()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 32)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleExportSettings() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 32)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleExportSettingsConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleExportSettingsConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleExportSettingsConstMeta =>
+      const TaskConstMeta(debugName: "export_settings", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleExportSettingsConstMeta => const TaskConstMeta(
-            debugName: "export_settings",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleFocusSelected()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 33)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleFocusSelected() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 33)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleFocusSelectedConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleFocusSelectedConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleFocusSelectedConstMeta =>
+      const TaskConstMeta(debugName: "focus_selected", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleFocusSelectedConstMeta => const TaskConstMeta(
-            debugName: "focus_selected",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleFrameAll()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 34)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleFrameAll() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 34)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleFrameAllConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleFrameAllConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleFrameAllConstMeta =>
+      const TaskConstMeta(debugName: "frame_all", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleFrameAllConstMeta => const TaskConstMeta(
-            debugName: "frame_all",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleImportKeymap()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 35)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleImportKeymap() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 35)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleImportKeymapConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleImportKeymapConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleImportKeymapConstMeta =>
+      const TaskConstMeta(debugName: "import_keymap", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleImportKeymapConstMeta => const TaskConstMeta(
-            debugName: "import_keymap",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleImportSettings()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 36)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleImportSettings() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 36)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleImportSettingsConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleImportSettingsConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleImportSettingsConstMeta =>
+      const TaskConstMeta(debugName: "import_settings", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleImportSettingsConstMeta => const TaskConstMeta(
-            debugName: "import_settings",
-            argNames: [],
-        );
-        
-
-@override Future<void> crateApiSimpleInitApp()  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 37, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<void> crateApiSimpleInitApp() {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 37,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleInitAppConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleInitAppConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleInitAppConstMeta =>
+      const TaskConstMeta(debugName: "init_app", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleInitAppConstMeta => const TaskConstMeta(
-            debugName: "init_app",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleNewScene()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 38)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleNewScene() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 38)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleNewSceneConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleNewSceneConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleNewSceneConstMeta =>
+      const TaskConstMeta(debugName: "new_scene", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleNewSceneConstMeta => const TaskConstMeta(
-            debugName: "new_scene",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleNudgeManipulatorPivotOffset({required double x , required double y , required double z })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_f_32(x, serializer);
-sse_encode_f_32(y, serializer);
-sse_encode_f_32(z, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 39)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleNudgeManipulatorPivotOffset({
+    required double x,
+    required double y,
+    required double z,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_f_32(x, serializer);
+          sse_encode_f_32(y, serializer);
+          sse_encode_f_32(z, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 39)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleNudgeManipulatorPivotOffsetConstMeta,
-            argValues: [x, y, z],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleNudgeManipulatorPivotOffsetConstMeta,
+        argValues: [x, y, z],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleNudgeManipulatorPivotOffsetConstMeta =>
+      const TaskConstMeta(
+        debugName: "nudge_manipulator_pivot_offset",
+        argNames: ["x", "y", "z"],
+      );
 
-        TaskConstMeta get kCrateApiSimpleNudgeManipulatorPivotOffsetConstMeta => const TaskConstMeta(
-            debugName: "nudge_manipulator_pivot_offset",
-            argNames: ["x", "y", "z"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleNudgeSelectedRotationDegrees({required double deltaXDegrees , required double deltaYDegrees , required double deltaZDegrees })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_f_32(deltaXDegrees, serializer);
-sse_encode_f_32(deltaYDegrees, serializer);
-sse_encode_f_32(deltaZDegrees, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 40)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleNudgeSelectedRotationDegrees({
+    required double deltaXDegrees,
+    required double deltaYDegrees,
+    required double deltaZDegrees,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_f_32(deltaXDegrees, serializer);
+          sse_encode_f_32(deltaYDegrees, serializer);
+          sse_encode_f_32(deltaZDegrees, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 40)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleNudgeSelectedRotationDegreesConstMeta,
-            argValues: [deltaXDegrees, deltaYDegrees, deltaZDegrees],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleNudgeSelectedRotationDegreesConstMeta,
+        argValues: [deltaXDegrees, deltaYDegrees, deltaZDegrees],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleNudgeSelectedRotationDegreesConstMeta =>
+      const TaskConstMeta(
+        debugName: "nudge_selected_rotation_degrees",
+        argNames: ["deltaXDegrees", "deltaYDegrees", "deltaZDegrees"],
+      );
 
-        TaskConstMeta get kCrateApiSimpleNudgeSelectedRotationDegreesConstMeta => const TaskConstMeta(
-            debugName: "nudge_selected_rotation_degrees",
-            argNames: ["deltaXDegrees", "deltaYDegrees", "deltaZDegrees"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleNudgeSelectedScale({required double deltaX , required double deltaY , required double deltaZ })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_f_32(deltaX, serializer);
-sse_encode_f_32(deltaY, serializer);
-sse_encode_f_32(deltaZ, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 41)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleNudgeSelectedScale({
+    required double deltaX,
+    required double deltaY,
+    required double deltaZ,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_f_32(deltaX, serializer);
+          sse_encode_f_32(deltaY, serializer);
+          sse_encode_f_32(deltaZ, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 41)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleNudgeSelectedScaleConstMeta,
-            argValues: [deltaX, deltaY, deltaZ],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleNudgeSelectedScaleConstMeta,
+        argValues: [deltaX, deltaY, deltaZ],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleNudgeSelectedScaleConstMeta =>
+      const TaskConstMeta(
+        debugName: "nudge_selected_scale",
+        argNames: ["deltaX", "deltaY", "deltaZ"],
+      );
 
-        TaskConstMeta get kCrateApiSimpleNudgeSelectedScaleConstMeta => const TaskConstMeta(
-            debugName: "nudge_selected_scale",
-            argNames: ["deltaX", "deltaY", "deltaZ"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleNudgeSelectedTranslation({required double deltaX , required double deltaY , required double deltaZ })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_f_32(deltaX, serializer);
-sse_encode_f_32(deltaY, serializer);
-sse_encode_f_32(deltaZ, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 42)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleNudgeSelectedTranslation({
+    required double deltaX,
+    required double deltaY,
+    required double deltaZ,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_f_32(deltaX, serializer);
+          sse_encode_f_32(deltaY, serializer);
+          sse_encode_f_32(deltaZ, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 42)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleNudgeSelectedTranslationConstMeta,
-            argValues: [deltaX, deltaY, deltaZ],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleNudgeSelectedTranslationConstMeta,
+        argValues: [deltaX, deltaY, deltaZ],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleNudgeSelectedTranslationConstMeta =>
+      const TaskConstMeta(
+        debugName: "nudge_selected_translation",
+        argNames: ["deltaX", "deltaY", "deltaZ"],
+      );
 
-        TaskConstMeta get kCrateApiSimpleNudgeSelectedTranslationConstMeta => const TaskConstMeta(
-            debugName: "nudge_selected_translation",
-            argNames: ["deltaX", "deltaY", "deltaZ"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleOpenImportDialog()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 43)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleOpenImportDialog() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 43)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleOpenImportDialogConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleOpenImportDialogConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleOpenImportDialogConstMeta =>
+      const TaskConstMeta(debugName: "open_import_dialog", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleOpenImportDialogConstMeta => const TaskConstMeta(
-            debugName: "open_import_dialog",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleOpenRecentScene({required String path })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(path, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 44)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleOpenRecentScene({required String path}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(path, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 44)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleOpenRecentSceneConstMeta,
-            argValues: [path],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleOpenRecentSceneConstMeta,
+        argValues: [path],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleOpenRecentSceneConstMeta =>
+      const TaskConstMeta(debugName: "open_recent_scene", argNames: ["path"]);
 
-        TaskConstMeta get kCrateApiSimpleOpenRecentSceneConstMeta => const TaskConstMeta(
-            debugName: "open_recent_scene",
-            argNames: ["path"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleOpenScene()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 45)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleOpenScene() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 45)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleOpenSceneConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleOpenSceneConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleOpenSceneConstMeta =>
+      const TaskConstMeta(debugName: "open_scene", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleOpenSceneConstMeta => const TaskConstMeta(
-            debugName: "open_scene",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleOpenSculptConvertDialogForSelected()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 46)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleOpenSculptConvertDialogForSelected() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 46)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleOpenSculptConvertDialogForSelectedConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleOpenSculptConvertDialogForSelectedConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta
+  get kCrateApiSimpleOpenSculptConvertDialogForSelectedConstMeta =>
+      const TaskConstMeta(
+        debugName: "open_sculpt_convert_dialog_for_selected",
+        argNames: [],
+      );
 
-        TaskConstMeta get kCrateApiSimpleOpenSculptConvertDialogForSelectedConstMeta => const TaskConstMeta(
-            debugName: "open_sculpt_convert_dialog_for_selected",
-            argNames: [],
-        );
-        
-
-@override void crateApiSimpleOrbitCamera({required double deltaX , required double deltaY })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_f_32(deltaX, serializer);
-sse_encode_f_32(deltaY, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 47)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  void crateApiSimpleOrbitCamera({
+    required double deltaX,
+    required double deltaY,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_f_32(deltaX, serializer);
+          sse_encode_f_32(deltaY, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 47)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleOrbitCameraConstMeta,
-            argValues: [deltaX, deltaY],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleOrbitCameraConstMeta,
+        argValues: [deltaX, deltaY],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleOrbitCameraConstMeta => const TaskConstMeta(
+    debugName: "orbit_camera",
+    argNames: ["deltaX", "deltaY"],
+  );
 
-        TaskConstMeta get kCrateApiSimpleOrbitCameraConstMeta => const TaskConstMeta(
-            debugName: "orbit_camera",
-            argNames: ["deltaX", "deltaY"],
-        );
-        
-
-@override void crateApiSimplePanCamera({required double deltaX , required double deltaY })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_f_32(deltaX, serializer);
-sse_encode_f_32(deltaY, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 48)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  void crateApiSimplePanCamera({
+    required double deltaX,
+    required double deltaY,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_f_32(deltaX, serializer);
+          sse_encode_f_32(deltaY, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 48)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimplePanCameraConstMeta,
-            argValues: [deltaX, deltaY],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimplePanCameraConstMeta,
+        argValues: [deltaX, deltaY],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimplePanCameraConstMeta => const TaskConstMeta(
+    debugName: "pan_camera",
+    argNames: ["deltaX", "deltaY"],
+  );
 
-        TaskConstMeta get kCrateApiSimplePanCameraConstMeta => const TaskConstMeta(
-            debugName: "pan_camera",
-            argNames: ["deltaX", "deltaY"],
-        );
-        
-
-@override String crateApiSimplePing()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 49)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  String crateApiSimplePing() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 49)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_String,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimplePingConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimplePingConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimplePingConstMeta =>
+      const TaskConstMeta(debugName: "ping", argNames: []);
 
-        TaskConstMeta get kCrateApiSimplePingConstMeta => const TaskConstMeta(
-            debugName: "ping",
-            argNames: [],
-        );
-        
-
-@override void crateApiSimplePreviewSelectedMaterialColor({required String fieldId , required double red , required double green , required double blue })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(fieldId, serializer);
-sse_encode_f_32(red, serializer);
-sse_encode_f_32(green, serializer);
-sse_encode_f_32(blue, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 50)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  void crateApiSimplePreviewSelectedMaterialColor({
+    required String fieldId,
+    required double red,
+    required double green,
+    required double blue,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(fieldId, serializer);
+          sse_encode_f_32(red, serializer);
+          sse_encode_f_32(green, serializer);
+          sse_encode_f_32(blue, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 50)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimplePreviewSelectedMaterialColorConstMeta,
-            argValues: [fieldId, red, green, blue],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimplePreviewSelectedMaterialColorConstMeta,
+        argValues: [fieldId, red, green, blue],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimplePreviewSelectedMaterialColorConstMeta =>
+      const TaskConstMeta(
+        debugName: "preview_selected_material_color",
+        argNames: ["fieldId", "red", "green", "blue"],
+      );
 
-        TaskConstMeta get kCrateApiSimplePreviewSelectedMaterialColorConstMeta => const TaskConstMeta(
-            debugName: "preview_selected_material_color",
-            argNames: ["fieldId", "red", "green", "blue"],
-        );
-        
-
-@override void crateApiSimplePreviewSelectedMaterialFloat({required String fieldId , required double value })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(fieldId, serializer);
-sse_encode_f_32(value, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 51)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  void crateApiSimplePreviewSelectedMaterialFloat({
+    required String fieldId,
+    required double value,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(fieldId, serializer);
+          sse_encode_f_32(value, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 51)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimplePreviewSelectedMaterialFloatConstMeta,
-            argValues: [fieldId, value],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimplePreviewSelectedMaterialFloatConstMeta,
+        argValues: [fieldId, value],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimplePreviewSelectedMaterialFloatConstMeta =>
+      const TaskConstMeta(
+        debugName: "preview_selected_material_float",
+        argNames: ["fieldId", "value"],
+      );
 
-        TaskConstMeta get kCrateApiSimplePreviewSelectedMaterialFloatConstMeta => const TaskConstMeta(
-            debugName: "preview_selected_material_float",
-            argNames: ["fieldId", "value"],
-        );
-        
-
-@override void crateApiSimplePreviewSelectedPrimitiveParameter({required String parameterKey , required double value })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(parameterKey, serializer);
-sse_encode_f_32(value, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 52)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  void crateApiSimplePreviewSelectedPrimitiveParameter({
+    required String parameterKey,
+    required double value,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(parameterKey, serializer);
+          sse_encode_f_32(value, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 52)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimplePreviewSelectedPrimitiveParameterConstMeta,
-            argValues: [parameterKey, value],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimplePreviewSelectedPrimitiveParameterConstMeta,
+        argValues: [parameterKey, value],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimplePreviewSelectedPrimitiveParameterConstMeta =>
+      const TaskConstMeta(
+        debugName: "preview_selected_primitive_parameter",
+        argNames: ["parameterKey", "value"],
+      );
 
-        TaskConstMeta get kCrateApiSimplePreviewSelectedPrimitiveParameterConstMeta => const TaskConstMeta(
-            debugName: "preview_selected_primitive_parameter",
-            argNames: ["parameterKey", "value"],
-        );
-        
-
-@override void crateApiSimplePreviewSelectedTransform({required AppVec3 position , required AppVec3 rotationDegrees , AppVec3? scale })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_box_autoadd_app_vec_3(position, serializer);
-sse_encode_box_autoadd_app_vec_3(rotationDegrees, serializer);
-sse_encode_opt_box_autoadd_app_vec_3(scale, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 53)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  void crateApiSimplePreviewSelectedTransform({
+    required AppVec3 position,
+    required AppVec3 rotationDegrees,
+    AppVec3? scale,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_app_vec_3(position, serializer);
+          sse_encode_box_autoadd_app_vec_3(rotationDegrees, serializer);
+          sse_encode_opt_box_autoadd_app_vec_3(scale, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 53)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimplePreviewSelectedTransformConstMeta,
-            argValues: [position, rotationDegrees, scale],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimplePreviewSelectedTransformConstMeta,
+        argValues: [position, rotationDegrees, scale],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimplePreviewSelectedTransformConstMeta =>
+      const TaskConstMeta(
+        debugName: "preview_selected_transform",
+        argNames: ["position", "rotationDegrees", "scale"],
+      );
 
-        TaskConstMeta get kCrateApiSimplePreviewSelectedTransformConstMeta => const TaskConstMeta(
-            debugName: "preview_selected_transform",
-            argNames: ["position", "rotationDegrees", "scale"],
-        );
-        
-
-@override void crateApiSimplePreviewSelectedTransformPosition({required double x , required double y , required double z })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_f_32(x, serializer);
-sse_encode_f_32(y, serializer);
-sse_encode_f_32(z, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 54)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  void crateApiSimplePreviewSelectedTransformPosition({
+    required double x,
+    required double y,
+    required double z,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_f_32(x, serializer);
+          sse_encode_f_32(y, serializer);
+          sse_encode_f_32(z, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 54)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimplePreviewSelectedTransformPositionConstMeta,
-            argValues: [x, y, z],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimplePreviewSelectedTransformPositionConstMeta,
+        argValues: [x, y, z],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimplePreviewSelectedTransformPositionConstMeta =>
+      const TaskConstMeta(
+        debugName: "preview_selected_transform_position",
+        argNames: ["x", "y", "z"],
+      );
 
-        TaskConstMeta get kCrateApiSimplePreviewSelectedTransformPositionConstMeta => const TaskConstMeta(
-            debugName: "preview_selected_transform_position",
-            argNames: ["x", "y", "z"],
-        );
-        
-
-@override void crateApiSimplePreviewSelectedTransformRotationDegrees({required double xDegrees , required double yDegrees , required double zDegrees })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_f_32(xDegrees, serializer);
-sse_encode_f_32(yDegrees, serializer);
-sse_encode_f_32(zDegrees, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 55)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  void crateApiSimplePreviewSelectedTransformRotationDegrees({
+    required double xDegrees,
+    required double yDegrees,
+    required double zDegrees,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_f_32(xDegrees, serializer);
+          sse_encode_f_32(yDegrees, serializer);
+          sse_encode_f_32(zDegrees, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 55)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimplePreviewSelectedTransformRotationDegreesConstMeta,
-            argValues: [xDegrees, yDegrees, zDegrees],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta:
+            kCrateApiSimplePreviewSelectedTransformRotationDegreesConstMeta,
+        argValues: [xDegrees, yDegrees, zDegrees],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta
+  get kCrateApiSimplePreviewSelectedTransformRotationDegreesConstMeta =>
+      const TaskConstMeta(
+        debugName: "preview_selected_transform_rotation_degrees",
+        argNames: ["xDegrees", "yDegrees", "zDegrees"],
+      );
 
-        TaskConstMeta get kCrateApiSimplePreviewSelectedTransformRotationDegreesConstMeta => const TaskConstMeta(
-            debugName: "preview_selected_transform_rotation_degrees",
-            argNames: ["xDegrees", "yDegrees", "zDegrees"],
-        );
-        
-
-@override void crateApiSimplePreviewSelectedTransformScale({required double x , required double y , required double z })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_f_32(x, serializer);
-sse_encode_f_32(y, serializer);
-sse_encode_f_32(z, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 56)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  void crateApiSimplePreviewSelectedTransformScale({
+    required double x,
+    required double y,
+    required double z,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_f_32(x, serializer);
+          sse_encode_f_32(y, serializer);
+          sse_encode_f_32(z, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 56)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimplePreviewSelectedTransformScaleConstMeta,
-            argValues: [x, y, z],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimplePreviewSelectedTransformScaleConstMeta,
+        argValues: [x, y, z],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimplePreviewSelectedTransformScaleConstMeta =>
+      const TaskConstMeta(
+        debugName: "preview_selected_transform_scale",
+        argNames: ["x", "y", "z"],
+      );
 
-        TaskConstMeta get kCrateApiSimplePreviewSelectedTransformScaleConstMeta => const TaskConstMeta(
-            debugName: "preview_selected_transform_scale",
-            argNames: ["x", "y", "z"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleRecoverAutosave()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 57)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleRecoverAutosave() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 57)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleRecoverAutosaveConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleRecoverAutosaveConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleRecoverAutosaveConstMeta =>
+      const TaskConstMeta(debugName: "recover_autosave", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleRecoverAutosaveConstMeta => const TaskConstMeta(
-            debugName: "recover_autosave",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleRedo()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 58)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleRedo() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 58)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleRedoConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleRedoConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleRedoConstMeta =>
+      const TaskConstMeta(debugName: "redo", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleRedoConstMeta => const TaskConstMeta(
-            debugName: "redo",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleRenameNode({required BigInt nodeId , required String name })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_64(nodeId, serializer);
-sse_encode_String(name, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 59)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  AppSceneSnapshot crateApiSimpleRenameNode({
+    required BigInt nodeId,
+    required String name,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_64(nodeId, serializer);
+          sse_encode_String(name, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 59)!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_scene_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleRenameNodeConstMeta,
-            argValues: [nodeId, name],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleRenameNodeConstMeta,
+        argValues: [nodeId, name],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleRenameNodeConstMeta => const TaskConstMeta(
+    debugName: "rename_node",
+    argNames: ["nodeId", "name"],
+  );
 
-        TaskConstMeta get kCrateApiSimpleRenameNodeConstMeta => const TaskConstMeta(
-            debugName: "rename_node",
-            argNames: ["nodeId", "name"],
-        );
-        
-
-@override Future<Uint8List> crateApiSimpleRenderPreviewFrame({required int width , required int height , required double timeSeconds })  { return handler.executeNormal(NormalTask(
-            callFfi: (port_) {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(width, serializer);
-sse_encode_u_32(height, serializer);
-sse_encode_f_32(timeSeconds, serializer);
-            pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 60, port: port_);
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  Future<Uint8List> crateApiSimpleRenderPreviewFrame({
+    required int width,
+    required int height,
+    required double timeSeconds,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(width, serializer);
+          sse_encode_u_32(height, serializer);
+          sse_encode_f_32(timeSeconds, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 60,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_list_prim_u_8_strict,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleRenderPreviewFrameConstMeta,
-            argValues: [width, height, timeSeconds],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleRenderPreviewFrameConstMeta => const TaskConstMeta(
-            debugName: "render_preview_frame",
-            argNames: ["width", "height", "timeSeconds"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleResetKeymap()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 61)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleResetKeymapConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleResetKeymapConstMeta => const TaskConstMeta(
-            debugName: "reset_keymap",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleResetManipulatorPivot()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 62)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleResetManipulatorPivotConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleResetManipulatorPivotConstMeta => const TaskConstMeta(
-            debugName: "reset_manipulator_pivot",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleResetScene()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 63)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleResetSceneConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleResetSceneConstMeta => const TaskConstMeta(
-            debugName: "reset_scene",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleResetSettings()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 64)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleResetSettingsConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleResetSettingsConstMeta => const TaskConstMeta(
-            debugName: "reset_settings",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleRestoreCameraBookmark({required int slotIndex })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_8(slotIndex, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 65)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleRestoreCameraBookmarkConstMeta,
-            argValues: [slotIndex],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleRestoreCameraBookmarkConstMeta => const TaskConstMeta(
-            debugName: "restore_camera_bookmark",
-            argNames: ["slotIndex"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleResumeSculptingSelected()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 66)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleResumeSculptingSelectedConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleResumeSculptingSelectedConstMeta => const TaskConstMeta(
-            debugName: "resume_sculpting_selected",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSaveCameraBookmark({required int slotIndex })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_8(slotIndex, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 67)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSaveCameraBookmarkConstMeta,
-            argValues: [slotIndex],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSaveCameraBookmarkConstMeta => const TaskConstMeta(
-            debugName: "save_camera_bookmark",
-            argNames: ["slotIndex"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSaveScene()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 68)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSaveSceneConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSaveSceneConstMeta => const TaskConstMeta(
-            debugName: "save_scene",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSaveSceneAs()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 69)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSaveSceneAsConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSaveSceneAsConstMeta => const TaskConstMeta(
-            debugName: "save_scene_as",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSceneSnapshot()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 70)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSceneSnapshotConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSceneSnapshotConstMeta => const TaskConstMeta(
-            debugName: "scene_snapshot",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSelectNode({BigInt? nodeId })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_opt_box_autoadd_u_64(nodeId, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 71)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSelectNodeConstMeta,
-            argValues: [nodeId],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSelectNodeConstMeta => const TaskConstMeta(
-            debugName: "select_node",
-            argNames: ["nodeId"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSelectNodeAtViewport({required double mouseX , required double mouseY , required int width , required int height , required double timeSeconds })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_f_32(mouseX, serializer);
-sse_encode_f_32(mouseY, serializer);
-sse_encode_u_32(width, serializer);
-sse_encode_u_32(height, serializer);
-sse_encode_f_32(timeSeconds, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 72)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSelectNodeAtViewportConstMeta,
-            argValues: [mouseX, mouseY, width, height, timeSeconds],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSelectNodeAtViewportConstMeta => const TaskConstMeta(
-            debugName: "select_node_at_viewport",
-            argNames: ["mouseX", "mouseY", "width", "height", "timeSeconds"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetAdaptiveExport({required bool enabled })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_bool(enabled, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 73)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetAdaptiveExportConstMeta,
-            argValues: [enabled],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetAdaptiveExportConstMeta => const TaskConstMeta(
-            debugName: "set_adaptive_export",
-            argNames: ["enabled"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetExportResolution({required int resolution })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(resolution, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 74)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetExportResolutionConstMeta,
-            argValues: [resolution],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetExportResolutionConstMeta => const TaskConstMeta(
-            debugName: "set_export_resolution",
-            argNames: ["resolution"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetImportResolution({required int resolution })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(resolution, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 75)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetImportResolutionConstMeta,
-            argValues: [resolution],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetImportResolutionConstMeta => const TaskConstMeta(
-            debugName: "set_import_resolution",
-            argNames: ["resolution"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetImportUseAuto({required bool useAuto })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_bool(useAuto, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 76)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetImportUseAutoConstMeta,
-            argValues: [useAuto],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetImportUseAutoConstMeta => const TaskConstMeta(
-            debugName: "set_import_use_auto",
-            argNames: ["useAuto"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetKeybinding({required String actionId , required String keyId , required bool ctrl , required bool shift , required bool alt })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(actionId, serializer);
-sse_encode_String(keyId, serializer);
-sse_encode_bool(ctrl, serializer);
-sse_encode_bool(shift, serializer);
-sse_encode_bool(alt, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 77)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetKeybindingConstMeta,
-            argValues: [actionId, keyId, ctrl, shift, alt],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetKeybindingConstMeta => const TaskConstMeta(
-            debugName: "set_keybinding",
-            argNames: ["actionId", "keyId", "ctrl", "shift", "alt"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetManipulatorMode({required String modeId })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(modeId, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 78)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetManipulatorModeConstMeta,
-            argValues: [modeId],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetManipulatorModeConstMeta => const TaskConstMeta(
-            debugName: "set_manipulator_mode",
-            argNames: ["modeId"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetNodeLightLinkEnabled({required BigInt nodeId , required BigInt lightId , required bool enabled })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_64(nodeId, serializer);
-sse_encode_u_64(lightId, serializer);
-sse_encode_bool(enabled, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 79)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetNodeLightLinkEnabledConstMeta,
-            argValues: [nodeId, lightId, enabled],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetNodeLightLinkEnabledConstMeta => const TaskConstMeta(
-            debugName: "set_node_light_link_enabled",
-            argNames: ["nodeId", "lightId", "enabled"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetNodeLightMask({required BigInt nodeId , required int mask })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_64(nodeId, serializer);
-sse_encode_u_8(mask, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 80)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetNodeLightMaskConstMeta,
-            argValues: [nodeId, mask],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetNodeLightMaskConstMeta => const TaskConstMeta(
-            debugName: "set_node_light_mask",
-            argNames: ["nodeId", "mask"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetRenderInteger({required String fieldId , required int value })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(fieldId, serializer);
-sse_encode_u_32(value, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 81)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetRenderIntegerConstMeta,
-            argValues: [fieldId, value],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetRenderIntegerConstMeta => const TaskConstMeta(
-            debugName: "set_render_integer",
-            argNames: ["fieldId", "value"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetRenderScalar({required String fieldId , required double value })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(fieldId, serializer);
-sse_encode_f_32(value, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 82)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetRenderScalarConstMeta,
-            argValues: [fieldId, value],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetRenderScalarConstMeta => const TaskConstMeta(
-            debugName: "set_render_scalar",
-            argNames: ["fieldId", "value"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetRenderShadingMode({required String modeId })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(modeId, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 83)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetRenderShadingModeConstMeta,
-            argValues: [modeId],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetRenderShadingModeConstMeta => const TaskConstMeta(
-            debugName: "set_render_shading_mode",
-            argNames: ["modeId"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetRenderToggle({required String fieldId , required bool enabled })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(fieldId, serializer);
-sse_encode_bool(enabled, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 84)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetRenderToggleConstMeta,
-            argValues: [fieldId, enabled],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetRenderToggleConstMeta => const TaskConstMeta(
-            debugName: "set_render_toggle",
-            argNames: ["fieldId", "enabled"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSculptBrushMode({required String modeId })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(modeId, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 85)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSculptBrushModeConstMeta,
-            argValues: [modeId],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSculptBrushModeConstMeta => const TaskConstMeta(
-            debugName: "set_sculpt_brush_mode",
-            argNames: ["modeId"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSculptBrushRadius({required double radius })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_f_32(radius, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 86)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSculptBrushRadiusConstMeta,
-            argValues: [radius],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSculptBrushRadiusConstMeta => const TaskConstMeta(
-            debugName: "set_sculpt_brush_radius",
-            argNames: ["radius"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSculptBrushStrength({required double strength })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_f_32(strength, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 87)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSculptBrushStrengthConstMeta,
-            argValues: [strength],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSculptBrushStrengthConstMeta => const TaskConstMeta(
-            debugName: "set_sculpt_brush_strength",
-            argNames: ["strength"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSculptConvertMode({required String modeId })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(modeId, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 88)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSculptConvertModeConstMeta,
-            argValues: [modeId],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSculptConvertModeConstMeta => const TaskConstMeta(
-            debugName: "set_sculpt_convert_mode",
-            argNames: ["modeId"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSculptConvertResolution({required int resolution })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(resolution, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 89)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSculptConvertResolutionConstMeta,
-            argValues: [resolution],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSculptConvertResolutionConstMeta => const TaskConstMeta(
-            debugName: "set_sculpt_convert_resolution",
-            argNames: ["resolution"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSculptSymmetryAxis({required String axisId })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(axisId, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 90)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSculptSymmetryAxisConstMeta,
-            argValues: [axisId],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSculptSymmetryAxisConstMeta => const TaskConstMeta(
-            debugName: "set_sculpt_symmetry_axis",
-            argNames: ["axisId"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSelectedLightArrayColorVariation({required double value })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_f_32(value, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 91)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSelectedLightArrayColorVariationConstMeta,
-            argValues: [value],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSelectedLightArrayColorVariationConstMeta => const TaskConstMeta(
-            debugName: "set_selected_light_array_color_variation",
-            argNames: ["value"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSelectedLightArrayCount({required int count })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(count, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 92)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSelectedLightArrayCountConstMeta,
-            argValues: [count],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSelectedLightArrayCountConstMeta => const TaskConstMeta(
-            debugName: "set_selected_light_array_count",
-            argNames: ["count"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSelectedLightArrayPattern({required String patternId })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(patternId, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 93)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSelectedLightArrayPatternConstMeta,
-            argValues: [patternId],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSelectedLightArrayPatternConstMeta => const TaskConstMeta(
-            debugName: "set_selected_light_array_pattern",
-            argNames: ["patternId"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSelectedLightArrayRadius({required double radius })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_f_32(radius, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 94)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSelectedLightArrayRadiusConstMeta,
-            argValues: [radius],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSelectedLightArrayRadiusConstMeta => const TaskConstMeta(
-            debugName: "set_selected_light_array_radius",
-            argNames: ["radius"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSelectedLightCastShadows({required bool enabled })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_bool(enabled, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 95)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSelectedLightCastShadowsConstMeta,
-            argValues: [enabled],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSelectedLightCastShadowsConstMeta => const TaskConstMeta(
-            debugName: "set_selected_light_cast_shadows",
-            argNames: ["enabled"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSelectedLightColor({required double red , required double green , required double blue })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_f_32(red, serializer);
-sse_encode_f_32(green, serializer);
-sse_encode_f_32(blue, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 96)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSelectedLightColorConstMeta,
-            argValues: [red, green, blue],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSelectedLightColorConstMeta => const TaskConstMeta(
-            debugName: "set_selected_light_color",
-            argNames: ["red", "green", "blue"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSelectedLightColorHueExpression({required String expression })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(expression, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 97)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSelectedLightColorHueExpressionConstMeta,
-            argValues: [expression],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSelectedLightColorHueExpressionConstMeta => const TaskConstMeta(
-            debugName: "set_selected_light_color_hue_expression",
-            argNames: ["expression"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSelectedLightCookie({required BigInt cookieNodeId })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_64(cookieNodeId, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 98)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSelectedLightCookieConstMeta,
-            argValues: [cookieNodeId],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSelectedLightCookieConstMeta => const TaskConstMeta(
-            debugName: "set_selected_light_cookie",
-            argNames: ["cookieNodeId"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSelectedLightIntensity({required double intensity })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_f_32(intensity, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 99)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSelectedLightIntensityConstMeta,
-            argValues: [intensity],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSelectedLightIntensityConstMeta => const TaskConstMeta(
-            debugName: "set_selected_light_intensity",
-            argNames: ["intensity"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSelectedLightIntensityExpression({required String expression })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(expression, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 100)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSelectedLightIntensityExpressionConstMeta,
-            argValues: [expression],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSelectedLightIntensityExpressionConstMeta => const TaskConstMeta(
-            debugName: "set_selected_light_intensity_expression",
-            argNames: ["expression"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSelectedLightProximityMode({required String modeId })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(modeId, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 101)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSelectedLightProximityModeConstMeta,
-            argValues: [modeId],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSelectedLightProximityModeConstMeta => const TaskConstMeta(
-            debugName: "set_selected_light_proximity_mode",
-            argNames: ["modeId"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSelectedLightProximityRange({required double range })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_f_32(range, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 102)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSelectedLightProximityRangeConstMeta,
-            argValues: [range],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSelectedLightProximityRangeConstMeta => const TaskConstMeta(
-            debugName: "set_selected_light_proximity_range",
-            argNames: ["range"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSelectedLightRange({required double range })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_f_32(range, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 103)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSelectedLightRangeConstMeta,
-            argValues: [range],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSelectedLightRangeConstMeta => const TaskConstMeta(
-            debugName: "set_selected_light_range",
-            argNames: ["range"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSelectedLightShadowColor({required double red , required double green , required double blue })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_f_32(red, serializer);
-sse_encode_f_32(green, serializer);
-sse_encode_f_32(blue, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 104)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSelectedLightShadowColorConstMeta,
-            argValues: [red, green, blue],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSelectedLightShadowColorConstMeta => const TaskConstMeta(
-            debugName: "set_selected_light_shadow_color",
-            argNames: ["red", "green", "blue"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSelectedLightShadowSoftness({required double softness })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_f_32(softness, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 105)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSelectedLightShadowSoftnessConstMeta,
-            argValues: [softness],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSelectedLightShadowSoftnessConstMeta => const TaskConstMeta(
-            debugName: "set_selected_light_shadow_softness",
-            argNames: ["softness"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSelectedLightSpotAngle({required double angleDegrees })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_f_32(angleDegrees, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 106)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSelectedLightSpotAngleConstMeta,
-            argValues: [angleDegrees],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSelectedLightSpotAngleConstMeta => const TaskConstMeta(
-            debugName: "set_selected_light_spot_angle",
-            argNames: ["angleDegrees"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSelectedLightType({required String lightTypeId })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(lightTypeId, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 107)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSelectedLightTypeConstMeta,
-            argValues: [lightTypeId],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSelectedLightTypeConstMeta => const TaskConstMeta(
-            debugName: "set_selected_light_type",
-            argNames: ["lightTypeId"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSelectedLightVolumetric({required bool enabled })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_bool(enabled, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 108)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSelectedLightVolumetricConstMeta,
-            argValues: [enabled],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSelectedLightVolumetricConstMeta => const TaskConstMeta(
-            debugName: "set_selected_light_volumetric",
-            argNames: ["enabled"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSelectedLightVolumetricDensity({required double density })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_f_32(density, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 109)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSelectedLightVolumetricDensityConstMeta,
-            argValues: [density],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSelectedLightVolumetricDensityConstMeta => const TaskConstMeta(
-            debugName: "set_selected_light_volumetric_density",
-            argNames: ["density"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSelectedMaterialColor({required String fieldId , required double red , required double green , required double blue })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(fieldId, serializer);
-sse_encode_f_32(red, serializer);
-sse_encode_f_32(green, serializer);
-sse_encode_f_32(blue, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 110)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSelectedMaterialColorConstMeta,
-            argValues: [fieldId, red, green, blue],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSelectedMaterialColorConstMeta => const TaskConstMeta(
-            debugName: "set_selected_material_color",
-            argNames: ["fieldId", "red", "green", "blue"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSelectedMaterialFloat({required String fieldId , required double value })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(fieldId, serializer);
-sse_encode_f_32(value, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 111)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSelectedMaterialFloatConstMeta,
-            argValues: [fieldId, value],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSelectedMaterialFloatConstMeta => const TaskConstMeta(
-            debugName: "set_selected_material_float",
-            argNames: ["fieldId", "value"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSelectedPrimitiveParameter({required String parameterKey , required double value })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(parameterKey, serializer);
-sse_encode_f_32(value, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 112)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSelectedPrimitiveParameterConstMeta,
-            argValues: [parameterKey, value],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSelectedPrimitiveParameterConstMeta => const TaskConstMeta(
-            debugName: "set_selected_primitive_parameter",
-            argNames: ["parameterKey", "value"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSelectedSculptResolution({required int resolution })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_32(resolution, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 113)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSelectedSculptResolutionConstMeta,
-            argValues: [resolution],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSelectedSculptResolutionConstMeta => const TaskConstMeta(
-            debugName: "set_selected_sculpt_resolution",
-            argNames: ["resolution"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSelectedTransform({required AppVec3 position , required AppVec3 rotationDegrees , AppVec3? scale })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_box_autoadd_app_vec_3(position, serializer);
-sse_encode_box_autoadd_app_vec_3(rotationDegrees, serializer);
-sse_encode_opt_box_autoadd_app_vec_3(scale, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 114)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSelectedTransformConstMeta,
-            argValues: [position, rotationDegrees, scale],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSelectedTransformConstMeta => const TaskConstMeta(
-            debugName: "set_selected_transform",
-            argNames: ["position", "rotationDegrees", "scale"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSelectedTransformPosition({required double x , required double y , required double z })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_f_32(x, serializer);
-sse_encode_f_32(y, serializer);
-sse_encode_f_32(z, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 115)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSelectedTransformPositionConstMeta,
-            argValues: [x, y, z],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSelectedTransformPositionConstMeta => const TaskConstMeta(
-            debugName: "set_selected_transform_position",
-            argNames: ["x", "y", "z"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSelectedTransformRotationDegrees({required double xDegrees , required double yDegrees , required double zDegrees })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_f_32(xDegrees, serializer);
-sse_encode_f_32(yDegrees, serializer);
-sse_encode_f_32(zDegrees, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 116)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSelectedTransformRotationDegreesConstMeta,
-            argValues: [xDegrees, yDegrees, zDegrees],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSelectedTransformRotationDegreesConstMeta => const TaskConstMeta(
-            debugName: "set_selected_transform_rotation_degrees",
-            argNames: ["xDegrees", "yDegrees", "zDegrees"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSelectedTransformScale({required double x , required double y , required double z })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_f_32(x, serializer);
-sse_encode_f_32(y, serializer);
-sse_encode_f_32(z, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 117)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSelectedTransformScaleConstMeta,
-            argValues: [x, y, z],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSelectedTransformScaleConstMeta => const TaskConstMeta(
-            debugName: "set_selected_transform_scale",
-            argNames: ["x", "y", "z"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSettingsInteger({required String fieldId , required int value })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(fieldId, serializer);
-sse_encode_u_32(value, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 118)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSettingsIntegerConstMeta,
-            argValues: [fieldId, value],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSettingsIntegerConstMeta => const TaskConstMeta(
-            debugName: "set_settings_integer",
-            argNames: ["fieldId", "value"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetSettingsToggle({required String fieldId , required bool enabled })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(fieldId, serializer);
-sse_encode_bool(enabled, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 119)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetSettingsToggleConstMeta,
-            argValues: [fieldId, enabled],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetSettingsToggleConstMeta => const TaskConstMeta(
-            debugName: "set_settings_toggle",
-            argNames: ["fieldId", "enabled"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleSetWorkspace({required String workspaceId })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_String(workspaceId, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 120)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleSetWorkspaceConstMeta,
-            argValues: [workspaceId],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleSetWorkspaceConstMeta => const TaskConstMeta(
-            debugName: "set_workspace",
-            argNames: ["workspaceId"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleStartExport()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 121)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleStartExportConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleStartExportConstMeta => const TaskConstMeta(
-            debugName: "start_export",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleStartImport()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 122)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleStartImportConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleStartImportConstMeta => const TaskConstMeta(
-            debugName: "start_import",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleStartSculptConvert()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 123)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleStartSculptConvertConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleStartSculptConvertConstMeta => const TaskConstMeta(
-            debugName: "start_sculpt_convert",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleStopSculpting()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 124)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleStopSculptingConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleStopSculptingConstMeta => const TaskConstMeta(
-            debugName: "stop_sculpting",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleToggleManipulatorSpace()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 125)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleToggleManipulatorSpaceConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleToggleManipulatorSpaceConstMeta => const TaskConstMeta(
-            debugName: "toggle_manipulator_space",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleToggleNodeLock({required BigInt nodeId })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_64(nodeId, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 126)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleToggleNodeLockConstMeta,
-            argValues: [nodeId],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleToggleNodeLockConstMeta => const TaskConstMeta(
-            debugName: "toggle_node_lock",
-            argNames: ["nodeId"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleToggleNodeSelection({required BigInt nodeId })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_64(nodeId, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 127)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleToggleNodeSelectionConstMeta,
-            argValues: [nodeId],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleToggleNodeSelectionConstMeta => const TaskConstMeta(
-            debugName: "toggle_node_selection",
-            argNames: ["nodeId"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleToggleNodeVisibility({required BigInt nodeId })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_u_64(nodeId, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 128)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleToggleNodeVisibilityConstMeta,
-            argValues: [nodeId],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleToggleNodeVisibilityConstMeta => const TaskConstMeta(
-            debugName: "toggle_node_visibility",
-            argNames: ["nodeId"],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleToggleOrthographic()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 129)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleToggleOrthographicConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleToggleOrthographicConstMeta => const TaskConstMeta(
-            debugName: "toggle_orthographic",
-            argNames: [],
-        );
-        
-
-@override AppSceneSnapshot crateApiSimpleUndo()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 130)!;
-            
-            },
-            codec: 
-        SseCodec(
-          decodeSuccessData: sse_decode_app_scene_snapshot,
-          decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleUndoConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
-
-
-        TaskConstMeta get kCrateApiSimpleUndoConstMeta => const TaskConstMeta(
-            debugName: "undo",
-            argNames: [],
-        );
-        
-
-@override AppWorkflowStatusSnapshot crateApiSimpleWorkflowStatus()  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 131)!;
-            
-            },
-            codec: 
-        SseCodec(
+        ),
+        constMeta: kCrateApiSimpleRenderPreviewFrameConstMeta,
+        argValues: [width, height, timeSeconds],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleRenderPreviewFrameConstMeta =>
+      const TaskConstMeta(
+        debugName: "render_preview_frame",
+        argNames: ["width", "height", "timeSeconds"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleResetKeymap() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 61)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleResetKeymapConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleResetKeymapConstMeta =>
+      const TaskConstMeta(debugName: "reset_keymap", argNames: []);
+
+  @override
+  AppSceneSnapshot crateApiSimpleResetManipulatorPivot() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 62)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleResetManipulatorPivotConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleResetManipulatorPivotConstMeta =>
+      const TaskConstMeta(debugName: "reset_manipulator_pivot", argNames: []);
+
+  @override
+  AppSceneSnapshot crateApiSimpleResetScene() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 63)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleResetSceneConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleResetSceneConstMeta =>
+      const TaskConstMeta(debugName: "reset_scene", argNames: []);
+
+  @override
+  AppSceneSnapshot crateApiSimpleResetSettings() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 64)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleResetSettingsConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleResetSettingsConstMeta =>
+      const TaskConstMeta(debugName: "reset_settings", argNames: []);
+
+  @override
+  AppSceneSnapshot crateApiSimpleRestoreCameraBookmark({
+    required int slotIndex,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_8(slotIndex, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 65)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleRestoreCameraBookmarkConstMeta,
+        argValues: [slotIndex],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleRestoreCameraBookmarkConstMeta =>
+      const TaskConstMeta(
+        debugName: "restore_camera_bookmark",
+        argNames: ["slotIndex"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleResumeSculptingSelected() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 66)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleResumeSculptingSelectedConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleResumeSculptingSelectedConstMeta =>
+      const TaskConstMeta(debugName: "resume_sculpting_selected", argNames: []);
+
+  @override
+  AppSceneSnapshot crateApiSimpleSaveCameraBookmark({required int slotIndex}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_8(slotIndex, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 67)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSaveCameraBookmarkConstMeta,
+        argValues: [slotIndex],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSaveCameraBookmarkConstMeta =>
+      const TaskConstMeta(
+        debugName: "save_camera_bookmark",
+        argNames: ["slotIndex"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSaveScene() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 68)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSaveSceneConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSaveSceneConstMeta =>
+      const TaskConstMeta(debugName: "save_scene", argNames: []);
+
+  @override
+  AppSceneSnapshot crateApiSimpleSaveSceneAs() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 69)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSaveSceneAsConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSaveSceneAsConstMeta =>
+      const TaskConstMeta(debugName: "save_scene_as", argNames: []);
+
+  @override
+  AppSceneSnapshot crateApiSimpleSceneSnapshot() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 70)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSceneSnapshotConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSceneSnapshotConstMeta =>
+      const TaskConstMeta(debugName: "scene_snapshot", argNames: []);
+
+  @override
+  AppSceneSnapshot crateApiSimpleSelectNode({BigInt? nodeId}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_opt_box_autoadd_u_64(nodeId, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 71)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSelectNodeConstMeta,
+        argValues: [nodeId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSelectNodeConstMeta =>
+      const TaskConstMeta(debugName: "select_node", argNames: ["nodeId"]);
+
+  @override
+  AppSceneSnapshot crateApiSimpleSelectNodeAtViewport({
+    required double mouseX,
+    required double mouseY,
+    required int width,
+    required int height,
+    required double timeSeconds,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_f_32(mouseX, serializer);
+          sse_encode_f_32(mouseY, serializer);
+          sse_encode_u_32(width, serializer);
+          sse_encode_u_32(height, serializer);
+          sse_encode_f_32(timeSeconds, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 72)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSelectNodeAtViewportConstMeta,
+        argValues: [mouseX, mouseY, width, height, timeSeconds],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSelectNodeAtViewportConstMeta =>
+      const TaskConstMeta(
+        debugName: "select_node_at_viewport",
+        argNames: ["mouseX", "mouseY", "width", "height", "timeSeconds"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetAdaptiveExport({required bool enabled}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_bool(enabled, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 73)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetAdaptiveExportConstMeta,
+        argValues: [enabled],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetAdaptiveExportConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_adaptive_export",
+        argNames: ["enabled"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetExportResolution({
+    required int resolution,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(resolution, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 74)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetExportResolutionConstMeta,
+        argValues: [resolution],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetExportResolutionConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_export_resolution",
+        argNames: ["resolution"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetImportResolution({
+    required int resolution,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(resolution, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 75)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetImportResolutionConstMeta,
+        argValues: [resolution],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetImportResolutionConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_import_resolution",
+        argNames: ["resolution"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetImportUseAuto({required bool useAuto}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_bool(useAuto, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 76)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetImportUseAutoConstMeta,
+        argValues: [useAuto],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetImportUseAutoConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_import_use_auto",
+        argNames: ["useAuto"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetKeybinding({
+    required String actionId,
+    required String keyId,
+    required bool ctrl,
+    required bool shift,
+    required bool alt,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(actionId, serializer);
+          sse_encode_String(keyId, serializer);
+          sse_encode_bool(ctrl, serializer);
+          sse_encode_bool(shift, serializer);
+          sse_encode_bool(alt, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 77)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetKeybindingConstMeta,
+        argValues: [actionId, keyId, ctrl, shift, alt],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetKeybindingConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_keybinding",
+        argNames: ["actionId", "keyId", "ctrl", "shift", "alt"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetManipulatorMode({required String modeId}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(modeId, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 78)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetManipulatorModeConstMeta,
+        argValues: [modeId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetManipulatorModeConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_manipulator_mode",
+        argNames: ["modeId"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetNodeLightLinkEnabled({
+    required BigInt nodeId,
+    required BigInt lightId,
+    required bool enabled,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_64(nodeId, serializer);
+          sse_encode_u_64(lightId, serializer);
+          sse_encode_bool(enabled, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 79)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetNodeLightLinkEnabledConstMeta,
+        argValues: [nodeId, lightId, enabled],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetNodeLightLinkEnabledConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_node_light_link_enabled",
+        argNames: ["nodeId", "lightId", "enabled"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetNodeLightMask({
+    required BigInt nodeId,
+    required int mask,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_64(nodeId, serializer);
+          sse_encode_u_8(mask, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 80)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetNodeLightMaskConstMeta,
+        argValues: [nodeId, mask],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetNodeLightMaskConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_node_light_mask",
+        argNames: ["nodeId", "mask"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetRenderInteger({
+    required String fieldId,
+    required int value,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(fieldId, serializer);
+          sse_encode_u_32(value, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 81)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetRenderIntegerConstMeta,
+        argValues: [fieldId, value],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetRenderIntegerConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_render_integer",
+        argNames: ["fieldId", "value"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetRenderScalar({
+    required String fieldId,
+    required double value,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(fieldId, serializer);
+          sse_encode_f_32(value, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 82)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetRenderScalarConstMeta,
+        argValues: [fieldId, value],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetRenderScalarConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_render_scalar",
+        argNames: ["fieldId", "value"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetRenderShadingMode({
+    required String modeId,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(modeId, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 83)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetRenderShadingModeConstMeta,
+        argValues: [modeId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetRenderShadingModeConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_render_shading_mode",
+        argNames: ["modeId"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetRenderToggle({
+    required String fieldId,
+    required bool enabled,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(fieldId, serializer);
+          sse_encode_bool(enabled, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 84)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetRenderToggleConstMeta,
+        argValues: [fieldId, enabled],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetRenderToggleConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_render_toggle",
+        argNames: ["fieldId", "enabled"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSculptBrushMode({required String modeId}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(modeId, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 85)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSculptBrushModeConstMeta,
+        argValues: [modeId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSculptBrushModeConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_sculpt_brush_mode",
+        argNames: ["modeId"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSculptBrushRadius({
+    required double radius,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_f_32(radius, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 86)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSculptBrushRadiusConstMeta,
+        argValues: [radius],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSculptBrushRadiusConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_sculpt_brush_radius",
+        argNames: ["radius"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSculptBrushStrength({
+    required double strength,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_f_32(strength, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 87)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSculptBrushStrengthConstMeta,
+        argValues: [strength],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSculptBrushStrengthConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_sculpt_brush_strength",
+        argNames: ["strength"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSculptConvertMode({
+    required String modeId,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(modeId, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 88)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSculptConvertModeConstMeta,
+        argValues: [modeId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSculptConvertModeConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_sculpt_convert_mode",
+        argNames: ["modeId"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSculptConvertResolution({
+    required int resolution,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(resolution, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 89)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSculptConvertResolutionConstMeta,
+        argValues: [resolution],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSculptConvertResolutionConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_sculpt_convert_resolution",
+        argNames: ["resolution"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSculptSymmetryAxis({
+    required String axisId,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(axisId, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 90)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSculptSymmetryAxisConstMeta,
+        argValues: [axisId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSculptSymmetryAxisConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_sculpt_symmetry_axis",
+        argNames: ["axisId"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSelectedLightArrayColorVariation({
+    required double value,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_f_32(value, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 91)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSelectedLightArrayColorVariationConstMeta,
+        argValues: [value],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiSimpleSetSelectedLightArrayColorVariationConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_selected_light_array_color_variation",
+        argNames: ["value"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSelectedLightArrayCount({
+    required int count,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(count, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 92)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSelectedLightArrayCountConstMeta,
+        argValues: [count],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSelectedLightArrayCountConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_selected_light_array_count",
+        argNames: ["count"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSelectedLightArrayPattern({
+    required String patternId,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(patternId, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 93)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSelectedLightArrayPatternConstMeta,
+        argValues: [patternId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSelectedLightArrayPatternConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_selected_light_array_pattern",
+        argNames: ["patternId"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSelectedLightArrayRadius({
+    required double radius,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_f_32(radius, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 94)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSelectedLightArrayRadiusConstMeta,
+        argValues: [radius],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSelectedLightArrayRadiusConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_selected_light_array_radius",
+        argNames: ["radius"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSelectedLightCastShadows({
+    required bool enabled,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_bool(enabled, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 95)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSelectedLightCastShadowsConstMeta,
+        argValues: [enabled],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSelectedLightCastShadowsConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_selected_light_cast_shadows",
+        argNames: ["enabled"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSelectedLightColor({
+    required double red,
+    required double green,
+    required double blue,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_f_32(red, serializer);
+          sse_encode_f_32(green, serializer);
+          sse_encode_f_32(blue, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 96)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSelectedLightColorConstMeta,
+        argValues: [red, green, blue],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSelectedLightColorConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_selected_light_color",
+        argNames: ["red", "green", "blue"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSelectedLightColorHueExpression({
+    required String expression,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(expression, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 97)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSelectedLightColorHueExpressionConstMeta,
+        argValues: [expression],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiSimpleSetSelectedLightColorHueExpressionConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_selected_light_color_hue_expression",
+        argNames: ["expression"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSelectedLightCookie({
+    required BigInt cookieNodeId,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_64(cookieNodeId, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 98)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSelectedLightCookieConstMeta,
+        argValues: [cookieNodeId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSelectedLightCookieConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_selected_light_cookie",
+        argNames: ["cookieNodeId"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSelectedLightIntensity({
+    required double intensity,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_f_32(intensity, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 99)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSelectedLightIntensityConstMeta,
+        argValues: [intensity],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSelectedLightIntensityConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_selected_light_intensity",
+        argNames: ["intensity"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSelectedLightIntensityExpression({
+    required String expression,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(expression, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 100,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSelectedLightIntensityExpressionConstMeta,
+        argValues: [expression],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiSimpleSetSelectedLightIntensityExpressionConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_selected_light_intensity_expression",
+        argNames: ["expression"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSelectedLightProximityMode({
+    required String modeId,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(modeId, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 101,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSelectedLightProximityModeConstMeta,
+        argValues: [modeId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSelectedLightProximityModeConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_selected_light_proximity_mode",
+        argNames: ["modeId"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSelectedLightProximityRange({
+    required double range,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_f_32(range, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 102,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSelectedLightProximityRangeConstMeta,
+        argValues: [range],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSelectedLightProximityRangeConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_selected_light_proximity_range",
+        argNames: ["range"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSelectedLightRange({
+    required double range,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_f_32(range, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 103,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSelectedLightRangeConstMeta,
+        argValues: [range],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSelectedLightRangeConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_selected_light_range",
+        argNames: ["range"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSelectedLightShadowColor({
+    required double red,
+    required double green,
+    required double blue,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_f_32(red, serializer);
+          sse_encode_f_32(green, serializer);
+          sse_encode_f_32(blue, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 104,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSelectedLightShadowColorConstMeta,
+        argValues: [red, green, blue],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSelectedLightShadowColorConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_selected_light_shadow_color",
+        argNames: ["red", "green", "blue"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSelectedLightShadowSoftness({
+    required double softness,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_f_32(softness, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 105,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSelectedLightShadowSoftnessConstMeta,
+        argValues: [softness],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSelectedLightShadowSoftnessConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_selected_light_shadow_softness",
+        argNames: ["softness"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSelectedLightSpotAngle({
+    required double angleDegrees,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_f_32(angleDegrees, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 106,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSelectedLightSpotAngleConstMeta,
+        argValues: [angleDegrees],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSelectedLightSpotAngleConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_selected_light_spot_angle",
+        argNames: ["angleDegrees"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSelectedLightType({
+    required String lightTypeId,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(lightTypeId, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 107,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSelectedLightTypeConstMeta,
+        argValues: [lightTypeId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSelectedLightTypeConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_selected_light_type",
+        argNames: ["lightTypeId"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSelectedLightVolumetric({
+    required bool enabled,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_bool(enabled, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 108,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSelectedLightVolumetricConstMeta,
+        argValues: [enabled],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSelectedLightVolumetricConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_selected_light_volumetric",
+        argNames: ["enabled"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSelectedLightVolumetricDensity({
+    required double density,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_f_32(density, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 109,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSelectedLightVolumetricDensityConstMeta,
+        argValues: [density],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSelectedLightVolumetricDensityConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_selected_light_volumetric_density",
+        argNames: ["density"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSelectedMaterialColor({
+    required String fieldId,
+    required double red,
+    required double green,
+    required double blue,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(fieldId, serializer);
+          sse_encode_f_32(red, serializer);
+          sse_encode_f_32(green, serializer);
+          sse_encode_f_32(blue, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 110,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSelectedMaterialColorConstMeta,
+        argValues: [fieldId, red, green, blue],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSelectedMaterialColorConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_selected_material_color",
+        argNames: ["fieldId", "red", "green", "blue"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSelectedMaterialFloat({
+    required String fieldId,
+    required double value,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(fieldId, serializer);
+          sse_encode_f_32(value, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 111,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSelectedMaterialFloatConstMeta,
+        argValues: [fieldId, value],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSelectedMaterialFloatConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_selected_material_float",
+        argNames: ["fieldId", "value"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSelectedPrimitiveParameter({
+    required String parameterKey,
+    required double value,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(parameterKey, serializer);
+          sse_encode_f_32(value, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 112,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSelectedPrimitiveParameterConstMeta,
+        argValues: [parameterKey, value],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSelectedPrimitiveParameterConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_selected_primitive_parameter",
+        argNames: ["parameterKey", "value"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSelectedSculptResolution({
+    required int resolution,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_32(resolution, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 113,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSelectedSculptResolutionConstMeta,
+        argValues: [resolution],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSelectedSculptResolutionConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_selected_sculpt_resolution",
+        argNames: ["resolution"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSelectedTransform({
+    required AppVec3 position,
+    required AppVec3 rotationDegrees,
+    AppVec3? scale,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_box_autoadd_app_vec_3(position, serializer);
+          sse_encode_box_autoadd_app_vec_3(rotationDegrees, serializer);
+          sse_encode_opt_box_autoadd_app_vec_3(scale, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 114,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSelectedTransformConstMeta,
+        argValues: [position, rotationDegrees, scale],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSelectedTransformConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_selected_transform",
+        argNames: ["position", "rotationDegrees", "scale"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSelectedTransformPosition({
+    required double x,
+    required double y,
+    required double z,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_f_32(x, serializer);
+          sse_encode_f_32(y, serializer);
+          sse_encode_f_32(z, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 115,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSelectedTransformPositionConstMeta,
+        argValues: [x, y, z],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSelectedTransformPositionConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_selected_transform_position",
+        argNames: ["x", "y", "z"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSelectedTransformRotationDegrees({
+    required double xDegrees,
+    required double yDegrees,
+    required double zDegrees,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_f_32(xDegrees, serializer);
+          sse_encode_f_32(yDegrees, serializer);
+          sse_encode_f_32(zDegrees, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 116,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSelectedTransformRotationDegreesConstMeta,
+        argValues: [xDegrees, yDegrees, zDegrees],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta
+  get kCrateApiSimpleSetSelectedTransformRotationDegreesConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_selected_transform_rotation_degrees",
+        argNames: ["xDegrees", "yDegrees", "zDegrees"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSelectedTransformScale({
+    required double x,
+    required double y,
+    required double z,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_f_32(x, serializer);
+          sse_encode_f_32(y, serializer);
+          sse_encode_f_32(z, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 117,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSelectedTransformScaleConstMeta,
+        argValues: [x, y, z],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSelectedTransformScaleConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_selected_transform_scale",
+        argNames: ["x", "y", "z"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSettingsInteger({
+    required String fieldId,
+    required int value,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(fieldId, serializer);
+          sse_encode_u_32(value, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 118,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSettingsIntegerConstMeta,
+        argValues: [fieldId, value],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSettingsIntegerConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_settings_integer",
+        argNames: ["fieldId", "value"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetSettingsToggle({
+    required String fieldId,
+    required bool enabled,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(fieldId, serializer);
+          sse_encode_bool(enabled, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 119,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetSettingsToggleConstMeta,
+        argValues: [fieldId, enabled],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetSettingsToggleConstMeta =>
+      const TaskConstMeta(
+        debugName: "set_settings_toggle",
+        argNames: ["fieldId", "enabled"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetWorkspace({required String workspaceId}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(workspaceId, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 120,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleSetWorkspaceConstMeta,
+        argValues: [workspaceId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleSetWorkspaceConstMeta => const TaskConstMeta(
+    debugName: "set_workspace",
+    argNames: ["workspaceId"],
+  );
+
+  @override
+  AppSceneSnapshot crateApiSimpleStartExport() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 121,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleStartExportConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleStartExportConstMeta =>
+      const TaskConstMeta(debugName: "start_export", argNames: []);
+
+  @override
+  AppSceneSnapshot crateApiSimpleStartImport() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 122,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleStartImportConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleStartImportConstMeta =>
+      const TaskConstMeta(debugName: "start_import", argNames: []);
+
+  @override
+  AppSceneSnapshot crateApiSimpleStartSculptConvert() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 123,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleStartSculptConvertConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleStartSculptConvertConstMeta =>
+      const TaskConstMeta(debugName: "start_sculpt_convert", argNames: []);
+
+  @override
+  AppSceneSnapshot crateApiSimpleStopSculpting() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 124,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleStopSculptingConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleStopSculptingConstMeta =>
+      const TaskConstMeta(debugName: "stop_sculpting", argNames: []);
+
+  @override
+  AppSceneSnapshot crateApiSimpleToggleManipulatorSpace() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 125,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleToggleManipulatorSpaceConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleToggleManipulatorSpaceConstMeta =>
+      const TaskConstMeta(debugName: "toggle_manipulator_space", argNames: []);
+
+  @override
+  AppSceneSnapshot crateApiSimpleToggleNodeLock({required BigInt nodeId}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_64(nodeId, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 126,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleToggleNodeLockConstMeta,
+        argValues: [nodeId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleToggleNodeLockConstMeta =>
+      const TaskConstMeta(debugName: "toggle_node_lock", argNames: ["nodeId"]);
+
+  @override
+  AppSceneSnapshot crateApiSimpleToggleNodeSelection({required BigInt nodeId}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_64(nodeId, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 127,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleToggleNodeSelectionConstMeta,
+        argValues: [nodeId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleToggleNodeSelectionConstMeta =>
+      const TaskConstMeta(
+        debugName: "toggle_node_selection",
+        argNames: ["nodeId"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleToggleNodeVisibility({
+    required BigInt nodeId,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_u_64(nodeId, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 128,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleToggleNodeVisibilityConstMeta,
+        argValues: [nodeId],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleToggleNodeVisibilityConstMeta =>
+      const TaskConstMeta(
+        debugName: "toggle_node_visibility",
+        argNames: ["nodeId"],
+      );
+
+  @override
+  AppSceneSnapshot crateApiSimpleToggleOrthographic() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 129,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleToggleOrthographicConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleToggleOrthographicConstMeta =>
+      const TaskConstMeta(debugName: "toggle_orthographic", argNames: []);
+
+  @override
+  AppSceneSnapshot crateApiSimpleUndo() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 130,
+          )!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_app_scene_snapshot,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSimpleUndoConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSimpleUndoConstMeta =>
+      const TaskConstMeta(debugName: "undo", argNames: []);
+
+  @override
+  AppWorkflowStatusSnapshot crateApiSimpleWorkflowStatus() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 131,
+          )!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_app_workflow_status_snapshot,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleWorkflowStatusConstMeta,
-            argValues: [],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleWorkflowStatusConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleWorkflowStatusConstMeta =>
+      const TaskConstMeta(debugName: "workflow_status", argNames: []);
 
-        TaskConstMeta get kCrateApiSimpleWorkflowStatusConstMeta => const TaskConstMeta(
-            debugName: "workflow_status",
-            argNames: [],
-        );
-        
-
-@override void crateApiSimpleZoomCamera({required double delta })  { return handler.executeSync(SyncTask(
-            callFfi: () {
-              
-            final serializer = SseSerializer(generalizedFrbRustBinding);sse_encode_f_32(delta, serializer);
-            return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 132)!;
-            
-            },
-            codec: 
-        SseCodec(
+  @override
+  void crateApiSimpleZoomCamera({required double delta}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_f_32(delta, serializer);
+          return pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 132,
+          )!;
+        },
+        codec: SseCodec(
           decodeSuccessData: sse_decode_unit,
           decodeErrorData: null,
-        )
-        ,
-            constMeta: kCrateApiSimpleZoomCameraConstMeta,
-            argValues: [delta],
-            apiImpl: this,
-        )); }
+        ),
+        constMeta: kCrateApiSimpleZoomCameraConstMeta,
+        argValues: [delta],
+        apiImpl: this,
+      ),
+    );
+  }
 
+  TaskConstMeta get kCrateApiSimpleZoomCameraConstMeta =>
+      const TaskConstMeta(debugName: "zoom_camera", argNames: ["delta"]);
 
-        TaskConstMeta get kCrateApiSimpleZoomCameraConstMeta => const TaskConstMeta(
-            debugName: "zoom_camera",
-            argNames: ["delta"],
+  @protected
+  String dco_decode_String(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as String;
+  }
+
+  @protected
+  AppCameraBookmarkSnapshot dco_decode_app_camera_bookmark_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return AppCameraBookmarkSnapshot(
+      slotIndex: dco_decode_u_8(arr[0]),
+      saved: dco_decode_bool(arr[1]),
+    );
+  }
+
+  @protected
+  AppCameraSnapshot dco_decode_app_camera_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    return AppCameraSnapshot(
+      yaw: dco_decode_f_32(arr[0]),
+      pitch: dco_decode_f_32(arr[1]),
+      roll: dco_decode_f_32(arr[2]),
+      distance: dco_decode_f_32(arr[3]),
+      fovDegrees: dco_decode_f_32(arr[4]),
+      orthographic: dco_decode_bool(arr[5]),
+      target: dco_decode_app_vec_3(arr[6]),
+      eye: dco_decode_app_vec_3(arr[7]),
+    );
+  }
+
+  @protected
+  AppCommandSnapshot dco_decode_app_command_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return AppCommandSnapshot(
+      id: dco_decode_String(arr[0]),
+      label: dco_decode_String(arr[1]),
+      category: dco_decode_String(arr[2]),
+      enabled: dco_decode_bool(arr[3]),
+      workspaceIds: dco_decode_list_String(arr[4]),
+      shortcutLabel: dco_decode_opt_String(arr[5]),
+    );
+  }
+
+  @protected
+  AppDocumentSnapshot dco_decode_app_document_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return AppDocumentSnapshot(
+      currentFilePath: dco_decode_opt_String(arr[0]),
+      currentFileName: dco_decode_opt_String(arr[1]),
+      hasUnsavedChanges: dco_decode_bool(arr[2]),
+      recentFiles: dco_decode_list_String(arr[3]),
+      recoveryAvailable: dco_decode_bool(arr[4]),
+      recoverySummary: dco_decode_opt_String(arr[5]),
+    );
+  }
+
+  @protected
+  AppExportPresetSnapshot dco_decode_app_export_preset_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return AppExportPresetSnapshot(
+      name: dco_decode_String(arr[0]),
+      resolution: dco_decode_u_32(arr[1]),
+    );
+  }
+
+  @protected
+  AppExportSnapshot dco_decode_app_export_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return AppExportSnapshot(
+      resolution: dco_decode_u_32(arr[0]),
+      minResolution: dco_decode_u_32(arr[1]),
+      maxResolution: dco_decode_u_32(arr[2]),
+      adaptive: dco_decode_bool(arr[3]),
+      presets: dco_decode_list_app_export_preset_snapshot(arr[4]),
+      status: dco_decode_app_export_status_snapshot(arr[5]),
+    );
+  }
+
+  @protected
+  AppExportStatusSnapshot dco_decode_app_export_status_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    return AppExportStatusSnapshot(
+      state: dco_decode_String(arr[0]),
+      progress: dco_decode_u_32(arr[1]),
+      total: dco_decode_u_32(arr[2]),
+      resolution: dco_decode_u_32(arr[3]),
+      phaseLabel: dco_decode_opt_String(arr[4]),
+      targetFileName: dco_decode_opt_String(arr[5]),
+      targetFilePath: dco_decode_opt_String(arr[6]),
+      formatLabel: dco_decode_opt_String(arr[7]),
+      message: dco_decode_opt_String(arr[8]),
+      isError: dco_decode_bool(arr[9]),
+    );
+  }
+
+  @protected
+  AppHistorySnapshot dco_decode_app_history_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return AppHistorySnapshot(
+      canUndo: dco_decode_bool(arr[0]),
+      canRedo: dco_decode_bool(arr[1]),
+    );
+  }
+
+  @protected
+  AppImportDialogSnapshot dco_decode_app_import_dialog_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    return AppImportDialogSnapshot(
+      filename: dco_decode_String(arr[0]),
+      resolution: dco_decode_u_32(arr[1]),
+      autoResolution: dco_decode_u_32(arr[2]),
+      useAuto: dco_decode_bool(arr[3]),
+      vertexCount: dco_decode_usize(arr[4]),
+      triangleCount: dco_decode_usize(arr[5]),
+      boundsSize: dco_decode_app_vec_3(arr[6]),
+      minResolution: dco_decode_u_32(arr[7]),
+      maxResolution: dco_decode_u_32(arr[8]),
+    );
+  }
+
+  @protected
+  AppImportSnapshot dco_decode_app_import_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return AppImportSnapshot(
+      dialog: dco_decode_opt_box_autoadd_app_import_dialog_snapshot(arr[0]),
+      status: dco_decode_app_import_status_snapshot(arr[1]),
+    );
+  }
+
+  @protected
+  AppImportStatusSnapshot dco_decode_app_import_status_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    return AppImportStatusSnapshot(
+      state: dco_decode_String(arr[0]),
+      progress: dco_decode_u_32(arr[1]),
+      total: dco_decode_u_32(arr[2]),
+      filename: dco_decode_opt_String(arr[3]),
+      phaseLabel: dco_decode_opt_String(arr[4]),
+      message: dco_decode_opt_String(arr[5]),
+      isError: dco_decode_bool(arr[6]),
+    );
+  }
+
+  @protected
+  AppKeyComboSnapshot dco_decode_app_key_combo_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return AppKeyComboSnapshot(
+      keyId: dco_decode_String(arr[0]),
+      keyLabel: dco_decode_String(arr[1]),
+      ctrl: dco_decode_bool(arr[2]),
+      shift: dco_decode_bool(arr[3]),
+      alt: dco_decode_bool(arr[4]),
+      shortcutLabel: dco_decode_String(arr[5]),
+    );
+  }
+
+  @protected
+  AppKeyOptionSnapshot dco_decode_app_key_option_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return AppKeyOptionSnapshot(
+      id: dco_decode_String(arr[0]),
+      label: dco_decode_String(arr[1]),
+    );
+  }
+
+  @protected
+  AppKeybindingSnapshot dco_decode_app_keybinding_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return AppKeybindingSnapshot(
+      actionId: dco_decode_String(arr[0]),
+      actionLabel: dco_decode_String(arr[1]),
+      category: dco_decode_String(arr[2]),
+      binding: dco_decode_opt_box_autoadd_app_key_combo_snapshot(arr[3]),
+    );
+  }
+
+  @protected
+  AppLightCookieCandidateSnapshot
+  dco_decode_app_light_cookie_candidate_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return AppLightCookieCandidateSnapshot(
+      nodeId: dco_decode_u_64(arr[0]),
+      name: dco_decode_String(arr[1]),
+      kindLabel: dco_decode_String(arr[2]),
+    );
+  }
+
+  @protected
+  AppLightLinkNodeSnapshot dco_decode_app_light_link_node_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return AppLightLinkNodeSnapshot(
+      nodeId: dco_decode_u_64(arr[0]),
+      nodeName: dco_decode_String(arr[1]),
+      kindLabel: dco_decode_String(arr[2]),
+      lightMask: dco_decode_u_8(arr[3]),
+    );
+  }
+
+  @protected
+  AppLightLinkTargetSnapshot dco_decode_app_light_link_target_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return AppLightLinkTargetSnapshot(
+      lightNodeId: dco_decode_u_64(arr[0]),
+      lightName: dco_decode_String(arr[1]),
+      lightTypeLabel: dco_decode_String(arr[2]),
+      active: dco_decode_bool(arr[3]),
+      maskBit: dco_decode_u_8(arr[4]),
+      color: dco_decode_app_vec_3(arr[5]),
+    );
+  }
+
+  @protected
+  AppLightLinkingSnapshot dco_decode_app_light_linking_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return AppLightLinkingSnapshot(
+      lights: dco_decode_list_app_light_link_target_snapshot(arr[0]),
+      geometryNodes: dco_decode_list_app_light_link_node_snapshot(arr[1]),
+      totalVisibleLightCount: dco_decode_u_32(arr[2]),
+      maxLightCount: dco_decode_u_32(arr[3]),
+    );
+  }
+
+  @protected
+  AppLightPropertiesSnapshot dco_decode_app_light_properties_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 36)
+      throw Exception('unexpected arr length: expect 36 but see ${arr.length}');
+    return AppLightPropertiesSnapshot(
+      nodeId: dco_decode_u_64(arr[0]),
+      transformNodeId: dco_decode_opt_box_autoadd_u_64(arr[1]),
+      lightTypeId: dco_decode_String(arr[2]),
+      lightTypeLabel: dco_decode_String(arr[3]),
+      color: dco_decode_app_vec_3(arr[4]),
+      intensity: dco_decode_f_32(arr[5]),
+      range: dco_decode_f_32(arr[6]),
+      spotAngle: dco_decode_f_32(arr[7]),
+      castShadows: dco_decode_bool(arr[8]),
+      shadowSoftness: dco_decode_f_32(arr[9]),
+      shadowColor: dco_decode_app_vec_3(arr[10]),
+      volumetric: dco_decode_bool(arr[11]),
+      volumetricDensity: dco_decode_f_32(arr[12]),
+      cookieNodeId: dco_decode_opt_box_autoadd_u_64(arr[13]),
+      cookieNodeName: dco_decode_opt_String(arr[14]),
+      cookieCandidates: dco_decode_list_app_light_cookie_candidate_snapshot(
+        arr[15],
+      ),
+      proximityModeId: dco_decode_String(arr[16]),
+      proximityModeLabel: dco_decode_String(arr[17]),
+      proximityRange: dco_decode_f_32(arr[18]),
+      arrayPatternId: dco_decode_opt_String(arr[19]),
+      arrayPatternLabel: dco_decode_opt_String(arr[20]),
+      arrayCount: dco_decode_opt_box_autoadd_u_32(arr[21]),
+      arrayRadius: dco_decode_opt_box_autoadd_f_32(arr[22]),
+      arrayColorVariation: dco_decode_opt_box_autoadd_f_32(arr[23]),
+      intensityExpression: dco_decode_opt_String(arr[24]),
+      intensityExpressionError: dco_decode_opt_String(arr[25]),
+      colorHueExpression: dco_decode_opt_String(arr[26]),
+      colorHueExpressionError: dco_decode_opt_String(arr[27]),
+      supportsRange: dco_decode_bool(arr[28]),
+      supportsSpotAngle: dco_decode_bool(arr[29]),
+      supportsShadows: dco_decode_bool(arr[30]),
+      supportsVolumetric: dco_decode_bool(arr[31]),
+      supportsCookie: dco_decode_bool(arr[32]),
+      supportsProximity: dco_decode_bool(arr[33]),
+      supportsExpressions: dco_decode_bool(arr[34]),
+      supportsArray: dco_decode_bool(arr[35]),
+    );
+  }
+
+  @protected
+  AppMaterialPropertiesSnapshot dco_decode_app_material_properties_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return AppMaterialPropertiesSnapshot(
+      color: dco_decode_app_vec_3(arr[0]),
+      roughness: dco_decode_f_32(arr[1]),
+      metallic: dco_decode_f_32(arr[2]),
+      emissive: dco_decode_app_vec_3(arr[3]),
+      emissiveIntensity: dco_decode_f_32(arr[4]),
+      fresnel: dco_decode_f_32(arr[5]),
+    );
+  }
+
+  @protected
+  AppNodeSnapshot dco_decode_app_node_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return AppNodeSnapshot(
+      id: dco_decode_u_64(arr[0]),
+      name: dco_decode_String(arr[1]),
+      kindLabel: dco_decode_String(arr[2]),
+      visible: dco_decode_bool(arr[3]),
+      locked: dco_decode_bool(arr[4]),
+    );
+  }
+
+  @protected
+  AppPrimitivePropertiesSnapshot dco_decode_app_primitive_properties_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return AppPrimitivePropertiesSnapshot(
+      primitiveKind: dco_decode_String(arr[0]),
+      parameters: dco_decode_list_app_scalar_property_snapshot(arr[1]),
+    );
+  }
+
+  @protected
+  AppQuickActionSnapshot dco_decode_app_quick_action_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 6)
+      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    return AppQuickActionSnapshot(
+      id: dco_decode_String(arr[0]),
+      label: dco_decode_String(arr[1]),
+      category: dco_decode_String(arr[2]),
+      enabled: dco_decode_bool(arr[3]),
+      prominent: dco_decode_bool(arr[4]),
+      shortcutLabel: dco_decode_opt_String(arr[5]),
+    );
+  }
+
+  @protected
+  AppRenderOptionSnapshot dco_decode_app_render_option_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return AppRenderOptionSnapshot(
+      id: dco_decode_String(arr[0]),
+      label: dco_decode_String(arr[1]),
+    );
+  }
+
+  @protected
+  AppRenderSettingsSnapshot dco_decode_app_render_settings_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 22)
+      throw Exception('unexpected arr length: expect 22 but see ${arr.length}');
+    return AppRenderSettingsSnapshot(
+      shadingModes: dco_decode_list_app_render_option_snapshot(arr[0]),
+      shadingModeId: dco_decode_String(arr[1]),
+      shadingModeLabel: dco_decode_String(arr[2]),
+      showGrid: dco_decode_bool(arr[3]),
+      shadowsEnabled: dco_decode_bool(arr[4]),
+      shadowSteps: dco_decode_u_32(arr[5]),
+      aoEnabled: dco_decode_bool(arr[6]),
+      aoSamples: dco_decode_u_32(arr[7]),
+      aoIntensity: dco_decode_f_32(arr[8]),
+      marchMaxSteps: dco_decode_u_32(arr[9]),
+      sculptFastMode: dco_decode_bool(arr[10]),
+      autoReduceSteps: dco_decode_bool(arr[11]),
+      interactionRenderScale: dco_decode_f_32(arr[12]),
+      restRenderScale: dco_decode_f_32(arr[13]),
+      fogEnabled: dco_decode_bool(arr[14]),
+      fogDensity: dco_decode_f_32(arr[15]),
+      bloomEnabled: dco_decode_bool(arr[16]),
+      bloomIntensity: dco_decode_f_32(arr[17]),
+      gamma: dco_decode_f_32(arr[18]),
+      tonemappingAces: dco_decode_bool(arr[19]),
+      crossSectionAxis: dco_decode_u_8(arr[20]),
+      crossSectionPosition: dco_decode_f_32(arr[21]),
+    );
+  }
+
+  @protected
+  AppScalarPropertySnapshot dco_decode_app_scalar_property_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return AppScalarPropertySnapshot(
+      key: dco_decode_String(arr[0]),
+      label: dco_decode_String(arr[1]),
+      value: dco_decode_f_32(arr[2]),
+    );
+  }
+
+  @protected
+  AppSceneSnapshot dco_decode_app_scene_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 21)
+      throw Exception('unexpected arr length: expect 21 but see ${arr.length}');
+    return AppSceneSnapshot(
+      selectedNode: dco_decode_opt_box_autoadd_app_node_snapshot(arr[0]),
+      selectedNodeProperties:
+          dco_decode_opt_box_autoadd_app_selected_node_properties_snapshot(
+            arr[1],
+          ),
+      selectedNodeIds: dco_decode_list_prim_u_64_strict(arr[2]),
+      topLevelNodes: dco_decode_list_app_node_snapshot(arr[3]),
+      sceneTreeRoots: dco_decode_list_app_scene_tree_node_snapshot(arr[4]),
+      viewportLights: dco_decode_list_app_viewport_light_snapshot(arr[5]),
+      workspace: dco_decode_app_workspace_snapshot(arr[6]),
+      selectionContext: dco_decode_app_selection_context_snapshot(arr[7]),
+      commands: dco_decode_list_app_command_snapshot(arr[8]),
+      history: dco_decode_app_history_snapshot(arr[9]),
+      document: dco_decode_app_document_snapshot(arr[10]),
+      render: dco_decode_app_render_settings_snapshot(arr[11]),
+      settings: dco_decode_app_settings_snapshot(arr[12]),
+      export_: dco_decode_app_export_snapshot(arr[13]),
+      import_: dco_decode_app_import_snapshot(arr[14]),
+      sculptConvert: dco_decode_app_sculpt_convert_snapshot(arr[15]),
+      sculpt: dco_decode_app_sculpt_snapshot(arr[16]),
+      lightLinking: dco_decode_app_light_linking_snapshot(arr[17]),
+      camera: dco_decode_app_camera_snapshot(arr[18]),
+      stats: dco_decode_app_scene_stats_snapshot(arr[19]),
+      tool: dco_decode_app_tool_snapshot(arr[20]),
+    );
+  }
+
+  @protected
+  AppSceneStatsSnapshot dco_decode_app_scene_stats_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 15)
+      throw Exception('unexpected arr length: expect 15 but see ${arr.length}');
+    return AppSceneStatsSnapshot(
+      totalNodes: dco_decode_u_32(arr[0]),
+      visibleNodes: dco_decode_u_32(arr[1]),
+      topLevelNodes: dco_decode_u_32(arr[2]),
+      primitiveNodes: dco_decode_u_32(arr[3]),
+      operationNodes: dco_decode_u_32(arr[4]),
+      transformNodes: dco_decode_u_32(arr[5]),
+      modifierNodes: dco_decode_u_32(arr[6]),
+      sculptNodes: dco_decode_u_32(arr[7]),
+      lightNodes: dco_decode_u_32(arr[8]),
+      voxelMemoryBytes: dco_decode_u_64(arr[9]),
+      sdfEvalComplexity: dco_decode_u_32(arr[10]),
+      structureKey: dco_decode_u_64(arr[11]),
+      dataFingerprint: dco_decode_u_64(arr[12]),
+      boundsMin: dco_decode_app_vec_3(arr[13]),
+      boundsMax: dco_decode_app_vec_3(arr[14]),
+    );
+  }
+
+  @protected
+  AppSceneTreeNodeSnapshot dco_decode_app_scene_tree_node_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    return AppSceneTreeNodeSnapshot(
+      id: dco_decode_u_64(arr[0]),
+      name: dco_decode_String(arr[1]),
+      kindLabel: dco_decode_String(arr[2]),
+      visible: dco_decode_bool(arr[3]),
+      locked: dco_decode_bool(arr[4]),
+      workflowStatusId: dco_decode_String(arr[5]),
+      workflowStatusLabel: dco_decode_String(arr[6]),
+      children: dco_decode_list_app_scene_tree_node_snapshot(arr[7]),
+    );
+  }
+
+  @protected
+  AppSculptConvertDialogSnapshot dco_decode_app_sculpt_convert_dialog_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    return AppSculptConvertDialogSnapshot(
+      targetNodeId: dco_decode_u_64(arr[0]),
+      targetName: dco_decode_String(arr[1]),
+      modeId: dco_decode_String(arr[2]),
+      modeLabel: dco_decode_String(arr[3]),
+      resolution: dco_decode_u_32(arr[4]),
+      minResolution: dco_decode_u_32(arr[5]),
+      maxResolution: dco_decode_u_32(arr[6]),
+    );
+  }
+
+  @protected
+  AppSculptConvertSnapshot dco_decode_app_sculpt_convert_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return AppSculptConvertSnapshot(
+      dialog: dco_decode_opt_box_autoadd_app_sculpt_convert_dialog_snapshot(
+        arr[0],
+      ),
+      status: dco_decode_app_sculpt_convert_status_snapshot(arr[1]),
+    );
+  }
+
+  @protected
+  AppSculptConvertStatusSnapshot dco_decode_app_sculpt_convert_status_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
+    return AppSculptConvertStatusSnapshot(
+      state: dco_decode_String(arr[0]),
+      progress: dco_decode_u_32(arr[1]),
+      total: dco_decode_u_32(arr[2]),
+      targetName: dco_decode_opt_String(arr[3]),
+      phaseLabel: dco_decode_opt_String(arr[4]),
+      message: dco_decode_opt_String(arr[5]),
+      isError: dco_decode_bool(arr[6]),
+    );
+  }
+
+  @protected
+  AppSculptSessionSnapshot dco_decode_app_sculpt_session_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    return AppSculptSessionSnapshot(
+      nodeId: dco_decode_u_64(arr[0]),
+      nodeName: dco_decode_String(arr[1]),
+      brushModeId: dco_decode_String(arr[2]),
+      brushModeLabel: dco_decode_String(arr[3]),
+      brushRadius: dco_decode_f_32(arr[4]),
+      brushStrength: dco_decode_f_32(arr[5]),
+      symmetryAxisId: dco_decode_String(arr[6]),
+      symmetryAxisLabel: dco_decode_String(arr[7]),
+    );
+  }
+
+  @protected
+  AppSculptSnapshot dco_decode_app_sculpt_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    return AppSculptSnapshot(
+      selected: dco_decode_opt_box_autoadd_app_selected_sculpt_snapshot(arr[0]),
+      session: dco_decode_opt_box_autoadd_app_sculpt_session_snapshot(arr[1]),
+      canResumeSelected: dco_decode_bool(arr[2]),
+      canStop: dco_decode_bool(arr[3]),
+      maxResolution: dco_decode_u_32(arr[4]),
+    );
+  }
+
+  @protected
+  AppSelectedNodePropertiesSnapshot
+  dco_decode_app_selected_node_properties_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 9)
+      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    return AppSelectedNodePropertiesSnapshot(
+      nodeId: dco_decode_u_64(arr[0]),
+      name: dco_decode_String(arr[1]),
+      kindLabel: dco_decode_String(arr[2]),
+      visible: dco_decode_bool(arr[3]),
+      locked: dco_decode_bool(arr[4]),
+      transform: dco_decode_opt_box_autoadd_app_transform_properties_snapshot(
+        arr[5],
+      ),
+      primitive: dco_decode_opt_box_autoadd_app_primitive_properties_snapshot(
+        arr[6],
+      ),
+      material: dco_decode_opt_box_autoadd_app_material_properties_snapshot(
+        arr[7],
+      ),
+      light: dco_decode_opt_box_autoadd_app_light_properties_snapshot(arr[8]),
+    );
+  }
+
+  @protected
+  AppSelectedSculptSnapshot dco_decode_app_selected_sculpt_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return AppSelectedSculptSnapshot(
+      nodeId: dco_decode_u_64(arr[0]),
+      nodeName: dco_decode_String(arr[1]),
+      currentResolution: dco_decode_u_32(arr[2]),
+      desiredResolution: dco_decode_u_32(arr[3]),
+    );
+  }
+
+  @protected
+  AppSelectionContextSnapshot dco_decode_app_selection_context_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
+    return AppSelectionContextSnapshot(
+      headline: dco_decode_String(arr[0]),
+      detail: dco_decode_String(arr[1]),
+      selectionCount: dco_decode_u_32(arr[2]),
+      selectionKindId: dco_decode_String(arr[3]),
+      selectionKindLabel: dco_decode_String(arr[4]),
+      workflowStatusId: dco_decode_String(arr[5]),
+      workflowStatusLabel: dco_decode_String(arr[6]),
+      quickActions: dco_decode_list_app_quick_action_snapshot(arr[7]),
+    );
+  }
+
+  @protected
+  AppSettingsSnapshot dco_decode_app_settings_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 11)
+      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
+    return AppSettingsSnapshot(
+      showFpsOverlay: dco_decode_bool(arr[0]),
+      showNodeLabels: dco_decode_bool(arr[1]),
+      showBoundingBox: dco_decode_bool(arr[2]),
+      showLightGizmos: dco_decode_bool(arr[3]),
+      autoSaveEnabled: dco_decode_bool(arr[4]),
+      autoSaveIntervalSecs: dco_decode_u_32(arr[5]),
+      maxExportResolution: dco_decode_u_32(arr[6]),
+      maxSculptResolution: dco_decode_u_32(arr[7]),
+      cameraBookmarks: dco_decode_list_app_camera_bookmark_snapshot(arr[8]),
+      keyOptions: dco_decode_list_app_key_option_snapshot(arr[9]),
+      keybindings: dco_decode_list_app_keybinding_snapshot(arr[10]),
+    );
+  }
+
+  @protected
+  AppToolSnapshot dco_decode_app_tool_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    return AppToolSnapshot(
+      activeToolLabel: dco_decode_String(arr[0]),
+      shadingModeLabel: dco_decode_String(arr[1]),
+      gridEnabled: dco_decode_bool(arr[2]),
+      manipulatorModeId: dco_decode_String(arr[3]),
+      manipulatorModeLabel: dco_decode_String(arr[4]),
+      manipulatorSpaceId: dco_decode_String(arr[5]),
+      manipulatorSpaceLabel: dco_decode_String(arr[6]),
+      manipulatorVisible: dco_decode_bool(arr[7]),
+      canResetPivot: dco_decode_bool(arr[8]),
+      pivotOffset: dco_decode_app_vec_3(arr[9]),
+    );
+  }
+
+  @protected
+  AppTransformPropertiesSnapshot dco_decode_app_transform_properties_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return AppTransformPropertiesSnapshot(
+      positionLabel: dco_decode_String(arr[0]),
+      position: dco_decode_app_vec_3(arr[1]),
+      rotationDegrees: dco_decode_app_vec_3(arr[2]),
+      scale: dco_decode_opt_box_autoadd_app_vec_3(arr[3]),
+    );
+  }
+
+  @protected
+  AppVec3 dco_decode_app_vec_3(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return AppVec3(
+      x: dco_decode_f_32(arr[0]),
+      y: dco_decode_f_32(arr[1]),
+      z: dco_decode_f_32(arr[2]),
+    );
+  }
+
+  @protected
+  AppViewportLightSnapshot dco_decode_app_viewport_light_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 13)
+      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
+    return AppViewportLightSnapshot(
+      lightNodeId: dco_decode_u_64(arr[0]),
+      transformNodeId: dco_decode_u_64(arr[1]),
+      lightTypeId: dco_decode_String(arr[2]),
+      lightTypeLabel: dco_decode_String(arr[3]),
+      worldPosition: dco_decode_app_vec_3(arr[4]),
+      direction: dco_decode_app_vec_3(arr[5]),
+      color: dco_decode_app_vec_3(arr[6]),
+      intensity: dco_decode_f_32(arr[7]),
+      range: dco_decode_f_32(arr[8]),
+      spotAngle: dco_decode_f_32(arr[9]),
+      active: dco_decode_bool(arr[10]),
+      arrayPositions: dco_decode_list_app_vec_3(arr[11]),
+      arrayColors: dco_decode_list_app_vec_3(arr[12]),
+    );
+  }
+
+  @protected
+  AppWorkflowStatusSnapshot dco_decode_app_workflow_status_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return AppWorkflowStatusSnapshot(
+      exportStatus: dco_decode_app_export_status_snapshot(arr[0]),
+      importStatus: dco_decode_app_import_status_snapshot(arr[1]),
+      sculptConvertStatus: dco_decode_app_sculpt_convert_status_snapshot(
+        arr[2],
+      ),
+      sceneChanged: dco_decode_bool(arr[3]),
+    );
+  }
+
+  @protected
+  AppWorkspaceSnapshot dco_decode_app_workspace_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    return AppWorkspaceSnapshot(
+      id: dco_decode_String(arr[0]),
+      label: dco_decode_String(arr[1]),
+      description: dco_decode_String(arr[2]),
+    );
+  }
+
+  @protected
+  bool dco_decode_bool(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as bool;
+  }
+
+  @protected
+  AppImportDialogSnapshot dco_decode_box_autoadd_app_import_dialog_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_app_import_dialog_snapshot(raw);
+  }
+
+  @protected
+  AppKeyComboSnapshot dco_decode_box_autoadd_app_key_combo_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_app_key_combo_snapshot(raw);
+  }
+
+  @protected
+  AppLightPropertiesSnapshot
+  dco_decode_box_autoadd_app_light_properties_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_app_light_properties_snapshot(raw);
+  }
+
+  @protected
+  AppMaterialPropertiesSnapshot
+  dco_decode_box_autoadd_app_material_properties_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_app_material_properties_snapshot(raw);
+  }
+
+  @protected
+  AppNodeSnapshot dco_decode_box_autoadd_app_node_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_app_node_snapshot(raw);
+  }
+
+  @protected
+  AppPrimitivePropertiesSnapshot
+  dco_decode_box_autoadd_app_primitive_properties_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_app_primitive_properties_snapshot(raw);
+  }
+
+  @protected
+  AppSculptConvertDialogSnapshot
+  dco_decode_box_autoadd_app_sculpt_convert_dialog_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_app_sculpt_convert_dialog_snapshot(raw);
+  }
+
+  @protected
+  AppSculptSessionSnapshot dco_decode_box_autoadd_app_sculpt_session_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_app_sculpt_session_snapshot(raw);
+  }
+
+  @protected
+  AppSelectedNodePropertiesSnapshot
+  dco_decode_box_autoadd_app_selected_node_properties_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_app_selected_node_properties_snapshot(raw);
+  }
+
+  @protected
+  AppSelectedSculptSnapshot dco_decode_box_autoadd_app_selected_sculpt_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_app_selected_sculpt_snapshot(raw);
+  }
+
+  @protected
+  AppTransformPropertiesSnapshot
+  dco_decode_box_autoadd_app_transform_properties_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_app_transform_properties_snapshot(raw);
+  }
+
+  @protected
+  AppVec3 dco_decode_box_autoadd_app_vec_3(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_app_vec_3(raw);
+  }
+
+  @protected
+  double dco_decode_box_autoadd_f_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as double;
+  }
+
+  @protected
+  int dco_decode_box_autoadd_u_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
+  BigInt dco_decode_box_autoadd_u_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_u_64(raw);
+  }
+
+  @protected
+  double dco_decode_f_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as double;
+  }
+
+  @protected
+  List<String> dco_decode_list_String(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_String).toList();
+  }
+
+  @protected
+  List<AppCameraBookmarkSnapshot> dco_decode_list_app_camera_bookmark_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_app_camera_bookmark_snapshot)
+        .toList();
+  }
+
+  @protected
+  List<AppCommandSnapshot> dco_decode_list_app_command_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_app_command_snapshot).toList();
+  }
+
+  @protected
+  List<AppExportPresetSnapshot> dco_decode_list_app_export_preset_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_app_export_preset_snapshot)
+        .toList();
+  }
+
+  @protected
+  List<AppKeyOptionSnapshot> dco_decode_list_app_key_option_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_app_key_option_snapshot)
+        .toList();
+  }
+
+  @protected
+  List<AppKeybindingSnapshot> dco_decode_list_app_keybinding_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_app_keybinding_snapshot)
+        .toList();
+  }
+
+  @protected
+  List<AppLightCookieCandidateSnapshot>
+  dco_decode_list_app_light_cookie_candidate_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_app_light_cookie_candidate_snapshot)
+        .toList();
+  }
+
+  @protected
+  List<AppLightLinkNodeSnapshot> dco_decode_list_app_light_link_node_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_app_light_link_node_snapshot)
+        .toList();
+  }
+
+  @protected
+  List<AppLightLinkTargetSnapshot>
+  dco_decode_list_app_light_link_target_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_app_light_link_target_snapshot)
+        .toList();
+  }
+
+  @protected
+  List<AppNodeSnapshot> dco_decode_list_app_node_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_app_node_snapshot).toList();
+  }
+
+  @protected
+  List<AppQuickActionSnapshot> dco_decode_list_app_quick_action_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_app_quick_action_snapshot)
+        .toList();
+  }
+
+  @protected
+  List<AppRenderOptionSnapshot> dco_decode_list_app_render_option_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_app_render_option_snapshot)
+        .toList();
+  }
+
+  @protected
+  List<AppScalarPropertySnapshot> dco_decode_list_app_scalar_property_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_app_scalar_property_snapshot)
+        .toList();
+  }
+
+  @protected
+  List<AppSceneTreeNodeSnapshot> dco_decode_list_app_scene_tree_node_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_app_scene_tree_node_snapshot)
+        .toList();
+  }
+
+  @protected
+  List<AppVec3> dco_decode_list_app_vec_3(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_app_vec_3).toList();
+  }
+
+  @protected
+  List<AppViewportLightSnapshot> dco_decode_list_app_viewport_light_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_app_viewport_light_snapshot)
+        .toList();
+  }
+
+  @protected
+  Uint64List dco_decode_list_prim_u_64_strict(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dcoDecodeUint64List(raw);
+  }
+
+  @protected
+  Uint8List dco_decode_list_prim_u_8_strict(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as Uint8List;
+  }
+
+  @protected
+  String? dco_decode_opt_String(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_String(raw);
+  }
+
+  @protected
+  AppImportDialogSnapshot?
+  dco_decode_opt_box_autoadd_app_import_dialog_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_app_import_dialog_snapshot(raw);
+  }
+
+  @protected
+  AppKeyComboSnapshot? dco_decode_opt_box_autoadd_app_key_combo_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_app_key_combo_snapshot(raw);
+  }
+
+  @protected
+  AppLightPropertiesSnapshot?
+  dco_decode_opt_box_autoadd_app_light_properties_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_app_light_properties_snapshot(raw);
+  }
+
+  @protected
+  AppMaterialPropertiesSnapshot?
+  dco_decode_opt_box_autoadd_app_material_properties_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_app_material_properties_snapshot(raw);
+  }
+
+  @protected
+  AppNodeSnapshot? dco_decode_opt_box_autoadd_app_node_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_app_node_snapshot(raw);
+  }
+
+  @protected
+  AppPrimitivePropertiesSnapshot?
+  dco_decode_opt_box_autoadd_app_primitive_properties_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_app_primitive_properties_snapshot(raw);
+  }
+
+  @protected
+  AppSculptConvertDialogSnapshot?
+  dco_decode_opt_box_autoadd_app_sculpt_convert_dialog_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_app_sculpt_convert_dialog_snapshot(raw);
+  }
+
+  @protected
+  AppSculptSessionSnapshot?
+  dco_decode_opt_box_autoadd_app_sculpt_session_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_app_sculpt_session_snapshot(raw);
+  }
+
+  @protected
+  AppSelectedNodePropertiesSnapshot?
+  dco_decode_opt_box_autoadd_app_selected_node_properties_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_app_selected_node_properties_snapshot(raw);
+  }
+
+  @protected
+  AppSelectedSculptSnapshot?
+  dco_decode_opt_box_autoadd_app_selected_sculpt_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_app_selected_sculpt_snapshot(raw);
+  }
+
+  @protected
+  AppTransformPropertiesSnapshot?
+  dco_decode_opt_box_autoadd_app_transform_properties_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_app_transform_properties_snapshot(raw);
+  }
+
+  @protected
+  AppVec3? dco_decode_opt_box_autoadd_app_vec_3(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_app_vec_3(raw);
+  }
+
+  @protected
+  double? dco_decode_opt_box_autoadd_f_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_f_32(raw);
+  }
+
+  @protected
+  int? dco_decode_opt_box_autoadd_u_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_u_32(raw);
+  }
+
+  @protected
+  BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_u_64(raw);
+  }
+
+  @protected
+  int dco_decode_u_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
+  BigInt dco_decode_u_64(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dcoDecodeU64(raw);
+  }
+
+  @protected
+  int dco_decode_u_8(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
+  void dco_decode_unit(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return;
+  }
+
+  @protected
+  BigInt dco_decode_usize(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dcoDecodeU64(raw);
+  }
+
+  @protected
+  String sse_decode_String(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_list_prim_u_8_strict(deserializer);
+    return utf8.decoder.convert(inner);
+  }
+
+  @protected
+  AppCameraBookmarkSnapshot sse_decode_app_camera_bookmark_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_slotIndex = sse_decode_u_8(deserializer);
+    var var_saved = sse_decode_bool(deserializer);
+    return AppCameraBookmarkSnapshot(
+      slotIndex: var_slotIndex,
+      saved: var_saved,
+    );
+  }
+
+  @protected
+  AppCameraSnapshot sse_decode_app_camera_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_yaw = sse_decode_f_32(deserializer);
+    var var_pitch = sse_decode_f_32(deserializer);
+    var var_roll = sse_decode_f_32(deserializer);
+    var var_distance = sse_decode_f_32(deserializer);
+    var var_fovDegrees = sse_decode_f_32(deserializer);
+    var var_orthographic = sse_decode_bool(deserializer);
+    var var_target = sse_decode_app_vec_3(deserializer);
+    var var_eye = sse_decode_app_vec_3(deserializer);
+    return AppCameraSnapshot(
+      yaw: var_yaw,
+      pitch: var_pitch,
+      roll: var_roll,
+      distance: var_distance,
+      fovDegrees: var_fovDegrees,
+      orthographic: var_orthographic,
+      target: var_target,
+      eye: var_eye,
+    );
+  }
+
+  @protected
+  AppCommandSnapshot sse_decode_app_command_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_String(deserializer);
+    var var_label = sse_decode_String(deserializer);
+    var var_category = sse_decode_String(deserializer);
+    var var_enabled = sse_decode_bool(deserializer);
+    var var_workspaceIds = sse_decode_list_String(deserializer);
+    var var_shortcutLabel = sse_decode_opt_String(deserializer);
+    return AppCommandSnapshot(
+      id: var_id,
+      label: var_label,
+      category: var_category,
+      enabled: var_enabled,
+      workspaceIds: var_workspaceIds,
+      shortcutLabel: var_shortcutLabel,
+    );
+  }
+
+  @protected
+  AppDocumentSnapshot sse_decode_app_document_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_currentFilePath = sse_decode_opt_String(deserializer);
+    var var_currentFileName = sse_decode_opt_String(deserializer);
+    var var_hasUnsavedChanges = sse_decode_bool(deserializer);
+    var var_recentFiles = sse_decode_list_String(deserializer);
+    var var_recoveryAvailable = sse_decode_bool(deserializer);
+    var var_recoverySummary = sse_decode_opt_String(deserializer);
+    return AppDocumentSnapshot(
+      currentFilePath: var_currentFilePath,
+      currentFileName: var_currentFileName,
+      hasUnsavedChanges: var_hasUnsavedChanges,
+      recentFiles: var_recentFiles,
+      recoveryAvailable: var_recoveryAvailable,
+      recoverySummary: var_recoverySummary,
+    );
+  }
+
+  @protected
+  AppExportPresetSnapshot sse_decode_app_export_preset_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_name = sse_decode_String(deserializer);
+    var var_resolution = sse_decode_u_32(deserializer);
+    return AppExportPresetSnapshot(name: var_name, resolution: var_resolution);
+  }
+
+  @protected
+  AppExportSnapshot sse_decode_app_export_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_resolution = sse_decode_u_32(deserializer);
+    var var_minResolution = sse_decode_u_32(deserializer);
+    var var_maxResolution = sse_decode_u_32(deserializer);
+    var var_adaptive = sse_decode_bool(deserializer);
+    var var_presets = sse_decode_list_app_export_preset_snapshot(deserializer);
+    var var_status = sse_decode_app_export_status_snapshot(deserializer);
+    return AppExportSnapshot(
+      resolution: var_resolution,
+      minResolution: var_minResolution,
+      maxResolution: var_maxResolution,
+      adaptive: var_adaptive,
+      presets: var_presets,
+      status: var_status,
+    );
+  }
+
+  @protected
+  AppExportStatusSnapshot sse_decode_app_export_status_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_state = sse_decode_String(deserializer);
+    var var_progress = sse_decode_u_32(deserializer);
+    var var_total = sse_decode_u_32(deserializer);
+    var var_resolution = sse_decode_u_32(deserializer);
+    var var_phaseLabel = sse_decode_opt_String(deserializer);
+    var var_targetFileName = sse_decode_opt_String(deserializer);
+    var var_targetFilePath = sse_decode_opt_String(deserializer);
+    var var_formatLabel = sse_decode_opt_String(deserializer);
+    var var_message = sse_decode_opt_String(deserializer);
+    var var_isError = sse_decode_bool(deserializer);
+    return AppExportStatusSnapshot(
+      state: var_state,
+      progress: var_progress,
+      total: var_total,
+      resolution: var_resolution,
+      phaseLabel: var_phaseLabel,
+      targetFileName: var_targetFileName,
+      targetFilePath: var_targetFilePath,
+      formatLabel: var_formatLabel,
+      message: var_message,
+      isError: var_isError,
+    );
+  }
+
+  @protected
+  AppHistorySnapshot sse_decode_app_history_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_canUndo = sse_decode_bool(deserializer);
+    var var_canRedo = sse_decode_bool(deserializer);
+    return AppHistorySnapshot(canUndo: var_canUndo, canRedo: var_canRedo);
+  }
+
+  @protected
+  AppImportDialogSnapshot sse_decode_app_import_dialog_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_filename = sse_decode_String(deserializer);
+    var var_resolution = sse_decode_u_32(deserializer);
+    var var_autoResolution = sse_decode_u_32(deserializer);
+    var var_useAuto = sse_decode_bool(deserializer);
+    var var_vertexCount = sse_decode_usize(deserializer);
+    var var_triangleCount = sse_decode_usize(deserializer);
+    var var_boundsSize = sse_decode_app_vec_3(deserializer);
+    var var_minResolution = sse_decode_u_32(deserializer);
+    var var_maxResolution = sse_decode_u_32(deserializer);
+    return AppImportDialogSnapshot(
+      filename: var_filename,
+      resolution: var_resolution,
+      autoResolution: var_autoResolution,
+      useAuto: var_useAuto,
+      vertexCount: var_vertexCount,
+      triangleCount: var_triangleCount,
+      boundsSize: var_boundsSize,
+      minResolution: var_minResolution,
+      maxResolution: var_maxResolution,
+    );
+  }
+
+  @protected
+  AppImportSnapshot sse_decode_app_import_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_dialog = sse_decode_opt_box_autoadd_app_import_dialog_snapshot(
+      deserializer,
+    );
+    var var_status = sse_decode_app_import_status_snapshot(deserializer);
+    return AppImportSnapshot(dialog: var_dialog, status: var_status);
+  }
+
+  @protected
+  AppImportStatusSnapshot sse_decode_app_import_status_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_state = sse_decode_String(deserializer);
+    var var_progress = sse_decode_u_32(deserializer);
+    var var_total = sse_decode_u_32(deserializer);
+    var var_filename = sse_decode_opt_String(deserializer);
+    var var_phaseLabel = sse_decode_opt_String(deserializer);
+    var var_message = sse_decode_opt_String(deserializer);
+    var var_isError = sse_decode_bool(deserializer);
+    return AppImportStatusSnapshot(
+      state: var_state,
+      progress: var_progress,
+      total: var_total,
+      filename: var_filename,
+      phaseLabel: var_phaseLabel,
+      message: var_message,
+      isError: var_isError,
+    );
+  }
+
+  @protected
+  AppKeyComboSnapshot sse_decode_app_key_combo_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_keyId = sse_decode_String(deserializer);
+    var var_keyLabel = sse_decode_String(deserializer);
+    var var_ctrl = sse_decode_bool(deserializer);
+    var var_shift = sse_decode_bool(deserializer);
+    var var_alt = sse_decode_bool(deserializer);
+    var var_shortcutLabel = sse_decode_String(deserializer);
+    return AppKeyComboSnapshot(
+      keyId: var_keyId,
+      keyLabel: var_keyLabel,
+      ctrl: var_ctrl,
+      shift: var_shift,
+      alt: var_alt,
+      shortcutLabel: var_shortcutLabel,
+    );
+  }
+
+  @protected
+  AppKeyOptionSnapshot sse_decode_app_key_option_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_String(deserializer);
+    var var_label = sse_decode_String(deserializer);
+    return AppKeyOptionSnapshot(id: var_id, label: var_label);
+  }
+
+  @protected
+  AppKeybindingSnapshot sse_decode_app_keybinding_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_actionId = sse_decode_String(deserializer);
+    var var_actionLabel = sse_decode_String(deserializer);
+    var var_category = sse_decode_String(deserializer);
+    var var_binding = sse_decode_opt_box_autoadd_app_key_combo_snapshot(
+      deserializer,
+    );
+    return AppKeybindingSnapshot(
+      actionId: var_actionId,
+      actionLabel: var_actionLabel,
+      category: var_category,
+      binding: var_binding,
+    );
+  }
+
+  @protected
+  AppLightCookieCandidateSnapshot
+  sse_decode_app_light_cookie_candidate_snapshot(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_nodeId = sse_decode_u_64(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_kindLabel = sse_decode_String(deserializer);
+    return AppLightCookieCandidateSnapshot(
+      nodeId: var_nodeId,
+      name: var_name,
+      kindLabel: var_kindLabel,
+    );
+  }
+
+  @protected
+  AppLightLinkNodeSnapshot sse_decode_app_light_link_node_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_nodeId = sse_decode_u_64(deserializer);
+    var var_nodeName = sse_decode_String(deserializer);
+    var var_kindLabel = sse_decode_String(deserializer);
+    var var_lightMask = sse_decode_u_8(deserializer);
+    return AppLightLinkNodeSnapshot(
+      nodeId: var_nodeId,
+      nodeName: var_nodeName,
+      kindLabel: var_kindLabel,
+      lightMask: var_lightMask,
+    );
+  }
+
+  @protected
+  AppLightLinkTargetSnapshot sse_decode_app_light_link_target_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_lightNodeId = sse_decode_u_64(deserializer);
+    var var_lightName = sse_decode_String(deserializer);
+    var var_lightTypeLabel = sse_decode_String(deserializer);
+    var var_active = sse_decode_bool(deserializer);
+    var var_maskBit = sse_decode_u_8(deserializer);
+    var var_color = sse_decode_app_vec_3(deserializer);
+    return AppLightLinkTargetSnapshot(
+      lightNodeId: var_lightNodeId,
+      lightName: var_lightName,
+      lightTypeLabel: var_lightTypeLabel,
+      active: var_active,
+      maskBit: var_maskBit,
+      color: var_color,
+    );
+  }
+
+  @protected
+  AppLightLinkingSnapshot sse_decode_app_light_linking_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_lights = sse_decode_list_app_light_link_target_snapshot(
+      deserializer,
+    );
+    var var_geometryNodes = sse_decode_list_app_light_link_node_snapshot(
+      deserializer,
+    );
+    var var_totalVisibleLightCount = sse_decode_u_32(deserializer);
+    var var_maxLightCount = sse_decode_u_32(deserializer);
+    return AppLightLinkingSnapshot(
+      lights: var_lights,
+      geometryNodes: var_geometryNodes,
+      totalVisibleLightCount: var_totalVisibleLightCount,
+      maxLightCount: var_maxLightCount,
+    );
+  }
+
+  @protected
+  AppLightPropertiesSnapshot sse_decode_app_light_properties_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_nodeId = sse_decode_u_64(deserializer);
+    var var_transformNodeId = sse_decode_opt_box_autoadd_u_64(deserializer);
+    var var_lightTypeId = sse_decode_String(deserializer);
+    var var_lightTypeLabel = sse_decode_String(deserializer);
+    var var_color = sse_decode_app_vec_3(deserializer);
+    var var_intensity = sse_decode_f_32(deserializer);
+    var var_range = sse_decode_f_32(deserializer);
+    var var_spotAngle = sse_decode_f_32(deserializer);
+    var var_castShadows = sse_decode_bool(deserializer);
+    var var_shadowSoftness = sse_decode_f_32(deserializer);
+    var var_shadowColor = sse_decode_app_vec_3(deserializer);
+    var var_volumetric = sse_decode_bool(deserializer);
+    var var_volumetricDensity = sse_decode_f_32(deserializer);
+    var var_cookieNodeId = sse_decode_opt_box_autoadd_u_64(deserializer);
+    var var_cookieNodeName = sse_decode_opt_String(deserializer);
+    var var_cookieCandidates =
+        sse_decode_list_app_light_cookie_candidate_snapshot(deserializer);
+    var var_proximityModeId = sse_decode_String(deserializer);
+    var var_proximityModeLabel = sse_decode_String(deserializer);
+    var var_proximityRange = sse_decode_f_32(deserializer);
+    var var_arrayPatternId = sse_decode_opt_String(deserializer);
+    var var_arrayPatternLabel = sse_decode_opt_String(deserializer);
+    var var_arrayCount = sse_decode_opt_box_autoadd_u_32(deserializer);
+    var var_arrayRadius = sse_decode_opt_box_autoadd_f_32(deserializer);
+    var var_arrayColorVariation = sse_decode_opt_box_autoadd_f_32(deserializer);
+    var var_intensityExpression = sse_decode_opt_String(deserializer);
+    var var_intensityExpressionError = sse_decode_opt_String(deserializer);
+    var var_colorHueExpression = sse_decode_opt_String(deserializer);
+    var var_colorHueExpressionError = sse_decode_opt_String(deserializer);
+    var var_supportsRange = sse_decode_bool(deserializer);
+    var var_supportsSpotAngle = sse_decode_bool(deserializer);
+    var var_supportsShadows = sse_decode_bool(deserializer);
+    var var_supportsVolumetric = sse_decode_bool(deserializer);
+    var var_supportsCookie = sse_decode_bool(deserializer);
+    var var_supportsProximity = sse_decode_bool(deserializer);
+    var var_supportsExpressions = sse_decode_bool(deserializer);
+    var var_supportsArray = sse_decode_bool(deserializer);
+    return AppLightPropertiesSnapshot(
+      nodeId: var_nodeId,
+      transformNodeId: var_transformNodeId,
+      lightTypeId: var_lightTypeId,
+      lightTypeLabel: var_lightTypeLabel,
+      color: var_color,
+      intensity: var_intensity,
+      range: var_range,
+      spotAngle: var_spotAngle,
+      castShadows: var_castShadows,
+      shadowSoftness: var_shadowSoftness,
+      shadowColor: var_shadowColor,
+      volumetric: var_volumetric,
+      volumetricDensity: var_volumetricDensity,
+      cookieNodeId: var_cookieNodeId,
+      cookieNodeName: var_cookieNodeName,
+      cookieCandidates: var_cookieCandidates,
+      proximityModeId: var_proximityModeId,
+      proximityModeLabel: var_proximityModeLabel,
+      proximityRange: var_proximityRange,
+      arrayPatternId: var_arrayPatternId,
+      arrayPatternLabel: var_arrayPatternLabel,
+      arrayCount: var_arrayCount,
+      arrayRadius: var_arrayRadius,
+      arrayColorVariation: var_arrayColorVariation,
+      intensityExpression: var_intensityExpression,
+      intensityExpressionError: var_intensityExpressionError,
+      colorHueExpression: var_colorHueExpression,
+      colorHueExpressionError: var_colorHueExpressionError,
+      supportsRange: var_supportsRange,
+      supportsSpotAngle: var_supportsSpotAngle,
+      supportsShadows: var_supportsShadows,
+      supportsVolumetric: var_supportsVolumetric,
+      supportsCookie: var_supportsCookie,
+      supportsProximity: var_supportsProximity,
+      supportsExpressions: var_supportsExpressions,
+      supportsArray: var_supportsArray,
+    );
+  }
+
+  @protected
+  AppMaterialPropertiesSnapshot sse_decode_app_material_properties_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_color = sse_decode_app_vec_3(deserializer);
+    var var_roughness = sse_decode_f_32(deserializer);
+    var var_metallic = sse_decode_f_32(deserializer);
+    var var_emissive = sse_decode_app_vec_3(deserializer);
+    var var_emissiveIntensity = sse_decode_f_32(deserializer);
+    var var_fresnel = sse_decode_f_32(deserializer);
+    return AppMaterialPropertiesSnapshot(
+      color: var_color,
+      roughness: var_roughness,
+      metallic: var_metallic,
+      emissive: var_emissive,
+      emissiveIntensity: var_emissiveIntensity,
+      fresnel: var_fresnel,
+    );
+  }
+
+  @protected
+  AppNodeSnapshot sse_decode_app_node_snapshot(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_u_64(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_kindLabel = sse_decode_String(deserializer);
+    var var_visible = sse_decode_bool(deserializer);
+    var var_locked = sse_decode_bool(deserializer);
+    return AppNodeSnapshot(
+      id: var_id,
+      name: var_name,
+      kindLabel: var_kindLabel,
+      visible: var_visible,
+      locked: var_locked,
+    );
+  }
+
+  @protected
+  AppPrimitivePropertiesSnapshot sse_decode_app_primitive_properties_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_primitiveKind = sse_decode_String(deserializer);
+    var var_parameters = sse_decode_list_app_scalar_property_snapshot(
+      deserializer,
+    );
+    return AppPrimitivePropertiesSnapshot(
+      primitiveKind: var_primitiveKind,
+      parameters: var_parameters,
+    );
+  }
+
+  @protected
+  AppQuickActionSnapshot sse_decode_app_quick_action_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_String(deserializer);
+    var var_label = sse_decode_String(deserializer);
+    var var_category = sse_decode_String(deserializer);
+    var var_enabled = sse_decode_bool(deserializer);
+    var var_prominent = sse_decode_bool(deserializer);
+    var var_shortcutLabel = sse_decode_opt_String(deserializer);
+    return AppQuickActionSnapshot(
+      id: var_id,
+      label: var_label,
+      category: var_category,
+      enabled: var_enabled,
+      prominent: var_prominent,
+      shortcutLabel: var_shortcutLabel,
+    );
+  }
+
+  @protected
+  AppRenderOptionSnapshot sse_decode_app_render_option_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_String(deserializer);
+    var var_label = sse_decode_String(deserializer);
+    return AppRenderOptionSnapshot(id: var_id, label: var_label);
+  }
+
+  @protected
+  AppRenderSettingsSnapshot sse_decode_app_render_settings_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_shadingModes = sse_decode_list_app_render_option_snapshot(
+      deserializer,
+    );
+    var var_shadingModeId = sse_decode_String(deserializer);
+    var var_shadingModeLabel = sse_decode_String(deserializer);
+    var var_showGrid = sse_decode_bool(deserializer);
+    var var_shadowsEnabled = sse_decode_bool(deserializer);
+    var var_shadowSteps = sse_decode_u_32(deserializer);
+    var var_aoEnabled = sse_decode_bool(deserializer);
+    var var_aoSamples = sse_decode_u_32(deserializer);
+    var var_aoIntensity = sse_decode_f_32(deserializer);
+    var var_marchMaxSteps = sse_decode_u_32(deserializer);
+    var var_sculptFastMode = sse_decode_bool(deserializer);
+    var var_autoReduceSteps = sse_decode_bool(deserializer);
+    var var_interactionRenderScale = sse_decode_f_32(deserializer);
+    var var_restRenderScale = sse_decode_f_32(deserializer);
+    var var_fogEnabled = sse_decode_bool(deserializer);
+    var var_fogDensity = sse_decode_f_32(deserializer);
+    var var_bloomEnabled = sse_decode_bool(deserializer);
+    var var_bloomIntensity = sse_decode_f_32(deserializer);
+    var var_gamma = sse_decode_f_32(deserializer);
+    var var_tonemappingAces = sse_decode_bool(deserializer);
+    var var_crossSectionAxis = sse_decode_u_8(deserializer);
+    var var_crossSectionPosition = sse_decode_f_32(deserializer);
+    return AppRenderSettingsSnapshot(
+      shadingModes: var_shadingModes,
+      shadingModeId: var_shadingModeId,
+      shadingModeLabel: var_shadingModeLabel,
+      showGrid: var_showGrid,
+      shadowsEnabled: var_shadowsEnabled,
+      shadowSteps: var_shadowSteps,
+      aoEnabled: var_aoEnabled,
+      aoSamples: var_aoSamples,
+      aoIntensity: var_aoIntensity,
+      marchMaxSteps: var_marchMaxSteps,
+      sculptFastMode: var_sculptFastMode,
+      autoReduceSteps: var_autoReduceSteps,
+      interactionRenderScale: var_interactionRenderScale,
+      restRenderScale: var_restRenderScale,
+      fogEnabled: var_fogEnabled,
+      fogDensity: var_fogDensity,
+      bloomEnabled: var_bloomEnabled,
+      bloomIntensity: var_bloomIntensity,
+      gamma: var_gamma,
+      tonemappingAces: var_tonemappingAces,
+      crossSectionAxis: var_crossSectionAxis,
+      crossSectionPosition: var_crossSectionPosition,
+    );
+  }
+
+  @protected
+  AppScalarPropertySnapshot sse_decode_app_scalar_property_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_key = sse_decode_String(deserializer);
+    var var_label = sse_decode_String(deserializer);
+    var var_value = sse_decode_f_32(deserializer);
+    return AppScalarPropertySnapshot(
+      key: var_key,
+      label: var_label,
+      value: var_value,
+    );
+  }
+
+  @protected
+  AppSceneSnapshot sse_decode_app_scene_snapshot(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_selectedNode = sse_decode_opt_box_autoadd_app_node_snapshot(
+      deserializer,
+    );
+    var var_selectedNodeProperties =
+        sse_decode_opt_box_autoadd_app_selected_node_properties_snapshot(
+          deserializer,
         );
-        
-
-
-
-                  @protected String dco_decode_String(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw as String; }
-
-@protected AppCameraBookmarkSnapshot dco_decode_app_camera_bookmark_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 2) throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-                return AppCameraBookmarkSnapshot(slotIndex: dco_decode_u_8(arr[0]),
-saved: dco_decode_bool(arr[1]),); }
-
-@protected AppCameraSnapshot dco_decode_app_camera_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 8) throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
-                return AppCameraSnapshot(yaw: dco_decode_f_32(arr[0]),
-pitch: dco_decode_f_32(arr[1]),
-roll: dco_decode_f_32(arr[2]),
-distance: dco_decode_f_32(arr[3]),
-fovDegrees: dco_decode_f_32(arr[4]),
-orthographic: dco_decode_bool(arr[5]),
-target: dco_decode_app_vec_3(arr[6]),
-eye: dco_decode_app_vec_3(arr[7]),); }
-
-@protected AppCommandSnapshot dco_decode_app_command_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 6) throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
-                return AppCommandSnapshot(id: dco_decode_String(arr[0]),
-label: dco_decode_String(arr[1]),
-category: dco_decode_String(arr[2]),
-enabled: dco_decode_bool(arr[3]),
-workspaceIds: dco_decode_list_String(arr[4]),
-shortcutLabel: dco_decode_opt_String(arr[5]),); }
-
-@protected AppDocumentSnapshot dco_decode_app_document_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 6) throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
-                return AppDocumentSnapshot(currentFilePath: dco_decode_opt_String(arr[0]),
-currentFileName: dco_decode_opt_String(arr[1]),
-hasUnsavedChanges: dco_decode_bool(arr[2]),
-recentFiles: dco_decode_list_String(arr[3]),
-recoveryAvailable: dco_decode_bool(arr[4]),
-recoverySummary: dco_decode_opt_String(arr[5]),); }
-
-@protected AppExportPresetSnapshot dco_decode_app_export_preset_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 2) throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-                return AppExportPresetSnapshot(name: dco_decode_String(arr[0]),
-resolution: dco_decode_u_32(arr[1]),); }
-
-@protected AppExportSnapshot dco_decode_app_export_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 6) throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
-                return AppExportSnapshot(resolution: dco_decode_u_32(arr[0]),
-minResolution: dco_decode_u_32(arr[1]),
-maxResolution: dco_decode_u_32(arr[2]),
-adaptive: dco_decode_bool(arr[3]),
-presets: dco_decode_list_app_export_preset_snapshot(arr[4]),
-status: dco_decode_app_export_status_snapshot(arr[5]),); }
-
-@protected AppExportStatusSnapshot dco_decode_app_export_status_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 10) throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
-                return AppExportStatusSnapshot(state: dco_decode_String(arr[0]),
-progress: dco_decode_u_32(arr[1]),
-total: dco_decode_u_32(arr[2]),
-resolution: dco_decode_u_32(arr[3]),
-phaseLabel: dco_decode_opt_String(arr[4]),
-targetFileName: dco_decode_opt_String(arr[5]),
-targetFilePath: dco_decode_opt_String(arr[6]),
-formatLabel: dco_decode_opt_String(arr[7]),
-message: dco_decode_opt_String(arr[8]),
-isError: dco_decode_bool(arr[9]),); }
-
-@protected AppHistorySnapshot dco_decode_app_history_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 2) throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-                return AppHistorySnapshot(canUndo: dco_decode_bool(arr[0]),
-canRedo: dco_decode_bool(arr[1]),); }
-
-@protected AppImportDialogSnapshot dco_decode_app_import_dialog_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 9) throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
-                return AppImportDialogSnapshot(filename: dco_decode_String(arr[0]),
-resolution: dco_decode_u_32(arr[1]),
-autoResolution: dco_decode_u_32(arr[2]),
-useAuto: dco_decode_bool(arr[3]),
-vertexCount: dco_decode_usize(arr[4]),
-triangleCount: dco_decode_usize(arr[5]),
-boundsSize: dco_decode_app_vec_3(arr[6]),
-minResolution: dco_decode_u_32(arr[7]),
-maxResolution: dco_decode_u_32(arr[8]),); }
-
-@protected AppImportSnapshot dco_decode_app_import_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 2) throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-                return AppImportSnapshot(dialog: dco_decode_opt_box_autoadd_app_import_dialog_snapshot(arr[0]),
-status: dco_decode_app_import_status_snapshot(arr[1]),); }
-
-@protected AppImportStatusSnapshot dco_decode_app_import_status_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 7) throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
-                return AppImportStatusSnapshot(state: dco_decode_String(arr[0]),
-progress: dco_decode_u_32(arr[1]),
-total: dco_decode_u_32(arr[2]),
-filename: dco_decode_opt_String(arr[3]),
-phaseLabel: dco_decode_opt_String(arr[4]),
-message: dco_decode_opt_String(arr[5]),
-isError: dco_decode_bool(arr[6]),); }
-
-@protected AppKeyComboSnapshot dco_decode_app_key_combo_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 6) throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
-                return AppKeyComboSnapshot(keyId: dco_decode_String(arr[0]),
-keyLabel: dco_decode_String(arr[1]),
-ctrl: dco_decode_bool(arr[2]),
-shift: dco_decode_bool(arr[3]),
-alt: dco_decode_bool(arr[4]),
-shortcutLabel: dco_decode_String(arr[5]),); }
-
-@protected AppKeyOptionSnapshot dco_decode_app_key_option_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 2) throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-                return AppKeyOptionSnapshot(id: dco_decode_String(arr[0]),
-label: dco_decode_String(arr[1]),); }
-
-@protected AppKeybindingSnapshot dco_decode_app_keybinding_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 4) throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
-                return AppKeybindingSnapshot(actionId: dco_decode_String(arr[0]),
-actionLabel: dco_decode_String(arr[1]),
-category: dco_decode_String(arr[2]),
-binding: dco_decode_opt_box_autoadd_app_key_combo_snapshot(arr[3]),); }
-
-@protected AppLightCookieCandidateSnapshot dco_decode_app_light_cookie_candidate_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 3) throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-                return AppLightCookieCandidateSnapshot(nodeId: dco_decode_u_64(arr[0]),
-name: dco_decode_String(arr[1]),
-kindLabel: dco_decode_String(arr[2]),); }
-
-@protected AppLightLinkNodeSnapshot dco_decode_app_light_link_node_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 4) throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
-                return AppLightLinkNodeSnapshot(nodeId: dco_decode_u_64(arr[0]),
-nodeName: dco_decode_String(arr[1]),
-kindLabel: dco_decode_String(arr[2]),
-lightMask: dco_decode_u_8(arr[3]),); }
-
-@protected AppLightLinkTargetSnapshot dco_decode_app_light_link_target_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 6) throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
-                return AppLightLinkTargetSnapshot(lightNodeId: dco_decode_u_64(arr[0]),
-lightName: dco_decode_String(arr[1]),
-lightTypeLabel: dco_decode_String(arr[2]),
-active: dco_decode_bool(arr[3]),
-maskBit: dco_decode_u_8(arr[4]),
-color: dco_decode_app_vec_3(arr[5]),); }
-
-@protected AppLightLinkingSnapshot dco_decode_app_light_linking_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 4) throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
-                return AppLightLinkingSnapshot(lights: dco_decode_list_app_light_link_target_snapshot(arr[0]),
-geometryNodes: dco_decode_list_app_light_link_node_snapshot(arr[1]),
-totalVisibleLightCount: dco_decode_u_32(arr[2]),
-maxLightCount: dco_decode_u_32(arr[3]),); }
-
-@protected AppLightPropertiesSnapshot dco_decode_app_light_properties_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 36) throw Exception('unexpected arr length: expect 36 but see ${arr.length}');
-                return AppLightPropertiesSnapshot(nodeId: dco_decode_u_64(arr[0]),
-transformNodeId: dco_decode_opt_box_autoadd_u_64(arr[1]),
-lightTypeId: dco_decode_String(arr[2]),
-lightTypeLabel: dco_decode_String(arr[3]),
-color: dco_decode_app_vec_3(arr[4]),
-intensity: dco_decode_f_32(arr[5]),
-range: dco_decode_f_32(arr[6]),
-spotAngle: dco_decode_f_32(arr[7]),
-castShadows: dco_decode_bool(arr[8]),
-shadowSoftness: dco_decode_f_32(arr[9]),
-shadowColor: dco_decode_app_vec_3(arr[10]),
-volumetric: dco_decode_bool(arr[11]),
-volumetricDensity: dco_decode_f_32(arr[12]),
-cookieNodeId: dco_decode_opt_box_autoadd_u_64(arr[13]),
-cookieNodeName: dco_decode_opt_String(arr[14]),
-cookieCandidates: dco_decode_list_app_light_cookie_candidate_snapshot(arr[15]),
-proximityModeId: dco_decode_String(arr[16]),
-proximityModeLabel: dco_decode_String(arr[17]),
-proximityRange: dco_decode_f_32(arr[18]),
-arrayPatternId: dco_decode_opt_String(arr[19]),
-arrayPatternLabel: dco_decode_opt_String(arr[20]),
-arrayCount: dco_decode_opt_box_autoadd_u_32(arr[21]),
-arrayRadius: dco_decode_opt_box_autoadd_f_32(arr[22]),
-arrayColorVariation: dco_decode_opt_box_autoadd_f_32(arr[23]),
-intensityExpression: dco_decode_opt_String(arr[24]),
-intensityExpressionError: dco_decode_opt_String(arr[25]),
-colorHueExpression: dco_decode_opt_String(arr[26]),
-colorHueExpressionError: dco_decode_opt_String(arr[27]),
-supportsRange: dco_decode_bool(arr[28]),
-supportsSpotAngle: dco_decode_bool(arr[29]),
-supportsShadows: dco_decode_bool(arr[30]),
-supportsVolumetric: dco_decode_bool(arr[31]),
-supportsCookie: dco_decode_bool(arr[32]),
-supportsProximity: dco_decode_bool(arr[33]),
-supportsExpressions: dco_decode_bool(arr[34]),
-supportsArray: dco_decode_bool(arr[35]),); }
-
-@protected AppMaterialPropertiesSnapshot dco_decode_app_material_properties_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 6) throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
-                return AppMaterialPropertiesSnapshot(color: dco_decode_app_vec_3(arr[0]),
-roughness: dco_decode_f_32(arr[1]),
-metallic: dco_decode_f_32(arr[2]),
-emissive: dco_decode_app_vec_3(arr[3]),
-emissiveIntensity: dco_decode_f_32(arr[4]),
-fresnel: dco_decode_f_32(arr[5]),); }
-
-@protected AppNodeSnapshot dco_decode_app_node_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 5) throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
-                return AppNodeSnapshot(id: dco_decode_u_64(arr[0]),
-name: dco_decode_String(arr[1]),
-kindLabel: dco_decode_String(arr[2]),
-visible: dco_decode_bool(arr[3]),
-locked: dco_decode_bool(arr[4]),); }
-
-@protected AppPrimitivePropertiesSnapshot dco_decode_app_primitive_properties_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 2) throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-                return AppPrimitivePropertiesSnapshot(primitiveKind: dco_decode_String(arr[0]),
-parameters: dco_decode_list_app_scalar_property_snapshot(arr[1]),); }
-
-@protected AppQuickActionSnapshot dco_decode_app_quick_action_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 6) throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
-                return AppQuickActionSnapshot(id: dco_decode_String(arr[0]),
-label: dco_decode_String(arr[1]),
-category: dco_decode_String(arr[2]),
-enabled: dco_decode_bool(arr[3]),
-prominent: dco_decode_bool(arr[4]),
-shortcutLabel: dco_decode_opt_String(arr[5]),); }
-
-@protected AppRenderOptionSnapshot dco_decode_app_render_option_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 2) throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-                return AppRenderOptionSnapshot(id: dco_decode_String(arr[0]),
-label: dco_decode_String(arr[1]),); }
-
-@protected AppRenderSettingsSnapshot dco_decode_app_render_settings_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 22) throw Exception('unexpected arr length: expect 22 but see ${arr.length}');
-                return AppRenderSettingsSnapshot(shadingModes: dco_decode_list_app_render_option_snapshot(arr[0]),
-shadingModeId: dco_decode_String(arr[1]),
-shadingModeLabel: dco_decode_String(arr[2]),
-showGrid: dco_decode_bool(arr[3]),
-shadowsEnabled: dco_decode_bool(arr[4]),
-shadowSteps: dco_decode_u_32(arr[5]),
-aoEnabled: dco_decode_bool(arr[6]),
-aoSamples: dco_decode_u_32(arr[7]),
-aoIntensity: dco_decode_f_32(arr[8]),
-marchMaxSteps: dco_decode_u_32(arr[9]),
-sculptFastMode: dco_decode_bool(arr[10]),
-autoReduceSteps: dco_decode_bool(arr[11]),
-interactionRenderScale: dco_decode_f_32(arr[12]),
-restRenderScale: dco_decode_f_32(arr[13]),
-fogEnabled: dco_decode_bool(arr[14]),
-fogDensity: dco_decode_f_32(arr[15]),
-bloomEnabled: dco_decode_bool(arr[16]),
-bloomIntensity: dco_decode_f_32(arr[17]),
-gamma: dco_decode_f_32(arr[18]),
-tonemappingAces: dco_decode_bool(arr[19]),
-crossSectionAxis: dco_decode_u_8(arr[20]),
-crossSectionPosition: dco_decode_f_32(arr[21]),); }
-
-@protected AppScalarPropertySnapshot dco_decode_app_scalar_property_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 3) throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-                return AppScalarPropertySnapshot(key: dco_decode_String(arr[0]),
-label: dco_decode_String(arr[1]),
-value: dco_decode_f_32(arr[2]),); }
-
-@protected AppSceneSnapshot dco_decode_app_scene_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 21) throw Exception('unexpected arr length: expect 21 but see ${arr.length}');
-                return AppSceneSnapshot(selectedNode: dco_decode_opt_box_autoadd_app_node_snapshot(arr[0]),
-selectedNodeProperties: dco_decode_opt_box_autoadd_app_selected_node_properties_snapshot(arr[1]),
-selectedNodeIds: dco_decode_list_prim_u_64_strict(arr[2]),
-topLevelNodes: dco_decode_list_app_node_snapshot(arr[3]),
-sceneTreeRoots: dco_decode_list_app_scene_tree_node_snapshot(arr[4]),
-viewportLights: dco_decode_list_app_viewport_light_snapshot(arr[5]),
-workspace: dco_decode_app_workspace_snapshot(arr[6]),
-selectionContext: dco_decode_app_selection_context_snapshot(arr[7]),
-commands: dco_decode_list_app_command_snapshot(arr[8]),
-history: dco_decode_app_history_snapshot(arr[9]),
-document: dco_decode_app_document_snapshot(arr[10]),
-render: dco_decode_app_render_settings_snapshot(arr[11]),
-settings: dco_decode_app_settings_snapshot(arr[12]),
-export_: dco_decode_app_export_snapshot(arr[13]),
-import_: dco_decode_app_import_snapshot(arr[14]),
-sculptConvert: dco_decode_app_sculpt_convert_snapshot(arr[15]),
-sculpt: dco_decode_app_sculpt_snapshot(arr[16]),
-lightLinking: dco_decode_app_light_linking_snapshot(arr[17]),
-camera: dco_decode_app_camera_snapshot(arr[18]),
-stats: dco_decode_app_scene_stats_snapshot(arr[19]),
-tool: dco_decode_app_tool_snapshot(arr[20]),); }
-
-@protected AppSceneStatsSnapshot dco_decode_app_scene_stats_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 15) throw Exception('unexpected arr length: expect 15 but see ${arr.length}');
-                return AppSceneStatsSnapshot(totalNodes: dco_decode_u_32(arr[0]),
-visibleNodes: dco_decode_u_32(arr[1]),
-topLevelNodes: dco_decode_u_32(arr[2]),
-primitiveNodes: dco_decode_u_32(arr[3]),
-operationNodes: dco_decode_u_32(arr[4]),
-transformNodes: dco_decode_u_32(arr[5]),
-modifierNodes: dco_decode_u_32(arr[6]),
-sculptNodes: dco_decode_u_32(arr[7]),
-lightNodes: dco_decode_u_32(arr[8]),
-voxelMemoryBytes: dco_decode_u_64(arr[9]),
-sdfEvalComplexity: dco_decode_u_32(arr[10]),
-structureKey: dco_decode_u_64(arr[11]),
-dataFingerprint: dco_decode_u_64(arr[12]),
-boundsMin: dco_decode_app_vec_3(arr[13]),
-boundsMax: dco_decode_app_vec_3(arr[14]),); }
-
-@protected AppSceneTreeNodeSnapshot dco_decode_app_scene_tree_node_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 8) throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
-                return AppSceneTreeNodeSnapshot(id: dco_decode_u_64(arr[0]),
-name: dco_decode_String(arr[1]),
-kindLabel: dco_decode_String(arr[2]),
-visible: dco_decode_bool(arr[3]),
-locked: dco_decode_bool(arr[4]),
-workflowStatusId: dco_decode_String(arr[5]),
-workflowStatusLabel: dco_decode_String(arr[6]),
-children: dco_decode_list_app_scene_tree_node_snapshot(arr[7]),); }
-
-@protected AppSculptConvertDialogSnapshot dco_decode_app_sculpt_convert_dialog_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 7) throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
-                return AppSculptConvertDialogSnapshot(targetNodeId: dco_decode_u_64(arr[0]),
-targetName: dco_decode_String(arr[1]),
-modeId: dco_decode_String(arr[2]),
-modeLabel: dco_decode_String(arr[3]),
-resolution: dco_decode_u_32(arr[4]),
-minResolution: dco_decode_u_32(arr[5]),
-maxResolution: dco_decode_u_32(arr[6]),); }
-
-@protected AppSculptConvertSnapshot dco_decode_app_sculpt_convert_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 2) throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
-                return AppSculptConvertSnapshot(dialog: dco_decode_opt_box_autoadd_app_sculpt_convert_dialog_snapshot(arr[0]),
-status: dco_decode_app_sculpt_convert_status_snapshot(arr[1]),); }
-
-@protected AppSculptConvertStatusSnapshot dco_decode_app_sculpt_convert_status_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 7) throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
-                return AppSculptConvertStatusSnapshot(state: dco_decode_String(arr[0]),
-progress: dco_decode_u_32(arr[1]),
-total: dco_decode_u_32(arr[2]),
-targetName: dco_decode_opt_String(arr[3]),
-phaseLabel: dco_decode_opt_String(arr[4]),
-message: dco_decode_opt_String(arr[5]),
-isError: dco_decode_bool(arr[6]),); }
-
-@protected AppSculptSessionSnapshot dco_decode_app_sculpt_session_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 8) throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
-                return AppSculptSessionSnapshot(nodeId: dco_decode_u_64(arr[0]),
-nodeName: dco_decode_String(arr[1]),
-brushModeId: dco_decode_String(arr[2]),
-brushModeLabel: dco_decode_String(arr[3]),
-brushRadius: dco_decode_f_32(arr[4]),
-brushStrength: dco_decode_f_32(arr[5]),
-symmetryAxisId: dco_decode_String(arr[6]),
-symmetryAxisLabel: dco_decode_String(arr[7]),); }
-
-@protected AppSculptSnapshot dco_decode_app_sculpt_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 5) throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
-                return AppSculptSnapshot(selected: dco_decode_opt_box_autoadd_app_selected_sculpt_snapshot(arr[0]),
-session: dco_decode_opt_box_autoadd_app_sculpt_session_snapshot(arr[1]),
-canResumeSelected: dco_decode_bool(arr[2]),
-canStop: dco_decode_bool(arr[3]),
-maxResolution: dco_decode_u_32(arr[4]),); }
-
-@protected AppSelectedNodePropertiesSnapshot dco_decode_app_selected_node_properties_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 9) throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
-                return AppSelectedNodePropertiesSnapshot(nodeId: dco_decode_u_64(arr[0]),
-name: dco_decode_String(arr[1]),
-kindLabel: dco_decode_String(arr[2]),
-visible: dco_decode_bool(arr[3]),
-locked: dco_decode_bool(arr[4]),
-transform: dco_decode_opt_box_autoadd_app_transform_properties_snapshot(arr[5]),
-primitive: dco_decode_opt_box_autoadd_app_primitive_properties_snapshot(arr[6]),
-material: dco_decode_opt_box_autoadd_app_material_properties_snapshot(arr[7]),
-light: dco_decode_opt_box_autoadd_app_light_properties_snapshot(arr[8]),); }
-
-@protected AppSelectedSculptSnapshot dco_decode_app_selected_sculpt_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 4) throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
-                return AppSelectedSculptSnapshot(nodeId: dco_decode_u_64(arr[0]),
-nodeName: dco_decode_String(arr[1]),
-currentResolution: dco_decode_u_32(arr[2]),
-desiredResolution: dco_decode_u_32(arr[3]),); }
-
-@protected AppSelectionContextSnapshot dco_decode_app_selection_context_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 8) throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
-                return AppSelectionContextSnapshot(headline: dco_decode_String(arr[0]),
-detail: dco_decode_String(arr[1]),
-selectionCount: dco_decode_u_32(arr[2]),
-selectionKindId: dco_decode_String(arr[3]),
-selectionKindLabel: dco_decode_String(arr[4]),
-workflowStatusId: dco_decode_String(arr[5]),
-workflowStatusLabel: dco_decode_String(arr[6]),
-quickActions: dco_decode_list_app_quick_action_snapshot(arr[7]),); }
-
-@protected AppSettingsSnapshot dco_decode_app_settings_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 11) throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
-                return AppSettingsSnapshot(showFpsOverlay: dco_decode_bool(arr[0]),
-showNodeLabels: dco_decode_bool(arr[1]),
-showBoundingBox: dco_decode_bool(arr[2]),
-showLightGizmos: dco_decode_bool(arr[3]),
-autoSaveEnabled: dco_decode_bool(arr[4]),
-autoSaveIntervalSecs: dco_decode_u_32(arr[5]),
-maxExportResolution: dco_decode_u_32(arr[6]),
-maxSculptResolution: dco_decode_u_32(arr[7]),
-cameraBookmarks: dco_decode_list_app_camera_bookmark_snapshot(arr[8]),
-keyOptions: dco_decode_list_app_key_option_snapshot(arr[9]),
-keybindings: dco_decode_list_app_keybinding_snapshot(arr[10]),); }
-
-@protected AppToolSnapshot dco_decode_app_tool_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 10) throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
-                return AppToolSnapshot(activeToolLabel: dco_decode_String(arr[0]),
-shadingModeLabel: dco_decode_String(arr[1]),
-gridEnabled: dco_decode_bool(arr[2]),
-manipulatorModeId: dco_decode_String(arr[3]),
-manipulatorModeLabel: dco_decode_String(arr[4]),
-manipulatorSpaceId: dco_decode_String(arr[5]),
-manipulatorSpaceLabel: dco_decode_String(arr[6]),
-manipulatorVisible: dco_decode_bool(arr[7]),
-canResetPivot: dco_decode_bool(arr[8]),
-pivotOffset: dco_decode_app_vec_3(arr[9]),); }
-
-@protected AppTransformPropertiesSnapshot dco_decode_app_transform_properties_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 4) throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
-                return AppTransformPropertiesSnapshot(positionLabel: dco_decode_String(arr[0]),
-position: dco_decode_app_vec_3(arr[1]),
-rotationDegrees: dco_decode_app_vec_3(arr[2]),
-scale: dco_decode_opt_box_autoadd_app_vec_3(arr[3]),); }
-
-@protected AppVec3 dco_decode_app_vec_3(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 3) throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-                return AppVec3(x: dco_decode_f_32(arr[0]),
-y: dco_decode_f_32(arr[1]),
-z: dco_decode_f_32(arr[2]),); }
-
-@protected AppViewportLightSnapshot dco_decode_app_viewport_light_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 13) throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
-                return AppViewportLightSnapshot(lightNodeId: dco_decode_u_64(arr[0]),
-transformNodeId: dco_decode_u_64(arr[1]),
-lightTypeId: dco_decode_String(arr[2]),
-lightTypeLabel: dco_decode_String(arr[3]),
-worldPosition: dco_decode_app_vec_3(arr[4]),
-direction: dco_decode_app_vec_3(arr[5]),
-color: dco_decode_app_vec_3(arr[6]),
-intensity: dco_decode_f_32(arr[7]),
-range: dco_decode_f_32(arr[8]),
-spotAngle: dco_decode_f_32(arr[9]),
-active: dco_decode_bool(arr[10]),
-arrayPositions: dco_decode_list_app_vec_3(arr[11]),
-arrayColors: dco_decode_list_app_vec_3(arr[12]),); }
-
-@protected AppWorkflowStatusSnapshot dco_decode_app_workflow_status_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 4) throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
-                return AppWorkflowStatusSnapshot(exportStatus: dco_decode_app_export_status_snapshot(arr[0]),
-importStatus: dco_decode_app_import_status_snapshot(arr[1]),
-sculptConvertStatus: dco_decode_app_sculpt_convert_status_snapshot(arr[2]),
-sceneChanged: dco_decode_bool(arr[3]),); }
-
-@protected AppWorkspaceSnapshot dco_decode_app_workspace_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-final arr = raw as List<dynamic>;
-                if (arr.length != 3) throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
-                return AppWorkspaceSnapshot(id: dco_decode_String(arr[0]),
-label: dco_decode_String(arr[1]),
-description: dco_decode_String(arr[2]),); }
-
-@protected bool dco_decode_bool(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw as bool; }
-
-@protected AppImportDialogSnapshot dco_decode_box_autoadd_app_import_dialog_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return dco_decode_app_import_dialog_snapshot(raw); }
-
-@protected AppKeyComboSnapshot dco_decode_box_autoadd_app_key_combo_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return dco_decode_app_key_combo_snapshot(raw); }
-
-@protected AppLightPropertiesSnapshot dco_decode_box_autoadd_app_light_properties_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return dco_decode_app_light_properties_snapshot(raw); }
-
-@protected AppMaterialPropertiesSnapshot dco_decode_box_autoadd_app_material_properties_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return dco_decode_app_material_properties_snapshot(raw); }
-
-@protected AppNodeSnapshot dco_decode_box_autoadd_app_node_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return dco_decode_app_node_snapshot(raw); }
-
-@protected AppPrimitivePropertiesSnapshot dco_decode_box_autoadd_app_primitive_properties_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return dco_decode_app_primitive_properties_snapshot(raw); }
-
-@protected AppSculptConvertDialogSnapshot dco_decode_box_autoadd_app_sculpt_convert_dialog_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return dco_decode_app_sculpt_convert_dialog_snapshot(raw); }
-
-@protected AppSculptSessionSnapshot dco_decode_box_autoadd_app_sculpt_session_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return dco_decode_app_sculpt_session_snapshot(raw); }
-
-@protected AppSelectedNodePropertiesSnapshot dco_decode_box_autoadd_app_selected_node_properties_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return dco_decode_app_selected_node_properties_snapshot(raw); }
-
-@protected AppSelectedSculptSnapshot dco_decode_box_autoadd_app_selected_sculpt_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return dco_decode_app_selected_sculpt_snapshot(raw); }
-
-@protected AppTransformPropertiesSnapshot dco_decode_box_autoadd_app_transform_properties_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return dco_decode_app_transform_properties_snapshot(raw); }
-
-@protected AppVec3 dco_decode_box_autoadd_app_vec_3(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return dco_decode_app_vec_3(raw); }
-
-@protected double dco_decode_box_autoadd_f_32(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw as double; }
-
-@protected int dco_decode_box_autoadd_u_32(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw as int; }
-
-@protected BigInt dco_decode_box_autoadd_u_64(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return dco_decode_u_64(raw); }
-
-@protected double dco_decode_f_32(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw as double; }
-
-@protected List<String> dco_decode_list_String(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_String).toList(); }
-
-@protected List<AppCameraBookmarkSnapshot> dco_decode_list_app_camera_bookmark_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_app_camera_bookmark_snapshot).toList(); }
-
-@protected List<AppCommandSnapshot> dco_decode_list_app_command_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_app_command_snapshot).toList(); }
-
-@protected List<AppExportPresetSnapshot> dco_decode_list_app_export_preset_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_app_export_preset_snapshot).toList(); }
-
-@protected List<AppKeyOptionSnapshot> dco_decode_list_app_key_option_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_app_key_option_snapshot).toList(); }
-
-@protected List<AppKeybindingSnapshot> dco_decode_list_app_keybinding_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_app_keybinding_snapshot).toList(); }
-
-@protected List<AppLightCookieCandidateSnapshot> dco_decode_list_app_light_cookie_candidate_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_app_light_cookie_candidate_snapshot).toList(); }
-
-@protected List<AppLightLinkNodeSnapshot> dco_decode_list_app_light_link_node_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_app_light_link_node_snapshot).toList(); }
-
-@protected List<AppLightLinkTargetSnapshot> dco_decode_list_app_light_link_target_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_app_light_link_target_snapshot).toList(); }
-
-@protected List<AppNodeSnapshot> dco_decode_list_app_node_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_app_node_snapshot).toList(); }
-
-@protected List<AppQuickActionSnapshot> dco_decode_list_app_quick_action_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_app_quick_action_snapshot).toList(); }
-
-@protected List<AppRenderOptionSnapshot> dco_decode_list_app_render_option_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_app_render_option_snapshot).toList(); }
-
-@protected List<AppScalarPropertySnapshot> dco_decode_list_app_scalar_property_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_app_scalar_property_snapshot).toList(); }
-
-@protected List<AppSceneTreeNodeSnapshot> dco_decode_list_app_scene_tree_node_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_app_scene_tree_node_snapshot).toList(); }
-
-@protected List<AppVec3> dco_decode_list_app_vec_3(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_app_vec_3).toList(); }
-
-@protected List<AppViewportLightSnapshot> dco_decode_list_app_viewport_light_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return (raw as List<dynamic>).map(dco_decode_app_viewport_light_snapshot).toList(); }
-
-@protected Uint64List dco_decode_list_prim_u_64_strict(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return dcoDecodeUint64List(raw); }
-
-@protected Uint8List dco_decode_list_prim_u_8_strict(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw as Uint8List; }
-
-@protected String? dco_decode_opt_String(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw == null ? null : dco_decode_String(raw); }
-
-@protected AppImportDialogSnapshot? dco_decode_opt_box_autoadd_app_import_dialog_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw == null ? null : dco_decode_box_autoadd_app_import_dialog_snapshot(raw); }
-
-@protected AppKeyComboSnapshot? dco_decode_opt_box_autoadd_app_key_combo_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw == null ? null : dco_decode_box_autoadd_app_key_combo_snapshot(raw); }
-
-@protected AppLightPropertiesSnapshot? dco_decode_opt_box_autoadd_app_light_properties_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw == null ? null : dco_decode_box_autoadd_app_light_properties_snapshot(raw); }
-
-@protected AppMaterialPropertiesSnapshot? dco_decode_opt_box_autoadd_app_material_properties_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw == null ? null : dco_decode_box_autoadd_app_material_properties_snapshot(raw); }
-
-@protected AppNodeSnapshot? dco_decode_opt_box_autoadd_app_node_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw == null ? null : dco_decode_box_autoadd_app_node_snapshot(raw); }
-
-@protected AppPrimitivePropertiesSnapshot? dco_decode_opt_box_autoadd_app_primitive_properties_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw == null ? null : dco_decode_box_autoadd_app_primitive_properties_snapshot(raw); }
-
-@protected AppSculptConvertDialogSnapshot? dco_decode_opt_box_autoadd_app_sculpt_convert_dialog_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw == null ? null : dco_decode_box_autoadd_app_sculpt_convert_dialog_snapshot(raw); }
-
-@protected AppSculptSessionSnapshot? dco_decode_opt_box_autoadd_app_sculpt_session_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw == null ? null : dco_decode_box_autoadd_app_sculpt_session_snapshot(raw); }
-
-@protected AppSelectedNodePropertiesSnapshot? dco_decode_opt_box_autoadd_app_selected_node_properties_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw == null ? null : dco_decode_box_autoadd_app_selected_node_properties_snapshot(raw); }
-
-@protected AppSelectedSculptSnapshot? dco_decode_opt_box_autoadd_app_selected_sculpt_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw == null ? null : dco_decode_box_autoadd_app_selected_sculpt_snapshot(raw); }
-
-@protected AppTransformPropertiesSnapshot? dco_decode_opt_box_autoadd_app_transform_properties_snapshot(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw == null ? null : dco_decode_box_autoadd_app_transform_properties_snapshot(raw); }
-
-@protected AppVec3? dco_decode_opt_box_autoadd_app_vec_3(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw == null ? null : dco_decode_box_autoadd_app_vec_3(raw); }
-
-@protected double? dco_decode_opt_box_autoadd_f_32(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw == null ? null : dco_decode_box_autoadd_f_32(raw); }
-
-@protected int? dco_decode_opt_box_autoadd_u_32(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw == null ? null : dco_decode_box_autoadd_u_32(raw); }
-
-@protected BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw == null ? null : dco_decode_box_autoadd_u_64(raw); }
-
-@protected int dco_decode_u_32(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw as int; }
-
-@protected BigInt dco_decode_u_64(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return dcoDecodeU64(raw); }
-
-@protected int dco_decode_u_8(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return raw as int; }
-
-@protected void dco_decode_unit(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return; }
-
-@protected BigInt dco_decode_usize(dynamic raw){ // Codec=Dco (DartCObject based), see doc to use other codecs
-return dcoDecodeU64(raw); }
-
-@protected String sse_decode_String(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var inner = sse_decode_list_prim_u_8_strict(deserializer);
-        return utf8.decoder.convert(inner); }
-
-@protected AppCameraBookmarkSnapshot sse_decode_app_camera_bookmark_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_slotIndex = sse_decode_u_8(deserializer);
-var var_saved = sse_decode_bool(deserializer);
-return AppCameraBookmarkSnapshot(slotIndex: var_slotIndex, saved: var_saved); }
-
-@protected AppCameraSnapshot sse_decode_app_camera_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_yaw = sse_decode_f_32(deserializer);
-var var_pitch = sse_decode_f_32(deserializer);
-var var_roll = sse_decode_f_32(deserializer);
-var var_distance = sse_decode_f_32(deserializer);
-var var_fovDegrees = sse_decode_f_32(deserializer);
-var var_orthographic = sse_decode_bool(deserializer);
-var var_target = sse_decode_app_vec_3(deserializer);
-var var_eye = sse_decode_app_vec_3(deserializer);
-return AppCameraSnapshot(yaw: var_yaw, pitch: var_pitch, roll: var_roll, distance: var_distance, fovDegrees: var_fovDegrees, orthographic: var_orthographic, target: var_target, eye: var_eye); }
-
-@protected AppCommandSnapshot sse_decode_app_command_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_id = sse_decode_String(deserializer);
-var var_label = sse_decode_String(deserializer);
-var var_category = sse_decode_String(deserializer);
-var var_enabled = sse_decode_bool(deserializer);
-var var_workspaceIds = sse_decode_list_String(deserializer);
-var var_shortcutLabel = sse_decode_opt_String(deserializer);
-return AppCommandSnapshot(id: var_id, label: var_label, category: var_category, enabled: var_enabled, workspaceIds: var_workspaceIds, shortcutLabel: var_shortcutLabel); }
-
-@protected AppDocumentSnapshot sse_decode_app_document_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_currentFilePath = sse_decode_opt_String(deserializer);
-var var_currentFileName = sse_decode_opt_String(deserializer);
-var var_hasUnsavedChanges = sse_decode_bool(deserializer);
-var var_recentFiles = sse_decode_list_String(deserializer);
-var var_recoveryAvailable = sse_decode_bool(deserializer);
-var var_recoverySummary = sse_decode_opt_String(deserializer);
-return AppDocumentSnapshot(currentFilePath: var_currentFilePath, currentFileName: var_currentFileName, hasUnsavedChanges: var_hasUnsavedChanges, recentFiles: var_recentFiles, recoveryAvailable: var_recoveryAvailable, recoverySummary: var_recoverySummary); }
-
-@protected AppExportPresetSnapshot sse_decode_app_export_preset_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_name = sse_decode_String(deserializer);
-var var_resolution = sse_decode_u_32(deserializer);
-return AppExportPresetSnapshot(name: var_name, resolution: var_resolution); }
-
-@protected AppExportSnapshot sse_decode_app_export_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_resolution = sse_decode_u_32(deserializer);
-var var_minResolution = sse_decode_u_32(deserializer);
-var var_maxResolution = sse_decode_u_32(deserializer);
-var var_adaptive = sse_decode_bool(deserializer);
-var var_presets = sse_decode_list_app_export_preset_snapshot(deserializer);
-var var_status = sse_decode_app_export_status_snapshot(deserializer);
-return AppExportSnapshot(resolution: var_resolution, minResolution: var_minResolution, maxResolution: var_maxResolution, adaptive: var_adaptive, presets: var_presets, status: var_status); }
-
-@protected AppExportStatusSnapshot sse_decode_app_export_status_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_state = sse_decode_String(deserializer);
-var var_progress = sse_decode_u_32(deserializer);
-var var_total = sse_decode_u_32(deserializer);
-var var_resolution = sse_decode_u_32(deserializer);
-var var_phaseLabel = sse_decode_opt_String(deserializer);
-var var_targetFileName = sse_decode_opt_String(deserializer);
-var var_targetFilePath = sse_decode_opt_String(deserializer);
-var var_formatLabel = sse_decode_opt_String(deserializer);
-var var_message = sse_decode_opt_String(deserializer);
-var var_isError = sse_decode_bool(deserializer);
-return AppExportStatusSnapshot(state: var_state, progress: var_progress, total: var_total, resolution: var_resolution, phaseLabel: var_phaseLabel, targetFileName: var_targetFileName, targetFilePath: var_targetFilePath, formatLabel: var_formatLabel, message: var_message, isError: var_isError); }
-
-@protected AppHistorySnapshot sse_decode_app_history_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_canUndo = sse_decode_bool(deserializer);
-var var_canRedo = sse_decode_bool(deserializer);
-return AppHistorySnapshot(canUndo: var_canUndo, canRedo: var_canRedo); }
-
-@protected AppImportDialogSnapshot sse_decode_app_import_dialog_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_filename = sse_decode_String(deserializer);
-var var_resolution = sse_decode_u_32(deserializer);
-var var_autoResolution = sse_decode_u_32(deserializer);
-var var_useAuto = sse_decode_bool(deserializer);
-var var_vertexCount = sse_decode_usize(deserializer);
-var var_triangleCount = sse_decode_usize(deserializer);
-var var_boundsSize = sse_decode_app_vec_3(deserializer);
-var var_minResolution = sse_decode_u_32(deserializer);
-var var_maxResolution = sse_decode_u_32(deserializer);
-return AppImportDialogSnapshot(filename: var_filename, resolution: var_resolution, autoResolution: var_autoResolution, useAuto: var_useAuto, vertexCount: var_vertexCount, triangleCount: var_triangleCount, boundsSize: var_boundsSize, minResolution: var_minResolution, maxResolution: var_maxResolution); }
-
-@protected AppImportSnapshot sse_decode_app_import_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_dialog = sse_decode_opt_box_autoadd_app_import_dialog_snapshot(deserializer);
-var var_status = sse_decode_app_import_status_snapshot(deserializer);
-return AppImportSnapshot(dialog: var_dialog, status: var_status); }
-
-@protected AppImportStatusSnapshot sse_decode_app_import_status_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_state = sse_decode_String(deserializer);
-var var_progress = sse_decode_u_32(deserializer);
-var var_total = sse_decode_u_32(deserializer);
-var var_filename = sse_decode_opt_String(deserializer);
-var var_phaseLabel = sse_decode_opt_String(deserializer);
-var var_message = sse_decode_opt_String(deserializer);
-var var_isError = sse_decode_bool(deserializer);
-return AppImportStatusSnapshot(state: var_state, progress: var_progress, total: var_total, filename: var_filename, phaseLabel: var_phaseLabel, message: var_message, isError: var_isError); }
-
-@protected AppKeyComboSnapshot sse_decode_app_key_combo_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_keyId = sse_decode_String(deserializer);
-var var_keyLabel = sse_decode_String(deserializer);
-var var_ctrl = sse_decode_bool(deserializer);
-var var_shift = sse_decode_bool(deserializer);
-var var_alt = sse_decode_bool(deserializer);
-var var_shortcutLabel = sse_decode_String(deserializer);
-return AppKeyComboSnapshot(keyId: var_keyId, keyLabel: var_keyLabel, ctrl: var_ctrl, shift: var_shift, alt: var_alt, shortcutLabel: var_shortcutLabel); }
-
-@protected AppKeyOptionSnapshot sse_decode_app_key_option_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_id = sse_decode_String(deserializer);
-var var_label = sse_decode_String(deserializer);
-return AppKeyOptionSnapshot(id: var_id, label: var_label); }
-
-@protected AppKeybindingSnapshot sse_decode_app_keybinding_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_actionId = sse_decode_String(deserializer);
-var var_actionLabel = sse_decode_String(deserializer);
-var var_category = sse_decode_String(deserializer);
-var var_binding = sse_decode_opt_box_autoadd_app_key_combo_snapshot(deserializer);
-return AppKeybindingSnapshot(actionId: var_actionId, actionLabel: var_actionLabel, category: var_category, binding: var_binding); }
-
-@protected AppLightCookieCandidateSnapshot sse_decode_app_light_cookie_candidate_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_nodeId = sse_decode_u_64(deserializer);
-var var_name = sse_decode_String(deserializer);
-var var_kindLabel = sse_decode_String(deserializer);
-return AppLightCookieCandidateSnapshot(nodeId: var_nodeId, name: var_name, kindLabel: var_kindLabel); }
-
-@protected AppLightLinkNodeSnapshot sse_decode_app_light_link_node_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_nodeId = sse_decode_u_64(deserializer);
-var var_nodeName = sse_decode_String(deserializer);
-var var_kindLabel = sse_decode_String(deserializer);
-var var_lightMask = sse_decode_u_8(deserializer);
-return AppLightLinkNodeSnapshot(nodeId: var_nodeId, nodeName: var_nodeName, kindLabel: var_kindLabel, lightMask: var_lightMask); }
-
-@protected AppLightLinkTargetSnapshot sse_decode_app_light_link_target_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_lightNodeId = sse_decode_u_64(deserializer);
-var var_lightName = sse_decode_String(deserializer);
-var var_lightTypeLabel = sse_decode_String(deserializer);
-var var_active = sse_decode_bool(deserializer);
-var var_maskBit = sse_decode_u_8(deserializer);
-var var_color = sse_decode_app_vec_3(deserializer);
-return AppLightLinkTargetSnapshot(lightNodeId: var_lightNodeId, lightName: var_lightName, lightTypeLabel: var_lightTypeLabel, active: var_active, maskBit: var_maskBit, color: var_color); }
-
-@protected AppLightLinkingSnapshot sse_decode_app_light_linking_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_lights = sse_decode_list_app_light_link_target_snapshot(deserializer);
-var var_geometryNodes = sse_decode_list_app_light_link_node_snapshot(deserializer);
-var var_totalVisibleLightCount = sse_decode_u_32(deserializer);
-var var_maxLightCount = sse_decode_u_32(deserializer);
-return AppLightLinkingSnapshot(lights: var_lights, geometryNodes: var_geometryNodes, totalVisibleLightCount: var_totalVisibleLightCount, maxLightCount: var_maxLightCount); }
-
-@protected AppLightPropertiesSnapshot sse_decode_app_light_properties_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_nodeId = sse_decode_u_64(deserializer);
-var var_transformNodeId = sse_decode_opt_box_autoadd_u_64(deserializer);
-var var_lightTypeId = sse_decode_String(deserializer);
-var var_lightTypeLabel = sse_decode_String(deserializer);
-var var_color = sse_decode_app_vec_3(deserializer);
-var var_intensity = sse_decode_f_32(deserializer);
-var var_range = sse_decode_f_32(deserializer);
-var var_spotAngle = sse_decode_f_32(deserializer);
-var var_castShadows = sse_decode_bool(deserializer);
-var var_shadowSoftness = sse_decode_f_32(deserializer);
-var var_shadowColor = sse_decode_app_vec_3(deserializer);
-var var_volumetric = sse_decode_bool(deserializer);
-var var_volumetricDensity = sse_decode_f_32(deserializer);
-var var_cookieNodeId = sse_decode_opt_box_autoadd_u_64(deserializer);
-var var_cookieNodeName = sse_decode_opt_String(deserializer);
-var var_cookieCandidates = sse_decode_list_app_light_cookie_candidate_snapshot(deserializer);
-var var_proximityModeId = sse_decode_String(deserializer);
-var var_proximityModeLabel = sse_decode_String(deserializer);
-var var_proximityRange = sse_decode_f_32(deserializer);
-var var_arrayPatternId = sse_decode_opt_String(deserializer);
-var var_arrayPatternLabel = sse_decode_opt_String(deserializer);
-var var_arrayCount = sse_decode_opt_box_autoadd_u_32(deserializer);
-var var_arrayRadius = sse_decode_opt_box_autoadd_f_32(deserializer);
-var var_arrayColorVariation = sse_decode_opt_box_autoadd_f_32(deserializer);
-var var_intensityExpression = sse_decode_opt_String(deserializer);
-var var_intensityExpressionError = sse_decode_opt_String(deserializer);
-var var_colorHueExpression = sse_decode_opt_String(deserializer);
-var var_colorHueExpressionError = sse_decode_opt_String(deserializer);
-var var_supportsRange = sse_decode_bool(deserializer);
-var var_supportsSpotAngle = sse_decode_bool(deserializer);
-var var_supportsShadows = sse_decode_bool(deserializer);
-var var_supportsVolumetric = sse_decode_bool(deserializer);
-var var_supportsCookie = sse_decode_bool(deserializer);
-var var_supportsProximity = sse_decode_bool(deserializer);
-var var_supportsExpressions = sse_decode_bool(deserializer);
-var var_supportsArray = sse_decode_bool(deserializer);
-return AppLightPropertiesSnapshot(nodeId: var_nodeId, transformNodeId: var_transformNodeId, lightTypeId: var_lightTypeId, lightTypeLabel: var_lightTypeLabel, color: var_color, intensity: var_intensity, range: var_range, spotAngle: var_spotAngle, castShadows: var_castShadows, shadowSoftness: var_shadowSoftness, shadowColor: var_shadowColor, volumetric: var_volumetric, volumetricDensity: var_volumetricDensity, cookieNodeId: var_cookieNodeId, cookieNodeName: var_cookieNodeName, cookieCandidates: var_cookieCandidates, proximityModeId: var_proximityModeId, proximityModeLabel: var_proximityModeLabel, proximityRange: var_proximityRange, arrayPatternId: var_arrayPatternId, arrayPatternLabel: var_arrayPatternLabel, arrayCount: var_arrayCount, arrayRadius: var_arrayRadius, arrayColorVariation: var_arrayColorVariation, intensityExpression: var_intensityExpression, intensityExpressionError: var_intensityExpressionError, colorHueExpression: var_colorHueExpression, colorHueExpressionError: var_colorHueExpressionError, supportsRange: var_supportsRange, supportsSpotAngle: var_supportsSpotAngle, supportsShadows: var_supportsShadows, supportsVolumetric: var_supportsVolumetric, supportsCookie: var_supportsCookie, supportsProximity: var_supportsProximity, supportsExpressions: var_supportsExpressions, supportsArray: var_supportsArray); }
-
-@protected AppMaterialPropertiesSnapshot sse_decode_app_material_properties_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_color = sse_decode_app_vec_3(deserializer);
-var var_roughness = sse_decode_f_32(deserializer);
-var var_metallic = sse_decode_f_32(deserializer);
-var var_emissive = sse_decode_app_vec_3(deserializer);
-var var_emissiveIntensity = sse_decode_f_32(deserializer);
-var var_fresnel = sse_decode_f_32(deserializer);
-return AppMaterialPropertiesSnapshot(color: var_color, roughness: var_roughness, metallic: var_metallic, emissive: var_emissive, emissiveIntensity: var_emissiveIntensity, fresnel: var_fresnel); }
-
-@protected AppNodeSnapshot sse_decode_app_node_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_id = sse_decode_u_64(deserializer);
-var var_name = sse_decode_String(deserializer);
-var var_kindLabel = sse_decode_String(deserializer);
-var var_visible = sse_decode_bool(deserializer);
-var var_locked = sse_decode_bool(deserializer);
-return AppNodeSnapshot(id: var_id, name: var_name, kindLabel: var_kindLabel, visible: var_visible, locked: var_locked); }
-
-@protected AppPrimitivePropertiesSnapshot sse_decode_app_primitive_properties_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_primitiveKind = sse_decode_String(deserializer);
-var var_parameters = sse_decode_list_app_scalar_property_snapshot(deserializer);
-return AppPrimitivePropertiesSnapshot(primitiveKind: var_primitiveKind, parameters: var_parameters); }
-
-@protected AppQuickActionSnapshot sse_decode_app_quick_action_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_id = sse_decode_String(deserializer);
-var var_label = sse_decode_String(deserializer);
-var var_category = sse_decode_String(deserializer);
-var var_enabled = sse_decode_bool(deserializer);
-var var_prominent = sse_decode_bool(deserializer);
-var var_shortcutLabel = sse_decode_opt_String(deserializer);
-return AppQuickActionSnapshot(id: var_id, label: var_label, category: var_category, enabled: var_enabled, prominent: var_prominent, shortcutLabel: var_shortcutLabel); }
-
-@protected AppRenderOptionSnapshot sse_decode_app_render_option_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_id = sse_decode_String(deserializer);
-var var_label = sse_decode_String(deserializer);
-return AppRenderOptionSnapshot(id: var_id, label: var_label); }
-
-@protected AppRenderSettingsSnapshot sse_decode_app_render_settings_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_shadingModes = sse_decode_list_app_render_option_snapshot(deserializer);
-var var_shadingModeId = sse_decode_String(deserializer);
-var var_shadingModeLabel = sse_decode_String(deserializer);
-var var_showGrid = sse_decode_bool(deserializer);
-var var_shadowsEnabled = sse_decode_bool(deserializer);
-var var_shadowSteps = sse_decode_u_32(deserializer);
-var var_aoEnabled = sse_decode_bool(deserializer);
-var var_aoSamples = sse_decode_u_32(deserializer);
-var var_aoIntensity = sse_decode_f_32(deserializer);
-var var_marchMaxSteps = sse_decode_u_32(deserializer);
-var var_sculptFastMode = sse_decode_bool(deserializer);
-var var_autoReduceSteps = sse_decode_bool(deserializer);
-var var_interactionRenderScale = sse_decode_f_32(deserializer);
-var var_restRenderScale = sse_decode_f_32(deserializer);
-var var_fogEnabled = sse_decode_bool(deserializer);
-var var_fogDensity = sse_decode_f_32(deserializer);
-var var_bloomEnabled = sse_decode_bool(deserializer);
-var var_bloomIntensity = sse_decode_f_32(deserializer);
-var var_gamma = sse_decode_f_32(deserializer);
-var var_tonemappingAces = sse_decode_bool(deserializer);
-var var_crossSectionAxis = sse_decode_u_8(deserializer);
-var var_crossSectionPosition = sse_decode_f_32(deserializer);
-return AppRenderSettingsSnapshot(shadingModes: var_shadingModes, shadingModeId: var_shadingModeId, shadingModeLabel: var_shadingModeLabel, showGrid: var_showGrid, shadowsEnabled: var_shadowsEnabled, shadowSteps: var_shadowSteps, aoEnabled: var_aoEnabled, aoSamples: var_aoSamples, aoIntensity: var_aoIntensity, marchMaxSteps: var_marchMaxSteps, sculptFastMode: var_sculptFastMode, autoReduceSteps: var_autoReduceSteps, interactionRenderScale: var_interactionRenderScale, restRenderScale: var_restRenderScale, fogEnabled: var_fogEnabled, fogDensity: var_fogDensity, bloomEnabled: var_bloomEnabled, bloomIntensity: var_bloomIntensity, gamma: var_gamma, tonemappingAces: var_tonemappingAces, crossSectionAxis: var_crossSectionAxis, crossSectionPosition: var_crossSectionPosition); }
-
-@protected AppScalarPropertySnapshot sse_decode_app_scalar_property_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_key = sse_decode_String(deserializer);
-var var_label = sse_decode_String(deserializer);
-var var_value = sse_decode_f_32(deserializer);
-return AppScalarPropertySnapshot(key: var_key, label: var_label, value: var_value); }
-
-@protected AppSceneSnapshot sse_decode_app_scene_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_selectedNode = sse_decode_opt_box_autoadd_app_node_snapshot(deserializer);
-var var_selectedNodeProperties = sse_decode_opt_box_autoadd_app_selected_node_properties_snapshot(deserializer);
-var var_selectedNodeIds = sse_decode_list_prim_u_64_strict(deserializer);
-var var_topLevelNodes = sse_decode_list_app_node_snapshot(deserializer);
-var var_sceneTreeRoots = sse_decode_list_app_scene_tree_node_snapshot(deserializer);
-var var_viewportLights = sse_decode_list_app_viewport_light_snapshot(deserializer);
-var var_workspace = sse_decode_app_workspace_snapshot(deserializer);
-var var_selectionContext = sse_decode_app_selection_context_snapshot(deserializer);
-var var_commands = sse_decode_list_app_command_snapshot(deserializer);
-var var_history = sse_decode_app_history_snapshot(deserializer);
-var var_document = sse_decode_app_document_snapshot(deserializer);
-var var_render = sse_decode_app_render_settings_snapshot(deserializer);
-var var_settings = sse_decode_app_settings_snapshot(deserializer);
-var var_export_ = sse_decode_app_export_snapshot(deserializer);
-var var_import_ = sse_decode_app_import_snapshot(deserializer);
-var var_sculptConvert = sse_decode_app_sculpt_convert_snapshot(deserializer);
-var var_sculpt = sse_decode_app_sculpt_snapshot(deserializer);
-var var_lightLinking = sse_decode_app_light_linking_snapshot(deserializer);
-var var_camera = sse_decode_app_camera_snapshot(deserializer);
-var var_stats = sse_decode_app_scene_stats_snapshot(deserializer);
-var var_tool = sse_decode_app_tool_snapshot(deserializer);
-return AppSceneSnapshot(selectedNode: var_selectedNode, selectedNodeProperties: var_selectedNodeProperties, selectedNodeIds: var_selectedNodeIds, topLevelNodes: var_topLevelNodes, sceneTreeRoots: var_sceneTreeRoots, viewportLights: var_viewportLights, workspace: var_workspace, selectionContext: var_selectionContext, commands: var_commands, history: var_history, document: var_document, render: var_render, settings: var_settings, export_: var_export_, import_: var_import_, sculptConvert: var_sculptConvert, sculpt: var_sculpt, lightLinking: var_lightLinking, camera: var_camera, stats: var_stats, tool: var_tool); }
-
-@protected AppSceneStatsSnapshot sse_decode_app_scene_stats_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_totalNodes = sse_decode_u_32(deserializer);
-var var_visibleNodes = sse_decode_u_32(deserializer);
-var var_topLevelNodes = sse_decode_u_32(deserializer);
-var var_primitiveNodes = sse_decode_u_32(deserializer);
-var var_operationNodes = sse_decode_u_32(deserializer);
-var var_transformNodes = sse_decode_u_32(deserializer);
-var var_modifierNodes = sse_decode_u_32(deserializer);
-var var_sculptNodes = sse_decode_u_32(deserializer);
-var var_lightNodes = sse_decode_u_32(deserializer);
-var var_voxelMemoryBytes = sse_decode_u_64(deserializer);
-var var_sdfEvalComplexity = sse_decode_u_32(deserializer);
-var var_structureKey = sse_decode_u_64(deserializer);
-var var_dataFingerprint = sse_decode_u_64(deserializer);
-var var_boundsMin = sse_decode_app_vec_3(deserializer);
-var var_boundsMax = sse_decode_app_vec_3(deserializer);
-return AppSceneStatsSnapshot(totalNodes: var_totalNodes, visibleNodes: var_visibleNodes, topLevelNodes: var_topLevelNodes, primitiveNodes: var_primitiveNodes, operationNodes: var_operationNodes, transformNodes: var_transformNodes, modifierNodes: var_modifierNodes, sculptNodes: var_sculptNodes, lightNodes: var_lightNodes, voxelMemoryBytes: var_voxelMemoryBytes, sdfEvalComplexity: var_sdfEvalComplexity, structureKey: var_structureKey, dataFingerprint: var_dataFingerprint, boundsMin: var_boundsMin, boundsMax: var_boundsMax); }
-
-@protected AppSceneTreeNodeSnapshot sse_decode_app_scene_tree_node_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_id = sse_decode_u_64(deserializer);
-var var_name = sse_decode_String(deserializer);
-var var_kindLabel = sse_decode_String(deserializer);
-var var_visible = sse_decode_bool(deserializer);
-var var_locked = sse_decode_bool(deserializer);
-var var_workflowStatusId = sse_decode_String(deserializer);
-var var_workflowStatusLabel = sse_decode_String(deserializer);
-var var_children = sse_decode_list_app_scene_tree_node_snapshot(deserializer);
-return AppSceneTreeNodeSnapshot(id: var_id, name: var_name, kindLabel: var_kindLabel, visible: var_visible, locked: var_locked, workflowStatusId: var_workflowStatusId, workflowStatusLabel: var_workflowStatusLabel, children: var_children); }
-
-@protected AppSculptConvertDialogSnapshot sse_decode_app_sculpt_convert_dialog_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_targetNodeId = sse_decode_u_64(deserializer);
-var var_targetName = sse_decode_String(deserializer);
-var var_modeId = sse_decode_String(deserializer);
-var var_modeLabel = sse_decode_String(deserializer);
-var var_resolution = sse_decode_u_32(deserializer);
-var var_minResolution = sse_decode_u_32(deserializer);
-var var_maxResolution = sse_decode_u_32(deserializer);
-return AppSculptConvertDialogSnapshot(targetNodeId: var_targetNodeId, targetName: var_targetName, modeId: var_modeId, modeLabel: var_modeLabel, resolution: var_resolution, minResolution: var_minResolution, maxResolution: var_maxResolution); }
-
-@protected AppSculptConvertSnapshot sse_decode_app_sculpt_convert_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_dialog = sse_decode_opt_box_autoadd_app_sculpt_convert_dialog_snapshot(deserializer);
-var var_status = sse_decode_app_sculpt_convert_status_snapshot(deserializer);
-return AppSculptConvertSnapshot(dialog: var_dialog, status: var_status); }
-
-@protected AppSculptConvertStatusSnapshot sse_decode_app_sculpt_convert_status_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_state = sse_decode_String(deserializer);
-var var_progress = sse_decode_u_32(deserializer);
-var var_total = sse_decode_u_32(deserializer);
-var var_targetName = sse_decode_opt_String(deserializer);
-var var_phaseLabel = sse_decode_opt_String(deserializer);
-var var_message = sse_decode_opt_String(deserializer);
-var var_isError = sse_decode_bool(deserializer);
-return AppSculptConvertStatusSnapshot(state: var_state, progress: var_progress, total: var_total, targetName: var_targetName, phaseLabel: var_phaseLabel, message: var_message, isError: var_isError); }
-
-@protected AppSculptSessionSnapshot sse_decode_app_sculpt_session_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_nodeId = sse_decode_u_64(deserializer);
-var var_nodeName = sse_decode_String(deserializer);
-var var_brushModeId = sse_decode_String(deserializer);
-var var_brushModeLabel = sse_decode_String(deserializer);
-var var_brushRadius = sse_decode_f_32(deserializer);
-var var_brushStrength = sse_decode_f_32(deserializer);
-var var_symmetryAxisId = sse_decode_String(deserializer);
-var var_symmetryAxisLabel = sse_decode_String(deserializer);
-return AppSculptSessionSnapshot(nodeId: var_nodeId, nodeName: var_nodeName, brushModeId: var_brushModeId, brushModeLabel: var_brushModeLabel, brushRadius: var_brushRadius, brushStrength: var_brushStrength, symmetryAxisId: var_symmetryAxisId, symmetryAxisLabel: var_symmetryAxisLabel); }
-
-@protected AppSculptSnapshot sse_decode_app_sculpt_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_selected = sse_decode_opt_box_autoadd_app_selected_sculpt_snapshot(deserializer);
-var var_session = sse_decode_opt_box_autoadd_app_sculpt_session_snapshot(deserializer);
-var var_canResumeSelected = sse_decode_bool(deserializer);
-var var_canStop = sse_decode_bool(deserializer);
-var var_maxResolution = sse_decode_u_32(deserializer);
-return AppSculptSnapshot(selected: var_selected, session: var_session, canResumeSelected: var_canResumeSelected, canStop: var_canStop, maxResolution: var_maxResolution); }
-
-@protected AppSelectedNodePropertiesSnapshot sse_decode_app_selected_node_properties_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_nodeId = sse_decode_u_64(deserializer);
-var var_name = sse_decode_String(deserializer);
-var var_kindLabel = sse_decode_String(deserializer);
-var var_visible = sse_decode_bool(deserializer);
-var var_locked = sse_decode_bool(deserializer);
-var var_transform = sse_decode_opt_box_autoadd_app_transform_properties_snapshot(deserializer);
-var var_primitive = sse_decode_opt_box_autoadd_app_primitive_properties_snapshot(deserializer);
-var var_material = sse_decode_opt_box_autoadd_app_material_properties_snapshot(deserializer);
-var var_light = sse_decode_opt_box_autoadd_app_light_properties_snapshot(deserializer);
-return AppSelectedNodePropertiesSnapshot(nodeId: var_nodeId, name: var_name, kindLabel: var_kindLabel, visible: var_visible, locked: var_locked, transform: var_transform, primitive: var_primitive, material: var_material, light: var_light); }
-
-@protected AppSelectedSculptSnapshot sse_decode_app_selected_sculpt_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_nodeId = sse_decode_u_64(deserializer);
-var var_nodeName = sse_decode_String(deserializer);
-var var_currentResolution = sse_decode_u_32(deserializer);
-var var_desiredResolution = sse_decode_u_32(deserializer);
-return AppSelectedSculptSnapshot(nodeId: var_nodeId, nodeName: var_nodeName, currentResolution: var_currentResolution, desiredResolution: var_desiredResolution); }
-
-@protected AppSelectionContextSnapshot sse_decode_app_selection_context_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_headline = sse_decode_String(deserializer);
-var var_detail = sse_decode_String(deserializer);
-var var_selectionCount = sse_decode_u_32(deserializer);
-var var_selectionKindId = sse_decode_String(deserializer);
-var var_selectionKindLabel = sse_decode_String(deserializer);
-var var_workflowStatusId = sse_decode_String(deserializer);
-var var_workflowStatusLabel = sse_decode_String(deserializer);
-var var_quickActions = sse_decode_list_app_quick_action_snapshot(deserializer);
-return AppSelectionContextSnapshot(headline: var_headline, detail: var_detail, selectionCount: var_selectionCount, selectionKindId: var_selectionKindId, selectionKindLabel: var_selectionKindLabel, workflowStatusId: var_workflowStatusId, workflowStatusLabel: var_workflowStatusLabel, quickActions: var_quickActions); }
-
-@protected AppSettingsSnapshot sse_decode_app_settings_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_showFpsOverlay = sse_decode_bool(deserializer);
-var var_showNodeLabels = sse_decode_bool(deserializer);
-var var_showBoundingBox = sse_decode_bool(deserializer);
-var var_showLightGizmos = sse_decode_bool(deserializer);
-var var_autoSaveEnabled = sse_decode_bool(deserializer);
-var var_autoSaveIntervalSecs = sse_decode_u_32(deserializer);
-var var_maxExportResolution = sse_decode_u_32(deserializer);
-var var_maxSculptResolution = sse_decode_u_32(deserializer);
-var var_cameraBookmarks = sse_decode_list_app_camera_bookmark_snapshot(deserializer);
-var var_keyOptions = sse_decode_list_app_key_option_snapshot(deserializer);
-var var_keybindings = sse_decode_list_app_keybinding_snapshot(deserializer);
-return AppSettingsSnapshot(showFpsOverlay: var_showFpsOverlay, showNodeLabels: var_showNodeLabels, showBoundingBox: var_showBoundingBox, showLightGizmos: var_showLightGizmos, autoSaveEnabled: var_autoSaveEnabled, autoSaveIntervalSecs: var_autoSaveIntervalSecs, maxExportResolution: var_maxExportResolution, maxSculptResolution: var_maxSculptResolution, cameraBookmarks: var_cameraBookmarks, keyOptions: var_keyOptions, keybindings: var_keybindings); }
-
-@protected AppToolSnapshot sse_decode_app_tool_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_activeToolLabel = sse_decode_String(deserializer);
-var var_shadingModeLabel = sse_decode_String(deserializer);
-var var_gridEnabled = sse_decode_bool(deserializer);
-var var_manipulatorModeId = sse_decode_String(deserializer);
-var var_manipulatorModeLabel = sse_decode_String(deserializer);
-var var_manipulatorSpaceId = sse_decode_String(deserializer);
-var var_manipulatorSpaceLabel = sse_decode_String(deserializer);
-var var_manipulatorVisible = sse_decode_bool(deserializer);
-var var_canResetPivot = sse_decode_bool(deserializer);
-var var_pivotOffset = sse_decode_app_vec_3(deserializer);
-return AppToolSnapshot(activeToolLabel: var_activeToolLabel, shadingModeLabel: var_shadingModeLabel, gridEnabled: var_gridEnabled, manipulatorModeId: var_manipulatorModeId, manipulatorModeLabel: var_manipulatorModeLabel, manipulatorSpaceId: var_manipulatorSpaceId, manipulatorSpaceLabel: var_manipulatorSpaceLabel, manipulatorVisible: var_manipulatorVisible, canResetPivot: var_canResetPivot, pivotOffset: var_pivotOffset); }
-
-@protected AppTransformPropertiesSnapshot sse_decode_app_transform_properties_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_positionLabel = sse_decode_String(deserializer);
-var var_position = sse_decode_app_vec_3(deserializer);
-var var_rotationDegrees = sse_decode_app_vec_3(deserializer);
-var var_scale = sse_decode_opt_box_autoadd_app_vec_3(deserializer);
-return AppTransformPropertiesSnapshot(positionLabel: var_positionLabel, position: var_position, rotationDegrees: var_rotationDegrees, scale: var_scale); }
-
-@protected AppVec3 sse_decode_app_vec_3(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_x = sse_decode_f_32(deserializer);
-var var_y = sse_decode_f_32(deserializer);
-var var_z = sse_decode_f_32(deserializer);
-return AppVec3(x: var_x, y: var_y, z: var_z); }
-
-@protected AppViewportLightSnapshot sse_decode_app_viewport_light_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_lightNodeId = sse_decode_u_64(deserializer);
-var var_transformNodeId = sse_decode_u_64(deserializer);
-var var_lightTypeId = sse_decode_String(deserializer);
-var var_lightTypeLabel = sse_decode_String(deserializer);
-var var_worldPosition = sse_decode_app_vec_3(deserializer);
-var var_direction = sse_decode_app_vec_3(deserializer);
-var var_color = sse_decode_app_vec_3(deserializer);
-var var_intensity = sse_decode_f_32(deserializer);
-var var_range = sse_decode_f_32(deserializer);
-var var_spotAngle = sse_decode_f_32(deserializer);
-var var_active = sse_decode_bool(deserializer);
-var var_arrayPositions = sse_decode_list_app_vec_3(deserializer);
-var var_arrayColors = sse_decode_list_app_vec_3(deserializer);
-return AppViewportLightSnapshot(lightNodeId: var_lightNodeId, transformNodeId: var_transformNodeId, lightTypeId: var_lightTypeId, lightTypeLabel: var_lightTypeLabel, worldPosition: var_worldPosition, direction: var_direction, color: var_color, intensity: var_intensity, range: var_range, spotAngle: var_spotAngle, active: var_active, arrayPositions: var_arrayPositions, arrayColors: var_arrayColors); }
-
-@protected AppWorkflowStatusSnapshot sse_decode_app_workflow_status_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_exportStatus = sse_decode_app_export_status_snapshot(deserializer);
-var var_importStatus = sse_decode_app_import_status_snapshot(deserializer);
-var var_sculptConvertStatus = sse_decode_app_sculpt_convert_status_snapshot(deserializer);
-var var_sceneChanged = sse_decode_bool(deserializer);
-return AppWorkflowStatusSnapshot(exportStatus: var_exportStatus, importStatus: var_importStatus, sculptConvertStatus: var_sculptConvertStatus, sceneChanged: var_sceneChanged); }
-
-@protected AppWorkspaceSnapshot sse_decode_app_workspace_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var var_id = sse_decode_String(deserializer);
-var var_label = sse_decode_String(deserializer);
-var var_description = sse_decode_String(deserializer);
-return AppWorkspaceSnapshot(id: var_id, label: var_label, description: var_description); }
-
-@protected bool sse_decode_bool(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return deserializer.buffer.getUint8() != 0; }
-
-@protected AppImportDialogSnapshot sse_decode_box_autoadd_app_import_dialog_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return (sse_decode_app_import_dialog_snapshot(deserializer)); }
-
-@protected AppKeyComboSnapshot sse_decode_box_autoadd_app_key_combo_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return (sse_decode_app_key_combo_snapshot(deserializer)); }
-
-@protected AppLightPropertiesSnapshot sse_decode_box_autoadd_app_light_properties_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return (sse_decode_app_light_properties_snapshot(deserializer)); }
-
-@protected AppMaterialPropertiesSnapshot sse_decode_box_autoadd_app_material_properties_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return (sse_decode_app_material_properties_snapshot(deserializer)); }
-
-@protected AppNodeSnapshot sse_decode_box_autoadd_app_node_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return (sse_decode_app_node_snapshot(deserializer)); }
-
-@protected AppPrimitivePropertiesSnapshot sse_decode_box_autoadd_app_primitive_properties_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return (sse_decode_app_primitive_properties_snapshot(deserializer)); }
-
-@protected AppSculptConvertDialogSnapshot sse_decode_box_autoadd_app_sculpt_convert_dialog_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return (sse_decode_app_sculpt_convert_dialog_snapshot(deserializer)); }
-
-@protected AppSculptSessionSnapshot sse_decode_box_autoadd_app_sculpt_session_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return (sse_decode_app_sculpt_session_snapshot(deserializer)); }
-
-@protected AppSelectedNodePropertiesSnapshot sse_decode_box_autoadd_app_selected_node_properties_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return (sse_decode_app_selected_node_properties_snapshot(deserializer)); }
-
-@protected AppSelectedSculptSnapshot sse_decode_box_autoadd_app_selected_sculpt_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return (sse_decode_app_selected_sculpt_snapshot(deserializer)); }
-
-@protected AppTransformPropertiesSnapshot sse_decode_box_autoadd_app_transform_properties_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return (sse_decode_app_transform_properties_snapshot(deserializer)); }
-
-@protected AppVec3 sse_decode_box_autoadd_app_vec_3(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return (sse_decode_app_vec_3(deserializer)); }
-
-@protected double sse_decode_box_autoadd_f_32(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return (sse_decode_f_32(deserializer)); }
-
-@protected int sse_decode_box_autoadd_u_32(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return (sse_decode_u_32(deserializer)); }
-
-@protected BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return (sse_decode_u_64(deserializer)); }
-
-@protected double sse_decode_f_32(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return deserializer.buffer.getFloat32(); }
-
-@protected List<String> sse_decode_list_String(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <String>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_String(deserializer)); }
-        return ans_;
-         }
-
-@protected List<AppCameraBookmarkSnapshot> sse_decode_list_app_camera_bookmark_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <AppCameraBookmarkSnapshot>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_app_camera_bookmark_snapshot(deserializer)); }
-        return ans_;
-         }
-
-@protected List<AppCommandSnapshot> sse_decode_list_app_command_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <AppCommandSnapshot>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_app_command_snapshot(deserializer)); }
-        return ans_;
-         }
-
-@protected List<AppExportPresetSnapshot> sse_decode_list_app_export_preset_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <AppExportPresetSnapshot>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_app_export_preset_snapshot(deserializer)); }
-        return ans_;
-         }
-
-@protected List<AppKeyOptionSnapshot> sse_decode_list_app_key_option_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <AppKeyOptionSnapshot>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_app_key_option_snapshot(deserializer)); }
-        return ans_;
-         }
-
-@protected List<AppKeybindingSnapshot> sse_decode_list_app_keybinding_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <AppKeybindingSnapshot>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_app_keybinding_snapshot(deserializer)); }
-        return ans_;
-         }
-
-@protected List<AppLightCookieCandidateSnapshot> sse_decode_list_app_light_cookie_candidate_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <AppLightCookieCandidateSnapshot>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_app_light_cookie_candidate_snapshot(deserializer)); }
-        return ans_;
-         }
-
-@protected List<AppLightLinkNodeSnapshot> sse_decode_list_app_light_link_node_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <AppLightLinkNodeSnapshot>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_app_light_link_node_snapshot(deserializer)); }
-        return ans_;
-         }
-
-@protected List<AppLightLinkTargetSnapshot> sse_decode_list_app_light_link_target_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <AppLightLinkTargetSnapshot>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_app_light_link_target_snapshot(deserializer)); }
-        return ans_;
-         }
-
-@protected List<AppNodeSnapshot> sse_decode_list_app_node_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <AppNodeSnapshot>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_app_node_snapshot(deserializer)); }
-        return ans_;
-         }
-
-@protected List<AppQuickActionSnapshot> sse_decode_list_app_quick_action_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <AppQuickActionSnapshot>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_app_quick_action_snapshot(deserializer)); }
-        return ans_;
-         }
-
-@protected List<AppRenderOptionSnapshot> sse_decode_list_app_render_option_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <AppRenderOptionSnapshot>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_app_render_option_snapshot(deserializer)); }
-        return ans_;
-         }
-
-@protected List<AppScalarPropertySnapshot> sse_decode_list_app_scalar_property_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <AppScalarPropertySnapshot>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_app_scalar_property_snapshot(deserializer)); }
-        return ans_;
-         }
-
-@protected List<AppSceneTreeNodeSnapshot> sse_decode_list_app_scene_tree_node_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <AppSceneTreeNodeSnapshot>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_app_scene_tree_node_snapshot(deserializer)); }
-        return ans_;
-         }
-
-@protected List<AppVec3> sse_decode_list_app_vec_3(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <AppVec3>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_app_vec_3(deserializer)); }
-        return ans_;
-         }
-
-@protected List<AppViewportLightSnapshot> sse_decode_list_app_viewport_light_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-        var len_ = sse_decode_i_32(deserializer);
-        var ans_ = <AppViewportLightSnapshot>[];
-        for (var idx_ = 0; idx_ < len_; ++idx_) { ans_.add(sse_decode_app_viewport_light_snapshot(deserializer)); }
-        return ans_;
-         }
-
-@protected Uint64List sse_decode_list_prim_u_64_strict(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var len_ = sse_decode_i_32(deserializer);
-                return deserializer.buffer.getUint64List(len_); }
-
-@protected Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-var len_ = sse_decode_i_32(deserializer);
-                return deserializer.buffer.getUint8List(len_); }
-
-@protected String? sse_decode_opt_String(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-            if (sse_decode_bool(deserializer)) {
-                return (sse_decode_String(deserializer));
-            } else {
-                return null;
-            }
-             }
-
-@protected AppImportDialogSnapshot? sse_decode_opt_box_autoadd_app_import_dialog_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-            if (sse_decode_bool(deserializer)) {
-                return (sse_decode_box_autoadd_app_import_dialog_snapshot(deserializer));
-            } else {
-                return null;
-            }
-             }
-
-@protected AppKeyComboSnapshot? sse_decode_opt_box_autoadd_app_key_combo_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-            if (sse_decode_bool(deserializer)) {
-                return (sse_decode_box_autoadd_app_key_combo_snapshot(deserializer));
-            } else {
-                return null;
-            }
-             }
-
-@protected AppLightPropertiesSnapshot? sse_decode_opt_box_autoadd_app_light_properties_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-            if (sse_decode_bool(deserializer)) {
-                return (sse_decode_box_autoadd_app_light_properties_snapshot(deserializer));
-            } else {
-                return null;
-            }
-             }
-
-@protected AppMaterialPropertiesSnapshot? sse_decode_opt_box_autoadd_app_material_properties_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-            if (sse_decode_bool(deserializer)) {
-                return (sse_decode_box_autoadd_app_material_properties_snapshot(deserializer));
-            } else {
-                return null;
-            }
-             }
-
-@protected AppNodeSnapshot? sse_decode_opt_box_autoadd_app_node_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-            if (sse_decode_bool(deserializer)) {
-                return (sse_decode_box_autoadd_app_node_snapshot(deserializer));
-            } else {
-                return null;
-            }
-             }
-
-@protected AppPrimitivePropertiesSnapshot? sse_decode_opt_box_autoadd_app_primitive_properties_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-            if (sse_decode_bool(deserializer)) {
-                return (sse_decode_box_autoadd_app_primitive_properties_snapshot(deserializer));
-            } else {
-                return null;
-            }
-             }
-
-@protected AppSculptConvertDialogSnapshot? sse_decode_opt_box_autoadd_app_sculpt_convert_dialog_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-            if (sse_decode_bool(deserializer)) {
-                return (sse_decode_box_autoadd_app_sculpt_convert_dialog_snapshot(deserializer));
-            } else {
-                return null;
-            }
-             }
-
-@protected AppSculptSessionSnapshot? sse_decode_opt_box_autoadd_app_sculpt_session_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-            if (sse_decode_bool(deserializer)) {
-                return (sse_decode_box_autoadd_app_sculpt_session_snapshot(deserializer));
-            } else {
-                return null;
-            }
-             }
-
-@protected AppSelectedNodePropertiesSnapshot? sse_decode_opt_box_autoadd_app_selected_node_properties_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-            if (sse_decode_bool(deserializer)) {
-                return (sse_decode_box_autoadd_app_selected_node_properties_snapshot(deserializer));
-            } else {
-                return null;
-            }
-             }
-
-@protected AppSelectedSculptSnapshot? sse_decode_opt_box_autoadd_app_selected_sculpt_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-            if (sse_decode_bool(deserializer)) {
-                return (sse_decode_box_autoadd_app_selected_sculpt_snapshot(deserializer));
-            } else {
-                return null;
-            }
-             }
-
-@protected AppTransformPropertiesSnapshot? sse_decode_opt_box_autoadd_app_transform_properties_snapshot(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-            if (sse_decode_bool(deserializer)) {
-                return (sse_decode_box_autoadd_app_transform_properties_snapshot(deserializer));
-            } else {
-                return null;
-            }
-             }
-
-@protected AppVec3? sse_decode_opt_box_autoadd_app_vec_3(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-            if (sse_decode_bool(deserializer)) {
-                return (sse_decode_box_autoadd_app_vec_3(deserializer));
-            } else {
-                return null;
-            }
-             }
-
-@protected double? sse_decode_opt_box_autoadd_f_32(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-            if (sse_decode_bool(deserializer)) {
-                return (sse_decode_box_autoadd_f_32(deserializer));
-            } else {
-                return null;
-            }
-             }
-
-@protected int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-            if (sse_decode_bool(deserializer)) {
-                return (sse_decode_box_autoadd_u_32(deserializer));
-            } else {
-                return null;
-            }
-             }
-
-@protected BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-            if (sse_decode_bool(deserializer)) {
-                return (sse_decode_box_autoadd_u_64(deserializer));
-            } else {
-                return null;
-            }
-             }
-
-@protected int sse_decode_u_32(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return deserializer.buffer.getUint32(); }
-
-@protected BigInt sse_decode_u_64(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return deserializer.buffer.getBigUint64(); }
-
-@protected int sse_decode_u_8(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return deserializer.buffer.getUint8(); }
-
-@protected void sse_decode_unit(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
- }
-
-@protected BigInt sse_decode_usize(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return deserializer.buffer.getBigUint64(); }
-
-@protected int sse_decode_i_32(SseDeserializer deserializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-return deserializer.buffer.getInt32(); }
-
-@protected void sse_encode_String(String self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_list_prim_u_8_strict(utf8.encoder.convert(self), serializer); }
-
-@protected void sse_encode_app_camera_bookmark_snapshot(AppCameraBookmarkSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_8(self.slotIndex, serializer);
-sse_encode_bool(self.saved, serializer);
- }
-
-@protected void sse_encode_app_camera_snapshot(AppCameraSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_f_32(self.yaw, serializer);
-sse_encode_f_32(self.pitch, serializer);
-sse_encode_f_32(self.roll, serializer);
-sse_encode_f_32(self.distance, serializer);
-sse_encode_f_32(self.fovDegrees, serializer);
-sse_encode_bool(self.orthographic, serializer);
-sse_encode_app_vec_3(self.target, serializer);
-sse_encode_app_vec_3(self.eye, serializer);
- }
-
-@protected void sse_encode_app_command_snapshot(AppCommandSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_String(self.id, serializer);
-sse_encode_String(self.label, serializer);
-sse_encode_String(self.category, serializer);
-sse_encode_bool(self.enabled, serializer);
-sse_encode_list_String(self.workspaceIds, serializer);
-sse_encode_opt_String(self.shortcutLabel, serializer);
- }
-
-@protected void sse_encode_app_document_snapshot(AppDocumentSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_opt_String(self.currentFilePath, serializer);
-sse_encode_opt_String(self.currentFileName, serializer);
-sse_encode_bool(self.hasUnsavedChanges, serializer);
-sse_encode_list_String(self.recentFiles, serializer);
-sse_encode_bool(self.recoveryAvailable, serializer);
-sse_encode_opt_String(self.recoverySummary, serializer);
- }
-
-@protected void sse_encode_app_export_preset_snapshot(AppExportPresetSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_String(self.name, serializer);
-sse_encode_u_32(self.resolution, serializer);
- }
-
-@protected void sse_encode_app_export_snapshot(AppExportSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_32(self.resolution, serializer);
-sse_encode_u_32(self.minResolution, serializer);
-sse_encode_u_32(self.maxResolution, serializer);
-sse_encode_bool(self.adaptive, serializer);
-sse_encode_list_app_export_preset_snapshot(self.presets, serializer);
-sse_encode_app_export_status_snapshot(self.status, serializer);
- }
-
-@protected void sse_encode_app_export_status_snapshot(AppExportStatusSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_String(self.state, serializer);
-sse_encode_u_32(self.progress, serializer);
-sse_encode_u_32(self.total, serializer);
-sse_encode_u_32(self.resolution, serializer);
-sse_encode_opt_String(self.phaseLabel, serializer);
-sse_encode_opt_String(self.targetFileName, serializer);
-sse_encode_opt_String(self.targetFilePath, serializer);
-sse_encode_opt_String(self.formatLabel, serializer);
-sse_encode_opt_String(self.message, serializer);
-sse_encode_bool(self.isError, serializer);
- }
-
-@protected void sse_encode_app_history_snapshot(AppHistorySnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_bool(self.canUndo, serializer);
-sse_encode_bool(self.canRedo, serializer);
- }
-
-@protected void sse_encode_app_import_dialog_snapshot(AppImportDialogSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_String(self.filename, serializer);
-sse_encode_u_32(self.resolution, serializer);
-sse_encode_u_32(self.autoResolution, serializer);
-sse_encode_bool(self.useAuto, serializer);
-sse_encode_usize(self.vertexCount, serializer);
-sse_encode_usize(self.triangleCount, serializer);
-sse_encode_app_vec_3(self.boundsSize, serializer);
-sse_encode_u_32(self.minResolution, serializer);
-sse_encode_u_32(self.maxResolution, serializer);
- }
-
-@protected void sse_encode_app_import_snapshot(AppImportSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_opt_box_autoadd_app_import_dialog_snapshot(self.dialog, serializer);
-sse_encode_app_import_status_snapshot(self.status, serializer);
- }
-
-@protected void sse_encode_app_import_status_snapshot(AppImportStatusSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_String(self.state, serializer);
-sse_encode_u_32(self.progress, serializer);
-sse_encode_u_32(self.total, serializer);
-sse_encode_opt_String(self.filename, serializer);
-sse_encode_opt_String(self.phaseLabel, serializer);
-sse_encode_opt_String(self.message, serializer);
-sse_encode_bool(self.isError, serializer);
- }
-
-@protected void sse_encode_app_key_combo_snapshot(AppKeyComboSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_String(self.keyId, serializer);
-sse_encode_String(self.keyLabel, serializer);
-sse_encode_bool(self.ctrl, serializer);
-sse_encode_bool(self.shift, serializer);
-sse_encode_bool(self.alt, serializer);
-sse_encode_String(self.shortcutLabel, serializer);
- }
-
-@protected void sse_encode_app_key_option_snapshot(AppKeyOptionSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_String(self.id, serializer);
-sse_encode_String(self.label, serializer);
- }
-
-@protected void sse_encode_app_keybinding_snapshot(AppKeybindingSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_String(self.actionId, serializer);
-sse_encode_String(self.actionLabel, serializer);
-sse_encode_String(self.category, serializer);
-sse_encode_opt_box_autoadd_app_key_combo_snapshot(self.binding, serializer);
- }
-
-@protected void sse_encode_app_light_cookie_candidate_snapshot(AppLightCookieCandidateSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_64(self.nodeId, serializer);
-sse_encode_String(self.name, serializer);
-sse_encode_String(self.kindLabel, serializer);
- }
-
-@protected void sse_encode_app_light_link_node_snapshot(AppLightLinkNodeSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_64(self.nodeId, serializer);
-sse_encode_String(self.nodeName, serializer);
-sse_encode_String(self.kindLabel, serializer);
-sse_encode_u_8(self.lightMask, serializer);
- }
-
-@protected void sse_encode_app_light_link_target_snapshot(AppLightLinkTargetSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_64(self.lightNodeId, serializer);
-sse_encode_String(self.lightName, serializer);
-sse_encode_String(self.lightTypeLabel, serializer);
-sse_encode_bool(self.active, serializer);
-sse_encode_u_8(self.maskBit, serializer);
-sse_encode_app_vec_3(self.color, serializer);
- }
-
-@protected void sse_encode_app_light_linking_snapshot(AppLightLinkingSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_list_app_light_link_target_snapshot(self.lights, serializer);
-sse_encode_list_app_light_link_node_snapshot(self.geometryNodes, serializer);
-sse_encode_u_32(self.totalVisibleLightCount, serializer);
-sse_encode_u_32(self.maxLightCount, serializer);
- }
-
-@protected void sse_encode_app_light_properties_snapshot(AppLightPropertiesSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_64(self.nodeId, serializer);
-sse_encode_opt_box_autoadd_u_64(self.transformNodeId, serializer);
-sse_encode_String(self.lightTypeId, serializer);
-sse_encode_String(self.lightTypeLabel, serializer);
-sse_encode_app_vec_3(self.color, serializer);
-sse_encode_f_32(self.intensity, serializer);
-sse_encode_f_32(self.range, serializer);
-sse_encode_f_32(self.spotAngle, serializer);
-sse_encode_bool(self.castShadows, serializer);
-sse_encode_f_32(self.shadowSoftness, serializer);
-sse_encode_app_vec_3(self.shadowColor, serializer);
-sse_encode_bool(self.volumetric, serializer);
-sse_encode_f_32(self.volumetricDensity, serializer);
-sse_encode_opt_box_autoadd_u_64(self.cookieNodeId, serializer);
-sse_encode_opt_String(self.cookieNodeName, serializer);
-sse_encode_list_app_light_cookie_candidate_snapshot(self.cookieCandidates, serializer);
-sse_encode_String(self.proximityModeId, serializer);
-sse_encode_String(self.proximityModeLabel, serializer);
-sse_encode_f_32(self.proximityRange, serializer);
-sse_encode_opt_String(self.arrayPatternId, serializer);
-sse_encode_opt_String(self.arrayPatternLabel, serializer);
-sse_encode_opt_box_autoadd_u_32(self.arrayCount, serializer);
-sse_encode_opt_box_autoadd_f_32(self.arrayRadius, serializer);
-sse_encode_opt_box_autoadd_f_32(self.arrayColorVariation, serializer);
-sse_encode_opt_String(self.intensityExpression, serializer);
-sse_encode_opt_String(self.intensityExpressionError, serializer);
-sse_encode_opt_String(self.colorHueExpression, serializer);
-sse_encode_opt_String(self.colorHueExpressionError, serializer);
-sse_encode_bool(self.supportsRange, serializer);
-sse_encode_bool(self.supportsSpotAngle, serializer);
-sse_encode_bool(self.supportsShadows, serializer);
-sse_encode_bool(self.supportsVolumetric, serializer);
-sse_encode_bool(self.supportsCookie, serializer);
-sse_encode_bool(self.supportsProximity, serializer);
-sse_encode_bool(self.supportsExpressions, serializer);
-sse_encode_bool(self.supportsArray, serializer);
- }
-
-@protected void sse_encode_app_material_properties_snapshot(AppMaterialPropertiesSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_app_vec_3(self.color, serializer);
-sse_encode_f_32(self.roughness, serializer);
-sse_encode_f_32(self.metallic, serializer);
-sse_encode_app_vec_3(self.emissive, serializer);
-sse_encode_f_32(self.emissiveIntensity, serializer);
-sse_encode_f_32(self.fresnel, serializer);
- }
-
-@protected void sse_encode_app_node_snapshot(AppNodeSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_64(self.id, serializer);
-sse_encode_String(self.name, serializer);
-sse_encode_String(self.kindLabel, serializer);
-sse_encode_bool(self.visible, serializer);
-sse_encode_bool(self.locked, serializer);
- }
-
-@protected void sse_encode_app_primitive_properties_snapshot(AppPrimitivePropertiesSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_String(self.primitiveKind, serializer);
-sse_encode_list_app_scalar_property_snapshot(self.parameters, serializer);
- }
-
-@protected void sse_encode_app_quick_action_snapshot(AppQuickActionSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_String(self.id, serializer);
-sse_encode_String(self.label, serializer);
-sse_encode_String(self.category, serializer);
-sse_encode_bool(self.enabled, serializer);
-sse_encode_bool(self.prominent, serializer);
-sse_encode_opt_String(self.shortcutLabel, serializer);
- }
-
-@protected void sse_encode_app_render_option_snapshot(AppRenderOptionSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_String(self.id, serializer);
-sse_encode_String(self.label, serializer);
- }
-
-@protected void sse_encode_app_render_settings_snapshot(AppRenderSettingsSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_list_app_render_option_snapshot(self.shadingModes, serializer);
-sse_encode_String(self.shadingModeId, serializer);
-sse_encode_String(self.shadingModeLabel, serializer);
-sse_encode_bool(self.showGrid, serializer);
-sse_encode_bool(self.shadowsEnabled, serializer);
-sse_encode_u_32(self.shadowSteps, serializer);
-sse_encode_bool(self.aoEnabled, serializer);
-sse_encode_u_32(self.aoSamples, serializer);
-sse_encode_f_32(self.aoIntensity, serializer);
-sse_encode_u_32(self.marchMaxSteps, serializer);
-sse_encode_bool(self.sculptFastMode, serializer);
-sse_encode_bool(self.autoReduceSteps, serializer);
-sse_encode_f_32(self.interactionRenderScale, serializer);
-sse_encode_f_32(self.restRenderScale, serializer);
-sse_encode_bool(self.fogEnabled, serializer);
-sse_encode_f_32(self.fogDensity, serializer);
-sse_encode_bool(self.bloomEnabled, serializer);
-sse_encode_f_32(self.bloomIntensity, serializer);
-sse_encode_f_32(self.gamma, serializer);
-sse_encode_bool(self.tonemappingAces, serializer);
-sse_encode_u_8(self.crossSectionAxis, serializer);
-sse_encode_f_32(self.crossSectionPosition, serializer);
- }
-
-@protected void sse_encode_app_scalar_property_snapshot(AppScalarPropertySnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_String(self.key, serializer);
-sse_encode_String(self.label, serializer);
-sse_encode_f_32(self.value, serializer);
- }
-
-@protected void sse_encode_app_scene_snapshot(AppSceneSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_opt_box_autoadd_app_node_snapshot(self.selectedNode, serializer);
-sse_encode_opt_box_autoadd_app_selected_node_properties_snapshot(self.selectedNodeProperties, serializer);
-sse_encode_list_prim_u_64_strict(self.selectedNodeIds, serializer);
-sse_encode_list_app_node_snapshot(self.topLevelNodes, serializer);
-sse_encode_list_app_scene_tree_node_snapshot(self.sceneTreeRoots, serializer);
-sse_encode_list_app_viewport_light_snapshot(self.viewportLights, serializer);
-sse_encode_app_workspace_snapshot(self.workspace, serializer);
-sse_encode_app_selection_context_snapshot(self.selectionContext, serializer);
-sse_encode_list_app_command_snapshot(self.commands, serializer);
-sse_encode_app_history_snapshot(self.history, serializer);
-sse_encode_app_document_snapshot(self.document, serializer);
-sse_encode_app_render_settings_snapshot(self.render, serializer);
-sse_encode_app_settings_snapshot(self.settings, serializer);
-sse_encode_app_export_snapshot(self.export_, serializer);
-sse_encode_app_import_snapshot(self.import_, serializer);
-sse_encode_app_sculpt_convert_snapshot(self.sculptConvert, serializer);
-sse_encode_app_sculpt_snapshot(self.sculpt, serializer);
-sse_encode_app_light_linking_snapshot(self.lightLinking, serializer);
-sse_encode_app_camera_snapshot(self.camera, serializer);
-sse_encode_app_scene_stats_snapshot(self.stats, serializer);
-sse_encode_app_tool_snapshot(self.tool, serializer);
- }
-
-@protected void sse_encode_app_scene_stats_snapshot(AppSceneStatsSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_32(self.totalNodes, serializer);
-sse_encode_u_32(self.visibleNodes, serializer);
-sse_encode_u_32(self.topLevelNodes, serializer);
-sse_encode_u_32(self.primitiveNodes, serializer);
-sse_encode_u_32(self.operationNodes, serializer);
-sse_encode_u_32(self.transformNodes, serializer);
-sse_encode_u_32(self.modifierNodes, serializer);
-sse_encode_u_32(self.sculptNodes, serializer);
-sse_encode_u_32(self.lightNodes, serializer);
-sse_encode_u_64(self.voxelMemoryBytes, serializer);
-sse_encode_u_32(self.sdfEvalComplexity, serializer);
-sse_encode_u_64(self.structureKey, serializer);
-sse_encode_u_64(self.dataFingerprint, serializer);
-sse_encode_app_vec_3(self.boundsMin, serializer);
-sse_encode_app_vec_3(self.boundsMax, serializer);
- }
-
-@protected void sse_encode_app_scene_tree_node_snapshot(AppSceneTreeNodeSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_64(self.id, serializer);
-sse_encode_String(self.name, serializer);
-sse_encode_String(self.kindLabel, serializer);
-sse_encode_bool(self.visible, serializer);
-sse_encode_bool(self.locked, serializer);
-sse_encode_String(self.workflowStatusId, serializer);
-sse_encode_String(self.workflowStatusLabel, serializer);
-sse_encode_list_app_scene_tree_node_snapshot(self.children, serializer);
- }
-
-@protected void sse_encode_app_sculpt_convert_dialog_snapshot(AppSculptConvertDialogSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_64(self.targetNodeId, serializer);
-sse_encode_String(self.targetName, serializer);
-sse_encode_String(self.modeId, serializer);
-sse_encode_String(self.modeLabel, serializer);
-sse_encode_u_32(self.resolution, serializer);
-sse_encode_u_32(self.minResolution, serializer);
-sse_encode_u_32(self.maxResolution, serializer);
- }
-
-@protected void sse_encode_app_sculpt_convert_snapshot(AppSculptConvertSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_opt_box_autoadd_app_sculpt_convert_dialog_snapshot(self.dialog, serializer);
-sse_encode_app_sculpt_convert_status_snapshot(self.status, serializer);
- }
-
-@protected void sse_encode_app_sculpt_convert_status_snapshot(AppSculptConvertStatusSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_String(self.state, serializer);
-sse_encode_u_32(self.progress, serializer);
-sse_encode_u_32(self.total, serializer);
-sse_encode_opt_String(self.targetName, serializer);
-sse_encode_opt_String(self.phaseLabel, serializer);
-sse_encode_opt_String(self.message, serializer);
-sse_encode_bool(self.isError, serializer);
- }
-
-@protected void sse_encode_app_sculpt_session_snapshot(AppSculptSessionSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_64(self.nodeId, serializer);
-sse_encode_String(self.nodeName, serializer);
-sse_encode_String(self.brushModeId, serializer);
-sse_encode_String(self.brushModeLabel, serializer);
-sse_encode_f_32(self.brushRadius, serializer);
-sse_encode_f_32(self.brushStrength, serializer);
-sse_encode_String(self.symmetryAxisId, serializer);
-sse_encode_String(self.symmetryAxisLabel, serializer);
- }
-
-@protected void sse_encode_app_sculpt_snapshot(AppSculptSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_opt_box_autoadd_app_selected_sculpt_snapshot(self.selected, serializer);
-sse_encode_opt_box_autoadd_app_sculpt_session_snapshot(self.session, serializer);
-sse_encode_bool(self.canResumeSelected, serializer);
-sse_encode_bool(self.canStop, serializer);
-sse_encode_u_32(self.maxResolution, serializer);
- }
-
-@protected void sse_encode_app_selected_node_properties_snapshot(AppSelectedNodePropertiesSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_64(self.nodeId, serializer);
-sse_encode_String(self.name, serializer);
-sse_encode_String(self.kindLabel, serializer);
-sse_encode_bool(self.visible, serializer);
-sse_encode_bool(self.locked, serializer);
-sse_encode_opt_box_autoadd_app_transform_properties_snapshot(self.transform, serializer);
-sse_encode_opt_box_autoadd_app_primitive_properties_snapshot(self.primitive, serializer);
-sse_encode_opt_box_autoadd_app_material_properties_snapshot(self.material, serializer);
-sse_encode_opt_box_autoadd_app_light_properties_snapshot(self.light, serializer);
- }
-
-@protected void sse_encode_app_selected_sculpt_snapshot(AppSelectedSculptSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_64(self.nodeId, serializer);
-sse_encode_String(self.nodeName, serializer);
-sse_encode_u_32(self.currentResolution, serializer);
-sse_encode_u_32(self.desiredResolution, serializer);
- }
-
-@protected void sse_encode_app_selection_context_snapshot(AppSelectionContextSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_String(self.headline, serializer);
-sse_encode_String(self.detail, serializer);
-sse_encode_u_32(self.selectionCount, serializer);
-sse_encode_String(self.selectionKindId, serializer);
-sse_encode_String(self.selectionKindLabel, serializer);
-sse_encode_String(self.workflowStatusId, serializer);
-sse_encode_String(self.workflowStatusLabel, serializer);
-sse_encode_list_app_quick_action_snapshot(self.quickActions, serializer);
- }
-
-@protected void sse_encode_app_settings_snapshot(AppSettingsSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_bool(self.showFpsOverlay, serializer);
-sse_encode_bool(self.showNodeLabels, serializer);
-sse_encode_bool(self.showBoundingBox, serializer);
-sse_encode_bool(self.showLightGizmos, serializer);
-sse_encode_bool(self.autoSaveEnabled, serializer);
-sse_encode_u_32(self.autoSaveIntervalSecs, serializer);
-sse_encode_u_32(self.maxExportResolution, serializer);
-sse_encode_u_32(self.maxSculptResolution, serializer);
-sse_encode_list_app_camera_bookmark_snapshot(self.cameraBookmarks, serializer);
-sse_encode_list_app_key_option_snapshot(self.keyOptions, serializer);
-sse_encode_list_app_keybinding_snapshot(self.keybindings, serializer);
- }
-
-@protected void sse_encode_app_tool_snapshot(AppToolSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_String(self.activeToolLabel, serializer);
-sse_encode_String(self.shadingModeLabel, serializer);
-sse_encode_bool(self.gridEnabled, serializer);
-sse_encode_String(self.manipulatorModeId, serializer);
-sse_encode_String(self.manipulatorModeLabel, serializer);
-sse_encode_String(self.manipulatorSpaceId, serializer);
-sse_encode_String(self.manipulatorSpaceLabel, serializer);
-sse_encode_bool(self.manipulatorVisible, serializer);
-sse_encode_bool(self.canResetPivot, serializer);
-sse_encode_app_vec_3(self.pivotOffset, serializer);
- }
-
-@protected void sse_encode_app_transform_properties_snapshot(AppTransformPropertiesSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_String(self.positionLabel, serializer);
-sse_encode_app_vec_3(self.position, serializer);
-sse_encode_app_vec_3(self.rotationDegrees, serializer);
-sse_encode_opt_box_autoadd_app_vec_3(self.scale, serializer);
- }
-
-@protected void sse_encode_app_vec_3(AppVec3 self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_f_32(self.x, serializer);
-sse_encode_f_32(self.y, serializer);
-sse_encode_f_32(self.z, serializer);
- }
-
-@protected void sse_encode_app_viewport_light_snapshot(AppViewportLightSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_64(self.lightNodeId, serializer);
-sse_encode_u_64(self.transformNodeId, serializer);
-sse_encode_String(self.lightTypeId, serializer);
-sse_encode_String(self.lightTypeLabel, serializer);
-sse_encode_app_vec_3(self.worldPosition, serializer);
-sse_encode_app_vec_3(self.direction, serializer);
-sse_encode_app_vec_3(self.color, serializer);
-sse_encode_f_32(self.intensity, serializer);
-sse_encode_f_32(self.range, serializer);
-sse_encode_f_32(self.spotAngle, serializer);
-sse_encode_bool(self.active, serializer);
-sse_encode_list_app_vec_3(self.arrayPositions, serializer);
-sse_encode_list_app_vec_3(self.arrayColors, serializer);
- }
-
-@protected void sse_encode_app_workflow_status_snapshot(AppWorkflowStatusSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_app_export_status_snapshot(self.exportStatus, serializer);
-sse_encode_app_import_status_snapshot(self.importStatus, serializer);
-sse_encode_app_sculpt_convert_status_snapshot(self.sculptConvertStatus, serializer);
-sse_encode_bool(self.sceneChanged, serializer);
- }
-
-@protected void sse_encode_app_workspace_snapshot(AppWorkspaceSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_String(self.id, serializer);
-sse_encode_String(self.label, serializer);
-sse_encode_String(self.description, serializer);
- }
-
-@protected void sse_encode_bool(bool self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-serializer.buffer.putUint8(self ? 1 : 0); }
-
-@protected void sse_encode_box_autoadd_app_import_dialog_snapshot(AppImportDialogSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_app_import_dialog_snapshot(self, serializer); }
-
-@protected void sse_encode_box_autoadd_app_key_combo_snapshot(AppKeyComboSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_app_key_combo_snapshot(self, serializer); }
-
-@protected void sse_encode_box_autoadd_app_light_properties_snapshot(AppLightPropertiesSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_app_light_properties_snapshot(self, serializer); }
-
-@protected void sse_encode_box_autoadd_app_material_properties_snapshot(AppMaterialPropertiesSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_app_material_properties_snapshot(self, serializer); }
-
-@protected void sse_encode_box_autoadd_app_node_snapshot(AppNodeSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_app_node_snapshot(self, serializer); }
-
-@protected void sse_encode_box_autoadd_app_primitive_properties_snapshot(AppPrimitivePropertiesSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_app_primitive_properties_snapshot(self, serializer); }
-
-@protected void sse_encode_box_autoadd_app_sculpt_convert_dialog_snapshot(AppSculptConvertDialogSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_app_sculpt_convert_dialog_snapshot(self, serializer); }
-
-@protected void sse_encode_box_autoadd_app_sculpt_session_snapshot(AppSculptSessionSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_app_sculpt_session_snapshot(self, serializer); }
-
-@protected void sse_encode_box_autoadd_app_selected_node_properties_snapshot(AppSelectedNodePropertiesSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_app_selected_node_properties_snapshot(self, serializer); }
-
-@protected void sse_encode_box_autoadd_app_selected_sculpt_snapshot(AppSelectedSculptSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_app_selected_sculpt_snapshot(self, serializer); }
-
-@protected void sse_encode_box_autoadd_app_transform_properties_snapshot(AppTransformPropertiesSnapshot self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_app_transform_properties_snapshot(self, serializer); }
-
-@protected void sse_encode_box_autoadd_app_vec_3(AppVec3 self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_app_vec_3(self, serializer); }
-
-@protected void sse_encode_box_autoadd_f_32(double self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_f_32(self, serializer); }
-
-@protected void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_32(self, serializer); }
-
-@protected void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_u_64(self, serializer); }
-
-@protected void sse_encode_f_32(double self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-serializer.buffer.putFloat32(self); }
-
-@protected void sse_encode_list_String(List<String> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_String(item, serializer); } }
-
-@protected void sse_encode_list_app_camera_bookmark_snapshot(List<AppCameraBookmarkSnapshot> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_app_camera_bookmark_snapshot(item, serializer); } }
-
-@protected void sse_encode_list_app_command_snapshot(List<AppCommandSnapshot> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_app_command_snapshot(item, serializer); } }
-
-@protected void sse_encode_list_app_export_preset_snapshot(List<AppExportPresetSnapshot> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_app_export_preset_snapshot(item, serializer); } }
-
-@protected void sse_encode_list_app_key_option_snapshot(List<AppKeyOptionSnapshot> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_app_key_option_snapshot(item, serializer); } }
-
-@protected void sse_encode_list_app_keybinding_snapshot(List<AppKeybindingSnapshot> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_app_keybinding_snapshot(item, serializer); } }
-
-@protected void sse_encode_list_app_light_cookie_candidate_snapshot(List<AppLightCookieCandidateSnapshot> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_app_light_cookie_candidate_snapshot(item, serializer); } }
-
-@protected void sse_encode_list_app_light_link_node_snapshot(List<AppLightLinkNodeSnapshot> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_app_light_link_node_snapshot(item, serializer); } }
-
-@protected void sse_encode_list_app_light_link_target_snapshot(List<AppLightLinkTargetSnapshot> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_app_light_link_target_snapshot(item, serializer); } }
-
-@protected void sse_encode_list_app_node_snapshot(List<AppNodeSnapshot> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_app_node_snapshot(item, serializer); } }
-
-@protected void sse_encode_list_app_quick_action_snapshot(List<AppQuickActionSnapshot> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_app_quick_action_snapshot(item, serializer); } }
-
-@protected void sse_encode_list_app_render_option_snapshot(List<AppRenderOptionSnapshot> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_app_render_option_snapshot(item, serializer); } }
-
-@protected void sse_encode_list_app_scalar_property_snapshot(List<AppScalarPropertySnapshot> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_app_scalar_property_snapshot(item, serializer); } }
-
-@protected void sse_encode_list_app_scene_tree_node_snapshot(List<AppSceneTreeNodeSnapshot> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_app_scene_tree_node_snapshot(item, serializer); } }
-
-@protected void sse_encode_list_app_vec_3(List<AppVec3> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_app_vec_3(item, serializer); } }
-
-@protected void sse_encode_list_app_viewport_light_snapshot(List<AppViewportLightSnapshot> self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-        for (final item in self) { sse_encode_app_viewport_light_snapshot(item, serializer); } }
-
-@protected void sse_encode_list_prim_u_64_strict(Uint64List self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-                    serializer.buffer.putUint64List(self); }
-
-@protected void sse_encode_list_prim_u_8_strict(Uint8List self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-sse_encode_i_32(self.length, serializer);
-                    serializer.buffer.putUint8List(self); }
-
-@protected void sse_encode_opt_String(String? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-                sse_encode_bool(self != null, serializer);
-                if (self != null) {
-                    sse_encode_String(self, serializer);
-                }
-                 }
-
-@protected void sse_encode_opt_box_autoadd_app_import_dialog_snapshot(AppImportDialogSnapshot? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-                sse_encode_bool(self != null, serializer);
-                if (self != null) {
-                    sse_encode_box_autoadd_app_import_dialog_snapshot(self, serializer);
-                }
-                 }
-
-@protected void sse_encode_opt_box_autoadd_app_key_combo_snapshot(AppKeyComboSnapshot? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-                sse_encode_bool(self != null, serializer);
-                if (self != null) {
-                    sse_encode_box_autoadd_app_key_combo_snapshot(self, serializer);
-                }
-                 }
-
-@protected void sse_encode_opt_box_autoadd_app_light_properties_snapshot(AppLightPropertiesSnapshot? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-                sse_encode_bool(self != null, serializer);
-                if (self != null) {
-                    sse_encode_box_autoadd_app_light_properties_snapshot(self, serializer);
-                }
-                 }
-
-@protected void sse_encode_opt_box_autoadd_app_material_properties_snapshot(AppMaterialPropertiesSnapshot? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-                sse_encode_bool(self != null, serializer);
-                if (self != null) {
-                    sse_encode_box_autoadd_app_material_properties_snapshot(self, serializer);
-                }
-                 }
-
-@protected void sse_encode_opt_box_autoadd_app_node_snapshot(AppNodeSnapshot? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-                sse_encode_bool(self != null, serializer);
-                if (self != null) {
-                    sse_encode_box_autoadd_app_node_snapshot(self, serializer);
-                }
-                 }
-
-@protected void sse_encode_opt_box_autoadd_app_primitive_properties_snapshot(AppPrimitivePropertiesSnapshot? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-                sse_encode_bool(self != null, serializer);
-                if (self != null) {
-                    sse_encode_box_autoadd_app_primitive_properties_snapshot(self, serializer);
-                }
-                 }
-
-@protected void sse_encode_opt_box_autoadd_app_sculpt_convert_dialog_snapshot(AppSculptConvertDialogSnapshot? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-                sse_encode_bool(self != null, serializer);
-                if (self != null) {
-                    sse_encode_box_autoadd_app_sculpt_convert_dialog_snapshot(self, serializer);
-                }
-                 }
-
-@protected void sse_encode_opt_box_autoadd_app_sculpt_session_snapshot(AppSculptSessionSnapshot? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-                sse_encode_bool(self != null, serializer);
-                if (self != null) {
-                    sse_encode_box_autoadd_app_sculpt_session_snapshot(self, serializer);
-                }
-                 }
-
-@protected void sse_encode_opt_box_autoadd_app_selected_node_properties_snapshot(AppSelectedNodePropertiesSnapshot? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-                sse_encode_bool(self != null, serializer);
-                if (self != null) {
-                    sse_encode_box_autoadd_app_selected_node_properties_snapshot(self, serializer);
-                }
-                 }
-
-@protected void sse_encode_opt_box_autoadd_app_selected_sculpt_snapshot(AppSelectedSculptSnapshot? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-                sse_encode_bool(self != null, serializer);
-                if (self != null) {
-                    sse_encode_box_autoadd_app_selected_sculpt_snapshot(self, serializer);
-                }
-                 }
-
-@protected void sse_encode_opt_box_autoadd_app_transform_properties_snapshot(AppTransformPropertiesSnapshot? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-                sse_encode_bool(self != null, serializer);
-                if (self != null) {
-                    sse_encode_box_autoadd_app_transform_properties_snapshot(self, serializer);
-                }
-                 }
-
-@protected void sse_encode_opt_box_autoadd_app_vec_3(AppVec3? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-                sse_encode_bool(self != null, serializer);
-                if (self != null) {
-                    sse_encode_box_autoadd_app_vec_3(self, serializer);
-                }
-                 }
-
-@protected void sse_encode_opt_box_autoadd_f_32(double? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-                sse_encode_bool(self != null, serializer);
-                if (self != null) {
-                    sse_encode_box_autoadd_f_32(self, serializer);
-                }
-                 }
-
-@protected void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-                sse_encode_bool(self != null, serializer);
-                if (self != null) {
-                    sse_encode_box_autoadd_u_32(self, serializer);
-                }
-                 }
-
-@protected void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-
-                sse_encode_bool(self != null, serializer);
-                if (self != null) {
-                    sse_encode_box_autoadd_u_64(self, serializer);
-                }
-                 }
-
-@protected void sse_encode_u_32(int self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-serializer.buffer.putUint32(self); }
-
-@protected void sse_encode_u_64(BigInt self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-serializer.buffer.putBigUint64(self); }
-
-@protected void sse_encode_u_8(int self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-serializer.buffer.putUint8(self); }
-
-@protected void sse_encode_unit(void self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
- }
-
-@protected void sse_encode_usize(BigInt self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-serializer.buffer.putBigUint64(self); }
-
-@protected void sse_encode_i_32(int self, SseSerializer serializer){ // Codec=Sse (Serialization based), see doc to use other codecs
-serializer.buffer.putInt32(self); }
-                }
-                
+    var var_selectedNodeIds = sse_decode_list_prim_u_64_strict(deserializer);
+    var var_topLevelNodes = sse_decode_list_app_node_snapshot(deserializer);
+    var var_sceneTreeRoots = sse_decode_list_app_scene_tree_node_snapshot(
+      deserializer,
+    );
+    var var_viewportLights = sse_decode_list_app_viewport_light_snapshot(
+      deserializer,
+    );
+    var var_workspace = sse_decode_app_workspace_snapshot(deserializer);
+    var var_selectionContext = sse_decode_app_selection_context_snapshot(
+      deserializer,
+    );
+    var var_commands = sse_decode_list_app_command_snapshot(deserializer);
+    var var_history = sse_decode_app_history_snapshot(deserializer);
+    var var_document = sse_decode_app_document_snapshot(deserializer);
+    var var_render = sse_decode_app_render_settings_snapshot(deserializer);
+    var var_settings = sse_decode_app_settings_snapshot(deserializer);
+    var var_export_ = sse_decode_app_export_snapshot(deserializer);
+    var var_import_ = sse_decode_app_import_snapshot(deserializer);
+    var var_sculptConvert = sse_decode_app_sculpt_convert_snapshot(
+      deserializer,
+    );
+    var var_sculpt = sse_decode_app_sculpt_snapshot(deserializer);
+    var var_lightLinking = sse_decode_app_light_linking_snapshot(deserializer);
+    var var_camera = sse_decode_app_camera_snapshot(deserializer);
+    var var_stats = sse_decode_app_scene_stats_snapshot(deserializer);
+    var var_tool = sse_decode_app_tool_snapshot(deserializer);
+    return AppSceneSnapshot(
+      selectedNode: var_selectedNode,
+      selectedNodeProperties: var_selectedNodeProperties,
+      selectedNodeIds: var_selectedNodeIds,
+      topLevelNodes: var_topLevelNodes,
+      sceneTreeRoots: var_sceneTreeRoots,
+      viewportLights: var_viewportLights,
+      workspace: var_workspace,
+      selectionContext: var_selectionContext,
+      commands: var_commands,
+      history: var_history,
+      document: var_document,
+      render: var_render,
+      settings: var_settings,
+      export_: var_export_,
+      import_: var_import_,
+      sculptConvert: var_sculptConvert,
+      sculpt: var_sculpt,
+      lightLinking: var_lightLinking,
+      camera: var_camera,
+      stats: var_stats,
+      tool: var_tool,
+    );
+  }
+
+  @protected
+  AppSceneStatsSnapshot sse_decode_app_scene_stats_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_totalNodes = sse_decode_u_32(deserializer);
+    var var_visibleNodes = sse_decode_u_32(deserializer);
+    var var_topLevelNodes = sse_decode_u_32(deserializer);
+    var var_primitiveNodes = sse_decode_u_32(deserializer);
+    var var_operationNodes = sse_decode_u_32(deserializer);
+    var var_transformNodes = sse_decode_u_32(deserializer);
+    var var_modifierNodes = sse_decode_u_32(deserializer);
+    var var_sculptNodes = sse_decode_u_32(deserializer);
+    var var_lightNodes = sse_decode_u_32(deserializer);
+    var var_voxelMemoryBytes = sse_decode_u_64(deserializer);
+    var var_sdfEvalComplexity = sse_decode_u_32(deserializer);
+    var var_structureKey = sse_decode_u_64(deserializer);
+    var var_dataFingerprint = sse_decode_u_64(deserializer);
+    var var_boundsMin = sse_decode_app_vec_3(deserializer);
+    var var_boundsMax = sse_decode_app_vec_3(deserializer);
+    return AppSceneStatsSnapshot(
+      totalNodes: var_totalNodes,
+      visibleNodes: var_visibleNodes,
+      topLevelNodes: var_topLevelNodes,
+      primitiveNodes: var_primitiveNodes,
+      operationNodes: var_operationNodes,
+      transformNodes: var_transformNodes,
+      modifierNodes: var_modifierNodes,
+      sculptNodes: var_sculptNodes,
+      lightNodes: var_lightNodes,
+      voxelMemoryBytes: var_voxelMemoryBytes,
+      sdfEvalComplexity: var_sdfEvalComplexity,
+      structureKey: var_structureKey,
+      dataFingerprint: var_dataFingerprint,
+      boundsMin: var_boundsMin,
+      boundsMax: var_boundsMax,
+    );
+  }
+
+  @protected
+  AppSceneTreeNodeSnapshot sse_decode_app_scene_tree_node_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_u_64(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_kindLabel = sse_decode_String(deserializer);
+    var var_visible = sse_decode_bool(deserializer);
+    var var_locked = sse_decode_bool(deserializer);
+    var var_workflowStatusId = sse_decode_String(deserializer);
+    var var_workflowStatusLabel = sse_decode_String(deserializer);
+    var var_children = sse_decode_list_app_scene_tree_node_snapshot(
+      deserializer,
+    );
+    return AppSceneTreeNodeSnapshot(
+      id: var_id,
+      name: var_name,
+      kindLabel: var_kindLabel,
+      visible: var_visible,
+      locked: var_locked,
+      workflowStatusId: var_workflowStatusId,
+      workflowStatusLabel: var_workflowStatusLabel,
+      children: var_children,
+    );
+  }
+
+  @protected
+  AppSculptConvertDialogSnapshot sse_decode_app_sculpt_convert_dialog_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_targetNodeId = sse_decode_u_64(deserializer);
+    var var_targetName = sse_decode_String(deserializer);
+    var var_modeId = sse_decode_String(deserializer);
+    var var_modeLabel = sse_decode_String(deserializer);
+    var var_resolution = sse_decode_u_32(deserializer);
+    var var_minResolution = sse_decode_u_32(deserializer);
+    var var_maxResolution = sse_decode_u_32(deserializer);
+    return AppSculptConvertDialogSnapshot(
+      targetNodeId: var_targetNodeId,
+      targetName: var_targetName,
+      modeId: var_modeId,
+      modeLabel: var_modeLabel,
+      resolution: var_resolution,
+      minResolution: var_minResolution,
+      maxResolution: var_maxResolution,
+    );
+  }
+
+  @protected
+  AppSculptConvertSnapshot sse_decode_app_sculpt_convert_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_dialog =
+        sse_decode_opt_box_autoadd_app_sculpt_convert_dialog_snapshot(
+          deserializer,
+        );
+    var var_status = sse_decode_app_sculpt_convert_status_snapshot(
+      deserializer,
+    );
+    return AppSculptConvertSnapshot(dialog: var_dialog, status: var_status);
+  }
+
+  @protected
+  AppSculptConvertStatusSnapshot sse_decode_app_sculpt_convert_status_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_state = sse_decode_String(deserializer);
+    var var_progress = sse_decode_u_32(deserializer);
+    var var_total = sse_decode_u_32(deserializer);
+    var var_targetName = sse_decode_opt_String(deserializer);
+    var var_phaseLabel = sse_decode_opt_String(deserializer);
+    var var_message = sse_decode_opt_String(deserializer);
+    var var_isError = sse_decode_bool(deserializer);
+    return AppSculptConvertStatusSnapshot(
+      state: var_state,
+      progress: var_progress,
+      total: var_total,
+      targetName: var_targetName,
+      phaseLabel: var_phaseLabel,
+      message: var_message,
+      isError: var_isError,
+    );
+  }
+
+  @protected
+  AppSculptSessionSnapshot sse_decode_app_sculpt_session_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_nodeId = sse_decode_u_64(deserializer);
+    var var_nodeName = sse_decode_String(deserializer);
+    var var_brushModeId = sse_decode_String(deserializer);
+    var var_brushModeLabel = sse_decode_String(deserializer);
+    var var_brushRadius = sse_decode_f_32(deserializer);
+    var var_brushStrength = sse_decode_f_32(deserializer);
+    var var_symmetryAxisId = sse_decode_String(deserializer);
+    var var_symmetryAxisLabel = sse_decode_String(deserializer);
+    return AppSculptSessionSnapshot(
+      nodeId: var_nodeId,
+      nodeName: var_nodeName,
+      brushModeId: var_brushModeId,
+      brushModeLabel: var_brushModeLabel,
+      brushRadius: var_brushRadius,
+      brushStrength: var_brushStrength,
+      symmetryAxisId: var_symmetryAxisId,
+      symmetryAxisLabel: var_symmetryAxisLabel,
+    );
+  }
+
+  @protected
+  AppSculptSnapshot sse_decode_app_sculpt_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_selected = sse_decode_opt_box_autoadd_app_selected_sculpt_snapshot(
+      deserializer,
+    );
+    var var_session = sse_decode_opt_box_autoadd_app_sculpt_session_snapshot(
+      deserializer,
+    );
+    var var_canResumeSelected = sse_decode_bool(deserializer);
+    var var_canStop = sse_decode_bool(deserializer);
+    var var_maxResolution = sse_decode_u_32(deserializer);
+    return AppSculptSnapshot(
+      selected: var_selected,
+      session: var_session,
+      canResumeSelected: var_canResumeSelected,
+      canStop: var_canStop,
+      maxResolution: var_maxResolution,
+    );
+  }
+
+  @protected
+  AppSelectedNodePropertiesSnapshot
+  sse_decode_app_selected_node_properties_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_nodeId = sse_decode_u_64(deserializer);
+    var var_name = sse_decode_String(deserializer);
+    var var_kindLabel = sse_decode_String(deserializer);
+    var var_visible = sse_decode_bool(deserializer);
+    var var_locked = sse_decode_bool(deserializer);
+    var var_transform =
+        sse_decode_opt_box_autoadd_app_transform_properties_snapshot(
+          deserializer,
+        );
+    var var_primitive =
+        sse_decode_opt_box_autoadd_app_primitive_properties_snapshot(
+          deserializer,
+        );
+    var var_material =
+        sse_decode_opt_box_autoadd_app_material_properties_snapshot(
+          deserializer,
+        );
+    var var_light = sse_decode_opt_box_autoadd_app_light_properties_snapshot(
+      deserializer,
+    );
+    return AppSelectedNodePropertiesSnapshot(
+      nodeId: var_nodeId,
+      name: var_name,
+      kindLabel: var_kindLabel,
+      visible: var_visible,
+      locked: var_locked,
+      transform: var_transform,
+      primitive: var_primitive,
+      material: var_material,
+      light: var_light,
+    );
+  }
+
+  @protected
+  AppSelectedSculptSnapshot sse_decode_app_selected_sculpt_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_nodeId = sse_decode_u_64(deserializer);
+    var var_nodeName = sse_decode_String(deserializer);
+    var var_currentResolution = sse_decode_u_32(deserializer);
+    var var_desiredResolution = sse_decode_u_32(deserializer);
+    return AppSelectedSculptSnapshot(
+      nodeId: var_nodeId,
+      nodeName: var_nodeName,
+      currentResolution: var_currentResolution,
+      desiredResolution: var_desiredResolution,
+    );
+  }
+
+  @protected
+  AppSelectionContextSnapshot sse_decode_app_selection_context_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_headline = sse_decode_String(deserializer);
+    var var_detail = sse_decode_String(deserializer);
+    var var_selectionCount = sse_decode_u_32(deserializer);
+    var var_selectionKindId = sse_decode_String(deserializer);
+    var var_selectionKindLabel = sse_decode_String(deserializer);
+    var var_workflowStatusId = sse_decode_String(deserializer);
+    var var_workflowStatusLabel = sse_decode_String(deserializer);
+    var var_quickActions = sse_decode_list_app_quick_action_snapshot(
+      deserializer,
+    );
+    return AppSelectionContextSnapshot(
+      headline: var_headline,
+      detail: var_detail,
+      selectionCount: var_selectionCount,
+      selectionKindId: var_selectionKindId,
+      selectionKindLabel: var_selectionKindLabel,
+      workflowStatusId: var_workflowStatusId,
+      workflowStatusLabel: var_workflowStatusLabel,
+      quickActions: var_quickActions,
+    );
+  }
+
+  @protected
+  AppSettingsSnapshot sse_decode_app_settings_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_showFpsOverlay = sse_decode_bool(deserializer);
+    var var_showNodeLabels = sse_decode_bool(deserializer);
+    var var_showBoundingBox = sse_decode_bool(deserializer);
+    var var_showLightGizmos = sse_decode_bool(deserializer);
+    var var_autoSaveEnabled = sse_decode_bool(deserializer);
+    var var_autoSaveIntervalSecs = sse_decode_u_32(deserializer);
+    var var_maxExportResolution = sse_decode_u_32(deserializer);
+    var var_maxSculptResolution = sse_decode_u_32(deserializer);
+    var var_cameraBookmarks = sse_decode_list_app_camera_bookmark_snapshot(
+      deserializer,
+    );
+    var var_keyOptions = sse_decode_list_app_key_option_snapshot(deserializer);
+    var var_keybindings = sse_decode_list_app_keybinding_snapshot(deserializer);
+    return AppSettingsSnapshot(
+      showFpsOverlay: var_showFpsOverlay,
+      showNodeLabels: var_showNodeLabels,
+      showBoundingBox: var_showBoundingBox,
+      showLightGizmos: var_showLightGizmos,
+      autoSaveEnabled: var_autoSaveEnabled,
+      autoSaveIntervalSecs: var_autoSaveIntervalSecs,
+      maxExportResolution: var_maxExportResolution,
+      maxSculptResolution: var_maxSculptResolution,
+      cameraBookmarks: var_cameraBookmarks,
+      keyOptions: var_keyOptions,
+      keybindings: var_keybindings,
+    );
+  }
+
+  @protected
+  AppToolSnapshot sse_decode_app_tool_snapshot(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_activeToolLabel = sse_decode_String(deserializer);
+    var var_shadingModeLabel = sse_decode_String(deserializer);
+    var var_gridEnabled = sse_decode_bool(deserializer);
+    var var_manipulatorModeId = sse_decode_String(deserializer);
+    var var_manipulatorModeLabel = sse_decode_String(deserializer);
+    var var_manipulatorSpaceId = sse_decode_String(deserializer);
+    var var_manipulatorSpaceLabel = sse_decode_String(deserializer);
+    var var_manipulatorVisible = sse_decode_bool(deserializer);
+    var var_canResetPivot = sse_decode_bool(deserializer);
+    var var_pivotOffset = sse_decode_app_vec_3(deserializer);
+    return AppToolSnapshot(
+      activeToolLabel: var_activeToolLabel,
+      shadingModeLabel: var_shadingModeLabel,
+      gridEnabled: var_gridEnabled,
+      manipulatorModeId: var_manipulatorModeId,
+      manipulatorModeLabel: var_manipulatorModeLabel,
+      manipulatorSpaceId: var_manipulatorSpaceId,
+      manipulatorSpaceLabel: var_manipulatorSpaceLabel,
+      manipulatorVisible: var_manipulatorVisible,
+      canResetPivot: var_canResetPivot,
+      pivotOffset: var_pivotOffset,
+    );
+  }
+
+  @protected
+  AppTransformPropertiesSnapshot sse_decode_app_transform_properties_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_positionLabel = sse_decode_String(deserializer);
+    var var_position = sse_decode_app_vec_3(deserializer);
+    var var_rotationDegrees = sse_decode_app_vec_3(deserializer);
+    var var_scale = sse_decode_opt_box_autoadd_app_vec_3(deserializer);
+    return AppTransformPropertiesSnapshot(
+      positionLabel: var_positionLabel,
+      position: var_position,
+      rotationDegrees: var_rotationDegrees,
+      scale: var_scale,
+    );
+  }
+
+  @protected
+  AppVec3 sse_decode_app_vec_3(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_x = sse_decode_f_32(deserializer);
+    var var_y = sse_decode_f_32(deserializer);
+    var var_z = sse_decode_f_32(deserializer);
+    return AppVec3(x: var_x, y: var_y, z: var_z);
+  }
+
+  @protected
+  AppViewportLightSnapshot sse_decode_app_viewport_light_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_lightNodeId = sse_decode_u_64(deserializer);
+    var var_transformNodeId = sse_decode_u_64(deserializer);
+    var var_lightTypeId = sse_decode_String(deserializer);
+    var var_lightTypeLabel = sse_decode_String(deserializer);
+    var var_worldPosition = sse_decode_app_vec_3(deserializer);
+    var var_direction = sse_decode_app_vec_3(deserializer);
+    var var_color = sse_decode_app_vec_3(deserializer);
+    var var_intensity = sse_decode_f_32(deserializer);
+    var var_range = sse_decode_f_32(deserializer);
+    var var_spotAngle = sse_decode_f_32(deserializer);
+    var var_active = sse_decode_bool(deserializer);
+    var var_arrayPositions = sse_decode_list_app_vec_3(deserializer);
+    var var_arrayColors = sse_decode_list_app_vec_3(deserializer);
+    return AppViewportLightSnapshot(
+      lightNodeId: var_lightNodeId,
+      transformNodeId: var_transformNodeId,
+      lightTypeId: var_lightTypeId,
+      lightTypeLabel: var_lightTypeLabel,
+      worldPosition: var_worldPosition,
+      direction: var_direction,
+      color: var_color,
+      intensity: var_intensity,
+      range: var_range,
+      spotAngle: var_spotAngle,
+      active: var_active,
+      arrayPositions: var_arrayPositions,
+      arrayColors: var_arrayColors,
+    );
+  }
+
+  @protected
+  AppWorkflowStatusSnapshot sse_decode_app_workflow_status_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_exportStatus = sse_decode_app_export_status_snapshot(deserializer);
+    var var_importStatus = sse_decode_app_import_status_snapshot(deserializer);
+    var var_sculptConvertStatus = sse_decode_app_sculpt_convert_status_snapshot(
+      deserializer,
+    );
+    var var_sceneChanged = sse_decode_bool(deserializer);
+    return AppWorkflowStatusSnapshot(
+      exportStatus: var_exportStatus,
+      importStatus: var_importStatus,
+      sculptConvertStatus: var_sculptConvertStatus,
+      sceneChanged: var_sceneChanged,
+    );
+  }
+
+  @protected
+  AppWorkspaceSnapshot sse_decode_app_workspace_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_String(deserializer);
+    var var_label = sse_decode_String(deserializer);
+    var var_description = sse_decode_String(deserializer);
+    return AppWorkspaceSnapshot(
+      id: var_id,
+      label: var_label,
+      description: var_description,
+    );
+  }
+
+  @protected
+  bool sse_decode_bool(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getUint8() != 0;
+  }
+
+  @protected
+  AppImportDialogSnapshot sse_decode_box_autoadd_app_import_dialog_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_app_import_dialog_snapshot(deserializer));
+  }
+
+  @protected
+  AppKeyComboSnapshot sse_decode_box_autoadd_app_key_combo_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_app_key_combo_snapshot(deserializer));
+  }
+
+  @protected
+  AppLightPropertiesSnapshot
+  sse_decode_box_autoadd_app_light_properties_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_app_light_properties_snapshot(deserializer));
+  }
+
+  @protected
+  AppMaterialPropertiesSnapshot
+  sse_decode_box_autoadd_app_material_properties_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_app_material_properties_snapshot(deserializer));
+  }
+
+  @protected
+  AppNodeSnapshot sse_decode_box_autoadd_app_node_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_app_node_snapshot(deserializer));
+  }
+
+  @protected
+  AppPrimitivePropertiesSnapshot
+  sse_decode_box_autoadd_app_primitive_properties_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_app_primitive_properties_snapshot(deserializer));
+  }
+
+  @protected
+  AppSculptConvertDialogSnapshot
+  sse_decode_box_autoadd_app_sculpt_convert_dialog_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_app_sculpt_convert_dialog_snapshot(deserializer));
+  }
+
+  @protected
+  AppSculptSessionSnapshot sse_decode_box_autoadd_app_sculpt_session_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_app_sculpt_session_snapshot(deserializer));
+  }
+
+  @protected
+  AppSelectedNodePropertiesSnapshot
+  sse_decode_box_autoadd_app_selected_node_properties_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_app_selected_node_properties_snapshot(deserializer));
+  }
+
+  @protected
+  AppSelectedSculptSnapshot sse_decode_box_autoadd_app_selected_sculpt_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_app_selected_sculpt_snapshot(deserializer));
+  }
+
+  @protected
+  AppTransformPropertiesSnapshot
+  sse_decode_box_autoadd_app_transform_properties_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_app_transform_properties_snapshot(deserializer));
+  }
+
+  @protected
+  AppVec3 sse_decode_box_autoadd_app_vec_3(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_app_vec_3(deserializer));
+  }
+
+  @protected
+  double sse_decode_box_autoadd_f_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_f_32(deserializer));
+  }
+
+  @protected
+  int sse_decode_box_autoadd_u_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_u_32(deserializer));
+  }
+
+  @protected
+  BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_u_64(deserializer));
+  }
+
+  @protected
+  double sse_decode_f_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getFloat32();
+  }
+
+  @protected
+  List<String> sse_decode_list_String(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <String>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_String(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<AppCameraBookmarkSnapshot> sse_decode_list_app_camera_bookmark_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <AppCameraBookmarkSnapshot>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_app_camera_bookmark_snapshot(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<AppCommandSnapshot> sse_decode_list_app_command_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <AppCommandSnapshot>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_app_command_snapshot(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<AppExportPresetSnapshot> sse_decode_list_app_export_preset_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <AppExportPresetSnapshot>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_app_export_preset_snapshot(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<AppKeyOptionSnapshot> sse_decode_list_app_key_option_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <AppKeyOptionSnapshot>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_app_key_option_snapshot(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<AppKeybindingSnapshot> sse_decode_list_app_keybinding_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <AppKeybindingSnapshot>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_app_keybinding_snapshot(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<AppLightCookieCandidateSnapshot>
+  sse_decode_list_app_light_cookie_candidate_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <AppLightCookieCandidateSnapshot>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_app_light_cookie_candidate_snapshot(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<AppLightLinkNodeSnapshot> sse_decode_list_app_light_link_node_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <AppLightLinkNodeSnapshot>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_app_light_link_node_snapshot(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<AppLightLinkTargetSnapshot>
+  sse_decode_list_app_light_link_target_snapshot(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <AppLightLinkTargetSnapshot>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_app_light_link_target_snapshot(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<AppNodeSnapshot> sse_decode_list_app_node_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <AppNodeSnapshot>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_app_node_snapshot(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<AppQuickActionSnapshot> sse_decode_list_app_quick_action_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <AppQuickActionSnapshot>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_app_quick_action_snapshot(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<AppRenderOptionSnapshot> sse_decode_list_app_render_option_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <AppRenderOptionSnapshot>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_app_render_option_snapshot(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<AppScalarPropertySnapshot> sse_decode_list_app_scalar_property_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <AppScalarPropertySnapshot>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_app_scalar_property_snapshot(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<AppSceneTreeNodeSnapshot> sse_decode_list_app_scene_tree_node_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <AppSceneTreeNodeSnapshot>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_app_scene_tree_node_snapshot(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<AppVec3> sse_decode_list_app_vec_3(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <AppVec3>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_app_vec_3(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<AppViewportLightSnapshot> sse_decode_list_app_viewport_light_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <AppViewportLightSnapshot>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_app_viewport_light_snapshot(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  Uint64List sse_decode_list_prim_u_64_strict(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var len_ = sse_decode_i_32(deserializer);
+    return deserializer.buffer.getUint64List(len_);
+  }
+
+  @protected
+  Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var len_ = sse_decode_i_32(deserializer);
+    return deserializer.buffer.getUint8List(len_);
+  }
+
+  @protected
+  String? sse_decode_opt_String(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_String(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  AppImportDialogSnapshot?
+  sse_decode_opt_box_autoadd_app_import_dialog_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_app_import_dialog_snapshot(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  AppKeyComboSnapshot? sse_decode_opt_box_autoadd_app_key_combo_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_app_key_combo_snapshot(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  AppLightPropertiesSnapshot?
+  sse_decode_opt_box_autoadd_app_light_properties_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_app_light_properties_snapshot(
+        deserializer,
+      ));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  AppMaterialPropertiesSnapshot?
+  sse_decode_opt_box_autoadd_app_material_properties_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_app_material_properties_snapshot(
+        deserializer,
+      ));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  AppNodeSnapshot? sse_decode_opt_box_autoadd_app_node_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_app_node_snapshot(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  AppPrimitivePropertiesSnapshot?
+  sse_decode_opt_box_autoadd_app_primitive_properties_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_app_primitive_properties_snapshot(
+        deserializer,
+      ));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  AppSculptConvertDialogSnapshot?
+  sse_decode_opt_box_autoadd_app_sculpt_convert_dialog_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_app_sculpt_convert_dialog_snapshot(
+        deserializer,
+      ));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  AppSculptSessionSnapshot?
+  sse_decode_opt_box_autoadd_app_sculpt_session_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_app_sculpt_session_snapshot(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  AppSelectedNodePropertiesSnapshot?
+  sse_decode_opt_box_autoadd_app_selected_node_properties_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_app_selected_node_properties_snapshot(
+        deserializer,
+      ));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  AppSelectedSculptSnapshot?
+  sse_decode_opt_box_autoadd_app_selected_sculpt_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_app_selected_sculpt_snapshot(
+        deserializer,
+      ));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  AppTransformPropertiesSnapshot?
+  sse_decode_opt_box_autoadd_app_transform_properties_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_app_transform_properties_snapshot(
+        deserializer,
+      ));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  AppVec3? sse_decode_opt_box_autoadd_app_vec_3(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_app_vec_3(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  double? sse_decode_opt_box_autoadd_f_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_f_32(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_u_32(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_u_64(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  int sse_decode_u_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getUint32();
+  }
+
+  @protected
+  BigInt sse_decode_u_64(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getBigUint64();
+  }
+
+  @protected
+  int sse_decode_u_8(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getUint8();
+  }
+
+  @protected
+  void sse_decode_unit(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+  }
+
+  @protected
+  BigInt sse_decode_usize(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getBigUint64();
+  }
+
+  @protected
+  int sse_decode_i_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return deserializer.buffer.getInt32();
+  }
+
+  @protected
+  void sse_encode_String(String self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_prim_u_8_strict(utf8.encoder.convert(self), serializer);
+  }
+
+  @protected
+  void sse_encode_app_camera_bookmark_snapshot(
+    AppCameraBookmarkSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_8(self.slotIndex, serializer);
+    sse_encode_bool(self.saved, serializer);
+  }
+
+  @protected
+  void sse_encode_app_camera_snapshot(
+    AppCameraSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_32(self.yaw, serializer);
+    sse_encode_f_32(self.pitch, serializer);
+    sse_encode_f_32(self.roll, serializer);
+    sse_encode_f_32(self.distance, serializer);
+    sse_encode_f_32(self.fovDegrees, serializer);
+    sse_encode_bool(self.orthographic, serializer);
+    sse_encode_app_vec_3(self.target, serializer);
+    sse_encode_app_vec_3(self.eye, serializer);
+  }
+
+  @protected
+  void sse_encode_app_command_snapshot(
+    AppCommandSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.id, serializer);
+    sse_encode_String(self.label, serializer);
+    sse_encode_String(self.category, serializer);
+    sse_encode_bool(self.enabled, serializer);
+    sse_encode_list_String(self.workspaceIds, serializer);
+    sse_encode_opt_String(self.shortcutLabel, serializer);
+  }
+
+  @protected
+  void sse_encode_app_document_snapshot(
+    AppDocumentSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_opt_String(self.currentFilePath, serializer);
+    sse_encode_opt_String(self.currentFileName, serializer);
+    sse_encode_bool(self.hasUnsavedChanges, serializer);
+    sse_encode_list_String(self.recentFiles, serializer);
+    sse_encode_bool(self.recoveryAvailable, serializer);
+    sse_encode_opt_String(self.recoverySummary, serializer);
+  }
+
+  @protected
+  void sse_encode_app_export_preset_snapshot(
+    AppExportPresetSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.name, serializer);
+    sse_encode_u_32(self.resolution, serializer);
+  }
+
+  @protected
+  void sse_encode_app_export_snapshot(
+    AppExportSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.resolution, serializer);
+    sse_encode_u_32(self.minResolution, serializer);
+    sse_encode_u_32(self.maxResolution, serializer);
+    sse_encode_bool(self.adaptive, serializer);
+    sse_encode_list_app_export_preset_snapshot(self.presets, serializer);
+    sse_encode_app_export_status_snapshot(self.status, serializer);
+  }
+
+  @protected
+  void sse_encode_app_export_status_snapshot(
+    AppExportStatusSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.state, serializer);
+    sse_encode_u_32(self.progress, serializer);
+    sse_encode_u_32(self.total, serializer);
+    sse_encode_u_32(self.resolution, serializer);
+    sse_encode_opt_String(self.phaseLabel, serializer);
+    sse_encode_opt_String(self.targetFileName, serializer);
+    sse_encode_opt_String(self.targetFilePath, serializer);
+    sse_encode_opt_String(self.formatLabel, serializer);
+    sse_encode_opt_String(self.message, serializer);
+    sse_encode_bool(self.isError, serializer);
+  }
+
+  @protected
+  void sse_encode_app_history_snapshot(
+    AppHistorySnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_bool(self.canUndo, serializer);
+    sse_encode_bool(self.canRedo, serializer);
+  }
+
+  @protected
+  void sse_encode_app_import_dialog_snapshot(
+    AppImportDialogSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.filename, serializer);
+    sse_encode_u_32(self.resolution, serializer);
+    sse_encode_u_32(self.autoResolution, serializer);
+    sse_encode_bool(self.useAuto, serializer);
+    sse_encode_usize(self.vertexCount, serializer);
+    sse_encode_usize(self.triangleCount, serializer);
+    sse_encode_app_vec_3(self.boundsSize, serializer);
+    sse_encode_u_32(self.minResolution, serializer);
+    sse_encode_u_32(self.maxResolution, serializer);
+  }
+
+  @protected
+  void sse_encode_app_import_snapshot(
+    AppImportSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_opt_box_autoadd_app_import_dialog_snapshot(
+      self.dialog,
+      serializer,
+    );
+    sse_encode_app_import_status_snapshot(self.status, serializer);
+  }
+
+  @protected
+  void sse_encode_app_import_status_snapshot(
+    AppImportStatusSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.state, serializer);
+    sse_encode_u_32(self.progress, serializer);
+    sse_encode_u_32(self.total, serializer);
+    sse_encode_opt_String(self.filename, serializer);
+    sse_encode_opt_String(self.phaseLabel, serializer);
+    sse_encode_opt_String(self.message, serializer);
+    sse_encode_bool(self.isError, serializer);
+  }
+
+  @protected
+  void sse_encode_app_key_combo_snapshot(
+    AppKeyComboSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.keyId, serializer);
+    sse_encode_String(self.keyLabel, serializer);
+    sse_encode_bool(self.ctrl, serializer);
+    sse_encode_bool(self.shift, serializer);
+    sse_encode_bool(self.alt, serializer);
+    sse_encode_String(self.shortcutLabel, serializer);
+  }
+
+  @protected
+  void sse_encode_app_key_option_snapshot(
+    AppKeyOptionSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.id, serializer);
+    sse_encode_String(self.label, serializer);
+  }
+
+  @protected
+  void sse_encode_app_keybinding_snapshot(
+    AppKeybindingSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.actionId, serializer);
+    sse_encode_String(self.actionLabel, serializer);
+    sse_encode_String(self.category, serializer);
+    sse_encode_opt_box_autoadd_app_key_combo_snapshot(self.binding, serializer);
+  }
+
+  @protected
+  void sse_encode_app_light_cookie_candidate_snapshot(
+    AppLightCookieCandidateSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self.nodeId, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_String(self.kindLabel, serializer);
+  }
+
+  @protected
+  void sse_encode_app_light_link_node_snapshot(
+    AppLightLinkNodeSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self.nodeId, serializer);
+    sse_encode_String(self.nodeName, serializer);
+    sse_encode_String(self.kindLabel, serializer);
+    sse_encode_u_8(self.lightMask, serializer);
+  }
+
+  @protected
+  void sse_encode_app_light_link_target_snapshot(
+    AppLightLinkTargetSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self.lightNodeId, serializer);
+    sse_encode_String(self.lightName, serializer);
+    sse_encode_String(self.lightTypeLabel, serializer);
+    sse_encode_bool(self.active, serializer);
+    sse_encode_u_8(self.maskBit, serializer);
+    sse_encode_app_vec_3(self.color, serializer);
+  }
+
+  @protected
+  void sse_encode_app_light_linking_snapshot(
+    AppLightLinkingSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_app_light_link_target_snapshot(self.lights, serializer);
+    sse_encode_list_app_light_link_node_snapshot(
+      self.geometryNodes,
+      serializer,
+    );
+    sse_encode_u_32(self.totalVisibleLightCount, serializer);
+    sse_encode_u_32(self.maxLightCount, serializer);
+  }
+
+  @protected
+  void sse_encode_app_light_properties_snapshot(
+    AppLightPropertiesSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self.nodeId, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.transformNodeId, serializer);
+    sse_encode_String(self.lightTypeId, serializer);
+    sse_encode_String(self.lightTypeLabel, serializer);
+    sse_encode_app_vec_3(self.color, serializer);
+    sse_encode_f_32(self.intensity, serializer);
+    sse_encode_f_32(self.range, serializer);
+    sse_encode_f_32(self.spotAngle, serializer);
+    sse_encode_bool(self.castShadows, serializer);
+    sse_encode_f_32(self.shadowSoftness, serializer);
+    sse_encode_app_vec_3(self.shadowColor, serializer);
+    sse_encode_bool(self.volumetric, serializer);
+    sse_encode_f_32(self.volumetricDensity, serializer);
+    sse_encode_opt_box_autoadd_u_64(self.cookieNodeId, serializer);
+    sse_encode_opt_String(self.cookieNodeName, serializer);
+    sse_encode_list_app_light_cookie_candidate_snapshot(
+      self.cookieCandidates,
+      serializer,
+    );
+    sse_encode_String(self.proximityModeId, serializer);
+    sse_encode_String(self.proximityModeLabel, serializer);
+    sse_encode_f_32(self.proximityRange, serializer);
+    sse_encode_opt_String(self.arrayPatternId, serializer);
+    sse_encode_opt_String(self.arrayPatternLabel, serializer);
+    sse_encode_opt_box_autoadd_u_32(self.arrayCount, serializer);
+    sse_encode_opt_box_autoadd_f_32(self.arrayRadius, serializer);
+    sse_encode_opt_box_autoadd_f_32(self.arrayColorVariation, serializer);
+    sse_encode_opt_String(self.intensityExpression, serializer);
+    sse_encode_opt_String(self.intensityExpressionError, serializer);
+    sse_encode_opt_String(self.colorHueExpression, serializer);
+    sse_encode_opt_String(self.colorHueExpressionError, serializer);
+    sse_encode_bool(self.supportsRange, serializer);
+    sse_encode_bool(self.supportsSpotAngle, serializer);
+    sse_encode_bool(self.supportsShadows, serializer);
+    sse_encode_bool(self.supportsVolumetric, serializer);
+    sse_encode_bool(self.supportsCookie, serializer);
+    sse_encode_bool(self.supportsProximity, serializer);
+    sse_encode_bool(self.supportsExpressions, serializer);
+    sse_encode_bool(self.supportsArray, serializer);
+  }
+
+  @protected
+  void sse_encode_app_material_properties_snapshot(
+    AppMaterialPropertiesSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_app_vec_3(self.color, serializer);
+    sse_encode_f_32(self.roughness, serializer);
+    sse_encode_f_32(self.metallic, serializer);
+    sse_encode_app_vec_3(self.emissive, serializer);
+    sse_encode_f_32(self.emissiveIntensity, serializer);
+    sse_encode_f_32(self.fresnel, serializer);
+  }
+
+  @protected
+  void sse_encode_app_node_snapshot(
+    AppNodeSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self.id, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_String(self.kindLabel, serializer);
+    sse_encode_bool(self.visible, serializer);
+    sse_encode_bool(self.locked, serializer);
+  }
+
+  @protected
+  void sse_encode_app_primitive_properties_snapshot(
+    AppPrimitivePropertiesSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.primitiveKind, serializer);
+    sse_encode_list_app_scalar_property_snapshot(self.parameters, serializer);
+  }
+
+  @protected
+  void sse_encode_app_quick_action_snapshot(
+    AppQuickActionSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.id, serializer);
+    sse_encode_String(self.label, serializer);
+    sse_encode_String(self.category, serializer);
+    sse_encode_bool(self.enabled, serializer);
+    sse_encode_bool(self.prominent, serializer);
+    sse_encode_opt_String(self.shortcutLabel, serializer);
+  }
+
+  @protected
+  void sse_encode_app_render_option_snapshot(
+    AppRenderOptionSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.id, serializer);
+    sse_encode_String(self.label, serializer);
+  }
+
+  @protected
+  void sse_encode_app_render_settings_snapshot(
+    AppRenderSettingsSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_app_render_option_snapshot(self.shadingModes, serializer);
+    sse_encode_String(self.shadingModeId, serializer);
+    sse_encode_String(self.shadingModeLabel, serializer);
+    sse_encode_bool(self.showGrid, serializer);
+    sse_encode_bool(self.shadowsEnabled, serializer);
+    sse_encode_u_32(self.shadowSteps, serializer);
+    sse_encode_bool(self.aoEnabled, serializer);
+    sse_encode_u_32(self.aoSamples, serializer);
+    sse_encode_f_32(self.aoIntensity, serializer);
+    sse_encode_u_32(self.marchMaxSteps, serializer);
+    sse_encode_bool(self.sculptFastMode, serializer);
+    sse_encode_bool(self.autoReduceSteps, serializer);
+    sse_encode_f_32(self.interactionRenderScale, serializer);
+    sse_encode_f_32(self.restRenderScale, serializer);
+    sse_encode_bool(self.fogEnabled, serializer);
+    sse_encode_f_32(self.fogDensity, serializer);
+    sse_encode_bool(self.bloomEnabled, serializer);
+    sse_encode_f_32(self.bloomIntensity, serializer);
+    sse_encode_f_32(self.gamma, serializer);
+    sse_encode_bool(self.tonemappingAces, serializer);
+    sse_encode_u_8(self.crossSectionAxis, serializer);
+    sse_encode_f_32(self.crossSectionPosition, serializer);
+  }
+
+  @protected
+  void sse_encode_app_scalar_property_snapshot(
+    AppScalarPropertySnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.key, serializer);
+    sse_encode_String(self.label, serializer);
+    sse_encode_f_32(self.value, serializer);
+  }
+
+  @protected
+  void sse_encode_app_scene_snapshot(
+    AppSceneSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_opt_box_autoadd_app_node_snapshot(self.selectedNode, serializer);
+    sse_encode_opt_box_autoadd_app_selected_node_properties_snapshot(
+      self.selectedNodeProperties,
+      serializer,
+    );
+    sse_encode_list_prim_u_64_strict(self.selectedNodeIds, serializer);
+    sse_encode_list_app_node_snapshot(self.topLevelNodes, serializer);
+    sse_encode_list_app_scene_tree_node_snapshot(
+      self.sceneTreeRoots,
+      serializer,
+    );
+    sse_encode_list_app_viewport_light_snapshot(
+      self.viewportLights,
+      serializer,
+    );
+    sse_encode_app_workspace_snapshot(self.workspace, serializer);
+    sse_encode_app_selection_context_snapshot(
+      self.selectionContext,
+      serializer,
+    );
+    sse_encode_list_app_command_snapshot(self.commands, serializer);
+    sse_encode_app_history_snapshot(self.history, serializer);
+    sse_encode_app_document_snapshot(self.document, serializer);
+    sse_encode_app_render_settings_snapshot(self.render, serializer);
+    sse_encode_app_settings_snapshot(self.settings, serializer);
+    sse_encode_app_export_snapshot(self.export_, serializer);
+    sse_encode_app_import_snapshot(self.import_, serializer);
+    sse_encode_app_sculpt_convert_snapshot(self.sculptConvert, serializer);
+    sse_encode_app_sculpt_snapshot(self.sculpt, serializer);
+    sse_encode_app_light_linking_snapshot(self.lightLinking, serializer);
+    sse_encode_app_camera_snapshot(self.camera, serializer);
+    sse_encode_app_scene_stats_snapshot(self.stats, serializer);
+    sse_encode_app_tool_snapshot(self.tool, serializer);
+  }
+
+  @protected
+  void sse_encode_app_scene_stats_snapshot(
+    AppSceneStatsSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.totalNodes, serializer);
+    sse_encode_u_32(self.visibleNodes, serializer);
+    sse_encode_u_32(self.topLevelNodes, serializer);
+    sse_encode_u_32(self.primitiveNodes, serializer);
+    sse_encode_u_32(self.operationNodes, serializer);
+    sse_encode_u_32(self.transformNodes, serializer);
+    sse_encode_u_32(self.modifierNodes, serializer);
+    sse_encode_u_32(self.sculptNodes, serializer);
+    sse_encode_u_32(self.lightNodes, serializer);
+    sse_encode_u_64(self.voxelMemoryBytes, serializer);
+    sse_encode_u_32(self.sdfEvalComplexity, serializer);
+    sse_encode_u_64(self.structureKey, serializer);
+    sse_encode_u_64(self.dataFingerprint, serializer);
+    sse_encode_app_vec_3(self.boundsMin, serializer);
+    sse_encode_app_vec_3(self.boundsMax, serializer);
+  }
+
+  @protected
+  void sse_encode_app_scene_tree_node_snapshot(
+    AppSceneTreeNodeSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self.id, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_String(self.kindLabel, serializer);
+    sse_encode_bool(self.visible, serializer);
+    sse_encode_bool(self.locked, serializer);
+    sse_encode_String(self.workflowStatusId, serializer);
+    sse_encode_String(self.workflowStatusLabel, serializer);
+    sse_encode_list_app_scene_tree_node_snapshot(self.children, serializer);
+  }
+
+  @protected
+  void sse_encode_app_sculpt_convert_dialog_snapshot(
+    AppSculptConvertDialogSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self.targetNodeId, serializer);
+    sse_encode_String(self.targetName, serializer);
+    sse_encode_String(self.modeId, serializer);
+    sse_encode_String(self.modeLabel, serializer);
+    sse_encode_u_32(self.resolution, serializer);
+    sse_encode_u_32(self.minResolution, serializer);
+    sse_encode_u_32(self.maxResolution, serializer);
+  }
+
+  @protected
+  void sse_encode_app_sculpt_convert_snapshot(
+    AppSculptConvertSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_opt_box_autoadd_app_sculpt_convert_dialog_snapshot(
+      self.dialog,
+      serializer,
+    );
+    sse_encode_app_sculpt_convert_status_snapshot(self.status, serializer);
+  }
+
+  @protected
+  void sse_encode_app_sculpt_convert_status_snapshot(
+    AppSculptConvertStatusSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.state, serializer);
+    sse_encode_u_32(self.progress, serializer);
+    sse_encode_u_32(self.total, serializer);
+    sse_encode_opt_String(self.targetName, serializer);
+    sse_encode_opt_String(self.phaseLabel, serializer);
+    sse_encode_opt_String(self.message, serializer);
+    sse_encode_bool(self.isError, serializer);
+  }
+
+  @protected
+  void sse_encode_app_sculpt_session_snapshot(
+    AppSculptSessionSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self.nodeId, serializer);
+    sse_encode_String(self.nodeName, serializer);
+    sse_encode_String(self.brushModeId, serializer);
+    sse_encode_String(self.brushModeLabel, serializer);
+    sse_encode_f_32(self.brushRadius, serializer);
+    sse_encode_f_32(self.brushStrength, serializer);
+    sse_encode_String(self.symmetryAxisId, serializer);
+    sse_encode_String(self.symmetryAxisLabel, serializer);
+  }
+
+  @protected
+  void sse_encode_app_sculpt_snapshot(
+    AppSculptSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_opt_box_autoadd_app_selected_sculpt_snapshot(
+      self.selected,
+      serializer,
+    );
+    sse_encode_opt_box_autoadd_app_sculpt_session_snapshot(
+      self.session,
+      serializer,
+    );
+    sse_encode_bool(self.canResumeSelected, serializer);
+    sse_encode_bool(self.canStop, serializer);
+    sse_encode_u_32(self.maxResolution, serializer);
+  }
+
+  @protected
+  void sse_encode_app_selected_node_properties_snapshot(
+    AppSelectedNodePropertiesSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self.nodeId, serializer);
+    sse_encode_String(self.name, serializer);
+    sse_encode_String(self.kindLabel, serializer);
+    sse_encode_bool(self.visible, serializer);
+    sse_encode_bool(self.locked, serializer);
+    sse_encode_opt_box_autoadd_app_transform_properties_snapshot(
+      self.transform,
+      serializer,
+    );
+    sse_encode_opt_box_autoadd_app_primitive_properties_snapshot(
+      self.primitive,
+      serializer,
+    );
+    sse_encode_opt_box_autoadd_app_material_properties_snapshot(
+      self.material,
+      serializer,
+    );
+    sse_encode_opt_box_autoadd_app_light_properties_snapshot(
+      self.light,
+      serializer,
+    );
+  }
+
+  @protected
+  void sse_encode_app_selected_sculpt_snapshot(
+    AppSelectedSculptSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self.nodeId, serializer);
+    sse_encode_String(self.nodeName, serializer);
+    sse_encode_u_32(self.currentResolution, serializer);
+    sse_encode_u_32(self.desiredResolution, serializer);
+  }
+
+  @protected
+  void sse_encode_app_selection_context_snapshot(
+    AppSelectionContextSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.headline, serializer);
+    sse_encode_String(self.detail, serializer);
+    sse_encode_u_32(self.selectionCount, serializer);
+    sse_encode_String(self.selectionKindId, serializer);
+    sse_encode_String(self.selectionKindLabel, serializer);
+    sse_encode_String(self.workflowStatusId, serializer);
+    sse_encode_String(self.workflowStatusLabel, serializer);
+    sse_encode_list_app_quick_action_snapshot(self.quickActions, serializer);
+  }
+
+  @protected
+  void sse_encode_app_settings_snapshot(
+    AppSettingsSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_bool(self.showFpsOverlay, serializer);
+    sse_encode_bool(self.showNodeLabels, serializer);
+    sse_encode_bool(self.showBoundingBox, serializer);
+    sse_encode_bool(self.showLightGizmos, serializer);
+    sse_encode_bool(self.autoSaveEnabled, serializer);
+    sse_encode_u_32(self.autoSaveIntervalSecs, serializer);
+    sse_encode_u_32(self.maxExportResolution, serializer);
+    sse_encode_u_32(self.maxSculptResolution, serializer);
+    sse_encode_list_app_camera_bookmark_snapshot(
+      self.cameraBookmarks,
+      serializer,
+    );
+    sse_encode_list_app_key_option_snapshot(self.keyOptions, serializer);
+    sse_encode_list_app_keybinding_snapshot(self.keybindings, serializer);
+  }
+
+  @protected
+  void sse_encode_app_tool_snapshot(
+    AppToolSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.activeToolLabel, serializer);
+    sse_encode_String(self.shadingModeLabel, serializer);
+    sse_encode_bool(self.gridEnabled, serializer);
+    sse_encode_String(self.manipulatorModeId, serializer);
+    sse_encode_String(self.manipulatorModeLabel, serializer);
+    sse_encode_String(self.manipulatorSpaceId, serializer);
+    sse_encode_String(self.manipulatorSpaceLabel, serializer);
+    sse_encode_bool(self.manipulatorVisible, serializer);
+    sse_encode_bool(self.canResetPivot, serializer);
+    sse_encode_app_vec_3(self.pivotOffset, serializer);
+  }
+
+  @protected
+  void sse_encode_app_transform_properties_snapshot(
+    AppTransformPropertiesSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.positionLabel, serializer);
+    sse_encode_app_vec_3(self.position, serializer);
+    sse_encode_app_vec_3(self.rotationDegrees, serializer);
+    sse_encode_opt_box_autoadd_app_vec_3(self.scale, serializer);
+  }
+
+  @protected
+  void sse_encode_app_vec_3(AppVec3 self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_32(self.x, serializer);
+    sse_encode_f_32(self.y, serializer);
+    sse_encode_f_32(self.z, serializer);
+  }
+
+  @protected
+  void sse_encode_app_viewport_light_snapshot(
+    AppViewportLightSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self.lightNodeId, serializer);
+    sse_encode_u_64(self.transformNodeId, serializer);
+    sse_encode_String(self.lightTypeId, serializer);
+    sse_encode_String(self.lightTypeLabel, serializer);
+    sse_encode_app_vec_3(self.worldPosition, serializer);
+    sse_encode_app_vec_3(self.direction, serializer);
+    sse_encode_app_vec_3(self.color, serializer);
+    sse_encode_f_32(self.intensity, serializer);
+    sse_encode_f_32(self.range, serializer);
+    sse_encode_f_32(self.spotAngle, serializer);
+    sse_encode_bool(self.active, serializer);
+    sse_encode_list_app_vec_3(self.arrayPositions, serializer);
+    sse_encode_list_app_vec_3(self.arrayColors, serializer);
+  }
+
+  @protected
+  void sse_encode_app_workflow_status_snapshot(
+    AppWorkflowStatusSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_app_export_status_snapshot(self.exportStatus, serializer);
+    sse_encode_app_import_status_snapshot(self.importStatus, serializer);
+    sse_encode_app_sculpt_convert_status_snapshot(
+      self.sculptConvertStatus,
+      serializer,
+    );
+    sse_encode_bool(self.sceneChanged, serializer);
+  }
+
+  @protected
+  void sse_encode_app_workspace_snapshot(
+    AppWorkspaceSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.id, serializer);
+    sse_encode_String(self.label, serializer);
+    sse_encode_String(self.description, serializer);
+  }
+
+  @protected
+  void sse_encode_bool(bool self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putUint8(self ? 1 : 0);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_app_import_dialog_snapshot(
+    AppImportDialogSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_app_import_dialog_snapshot(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_app_key_combo_snapshot(
+    AppKeyComboSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_app_key_combo_snapshot(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_app_light_properties_snapshot(
+    AppLightPropertiesSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_app_light_properties_snapshot(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_app_material_properties_snapshot(
+    AppMaterialPropertiesSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_app_material_properties_snapshot(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_app_node_snapshot(
+    AppNodeSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_app_node_snapshot(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_app_primitive_properties_snapshot(
+    AppPrimitivePropertiesSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_app_primitive_properties_snapshot(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_app_sculpt_convert_dialog_snapshot(
+    AppSculptConvertDialogSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_app_sculpt_convert_dialog_snapshot(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_app_sculpt_session_snapshot(
+    AppSculptSessionSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_app_sculpt_session_snapshot(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_app_selected_node_properties_snapshot(
+    AppSelectedNodePropertiesSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_app_selected_node_properties_snapshot(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_app_selected_sculpt_snapshot(
+    AppSelectedSculptSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_app_selected_sculpt_snapshot(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_app_transform_properties_snapshot(
+    AppTransformPropertiesSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_app_transform_properties_snapshot(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_app_vec_3(
+    AppVec3 self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_app_vec_3(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_f_32(double self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_f_32(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self, serializer);
+  }
+
+  @protected
+  void sse_encode_f_32(double self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putFloat32(self);
+  }
+
+  @protected
+  void sse_encode_list_String(List<String> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_String(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_app_camera_bookmark_snapshot(
+    List<AppCameraBookmarkSnapshot> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_app_camera_bookmark_snapshot(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_app_command_snapshot(
+    List<AppCommandSnapshot> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_app_command_snapshot(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_app_export_preset_snapshot(
+    List<AppExportPresetSnapshot> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_app_export_preset_snapshot(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_app_key_option_snapshot(
+    List<AppKeyOptionSnapshot> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_app_key_option_snapshot(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_app_keybinding_snapshot(
+    List<AppKeybindingSnapshot> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_app_keybinding_snapshot(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_app_light_cookie_candidate_snapshot(
+    List<AppLightCookieCandidateSnapshot> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_app_light_cookie_candidate_snapshot(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_app_light_link_node_snapshot(
+    List<AppLightLinkNodeSnapshot> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_app_light_link_node_snapshot(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_app_light_link_target_snapshot(
+    List<AppLightLinkTargetSnapshot> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_app_light_link_target_snapshot(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_app_node_snapshot(
+    List<AppNodeSnapshot> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_app_node_snapshot(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_app_quick_action_snapshot(
+    List<AppQuickActionSnapshot> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_app_quick_action_snapshot(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_app_render_option_snapshot(
+    List<AppRenderOptionSnapshot> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_app_render_option_snapshot(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_app_scalar_property_snapshot(
+    List<AppScalarPropertySnapshot> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_app_scalar_property_snapshot(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_app_scene_tree_node_snapshot(
+    List<AppSceneTreeNodeSnapshot> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_app_scene_tree_node_snapshot(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_app_vec_3(List<AppVec3> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_app_vec_3(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_app_viewport_light_snapshot(
+    List<AppViewportLightSnapshot> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_app_viewport_light_snapshot(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_prim_u_64_strict(
+    Uint64List self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    serializer.buffer.putUint64List(self);
+  }
+
+  @protected
+  void sse_encode_list_prim_u_8_strict(
+    Uint8List self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    serializer.buffer.putUint8List(self);
+  }
+
+  @protected
+  void sse_encode_opt_String(String? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_String(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_app_import_dialog_snapshot(
+    AppImportDialogSnapshot? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_app_import_dialog_snapshot(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_app_key_combo_snapshot(
+    AppKeyComboSnapshot? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_app_key_combo_snapshot(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_app_light_properties_snapshot(
+    AppLightPropertiesSnapshot? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_app_light_properties_snapshot(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_app_material_properties_snapshot(
+    AppMaterialPropertiesSnapshot? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_app_material_properties_snapshot(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_app_node_snapshot(
+    AppNodeSnapshot? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_app_node_snapshot(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_app_primitive_properties_snapshot(
+    AppPrimitivePropertiesSnapshot? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_app_primitive_properties_snapshot(
+        self,
+        serializer,
+      );
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_app_sculpt_convert_dialog_snapshot(
+    AppSculptConvertDialogSnapshot? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_app_sculpt_convert_dialog_snapshot(
+        self,
+        serializer,
+      );
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_app_sculpt_session_snapshot(
+    AppSculptSessionSnapshot? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_app_sculpt_session_snapshot(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_app_selected_node_properties_snapshot(
+    AppSelectedNodePropertiesSnapshot? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_app_selected_node_properties_snapshot(
+        self,
+        serializer,
+      );
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_app_selected_sculpt_snapshot(
+    AppSelectedSculptSnapshot? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_app_selected_sculpt_snapshot(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_app_transform_properties_snapshot(
+    AppTransformPropertiesSnapshot? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_app_transform_properties_snapshot(
+        self,
+        serializer,
+      );
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_app_vec_3(
+    AppVec3? self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_app_vec_3(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_f_32(double? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_f_32(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_u_32(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_u_64(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_u_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putUint32(self);
+  }
+
+  @protected
+  void sse_encode_u_64(BigInt self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putBigUint64(self);
+  }
+
+  @protected
+  void sse_encode_u_8(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putUint8(self);
+  }
+
+  @protected
+  void sse_encode_unit(void self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+  }
+
+  @protected
+  void sse_encode_usize(BigInt self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putBigUint64(self);
+  }
+
+  @protected
+  void sse_encode_i_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    serializer.buffer.putInt32(self);
+  }
+}
