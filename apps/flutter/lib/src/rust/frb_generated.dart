@@ -4424,8 +4424,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   AppSceneSnapshot dco_decode_app_scene_snapshot(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 16)
-      throw Exception('unexpected arr length: expect 16 but see ${arr.length}');
+    if (arr.length != 17)
+      throw Exception('unexpected arr length: expect 17 but see ${arr.length}');
     return AppSceneSnapshot(
       selectedNode: dco_decode_opt_box_autoadd_app_node_snapshot(arr[0]),
       selectedNodeProperties:
@@ -4434,18 +4434,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           ),
       topLevelNodes: dco_decode_list_app_node_snapshot(arr[2]),
       sceneTreeRoots: dco_decode_list_app_scene_tree_node_snapshot(arr[3]),
-      history: dco_decode_app_history_snapshot(arr[4]),
-      document: dco_decode_app_document_snapshot(arr[5]),
-      render: dco_decode_app_render_settings_snapshot(arr[6]),
-      settings: dco_decode_app_settings_snapshot(arr[7]),
-      export_: dco_decode_app_export_snapshot(arr[8]),
-      import_: dco_decode_app_import_snapshot(arr[9]),
-      sculptConvert: dco_decode_app_sculpt_convert_snapshot(arr[10]),
-      sculpt: dco_decode_app_sculpt_snapshot(arr[11]),
-      lightLinking: dco_decode_app_light_linking_snapshot(arr[12]),
-      camera: dco_decode_app_camera_snapshot(arr[13]),
-      stats: dco_decode_app_scene_stats_snapshot(arr[14]),
-      tool: dco_decode_app_tool_snapshot(arr[15]),
+      viewportLights: dco_decode_list_app_viewport_light_snapshot(arr[4]),
+      history: dco_decode_app_history_snapshot(arr[5]),
+      document: dco_decode_app_document_snapshot(arr[6]),
+      render: dco_decode_app_render_settings_snapshot(arr[7]),
+      settings: dco_decode_app_settings_snapshot(arr[8]),
+      export_: dco_decode_app_export_snapshot(arr[9]),
+      import_: dco_decode_app_import_snapshot(arr[10]),
+      sculptConvert: dco_decode_app_sculpt_convert_snapshot(arr[11]),
+      sculpt: dco_decode_app_sculpt_snapshot(arr[12]),
+      lightLinking: dco_decode_app_light_linking_snapshot(arr[13]),
+      camera: dco_decode_app_camera_snapshot(arr[14]),
+      stats: dco_decode_app_scene_stats_snapshot(arr[15]),
+      tool: dco_decode_app_tool_snapshot(arr[16]),
     );
   }
 
@@ -4690,6 +4691,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  AppViewportLightSnapshot dco_decode_app_viewport_light_snapshot(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 13)
+      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
+    return AppViewportLightSnapshot(
+      lightNodeId: dco_decode_u_64(arr[0]),
+      transformNodeId: dco_decode_u_64(arr[1]),
+      lightTypeId: dco_decode_String(arr[2]),
+      lightTypeLabel: dco_decode_String(arr[3]),
+      worldPosition: dco_decode_app_vec_3(arr[4]),
+      direction: dco_decode_app_vec_3(arr[5]),
+      color: dco_decode_app_vec_3(arr[6]),
+      intensity: dco_decode_f_32(arr[7]),
+      range: dco_decode_f_32(arr[8]),
+      spotAngle: dco_decode_f_32(arr[9]),
+      active: dco_decode_bool(arr[10]),
+      arrayPositions: dco_decode_list_app_vec_3(arr[11]),
+      arrayColors: dco_decode_list_app_vec_3(arr[12]),
+    );
+  }
+
+  @protected
   AppWorkflowStatusSnapshot dco_decode_app_workflow_status_snapshot(
     dynamic raw,
   ) {
@@ -4930,6 +4954,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>)
         .map(dco_decode_app_scene_tree_node_snapshot)
+        .toList();
+  }
+
+  @protected
+  List<AppVec3> dco_decode_list_app_vec_3(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_app_vec_3).toList();
+  }
+
+  @protected
+  List<AppViewportLightSnapshot> dco_decode_list_app_viewport_light_snapshot(
+    dynamic raw,
+  ) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>)
+        .map(dco_decode_app_viewport_light_snapshot)
         .toList();
   }
 
@@ -5648,6 +5688,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_sceneTreeRoots = sse_decode_list_app_scene_tree_node_snapshot(
       deserializer,
     );
+    var var_viewportLights = sse_decode_list_app_viewport_light_snapshot(
+      deserializer,
+    );
     var var_history = sse_decode_app_history_snapshot(deserializer);
     var var_document = sse_decode_app_document_snapshot(deserializer);
     var var_render = sse_decode_app_render_settings_snapshot(deserializer);
@@ -5667,6 +5710,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       selectedNodeProperties: var_selectedNodeProperties,
       topLevelNodes: var_topLevelNodes,
       sceneTreeRoots: var_sceneTreeRoots,
+      viewportLights: var_viewportLights,
       history: var_history,
       document: var_document,
       render: var_render,
@@ -5996,6 +6040,41 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  AppViewportLightSnapshot sse_decode_app_viewport_light_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_lightNodeId = sse_decode_u_64(deserializer);
+    var var_transformNodeId = sse_decode_u_64(deserializer);
+    var var_lightTypeId = sse_decode_String(deserializer);
+    var var_lightTypeLabel = sse_decode_String(deserializer);
+    var var_worldPosition = sse_decode_app_vec_3(deserializer);
+    var var_direction = sse_decode_app_vec_3(deserializer);
+    var var_color = sse_decode_app_vec_3(deserializer);
+    var var_intensity = sse_decode_f_32(deserializer);
+    var var_range = sse_decode_f_32(deserializer);
+    var var_spotAngle = sse_decode_f_32(deserializer);
+    var var_active = sse_decode_bool(deserializer);
+    var var_arrayPositions = sse_decode_list_app_vec_3(deserializer);
+    var var_arrayColors = sse_decode_list_app_vec_3(deserializer);
+    return AppViewportLightSnapshot(
+      lightNodeId: var_lightNodeId,
+      transformNodeId: var_transformNodeId,
+      lightTypeId: var_lightTypeId,
+      lightTypeLabel: var_lightTypeLabel,
+      worldPosition: var_worldPosition,
+      direction: var_direction,
+      color: var_color,
+      intensity: var_intensity,
+      range: var_range,
+      spotAngle: var_spotAngle,
+      active: var_active,
+      arrayPositions: var_arrayPositions,
+      arrayColors: var_arrayColors,
+    );
+  }
+
+  @protected
   AppWorkflowStatusSnapshot sse_decode_app_workflow_status_snapshot(
     SseDeserializer deserializer,
   ) {
@@ -6306,6 +6385,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var ans_ = <AppSceneTreeNodeSnapshot>[];
     for (var idx_ = 0; idx_ < len_; ++idx_) {
       ans_.add(sse_decode_app_scene_tree_node_snapshot(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<AppVec3> sse_decode_list_app_vec_3(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <AppVec3>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_app_vec_3(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
+  List<AppViewportLightSnapshot> sse_decode_list_app_viewport_light_snapshot(
+    SseDeserializer deserializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <AppViewportLightSnapshot>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_app_viewport_light_snapshot(deserializer));
     }
     return ans_;
   }
@@ -6955,6 +7060,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       self.sceneTreeRoots,
       serializer,
     );
+    sse_encode_list_app_viewport_light_snapshot(
+      self.viewportLights,
+      serializer,
+    );
     sse_encode_app_history_snapshot(self.history, serializer);
     sse_encode_app_document_snapshot(self.document, serializer);
     sse_encode_app_render_settings_snapshot(self.render, serializer);
@@ -7183,6 +7292,27 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_f_32(self.x, serializer);
     sse_encode_f_32(self.y, serializer);
     sse_encode_f_32(self.z, serializer);
+  }
+
+  @protected
+  void sse_encode_app_viewport_light_snapshot(
+    AppViewportLightSnapshot self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_64(self.lightNodeId, serializer);
+    sse_encode_u_64(self.transformNodeId, serializer);
+    sse_encode_String(self.lightTypeId, serializer);
+    sse_encode_String(self.lightTypeLabel, serializer);
+    sse_encode_app_vec_3(self.worldPosition, serializer);
+    sse_encode_app_vec_3(self.direction, serializer);
+    sse_encode_app_vec_3(self.color, serializer);
+    sse_encode_f_32(self.intensity, serializer);
+    sse_encode_f_32(self.range, serializer);
+    sse_encode_f_32(self.spotAngle, serializer);
+    sse_encode_bool(self.active, serializer);
+    sse_encode_list_app_vec_3(self.arrayPositions, serializer);
+    sse_encode_list_app_vec_3(self.arrayColors, serializer);
   }
 
   @protected
@@ -7476,6 +7606,27 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_i_32(self.length, serializer);
     for (final item in self) {
       sse_encode_app_scene_tree_node_snapshot(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_app_vec_3(List<AppVec3> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_app_vec_3(item, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_list_app_viewport_light_snapshot(
+    List<AppViewportLightSnapshot> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_app_viewport_light_snapshot(item, serializer);
     }
   }
 

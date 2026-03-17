@@ -50,6 +50,7 @@ AppSceneSnapshot mergeWorkflowStatusIntoScene(
     ),
     sculpt: snapshot.sculpt,
     lightLinking: snapshot.lightLinking,
+    viewportLights: snapshot.viewportLights,
     camera: snapshot.camera,
     stats: snapshot.stats,
     tool: snapshot.tool,

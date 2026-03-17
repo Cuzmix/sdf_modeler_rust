@@ -4637,6 +4637,8 @@ impl SseDecode for crate::api::mirrors::AppSceneSnapshot {
             <Vec<crate::api::mirrors::AppNodeSnapshot>>::sse_decode(deserializer);
         let mut var_sceneTreeRoots =
             <Vec<crate::api::mirrors::AppSceneTreeNodeSnapshot>>::sse_decode(deserializer);
+        let mut var_viewportLights =
+            <Vec<crate::api::mirrors::AppViewportLightSnapshot>>::sse_decode(deserializer);
         let mut var_history = <crate::api::mirrors::AppHistorySnapshot>::sse_decode(deserializer);
         let mut var_document = <crate::api::mirrors::AppDocumentSnapshot>::sse_decode(deserializer);
         let mut var_render =
@@ -4657,6 +4659,7 @@ impl SseDecode for crate::api::mirrors::AppSceneSnapshot {
             selected_node_properties: var_selectedNodeProperties,
             top_level_nodes: var_topLevelNodes,
             scene_tree_roots: var_sceneTreeRoots,
+            viewport_lights: var_viewportLights,
             history: var_history,
             document: var_document,
             render: var_render,
@@ -4971,6 +4974,40 @@ impl SseDecode for crate::api::mirrors::AppVec3 {
     }
 }
 
+impl SseDecode for crate::api::mirrors::AppViewportLightSnapshot {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_lightNodeId = <u64>::sse_decode(deserializer);
+        let mut var_transformNodeId = <u64>::sse_decode(deserializer);
+        let mut var_lightTypeId = <String>::sse_decode(deserializer);
+        let mut var_lightTypeLabel = <String>::sse_decode(deserializer);
+        let mut var_worldPosition = <crate::api::mirrors::AppVec3>::sse_decode(deserializer);
+        let mut var_direction = <crate::api::mirrors::AppVec3>::sse_decode(deserializer);
+        let mut var_color = <crate::api::mirrors::AppVec3>::sse_decode(deserializer);
+        let mut var_intensity = <f32>::sse_decode(deserializer);
+        let mut var_range = <f32>::sse_decode(deserializer);
+        let mut var_spotAngle = <f32>::sse_decode(deserializer);
+        let mut var_active = <bool>::sse_decode(deserializer);
+        let mut var_arrayPositions = <Vec<crate::api::mirrors::AppVec3>>::sse_decode(deserializer);
+        let mut var_arrayColors = <Vec<crate::api::mirrors::AppVec3>>::sse_decode(deserializer);
+        return crate::api::mirrors::AppViewportLightSnapshot {
+            light_node_id: var_lightNodeId,
+            transform_node_id: var_transformNodeId,
+            light_type_id: var_lightTypeId,
+            light_type_label: var_lightTypeLabel,
+            world_position: var_worldPosition,
+            direction: var_direction,
+            color: var_color,
+            intensity: var_intensity,
+            range: var_range,
+            spot_angle: var_spotAngle,
+            active: var_active,
+            array_positions: var_arrayPositions,
+            array_colors: var_arrayColors,
+        };
+    }
+}
+
 impl SseDecode for crate::api::mirrors::AppWorkflowStatusSnapshot {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -5157,6 +5194,32 @@ impl SseDecode for Vec<crate::api::mirrors::AppSceneTreeNodeSnapshot> {
         let mut ans_ = vec![];
         for idx_ in 0..len_ {
             ans_.push(<crate::api::mirrors::AppSceneTreeNodeSnapshot>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::mirrors::AppVec3> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::mirrors::AppVec3>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::mirrors::AppViewportLightSnapshot> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::mirrors::AppViewportLightSnapshot>::sse_decode(
                 deserializer,
             ));
         }
@@ -6324,6 +6387,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::mirrors::AppSceneSnapshot {
             self.selected_node_properties.into_into_dart().into_dart(),
             self.top_level_nodes.into_into_dart().into_dart(),
             self.scene_tree_roots.into_into_dart().into_dart(),
+            self.viewport_lights.into_into_dart().into_dart(),
             self.history.into_into_dart().into_dart(),
             self.document.into_into_dart().into_dart(),
             self.render.into_into_dart().into_dart(),
@@ -6687,6 +6751,38 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::mirrors::AppVec3>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::mirrors::AppViewportLightSnapshot {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.light_node_id.into_into_dart().into_dart(),
+            self.transform_node_id.into_into_dart().into_dart(),
+            self.light_type_id.into_into_dart().into_dart(),
+            self.light_type_label.into_into_dart().into_dart(),
+            self.world_position.into_into_dart().into_dart(),
+            self.direction.into_into_dart().into_dart(),
+            self.color.into_into_dart().into_dart(),
+            self.intensity.into_into_dart().into_dart(),
+            self.range.into_into_dart().into_dart(),
+            self.spot_angle.into_into_dart().into_dart(),
+            self.active.into_into_dart().into_dart(),
+            self.array_positions.into_into_dart().into_dart(),
+            self.array_colors.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::mirrors::AppViewportLightSnapshot
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::mirrors::AppViewportLightSnapshot>
+    for crate::api::mirrors::AppViewportLightSnapshot
+{
+    fn into_into_dart(self) -> crate::api::mirrors::AppViewportLightSnapshot {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::mirrors::AppWorkflowStatusSnapshot {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -7045,6 +7141,10 @@ impl SseEncode for crate::api::mirrors::AppSceneSnapshot {
             self.scene_tree_roots,
             serializer,
         );
+        <Vec<crate::api::mirrors::AppViewportLightSnapshot>>::sse_encode(
+            self.viewport_lights,
+            serializer,
+        );
         <crate::api::mirrors::AppHistorySnapshot>::sse_encode(self.history, serializer);
         <crate::api::mirrors::AppDocumentSnapshot>::sse_encode(self.document, serializer);
         <crate::api::mirrors::AppRenderSettingsSnapshot>::sse_encode(self.render, serializer);
@@ -7255,6 +7355,25 @@ impl SseEncode for crate::api::mirrors::AppVec3 {
     }
 }
 
+impl SseEncode for crate::api::mirrors::AppViewportLightSnapshot {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u64>::sse_encode(self.light_node_id, serializer);
+        <u64>::sse_encode(self.transform_node_id, serializer);
+        <String>::sse_encode(self.light_type_id, serializer);
+        <String>::sse_encode(self.light_type_label, serializer);
+        <crate::api::mirrors::AppVec3>::sse_encode(self.world_position, serializer);
+        <crate::api::mirrors::AppVec3>::sse_encode(self.direction, serializer);
+        <crate::api::mirrors::AppVec3>::sse_encode(self.color, serializer);
+        <f32>::sse_encode(self.intensity, serializer);
+        <f32>::sse_encode(self.range, serializer);
+        <f32>::sse_encode(self.spot_angle, serializer);
+        <bool>::sse_encode(self.active, serializer);
+        <Vec<crate::api::mirrors::AppVec3>>::sse_encode(self.array_positions, serializer);
+        <Vec<crate::api::mirrors::AppVec3>>::sse_encode(self.array_colors, serializer);
+    }
+}
+
 impl SseEncode for crate::api::mirrors::AppWorkflowStatusSnapshot {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -7398,6 +7517,26 @@ impl SseEncode for Vec<crate::api::mirrors::AppSceneTreeNodeSnapshot> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::mirrors::AppSceneTreeNodeSnapshot>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::api::mirrors::AppVec3> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::mirrors::AppVec3>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::api::mirrors::AppViewportLightSnapshot> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::mirrors::AppViewportLightSnapshot>::sse_encode(item, serializer);
         }
     }
 }

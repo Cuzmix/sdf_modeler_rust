@@ -8,7 +8,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `convert_opt`, `convert_vec`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `AppViewportFeedbackSnapshot`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`, `from`
 
 class AppCameraBookmarkSnapshot {
   final int slotIndex;
@@ -976,6 +976,7 @@ class AppSceneSnapshot {
   final AppSelectedNodePropertiesSnapshot? selectedNodeProperties;
   final List<AppNodeSnapshot> topLevelNodes;
   final List<AppSceneTreeNodeSnapshot> sceneTreeRoots;
+  final List<AppViewportLightSnapshot> viewportLights;
   final AppHistorySnapshot history;
   final AppDocumentSnapshot document;
   final AppRenderSettingsSnapshot render;
@@ -994,6 +995,7 @@ class AppSceneSnapshot {
     this.selectedNodeProperties,
     required this.topLevelNodes,
     required this.sceneTreeRoots,
+    required this.viewportLights,
     required this.history,
     required this.document,
     required this.render,
@@ -1014,6 +1016,7 @@ class AppSceneSnapshot {
       selectedNodeProperties.hashCode ^
       topLevelNodes.hashCode ^
       sceneTreeRoots.hashCode ^
+      viewportLights.hashCode ^
       history.hashCode ^
       document.hashCode ^
       render.hashCode ^
@@ -1036,6 +1039,7 @@ class AppSceneSnapshot {
           selectedNodeProperties == other.selectedNodeProperties &&
           topLevelNodes == other.topLevelNodes &&
           sceneTreeRoots == other.sceneTreeRoots &&
+          viewportLights == other.viewportLights &&
           history == other.history &&
           document == other.document &&
           render == other.render &&
@@ -1595,6 +1599,73 @@ class AppVec3 {
           x == other.x &&
           y == other.y &&
           z == other.z;
+}
+
+class AppViewportLightSnapshot {
+  final BigInt lightNodeId;
+  final BigInt transformNodeId;
+  final String lightTypeId;
+  final String lightTypeLabel;
+  final AppVec3 worldPosition;
+  final AppVec3 direction;
+  final AppVec3 color;
+  final double intensity;
+  final double range;
+  final double spotAngle;
+  final bool active;
+  final List<AppVec3> arrayPositions;
+  final List<AppVec3> arrayColors;
+
+  const AppViewportLightSnapshot({
+    required this.lightNodeId,
+    required this.transformNodeId,
+    required this.lightTypeId,
+    required this.lightTypeLabel,
+    required this.worldPosition,
+    required this.direction,
+    required this.color,
+    required this.intensity,
+    required this.range,
+    required this.spotAngle,
+    required this.active,
+    required this.arrayPositions,
+    required this.arrayColors,
+  });
+
+  @override
+  int get hashCode =>
+      lightNodeId.hashCode ^
+      transformNodeId.hashCode ^
+      lightTypeId.hashCode ^
+      lightTypeLabel.hashCode ^
+      worldPosition.hashCode ^
+      direction.hashCode ^
+      color.hashCode ^
+      intensity.hashCode ^
+      range.hashCode ^
+      spotAngle.hashCode ^
+      active.hashCode ^
+      arrayPositions.hashCode ^
+      arrayColors.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppViewportLightSnapshot &&
+          runtimeType == other.runtimeType &&
+          lightNodeId == other.lightNodeId &&
+          transformNodeId == other.transformNodeId &&
+          lightTypeId == other.lightTypeId &&
+          lightTypeLabel == other.lightTypeLabel &&
+          worldPosition == other.worldPosition &&
+          direction == other.direction &&
+          color == other.color &&
+          intensity == other.intensity &&
+          range == other.range &&
+          spotAngle == other.spotAngle &&
+          active == other.active &&
+          arrayPositions == other.arrayPositions &&
+          arrayColors == other.arrayColors;
 }
 
 class AppWorkflowStatusSnapshot {

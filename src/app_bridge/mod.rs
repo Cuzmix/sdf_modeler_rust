@@ -15,7 +15,7 @@ pub use dto::{
     AppSculptConvertDialogSnapshot, AppSculptConvertSnapshot, AppSculptConvertStatusSnapshot,
     AppSculptSessionSnapshot, AppSculptSnapshot, AppSelectedNodePropertiesSnapshot,
     AppSelectedSculptSnapshot, AppSettingsSnapshot, AppToolSnapshot,
-    AppTransformPropertiesSnapshot, AppVec3, AppViewportFeedbackSnapshot,
+    AppTransformPropertiesSnapshot, AppVec3, AppViewportFeedbackSnapshot, AppViewportLightSnapshot,
     AppWorkflowStatusSnapshot,
 };
 pub use session::AppBridge;

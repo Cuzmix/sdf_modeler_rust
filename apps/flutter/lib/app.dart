@@ -26,6 +26,8 @@ import 'package:sdf_modeler_flutter/src/texture/texture_bridge.dart';
 import 'package:sdf_modeler_flutter/src/texture/texture_viewport_event.dart';
 import 'package:sdf_modeler_flutter/src/texture/texture_viewport_feedback.dart';
 import 'package:sdf_modeler_flutter/src/viewport/viewport_feedback_overlay.dart';
+import 'package:sdf_modeler_flutter/src/viewport/viewport_light_gizmo.dart'
+    as viewport_light_gizmo;
 import 'package:sdf_modeler_flutter/src/viewport/viewport_transform_gizmo.dart';
 import 'package:sdf_modeler_flutter/src/viewport/viewport_surface.dart';
 import 'package:sdf_modeler_flutter/src/viewport/viewport_tool_overlay.dart';
@@ -502,6 +504,15 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     );
   }
 
+  Offset? debugViewportLightBillboardPosition({BigInt? nodeId}) {
+    return viewport_light_gizmo.debugViewportLightBillboardPosition(
+      _lastLogicalViewportSize,
+      snapshot: _sceneSnapshot,
+      feedback: _viewportOverlayNotifier.value.feedback,
+      nodeId: nodeId,
+    );
+  }
+
   double? _framesPerSecondFromFrameTime(double frameTimeMs) {
     if (frameTimeMs <= 0.0) {
       return null;
@@ -729,6 +740,18 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     Offset localPosition,
     Size logicalViewportSize,
   ) {
+    final billboardTransformId =
+        viewport_light_gizmo.hitTestViewportLightBillboardTransformId(
+          localPosition,
+          logicalViewportSize,
+          snapshot: _sceneSnapshot,
+          feedback: _viewportOverlayNotifier.value.feedback,
+        );
+    if (billboardTransformId != null) {
+      unawaited(_runSceneCommand(() => selectNode(nodeId: billboardTransformId)));
+      return;
+    }
+
     final normalizedX = _normalizeViewportCoordinate(
       localPosition.dx,
       logicalViewportSize.width,
@@ -1684,6 +1707,10 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
           overlay: Stack(
             fit: StackFit.expand,
             children: [
+              viewport_light_gizmo.ViewportLightGizmoOverlay(
+                snapshot: snapshot,
+                feedback: overlayState.feedback,
+              ),
               ViewportTransformGizmoOverlay(
                 controller: _viewportTransformGizmoController,
                 snapshot: snapshot,

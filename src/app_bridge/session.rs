@@ -30,7 +30,7 @@ use super::dto::{
     AppSculptConvertDialogSnapshot, AppSculptConvertSnapshot, AppSculptConvertStatusSnapshot,
     AppSculptSessionSnapshot, AppSculptSnapshot, AppSelectedNodePropertiesSnapshot,
     AppSelectedSculptSnapshot, AppSettingsSnapshot, AppToolSnapshot,
-    AppTransformPropertiesSnapshot, AppVec3, AppViewportFeedbackSnapshot,
+    AppTransformPropertiesSnapshot, AppVec3, AppViewportFeedbackSnapshot, AppViewportLightSnapshot,
     AppWorkflowStatusSnapshot,
 };
 use super::renderer::{HeadlessPickRequest, HeadlessRenderRequest, HeadlessViewportRenderer};
@@ -302,6 +302,7 @@ impl AppBridge {
             selected_node_properties: self.selected_node_properties_snapshot(),
             top_level_nodes,
             scene_tree_roots: self.scene_tree_roots(),
+            viewport_lights: self.viewport_light_snapshots(),
             history: AppHistorySnapshot {
                 can_undo: self.history.undo_count() > 0,
                 can_redo: self.history.redo_count() > 0,
@@ -2658,6 +2659,110 @@ impl AppBridge {
         (targets, total_visible_light_count)
     }
 
+    fn viewport_light_snapshots(&self) -> Vec<AppViewportLightSnapshot> {
+        let (active_light_ids, _) = identify_active_lights(&self.scene, self.camera.eye());
+        let parent_map = self.scene.build_parent_map();
+        let mut light_ids: Vec<NodeId> = self
+            .scene
+            .nodes
+            .iter()
+            .filter_map(|(&node_id, node)| {
+                matches!(node.data, NodeData::Light { .. })
+                    .then_some(node_id)
+                    .filter(|id| !self.scene.is_hidden(*id))
+                    .filter(|id| parent_map.contains_key(id))
+            })
+            .collect();
+        light_ids.sort_unstable();
+
+        light_ids
+            .into_iter()
+            .filter_map(|light_node_id| {
+                let light_node = self.scene.nodes.get(&light_node_id)?;
+                let transform_node_id = *parent_map.get(&light_node_id)?;
+                if self.scene.is_hidden(transform_node_id) {
+                    return None;
+                }
+
+                let transform_node = self.scene.nodes.get(&transform_node_id)?;
+                let NodeData::Transform {
+                    translation,
+                    rotation,
+                    ..
+                } = &transform_node.data
+                else {
+                    return None;
+                };
+                let NodeData::Light {
+                    light_type,
+                    color,
+                    intensity,
+                    range,
+                    spot_angle,
+                    array_config,
+                    ..
+                } = &light_node.data
+                else {
+                    return None;
+                };
+
+                let direction = inverse_rotate_euler(Vec3::NEG_Y, *rotation).normalize_or_zero();
+                let direction = if direction.length_squared() > 0.5 {
+                    direction
+                } else {
+                    Vec3::NEG_Y
+                };
+
+                let (array_positions, array_colors) = if *light_type == LightType::Array {
+                    if let Some(config) = array_config {
+                        let local_positions = compute_light_array_positions(
+                            &config.pattern,
+                            config.count,
+                            config.radius,
+                        );
+                        let world_positions: Vec<Vec3> = local_positions
+                            .iter()
+                            .map(|position| *translation + *position)
+                            .collect();
+                        let colors: Vec<Vec3> = (0..local_positions.len())
+                            .map(|index| {
+                                if config.color_variation > 0.0 {
+                                    let hue_shift = (index as f32 / local_positions.len() as f32)
+                                        * config.color_variation
+                                        * 360.0;
+                                    hue_rotate_color(*color, hue_shift)
+                                } else {
+                                    *color
+                                }
+                            })
+                            .collect();
+                        (world_positions, colors)
+                    } else {
+                        (Vec::new(), Vec::new())
+                    }
+                } else {
+                    (Vec::new(), Vec::new())
+                };
+
+                Some(AppViewportLightSnapshot {
+                    light_node_id,
+                    transform_node_id,
+                    light_type_id: light_type_id(light_type).to_string(),
+                    light_type_label: light_type.label().to_string(),
+                    world_position: app_vec3(*translation),
+                    direction: app_vec3(direction),
+                    color: app_vec3(*color),
+                    intensity: *intensity,
+                    range: *range,
+                    spot_angle: *spot_angle,
+                    active: active_light_ids.contains(&light_node_id),
+                    array_positions: array_positions.into_iter().map(app_vec3).collect(),
+                    array_colors: array_colors.into_iter().map(app_vec3).collect(),
+                })
+            })
+            .collect()
+    }
+
     fn light_mask_bit_for_light(&self, light_id: NodeId) -> Option<u8> {
         self.light_link_targets()
             .0
@@ -3785,6 +3890,142 @@ fn parse_array_pattern_id(pattern_id: &str) -> Option<ArrayPattern> {
     })
 }
 
+fn inverse_rotate_euler(point: Vec3, rotation: Vec3) -> Vec3 {
+    let mut rotated = point;
+    let (sin_z, cos_z) = (-rotation.z).sin_cos();
+    rotated = Vec3::new(
+        cos_z * rotated.x - sin_z * rotated.y,
+        sin_z * rotated.x + cos_z * rotated.y,
+        rotated.z,
+    );
+    let (sin_y, cos_y) = (-rotation.y).sin_cos();
+    rotated = Vec3::new(
+        cos_y * rotated.x + sin_y * rotated.z,
+        rotated.y,
+        -sin_y * rotated.x + cos_y * rotated.z,
+    );
+    let (sin_x, cos_x) = (-rotation.x).sin_cos();
+    Vec3::new(
+        rotated.x,
+        cos_x * rotated.y - sin_x * rotated.z,
+        sin_x * rotated.y + cos_x * rotated.z,
+    )
+}
+
+fn compute_light_array_positions(pattern: &ArrayPattern, count: u32, radius: f32) -> Vec<Vec3> {
+    let instance_count = count.max(1) as usize;
+    let mut positions = Vec::with_capacity(instance_count);
+
+    match pattern {
+        ArrayPattern::Ring => {
+            for index in 0..instance_count {
+                let angle = (index as f32 / instance_count as f32) * std::f32::consts::TAU;
+                positions.push(Vec3::new(angle.cos() * radius, 0.0, angle.sin() * radius));
+            }
+        }
+        ArrayPattern::Line => {
+            let total_length = radius * 2.0;
+            for index in 0..instance_count {
+                let t = if instance_count > 1 {
+                    index as f32 / (instance_count - 1) as f32
+                } else {
+                    0.5
+                };
+                positions.push(Vec3::new(-radius + t * total_length, 0.0, 0.0));
+            }
+        }
+        ArrayPattern::Grid => {
+            let side = (instance_count as f32).sqrt().ceil() as usize;
+            let mut placed = 0usize;
+            for row in 0..side {
+                for col in 0..side {
+                    if placed >= instance_count {
+                        break;
+                    }
+                    let tx = if side > 1 {
+                        col as f32 / (side - 1) as f32
+                    } else {
+                        0.5
+                    };
+                    let tz = if side > 1 {
+                        row as f32 / (side - 1) as f32
+                    } else {
+                        0.5
+                    };
+                    positions.push(Vec3::new(
+                        -radius + tx * radius * 2.0,
+                        0.0,
+                        -radius + tz * radius * 2.0,
+                    ));
+                    placed += 1;
+                }
+            }
+        }
+        ArrayPattern::Spiral => {
+            for index in 0..instance_count {
+                let t = index as f32 / instance_count.max(1) as f32;
+                let angle = t * std::f32::consts::TAU * 2.0;
+                let current_radius = t * radius;
+                positions.push(Vec3::new(
+                    angle.cos() * current_radius,
+                    0.0,
+                    angle.sin() * current_radius,
+                ));
+            }
+        }
+    }
+
+    positions
+}
+
+fn hue_rotate_color(color: Vec3, degrees: f32) -> Vec3 {
+    let red = color.x;
+    let green = color.y;
+    let blue = color.z;
+    let max_channel = red.max(green).max(blue);
+    let min_channel = red.min(green).min(blue);
+    let delta = max_channel - min_channel;
+    let hue = if delta < 1e-6 {
+        0.0
+    } else if (max_channel - red).abs() < 1e-6 {
+        60.0 * (((green - blue) / delta) % 6.0)
+    } else if (max_channel - green).abs() < 1e-6 {
+        60.0 * ((blue - red) / delta + 2.0)
+    } else {
+        60.0 * ((red - green) / delta + 4.0)
+    };
+    let saturation = if max_channel < 1e-6 {
+        0.0
+    } else {
+        delta / max_channel
+    };
+    let value = max_channel;
+    let shifted_hue = (hue + degrees).rem_euclid(360.0);
+    let chroma = value * saturation;
+    let x = chroma * (1.0 - ((shifted_hue / 60.0) % 2.0 - 1.0).abs());
+    let match_value = value - chroma;
+
+    let (red1, green1, blue1) = if shifted_hue < 60.0 {
+        (chroma, x, 0.0)
+    } else if shifted_hue < 120.0 {
+        (x, chroma, 0.0)
+    } else if shifted_hue < 180.0 {
+        (0.0, chroma, x)
+    } else if shifted_hue < 240.0 {
+        (0.0, x, chroma)
+    } else if shifted_hue < 300.0 {
+        (x, 0.0, chroma)
+    } else {
+        (chroma, 0.0, x)
+    };
+
+    Vec3::new(
+        red1 + match_value,
+        green1 + match_value,
+        blue1 + match_value,
+    )
+}
+
 fn light_type_supports_range(light_type: &LightType) -> bool {
     matches!(
         light_type,
@@ -4585,6 +4826,30 @@ mod tests {
             .cookie_candidates
             .iter()
             .any(|candidate| candidate.name == "Sphere"));
+    }
+
+    #[test]
+    fn scene_snapshot_includes_viewport_light_gizmos_for_visible_lights() {
+        let mut bridge = AppBridge::new();
+        let transform_id = bridge.create_light(LightType::Spot);
+
+        let snapshot = bridge.scene_snapshot();
+        let viewport_light = snapshot
+            .viewport_lights
+            .iter()
+            .find(|light| light.transform_node_id == transform_id)
+            .expect("viewport light snapshot");
+
+        assert_eq!(viewport_light.light_type_id, "spot");
+        assert_eq!(viewport_light.light_type_label, "Spot");
+        assert!(viewport_light.active);
+        assert!(viewport_light.range > 0.0);
+        assert!(viewport_light.spot_angle > 0.0);
+        assert!(viewport_light.direction.y < 0.0);
+        assert!(snapshot.viewport_lights.iter().all(|light| {
+            bridge.scene.nodes.contains_key(&light.light_node_id)
+                && bridge.scene.nodes.contains_key(&light.transform_node_id)
+        }));
     }
 
     #[test]

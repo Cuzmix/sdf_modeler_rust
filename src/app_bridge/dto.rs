@@ -343,6 +343,23 @@ pub struct AppLightPropertiesSnapshot {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AppViewportLightSnapshot {
+    pub light_node_id: u64,
+    pub transform_node_id: u64,
+    pub light_type_id: String,
+    pub light_type_label: String,
+    pub world_position: AppVec3,
+    pub direction: AppVec3,
+    pub color: AppVec3,
+    pub intensity: f32,
+    pub range: f32,
+    pub spot_angle: f32,
+    pub active: bool,
+    pub array_positions: Vec<AppVec3>,
+    pub array_colors: Vec<AppVec3>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AppScalarPropertySnapshot {
     pub key: String,
     pub label: String,
@@ -418,6 +435,8 @@ pub struct AppSceneSnapshot {
     pub selected_node_properties: Option<AppSelectedNodePropertiesSnapshot>,
     pub top_level_nodes: Vec<AppNodeSnapshot>,
     pub scene_tree_roots: Vec<AppSceneTreeNodeSnapshot>,
+    #[serde(default)]
+    pub viewport_lights: Vec<AppViewportLightSnapshot>,
     pub history: AppHistorySnapshot,
     pub document: AppDocumentSnapshot,
     pub render: AppRenderSettingsSnapshot,

@@ -560,6 +560,31 @@ rust.AppLightLinkingSnapshot _lightLinking(Map<String, dynamic> json) =>
       maxLightCount: _readInt(json, 'max_light_count', defaultValue: 8),
     );
 
+rust.AppViewportLightSnapshot _viewportLight(Map<String, dynamic> json) =>
+    rust.AppViewportLightSnapshot(
+      lightNodeId: _readBigInt(json, 'light_node_id'),
+      transformNodeId: _readBigInt(json, 'transform_node_id'),
+      lightTypeId: _readString(json, 'light_type_id'),
+      lightTypeLabel: _readString(json, 'light_type_label'),
+      worldPosition: _vec3(_readJsonObject(json['world_position'])),
+      direction: _vec3(_readJsonObject(json['direction'])),
+      color: _vec3(_readJsonObject(json['color'])),
+      intensity: _readDouble(json, 'intensity'),
+      range: _readDouble(json, 'range'),
+      spotAngle: _readDouble(json, 'spot_angle'),
+      active: _readBool(json, 'active', defaultValue: true),
+      arrayPositions: _readObjectList(
+        json,
+        'array_positions',
+        _vec3,
+      ),
+      arrayColors: _readObjectList(
+        json,
+        'array_colors',
+        _vec3,
+      ),
+    );
+
 rust.AppScalarPropertySnapshot _scalarProperty(Map<String, dynamic> json) =>
     rust.AppScalarPropertySnapshot(
       key: _readString(json, 'key'),
@@ -663,6 +688,7 @@ rust.AppSceneSnapshot _sceneSnapshot(Map<String, dynamic> json) {
     lightLinking: _readOptionalObject(json, 'light_linking') == null
         ? _defaultLightLinkingSnapshot()
         : _lightLinking(_readOptionalObject(json, 'light_linking')!),
+    viewportLights: _readObjectList(json, 'viewport_lights', _viewportLight),
     camera: _camera(_readJsonObject(json['camera'])),
     stats: _sceneStats(_readJsonObject(json['stats'])),
     tool: _tool(_readJsonObject(json['tool'])),

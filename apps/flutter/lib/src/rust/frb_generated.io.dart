@@ -161,6 +161,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AppVec3 dco_decode_app_vec_3(dynamic raw);
 
   @protected
+  AppViewportLightSnapshot dco_decode_app_viewport_light_snapshot(dynamic raw);
+
+  @protected
   AppWorkflowStatusSnapshot dco_decode_app_workflow_status_snapshot(
     dynamic raw,
   );
@@ -281,6 +284,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<AppSceneTreeNodeSnapshot> dco_decode_list_app_scene_tree_node_snapshot(
+    dynamic raw,
+  );
+
+  @protected
+  List<AppVec3> dco_decode_list_app_vec_3(dynamic raw);
+
+  @protected
+  List<AppViewportLightSnapshot> dco_decode_list_app_viewport_light_snapshot(
     dynamic raw,
   );
 
@@ -547,6 +558,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AppVec3 sse_decode_app_vec_3(SseDeserializer deserializer);
 
   @protected
+  AppViewportLightSnapshot sse_decode_app_viewport_light_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
   AppWorkflowStatusSnapshot sse_decode_app_workflow_status_snapshot(
     SseDeserializer deserializer,
   );
@@ -685,6 +701,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<AppSceneTreeNodeSnapshot> sse_decode_list_app_scene_tree_node_snapshot(
+    SseDeserializer deserializer,
+  );
+
+  @protected
+  List<AppVec3> sse_decode_list_app_vec_3(SseDeserializer deserializer);
+
+  @protected
+  List<AppViewportLightSnapshot> sse_decode_list_app_viewport_light_snapshot(
     SseDeserializer deserializer,
   );
 
@@ -1017,6 +1041,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_app_vec_3(AppVec3 self, SseSerializer serializer);
 
   @protected
+  void sse_encode_app_viewport_light_snapshot(
+    AppViewportLightSnapshot self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_app_workflow_status_snapshot(
     AppWorkflowStatusSnapshot self,
     SseSerializer serializer,
@@ -1172,6 +1202,15 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_app_scene_tree_node_snapshot(
     List<AppSceneTreeNodeSnapshot> self,
+    SseSerializer serializer,
+  );
+
+  @protected
+  void sse_encode_list_app_vec_3(List<AppVec3> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_app_viewport_light_snapshot(
+    List<AppViewportLightSnapshot> self,
     SseSerializer serializer,
   );
 

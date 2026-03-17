@@ -523,6 +523,29 @@ class _MockRustApi extends RustLibApi {
     },
   );
 
+  static final String _lightBillboardSnapshot = _withFields(
+    _advancedLightSnapshot,
+    <String, Object?>{
+      'viewport_lights': <Object?>[
+        <String, Object?>{
+          'light_node_id': 9,
+          'transform_node_id': 8,
+          'light_type_id': 'spot',
+          'light_type_label': 'Spot',
+          'world_position': <String, double>{'x': 0.0, 'y': 1.5, 'z': 0.0},
+          'direction': <String, double>{'x': 0.0, 'y': -1.0, 'z': 0.0},
+          'color': <String, double>{'x': 0.7, 'y': 0.8, 'z': 0.9},
+          'intensity': 2.5,
+          'range': 12.0,
+          'spot_angle': 35.0,
+          'active': true,
+          'array_positions': <Object?>[],
+          'array_colors': <Object?>[],
+        },
+      ],
+    },
+  );
+
   static final String _arrayLightSnapshot = _withFields(
     _advancedLightSnapshot,
     <String, Object?>{
@@ -3671,6 +3694,39 @@ void main() {
 
     expect(orbitCalls, greaterThan(0));
     expect(pickCalls, 1);
+  });
+
+  testWidgets('light billboard taps select via Rust without native picking', (
+    WidgetTester tester,
+  ) async {
+    mockApi.currentSnapshot = _MockRustApi._lightBillboardSnapshot;
+
+    await pumpApp(tester, logicalSize: const Size(1400, 900));
+
+    final dynamic state = tester.state(find.byType(BridgeStatusPage));
+    final viewportRect = tester.getRect(find.byType(ViewportSurface));
+    var viewportWidth = viewportRect.width;
+    var viewportHeight = viewportWidth / (16.0 / 9.0);
+    if (viewportHeight > viewportRect.height) {
+      viewportHeight = viewportRect.height;
+      viewportWidth = viewportHeight * (16.0 / 9.0);
+    }
+    final innerViewportTopLeft = Offset(
+      viewportRect.left + (viewportRect.width - viewportWidth) * 0.5,
+      viewportRect.top + (viewportRect.height - viewportHeight) * 0.5,
+    );
+    final localBillboardPosition =
+        state.debugViewportLightBillboardPosition(nodeId: BigInt.from(8))
+            as Offset?;
+
+    expect(localBillboardPosition, isNotNull);
+
+    await tester.tapAt(innerViewportTopLeft + localBillboardPosition!);
+    await tester.pump();
+
+    expect(mockApi.selectNodeCalls, 1);
+    expect(mockApi.currentSnapshot, _MockRustApi._selectedSnapshot);
+    expect(pickCalls, 0);
   });
 
   testWidgets('tablet touch gestures route pan and pinch without selecting', (
