@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:sdf_modeler_flutter/src/bridge/bridge_snapshot_extensions.dart';
 import 'package:sdf_modeler_flutter/src/rust/api/simple.dart';
 import 'package:sdf_modeler_flutter/src/export/export_panel.dart';
@@ -495,6 +496,14 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     _handleTextureEvent(event);
   }
 
+  ViewportGizmoTransformData? _selectedTransformOverride(
+    AppSceneSnapshot? snapshot,
+  ) {
+    return _viewportTransformGizmoController.transformOverrideForSnapshot(
+      snapshot,
+    );
+  }
+
   Offset? debugViewportGizmoAxisHandlePosition(String axisId) {
     return _viewportTransformGizmoController.debugAxisHandlePosition(
       axisId,
@@ -505,11 +514,13 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
   }
 
   Offset? debugViewportLightBillboardPosition({BigInt? nodeId}) {
+    final snapshot = _sceneSnapshot;
     return viewport_light_gizmo.debugViewportLightBillboardPosition(
       _lastLogicalViewportSize,
-      snapshot: _sceneSnapshot,
+      snapshot: snapshot,
       feedback: _viewportOverlayNotifier.value.feedback,
       nodeId: nodeId,
+      selectedTransformOverride: _selectedTransformOverride(snapshot),
     );
   }
 
@@ -740,12 +751,14 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     Offset localPosition,
     Size logicalViewportSize,
   ) {
+    final snapshot = _sceneSnapshot;
     final billboardTransformId =
         viewport_light_gizmo.hitTestViewportLightBillboardTransformId(
           localPosition,
           logicalViewportSize,
-          snapshot: _sceneSnapshot,
+          snapshot: snapshot,
           feedback: _viewportOverlayNotifier.value.feedback,
+          selectedTransformOverride: _selectedTransformOverride(snapshot),
         );
     if (billboardTransformId != null) {
       unawaited(_runSceneCommand(() => selectNode(nodeId: billboardTransformId)));
@@ -828,7 +841,14 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
 
   void _handleViewportInteractionEnd() {}
 
+  bool _canShowCommandPanel() {
+    return !ShellLayout.forWidth(MediaQuery.sizeOf(context).width).useSidePanel;
+  }
+
   void _openCommandPanel() {
+    if (!_canShowCommandPanel()) {
+      return;
+    }
     if (_activeModalPanel == _BridgeModalPanel.commands) {
       return;
     }
@@ -846,6 +866,436 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     setState(() {
       _activeModalPanel = null;
     });
+  }
+
+  void _toggleCommandPanel() {
+    if (!_canShowCommandPanel()) {
+      return;
+    }
+    if (_activeModalPanel == _BridgeModalPanel.commands) {
+      _closeCommandPanel();
+      return;
+    }
+    _openCommandPanel();
+  }
+
+  KeyEventResult _handleShortcutKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent || _commandInFlight || _isEditableTextFocused()) {
+      return KeyEventResult.ignored;
+    }
+
+    final snapshot = _sceneSnapshot;
+    if (snapshot == null) {
+      return KeyEventResult.ignored;
+    }
+
+    if (_handleCameraBookmarkShortcut(event, snapshot)) {
+      return KeyEventResult.handled;
+    }
+
+    final actionId = _matchingShortcutActionId(event, snapshot);
+    if (actionId == null) {
+      return KeyEventResult.ignored;
+    }
+
+    if (_dispatchShortcutAction(actionId, snapshot)) {
+      return KeyEventResult.handled;
+    }
+
+    return KeyEventResult.ignored;
+  }
+
+  String? _matchingShortcutActionId(KeyEvent event, AppSceneSnapshot snapshot) {
+    for (final keybinding in snapshot.settings.keybindings) {
+      if (!_eventMatchesShortcutBinding(event, keybinding)) {
+        continue;
+      }
+      if (_shouldIgnoreShortcutAction(keybinding.actionId, snapshot)) {
+        continue;
+      }
+      return keybinding.actionId;
+    }
+    return null;
+  }
+
+  bool _eventMatchesShortcutBinding(
+    KeyEvent event,
+    AppKeybindingSnapshot keybinding,
+  ) {
+    final binding = keybinding.binding;
+    if (binding == null) {
+      return false;
+    }
+
+    final keyboard = HardwareKeyboard.instance;
+    if (keyboard.isMetaPressed) {
+      return false;
+    }
+    if (!_eventMatchesShortcutKeyId(event, binding.keyId)) {
+      return false;
+    }
+
+    return keyboard.isControlPressed == binding.ctrl &&
+        keyboard.isShiftPressed == binding.shift &&
+        keyboard.isAltPressed == binding.alt;
+  }
+
+  bool _eventMatchesShortcutKeyId(KeyEvent event, String keyId) {
+    return _shortcutKeyIdForEvent(event.logicalKey) == keyId;
+  }
+
+  String? _shortcutKeyIdForEvent(LogicalKeyboardKey logicalKey) {
+    final keyLabel = logicalKey.keyLabel.toLowerCase();
+    if (keyLabel.length == 1) {
+      if (_isAsciiLetterOrDigit(keyLabel)) {
+        return keyLabel;
+      }
+      return switch (keyLabel) {
+        '[' => 'open_bracket',
+        ']' => 'close_bracket',
+        '/' => 'slash',
+        _ => null,
+      };
+    }
+
+    if (keyLabel.startsWith('f')) {
+      final functionNumber = int.tryParse(keyLabel.substring(1));
+      if (functionNumber != null &&
+          functionNumber >= 1 &&
+          functionNumber <= 12) {
+        return keyLabel;
+      }
+    }
+
+    return switch (logicalKey) {
+      LogicalKeyboardKey.space => 'space',
+      LogicalKeyboardKey.enter || LogicalKeyboardKey.numpadEnter => 'enter',
+      LogicalKeyboardKey.escape => 'escape',
+      LogicalKeyboardKey.tab => 'tab',
+      LogicalKeyboardKey.delete => 'delete',
+      LogicalKeyboardKey.home => 'home',
+      LogicalKeyboardKey.end => 'end',
+      LogicalKeyboardKey.arrowUp => 'arrow_up',
+      LogicalKeyboardKey.arrowDown => 'arrow_down',
+      LogicalKeyboardKey.arrowLeft => 'arrow_left',
+      LogicalKeyboardKey.arrowRight => 'arrow_right',
+      LogicalKeyboardKey.numpadDivide => 'slash',
+      _ => null,
+    };
+  }
+
+  bool _isAsciiLetterOrDigit(String value) {
+    if (value.length != 1) {
+      return false;
+    }
+    final codeUnit = value.codeUnitAt(0);
+    return (codeUnit >= 48 && codeUnit <= 57) ||
+        (codeUnit >= 97 && codeUnit <= 122);
+  }
+
+  bool _shouldIgnoreShortcutAction(String actionId, AppSceneSnapshot snapshot) {
+    if (_isSculptOnlyShortcutAction(actionId) &&
+        !_isSculptSessionActive(snapshot)) {
+      return true;
+    }
+    if (_isSculptSessionActive(snapshot) && actionId == 'cycle_shading_mode') {
+      return true;
+    }
+    if (actionId == 'show_export_dialog' &&
+        snapshot.export_.status.isInProgress) {
+      return true;
+    }
+    if (actionId == 'quick_sculpt_mode' &&
+        snapshot.tool.activeToolLabel.toLowerCase() != 'select') {
+      return true;
+    }
+    if (actionId == 'exit_sculpt_mode' && !_isSculptToolActive(snapshot)) {
+      return true;
+    }
+    return false;
+  }
+
+  bool _isSculptOnlyShortcutAction(String actionId) {
+    switch (actionId) {
+      case 'sculpt_brush_add':
+      case 'sculpt_brush_carve':
+      case 'sculpt_brush_smooth':
+      case 'sculpt_brush_flatten':
+      case 'sculpt_brush_inflate':
+      case 'sculpt_brush_grab':
+      case 'sculpt_brush_shrink':
+      case 'sculpt_brush_grow':
+      case 'sculpt_symmetry_x':
+      case 'sculpt_symmetry_y':
+      case 'sculpt_symmetry_z':
+      case 'exit_sculpt_mode':
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  bool _isSculptSessionActive(AppSceneSnapshot snapshot) {
+    return snapshot.sculpt.session != null || snapshot.sculpt.canStop;
+  }
+
+  bool _isSculptToolActive(AppSceneSnapshot snapshot) {
+    return snapshot.tool.activeToolLabel.toLowerCase() == 'sculpt' ||
+        _isSculptSessionActive(snapshot);
+  }
+
+  bool _handleCameraBookmarkShortcut(
+    KeyEvent event,
+    AppSceneSnapshot snapshot,
+  ) {
+    if (_isSculptSessionActive(snapshot)) {
+      return false;
+    }
+
+    final keyboard = HardwareKeyboard.instance;
+    if (!keyboard.isControlPressed ||
+        keyboard.isShiftPressed ||
+        keyboard.isAltPressed ||
+        keyboard.isMetaPressed) {
+      return false;
+    }
+
+    final slotIndex = switch (_shortcutKeyIdForEvent(event.logicalKey)) {
+      '1' => 0,
+      '2' => 1,
+      '3' => 2,
+      '4' => 3,
+      '5' => 4,
+      '6' => 5,
+      '7' => 6,
+      '8' => 7,
+      '9' => 8,
+      _ => null,
+    };
+    if (slotIndex == null) {
+      return false;
+    }
+
+    unawaited(_saveCameraBookmark(slotIndex));
+    return true;
+  }
+
+  bool _dispatchShortcutAction(String actionId, AppSceneSnapshot snapshot) {
+    switch (actionId) {
+      case 'new_scene':
+        unawaited(_newScene());
+        return true;
+      case 'open_project':
+        unawaited(_openScene());
+        return true;
+      case 'save_project':
+        unawaited(_saveScene());
+        return true;
+      case 'undo':
+        if (_isSculptSessionActive(snapshot)) {
+          return false;
+        }
+        unawaited(_runSceneCommand(undo));
+        return true;
+      case 'redo':
+        if (_isSculptSessionActive(snapshot)) {
+          return false;
+        }
+        unawaited(_runSceneCommand(redo));
+        return true;
+      case 'duplicate':
+        if (snapshot.selectedNode == null) {
+          return false;
+        }
+        unawaited(_runSceneCommand(duplicateSelected));
+        return true;
+      case 'delete_selected':
+        if (snapshot.selectedNode == null) {
+          return false;
+        }
+        unawaited(_runSceneCommand(deleteSelected));
+        return true;
+      case 'show_export_dialog':
+        if (!_canShowCommandPanel()) {
+          return false;
+        }
+        _openCommandPanel();
+        return true;
+      case 'toggle_command_palette':
+        if (!_canShowCommandPanel()) {
+          return false;
+        }
+        _toggleCommandPanel();
+        return true;
+      case 'camera_front':
+        unawaited(_runSceneCommand(cameraFront));
+        return true;
+      case 'camera_top':
+        unawaited(_runSceneCommand(cameraTop));
+        return true;
+      case 'camera_right':
+        unawaited(_runSceneCommand(cameraRight));
+        return true;
+      case 'camera_back':
+        unawaited(_runSceneCommand(cameraBack));
+        return true;
+      case 'camera_left':
+        unawaited(_runSceneCommand(cameraLeft));
+        return true;
+      case 'camera_bottom':
+        unawaited(_runSceneCommand(cameraBottom));
+        return true;
+      case 'toggle_ortho':
+        unawaited(_runSceneCommand(toggleOrthographic));
+        return true;
+      case 'focus_selected':
+        if (snapshot.selectedNode == null) {
+          return false;
+        }
+        unawaited(_runSceneCommand(focusSelected));
+        return true;
+      case 'frame_all':
+        unawaited(_runSceneCommand(frameAll));
+        return true;
+      case 'gizmo_translate':
+        if (snapshot.selectedNode == null) {
+          return false;
+        }
+        unawaited(_setManipulatorMode('translate'));
+        return true;
+      case 'gizmo_rotate':
+        if (snapshot.selectedNode == null) {
+          return false;
+        }
+        unawaited(_setManipulatorMode('rotate'));
+        return true;
+      case 'gizmo_scale':
+        if (snapshot.selectedNode == null) {
+          return false;
+        }
+        unawaited(_setManipulatorMode('scale'));
+        return true;
+      case 'toggle_gizmo_space':
+        if (snapshot.selectedNode == null) {
+          return false;
+        }
+        unawaited(_toggleManipulatorSpace());
+        return true;
+      case 'reset_pivot':
+        if (!snapshot.tool.canResetPivot) {
+          return false;
+        }
+        unawaited(_resetManipulatorPivot());
+        return true;
+      case 'enter_sculpt_mode':
+      case 'quick_sculpt_mode':
+        return _enterSculptModeShortcut(snapshot);
+      case 'exit_sculpt_mode':
+        if (!snapshot.sculpt.canStop) {
+          return false;
+        }
+        unawaited(_stopSculpting());
+        return true;
+      case 'sculpt_brush_add':
+        unawaited(_setSculptBrushMode('add'));
+        return true;
+      case 'sculpt_brush_carve':
+        unawaited(_setSculptBrushMode('carve'));
+        return true;
+      case 'sculpt_brush_smooth':
+        unawaited(_setSculptBrushMode('smooth'));
+        return true;
+      case 'sculpt_brush_flatten':
+        unawaited(_setSculptBrushMode('flatten'));
+        return true;
+      case 'sculpt_brush_inflate':
+        unawaited(_setSculptBrushMode('inflate'));
+        return true;
+      case 'sculpt_brush_grab':
+        unawaited(_setSculptBrushMode('grab'));
+        return true;
+      case 'sculpt_brush_shrink':
+        return _nudgeSculptBrushRadius(snapshot, -0.05);
+      case 'sculpt_brush_grow':
+        return _nudgeSculptBrushRadius(snapshot, 0.05);
+      case 'sculpt_symmetry_x':
+        return _toggleSculptSymmetryShortcut(snapshot, 'x');
+      case 'sculpt_symmetry_y':
+        return _toggleSculptSymmetryShortcut(snapshot, 'y');
+      case 'sculpt_symmetry_z':
+        return _toggleSculptSymmetryShortcut(snapshot, 'z');
+      case 'cycle_shading_mode':
+        return _cycleShadingMode(snapshot);
+      default:
+        return false;
+    }
+  }
+
+  bool _enterSculptModeShortcut(AppSceneSnapshot snapshot) {
+    if (snapshot.sculpt.canStop) {
+      return false;
+    }
+    if (snapshot.sculpt.canResumeSelected) {
+      unawaited(_resumeSculptingSelected());
+      return true;
+    }
+    if (snapshot.selectedNode == null) {
+      return false;
+    }
+    unawaited(_openSculptConvertDialog());
+    return true;
+  }
+
+  bool _toggleSculptSymmetryShortcut(
+    AppSceneSnapshot snapshot,
+    String axisId,
+  ) {
+    final sculptSession = snapshot.sculpt.session;
+    if (sculptSession == null) {
+      return false;
+    }
+
+    final nextAxisId = sculptSession.symmetryAxisId == axisId ? 'off' : axisId;
+    unawaited(_setSculptSymmetryAxis(nextAxisId));
+    return true;
+  }
+
+  bool _nudgeSculptBrushRadius(AppSceneSnapshot snapshot, double delta) {
+    final sculptSession = snapshot.sculpt.session;
+    if (sculptSession == null) {
+      return false;
+    }
+
+    final nextRadius = (sculptSession.brushRadius + delta).clamp(0.05, 2.0);
+    unawaited(_setSculptBrushRadius(nextRadius.toDouble()));
+    return true;
+  }
+
+  bool _cycleShadingMode(AppSceneSnapshot snapshot) {
+    final shadingModes = snapshot.render.shadingModes;
+    if (shadingModes.isEmpty) {
+      return false;
+    }
+
+    final currentIndex = shadingModes.indexWhere(
+      (option) => option.id == snapshot.render.shadingModeId,
+    );
+    final nextIndex = currentIndex == -1
+        ? 0
+        : (currentIndex + 1) % shadingModes.length;
+    unawaited(_setRenderShadingMode(shadingModes[nextIndex].id));
+    return true;
+  }
+
+  bool _isEditableTextFocused() {
+    FocusNode? focusNode = FocusManager.instance.primaryFocus;
+    while (focusNode != null) {
+      if (focusNode.context?.widget is EditableText) {
+        return true;
+      }
+      focusNode = focusNode.parent;
+    }
+    return false;
   }
 
   void _runModalSceneCommand(
@@ -1707,9 +2157,17 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
           overlay: Stack(
             fit: StackFit.expand,
             children: [
-              viewport_light_gizmo.ViewportLightGizmoOverlay(
-                snapshot: snapshot,
-                feedback: overlayState.feedback,
+              AnimatedBuilder(
+                animation: _viewportTransformGizmoController,
+                builder: (context, child) {
+                  return viewport_light_gizmo.ViewportLightGizmoOverlay(
+                    snapshot: snapshot,
+                    feedback: overlayState.feedback,
+                    selectedTransformOverride: _selectedTransformOverride(
+                      snapshot,
+                    ),
+                  );
+                },
               ),
               ViewportTransformGizmoOverlay(
                 controller: _viewportTransformGizmoController,
@@ -2120,52 +2578,56 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     final activeTextureId = _textureId;
     final shellBackground = ShellSurfaceStyles.canvas(context);
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      appBar: AppBar(title: const Text('SDF Modeler Flutter Host')),
-      body: DecoratedBox(
-        decoration: shellBackground,
-        child: Padding(
-          padding: EdgeInsets.all(
-            ShellLayout.forWidth(MediaQuery.sizeOf(context).width).screenPadding,
-          ),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final shellLayout = ShellLayout.forWidth(constraints.maxWidth);
-              final viewportCard = _buildViewportCard(activeTextureId);
-              final commandSheetContent = _buildCommandSheetContent();
+    return Focus(
+      autofocus: true,
+      onKeyEvent: _handleShortcutKeyEvent,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(title: const Text('SDF Modeler Flutter Host')),
+        body: DecoratedBox(
+          decoration: shellBackground,
+          child: Padding(
+            padding: EdgeInsets.all(
+              ShellLayout.forWidth(MediaQuery.sizeOf(context).width).screenPadding,
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final shellLayout = ShellLayout.forWidth(constraints.maxWidth);
+                final viewportCard = _buildViewportCard(activeTextureId);
+                final commandSheetContent = _buildCommandSheetContent();
 
-              if (shellLayout.useSidePanel) {
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(flex: 3, child: viewportCard),
-                    SizedBox(width: shellLayout.panelGap),
-                    ShellDesktopSidePanel(
-                      width: shellLayout.inspectorPanelExtent,
-                      child: _buildInspectorPanel(shellLayout),
-                    ),
-                  ],
-                );
-              }
-
-              return ShellStackedPaneLayout(
-                viewport: viewportCard,
-                modalPanel: _activeModalPanel == _BridgeModalPanel.commands
-                    ? ShellModalPanel(
-                        title: 'Workspace Commands',
-                        onDismiss: _closeCommandPanel,
-                        child: commandSheetContent,
-                      )
-                    : null,
-                bottomSheetBuilder: (context, scrollController) {
-                  return _buildInspectorPanel(
-                    shellLayout,
-                    scrollController: scrollController,
+                if (shellLayout.useSidePanel) {
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(flex: 3, child: viewportCard),
+                      SizedBox(width: shellLayout.panelGap),
+                      ShellDesktopSidePanel(
+                        width: shellLayout.inspectorPanelExtent,
+                        child: _buildInspectorPanel(shellLayout),
+                      ),
+                    ],
                   );
-                },
-              );
-            },
+                }
+
+                return ShellStackedPaneLayout(
+                  viewport: viewportCard,
+                  modalPanel: _activeModalPanel == _BridgeModalPanel.commands
+                      ? ShellModalPanel(
+                          title: 'Workspace Commands',
+                          onDismiss: _closeCommandPanel,
+                          child: commandSheetContent,
+                        )
+                      : null,
+                  bottomSheetBuilder: (context, scrollController) {
+                    return _buildInspectorPanel(
+                      shellLayout,
+                      scrollController: scrollController,
+                    );
+                  },
+                );
+              },
+            ),
           ),
         ),
       ),

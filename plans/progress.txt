@@ -3029,3 +3029,80 @@ Result:
 - PRD `#43` is fully verified and complete.
 - All items in `plans/prd.json` now pass.
 
+--- Migration Iteration 37: PRD #44 - Windows Flutter accessibility AXTree debugging ---
+IN PROGRESS. Investigated the repeated Flutter desktop accessibility error (`Failed to update ui::AXTree`, `Nodes left pending by the update`) and landed the smallest likely mitigation first: remove the high-churn decorative viewport HUD/gizmo subtree from desktop semantics while keeping real interactive controls accessible.
+
+Changes:
+- apps/flutter/lib/src/viewport/viewport_surface.dart
+- plans/prd.json
+- plans/progress.txt
+  - Narrowed the highest-confidence trigger to the non-interactive viewport overlay stack that rebuilds from native frame and hover feedback above the texture viewport.
+  - Wrapped the decorative `widget.overlay` subtree in `ExcludeSemantics` while leaving `controlsOverlay` untouched so actual viewport tool buttons stay accessible.
+  - Added PRD `#44` to track the remaining manual reproduction and confirmation work for the AXTree failure.
+
+Verification:
+- Flutter analyze: PASS
+- Flutter test: PASS
+- Flutter build windows --debug: PASS
+
+Manual verification:
+- Not run in this terminal session. Need to reproduce the prior Windows AXTree failure and confirm the viewport overlay semantics exclusion stops the repeated console spam without harming viewport tool usability.
+
+Result:
+- A targeted mitigation is in place for the most likely culprit subtree and the Flutter validation loop stayed green.
+- PRD `#44` remains open until Windows host validation confirms the AXTree error is gone or narrows it further.
+
+--- Planning Note: Separate product enhancement PRD created ---
+Added a separate post-migration enhancement roadmap so future product work has a concrete backlog without polluting the active migration PRD or the UI-only customization plan.
+
+Changes:
+- docs/product_enhancements_prd.md
+- docs/flutter_migration.md
+- plans/progress.txt
+  - Added a dedicated enhancement PRD covering goals, non-goals, prioritization rules, product opportunity areas, and a prioritized set of candidate execution slices.
+  - Kept the enhancement plan separate from `plans/prd.json` and `docs/ui_customization_prd.md`.
+  - Linked the new document from the migration note so it remains discoverable with the other active planning references.
+
+Verification:
+- Documentation review only; no code or build validation required.
+
+Result:
+- The repo now has distinct planning artifacts for migration execution, UI customization, and broader product enhancements.
+
+--- Planning Note: Detailed professional UX overhaul PRD created ---
+Added a dedicated UX overhaul PRD that defines the target product feel, workflow model, and shell architecture for turning SDF Modeler into a more professional hybrid SDF-and-sculpt app.
+
+Changes:
+- docs/professional_ux_overhaul_prd.md
+- docs/product_enhancements_prd.md
+- docs/flutter_migration.md
+- plans/progress.txt
+  - Added a detailed overhaul PRD covering product thesis, benchmark synthesis, unique differentiators, information architecture, workspace model, major workflow overhauls, professional quality systems, rollout phases, and acceptance criteria.
+  - Explicitly framed the target as taking the best workflow traits from Nomad Sculpt, ZBrush for iPad, and Shapr3D without losing the app's unique live-SDF-to-sculpt identity.
+  - Linked the new PRD from the broader enhancement roadmap and the migration note so it remains part of the planning surface.
+
+Verification:
+- Documentation review only; no code or build validation required.
+
+Result:
+- The repo now has a deeper execution-level UX overhaul document that can be broken into concrete implementation slices later.
+
+--- Planning Note: Professional UX overhaul Batch 1 execution PRD created ---
+Added a separate execution-ready Batch 1 PRD that breaks the professional UX overhaul into concrete, ordered slices without mixing that work into the active migration PRD.
+
+Changes:
+- docs/professional_ux_overhaul_batch_1_prd.md
+- docs/professional_ux_overhaul_prd.md
+- docs/product_enhancements_prd.md
+- docs/flutter_migration.md
+- plans/progress.txt
+  - Added a Batch 1 execution PRD covering preconditions, goals, non-goals, ordered slices, dependencies, build order, verification expectations, and promotion guidance into future active execution.
+  - Made the batch focus explicit: viewport-first shell, selection context engine, scene/layers refresh, live blockout workflow, hybrid branch-to-sculpt flow, sculpt workspace shell, command search, and radial quick actions.
+  - Linked the new Batch 1 PRD from the broader overhaul and enhancement planning documents.
+
+Verification:
+- Documentation review only; no code or build validation required.
+
+Result:
+- The repo now has a concrete first execution batch for the UX overhaul that can be promoted into future implementation slices when desired.
+

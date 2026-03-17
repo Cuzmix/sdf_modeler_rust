@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:sdf_modeler_flutter/src/rust/api/mirrors.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_theme.dart';
 import 'package:sdf_modeler_flutter/src/texture/texture_viewport_feedback.dart';
+import 'package:sdf_modeler_flutter/src/viewport/viewport_gizmo_math.dart'
+    show ViewportGizmoTransformData;
 
 const double _iconHitRadius = 16.0;
 const double _iconSizeMin = 12.0;
@@ -17,11 +19,13 @@ BigInt? hitTestViewportLightBillboardTransformId(
   Size viewportSize, {
   required AppSceneSnapshot? snapshot,
   required TextureViewportFeedback? feedback,
+  ViewportGizmoTransformData? selectedTransformOverride,
 }) {
   final geometry = _computeViewportLightGeometry(
     snapshot,
     feedback,
     viewportSize,
+    selectedTransformOverride: selectedTransformOverride,
   );
   if (geometry == null) {
     return null;
@@ -34,11 +38,13 @@ Offset? debugViewportLightBillboardPosition(
   required AppSceneSnapshot? snapshot,
   required TextureViewportFeedback? feedback,
   BigInt? nodeId,
+  ViewportGizmoTransformData? selectedTransformOverride,
 }) {
   final geometry = _computeViewportLightGeometry(
     snapshot,
     feedback,
     viewportSize,
+    selectedTransformOverride: selectedTransformOverride,
   );
   if (geometry == null || geometry.billboards.isEmpty) {
     return null;
@@ -63,10 +69,12 @@ class ViewportLightGizmoOverlay extends StatelessWidget {
     super.key,
     required this.snapshot,
     required this.feedback,
+    this.selectedTransformOverride,
   });
 
   final AppSceneSnapshot? snapshot;
   final TextureViewportFeedback? feedback;
+  final ViewportGizmoTransformData? selectedTransformOverride;
 
   @override
   Widget build(BuildContext context) {
@@ -76,6 +84,7 @@ class ViewportLightGizmoOverlay extends StatelessWidget {
           snapshot,
           feedback,
           Size(constraints.maxWidth, constraints.maxHeight),
+          selectedTransformOverride: selectedTransformOverride,
         );
         if (geometry == null) {
           return const SizedBox.expand();
@@ -734,9 +743,14 @@ class _ViewportLightGizmoPainter extends CustomPainter {
 _ViewportLightGizmoGeometry? _computeViewportLightGeometry(
   AppSceneSnapshot? snapshot,
   TextureViewportFeedback? feedback,
-  Size viewportSize,
-) {
-  final scene = _buildViewportLightScene(snapshot, feedback);
+  Size viewportSize, {
+  ViewportGizmoTransformData? selectedTransformOverride,
+}) {
+  final scene = _buildViewportLightScene(
+    snapshot,
+    feedback,
+    selectedTransformOverride: selectedTransformOverride,
+  );
   if (scene == null ||
       viewportSize.width <= 0 ||
       viewportSize.height <= 0) {
@@ -781,8 +795,9 @@ _ViewportLightGizmoGeometry? _computeViewportLightGeometry(
 
 _ViewportLightGizmoSceneState? _buildViewportLightScene(
   AppSceneSnapshot? snapshot,
-  TextureViewportFeedback? feedback,
-) {
+  TextureViewportFeedback? feedback, {
+  ViewportGizmoTransformData? selectedTransformOverride,
+}) {
   if (snapshot == null ||
       !snapshot.settings.showLightGizmos ||
       snapshot.viewportLights.isEmpty) {
@@ -792,7 +807,118 @@ _ViewportLightGizmoSceneState? _buildViewportLightScene(
   return _ViewportLightGizmoSceneState(
     camera: feedback?.camera ?? snapshot.camera,
     selectedNodeId: snapshot.selectedNode?.id,
-    viewportLights: snapshot.viewportLights,
+    viewportLights: _resolveViewportLights(
+      snapshot,
+      selectedTransformOverride: selectedTransformOverride,
+    ),
+  );
+}
+
+List<AppViewportLightSnapshot> _resolveViewportLights(
+  AppSceneSnapshot snapshot, {
+  ViewportGizmoTransformData? selectedTransformOverride,
+}) {
+  final selectedNodeId = snapshot.selectedNode?.id;
+  final selectedNodeProperties = snapshot.selectedNodeProperties;
+  final baseTransform = selectedNodeProperties?.transform;
+  final selectedLight = selectedNodeProperties?.light;
+  if (selectedNodeId == null ||
+      selectedTransformOverride == null ||
+      selectedNodeProperties?.nodeId != selectedNodeId ||
+      baseTransform == null ||
+      selectedLight == null) {
+    return snapshot.viewportLights;
+  }
+
+  final selectedTransformNodeId = selectedLight.transformNodeId ?? selectedNodeId;
+  var didApplyOverride = false;
+  final resolvedLights = snapshot.viewportLights.map((light) {
+    final isSelectedLight =
+        light.lightNodeId == selectedLight.nodeId &&
+        light.transformNodeId == selectedTransformNodeId;
+    if (!isSelectedLight) {
+      return light;
+    }
+
+    didApplyOverride = true;
+    return _applyTransformOverrideToLight(
+      light,
+      baseTransform: baseTransform,
+      selectedTransformOverride: selectedTransformOverride,
+    );
+  }).toList(growable: false);
+  if (!didApplyOverride) {
+    return snapshot.viewportLights;
+  }
+  return resolvedLights;
+}
+
+AppViewportLightSnapshot _applyTransformOverrideToLight(
+  AppViewportLightSnapshot light, {
+  required AppTransformPropertiesSnapshot baseTransform,
+  required ViewportGizmoTransformData selectedTransformOverride,
+}) {
+  final translationDelta =
+      _Vec3.fromAppVec3(selectedTransformOverride.position) -
+      _Vec3.fromAppVec3(baseTransform.position);
+  final direction = _directionFromRotationDegrees(
+    selectedTransformOverride.rotationDegrees,
+  );
+  final arrayPositions = light.arrayPositions
+      .map(
+        (position) =>
+            (_Vec3.fromAppVec3(position) + translationDelta).toAppVec3(),
+      )
+      .toList(growable: false);
+  return AppViewportLightSnapshot(
+    lightNodeId: light.lightNodeId,
+    transformNodeId: light.transformNodeId,
+    lightTypeId: light.lightTypeId,
+    lightTypeLabel: light.lightTypeLabel,
+    worldPosition: selectedTransformOverride.position,
+    direction: direction.toAppVec3(),
+    color: light.color,
+    intensity: light.intensity,
+    range: light.range,
+    spotAngle: light.spotAngle,
+    active: light.active,
+    arrayPositions: arrayPositions,
+    arrayColors: light.arrayColors,
+  );
+}
+
+_Vec3 _directionFromRotationDegrees(AppVec3 rotationDegrees) {
+  final rotationRadians = _Vec3(
+    rotationDegrees.x * math.pi / 180.0,
+    rotationDegrees.y * math.pi / 180.0,
+    rotationDegrees.z * math.pi / 180.0,
+  );
+  return _inverseRotateEuler(const _Vec3(0.0, -1.0, 0.0), rotationRadians)
+      .normalized();
+}
+
+_Vec3 _inverseRotateEuler(_Vec3 point, _Vec3 rotation) {
+  var rotated = point;
+  final sinZ = math.sin(-rotation.z);
+  final cosZ = math.cos(-rotation.z);
+  rotated = _Vec3(
+    cosZ * rotated.x - sinZ * rotated.y,
+    sinZ * rotated.x + cosZ * rotated.y,
+    rotated.z,
+  );
+  final sinY = math.sin(-rotation.y);
+  final cosY = math.cos(-rotation.y);
+  rotated = _Vec3(
+    cosY * rotated.x + sinY * rotated.z,
+    rotated.y,
+    -sinY * rotated.x + cosY * rotated.z,
+  );
+  final sinX = math.sin(-rotation.x);
+  final cosX = math.cos(-rotation.x);
+  return _Vec3(
+    rotated.x,
+    cosX * rotated.y - sinX * rotated.z,
+    sinX * rotated.y + cosX * rotated.z,
   );
 }
 

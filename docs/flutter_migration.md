@@ -15,6 +15,9 @@ Keep migration rules and architecture constraints in:
 - `docs/architecture.md`
 - `docs/egui_parity_audit.md`
 - `docs/ui_customization_prd.md`
+- `docs/product_enhancements_prd.md`
+- `docs/professional_ux_overhaul_prd.md`
+- `docs/professional_ux_overhaul_batch_1_prd.md`
 - `docs/ui_backend_boundary.md`
 - `apps/flutter/README.md`
 

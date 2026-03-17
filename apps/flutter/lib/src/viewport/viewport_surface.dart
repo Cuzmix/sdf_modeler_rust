@@ -492,7 +492,13 @@ class _ViewportSurfaceState extends State<ViewportSurface> {
                               )
                             : Texture(textureId: widget.textureId!),
                         if (widget.overlay != null)
-                          IgnorePointer(child: widget.overlay!),
+                          ExcludeSemantics(
+                            // This overlay is decorative HUD/gizmo chrome above the
+                            // native texture viewport. Keep it out of the desktop
+                            // accessibility tree so rapid frame/hover updates do not
+                            // churn semantics for non-interactive content.
+                            child: IgnorePointer(child: widget.overlay!),
+                          ),
                         if (widget.controlsOverlay != null)
                           widget.controlsOverlay!,
                       ],

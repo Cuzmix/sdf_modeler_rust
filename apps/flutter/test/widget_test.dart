@@ -709,6 +709,110 @@ class _MockRustApi extends RustLibApi {
         ],
       };
 
+  static Map<String, Object?> _settingsWithKeybindings(
+    List<Map<String, Object?>> keybindings,
+  ) {
+    final settings = Map<String, Object?>.from(_defaultSettingsPayload());
+    final defaultKeyOptions =
+        (settings['key_options'] as List<dynamic>? ?? const <dynamic>[])
+            .map((option) => Map<String, String>.from(option as Map))
+            .toList(growable: false);
+    final keyOptionsById = <String, Map<String, String>>{
+      for (final option in defaultKeyOptions) option['id']!: option,
+    };
+    for (final keybinding in keybindings) {
+      final binding = keybinding['binding'] as Map<String, Object?>?;
+      if (binding == null) {
+        continue;
+      }
+      final keyId = binding['key_id'] as String;
+      final keyLabel = binding['key_label'] as String;
+      keyOptionsById[keyId] = <String, String>{'id': keyId, 'label': keyLabel};
+    }
+    settings['key_options'] = keyOptionsById.values.toList(growable: false);
+    settings['keybindings'] = keybindings;
+    return settings;
+  }
+
+  static Map<String, Object?> _keybinding({
+    required String actionId,
+    required String actionLabel,
+    required String keyId,
+    bool ctrl = false,
+    bool shift = false,
+    bool alt = false,
+    String category = 'General',
+  }) {
+    final keyLabel = _keyLabelForId(keyId);
+    return <String, Object?>{
+      'action_id': actionId,
+      'action_label': actionLabel,
+      'category': category,
+      'binding': <String, Object?>{
+        'key_id': keyId,
+        'key_label': keyLabel,
+        'ctrl': ctrl,
+        'shift': shift,
+        'alt': alt,
+        'shortcut_label': _shortcutLabelForBinding(
+          keyLabel,
+          ctrl: ctrl,
+          shift: shift,
+          alt: alt,
+        ),
+      },
+    };
+  }
+
+  static String _keyLabelForId(String keyId) {
+    switch (keyId) {
+      case 'space':
+        return 'Space';
+      case 'enter':
+        return 'Enter';
+      case 'escape':
+        return 'Escape';
+      case 'tab':
+        return 'Tab';
+      case 'delete':
+        return 'Delete';
+      case 'home':
+        return 'Home';
+      case 'end':
+        return 'End';
+      case 'arrow_up':
+        return 'Arrow Up';
+      case 'arrow_down':
+        return 'Arrow Down';
+      case 'arrow_left':
+        return 'Arrow Left';
+      case 'arrow_right':
+        return 'Arrow Right';
+      case 'open_bracket':
+        return '[';
+      case 'close_bracket':
+        return ']';
+      case 'slash':
+        return '/';
+      default:
+        return keyId.toUpperCase();
+    }
+  }
+
+  static String _shortcutLabelForBinding(
+    String keyLabel, {
+    required bool ctrl,
+    required bool shift,
+    required bool alt,
+  }) {
+    return <String>[
+      if (ctrl) 'Ctrl',
+      if (shift) 'Shift',
+      if (alt) 'Alt',
+      keyLabel,
+    ].join('+');
+  }
+
   static final String _settingsSnapshot = _withFields(
     _baseSnapshot,
     <String, Object?>{'settings': _defaultSettingsPayload()},
@@ -2492,6 +2596,139 @@ void main() {
     expect(requestFrameCalls, greaterThan(0));
   });
 
+  testWidgets('keyboard shortcut routes gizmo mode through the Rust facade', (
+    WidgetTester tester,
+  ) async {
+    mockApi.currentSnapshot = _MockRustApi._withFields(
+      _MockRustApi._selectedTransformManipulatorSnapshot,
+      <String, Object?>{
+        'settings': _MockRustApi._settingsWithKeybindings(<Map<String, Object?>>[
+          _MockRustApi._keybinding(
+            actionId: 'gizmo_rotate',
+            actionLabel: 'Gizmo Rotate',
+            keyId: 'e',
+            category: 'Viewport',
+          ),
+        ]),
+      },
+    );
+
+    await pumpApp(tester, logicalSize: const Size(1400, 900));
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.keyE);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.keyE);
+    await tester.pump();
+
+    expect(mockApi.setManipulatorModeCalls, 1);
+    expect(mockApi.currentSnapshot, _MockRustApi._selectedTransformRotateSnapshot);
+  });
+
+  testWidgets('keyboard shortcut routes undo through the Rust facade', (
+    WidgetTester tester,
+  ) async {
+    mockApi.currentSnapshot = _MockRustApi._withFields(
+      _MockRustApi._selectedTransformManipulatorSnapshot,
+      <String, Object?>{'settings': _MockRustApi._defaultSettingsPayload()},
+    );
+
+    await pumpApp(tester, logicalSize: const Size(1400, 900));
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.keyZ);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.keyZ);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+
+    expect(mockApi.undoCalls, 1);
+    expect(mockApi.currentSnapshot, _MockRustApi._baseRedoSnapshot);
+  });
+
+  testWidgets('viewport light billboard follows gizmo preview during drag', (
+    WidgetTester tester,
+  ) async {
+    mockApi.currentSnapshot = _MockRustApi._withFields(
+      _MockRustApi._lightBillboardSnapshot,
+      <String, Object?>{
+        'tool': <String, Object?>{
+          'active_tool_label': 'Select',
+          'shading_mode_label': 'Full',
+          'grid_enabled': true,
+          'manipulator_mode_id': 'translate',
+          'manipulator_mode_label': 'Move',
+          'manipulator_space_id': 'local',
+          'manipulator_space_label': 'Local',
+          'manipulator_visible': true,
+          'can_reset_pivot': false,
+          'pivot_offset': <String, double>{'x': 0.0, 'y': 0.0, 'z': 0.0},
+        },
+      },
+    );
+
+    await pumpApp(tester, logicalSize: const Size(1400, 900));
+
+    final dynamic state = tester.state(find.byType(BridgeStatusPage));
+    final viewportRect = tester.getRect(find.byType(ViewportSurface));
+    var viewportWidth = viewportRect.width;
+    var viewportHeight = viewportWidth / (16.0 / 9.0);
+    if (viewportHeight > viewportRect.height) {
+      viewportHeight = viewportRect.height;
+      viewportWidth = viewportHeight * (16.0 / 9.0);
+    }
+    final innerViewportTopLeft = Offset(
+      viewportRect.left + (viewportRect.width - viewportWidth) * 0.5,
+      viewportRect.top + (viewportRect.height - viewportHeight) * 0.5,
+    );
+    final localViewportCenter = Offset(
+      viewportWidth * 0.5,
+      viewportHeight * 0.5,
+    );
+    final localBillboardPositionBefore =
+        state.debugViewportLightBillboardPosition(nodeId: BigInt.from(8))
+            as Offset?;
+    final localHandlePosition =
+        state.debugViewportGizmoAxisHandlePosition('x') as Offset? ??
+        state.debugViewportGizmoAxisHandlePosition('y') as Offset? ??
+        state.debugViewportGizmoAxisHandlePosition('z') as Offset?;
+
+    expect(localBillboardPositionBefore, isNotNull);
+    expect(localHandlePosition, isNotNull);
+
+    final globalHandlePosition = innerViewportTopLeft + localHandlePosition!;
+    final dragDirection =
+        globalHandlePosition - (innerViewportTopLeft + localViewportCenter);
+    final dragDistance = dragDirection.distance;
+    expect(dragDistance, greaterThan(0.0));
+    final dragStep = Offset(
+      dragDirection.dx / dragDistance * 36.0,
+      dragDirection.dy / dragDistance * 36.0,
+    );
+
+    final gesture = await tester.startGesture(
+      globalHandlePosition,
+      kind: PointerDeviceKind.mouse,
+      buttons: kPrimaryMouseButton,
+    );
+    await tester.pump();
+    await gesture.moveBy(dragStep);
+    await tester.pump();
+
+    final localBillboardPositionDuring =
+        state.debugViewportLightBillboardPosition(nodeId: BigInt.from(8))
+            as Offset?;
+    expect(localBillboardPositionDuring, isNotNull);
+    expect(
+      (localBillboardPositionDuring! - localBillboardPositionBefore!).distance,
+      greaterThan(0.0),
+    );
+    expect(mockApi.previewSelectedTransformCalls, greaterThan(0));
+    expect(mockApi.setSelectedTransformCalls, 0);
+
+    await gesture.up();
+    await tester.pump();
+
+    expect(mockApi.setSelectedTransformCalls, 1);
+  });
+
   testWidgets('viewport gizmo drags preview and commit without orbiting', (
     WidgetTester tester,
   ) async {
@@ -3727,6 +3964,24 @@ void main() {
     expect(mockApi.selectNodeCalls, 1);
     expect(mockApi.currentSnapshot, _MockRustApi._selectedSnapshot);
     expect(pickCalls, 0);
+  });
+
+  testWidgets('keyboard shortcut saves camera bookmark like egui', (
+    WidgetTester tester,
+  ) async {
+    mockApi.currentSnapshot = _MockRustApi._settingsSnapshot;
+
+    await pumpApp(tester, logicalSize: const Size(1400, 900));
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.digit2);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.digit2);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+
+    expect(mockApi.saveCameraBookmarkCalls, 1);
+    final settings = parseSceneSnapshotJson(mockApi.currentSnapshot).settings;
+    expect(settings.cameraBookmarks[1].saved, isTrue);
   });
 
   testWidgets('tablet touch gestures route pan and pinch without selecting', (
