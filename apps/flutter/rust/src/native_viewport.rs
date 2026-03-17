@@ -102,6 +102,7 @@ impl NativeViewportString {
     }
 }
 
+#[derive(Default)]
 #[repr(C)]
 pub struct NativeViewportNodeSnapshot {
     pub id: u64,
@@ -109,18 +110,6 @@ pub struct NativeViewportNodeSnapshot {
     pub locked: u8,
     pub name: NativeViewportString,
     pub kind_label: NativeViewportString,
-}
-
-impl Default for NativeViewportNodeSnapshot {
-    fn default() -> Self {
-        Self {
-            id: 0,
-            visible: 0,
-            locked: 0,
-            name: NativeViewportString::default(),
-            kind_label: NativeViewportString::default(),
-        }
-    }
 }
 
 impl From<AppNodeSnapshot> for NativeViewportNodeSnapshot {

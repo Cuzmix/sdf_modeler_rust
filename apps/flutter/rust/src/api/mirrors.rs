@@ -601,7 +601,60 @@ impl From<bridge::AppSceneTreeNodeSnapshot> for AppSceneTreeNodeSnapshot {
             kind_label: value.kind_label,
             visible: value.visible,
             locked: value.locked,
+            workflow_status_id: value.workflow_status_id,
+            workflow_status_label: value.workflow_status_label,
             children: convert_vec(value.children),
+        }
+    }
+}
+
+impl From<bridge::AppWorkspaceSnapshot> for AppWorkspaceSnapshot {
+    fn from(value: bridge::AppWorkspaceSnapshot) -> Self {
+        Self {
+            id: value.id,
+            label: value.label,
+            description: value.description,
+        }
+    }
+}
+
+impl From<bridge::AppQuickActionSnapshot> for AppQuickActionSnapshot {
+    fn from(value: bridge::AppQuickActionSnapshot) -> Self {
+        Self {
+            id: value.id,
+            label: value.label,
+            category: value.category,
+            enabled: value.enabled,
+            prominent: value.prominent,
+            shortcut_label: value.shortcut_label,
+        }
+    }
+}
+
+impl From<bridge::AppCommandSnapshot> for AppCommandSnapshot {
+    fn from(value: bridge::AppCommandSnapshot) -> Self {
+        Self {
+            id: value.id,
+            label: value.label,
+            category: value.category,
+            enabled: value.enabled,
+            workspace_ids: value.workspace_ids,
+            shortcut_label: value.shortcut_label,
+        }
+    }
+}
+
+impl From<bridge::AppSelectionContextSnapshot> for AppSelectionContextSnapshot {
+    fn from(value: bridge::AppSelectionContextSnapshot) -> Self {
+        Self {
+            headline: value.headline,
+            detail: value.detail,
+            selection_count: value.selection_count,
+            selection_kind_id: value.selection_kind_id,
+            selection_kind_label: value.selection_kind_label,
+            workflow_status_id: value.workflow_status_id,
+            workflow_status_label: value.workflow_status_label,
+            quick_actions: convert_vec(value.quick_actions),
         }
     }
 }
@@ -1101,9 +1154,13 @@ impl From<bridge::AppSceneSnapshot> for AppSceneSnapshot {
         Self {
             selected_node: convert_opt(value.selected_node),
             selected_node_properties: convert_opt(value.selected_node_properties),
+            selected_node_ids: value.selected_node_ids,
             top_level_nodes: convert_vec(value.top_level_nodes),
             scene_tree_roots: convert_vec(value.scene_tree_roots),
             viewport_lights: convert_vec(value.viewport_lights),
+            workspace: value.workspace.into(),
+            selection_context: value.selection_context.into(),
+            commands: convert_vec(value.commands),
             history: value.history.into(),
             document: value.document.into(),
             render: value.render.into(),
