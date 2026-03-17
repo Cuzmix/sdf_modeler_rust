@@ -23,30 +23,96 @@ A real-time Signed Distance Function (SDF) 3D modeling application built in Rust
 | Parallelism | rayon (native) |
 | File Dialogs | rfd (native) |
 
-## Quick Start
+## Development Setup
 
-### Prerequisites
+### Primary Environment
 
-- Rust stable toolchain (edition 2021)
-- GPU drivers with Vulkan, Metal, or DX12 support
+- Windows 11 is the primary development platform for this repo.
+- The native Rust app lives at the repo root.
+- Flutter host work lives in `apps/flutter`.
+- The repo pins Flutter `3.41.4` in `.fvmrc`.
+
+### Native Toolchain
+
+Install these before working on the native app or the Flutter Windows host:
+
+- Rust stable via `rustup`
+- Visual Studio 2022 with the `Desktop development with C++` workload
+- Current GPU drivers with Vulkan, Metal, or DX12 support
+
+Verify the Rust toolchain:
+
+```powershell
+rustup default stable
+cargo --version
+rustc --version
+```
+
+### Flutter Toolchain
+
+The repo uses a repo-local Flutter SDK under `.fvm/flutter_sdk`. In a new shell, add it to `PATH` and verify the install:
+
+```powershell
+$env:Path = "$(Resolve-Path .\.fvm\flutter_sdk\bin);$env:Path"
+flutter --version
+flutter doctor
+flutter config --enable-windows-desktop
+```
+
+If `.fvm/flutter_sdk` is missing on your machine, install the pinned SDK with `fvm` instead:
+
+```powershell
+# Requires Dart on PATH
+dart pub global activate fvm
+$env:Path = "$env:USERPROFILE\AppData\Local\Pub\Cache\bin;$env:Path"
+fvm install 3.41.4
+fvm use 3.41.4
+fvm flutter doctor
+fvm flutter config --enable-windows-desktop
+```
+
+After `fvm install`, you can keep using the repo-local `flutter` binary from `.fvm/flutter_sdk\bin`, or replace `flutter` with `fvm flutter` in the commands below.
 
 ### Build and Run
 
-```bash
-# Development build (opt-level=2 for near-release performance)
-cargo run
+Native Rust app from the repo root:
 
-# Release build with debug symbols (for profiling)
+```powershell
+cargo run
 cargo run --release
+```
+
+Flutter host from `apps/flutter`:
+
+```powershell
+Set-Location apps\flutter
+flutter pub get
+flutter run -d windows
+```
+
+If you edit the Flutter <-> Rust bridge API, install the pinned generator once and regenerate from `apps/flutter`:
+
+```powershell
+cargo install flutter_rust_bridge_codegen --version 2.11.1 --locked
+.\scripts\frb_codegen.ps1
 ```
 
 ### Verification
 
-```bash
-cargo check                       # Type checking
-cargo clippy -- -D warnings       # Lint (warnings are errors)
-cargo test                        # Run all tests
-cargo build                       # Full compilation
+Native validation from the repo root:
+
+```powershell
+cargo check
+cargo clippy -- -D warnings
+cargo test
+cargo build
+```
+
+Flutter validation from `apps/flutter`:
+
+```powershell
+flutter analyze
+flutter test
 ```
 
 ## Architecture
@@ -101,28 +167,16 @@ src/
 | `dev` | `opt-level = 2` | Fast iteration with near-release performance |
 | `release` | `debug = true` | Full optimization with symbols for profiling |
 
-## Flutter Migration Bootstrap
+## Flutter Host Workflow
 
-Flutter host work lives in `apps/flutter` and uses FVM pinning from `.fvmrc`.
-
-```bash
-# Install FVM (one-time)
-dart pub global activate fvm
-
-# Verify repo-pinned Flutter SDK
-fvm flutter --version
-
-# Run the Flutter host app
-cd apps/flutter
-fvm flutter pub get
-fvm flutter run
-```
+Flutter host work lives in `apps/flutter` and uses the repo-pinned Flutter SDK from `.fvmrc`.
 
 Migration guardrails:
 - Keep toolkit-neutral frame logic in `src/app/backend_frame.rs`.
 - Keep toolkit adapters in frontend-specific modules.
 - Do not introduce new egui features during migration (critical bug fixes only).
 - Keep structural mutations gated through `Action` + `process_actions()`.
+
 ## Contributing
 
 - Follow the coding standards in [CLAUDE.md](CLAUDE.md)
