@@ -10,12 +10,13 @@ pub use dto::{
     AppKeybindingSnapshot, AppLightCookieCandidateSnapshot, AppLightLinkNodeSnapshot,
     AppLightLinkTargetSnapshot, AppLightLinkingSnapshot, AppLightPropertiesSnapshot,
     AppMaterialPropertiesSnapshot, AppNodeSnapshot, AppPrimitivePropertiesSnapshot,
-    AppRenderOptionSnapshot, AppRenderSettingsSnapshot, AppScalarPropertySnapshot,
-    AppSceneSnapshot, AppSceneStatsSnapshot, AppSceneTreeNodeSnapshot,
+    AppQuickActionSnapshot, AppCommandSnapshot, AppRenderOptionSnapshot,
+    AppRenderSettingsSnapshot, AppScalarPropertySnapshot, AppSceneSnapshot,
+    AppSceneStatsSnapshot, AppSceneTreeNodeSnapshot, AppSelectionContextSnapshot,
     AppSculptConvertDialogSnapshot, AppSculptConvertSnapshot, AppSculptConvertStatusSnapshot,
     AppSculptSessionSnapshot, AppSculptSnapshot, AppSelectedNodePropertiesSnapshot,
     AppSelectedSculptSnapshot, AppSettingsSnapshot, AppToolSnapshot,
-    AppTransformPropertiesSnapshot, AppVec3, AppViewportFeedbackSnapshot, AppViewportLightSnapshot,
-    AppWorkflowStatusSnapshot,
+    AppTransformPropertiesSnapshot, AppVec3, AppViewportFeedbackSnapshot,
+    AppViewportLightSnapshot, AppWorkflowStatusSnapshot, AppWorkspaceSnapshot,
 };
 pub use session::AppBridge;

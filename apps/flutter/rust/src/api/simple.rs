@@ -359,6 +359,20 @@ pub fn select_node(node_id: Option<u64>) -> AppSceneSnapshot {
 }
 
 #[flutter_rust_bridge::frb(sync)]
+pub fn toggle_node_selection(node_id: u64) -> AppSceneSnapshot {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.toggle_node_selection(node_id);
+    current_scene_snapshot(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn clear_selection() -> AppSceneSnapshot {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.clear_selection();
+    current_scene_snapshot(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
 pub fn select_node_at_viewport(
     mouse_x: f32,
     mouse_y: f32,
@@ -368,6 +382,20 @@ pub fn select_node_at_viewport(
 ) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.select_node_at_viewport(mouse_x, mouse_y, width, height, time_seconds);
+    current_scene_snapshot(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_workspace(workspace_id: String) -> AppSceneSnapshot {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_workspace(&workspace_id);
+    current_scene_snapshot(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn execute_command(command_id: String) -> AppSceneSnapshot {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.execute_command(&command_id);
     current_scene_snapshot(&mut bridge)
 }
 

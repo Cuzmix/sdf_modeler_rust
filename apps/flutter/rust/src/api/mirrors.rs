@@ -37,7 +37,50 @@ pub struct AppSceneTreeNodeSnapshot {
     pub kind_label: String,
     pub visible: bool,
     pub locked: bool,
+    pub workflow_status_id: String,
+    pub workflow_status_label: String,
     pub children: Vec<AppSceneTreeNodeSnapshot>,
+}
+
+#[flutter_rust_bridge::frb(mirror(sdf_modeler::app_bridge::AppWorkspaceSnapshot))]
+pub struct AppWorkspaceSnapshot {
+    pub id: String,
+    pub label: String,
+    pub description: String,
+}
+
+#[flutter_rust_bridge::frb(mirror(sdf_modeler::app_bridge::AppQuickActionSnapshot))]
+pub struct AppQuickActionSnapshot {
+    pub id: String,
+    pub label: String,
+    pub category: String,
+    pub enabled: bool,
+    pub prominent: bool,
+    pub shortcut_label: Option<String>,
+}
+
+#[flutter_rust_bridge::frb(mirror(sdf_modeler::app_bridge::AppCommandSnapshot))]
+pub struct AppCommandSnapshot {
+    pub id: String,
+    pub label: String,
+    pub category: String,
+    pub enabled: bool,
+    pub workspace_ids: Vec<String>,
+    pub shortcut_label: Option<String>,
+}
+
+#[flutter_rust_bridge::frb(mirror(
+    sdf_modeler::app_bridge::AppSelectionContextSnapshot
+))]
+pub struct AppSelectionContextSnapshot {
+    pub headline: String,
+    pub detail: String,
+    pub selection_count: u32,
+    pub selection_kind_id: String,
+    pub selection_kind_label: String,
+    pub workflow_status_id: String,
+    pub workflow_status_label: String,
+    pub quick_actions: Vec<AppQuickActionSnapshot>,
 }
 
 #[flutter_rust_bridge::frb(mirror(sdf_modeler::app_bridge::AppSceneStatsSnapshot))]
@@ -475,9 +518,13 @@ pub struct AppLightLinkingSnapshot {
 pub struct AppSceneSnapshot {
     pub selected_node: Option<AppNodeSnapshot>,
     pub selected_node_properties: Option<AppSelectedNodePropertiesSnapshot>,
+    pub selected_node_ids: Vec<u64>,
     pub top_level_nodes: Vec<AppNodeSnapshot>,
     pub scene_tree_roots: Vec<AppSceneTreeNodeSnapshot>,
     pub viewport_lights: Vec<AppViewportLightSnapshot>,
+    pub workspace: AppWorkspaceSnapshot,
+    pub selection_context: AppSelectionContextSnapshot,
+    pub commands: Vec<AppCommandSnapshot>,
     pub history: AppHistorySnapshot,
     pub document: AppDocumentSnapshot,
     pub render: AppRenderSettingsSnapshot,

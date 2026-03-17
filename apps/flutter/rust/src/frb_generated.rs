@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1034354002;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -684641965;
 
 // Section: executor
 
@@ -635,6 +635,35 @@ fn wire__crate__api__simple__clear_selected_light_cookie_impl(
         },
     )
 }
+fn wire__crate__api__simple__clear_selection_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "clear_selection",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(crate::api::simple::clear_selection())?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__simple__create_light_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -868,6 +897,37 @@ fn wire__crate__api__simple__duplicate_selected_impl(
             deserializer.end();
             transform_result_sse::<_, ()>((move || {
                 let output_ok = Result::<_, ()>::Ok(crate::api::simple::duplicate_selected())?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__execute_command_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "execute_command",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_command_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok =
+                    Result::<_, ()>::Ok(crate::api::simple::execute_command(api_command_id))?;
                 Ok(output_ok)
             })())
         },
@@ -3767,6 +3827,37 @@ fn wire__crate__api__simple__set_settings_toggle_impl(
         },
     )
 }
+fn wire__crate__api__simple__set_workspace_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_workspace",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_workspace_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok =
+                    Result::<_, ()>::Ok(crate::api::simple::set_workspace(api_workspace_id))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__simple__start_export_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -3939,6 +4030,37 @@ fn wire__crate__api__simple__toggle_node_lock_impl(
             transform_result_sse::<_, ()>((move || {
                 let output_ok =
                     Result::<_, ()>::Ok(crate::api::simple::toggle_node_lock(api_node_id))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__toggle_node_selection_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "toggle_node_selection",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_node_id = <u64>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok =
+                    Result::<_, ()>::Ok(crate::api::simple::toggle_node_selection(api_node_id))?;
                 Ok(output_ok)
             })())
         },
@@ -4137,6 +4259,26 @@ impl SseDecode for crate::api::mirrors::AppCameraSnapshot {
             orthographic: var_orthographic,
             target: var_target,
             eye: var_eye,
+        };
+    }
+}
+
+impl SseDecode for crate::api::mirrors::AppCommandSnapshot {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_id = <String>::sse_decode(deserializer);
+        let mut var_label = <String>::sse_decode(deserializer);
+        let mut var_category = <String>::sse_decode(deserializer);
+        let mut var_enabled = <bool>::sse_decode(deserializer);
+        let mut var_workspaceIds = <Vec<String>>::sse_decode(deserializer);
+        let mut var_shortcutLabel = <Option<String>>::sse_decode(deserializer);
+        return crate::api::mirrors::AppCommandSnapshot {
+            id: var_id,
+            label: var_label,
+            category: var_category,
+            enabled: var_enabled,
+            workspace_ids: var_workspaceIds,
+            shortcut_label: var_shortcutLabel,
         };
     }
 }
@@ -4546,6 +4688,26 @@ impl SseDecode for crate::api::mirrors::AppPrimitivePropertiesSnapshot {
     }
 }
 
+impl SseDecode for crate::api::mirrors::AppQuickActionSnapshot {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_id = <String>::sse_decode(deserializer);
+        let mut var_label = <String>::sse_decode(deserializer);
+        let mut var_category = <String>::sse_decode(deserializer);
+        let mut var_enabled = <bool>::sse_decode(deserializer);
+        let mut var_prominent = <bool>::sse_decode(deserializer);
+        let mut var_shortcutLabel = <Option<String>>::sse_decode(deserializer);
+        return crate::api::mirrors::AppQuickActionSnapshot {
+            id: var_id,
+            label: var_label,
+            category: var_category,
+            enabled: var_enabled,
+            prominent: var_prominent,
+            shortcut_label: var_shortcutLabel,
+        };
+    }
+}
+
 impl SseDecode for crate::api::mirrors::AppRenderOptionSnapshot {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -4633,12 +4795,19 @@ impl SseDecode for crate::api::mirrors::AppSceneSnapshot {
         let mut var_selectedNodeProperties = <Option<
             crate::api::mirrors::AppSelectedNodePropertiesSnapshot,
         >>::sse_decode(deserializer);
+        let mut var_selectedNodeIds = <Vec<u64>>::sse_decode(deserializer);
         let mut var_topLevelNodes =
             <Vec<crate::api::mirrors::AppNodeSnapshot>>::sse_decode(deserializer);
         let mut var_sceneTreeRoots =
             <Vec<crate::api::mirrors::AppSceneTreeNodeSnapshot>>::sse_decode(deserializer);
         let mut var_viewportLights =
             <Vec<crate::api::mirrors::AppViewportLightSnapshot>>::sse_decode(deserializer);
+        let mut var_workspace =
+            <crate::api::mirrors::AppWorkspaceSnapshot>::sse_decode(deserializer);
+        let mut var_selectionContext =
+            <crate::api::mirrors::AppSelectionContextSnapshot>::sse_decode(deserializer);
+        let mut var_commands =
+            <Vec<crate::api::mirrors::AppCommandSnapshot>>::sse_decode(deserializer);
         let mut var_history = <crate::api::mirrors::AppHistorySnapshot>::sse_decode(deserializer);
         let mut var_document = <crate::api::mirrors::AppDocumentSnapshot>::sse_decode(deserializer);
         let mut var_render =
@@ -4657,9 +4826,13 @@ impl SseDecode for crate::api::mirrors::AppSceneSnapshot {
         return crate::api::mirrors::AppSceneSnapshot {
             selected_node: var_selectedNode,
             selected_node_properties: var_selectedNodeProperties,
+            selected_node_ids: var_selectedNodeIds,
             top_level_nodes: var_topLevelNodes,
             scene_tree_roots: var_sceneTreeRoots,
             viewport_lights: var_viewportLights,
+            workspace: var_workspace,
+            selection_context: var_selectionContext,
+            commands: var_commands,
             history: var_history,
             document: var_document,
             render: var_render,
@@ -4722,6 +4895,8 @@ impl SseDecode for crate::api::mirrors::AppSceneTreeNodeSnapshot {
         let mut var_kindLabel = <String>::sse_decode(deserializer);
         let mut var_visible = <bool>::sse_decode(deserializer);
         let mut var_locked = <bool>::sse_decode(deserializer);
+        let mut var_workflowStatusId = <String>::sse_decode(deserializer);
+        let mut var_workflowStatusLabel = <String>::sse_decode(deserializer);
         let mut var_children =
             <Vec<crate::api::mirrors::AppSceneTreeNodeSnapshot>>::sse_decode(deserializer);
         return crate::api::mirrors::AppSceneTreeNodeSnapshot {
@@ -4730,6 +4905,8 @@ impl SseDecode for crate::api::mirrors::AppSceneTreeNodeSnapshot {
             kind_label: var_kindLabel,
             visible: var_visible,
             locked: var_locked,
+            workflow_status_id: var_workflowStatusId,
+            workflow_status_label: var_workflowStatusLabel,
             children: var_children,
         };
     }
@@ -4883,6 +5060,31 @@ impl SseDecode for crate::api::mirrors::AppSelectedSculptSnapshot {
     }
 }
 
+impl SseDecode for crate::api::mirrors::AppSelectionContextSnapshot {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_headline = <String>::sse_decode(deserializer);
+        let mut var_detail = <String>::sse_decode(deserializer);
+        let mut var_selectionCount = <u32>::sse_decode(deserializer);
+        let mut var_selectionKindId = <String>::sse_decode(deserializer);
+        let mut var_selectionKindLabel = <String>::sse_decode(deserializer);
+        let mut var_workflowStatusId = <String>::sse_decode(deserializer);
+        let mut var_workflowStatusLabel = <String>::sse_decode(deserializer);
+        let mut var_quickActions =
+            <Vec<crate::api::mirrors::AppQuickActionSnapshot>>::sse_decode(deserializer);
+        return crate::api::mirrors::AppSelectionContextSnapshot {
+            headline: var_headline,
+            detail: var_detail,
+            selection_count: var_selectionCount,
+            selection_kind_id: var_selectionKindId,
+            selection_kind_label: var_selectionKindLabel,
+            workflow_status_id: var_workflowStatusId,
+            workflow_status_label: var_workflowStatusLabel,
+            quick_actions: var_quickActions,
+        };
+    }
+}
+
 impl SseDecode for crate::api::mirrors::AppSettingsSnapshot {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -5027,6 +5229,20 @@ impl SseDecode for crate::api::mirrors::AppWorkflowStatusSnapshot {
     }
 }
 
+impl SseDecode for crate::api::mirrors::AppWorkspaceSnapshot {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_id = <String>::sse_decode(deserializer);
+        let mut var_label = <String>::sse_decode(deserializer);
+        let mut var_description = <String>::sse_decode(deserializer);
+        return crate::api::mirrors::AppWorkspaceSnapshot {
+            id: var_id,
+            label: var_label,
+            description: var_description,
+        };
+    }
+}
+
 impl SseDecode for bool {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -5060,6 +5276,20 @@ impl SseDecode for Vec<crate::api::mirrors::AppCameraBookmarkSnapshot> {
         let mut ans_ = vec![];
         for idx_ in 0..len_ {
             ans_.push(<crate::api::mirrors::AppCameraBookmarkSnapshot>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::mirrors::AppCommandSnapshot> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::mirrors::AppCommandSnapshot>::sse_decode(
+                deserializer,
+            ));
         }
         return ans_;
     }
@@ -5161,6 +5391,20 @@ impl SseDecode for Vec<crate::api::mirrors::AppNodeSnapshot> {
     }
 }
 
+impl SseDecode for Vec<crate::api::mirrors::AppQuickActionSnapshot> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::mirrors::AppQuickActionSnapshot>::sse_decode(
+                deserializer,
+            ));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::api::mirrors::AppRenderOptionSnapshot> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -5222,6 +5466,18 @@ impl SseDecode for Vec<crate::api::mirrors::AppViewportLightSnapshot> {
             ans_.push(<crate::api::mirrors::AppViewportLightSnapshot>::sse_decode(
                 deserializer,
             ));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<u64> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<u64>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -5486,8 +5742,8 @@ fn pde_ffi_dispatcher_primary_impl(
 ) {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        35 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
-        58 => {
+        37 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
+        60 => {
             wire__crate__api__simple__render_preview_frame_impl(port, ptr, rust_vec_len, data_len)
         }
         _ => unreachable!(),
@@ -5526,238 +5782,242 @@ fn pde_ffi_dispatcher_sync_impl(
         20 => {
             wire__crate__api__simple__clear_selected_light_cookie_impl(ptr, rust_vec_len, data_len)
         }
-        21 => wire__crate__api__simple__create_light_impl(ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__simple__create_modifier_impl(ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__simple__create_operation_impl(ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__simple__create_sculpt_impl(ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__simple__create_transform_impl(ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__simple__delete_selected_impl(ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__simple__discard_recovery_impl(ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__simple__duplicate_selected_impl(ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__simple__export_keymap_impl(ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__simple__export_settings_impl(ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__simple__focus_selected_impl(ptr, rust_vec_len, data_len),
-        32 => wire__crate__api__simple__frame_all_impl(ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__simple__import_keymap_impl(ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__simple__import_settings_impl(ptr, rust_vec_len, data_len),
-        36 => wire__crate__api__simple__new_scene_impl(ptr, rust_vec_len, data_len),
-        37 => wire__crate__api__simple__nudge_manipulator_pivot_offset_impl(
+        21 => wire__crate__api__simple__clear_selection_impl(ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__simple__create_light_impl(ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__simple__create_modifier_impl(ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__simple__create_operation_impl(ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__simple__create_sculpt_impl(ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__simple__create_transform_impl(ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__simple__delete_selected_impl(ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__simple__discard_recovery_impl(ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__simple__duplicate_selected_impl(ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__simple__execute_command_impl(ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__simple__export_keymap_impl(ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__simple__export_settings_impl(ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__simple__focus_selected_impl(ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__simple__frame_all_impl(ptr, rust_vec_len, data_len),
+        35 => wire__crate__api__simple__import_keymap_impl(ptr, rust_vec_len, data_len),
+        36 => wire__crate__api__simple__import_settings_impl(ptr, rust_vec_len, data_len),
+        38 => wire__crate__api__simple__new_scene_impl(ptr, rust_vec_len, data_len),
+        39 => wire__crate__api__simple__nudge_manipulator_pivot_offset_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        38 => wire__crate__api__simple__nudge_selected_rotation_degrees_impl(
+        40 => wire__crate__api__simple__nudge_selected_rotation_degrees_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        39 => wire__crate__api__simple__nudge_selected_scale_impl(ptr, rust_vec_len, data_len),
-        40 => {
+        41 => wire__crate__api__simple__nudge_selected_scale_impl(ptr, rust_vec_len, data_len),
+        42 => {
             wire__crate__api__simple__nudge_selected_translation_impl(ptr, rust_vec_len, data_len)
         }
-        41 => wire__crate__api__simple__open_import_dialog_impl(ptr, rust_vec_len, data_len),
-        42 => wire__crate__api__simple__open_recent_scene_impl(ptr, rust_vec_len, data_len),
-        43 => wire__crate__api__simple__open_scene_impl(ptr, rust_vec_len, data_len),
-        44 => wire__crate__api__simple__open_sculpt_convert_dialog_for_selected_impl(
+        43 => wire__crate__api__simple__open_import_dialog_impl(ptr, rust_vec_len, data_len),
+        44 => wire__crate__api__simple__open_recent_scene_impl(ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__simple__open_scene_impl(ptr, rust_vec_len, data_len),
+        46 => wire__crate__api__simple__open_sculpt_convert_dialog_for_selected_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        45 => wire__crate__api__simple__orbit_camera_impl(ptr, rust_vec_len, data_len),
-        46 => wire__crate__api__simple__pan_camera_impl(ptr, rust_vec_len, data_len),
-        47 => wire__crate__api__simple__ping_impl(ptr, rust_vec_len, data_len),
-        48 => wire__crate__api__simple__preview_selected_material_color_impl(
+        47 => wire__crate__api__simple__orbit_camera_impl(ptr, rust_vec_len, data_len),
+        48 => wire__crate__api__simple__pan_camera_impl(ptr, rust_vec_len, data_len),
+        49 => wire__crate__api__simple__ping_impl(ptr, rust_vec_len, data_len),
+        50 => wire__crate__api__simple__preview_selected_material_color_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        49 => wire__crate__api__simple__preview_selected_material_float_impl(
+        51 => wire__crate__api__simple__preview_selected_material_float_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        50 => wire__crate__api__simple__preview_selected_primitive_parameter_impl(
+        52 => wire__crate__api__simple__preview_selected_primitive_parameter_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        51 => {
+        53 => {
             wire__crate__api__simple__preview_selected_transform_impl(ptr, rust_vec_len, data_len)
         }
-        52 => wire__crate__api__simple__preview_selected_transform_position_impl(
+        54 => wire__crate__api__simple__preview_selected_transform_position_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        53 => wire__crate__api__simple__preview_selected_transform_rotation_degrees_impl(
+        55 => wire__crate__api__simple__preview_selected_transform_rotation_degrees_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        54 => wire__crate__api__simple__preview_selected_transform_scale_impl(
+        56 => wire__crate__api__simple__preview_selected_transform_scale_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        55 => wire__crate__api__simple__recover_autosave_impl(ptr, rust_vec_len, data_len),
-        56 => wire__crate__api__simple__redo_impl(ptr, rust_vec_len, data_len),
-        57 => wire__crate__api__simple__rename_node_impl(ptr, rust_vec_len, data_len),
-        59 => wire__crate__api__simple__reset_keymap_impl(ptr, rust_vec_len, data_len),
-        60 => wire__crate__api__simple__reset_manipulator_pivot_impl(ptr, rust_vec_len, data_len),
-        61 => wire__crate__api__simple__reset_scene_impl(ptr, rust_vec_len, data_len),
-        62 => wire__crate__api__simple__reset_settings_impl(ptr, rust_vec_len, data_len),
-        63 => wire__crate__api__simple__restore_camera_bookmark_impl(ptr, rust_vec_len, data_len),
-        64 => wire__crate__api__simple__resume_sculpting_selected_impl(ptr, rust_vec_len, data_len),
-        65 => wire__crate__api__simple__save_camera_bookmark_impl(ptr, rust_vec_len, data_len),
-        66 => wire__crate__api__simple__save_scene_impl(ptr, rust_vec_len, data_len),
-        67 => wire__crate__api__simple__save_scene_as_impl(ptr, rust_vec_len, data_len),
-        68 => wire__crate__api__simple__scene_snapshot_impl(ptr, rust_vec_len, data_len),
-        69 => wire__crate__api__simple__select_node_impl(ptr, rust_vec_len, data_len),
-        70 => wire__crate__api__simple__select_node_at_viewport_impl(ptr, rust_vec_len, data_len),
-        71 => wire__crate__api__simple__set_adaptive_export_impl(ptr, rust_vec_len, data_len),
-        72 => wire__crate__api__simple__set_export_resolution_impl(ptr, rust_vec_len, data_len),
-        73 => wire__crate__api__simple__set_import_resolution_impl(ptr, rust_vec_len, data_len),
-        74 => wire__crate__api__simple__set_import_use_auto_impl(ptr, rust_vec_len, data_len),
-        75 => wire__crate__api__simple__set_keybinding_impl(ptr, rust_vec_len, data_len),
-        76 => wire__crate__api__simple__set_manipulator_mode_impl(ptr, rust_vec_len, data_len),
-        77 => {
+        57 => wire__crate__api__simple__recover_autosave_impl(ptr, rust_vec_len, data_len),
+        58 => wire__crate__api__simple__redo_impl(ptr, rust_vec_len, data_len),
+        59 => wire__crate__api__simple__rename_node_impl(ptr, rust_vec_len, data_len),
+        61 => wire__crate__api__simple__reset_keymap_impl(ptr, rust_vec_len, data_len),
+        62 => wire__crate__api__simple__reset_manipulator_pivot_impl(ptr, rust_vec_len, data_len),
+        63 => wire__crate__api__simple__reset_scene_impl(ptr, rust_vec_len, data_len),
+        64 => wire__crate__api__simple__reset_settings_impl(ptr, rust_vec_len, data_len),
+        65 => wire__crate__api__simple__restore_camera_bookmark_impl(ptr, rust_vec_len, data_len),
+        66 => wire__crate__api__simple__resume_sculpting_selected_impl(ptr, rust_vec_len, data_len),
+        67 => wire__crate__api__simple__save_camera_bookmark_impl(ptr, rust_vec_len, data_len),
+        68 => wire__crate__api__simple__save_scene_impl(ptr, rust_vec_len, data_len),
+        69 => wire__crate__api__simple__save_scene_as_impl(ptr, rust_vec_len, data_len),
+        70 => wire__crate__api__simple__scene_snapshot_impl(ptr, rust_vec_len, data_len),
+        71 => wire__crate__api__simple__select_node_impl(ptr, rust_vec_len, data_len),
+        72 => wire__crate__api__simple__select_node_at_viewport_impl(ptr, rust_vec_len, data_len),
+        73 => wire__crate__api__simple__set_adaptive_export_impl(ptr, rust_vec_len, data_len),
+        74 => wire__crate__api__simple__set_export_resolution_impl(ptr, rust_vec_len, data_len),
+        75 => wire__crate__api__simple__set_import_resolution_impl(ptr, rust_vec_len, data_len),
+        76 => wire__crate__api__simple__set_import_use_auto_impl(ptr, rust_vec_len, data_len),
+        77 => wire__crate__api__simple__set_keybinding_impl(ptr, rust_vec_len, data_len),
+        78 => wire__crate__api__simple__set_manipulator_mode_impl(ptr, rust_vec_len, data_len),
+        79 => {
             wire__crate__api__simple__set_node_light_link_enabled_impl(ptr, rust_vec_len, data_len)
         }
-        78 => wire__crate__api__simple__set_node_light_mask_impl(ptr, rust_vec_len, data_len),
-        79 => wire__crate__api__simple__set_render_integer_impl(ptr, rust_vec_len, data_len),
-        80 => wire__crate__api__simple__set_render_scalar_impl(ptr, rust_vec_len, data_len),
-        81 => wire__crate__api__simple__set_render_shading_mode_impl(ptr, rust_vec_len, data_len),
-        82 => wire__crate__api__simple__set_render_toggle_impl(ptr, rust_vec_len, data_len),
-        83 => wire__crate__api__simple__set_sculpt_brush_mode_impl(ptr, rust_vec_len, data_len),
-        84 => wire__crate__api__simple__set_sculpt_brush_radius_impl(ptr, rust_vec_len, data_len),
-        85 => wire__crate__api__simple__set_sculpt_brush_strength_impl(ptr, rust_vec_len, data_len),
-        86 => wire__crate__api__simple__set_sculpt_convert_mode_impl(ptr, rust_vec_len, data_len),
-        87 => wire__crate__api__simple__set_sculpt_convert_resolution_impl(
+        80 => wire__crate__api__simple__set_node_light_mask_impl(ptr, rust_vec_len, data_len),
+        81 => wire__crate__api__simple__set_render_integer_impl(ptr, rust_vec_len, data_len),
+        82 => wire__crate__api__simple__set_render_scalar_impl(ptr, rust_vec_len, data_len),
+        83 => wire__crate__api__simple__set_render_shading_mode_impl(ptr, rust_vec_len, data_len),
+        84 => wire__crate__api__simple__set_render_toggle_impl(ptr, rust_vec_len, data_len),
+        85 => wire__crate__api__simple__set_sculpt_brush_mode_impl(ptr, rust_vec_len, data_len),
+        86 => wire__crate__api__simple__set_sculpt_brush_radius_impl(ptr, rust_vec_len, data_len),
+        87 => wire__crate__api__simple__set_sculpt_brush_strength_impl(ptr, rust_vec_len, data_len),
+        88 => wire__crate__api__simple__set_sculpt_convert_mode_impl(ptr, rust_vec_len, data_len),
+        89 => wire__crate__api__simple__set_sculpt_convert_resolution_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        88 => wire__crate__api__simple__set_sculpt_symmetry_axis_impl(ptr, rust_vec_len, data_len),
-        89 => wire__crate__api__simple__set_selected_light_array_color_variation_impl(
+        90 => wire__crate__api__simple__set_sculpt_symmetry_axis_impl(ptr, rust_vec_len, data_len),
+        91 => wire__crate__api__simple__set_selected_light_array_color_variation_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        90 => wire__crate__api__simple__set_selected_light_array_count_impl(
+        92 => wire__crate__api__simple__set_selected_light_array_count_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        91 => wire__crate__api__simple__set_selected_light_array_pattern_impl(
+        93 => wire__crate__api__simple__set_selected_light_array_pattern_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        92 => wire__crate__api__simple__set_selected_light_array_radius_impl(
+        94 => wire__crate__api__simple__set_selected_light_array_radius_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        93 => wire__crate__api__simple__set_selected_light_cast_shadows_impl(
+        95 => wire__crate__api__simple__set_selected_light_cast_shadows_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        94 => wire__crate__api__simple__set_selected_light_color_impl(ptr, rust_vec_len, data_len),
-        95 => wire__crate__api__simple__set_selected_light_color_hue_expression_impl(
+        96 => wire__crate__api__simple__set_selected_light_color_impl(ptr, rust_vec_len, data_len),
+        97 => wire__crate__api__simple__set_selected_light_color_hue_expression_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        96 => wire__crate__api__simple__set_selected_light_cookie_impl(ptr, rust_vec_len, data_len),
-        97 => {
+        98 => wire__crate__api__simple__set_selected_light_cookie_impl(ptr, rust_vec_len, data_len),
+        99 => {
             wire__crate__api__simple__set_selected_light_intensity_impl(ptr, rust_vec_len, data_len)
         }
-        98 => wire__crate__api__simple__set_selected_light_intensity_expression_impl(
+        100 => wire__crate__api__simple__set_selected_light_intensity_expression_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        99 => wire__crate__api__simple__set_selected_light_proximity_mode_impl(
+        101 => wire__crate__api__simple__set_selected_light_proximity_mode_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        100 => wire__crate__api__simple__set_selected_light_proximity_range_impl(
+        102 => wire__crate__api__simple__set_selected_light_proximity_range_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        101 => wire__crate__api__simple__set_selected_light_range_impl(ptr, rust_vec_len, data_len),
-        102 => wire__crate__api__simple__set_selected_light_shadow_color_impl(
+        103 => wire__crate__api__simple__set_selected_light_range_impl(ptr, rust_vec_len, data_len),
+        104 => wire__crate__api__simple__set_selected_light_shadow_color_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        103 => wire__crate__api__simple__set_selected_light_shadow_softness_impl(
+        105 => wire__crate__api__simple__set_selected_light_shadow_softness_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        104 => wire__crate__api__simple__set_selected_light_spot_angle_impl(
+        106 => wire__crate__api__simple__set_selected_light_spot_angle_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        105 => wire__crate__api__simple__set_selected_light_type_impl(ptr, rust_vec_len, data_len),
-        106 => wire__crate__api__simple__set_selected_light_volumetric_impl(
+        107 => wire__crate__api__simple__set_selected_light_type_impl(ptr, rust_vec_len, data_len),
+        108 => wire__crate__api__simple__set_selected_light_volumetric_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        107 => wire__crate__api__simple__set_selected_light_volumetric_density_impl(
+        109 => wire__crate__api__simple__set_selected_light_volumetric_density_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        108 => {
+        110 => {
             wire__crate__api__simple__set_selected_material_color_impl(ptr, rust_vec_len, data_len)
         }
-        109 => {
+        111 => {
             wire__crate__api__simple__set_selected_material_float_impl(ptr, rust_vec_len, data_len)
         }
-        110 => wire__crate__api__simple__set_selected_primitive_parameter_impl(
+        112 => wire__crate__api__simple__set_selected_primitive_parameter_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        111 => wire__crate__api__simple__set_selected_sculpt_resolution_impl(
+        113 => wire__crate__api__simple__set_selected_sculpt_resolution_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        112 => wire__crate__api__simple__set_selected_transform_impl(ptr, rust_vec_len, data_len),
-        113 => wire__crate__api__simple__set_selected_transform_position_impl(
+        114 => wire__crate__api__simple__set_selected_transform_impl(ptr, rust_vec_len, data_len),
+        115 => wire__crate__api__simple__set_selected_transform_position_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        114 => wire__crate__api__simple__set_selected_transform_rotation_degrees_impl(
+        116 => wire__crate__api__simple__set_selected_transform_rotation_degrees_impl(
             ptr,
             rust_vec_len,
             data_len,
         ),
-        115 => {
+        117 => {
             wire__crate__api__simple__set_selected_transform_scale_impl(ptr, rust_vec_len, data_len)
         }
-        116 => wire__crate__api__simple__set_settings_integer_impl(ptr, rust_vec_len, data_len),
-        117 => wire__crate__api__simple__set_settings_toggle_impl(ptr, rust_vec_len, data_len),
-        118 => wire__crate__api__simple__start_export_impl(ptr, rust_vec_len, data_len),
-        119 => wire__crate__api__simple__start_import_impl(ptr, rust_vec_len, data_len),
-        120 => wire__crate__api__simple__start_sculpt_convert_impl(ptr, rust_vec_len, data_len),
-        121 => wire__crate__api__simple__stop_sculpting_impl(ptr, rust_vec_len, data_len),
-        122 => wire__crate__api__simple__toggle_manipulator_space_impl(ptr, rust_vec_len, data_len),
-        123 => wire__crate__api__simple__toggle_node_lock_impl(ptr, rust_vec_len, data_len),
-        124 => wire__crate__api__simple__toggle_node_visibility_impl(ptr, rust_vec_len, data_len),
-        125 => wire__crate__api__simple__toggle_orthographic_impl(ptr, rust_vec_len, data_len),
-        126 => wire__crate__api__simple__undo_impl(ptr, rust_vec_len, data_len),
-        127 => wire__crate__api__simple__workflow_status_impl(ptr, rust_vec_len, data_len),
-        128 => wire__crate__api__simple__zoom_camera_impl(ptr, rust_vec_len, data_len),
+        118 => wire__crate__api__simple__set_settings_integer_impl(ptr, rust_vec_len, data_len),
+        119 => wire__crate__api__simple__set_settings_toggle_impl(ptr, rust_vec_len, data_len),
+        120 => wire__crate__api__simple__set_workspace_impl(ptr, rust_vec_len, data_len),
+        121 => wire__crate__api__simple__start_export_impl(ptr, rust_vec_len, data_len),
+        122 => wire__crate__api__simple__start_import_impl(ptr, rust_vec_len, data_len),
+        123 => wire__crate__api__simple__start_sculpt_convert_impl(ptr, rust_vec_len, data_len),
+        124 => wire__crate__api__simple__stop_sculpting_impl(ptr, rust_vec_len, data_len),
+        125 => wire__crate__api__simple__toggle_manipulator_space_impl(ptr, rust_vec_len, data_len),
+        126 => wire__crate__api__simple__toggle_node_lock_impl(ptr, rust_vec_len, data_len),
+        127 => wire__crate__api__simple__toggle_node_selection_impl(ptr, rust_vec_len, data_len),
+        128 => wire__crate__api__simple__toggle_node_visibility_impl(ptr, rust_vec_len, data_len),
+        129 => wire__crate__api__simple__toggle_orthographic_impl(ptr, rust_vec_len, data_len),
+        130 => wire__crate__api__simple__undo_impl(ptr, rust_vec_len, data_len),
+        131 => wire__crate__api__simple__workflow_status_impl(ptr, rust_vec_len, data_len),
+        132 => wire__crate__api__simple__zoom_camera_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -5809,6 +6069,31 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::mirrors::AppCameraSnapshot>
     for crate::api::mirrors::AppCameraSnapshot
 {
     fn into_into_dart(self) -> crate::api::mirrors::AppCameraSnapshot {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::mirrors::AppCommandSnapshot {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.id.into_into_dart().into_dart(),
+            self.label.into_into_dart().into_dart(),
+            self.category.into_into_dart().into_dart(),
+            self.enabled.into_into_dart().into_dart(),
+            self.workspace_ids.into_into_dart().into_dart(),
+            self.shortcut_label.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::mirrors::AppCommandSnapshot
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::mirrors::AppCommandSnapshot>
+    for crate::api::mirrors::AppCommandSnapshot
+{
+    fn into_into_dart(self) -> crate::api::mirrors::AppCommandSnapshot {
         self
     }
 }
@@ -6296,6 +6581,31 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::mirrors::AppPrimitiveProperti
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::mirrors::AppQuickActionSnapshot {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.id.into_into_dart().into_dart(),
+            self.label.into_into_dart().into_dart(),
+            self.category.into_into_dart().into_dart(),
+            self.enabled.into_into_dart().into_dart(),
+            self.prominent.into_into_dart().into_dart(),
+            self.shortcut_label.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::mirrors::AppQuickActionSnapshot
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::mirrors::AppQuickActionSnapshot>
+    for crate::api::mirrors::AppQuickActionSnapshot
+{
+    fn into_into_dart(self) -> crate::api::mirrors::AppQuickActionSnapshot {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::mirrors::AppRenderOptionSnapshot {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -6385,9 +6695,13 @@ impl flutter_rust_bridge::IntoDart for crate::api::mirrors::AppSceneSnapshot {
         [
             self.selected_node.into_into_dart().into_dart(),
             self.selected_node_properties.into_into_dart().into_dart(),
+            self.selected_node_ids.into_into_dart().into_dart(),
             self.top_level_nodes.into_into_dart().into_dart(),
             self.scene_tree_roots.into_into_dart().into_dart(),
             self.viewport_lights.into_into_dart().into_dart(),
+            self.workspace.into_into_dart().into_dart(),
+            self.selection_context.into_into_dart().into_dart(),
+            self.commands.into_into_dart().into_dart(),
             self.history.into_into_dart().into_dart(),
             self.document.into_into_dart().into_dart(),
             self.render.into_into_dart().into_dart(),
@@ -6458,6 +6772,8 @@ impl flutter_rust_bridge::IntoDart for crate::api::mirrors::AppSceneTreeNodeSnap
             self.kind_label.into_into_dart().into_dart(),
             self.visible.into_into_dart().into_dart(),
             self.locked.into_into_dart().into_dart(),
+            self.workflow_status_id.into_into_dart().into_dart(),
+            self.workflow_status_label.into_into_dart().into_dart(),
             self.children.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -6650,6 +6966,33 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::mirrors::AppSelectedSculptSna
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::mirrors::AppSelectionContextSnapshot {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.headline.into_into_dart().into_dart(),
+            self.detail.into_into_dart().into_dart(),
+            self.selection_count.into_into_dart().into_dart(),
+            self.selection_kind_id.into_into_dart().into_dart(),
+            self.selection_kind_label.into_into_dart().into_dart(),
+            self.workflow_status_id.into_into_dart().into_dart(),
+            self.workflow_status_label.into_into_dart().into_dart(),
+            self.quick_actions.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::mirrors::AppSelectionContextSnapshot
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::mirrors::AppSelectionContextSnapshot>
+    for crate::api::mirrors::AppSelectionContextSnapshot
+{
+    fn into_into_dart(self) -> crate::api::mirrors::AppSelectionContextSnapshot {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::mirrors::AppSettingsSnapshot {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -6805,6 +7148,28 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::mirrors::AppWorkflowStatusSna
         self
     }
 }
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::mirrors::AppWorkspaceSnapshot {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.id.into_into_dart().into_dart(),
+            self.label.into_into_dart().into_dart(),
+            self.description.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::mirrors::AppWorkspaceSnapshot
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::mirrors::AppWorkspaceSnapshot>
+    for crate::api::mirrors::AppWorkspaceSnapshot
+{
+    fn into_into_dart(self) -> crate::api::mirrors::AppWorkspaceSnapshot {
+        self
+    }
+}
 
 impl SseEncode for String {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -6832,6 +7197,18 @@ impl SseEncode for crate::api::mirrors::AppCameraSnapshot {
         <bool>::sse_encode(self.orthographic, serializer);
         <crate::api::mirrors::AppVec3>::sse_encode(self.target, serializer);
         <crate::api::mirrors::AppVec3>::sse_encode(self.eye, serializer);
+    }
+}
+
+impl SseEncode for crate::api::mirrors::AppCommandSnapshot {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.id, serializer);
+        <String>::sse_encode(self.label, serializer);
+        <String>::sse_encode(self.category, serializer);
+        <bool>::sse_encode(self.enabled, serializer);
+        <Vec<String>>::sse_encode(self.workspace_ids, serializer);
+        <Option<String>>::sse_encode(self.shortcut_label, serializer);
     }
 }
 
@@ -7080,6 +7457,18 @@ impl SseEncode for crate::api::mirrors::AppPrimitivePropertiesSnapshot {
     }
 }
 
+impl SseEncode for crate::api::mirrors::AppQuickActionSnapshot {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.id, serializer);
+        <String>::sse_encode(self.label, serializer);
+        <String>::sse_encode(self.category, serializer);
+        <bool>::sse_encode(self.enabled, serializer);
+        <bool>::sse_encode(self.prominent, serializer);
+        <Option<String>>::sse_encode(self.shortcut_label, serializer);
+    }
+}
+
 impl SseEncode for crate::api::mirrors::AppRenderOptionSnapshot {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -7136,6 +7525,7 @@ impl SseEncode for crate::api::mirrors::AppSceneSnapshot {
             self.selected_node_properties,
             serializer,
         );
+        <Vec<u64>>::sse_encode(self.selected_node_ids, serializer);
         <Vec<crate::api::mirrors::AppNodeSnapshot>>::sse_encode(self.top_level_nodes, serializer);
         <Vec<crate::api::mirrors::AppSceneTreeNodeSnapshot>>::sse_encode(
             self.scene_tree_roots,
@@ -7145,6 +7535,12 @@ impl SseEncode for crate::api::mirrors::AppSceneSnapshot {
             self.viewport_lights,
             serializer,
         );
+        <crate::api::mirrors::AppWorkspaceSnapshot>::sse_encode(self.workspace, serializer);
+        <crate::api::mirrors::AppSelectionContextSnapshot>::sse_encode(
+            self.selection_context,
+            serializer,
+        );
+        <Vec<crate::api::mirrors::AppCommandSnapshot>>::sse_encode(self.commands, serializer);
         <crate::api::mirrors::AppHistorySnapshot>::sse_encode(self.history, serializer);
         <crate::api::mirrors::AppDocumentSnapshot>::sse_encode(self.document, serializer);
         <crate::api::mirrors::AppRenderSettingsSnapshot>::sse_encode(self.render, serializer);
@@ -7192,6 +7588,8 @@ impl SseEncode for crate::api::mirrors::AppSceneTreeNodeSnapshot {
         <String>::sse_encode(self.kind_label, serializer);
         <bool>::sse_encode(self.visible, serializer);
         <bool>::sse_encode(self.locked, serializer);
+        <String>::sse_encode(self.workflow_status_id, serializer);
+        <String>::sse_encode(self.workflow_status_label, serializer);
         <Vec<crate::api::mirrors::AppSceneTreeNodeSnapshot>>::sse_encode(self.children, serializer);
     }
 }
@@ -7300,6 +7698,23 @@ impl SseEncode for crate::api::mirrors::AppSelectedSculptSnapshot {
     }
 }
 
+impl SseEncode for crate::api::mirrors::AppSelectionContextSnapshot {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.headline, serializer);
+        <String>::sse_encode(self.detail, serializer);
+        <u32>::sse_encode(self.selection_count, serializer);
+        <String>::sse_encode(self.selection_kind_id, serializer);
+        <String>::sse_encode(self.selection_kind_label, serializer);
+        <String>::sse_encode(self.workflow_status_id, serializer);
+        <String>::sse_encode(self.workflow_status_label, serializer);
+        <Vec<crate::api::mirrors::AppQuickActionSnapshot>>::sse_encode(
+            self.quick_actions,
+            serializer,
+        );
+    }
+}
+
 impl SseEncode for crate::api::mirrors::AppSettingsSnapshot {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -7387,6 +7802,15 @@ impl SseEncode for crate::api::mirrors::AppWorkflowStatusSnapshot {
     }
 }
 
+impl SseEncode for crate::api::mirrors::AppWorkspaceSnapshot {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.id, serializer);
+        <String>::sse_encode(self.label, serializer);
+        <String>::sse_encode(self.description, serializer);
+    }
+}
+
 impl SseEncode for bool {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -7417,6 +7841,16 @@ impl SseEncode for Vec<crate::api::mirrors::AppCameraBookmarkSnapshot> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::mirrors::AppCameraBookmarkSnapshot>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::api::mirrors::AppCommandSnapshot> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::mirrors::AppCommandSnapshot>::sse_encode(item, serializer);
         }
     }
 }
@@ -7491,6 +7925,16 @@ impl SseEncode for Vec<crate::api::mirrors::AppNodeSnapshot> {
     }
 }
 
+impl SseEncode for Vec<crate::api::mirrors::AppQuickActionSnapshot> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::mirrors::AppQuickActionSnapshot>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::api::mirrors::AppRenderOptionSnapshot> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -7537,6 +7981,16 @@ impl SseEncode for Vec<crate::api::mirrors::AppViewportLightSnapshot> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::mirrors::AppViewportLightSnapshot>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<u64> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <u64>::sse_encode(item, serializer);
         }
     }
 }

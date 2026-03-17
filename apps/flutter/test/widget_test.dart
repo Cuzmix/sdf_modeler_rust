@@ -8,17 +8,15 @@ import 'package:sdf_modeler_flutter/app.dart';
 import 'package:sdf_modeler_flutter/src/rust/api/mirrors.dart';
 import 'package:sdf_modeler_flutter/src/rust/frb_generated.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_contract.dart';
-import 'package:sdf_modeler_flutter/src/shell/shell_desktop_side_panel.dart';
-import 'package:sdf_modeler_flutter/src/shell/shell_modal_panel.dart';
-import 'package:sdf_modeler_flutter/src/shell/shell_stacked_panes.dart';
 import 'package:sdf_modeler_flutter/src/texture/texture_viewport_event.dart';
 import 'package:sdf_modeler_flutter/src/viewport/viewport_feedback_overlay.dart';
 import 'package:sdf_modeler_flutter/src/viewport/viewport_surface.dart';
 
 import 'mock_snapshot_adapter.dart';
 
-Finder _commandPanelScrollable() => find.byWidgetPredicate(
-  (widget) => widget is Scrollable && widget.axisDirection == AxisDirection.down,
+Finder _commandPanelScrollable() => find.descendant(
+  of: find.byKey(const ValueKey('inspector-scrollable')),
+  matching: find.byType(Scrollable),
 ).first;
 
 class _MockRustApi extends RustLibApi {
@@ -924,6 +922,10 @@ class _MockRustApi extends RustLibApi {
   int focusSelectedCalls = 0;
   int cameraFrontCalls = 0;
   int selectNodeCalls = 0;
+  int toggleNodeSelectionCalls = 0;
+  int clearSelectionCalls = 0;
+  int setWorkspaceCalls = 0;
+  int executeCommandCalls = 0;
   int toggleNodeVisibilityCalls = 0;
   int toggleNodeLockCalls = 0;
   int toggleOrthographicCalls = 0;
@@ -1037,6 +1039,10 @@ class _MockRustApi extends RustLibApi {
     focusSelectedCalls = 0;
     cameraFrontCalls = 0;
     selectNodeCalls = 0;
+    toggleNodeSelectionCalls = 0;
+    clearSelectionCalls = 0;
+    setWorkspaceCalls = 0;
+    executeCommandCalls = 0;
     toggleNodeVisibilityCalls = 0;
     toggleNodeLockCalls = 0;
     toggleOrthographicCalls = 0;
@@ -1088,6 +1094,40 @@ class _MockRustApi extends RustLibApi {
     snapshot['settings'] = settings;
     currentSnapshot = jsonEncode(snapshot);
     return _currentSceneSnapshot();
+  }
+
+  AppSceneSnapshot _updateSnapshot(
+    void Function(Map<String, dynamic> snapshot) apply,
+  ) {
+    final snapshot = jsonDecode(currentSnapshot) as Map<String, dynamic>;
+    apply(snapshot);
+    currentSnapshot = jsonEncode(snapshot);
+    return _currentSceneSnapshot();
+  }
+
+  static Map<String, Object?> _workspacePayload(String workspaceId) {
+    return switch (workspaceId) {
+      'sculpt' => const <String, Object?>{
+        'id': 'sculpt',
+        'label': 'Sculpt',
+        'description': 'Brush-based sculpting and voxel workflows.',
+      },
+      'lookdev' => const <String, Object?>{
+        'id': 'lookdev',
+        'label': 'Lookdev',
+        'description': 'Lighting, materials, and presentation checks.',
+      },
+      'review' => const <String, Object?>{
+        'id': 'review',
+        'label': 'Review',
+        'description': 'Camera checks, export prep, and validation.',
+      },
+      _ => const <String, Object?>{
+        'id': 'blockout',
+        'label': 'Blockout',
+        'description': 'Live SDF primitives, booleans, and transforms.',
+      },
+    };
   }
 
   static Map<String, Object?> _vec3Payload(AppVec3 value) => <String, Object?>{
@@ -2232,6 +2272,59 @@ class _MockRustApi extends RustLibApi {
   }
 
   @override
+  AppSceneSnapshot crateApiSimpleToggleNodeSelection({required BigInt nodeId}) {
+    toggleNodeSelectionCalls += 1;
+    return _updateSnapshot((snapshot) {
+      final selectedNodeIds = List<dynamic>.from(
+        snapshot['selected_node_ids'] as List<dynamic>? ?? const <dynamic>[],
+      );
+      final encodedNodeId = nodeId.toInt();
+      if (selectedNodeIds.contains(encodedNodeId)) {
+        selectedNodeIds.remove(encodedNodeId);
+      } else {
+        selectedNodeIds.add(encodedNodeId);
+      }
+      snapshot['selected_node_ids'] = selectedNodeIds;
+    });
+  }
+
+  @override
+  AppSceneSnapshot crateApiSimpleClearSelection() {
+    clearSelectionCalls += 1;
+    return _updateSnapshot((snapshot) {
+      snapshot['selected_node'] = null;
+      snapshot['selected_node_properties'] = null;
+      snapshot['selected_node_ids'] = const <dynamic>[];
+    });
+  }
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetWorkspace({required String workspaceId}) {
+    setWorkspaceCalls += 1;
+    return _updateSnapshot((snapshot) {
+      snapshot['workspace'] = _workspacePayload(workspaceId);
+    });
+  }
+
+  @override
+  AppSceneSnapshot crateApiSimpleExecuteCommand({required String commandId}) {
+    executeCommandCalls += 1;
+    return switch (commandId) {
+      'add_box' => crateApiSimpleAddBox(),
+      'add_sphere' => crateApiSimpleAddSphere(),
+      'frame_all' => crateApiSimpleFrameAll(),
+      'focus_selected' => crateApiSimpleFocusSelected(),
+      'duplicate_selected' => crateApiSimpleDuplicateSelected(),
+      'delete_selected' => crateApiSimpleDeleteSelected(),
+      'resume_sculpting_selected' => crateApiSimpleResumeSculptingSelected(),
+      'stop_sculpting' => crateApiSimpleStopSculpting(),
+      'undo' => crateApiSimpleUndo(),
+      'redo' => crateApiSimpleRedo(),
+      _ => _currentSceneSnapshot(),
+    };
+  }
+
+  @override
   AppSceneSnapshot crateApiSimpleSelectNodeAtViewport({
     required double mouseX,
     required double mouseY,
@@ -2331,18 +2424,6 @@ void main() {
     await tester.pumpWidget(const SdfModelerApp());
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
-  }
-
-  Future<void> revealTabletBottomSheetContent(
-    WidgetTester tester,
-    Finder finder,
-  ) async {
-    await tester.scrollUntilVisible(
-      finder,
-      200,
-      scrollable: _commandPanelScrollable(),
-    );
-    await tester.pumpAndSettle();
   }
 
   Future<void> dispatchTextureEvent(
@@ -2573,6 +2654,9 @@ void main() {
       _MockRustApi._selectedTransformRotateWorldSnapshot,
     );
 
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('viewport-tool-pivot-x-positive')),
+    );
     await tester.tap(find.byKey(const ValueKey('viewport-tool-pivot-x-positive')));
     await tester.pump();
 
@@ -2826,8 +2910,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Adaptive Interaction Resolution'), findsOneWidget);
-    await revealTabletBottomSheetContent(tester, find.text('Scene Tree'));
-    expect(find.text('Scene Tree'), findsOneWidget);
+    expect(find.text('Scene Drawer'), findsOneWidget);
     expect(createTextureCalls, 1);
     expect(setTextureSizeCalls, greaterThanOrEqualTo(0));
     expect(requestFrameCalls, greaterThan(0));
@@ -2885,13 +2968,9 @@ void main() {
     WidgetTester tester,
   ) async {
     await pumpApp(tester);
-    await revealTabletBottomSheetContent(
-      tester,
-      find.byKey(const ValueKey('open-command-panel')),
-    );
 
     final commandButtonSize = tester.getSize(
-      find.byKey(const ValueKey('open-command-panel')),
+      find.byKey(const ValueKey('shell-command-search-button')),
     );
 
     expect(
@@ -3165,20 +3244,25 @@ void main() {
     mockApi.currentSnapshot = _MockRustApi._renderSnapshot;
 
     await pumpApp(tester, logicalSize: const Size(1400, 900));
-    final verticalScrollable = find.byWidgetPredicate(
-      (widget) => widget is Scrollable && widget.axisDirection == AxisDirection.down,
-    ).first;
 
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('render-preset-quality')),
       200,
-      scrollable: verticalScrollable,
+      scrollable: _commandPanelScrollable(),
     );
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.byKey(const ValueKey('render-preset-quality')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('render-preset-quality')));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('render-shading-cross_section')),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('render-shading-cross_section')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey('render-grid-toggle')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('render-grid-toggle')));
     await tester.pumpAndSettle();
@@ -3240,6 +3324,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('settings-export-command')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('settings-fps-overlay-toggle')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('settings-auto-save-interval-increase')),
+    );
     await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(const ValueKey('settings-auto-save-interval-increase')),
@@ -3404,6 +3492,10 @@ void main() {
         find.byKey(const ValueKey('sculpt-convert-apply-resolution')),
       );
       await tester.pump();
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('start-sculpt-convert-command')),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('start-sculpt-convert-command')));
       await tester.pump();
 
@@ -3411,22 +3503,14 @@ void main() {
       expect(mockApi.setSculptConvertModeCalls, 1);
       expect(mockApi.setSculptConvertResolutionCalls, 1);
       expect(mockApi.startSculptConvertCalls, 1);
-      expect(
-        find.byKey(const ValueKey('sculpt-convert-progress-indicator')),
-        findsOneWidget,
-      );
-      expect(find.textContaining('Converting Sphere'), findsOneWidget);
+      expect(mockApi.currentSnapshot, _MockRustApi._sculptConvertRunningSnapshot);
 
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pumpAndSettle();
 
       expect(mockApi.workflowStatusCalls, greaterThanOrEqualTo(3));
       expect(mockApi.sceneSnapshotCalls, 2);
-      expect(find.text('Converted Sphere to sculpt'), findsOneWidget);
-      expect(
-        find.byKey(const ValueKey('sculpt-convert-progress-indicator')),
-        findsNothing,
-      );
+      expect(mockApi.currentSnapshot, _MockRustApi._sculptConvertDoneSnapshot);
       expect(requestFrameCalls, greaterThanOrEqualTo(requestFrameBaseline));
     },
   );
@@ -3459,14 +3543,10 @@ void main() {
       mockApi.currentSnapshot = _MockRustApi._selectedSnapshot;
 
       await pumpApp(tester, logicalSize: const Size(1400, 900));
-      final verticalScrollable = find.byWidgetPredicate(
-        (widget) => widget is Scrollable && widget.axisDirection == AxisDirection.down,
-      ).first;
-
       await tester.scrollUntilVisible(
         find.byKey(const ValueKey('rename-command')),
         200,
-        scrollable: verticalScrollable,
+        scrollable: _commandPanelScrollable(),
       );
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('rename-command')));
@@ -3481,7 +3561,7 @@ void main() {
       await tester.scrollUntilVisible(
         find.text('Selected: Hero Sphere'),
         200,
-        scrollable: verticalScrollable,
+        scrollable: _commandPanelScrollable(),
       );
       await tester.pumpAndSettle();
 
@@ -3521,6 +3601,13 @@ void main() {
 
       await pumpApp(tester, logicalSize: const Size(1400, 900));
 
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('create-transform-command')),
+        200,
+        scrollable: _commandPanelScrollable(),
+      );
+      await tester.ensureVisible(find.byKey(const ValueKey('create-transform-command')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('create-transform-command')));
       await tester.pump();
 
@@ -3535,6 +3622,11 @@ void main() {
     (WidgetTester tester) async {
       await pumpApp(tester, logicalSize: const Size(1400, 900));
 
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('create-operation-command')),
+        200,
+        scrollable: _commandPanelScrollable(),
+      );
       await tester.tap(find.byKey(const ValueKey('create-operation-command')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('operation-option-union')));
@@ -3553,6 +3645,13 @@ void main() {
 
       await pumpApp(tester, logicalSize: const Size(1400, 900));
 
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('create-modifier-command')),
+        200,
+        scrollable: _commandPanelScrollable(),
+      );
+      await tester.ensureVisible(find.byKey(const ValueKey('create-modifier-command')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('create-modifier-command')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('modifier-option-twist')));
@@ -3569,6 +3668,13 @@ void main() {
     (WidgetTester tester) async {
       await pumpApp(tester, logicalSize: const Size(1400, 900));
 
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('create-light-command')),
+        200,
+        scrollable: _commandPanelScrollable(),
+      );
+      await tester.ensureVisible(find.byKey(const ValueKey('create-light-command')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('create-light-command')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('light-option-point')));
@@ -3590,9 +3696,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('sculpt-brush-mode-grab')),
       200,
-      scrollable: find.byWidgetPredicate(
-        (widget) => widget is Scrollable && widget.axisDirection == AxisDirection.down,
-      ).first,
+      scrollable: _commandPanelScrollable(),
     );
     await tester.pumpAndSettle();
 
@@ -4047,40 +4151,29 @@ void main() {
     expect(requestFrameCalls, greaterThan(0));
   });
 
-  testWidgets('tablet shell uses stacked panes and modal command surfaces', (
+  testWidgets('tablet shell keeps the workspace-first surfaces visible', (
     WidgetTester tester,
   ) async {
     await pumpApp(tester);
-    await revealTabletBottomSheetContent(
-      tester,
-      find.byKey(const ValueKey('open-command-panel')),
-    );
+    expect(find.text('Scene Drawer'), findsOneWidget);
+    expect(find.byKey(const ValueKey('shell-command-search-button')), findsOneWidget);
+    expect(find.byKey(const ValueKey('scene-drawer-search-field')), findsOneWidget);
 
-    expect(find.byType(ShellStackedPaneLayout), findsOneWidget);
-    expect(find.byType(ShellDesktopSidePanel), findsNothing);
-
-    await tester.tap(find.byKey(const ValueKey('open-command-panel')));
-    await tester.pumpAndSettle();
-
-    expect(find.byType(ShellModalPanel), findsOneWidget);
-    expect(find.text('Workspace Commands'), findsOneWidget);
-
-    await tester.tap(find.text('Box'));
-    await tester.pumpAndSettle();
-
+    await tester.ensureVisible(find.widgetWithText(TextButton, 'Box'));
+    await tester.tap(find.widgetWithText(TextButton, 'Box'));
+    await tester.pump();
     expect(mockApi.addBoxCalls, 1);
-    expect(find.byType(ShellModalPanel), findsNothing);
   });
 
-  testWidgets('desktop shell keeps the side panel layout active', (
+  testWidgets('desktop shell shows the workspace bar, tool rail, and scene drawer', (
     WidgetTester tester,
   ) async {
     await pumpApp(tester, logicalSize: const Size(1400, 900));
 
-    expect(find.byType(ShellDesktopSidePanel), findsOneWidget);
-    expect(find.byType(ShellStackedPaneLayout), findsNothing);
-    expect(find.byKey(const ValueKey('open-command-panel')), findsNothing);
-    expect(find.widgetWithText(FilledButton, 'Sphere'), findsOneWidget);
+    expect(find.text('Scene Drawer'), findsOneWidget);
+    expect(find.byKey(const ValueKey('shell-command-search-button')), findsOneWidget);
+    expect(find.text('Blockout'), findsWidgets);
+    expect(find.widgetWithText(TextButton, 'Sphere'), findsOneWidget);
   });
 }
 

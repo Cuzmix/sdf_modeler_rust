@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
+    show Uint64List;
 import 'package:sdf_modeler_flutter/src/rust/api/mirrors.dart' as rust;
 
 rust.AppSceneSnapshot parseSceneSnapshotJson(String jsonString) {
@@ -135,6 +137,16 @@ rust.AppSceneTreeNodeSnapshot _sceneTreeNode(Map<String, dynamic> json) =>
       kindLabel: _readString(json, 'kind_label'),
       visible: _readBool(json, 'visible'),
       locked: _readBool(json, 'locked'),
+      workflowStatusId: _readString(
+        json,
+        'workflow_status_id',
+        defaultValue: 'live',
+      ),
+      workflowStatusLabel: _readString(
+        json,
+        'workflow_status_label',
+        defaultValue: 'Live',
+      ),
       children: _readObjectList(json, 'children', _sceneTreeNode),
     );
 
@@ -145,7 +157,68 @@ rust.AppSceneTreeNodeSnapshot _sceneTreeNodeFromNode(rust.AppNodeSnapshot node) 
       kindLabel: node.kindLabel,
       visible: node.visible,
       locked: node.locked,
+      workflowStatusId: 'live',
+      workflowStatusLabel: 'Live',
       children: const <rust.AppSceneTreeNodeSnapshot>[],
+    );
+
+rust.AppQuickActionSnapshot _quickAction(Map<String, dynamic> json) =>
+    rust.AppQuickActionSnapshot(
+      id: _readString(json, 'id'),
+      label: _readString(json, 'label'),
+      category: _readString(json, 'category'),
+      enabled: _readBool(json, 'enabled', defaultValue: true),
+      prominent: _readBool(json, 'prominent'),
+      shortcutLabel: _readNullableString(json, 'shortcut_label'),
+    );
+
+rust.AppCommandSnapshot _command(Map<String, dynamic> json) =>
+    rust.AppCommandSnapshot(
+      id: _readString(json, 'id'),
+      label: _readString(json, 'label'),
+      category: _readString(json, 'category'),
+      enabled: _readBool(json, 'enabled', defaultValue: true),
+      workspaceIds: _readStringList(json, 'workspace_ids'),
+      shortcutLabel: _readNullableString(json, 'shortcut_label'),
+    );
+
+rust.AppSelectionContextSnapshot _selectionContext(Map<String, dynamic> json) =>
+    rust.AppSelectionContextSnapshot(
+      headline: _readString(json, 'headline'),
+      detail: _readString(json, 'detail'),
+      selectionCount: _readInt(json, 'selection_count'),
+      selectionKindId: _readString(
+        json,
+        'selection_kind_id',
+        defaultValue: 'none',
+      ),
+      selectionKindLabel: _readString(
+        json,
+        'selection_kind_label',
+        defaultValue: 'Nothing selected',
+      ),
+      workflowStatusId: _readString(
+        json,
+        'workflow_status_id',
+        defaultValue: 'none',
+      ),
+      workflowStatusLabel: _readString(
+        json,
+        'workflow_status_label',
+        defaultValue: 'No selection',
+      ),
+      quickActions: _readObjectList(json, 'quick_actions', _quickAction),
+    );
+
+rust.AppWorkspaceSnapshot _workspace(Map<String, dynamic> json) =>
+    rust.AppWorkspaceSnapshot(
+      id: _readString(json, 'id', defaultValue: 'blockout'),
+      label: _readString(json, 'label', defaultValue: 'Blockout'),
+      description: _readString(
+        json,
+        'description',
+        defaultValue: 'Live SDF primitives, booleans, and transforms.',
+      ),
     );
 
 rust.AppSceneStatsSnapshot _sceneStats(Map<String, dynamic> json) =>
@@ -659,8 +732,22 @@ rust.AppSceneSnapshot _sceneSnapshot(Map<String, dynamic> json) {
         : _selectedNodeProperties(
             _readOptionalObject(json, 'selected_node_properties')!,
           ),
+    selectedNodeIds: Uint64List.fromList(
+      _readJsonList(json['selected_node_ids'])
+          .whereType<num>()
+          .map((nodeId) => nodeId.toInt())
+          .toList(growable: false),
+    ),
     topLevelNodes: topLevelNodes,
     sceneTreeRoots: sceneTreeRoots,
+    viewportLights: _readObjectList(json, 'viewport_lights', _viewportLight),
+    workspace: _readOptionalObject(json, 'workspace') == null
+        ? _defaultWorkspaceSnapshot()
+        : _workspace(_readOptionalObject(json, 'workspace')!),
+    selectionContext: _readOptionalObject(json, 'selection_context') == null
+        ? _defaultSelectionContextSnapshot()
+        : _selectionContext(_readOptionalObject(json, 'selection_context')!),
+    commands: _readObjectList(json, 'commands', _command),
     history: _readOptionalObject(json, 'history') == null
         ? const rust.AppHistorySnapshot(canUndo: false, canRedo: false)
         : _history(_readOptionalObject(json, 'history')!),
@@ -688,7 +775,6 @@ rust.AppSceneSnapshot _sceneSnapshot(Map<String, dynamic> json) {
     lightLinking: _readOptionalObject(json, 'light_linking') == null
         ? _defaultLightLinkingSnapshot()
         : _lightLinking(_readOptionalObject(json, 'light_linking')!),
-    viewportLights: _readObjectList(json, 'viewport_lights', _viewportLight),
     camera: _camera(_readJsonObject(json['camera'])),
     stats: _sceneStats(_readJsonObject(json['stats'])),
     tool: _tool(_readJsonObject(json['tool'])),
@@ -815,6 +901,25 @@ rust.AppSculptSnapshot _defaultSculptSnapshot() => const rust.AppSculptSnapshot(
   canStop: false,
   maxResolution: 16,
 );
+
+rust.AppWorkspaceSnapshot _defaultWorkspaceSnapshot() =>
+    const rust.AppWorkspaceSnapshot(
+      id: 'blockout',
+      label: 'Blockout',
+      description: 'Live SDF primitives, booleans, and transforms.',
+    );
+
+rust.AppSelectionContextSnapshot _defaultSelectionContextSnapshot() =>
+    const rust.AppSelectionContextSnapshot(
+      headline: 'Blockout workspace',
+      detail: 'Choose a shape or use the tool rail to start blocking out.',
+      selectionCount: 0,
+      selectionKindId: 'none',
+      selectionKindLabel: 'Nothing selected',
+      workflowStatusId: 'none',
+      workflowStatusLabel: 'No selection',
+      quickActions: <rust.AppQuickActionSnapshot>[],
+    );
 
 rust.AppLightLinkingSnapshot _defaultLightLinkingSnapshot() =>
     const rust.AppLightLinkingSnapshot(

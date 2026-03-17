@@ -40,13 +40,15 @@ class ViewportToolOverlay extends StatelessWidget {
       child: Align(
         alignment: Alignment.bottomLeft,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 360),
+          constraints: const BoxConstraints(maxWidth: 360, maxHeight: 360),
           child: DecoratedBox(
             decoration: ShellSurfaceStyles.overlayPanel(
               context,
               accentColor: shellPalette.infoAccent,
             ),
-            child: Padding(
+            child: SingleChildScrollView(
+              key: const ValueKey('viewport-tool-overlay-scrollable'),
+              child: Padding(
               padding: const EdgeInsets.all(ShellTokens.overlayChipHorizontalPadding),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -175,6 +177,7 @@ class ViewportToolOverlay extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
             ),
           ),
         ),

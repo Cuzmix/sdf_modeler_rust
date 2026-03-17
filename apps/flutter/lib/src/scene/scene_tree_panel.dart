@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:sdf_modeler_flutter/src/rust/api/mirrors.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_contract.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_theme.dart';
@@ -8,16 +9,20 @@ class SceneTreePanel extends StatelessWidget {
     super.key,
     required this.roots,
     required this.selectedNodeId,
+    required this.selectedNodeIds,
     required this.enabled,
     required this.onSelectNode,
+    required this.onToggleNodeSelection,
     required this.onToggleNodeVisibility,
     required this.onToggleNodeLock,
   });
 
   final List<AppSceneTreeNodeSnapshot> roots;
   final BigInt? selectedNodeId;
+  final Set<BigInt> selectedNodeIds;
   final bool enabled;
   final ValueChanged<BigInt> onSelectNode;
+  final ValueChanged<BigInt> onToggleNodeSelection;
   final ValueChanged<BigInt> onToggleNodeVisibility;
   final ValueChanged<BigInt> onToggleNodeLock;
 
@@ -35,8 +40,10 @@ class SceneTreePanel extends StatelessWidget {
               node: node,
               depth: 0,
               selectedNodeId: selectedNodeId,
+              selectedNodeIds: selectedNodeIds,
               enabled: enabled,
               onSelectNode: onSelectNode,
+              onToggleNodeSelection: onToggleNodeSelection,
               onToggleNodeVisibility: onToggleNodeVisibility,
               onToggleNodeLock: onToggleNodeLock,
             ),
@@ -51,8 +58,10 @@ class _SceneTreeNodeTile extends StatelessWidget {
     required this.node,
     required this.depth,
     required this.selectedNodeId,
+    required this.selectedNodeIds,
     required this.enabled,
     required this.onSelectNode,
+    required this.onToggleNodeSelection,
     required this.onToggleNodeVisibility,
     required this.onToggleNodeLock,
   });
@@ -60,18 +69,24 @@ class _SceneTreeNodeTile extends StatelessWidget {
   final AppSceneTreeNodeSnapshot node;
   final int depth;
   final BigInt? selectedNodeId;
+  final Set<BigInt> selectedNodeIds;
   final bool enabled;
   final ValueChanged<BigInt> onSelectNode;
+  final ValueChanged<BigInt> onToggleNodeSelection;
   final ValueChanged<BigInt> onToggleNodeVisibility;
   final ValueChanged<BigInt> onToggleNodeLock;
 
   @override
   Widget build(BuildContext context) {
     final isSelected = selectedNodeId == node.id;
+    final isPartOfSelection = selectedNodeIds.contains(node.id);
     final theme = Theme.of(context);
     final labelColor = node.visible
         ? theme.colorScheme.onSurface
         : theme.colorScheme.onSurfaceVariant;
+    final keyboard = HardwareKeyboard.instance;
+    final allowToggleSelection =
+        keyboard.isControlPressed || keyboard.isMetaPressed;
 
     return Padding(
       padding: EdgeInsets.only(
@@ -84,7 +99,7 @@ class _SceneTreeNodeTile extends StatelessWidget {
           DecoratedBox(
             decoration: ShellSurfaceStyles.sceneTreeTile(
               context,
-              selected: isSelected,
+              selected: isPartOfSelection,
             ),
             child: Row(
               children: [
@@ -94,7 +109,18 @@ class _SceneTreeNodeTile extends StatelessWidget {
                     borderRadius: BorderRadius.circular(
                       ShellTokens.surfaceRadius,
                     ),
-                    onTap: enabled ? () => onSelectNode(node.id) : null,
+                    onTap: enabled
+                        ? () {
+                            if (allowToggleSelection) {
+                              onToggleNodeSelection(node.id);
+                              return;
+                            }
+                            onSelectNode(node.id);
+                          }
+                        : null,
+                    onLongPress: enabled
+                        ? () => onToggleNodeSelection(node.id)
+                        : null,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
                         horizontal: ShellTokens.sceneTreeTileHorizontalPadding,
@@ -131,6 +157,26 @@ class _SceneTreeNodeTile extends StatelessWidget {
                                   style: theme.textTheme.bodySmall?.copyWith(
                                     color: theme.colorScheme.onSurfaceVariant,
                                   ),
+                                ),
+                                const SizedBox(height: 6),
+                                Wrap(
+                                  spacing: ShellTokens.compactGap,
+                                  runSpacing: ShellTokens.compactGap,
+                                  children: [
+                                    if (isPartOfSelection && !isSelected)
+                                      Chip(
+                                        label: const Text('Selected'),
+                                        visualDensity: VisualDensity.compact,
+                                        materialTapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                      ),
+                                    Chip(
+                                      label: Text(node.workflowStatusLabel),
+                                      visualDensity: VisualDensity.compact,
+                                      materialTapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
@@ -174,8 +220,10 @@ class _SceneTreeNodeTile extends StatelessWidget {
                 node: child,
                 depth: depth + 1,
                 selectedNodeId: selectedNodeId,
+                selectedNodeIds: selectedNodeIds,
                 enabled: enabled,
                 onSelectNode: onSelectNode,
+                onToggleNodeSelection: onToggleNodeSelection,
                 onToggleNodeVisibility: onToggleNodeVisibility,
                 onToggleNodeLock: onToggleNodeLock,
               ),

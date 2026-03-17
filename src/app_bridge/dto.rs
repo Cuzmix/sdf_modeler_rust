@@ -41,7 +41,73 @@ pub struct AppSceneTreeNodeSnapshot {
     pub kind_label: String,
     pub visible: bool,
     pub locked: bool,
+    #[serde(default)]
+    pub workflow_status_id: String,
+    #[serde(default)]
+    pub workflow_status_label: String,
     pub children: Vec<AppSceneTreeNodeSnapshot>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct AppWorkspaceSnapshot {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub label: String,
+    #[serde(default)]
+    pub description: String,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct AppQuickActionSnapshot {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub label: String,
+    #[serde(default)]
+    pub category: String,
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub prominent: bool,
+    #[serde(default)]
+    pub shortcut_label: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct AppCommandSnapshot {
+    #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub label: String,
+    #[serde(default)]
+    pub category: String,
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub workspace_ids: Vec<String>,
+    #[serde(default)]
+    pub shortcut_label: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct AppSelectionContextSnapshot {
+    #[serde(default)]
+    pub headline: String,
+    #[serde(default)]
+    pub detail: String,
+    #[serde(default)]
+    pub selection_count: u32,
+    #[serde(default)]
+    pub selection_kind_id: String,
+    #[serde(default)]
+    pub selection_kind_label: String,
+    #[serde(default)]
+    pub workflow_status_id: String,
+    #[serde(default)]
+    pub workflow_status_label: String,
+    #[serde(default)]
+    pub quick_actions: Vec<AppQuickActionSnapshot>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -433,10 +499,18 @@ pub struct AppLightLinkingSnapshot {
 pub struct AppSceneSnapshot {
     pub selected_node: Option<AppNodeSnapshot>,
     pub selected_node_properties: Option<AppSelectedNodePropertiesSnapshot>,
+    #[serde(default)]
+    pub selected_node_ids: Vec<u64>,
     pub top_level_nodes: Vec<AppNodeSnapshot>,
     pub scene_tree_roots: Vec<AppSceneTreeNodeSnapshot>,
     #[serde(default)]
     pub viewport_lights: Vec<AppViewportLightSnapshot>,
+    #[serde(default)]
+    pub workspace: AppWorkspaceSnapshot,
+    #[serde(default)]
+    pub selection_context: AppSelectionContextSnapshot,
+    #[serde(default)]
+    pub commands: Vec<AppCommandSnapshot>,
     pub history: AppHistorySnapshot,
     pub document: AppDocumentSnapshot,
     pub render: AppRenderSettingsSnapshot,

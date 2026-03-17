@@ -11,18 +11,20 @@ import 'package:sdf_modeler_flutter/src/import/import_panel.dart';
 import 'package:sdf_modeler_flutter/src/light/light_inspector_panel.dart';
 import 'package:sdf_modeler_flutter/src/render/render_settings_panel.dart';
 import 'package:sdf_modeler_flutter/src/rust/api/mirrors.dart';
+import 'package:sdf_modeler_flutter/src/scene/scene_drawer_panel.dart';
 import 'package:sdf_modeler_flutter/src/scene/scene_tree_panel.dart';
 import 'package:sdf_modeler_flutter/src/sculpt/sculpt_convert_panel.dart';
 import 'package:sdf_modeler_flutter/src/sculpt/sculpt_session_panel.dart';
+import 'package:sdf_modeler_flutter/src/shell/shell_command_search_panel.dart';
 import 'package:sdf_modeler_flutter/src/settings/settings_panel.dart';
 import 'package:sdf_modeler_flutter/src/session/document_session_panel.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_command_strip.dart';
+import 'package:sdf_modeler_flutter/src/shell/shell_context_shelf.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_contract.dart';
-import 'package:sdf_modeler_flutter/src/shell/shell_desktop_side_panel.dart';
-import 'package:sdf_modeler_flutter/src/shell/shell_modal_panel.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_panel_surface.dart';
-import 'package:sdf_modeler_flutter/src/shell/shell_stacked_panes.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_theme.dart';
+import 'package:sdf_modeler_flutter/src/shell/shell_tool_rail.dart';
+import 'package:sdf_modeler_flutter/src/shell/shell_workspace_bar.dart';
 import 'package:sdf_modeler_flutter/src/texture/texture_bridge.dart';
 import 'package:sdf_modeler_flutter/src/texture/texture_viewport_event.dart';
 import 'package:sdf_modeler_flutter/src/texture/texture_viewport_feedback.dart';
@@ -32,8 +34,6 @@ import 'package:sdf_modeler_flutter/src/viewport/viewport_light_gizmo.dart'
 import 'package:sdf_modeler_flutter/src/viewport/viewport_transform_gizmo.dart';
 import 'package:sdf_modeler_flutter/src/viewport/viewport_surface.dart';
 import 'package:sdf_modeler_flutter/src/viewport/viewport_tool_overlay.dart';
-
-enum _BridgeModalPanel { commands }
 
 class _CreateNodeOption {
   const _CreateNodeOption({required this.id, required this.label});
@@ -218,6 +218,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
   bool _queuedNativeFrameRequest = false;
   bool _hoverRequestPending = false;
   _HoverRequest? _queuedHoverRequest;
+  String _sceneFilterQuery = '';
   int _frameWidth = _defaultFrameWidth;
   int _frameHeight = _defaultFrameHeight;
   int _nativeFrameWidth = 0;
@@ -229,7 +230,6 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
   String _interactionPhase = 'idle';
   Size _lastLogicalViewportSize = Size.zero;
   double _lastDevicePixelRatio = 1.0;
-  _BridgeModalPanel? _activeModalPanel;
 
   @override
   void initState() {
@@ -842,41 +842,44 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
   void _handleViewportInteractionEnd() {}
 
   bool _canShowCommandPanel() {
-    return !ShellLayout.forWidth(MediaQuery.sizeOf(context).width).useSidePanel;
+    return _sceneSnapshot != null;
   }
 
   void _openCommandPanel() {
     if (!_canShowCommandPanel()) {
       return;
     }
-    if (_activeModalPanel == _BridgeModalPanel.commands) {
+    _openCommandSearchDialog();
+  }
+
+  Future<void> _openCommandSearchDialog() async {
+    final snapshot = _sceneSnapshot;
+    if (!mounted || snapshot == null) {
       return;
     }
 
-    setState(() {
-      _activeModalPanel = _BridgeModalPanel.commands;
-    });
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          insetPadding: const EdgeInsets.all(24),
+          child: ShellCommandSearchPanel(
+            commands: snapshot.commands,
+            onExecuteCommand: (commandId) =>
+                unawaited(_executeCommand(commandId)),
+          ),
+        );
+      },
+    );
   }
 
-  void _closeCommandPanel() {
-    if (_activeModalPanel == null) {
-      return;
-    }
-
-    setState(() {
-      _activeModalPanel = null;
-    });
-  }
+  void _closeCommandPanel() {}
 
   void _toggleCommandPanel() {
     if (!_canShowCommandPanel()) {
       return;
     }
-    if (_activeModalPanel == _BridgeModalPanel.commands) {
-      _closeCommandPanel();
-      return;
-    }
-    _openCommandPanel();
+    _openCommandSearchDialog();
   }
 
   KeyEventResult _handleShortcutKeyEvent(FocusNode node, KeyEvent event) {
@@ -1526,6 +1529,24 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
         rotationDegrees: transform.rotationDegrees,
         scale: transform.scale,
       ),
+    );
+  }
+
+  Future<void> _setWorkspace(String workspaceId) {
+    return _runSceneCommand(
+      () => setWorkspace(workspaceId: workspaceId),
+      requestNativeFrame: false,
+    );
+  }
+
+  Future<void> _executeCommand(String commandId) {
+    return _runSceneCommand(() => executeCommand(commandId: commandId));
+  }
+
+  Future<void> _toggleNodeSelection(BigInt nodeId) {
+    return _runSceneCommand(
+      () => toggleNodeSelection(nodeId: nodeId),
+      requestNativeFrame: false,
     );
   }
 
@@ -2216,6 +2237,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
   Widget _buildInspectorPanel(
     ShellLayout shellLayout, {
     ScrollController? scrollController,
+    bool showSceneDrawerSection = true,
   }) {
     return ValueListenableBuilder<AppSceneSnapshot?>(
       valueListenable: _sceneSnapshotNotifier,
@@ -2223,6 +2245,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
         return _InspectorPanel(
           shellLayout: shellLayout,
           scrollController: scrollController,
+          showSceneDrawerSection: showSceneDrawerSection,
           headerListenable: _bridgeHeaderNotifier,
           snapshot: snapshot,
           commandInFlight: _commandInFlight,
@@ -2284,6 +2307,8 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
           onDeleteSelected: () => _runSceneCommand(deleteSelected),
           onSelectSceneNode: (nodeId) =>
               _runSceneCommand(() => selectNode(nodeId: nodeId)),
+          onToggleSceneNodeSelection: (nodeId) =>
+              _toggleNodeSelection(nodeId),
           onToggleSceneNodeVisibility: (nodeId) => _runSceneCommand(
             () => toggleNodeVisibility(nodeId: nodeId),
           ),
@@ -2378,6 +2403,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     );
   }
 
+  // ignore: unused_element
   Widget _buildCommandSheetContent() {
     return ValueListenableBuilder<AppSceneSnapshot?>(
       valueListenable: _sceneSnapshotNotifier,
@@ -2577,13 +2603,27 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
   Widget build(BuildContext context) {
     final activeTextureId = _textureId;
     final shellBackground = ShellSurfaceStyles.canvas(context);
+    const defaultWorkspace = AppWorkspaceSnapshot(
+      id: 'blockout',
+      label: 'Blockout',
+      description: 'Live SDF primitives, booleans, and transforms.',
+    );
+    const defaultSelectionContext = AppSelectionContextSnapshot(
+      headline: 'Blockout workspace',
+      detail: 'Choose a shape or use the tool rail to start blocking out.',
+      selectionCount: 0,
+      selectionKindId: 'none',
+      selectionKindLabel: 'Nothing selected',
+      workflowStatusId: 'none',
+      workflowStatusLabel: 'No selection',
+      quickActions: <AppQuickActionSnapshot>[],
+    );
 
     return Focus(
       autofocus: true,
       onKeyEvent: _handleShortcutKeyEvent,
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        appBar: AppBar(title: const Text('SDF Modeler Flutter Host')),
         body: DecoratedBox(
           decoration: shellBackground,
           child: Padding(
@@ -2594,35 +2634,153 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
               builder: (context, constraints) {
                 final shellLayout = ShellLayout.forWidth(constraints.maxWidth);
                 final viewportCard = _buildViewportCard(activeTextureId);
-                final commandSheetContent = _buildCommandSheetContent();
+                return ValueListenableBuilder<AppSceneSnapshot?>(
+                  valueListenable: _sceneSnapshotNotifier,
+                  builder: (context, snapshot, child) {
+                    final workspace = snapshot?.workspace ?? defaultWorkspace;
+                    final selectionContext =
+                        snapshot?.selectionContext ?? defaultSelectionContext;
+                    final selectedNodeIds = snapshot == null
+                        ? <BigInt>{}
+                        : snapshot.selectedNodeIds.toSet();
 
-                if (shellLayout.useSidePanel) {
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(flex: 3, child: viewportCard),
-                      SizedBox(width: shellLayout.panelGap),
-                      ShellDesktopSidePanel(
-                        width: shellLayout.inspectorPanelExtent,
-                        child: _buildInspectorPanel(shellLayout),
+                    final sceneDrawer = SceneDrawerPanel(
+                      roots: snapshot?.sceneTreeRoots ?? const <AppSceneTreeNodeSnapshot>[],
+                      selectedNodeId: snapshot?.selectedNode?.id,
+                      selectedNodeIds: selectedNodeIds,
+                      enabled: !_commandInFlight,
+                      filterQuery: _sceneFilterQuery,
+                      onFilterQueryChanged: (nextQuery) {
+                        setState(() {
+                          _sceneFilterQuery = nextQuery;
+                        });
+                      },
+                      onSelectNode: (nodeId) =>
+                          unawaited(_runSceneCommand(() => selectNode(nodeId: nodeId))),
+                      onToggleNodeSelection: (nodeId) =>
+                          unawaited(_toggleNodeSelection(nodeId)),
+                      onToggleNodeVisibility: (nodeId) => unawaited(
+                        _runSceneCommand(() => toggleNodeVisibility(nodeId: nodeId)),
                       ),
-                    ],
-                  );
-                }
+                      onToggleNodeLock: (nodeId) => unawaited(
+                        _runSceneCommand(() => toggleNodeLock(nodeId: nodeId)),
+                      ),
+                    );
 
-                return ShellStackedPaneLayout(
-                  viewport: viewportCard,
-                  modalPanel: _activeModalPanel == _BridgeModalPanel.commands
-                      ? ShellModalPanel(
-                          title: 'Workspace Commands',
-                          onDismiss: _closeCommandPanel,
-                          child: commandSheetContent,
-                        )
-                      : null,
-                  bottomSheetBuilder: (context, scrollController) {
-                    return _buildInspectorPanel(
+                    final inspectorPanel = _buildInspectorPanel(
                       shellLayout,
-                      scrollController: scrollController,
+                      showSceneDrawerSection: false,
+                    );
+
+                    final shellContent = shellLayout.useSidePanel
+                        ? Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              const SizedBox(width: 0),
+                              ShellToolRail(
+                                currentWorkspaceId: workspace.id,
+                                enabled: !_commandInFlight,
+                                onSelectWorkspace: (workspaceId) =>
+                                    unawaited(_setWorkspace(workspaceId)),
+                                onExecuteCommand: (commandId) =>
+                                    unawaited(_executeCommand(commandId)),
+                                onOpenCommandSearch: _openCommandPanel,
+                              ),
+                              SizedBox(width: shellLayout.panelGap),
+                              Expanded(
+                                flex: 5,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    Expanded(child: viewportCard),
+                                    SizedBox(height: shellLayout.panelGap),
+                                    ShellContextShelf(
+                                      workspace: workspace,
+                                      selectionContext: selectionContext,
+                                      enabled: !_commandInFlight,
+                                      onExecuteCommand: (commandId) =>
+                                          unawaited(_executeCommand(commandId)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              SizedBox(width: shellLayout.panelGap),
+                              SizedBox(
+                                width: shellLayout.inspectorPanelExtent,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    Expanded(flex: 4, child: sceneDrawer),
+                                    SizedBox(height: shellLayout.panelGap),
+                                    Expanded(flex: 5, child: inspectorPanel),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          )
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(
+                                flex: 6,
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    ShellToolRail(
+                                      currentWorkspaceId: workspace.id,
+                                      enabled: !_commandInFlight,
+                                      onSelectWorkspace: (workspaceId) =>
+                                          unawaited(_setWorkspace(workspaceId)),
+                                      onExecuteCommand: (commandId) =>
+                                          unawaited(_executeCommand(commandId)),
+                                      onOpenCommandSearch: _openCommandPanel,
+                                    ),
+                                    SizedBox(width: shellLayout.panelGap),
+                                    Expanded(child: viewportCard),
+                                  ],
+                                ),
+                              ),
+                              SizedBox(height: shellLayout.panelGap),
+                              ShellContextShelf(
+                                workspace: workspace,
+                                selectionContext: selectionContext,
+                                enabled: !_commandInFlight,
+                                onExecuteCommand: (commandId) =>
+                                    unawaited(_executeCommand(commandId)),
+                              ),
+                              SizedBox(height: shellLayout.panelGap),
+                              Expanded(
+                                flex: 5,
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    Expanded(child: sceneDrawer),
+                                    SizedBox(width: shellLayout.panelGap),
+                                    Expanded(child: inspectorPanel),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          );
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        ShellWorkspaceBar(
+                          workspace: workspace,
+                          selectionContext: selectionContext,
+                          document: snapshot?.document,
+                          history: snapshot?.history,
+                          enabled: !_commandInFlight,
+                          onSelectWorkspace: (workspaceId) =>
+                              unawaited(_setWorkspace(workspaceId)),
+                          onOpenCommandSearch: _openCommandPanel,
+                          onUndo: () => unawaited(_runSceneCommand(undo)),
+                          onRedo: () => unawaited(_runSceneCommand(redo)),
+                        ),
+                        SizedBox(height: shellLayout.panelGap),
+                        Expanded(child: shellContent),
+                      ],
                     );
                   },
                 );
@@ -2737,6 +2895,7 @@ class _InspectorPanel extends StatelessWidget {
   const _InspectorPanel({
     required this.shellLayout,
     required this.snapshot,
+    required this.showSceneDrawerSection,
     required this.headerListenable,
     required this.commandInFlight,
     required this.adaptiveInteractionResolutionEnabled,
@@ -2770,6 +2929,7 @@ class _InspectorPanel extends StatelessWidget {
     required this.onRedo,
     required this.onDeleteSelected,
     required this.onSelectSceneNode,
+    required this.onToggleSceneNodeSelection,
     required this.onToggleSceneNodeVisibility,
     required this.onToggleSceneNodeLock,
     required this.onNewScene,
@@ -2858,6 +3018,7 @@ class _InspectorPanel extends StatelessWidget {
   final ShellLayout shellLayout;
   final ScrollController? scrollController;
   final AppSceneSnapshot? snapshot;
+  final bool showSceneDrawerSection;
   final ValueListenable<_BridgeHeaderModel> headerListenable;
   final bool commandInFlight;
   final bool adaptiveInteractionResolutionEnabled;
@@ -2894,6 +3055,7 @@ class _InspectorPanel extends StatelessWidget {
   final VoidCallback onRedo;
   final VoidCallback onDeleteSelected;
   final ValueChanged<BigInt> onSelectSceneNode;
+  final ValueChanged<BigInt> onToggleSceneNodeSelection;
   final ValueChanged<BigInt> onToggleSceneNodeVisibility;
   final ValueChanged<BigInt> onToggleSceneNodeLock;
   final VoidCallback onNewScene;
@@ -2991,6 +3153,9 @@ class _InspectorPanel extends StatelessWidget {
     final selectedNode = snapshot?.selectedNode;
     final selectedNodeProperties = snapshot?.selectedNodeProperties;
     final selectedNodeId = selectedNode?.id;
+    final selectedNodeIds = snapshot == null
+        ? <BigInt>{}
+        : snapshot!.selectedNodeIds.toSet();
     final cameraControlsEnabled = !commandInFlight && currentCamera != null;
     final focusSelectedEnabled = !commandInFlight && selectedNode != null;
     final sceneCommandsEnabled = !commandInFlight;
@@ -3007,7 +3172,9 @@ class _InspectorPanel extends StatelessWidget {
 
     return ShellPanelSurface(
       child: ListView(
+        key: const ValueKey('inspector-scrollable'),
         controller: scrollController,
+        cacheExtent: 12000,
         children: [
           ValueListenableBuilder<_BridgeHeaderModel>(
             valueListenable: headerListenable,
@@ -3066,12 +3233,12 @@ class _InspectorPanel extends StatelessWidget {
               ],
             ),
           ],
-          const SizedBox(height: ShellTokens.sectionGap),
-          Text(
-            'Scene Tree',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          if (showInlineCommandSections) ...[
+          if (!showSceneDrawerSection && showInlineCommandSections) ...[
+            const SizedBox(height: ShellTokens.sectionGap),
+            Text(
+              'Commands',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: ShellTokens.controlGap),
             _SceneCommandButtons(
               sceneCommandsEnabled: sceneCommandsEnabled,
@@ -3097,18 +3264,53 @@ class _InspectorPanel extends StatelessWidget {
               onDeleteSelected: onDeleteSelected,
             ),
           ],
-          const SizedBox(height: ShellTokens.controlGap),
-          if (snapshot == null)
-            const Text('Scene snapshot is still loading.')
-          else
-            SceneTreePanel(
-              roots: snapshot!.sceneTreeRoots,
-              selectedNodeId: selectedNodeId,
-              enabled: !commandInFlight,
-              onSelectNode: onSelectSceneNode,
-              onToggleNodeVisibility: onToggleSceneNodeVisibility,
-              onToggleNodeLock: onToggleSceneNodeLock,
+          if (showSceneDrawerSection) ...[
+            const SizedBox(height: ShellTokens.sectionGap),
+            Text(
+              'Scene Tree',
+              style: Theme.of(context).textTheme.titleMedium,
             ),
+            if (showInlineCommandSections) ...[
+              const SizedBox(height: ShellTokens.controlGap),
+              _SceneCommandButtons(
+                sceneCommandsEnabled: sceneCommandsEnabled,
+                deleteSelectedEnabled: deleteSelectedEnabled,
+                onAddSphere: onAddSphere,
+                onAddBox: onAddBox,
+                onAddCylinder: onAddCylinder,
+                onAddTorus: onAddTorus,
+                onCreateOperation: onCreateOperation,
+                onCreateTransform: onCreateTransform,
+                onCreateModifier: onCreateModifier,
+                onCreateLight: onCreateLight,
+                createSculptEnabled: createSculptEnabled,
+                onCreateSculpt: onCreateSculpt,
+                renameSelectedEnabled: renameSelectedEnabled,
+                onRenameSelected: onRenameSelected,
+                duplicateSelectedEnabled: duplicateSelectedEnabled,
+                onDuplicateSelected: onDuplicateSelected,
+                undoEnabled: undoEnabled,
+                onUndo: onUndo,
+                redoEnabled: redoEnabled,
+                onRedo: onRedo,
+                onDeleteSelected: onDeleteSelected,
+              ),
+            ],
+            const SizedBox(height: ShellTokens.controlGap),
+            if (snapshot == null)
+              const Text('Scene snapshot is still loading.')
+            else
+              SceneTreePanel(
+                roots: snapshot!.sceneTreeRoots,
+                selectedNodeId: selectedNodeId,
+                selectedNodeIds: selectedNodeIds,
+                enabled: !commandInFlight,
+                onSelectNode: onSelectSceneNode,
+                onToggleNodeSelection: onToggleSceneNodeSelection,
+                onToggleNodeVisibility: onToggleSceneNodeVisibility,
+                onToggleNodeLock: onToggleSceneNodeLock,
+              ),
+          ],
           const SizedBox(height: ShellTokens.sectionGap),
           Text(
             'Node Basics',

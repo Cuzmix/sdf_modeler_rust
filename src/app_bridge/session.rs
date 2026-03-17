@@ -25,13 +25,14 @@ use super::dto::{
     AppKeybindingSnapshot, AppLightCookieCandidateSnapshot, AppLightLinkNodeSnapshot,
     AppLightLinkTargetSnapshot, AppLightLinkingSnapshot, AppLightPropertiesSnapshot,
     AppMaterialPropertiesSnapshot, AppNodeSnapshot, AppPrimitivePropertiesSnapshot,
-    AppRenderOptionSnapshot, AppRenderSettingsSnapshot, AppScalarPropertySnapshot,
-    AppSceneSnapshot, AppSceneStatsSnapshot, AppSceneTreeNodeSnapshot,
+    AppQuickActionSnapshot, AppCommandSnapshot, AppRenderOptionSnapshot,
+    AppRenderSettingsSnapshot, AppScalarPropertySnapshot, AppSceneSnapshot,
+    AppSceneStatsSnapshot, AppSceneTreeNodeSnapshot, AppSelectionContextSnapshot,
     AppSculptConvertDialogSnapshot, AppSculptConvertSnapshot, AppSculptConvertStatusSnapshot,
     AppSculptSessionSnapshot, AppSculptSnapshot, AppSelectedNodePropertiesSnapshot,
     AppSelectedSculptSnapshot, AppSettingsSnapshot, AppToolSnapshot,
-    AppTransformPropertiesSnapshot, AppVec3, AppViewportFeedbackSnapshot, AppViewportLightSnapshot,
-    AppWorkflowStatusSnapshot,
+    AppTransformPropertiesSnapshot, AppVec3, AppViewportFeedbackSnapshot,
+    AppViewportLightSnapshot, AppWorkflowStatusSnapshot, AppWorkspaceSnapshot,
 };
 use super::renderer::{HeadlessPickRequest, HeadlessRenderRequest, HeadlessViewportRenderer};
 use super::workflows::{
@@ -51,7 +52,9 @@ pub struct AppBridge {
     history: History,
     persistence: DocumentPersistence,
     selected_node: Option<NodeId>,
+    selected_nodes: Vec<NodeId>,
     hovered_node: Option<NodeId>,
+    workspace: WorkspaceKind,
     export_state: ExportState,
     import_state: ImportState,
     sculpt_convert_state: SculptConvertState,
@@ -160,6 +163,53 @@ const LIGHT_ARRAY_RADIUS_MIN: f32 = 0.1;
 const LIGHT_ARRAY_RADIUS_MAX: f32 = 20.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum WorkspaceKind {
+    Blockout,
+    Sculpt,
+    Lookdev,
+    Review,
+}
+
+impl WorkspaceKind {
+    fn id(self) -> &'static str {
+        match self {
+            Self::Blockout => "blockout",
+            Self::Sculpt => "sculpt",
+            Self::Lookdev => "lookdev",
+            Self::Review => "review",
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Blockout => "Blockout",
+            Self::Sculpt => "Sculpt",
+            Self::Lookdev => "Lookdev",
+            Self::Review => "Review",
+        }
+    }
+
+    fn description(self) -> &'static str {
+        match self {
+            Self::Blockout => "Live SDF primitives, booleans, and transforms.",
+            Self::Sculpt => "Brush-led sculpting with persistent sculpt controls.",
+            Self::Lookdev => "Lighting, materials, and shading feedback.",
+            Self::Review => "Inspection, export readiness, and document review.",
+        }
+    }
+
+    fn from_id(workspace_id: &str) -> Option<Self> {
+        Some(match workspace_id {
+            "blockout" => Self::Blockout,
+            "sculpt" => Self::Sculpt,
+            "lookdev" => Self::Lookdev,
+            "review" => Self::Review,
+            _ => return None,
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ManipulatorMode {
     Translate,
     Rotate,
@@ -259,7 +309,9 @@ impl AppBridge {
                 recovery_summary,
             },
             selected_node: None,
+            selected_nodes: Vec::new(),
             hovered_node: None,
+            workspace: WorkspaceKind::Blockout,
             export_state: ExportState {
                 task: ExportTask::Idle,
                 last_message: None,
@@ -300,9 +352,13 @@ impl AppBridge {
         AppSceneSnapshot {
             selected_node: self.node_snapshot_by_id(self.selected_node),
             selected_node_properties: self.selected_node_properties_snapshot(),
+            selected_node_ids: self.selected_nodes.clone(),
             top_level_nodes,
             scene_tree_roots: self.scene_tree_roots(),
             viewport_lights: self.viewport_light_snapshots(),
+            workspace: self.workspace_snapshot(),
+            selection_context: self.selection_context_snapshot(),
+            commands: self.command_snapshots(),
             history: AppHistorySnapshot {
                 can_undo: self.history.undo_count() > 0,
                 can_redo: self.history.redo_count() > 0,
@@ -341,7 +397,7 @@ impl AppBridge {
                 manipulator_mode_label: self.manipulator_mode.label().to_string(),
                 manipulator_space_id: self.manipulator_space.id().to_string(),
                 manipulator_space_label: self.manipulator_space.label().to_string(),
-                manipulator_visible: self.selected_node.is_some(),
+                manipulator_visible: self.primary_selected_node().is_some(),
                 can_reset_pivot: self.pivot_offset.length_squared() > 0.0,
                 pivot_offset: AppVec3::new(
                     self.pivot_offset.x,
@@ -378,6 +434,460 @@ impl AppBridge {
         scene_changed
     }
 
+    fn primary_selected_node(&self) -> Option<NodeId> {
+        self.selected_node
+            .filter(|node_id| self.scene.nodes.contains_key(node_id))
+    }
+
+    fn workspace_snapshot(&self) -> AppWorkspaceSnapshot {
+        AppWorkspaceSnapshot {
+            id: self.workspace.id().to_string(),
+            label: self.workspace.label().to_string(),
+            description: self.workspace.description().to_string(),
+        }
+    }
+
+    fn selection_context_snapshot(&self) -> AppSelectionContextSnapshot {
+        let selection_count = self.selected_nodes.len() as u32;
+        let Some(primary_node_id) = self.primary_selected_node() else {
+            return AppSelectionContextSnapshot {
+                headline: format!("{} workspace", self.workspace.label()),
+                detail: "Choose a shape or use the tool rail to start blocking out.".to_string(),
+                selection_count,
+                selection_kind_id: "none".to_string(),
+                selection_kind_label: "Nothing selected".to_string(),
+                workflow_status_id: "none".to_string(),
+                workflow_status_label: "No selection".to_string(),
+                quick_actions: self.quick_actions_for("none", "none"),
+            };
+        };
+
+        if self.selected_nodes.len() > 1 {
+            let status = self.aggregate_selection_workflow_status();
+            return AppSelectionContextSnapshot {
+                headline: format!("{} items selected", self.selected_nodes.len()),
+                detail: "Adaptive actions are based on the primary selection and shared workflow state."
+                    .to_string(),
+                selection_count,
+                selection_kind_id: "multi".to_string(),
+                selection_kind_label: "Multi-selection".to_string(),
+                workflow_status_id: status.0.to_string(),
+                workflow_status_label: status.1.to_string(),
+                quick_actions: self.quick_actions_for("multi", status.0),
+            };
+        }
+
+        let Some(node) = self.scene.nodes.get(&primary_node_id) else {
+            return AppSelectionContextSnapshot::default();
+        };
+        let selection_kind = node_selection_kind(node);
+        let status = self.node_workflow_status(primary_node_id);
+
+        AppSelectionContextSnapshot {
+            headline: node.name.clone(),
+            detail: format!("{} in {} workspace", node_kind_label(node), self.workspace.label()),
+            selection_count,
+            selection_kind_id: selection_kind.0.to_string(),
+            selection_kind_label: selection_kind.1.to_string(),
+            workflow_status_id: status.0.to_string(),
+            workflow_status_label: status.1.to_string(),
+            quick_actions: self.quick_actions_for(selection_kind.0, status.0),
+        }
+    }
+
+    fn quick_actions_for(
+        &self,
+        selection_kind_id: &str,
+        workflow_status_id: &str,
+    ) -> Vec<AppQuickActionSnapshot> {
+        let command_ids: &[&str] = match selection_kind_id {
+            "none" => &["add_sphere", "add_box", "frame_all", "workspace_sculpt"],
+            "multi" => &[
+                "focus_selected",
+                "duplicate_selected",
+                "delete_selected",
+                "workspace_review",
+            ],
+            "primitive" | "operation" | "transform" | "modifier" => &[
+                "focus_selected",
+                "duplicate_selected",
+                "create_transform",
+                "create_sculpt",
+            ],
+            "light" => &[
+                "focus_selected",
+                "duplicate_selected",
+                "workspace_lookdev",
+                "create_light_point",
+            ],
+            "sculpt" => &[
+                "resume_sculpting_selected",
+                "open_sculpt_convert",
+                "focus_selected",
+                "duplicate_selected",
+            ],
+            _ if workflow_status_id == "sculpt" || workflow_status_id == "hybrid" => &[
+                "resume_sculpting_selected",
+                "open_sculpt_convert",
+                "focus_selected",
+                "duplicate_selected",
+            ],
+            _ => &["focus_selected", "duplicate_selected", "delete_selected"],
+        };
+
+        command_ids
+            .iter()
+            .enumerate()
+            .filter_map(|(index, command_id)| {
+                self.command_snapshot(command_id)
+                    .map(|command| AppQuickActionSnapshot {
+                        id: command.id,
+                        label: command.label,
+                        category: command.category,
+                        enabled: command.enabled,
+                        prominent: index == 0,
+                        shortcut_label: command.shortcut_label,
+                    })
+            })
+            .collect()
+    }
+
+    fn aggregate_selection_workflow_status(&self) -> (&'static str, &'static str) {
+        let mut seen_live = false;
+        let mut seen_sculpt = false;
+        let mut seen_hybrid = false;
+
+        for node_id in &self.selected_nodes {
+            match self.node_workflow_status(*node_id).0 {
+                "live" => seen_live = true,
+                "sculpt" => seen_sculpt = true,
+                "hybrid" => seen_hybrid = true,
+                _ => {}
+            }
+        }
+
+        if seen_hybrid || (seen_live && seen_sculpt) {
+            ("hybrid", "Hybrid")
+        } else if seen_sculpt {
+            ("sculpt", "Sculpt-baked")
+        } else {
+            ("live", "Live SDF")
+        }
+    }
+
+    fn node_workflow_status(&self, node_id: NodeId) -> (&'static str, &'static str) {
+        let (has_live, has_sculpt) = self.subtree_workflow_flags(node_id, &mut HashSet::new());
+        match (has_live, has_sculpt) {
+            (true, true) => ("hybrid", "Hybrid"),
+            (false, true) => ("sculpt", "Sculpt-baked"),
+            _ => ("live", "Live SDF"),
+        }
+    }
+
+    fn subtree_workflow_flags(
+        &self,
+        node_id: NodeId,
+        visited: &mut HashSet<NodeId>,
+    ) -> (bool, bool) {
+        if !visited.insert(node_id) {
+            return (false, false);
+        }
+
+        let Some(node) = self.scene.nodes.get(&node_id) else {
+            return (false, false);
+        };
+
+        let mut has_live = matches!(
+            node.data,
+            NodeData::Primitive { .. }
+                | NodeData::Operation { .. }
+                | NodeData::Transform { .. }
+                | NodeData::Modifier { .. }
+                | NodeData::Light { .. }
+        );
+        let mut has_sculpt = matches!(node.data, NodeData::Sculpt { .. });
+
+        for child_id in node.data.children() {
+            let (child_has_live, child_has_sculpt) =
+                self.subtree_workflow_flags(child_id, visited);
+            has_live |= child_has_live;
+            has_sculpt |= child_has_sculpt;
+        }
+
+        (has_live, has_sculpt)
+    }
+
+    fn command_snapshots(&self) -> Vec<AppCommandSnapshot> {
+        [
+            "workspace_blockout",
+            "workspace_sculpt",
+            "workspace_lookdev",
+            "workspace_review",
+            "add_sphere",
+            "add_box",
+            "add_cylinder",
+            "add_torus",
+            "create_transform",
+            "create_light_point",
+            "create_sculpt",
+            "resume_sculpting_selected",
+            "stop_sculpting",
+            "open_sculpt_convert",
+            "focus_selected",
+            "frame_all",
+            "duplicate_selected",
+            "delete_selected",
+            "undo",
+            "redo",
+            "toggle_projection",
+        ]
+        .into_iter()
+        .filter_map(|command_id| self.command_snapshot(command_id))
+        .collect()
+    }
+
+    fn command_snapshot(&self, command_id: &str) -> Option<AppCommandSnapshot> {
+        let snapshot = match command_id {
+            "workspace_blockout" => self.make_command_snapshot(
+                "workspace_blockout",
+                "Switch to Blockout",
+                "Workspace",
+                true,
+                &[WorkspaceKind::Blockout.id(), WorkspaceKind::Sculpt.id()],
+                None,
+            ),
+            "workspace_sculpt" => self.make_command_snapshot(
+                "workspace_sculpt",
+                "Switch to Sculpt",
+                "Workspace",
+                true,
+                &[WorkspaceKind::Blockout.id(), WorkspaceKind::Sculpt.id()],
+                Some(ActionBinding::EnterSculptMode),
+            ),
+            "workspace_lookdev" => self.make_command_snapshot(
+                "workspace_lookdev",
+                "Switch to Lookdev",
+                "Workspace",
+                true,
+                &[WorkspaceKind::Lookdev.id()],
+                None,
+            ),
+            "workspace_review" => self.make_command_snapshot(
+                "workspace_review",
+                "Switch to Review",
+                "Workspace",
+                true,
+                &[WorkspaceKind::Review.id()],
+                None,
+            ),
+            "add_sphere" => self.make_command_snapshot(
+                "add_sphere",
+                "Add Sphere",
+                "Create",
+                true,
+                &[WorkspaceKind::Blockout.id()],
+                None,
+            ),
+            "add_box" => self.make_command_snapshot(
+                "add_box",
+                "Add Box",
+                "Create",
+                true,
+                &[WorkspaceKind::Blockout.id()],
+                None,
+            ),
+            "add_cylinder" => self.make_command_snapshot(
+                "add_cylinder",
+                "Add Cylinder",
+                "Create",
+                true,
+                &[WorkspaceKind::Blockout.id()],
+                None,
+            ),
+            "add_torus" => self.make_command_snapshot(
+                "add_torus",
+                "Add Torus",
+                "Create",
+                true,
+                &[WorkspaceKind::Blockout.id()],
+                None,
+            ),
+            "create_transform" => self.make_command_snapshot(
+                "create_transform",
+                "Wrap In Transform",
+                "Structure",
+                self.primary_selected_node().is_some(),
+                &[WorkspaceKind::Blockout.id()],
+                None,
+            ),
+            "create_light_point" => self.make_command_snapshot(
+                "create_light_point",
+                "Add Point Light",
+                "Lighting",
+                true,
+                &[WorkspaceKind::Lookdev.id()],
+                None,
+            ),
+            "create_sculpt" => self.make_command_snapshot(
+                "create_sculpt",
+                "Branch To Sculpt",
+                "Hybrid",
+                self.primary_selected_node().is_some(),
+                &[WorkspaceKind::Blockout.id(), WorkspaceKind::Sculpt.id()],
+                None,
+            ),
+            "resume_sculpting_selected" => self.make_command_snapshot(
+                "resume_sculpting_selected",
+                if self.sculpt_state.active_node().is_some() {
+                    "Resume Sculpting"
+                } else {
+                    "Enter Sculpt Mode"
+                },
+                "Sculpt",
+                self.primary_selected_node().is_some(),
+                &[WorkspaceKind::Sculpt.id()],
+                Some(ActionBinding::QuickSculptMode),
+            ),
+            "stop_sculpting" => self.make_command_snapshot(
+                "stop_sculpting",
+                "Exit Sculpt Mode",
+                "Sculpt",
+                self.sculpt_state.active_node().is_some(),
+                &[WorkspaceKind::Sculpt.id()],
+                Some(ActionBinding::ExitSculptMode),
+            ),
+            "open_sculpt_convert" => self.make_command_snapshot(
+                "open_sculpt_convert",
+                "Convert Or Bake",
+                "Hybrid",
+                self.primary_selected_node().is_some(),
+                &[WorkspaceKind::Blockout.id(), WorkspaceKind::Sculpt.id()],
+                None,
+            ),
+            "focus_selected" => self.make_command_snapshot(
+                "focus_selected",
+                "Focus Selection",
+                "Camera",
+                self.primary_selected_node().is_some(),
+                &[
+                    WorkspaceKind::Blockout.id(),
+                    WorkspaceKind::Sculpt.id(),
+                    WorkspaceKind::Lookdev.id(),
+                    WorkspaceKind::Review.id(),
+                ],
+                Some(ActionBinding::FocusSelected),
+            ),
+            "frame_all" => self.make_command_snapshot(
+                "frame_all",
+                "Frame All",
+                "Camera",
+                true,
+                &[
+                    WorkspaceKind::Blockout.id(),
+                    WorkspaceKind::Sculpt.id(),
+                    WorkspaceKind::Lookdev.id(),
+                    WorkspaceKind::Review.id(),
+                ],
+                Some(ActionBinding::FrameAll),
+            ),
+            "duplicate_selected" => self.make_command_snapshot(
+                "duplicate_selected",
+                if self.selected_nodes.len() > 1 {
+                    "Duplicate Selection"
+                } else {
+                    "Duplicate Selected"
+                },
+                "Edit",
+                self.primary_selected_node().is_some(),
+                &[WorkspaceKind::Blockout.id(), WorkspaceKind::Lookdev.id()],
+                Some(ActionBinding::Duplicate),
+            ),
+            "delete_selected" => self.make_command_snapshot(
+                "delete_selected",
+                if self.selected_nodes.len() > 1 {
+                    "Delete Selection"
+                } else {
+                    "Delete Selected"
+                },
+                "Edit",
+                self.primary_selected_node().is_some(),
+                &[
+                    WorkspaceKind::Blockout.id(),
+                    WorkspaceKind::Sculpt.id(),
+                    WorkspaceKind::Lookdev.id(),
+                    WorkspaceKind::Review.id(),
+                ],
+                Some(ActionBinding::DeleteSelected),
+            ),
+            "undo" => self.make_command_snapshot(
+                "undo",
+                "Undo",
+                "History",
+                self.history.undo_count() > 0,
+                &[
+                    WorkspaceKind::Blockout.id(),
+                    WorkspaceKind::Sculpt.id(),
+                    WorkspaceKind::Lookdev.id(),
+                    WorkspaceKind::Review.id(),
+                ],
+                Some(ActionBinding::Undo),
+            ),
+            "redo" => self.make_command_snapshot(
+                "redo",
+                "Redo",
+                "History",
+                self.history.redo_count() > 0,
+                &[
+                    WorkspaceKind::Blockout.id(),
+                    WorkspaceKind::Sculpt.id(),
+                    WorkspaceKind::Lookdev.id(),
+                    WorkspaceKind::Review.id(),
+                ],
+                Some(ActionBinding::Redo),
+            ),
+            "toggle_projection" => self.make_command_snapshot(
+                "toggle_projection",
+                if self.camera.orthographic {
+                    "Use Perspective"
+                } else {
+                    "Use Orthographic"
+                },
+                "Camera",
+                true,
+                &[
+                    WorkspaceKind::Blockout.id(),
+                    WorkspaceKind::Sculpt.id(),
+                    WorkspaceKind::Lookdev.id(),
+                    WorkspaceKind::Review.id(),
+                ],
+                Some(ActionBinding::ToggleOrtho),
+            ),
+            _ => return None,
+        };
+
+        Some(snapshot)
+    }
+
+    fn make_command_snapshot(
+        &self,
+        id: &str,
+        label: &str,
+        category: &str,
+        enabled: bool,
+        workspace_ids: &[&str],
+        shortcut_action: Option<ActionBinding>,
+    ) -> AppCommandSnapshot {
+        AppCommandSnapshot {
+            id: id.to_string(),
+            label: label.to_string(),
+            category: category.to_string(),
+            enabled,
+            workspace_ids: workspace_ids.iter().map(|workspace_id| (*workspace_id).to_string()).collect(),
+            shortcut_label: shortcut_action
+                .and_then(|action| self.settings.keymap.format_shortcut(action)),
+        }
+    }
+
     pub fn render_viewport_frame(
         &mut self,
         width: u32,
@@ -389,7 +899,7 @@ impl AppBridge {
             scene: &self.scene,
             camera: &self.camera,
             render_config: &self.render_config,
-            selected_node: self.selected_node,
+            selected_node: self.primary_selected_node(),
             time_seconds,
             width,
             height,
@@ -461,23 +971,32 @@ impl AppBridge {
             mouse_x,
             mouse_y,
         });
-        self.selected_node = next_selected_node;
-        self.hovered_node = next_selected_node;
+        self.set_primary_selection(next_selected_node);
         next_selected_node
     }
 
     pub fn focus_selected(&mut self) {
-        let Some(selected_node) = self.selected_node else {
+        let selection_roots = self.selection_roots();
+        if selection_roots.is_empty() {
             return;
-        };
+        }
 
         self.cancel_camera_transition();
         let parent_map = self.scene.build_parent_map();
-        let (center, radius) = self
-            .scene
-            .compute_subtree_sphere(selected_node, &parent_map);
-        self.camera
-            .focus_on(Vec3::new(center[0], center[1], center[2]), radius.max(0.5));
+        let mut bounds_min = Vec3::splat(f32::MAX);
+        let mut bounds_max = Vec3::splat(f32::MIN);
+
+        for node_id in selection_roots {
+            let (center, radius) = self.scene.compute_subtree_sphere(node_id, &parent_map);
+            let center = Vec3::new(center[0], center[1], center[2]);
+            let radius = Vec3::splat(radius.max(0.5));
+            bounds_min = bounds_min.min(center - radius);
+            bounds_max = bounds_max.max(center + radius);
+        }
+
+        let center = (bounds_min + bounds_max) * 0.5;
+        let radius = ((bounds_max - bounds_min) * 0.5).length().max(0.5);
+        self.camera.focus_on(center, radius);
     }
 
     pub fn frame_all(&mut self) {
@@ -807,10 +1326,10 @@ impl AppBridge {
         self.scene = Scene::new();
         self.camera = Camera::default();
         self.history = History::new();
-        self.selected_node = None;
-        self.hovered_node = None;
+        self.clear_selection();
         self.last_viewport_time_seconds = None;
         self.interactive_edit_active = false;
+        self.workspace = WorkspaceKind::Blockout;
         self.clear_workflow_state();
         self.persistence.current_file_path = None;
         self.persistence.saved_fingerprint = self.scene.data_fingerprint();
@@ -869,10 +1388,10 @@ impl AppBridge {
         self.scene = project.scene;
         self.camera = project.camera;
         self.history = History::new();
-        self.selected_node = None;
-        self.hovered_node = None;
+        self.clear_selection();
         self.last_viewport_time_seconds = None;
         self.interactive_edit_active = false;
+        self.workspace = WorkspaceKind::Blockout;
         self.clear_workflow_state();
         self.persistence.current_file_path = None;
         self.persistence.saved_fingerprint = 0;
@@ -1279,32 +1798,41 @@ impl AppBridge {
 
     pub fn delete_selected(&mut self) {
         self.run_document_command(|bridge| {
-            let Some(selected_node) = bridge.selected_node else {
-                return;
-            };
-
-            if bridge.node_is_locked(selected_node) {
+            let selected_roots = bridge.selection_roots();
+            if selected_roots.is_empty() {
                 return;
             }
 
-            bridge.scene.remove_node(selected_node);
-            if bridge.selected_node == Some(selected_node) {
-                bridge.selected_node = None;
+            for selected_node in selected_roots {
+                if bridge.node_is_locked(selected_node) {
+                    continue;
+                }
+                bridge.scene.remove_node(selected_node);
             }
-            if bridge.hovered_node == Some(selected_node) {
-                bridge.hovered_node = None;
-            }
+
+            bridge.normalize_selection();
         });
     }
 
     pub fn duplicate_selected(&mut self) -> Option<u64> {
         self.run_document_command(|bridge| {
-            let selected_node = bridge.selected_node?;
-            let duplicated_node = bridge.scene.duplicate_subtree(selected_node)?;
-            bridge.offset_duplicated_root(duplicated_node);
-            bridge.selected_node = Some(duplicated_node);
-            bridge.hovered_node = Some(duplicated_node);
-            Some(duplicated_node)
+            let selected_roots = bridge.selection_roots();
+            let mut duplicated_nodes = Vec::new();
+
+            for selected_node in selected_roots {
+                let Some(duplicated_node) = bridge.scene.duplicate_subtree(selected_node) else {
+                    continue;
+                };
+                bridge.offset_duplicated_root(duplicated_node);
+                duplicated_nodes.push(duplicated_node);
+            }
+
+            let primary_duplicate = duplicated_nodes.first().copied()?;
+            bridge.selected_nodes = duplicated_nodes;
+            bridge.selected_node = Some(primary_duplicate);
+            bridge.hovered_node = Some(primary_duplicate);
+            bridge.normalize_selection();
+            Some(primary_duplicate)
         })
     }
 
@@ -1332,8 +1860,7 @@ impl AppBridge {
                 .copied();
             let right = geometry_roots.last().copied();
             let operation_id = bridge.scene.create_operation(op, left, right);
-            bridge.selected_node = Some(operation_id);
-            bridge.hovered_node = Some(operation_id);
+            bridge.set_primary_selection(Some(operation_id));
             operation_id
         })
     }
@@ -1345,8 +1872,7 @@ impl AppBridge {
             } else {
                 bridge.scene.create_transform(None)
             };
-            bridge.selected_node = Some(transform_id);
-            bridge.hovered_node = Some(transform_id);
+            bridge.set_primary_selection(Some(transform_id));
             transform_id
         })
     }
@@ -1358,8 +1884,7 @@ impl AppBridge {
             } else {
                 bridge.scene.create_modifier(kind, None)
             };
-            bridge.selected_node = Some(modifier_id);
-            bridge.hovered_node = Some(modifier_id);
+            bridge.set_primary_selection(Some(modifier_id));
             modifier_id
         })
     }
@@ -1367,8 +1892,7 @@ impl AppBridge {
     pub fn create_light(&mut self, light_type: LightType) -> u64 {
         self.run_document_command(|bridge| {
             let (_light_id, transform_id) = bridge.scene.create_light(light_type);
-            bridge.selected_node = Some(transform_id);
-            bridge.hovered_node = Some(transform_id);
+            bridge.set_primary_selection(Some(transform_id));
             transform_id
         })
     }
@@ -1382,15 +1906,14 @@ impl AppBridge {
             .get(&selected_node)
             .is_some_and(|node| matches!(node.data, NodeData::Sculpt { .. }))
         {
-            self.hovered_node = Some(selected_node);
+            self.set_primary_selection(Some(selected_node));
             self.activate_sculpt_session(selected_node);
             return Some(selected_node);
         }
 
         let parent_map = self.scene.build_parent_map();
         if let Some(sculpt_id) = self.scene.find_sculpt_parent(selected_node, &parent_map) {
-            self.selected_node = Some(sculpt_id);
-            self.hovered_node = Some(sculpt_id);
+            self.set_primary_selection(Some(sculpt_id));
             self.activate_sculpt_session(sculpt_id);
             return Some(sculpt_id);
         }
@@ -1405,9 +1928,9 @@ impl AppBridge {
             let color = bridge
                 .scene
                 .nodes
-                .get(&selected_node)
-                .map(|node| match &node.data {
-                    NodeData::Primitive { color, .. } => *color,
+                    .get(&selected_node)
+                    .map(|node| match &node.data {
+                        NodeData::Primitive { color, .. } => *color,
                     _ => Vec3::new(0.8, 0.8, 0.8),
                 })
                 .unwrap_or(Vec3::new(0.8, 0.8, 0.8));
@@ -1415,8 +1938,7 @@ impl AppBridge {
                 bridge
                     .scene
                     .insert_sculpt_above(selected_node, center, Vec3::ZERO, color, grid);
-            bridge.selected_node = Some(sculpt_id);
-            bridge.hovered_node = Some(sculpt_id);
+            bridge.set_primary_selection(Some(sculpt_id));
             bridge.activate_sculpt_session(sculpt_id);
             Some(sculpt_id)
         })
@@ -1455,7 +1977,8 @@ impl AppBridge {
             return;
         }
 
-        self.history.begin_frame(&self.scene, self.selected_node);
+        self.history
+            .begin_frame(&self.scene, self.primary_selected_node());
         self.interactive_edit_active = true;
     }
 
@@ -2358,32 +2881,210 @@ impl AppBridge {
     pub fn add_primitive(&mut self, kind: SdfPrimitive) -> u64 {
         self.run_document_command(|bridge| {
             let new_node_id = bridge.scene.create_primitive(kind);
-            bridge.selected_node = Some(new_node_id);
-            bridge.hovered_node = Some(new_node_id);
+            bridge.set_primary_selection(Some(new_node_id));
             new_node_id
         })
     }
 
     pub fn select_node(&mut self, node_id: Option<u64>) {
-        self.selected_node = node_id.filter(|id| self.scene.nodes.contains_key(id));
+        self.set_primary_selection(node_id);
+    }
+
+    pub fn toggle_node_selection(&mut self, node_id: u64) {
+        let node_id = if self.scene.nodes.contains_key(&node_id) {
+            Some(node_id)
+        } else {
+            None
+        };
+        let Some(node_id) = node_id else {
+            return;
+        };
+
+        if let Some(index) = self.selected_nodes.iter().position(|selected| *selected == node_id) {
+            self.selected_nodes.remove(index);
+        } else {
+            self.selected_nodes.insert(0, node_id);
+        }
+
+        self.selected_node = self.selected_nodes.first().copied();
         self.hovered_node = self.selected_node;
+        self.normalize_selection();
+    }
+
+    pub fn clear_selection(&mut self) {
+        self.selected_node = None;
+        self.selected_nodes.clear();
+        self.hovered_node = None;
+    }
+
+    pub fn set_workspace(&mut self, workspace_id: &str) -> bool {
+        let Some(workspace) = WorkspaceKind::from_id(workspace_id) else {
+            return false;
+        };
+        self.workspace = workspace;
+        true
+    }
+
+    pub fn execute_command(&mut self, command_id: &str) -> bool {
+        match command_id {
+            "workspace_blockout" => self.set_workspace("blockout"),
+            "workspace_sculpt" => self.set_workspace("sculpt"),
+            "workspace_lookdev" => self.set_workspace("lookdev"),
+            "workspace_review" => self.set_workspace("review"),
+            "add_sphere" => {
+                self.add_sphere();
+                true
+            }
+            "add_box" => {
+                self.add_box();
+                true
+            }
+            "add_cylinder" => {
+                self.add_cylinder();
+                true
+            }
+            "add_torus" => {
+                self.add_torus();
+                true
+            }
+            "create_transform" => {
+                self.create_transform();
+                true
+            }
+            "create_light_point" => {
+                self.create_light(LightType::Point);
+                true
+            }
+            "create_sculpt" => {
+                self.create_sculpt();
+                true
+            }
+            "resume_sculpting_selected" => {
+                self.resume_sculpting_selected()
+            }
+            "stop_sculpting" => {
+                self.stop_sculpting();
+                true
+            }
+            "open_sculpt_convert" => {
+                self.open_sculpt_convert_dialog_for_selected();
+                true
+            }
+            "focus_selected" => {
+                if self.primary_selected_node().is_none() {
+                    return false;
+                }
+                self.focus_selected();
+                true
+            }
+            "frame_all" => {
+                self.frame_all();
+                true
+            }
+            "duplicate_selected" => self.duplicate_selected().is_some(),
+            "delete_selected" => {
+                self.delete_selected();
+                true
+            }
+            "undo" => {
+                self.undo();
+                true
+            }
+            "redo" => {
+                self.redo();
+                true
+            }
+            "toggle_projection" => {
+                self.toggle_orthographic();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn set_primary_selection(&mut self, node_id: Option<NodeId>) {
+        self.selected_node = node_id.filter(|id| self.scene.nodes.contains_key(id));
+        if let Some(selected_node) = self.selected_node {
+            self.selected_nodes.retain(|node_id| *node_id != selected_node);
+            self.selected_nodes.insert(0, selected_node);
+            self.hovered_node = Some(selected_node);
+        } else {
+            self.selected_nodes.clear();
+            self.hovered_node = None;
+        }
+        self.normalize_selection();
+    }
+
+    fn normalize_selection(&mut self) {
+        let mut normalized = Vec::new();
+        for node_id in &self.selected_nodes {
+            if self.scene.nodes.contains_key(node_id) && !normalized.contains(node_id) {
+                normalized.push(*node_id);
+            }
+        }
+        self.selected_nodes = normalized;
+
+        if let Some(selected_node) = self.selected_node {
+            if let Some(position) = self.selected_nodes.iter().position(|node_id| *node_id == selected_node) {
+                let selected_node = self.selected_nodes.remove(position);
+                self.selected_nodes.insert(0, selected_node);
+            } else if self.scene.nodes.contains_key(&selected_node) {
+                self.selected_nodes.insert(0, selected_node);
+            } else {
+                self.selected_node = None;
+            }
+        }
+
+        if self.selected_node.is_none() {
+            self.selected_node = self.selected_nodes.first().copied();
+        }
+
+        if self.selected_node.is_none() {
+            self.hovered_node = None;
+        } else {
+            self.hovered_node = self.selected_node;
+        }
+    }
+
+    fn selection_roots(&self) -> Vec<NodeId> {
+        if self.selected_nodes.is_empty() {
+            return self.primary_selected_node().into_iter().collect();
+        }
+
+        let parent_map = self.scene.build_parent_map();
+        let selected_set: HashSet<NodeId> = self.selected_nodes.iter().copied().collect();
+
+        self.selected_nodes
+            .iter()
+            .copied()
+            .filter(|node_id| {
+                let mut current = *node_id;
+                while let Some(parent_id) = parent_map.get(&current).copied() {
+                    if selected_set.contains(&parent_id) {
+                        return false;
+                    }
+                    current = parent_id;
+                }
+                true
+            })
+            .collect()
     }
 
     pub fn reset_scene(&mut self) {
         self.scene = Scene::new();
         self.camera = Camera::default();
         self.history = History::new();
-        self.selected_node = None;
-        self.hovered_node = None;
+        self.clear_selection();
         self.last_viewport_time_seconds = None;
         self.interactive_edit_active = false;
+        self.workspace = WorkspaceKind::Blockout;
         self.clear_workflow_state();
         self.sync_document_persistence(true);
     }
 
     pub fn undo(&mut self) {
         if let Some((restored_scene, restored_selected)) =
-            self.history.undo(&self.scene, self.selected_node)
+            self.history.undo(&self.scene, self.primary_selected_node())
         {
             self.restore_history_state(restored_scene, restored_selected);
         }
@@ -2391,7 +3092,7 @@ impl AppBridge {
 
     pub fn redo(&mut self) {
         if let Some((restored_scene, restored_selected)) =
-            self.history.redo(&self.scene, self.selected_node)
+            self.history.redo(&self.scene, self.primary_selected_node())
         {
             self.restore_history_state(restored_scene, restored_selected);
         }
@@ -2421,7 +3122,8 @@ impl AppBridge {
             return result;
         }
 
-        self.history.begin_frame(&self.scene, self.selected_node);
+        self.history
+            .begin_frame(&self.scene, self.primary_selected_node());
         let result = command(self);
         self.finish_document_command(false, true);
         result
@@ -2440,18 +3142,20 @@ impl AppBridge {
     }
 
     fn finish_document_command(&mut self, is_dragging: bool, allow_auto_save: bool) {
+        self.normalize_selection();
         self.history
-            .end_frame(&self.scene, self.selected_node, is_dragging);
+            .end_frame(&self.scene, self.primary_selected_node(), is_dragging);
         self.sync_document_persistence(allow_auto_save);
         self.sync_sculpt_session();
     }
 
     fn restore_history_state(&mut self, restored_scene: Scene, restored_selected: Option<NodeId>) {
         self.scene = restored_scene;
-        self.selected_node =
-            restored_selected.filter(|node_id| self.scene.nodes.contains_key(node_id));
+        self.selected_node = restored_selected.filter(|node_id| self.scene.nodes.contains_key(node_id));
+        self.selected_nodes = self.selected_node.into_iter().collect();
         self.hovered_node = self.selected_node;
         self.interactive_edit_active = false;
+        self.normalize_selection();
         self.sync_document_persistence(true);
         self.sync_sculpt_session();
     }
@@ -2833,10 +3537,10 @@ impl AppBridge {
         self.scene = project.scene;
         self.camera = project.camera;
         self.history = History::new();
-        self.selected_node = None;
-        self.hovered_node = None;
+        self.clear_selection();
         self.last_viewport_time_seconds = None;
         self.interactive_edit_active = false;
+        self.workspace = WorkspaceKind::Blockout;
         self.clear_workflow_state();
         self.persistence.current_file_path = Some(path.to_path_buf());
         self.persistence.saved_fingerprint = self.scene.data_fingerprint();
@@ -3038,8 +3742,7 @@ impl AppBridge {
                     desired_resolution,
                 },
             );
-            bridge.selected_node = Some(sculpt_id);
-            bridge.hovered_node = Some(sculpt_id);
+            bridge.set_primary_selection(Some(sculpt_id));
             bridge.activate_sculpt_session(sculpt_id);
         });
 
@@ -3097,16 +3800,14 @@ impl AppBridge {
                 let sculpt_id = bridge
                     .scene
                     .flatten_subtree(subtree_root, grid, center, color);
-                bridge.selected_node = Some(sculpt_id);
-                bridge.hovered_node = Some(sculpt_id);
+                bridge.set_primary_selection(Some(sculpt_id));
                 bridge.activate_sculpt_session(sculpt_id);
             } else {
                 let sculpt_id =
                     bridge
                         .scene
                         .insert_sculpt_above(subtree_root, center, Vec3::ZERO, color, grid);
-                bridge.selected_node = Some(sculpt_id);
-                bridge.hovered_node = Some(sculpt_id);
+                bridge.set_primary_selection(Some(sculpt_id));
                 bridge.activate_sculpt_session(sculpt_id);
             }
         });
@@ -3191,6 +3892,8 @@ impl AppBridge {
             kind_label: node_kind_label(node),
             visible: !self.scene.is_hidden(node.id),
             locked: node.locked,
+            workflow_status_id: self.node_workflow_status(node.id).0.to_string(),
+            workflow_status_label: self.node_workflow_status(node.id).1.to_string(),
             children,
         })
     }
@@ -3593,18 +4296,25 @@ impl AppBridge {
             .unwrap_or(0.5);
         self.sculpt_state = SculptState::new_active_with_radius(node_id, extent);
         self.active_tool_label = "Sculpt".to_string();
+        self.workspace = WorkspaceKind::Sculpt;
         true
     }
 
     fn deactivate_sculpt_session(&mut self) {
         self.sculpt_state = SculptState::Inactive;
         self.active_tool_label = "Select".to_string();
+        if self.workspace == WorkspaceKind::Sculpt {
+            self.workspace = WorkspaceKind::Blockout;
+        }
     }
 
     fn sync_sculpt_session(&mut self) {
         let Some(active_node) = self.sculpt_state.active_node() else {
             if self.active_tool_label == "Sculpt" {
                 self.active_tool_label = "Select".to_string();
+                if self.workspace == WorkspaceKind::Sculpt {
+                    self.workspace = WorkspaceKind::Blockout;
+                }
             }
             return;
         };
@@ -3616,6 +4326,7 @@ impl AppBridge {
             .is_some_and(|node| matches!(node.data, NodeData::Sculpt { .. }))
         {
             self.active_tool_label = "Sculpt".to_string();
+            self.workspace = WorkspaceKind::Sculpt;
             return;
         }
 
@@ -3794,6 +4505,17 @@ fn node_kind_label(node: &SceneNode) -> String {
         NodeData::Transform { .. } => "Transform".to_string(),
         NodeData::Modifier { kind, .. } => kind.base_name().to_string(),
         NodeData::Light { light_type, .. } => light_type.label().to_string(),
+    }
+}
+
+fn node_selection_kind(node: &SceneNode) -> (&'static str, &'static str) {
+    match &node.data {
+        NodeData::Primitive { .. } => ("primitive", "Primitive"),
+        NodeData::Operation { .. } => ("operation", "Boolean"),
+        NodeData::Sculpt { .. } => ("sculpt", "Sculpt"),
+        NodeData::Transform { .. } => ("transform", "Transform"),
+        NodeData::Modifier { .. } => ("modifier", "Modifier"),
+        NodeData::Light { .. } => ("light", "Light"),
     }
 }
 
