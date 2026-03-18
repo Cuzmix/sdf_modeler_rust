@@ -182,6 +182,30 @@ pub struct AppCameraBookmarkSnapshot {
     pub saved: bool,
 }
 
+#[flutter_rust_bridge::frb(mirror(
+    sdf_modeler::app_bridge::AppShellPreferencesSnapshot
+))]
+pub struct AppShellPreferencesSnapshot {
+    pub leading_edge_side: String,
+    pub desktop_scene_pinned: bool,
+    pub desktop_properties_pinned: bool,
+    pub favorite_command_ids_by_workspace: std::collections::HashMap<String, Vec<String>>,
+    pub preferred_drawer_tab: String,
+    pub quick_wheel_hint_dismissed: bool,
+}
+
+#[flutter_rust_bridge::frb(mirror(
+    sdf_modeler::app_bridge::AppShellPreferencesUpdate
+))]
+pub struct AppShellPreferencesUpdate {
+    pub leading_edge_side: Option<String>,
+    pub desktop_scene_pinned: Option<bool>,
+    pub desktop_properties_pinned: Option<bool>,
+    pub favorite_command_ids_by_workspace: Option<std::collections::HashMap<String, Vec<String>>>,
+    pub preferred_drawer_tab: Option<String>,
+    pub quick_wheel_hint_dismissed: Option<bool>,
+}
+
 #[flutter_rust_bridge::frb(mirror(sdf_modeler::app_bridge::AppSettingsSnapshot))]
 pub struct AppSettingsSnapshot {
     pub show_fps_overlay: bool,
@@ -193,6 +217,7 @@ pub struct AppSettingsSnapshot {
     pub max_export_resolution: u32,
     pub max_sculpt_resolution: u32,
     pub camera_bookmarks: Vec<AppCameraBookmarkSnapshot>,
+    pub shell_preferences: AppShellPreferencesSnapshot,
     pub key_options: Vec<AppKeyOptionSnapshot>,
     pub keybindings: Vec<AppKeybindingSnapshot>,
 }
@@ -778,6 +803,32 @@ impl From<bridge::AppCameraBookmarkSnapshot> for AppCameraBookmarkSnapshot {
     }
 }
 
+impl From<bridge::AppShellPreferencesSnapshot> for AppShellPreferencesSnapshot {
+    fn from(value: bridge::AppShellPreferencesSnapshot) -> Self {
+        Self {
+            leading_edge_side: value.leading_edge_side,
+            desktop_scene_pinned: value.desktop_scene_pinned,
+            desktop_properties_pinned: value.desktop_properties_pinned,
+            favorite_command_ids_by_workspace: value.favorite_command_ids_by_workspace,
+            preferred_drawer_tab: value.preferred_drawer_tab,
+            quick_wheel_hint_dismissed: value.quick_wheel_hint_dismissed,
+        }
+    }
+}
+
+impl From<AppShellPreferencesUpdate> for bridge::AppShellPreferencesUpdate {
+    fn from(value: AppShellPreferencesUpdate) -> Self {
+        Self {
+            leading_edge_side: value.leading_edge_side,
+            desktop_scene_pinned: value.desktop_scene_pinned,
+            desktop_properties_pinned: value.desktop_properties_pinned,
+            favorite_command_ids_by_workspace: value.favorite_command_ids_by_workspace,
+            preferred_drawer_tab: value.preferred_drawer_tab,
+            quick_wheel_hint_dismissed: value.quick_wheel_hint_dismissed,
+        }
+    }
+}
+
 impl From<bridge::AppSettingsSnapshot> for AppSettingsSnapshot {
     fn from(value: bridge::AppSettingsSnapshot) -> Self {
         Self {
@@ -790,6 +841,7 @@ impl From<bridge::AppSettingsSnapshot> for AppSettingsSnapshot {
             max_export_resolution: value.max_export_resolution,
             max_sculpt_resolution: value.max_sculpt_resolution,
             camera_bookmarks: convert_vec(value.camera_bookmarks),
+            shell_preferences: value.shell_preferences.into(),
             key_options: convert_vec(value.key_options),
             keybindings: convert_vec(value.keybindings),
         }

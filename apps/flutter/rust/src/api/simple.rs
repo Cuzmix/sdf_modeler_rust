@@ -1,5 +1,7 @@
 use crate::bridge_state::app_bridge;
-use crate::api::mirrors::{AppSceneSnapshot, AppVec3, AppWorkflowStatusSnapshot};
+use crate::api::mirrors::{
+    AppSceneSnapshot, AppShellPreferencesUpdate, AppVec3, AppWorkflowStatusSnapshot,
+};
 use sdf_modeler::app_bridge::{AppBridge as HostAppBridge, AppVec3 as HostAppVec3};
 use sdf_modeler::{CsgOp, LightType, ModifierKind};
 
@@ -254,6 +256,13 @@ pub fn set_settings_toggle(field_id: String, enabled: bool) -> AppSceneSnapshot 
 pub fn set_settings_integer(field_id: String, value: u32) -> AppSceneSnapshot {
     let mut bridge = app_bridge().lock().expect("app bridge mutex");
     bridge.set_settings_integer(&field_id, value);
+    current_scene_snapshot(&mut bridge)
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn set_shell_preferences(update: AppShellPreferencesUpdate) -> AppSceneSnapshot {
+    let mut bridge = app_bridge().lock().expect("app bridge mutex");
+    bridge.set_shell_preferences(update.into());
     current_scene_snapshot(&mut bridge)
 }
 

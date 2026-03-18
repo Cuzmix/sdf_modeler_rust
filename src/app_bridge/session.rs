@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
@@ -16,23 +16,23 @@ use crate::graph::scene::{
 use crate::graph::voxel::create_displacement_grid_for_subtree;
 use crate::keymap::{ActionBinding, KeyCombo, SerializableKey};
 use crate::sculpt::{BrushMode, SculptState, DEFAULT_BRUSH_STRENGTH};
-use crate::settings::{RenderConfig, Settings, ShadingMode};
+use crate::settings::{LeadingEdgeSide, PreferredDrawerTab, RenderConfig, Settings, ShadingMode};
 
 use super::dto::{
-    AppCameraBookmarkSnapshot, AppCameraSnapshot, AppDocumentSnapshot, AppExportPresetSnapshot,
-    AppExportSnapshot, AppExportStatusSnapshot, AppHistorySnapshot, AppImportDialogSnapshot,
-    AppImportSnapshot, AppImportStatusSnapshot, AppKeyComboSnapshot, AppKeyOptionSnapshot,
-    AppKeybindingSnapshot, AppLightCookieCandidateSnapshot, AppLightLinkNodeSnapshot,
-    AppLightLinkTargetSnapshot, AppLightLinkingSnapshot, AppLightPropertiesSnapshot,
-    AppMaterialPropertiesSnapshot, AppNodeSnapshot, AppPrimitivePropertiesSnapshot,
-    AppQuickActionSnapshot, AppCommandSnapshot, AppRenderOptionSnapshot,
-    AppRenderSettingsSnapshot, AppScalarPropertySnapshot, AppSceneSnapshot,
-    AppSceneStatsSnapshot, AppSceneTreeNodeSnapshot, AppSelectionContextSnapshot,
-    AppSculptConvertDialogSnapshot, AppSculptConvertSnapshot, AppSculptConvertStatusSnapshot,
-    AppSculptSessionSnapshot, AppSculptSnapshot, AppSelectedNodePropertiesSnapshot,
-    AppSelectedSculptSnapshot, AppSettingsSnapshot, AppToolSnapshot,
-    AppTransformPropertiesSnapshot, AppVec3, AppViewportFeedbackSnapshot,
-    AppViewportLightSnapshot, AppWorkflowStatusSnapshot, AppWorkspaceSnapshot,
+    AppCameraBookmarkSnapshot, AppCameraSnapshot, AppCommandSnapshot, AppDocumentSnapshot,
+    AppExportPresetSnapshot, AppExportSnapshot, AppExportStatusSnapshot, AppHistorySnapshot,
+    AppImportDialogSnapshot, AppImportSnapshot, AppImportStatusSnapshot, AppKeyComboSnapshot,
+    AppKeyOptionSnapshot, AppKeybindingSnapshot, AppLightCookieCandidateSnapshot,
+    AppLightLinkNodeSnapshot, AppLightLinkTargetSnapshot, AppLightLinkingSnapshot,
+    AppLightPropertiesSnapshot, AppMaterialPropertiesSnapshot, AppNodeSnapshot,
+    AppPrimitivePropertiesSnapshot, AppQuickActionSnapshot, AppRenderOptionSnapshot,
+    AppRenderSettingsSnapshot, AppScalarPropertySnapshot, AppSceneSnapshot, AppSceneStatsSnapshot,
+    AppSceneTreeNodeSnapshot, AppSculptConvertDialogSnapshot, AppSculptConvertSnapshot,
+    AppSculptConvertStatusSnapshot, AppSculptSessionSnapshot, AppSculptSnapshot,
+    AppSelectedNodePropertiesSnapshot, AppSelectedSculptSnapshot, AppSelectionContextSnapshot,
+    AppSettingsSnapshot, AppShellPreferencesSnapshot, AppShellPreferencesUpdate, AppToolSnapshot,
+    AppTransformPropertiesSnapshot, AppVec3, AppViewportFeedbackSnapshot, AppViewportLightSnapshot,
+    AppWorkflowStatusSnapshot, AppWorkspaceSnapshot,
 };
 use super::renderer::{HeadlessPickRequest, HeadlessRenderRequest, HeadlessViewportRenderer};
 use super::workflows::{
@@ -171,6 +171,8 @@ enum WorkspaceKind {
 }
 
 impl WorkspaceKind {
+    const ALL: [Self; 4] = [Self::Blockout, Self::Sculpt, Self::Lookdev, Self::Review];
+
     fn id(self) -> &'static str {
         match self {
             Self::Blockout => "blockout",
@@ -208,6 +210,30 @@ impl WorkspaceKind {
         })
     }
 }
+
+const FAVORITABLE_COMMAND_IDS: [&str; 21] = [
+    "workspace_blockout",
+    "workspace_sculpt",
+    "workspace_lookdev",
+    "workspace_review",
+    "add_sphere",
+    "add_box",
+    "add_cylinder",
+    "add_torus",
+    "create_transform",
+    "create_light_point",
+    "create_sculpt",
+    "resume_sculpting_selected",
+    "stop_sculpting",
+    "open_sculpt_convert",
+    "focus_selected",
+    "frame_all",
+    "duplicate_selected",
+    "delete_selected",
+    "undo",
+    "redo",
+    "toggle_projection",
+];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ManipulatorMode {
@@ -294,7 +320,7 @@ impl AppBridge {
             None
         };
 
-        Self {
+        let mut bridge = Self {
             scene,
             camera,
             render_config,
@@ -334,7 +360,9 @@ impl AppBridge {
             renderer,
             last_viewport_time_seconds: None,
             interactive_edit_active: false,
-        }
+        };
+        bridge.sanitize_shell_preferences();
+        bridge
     }
 
     pub fn scene_snapshot(&self) -> AppSceneSnapshot {
@@ -466,8 +494,9 @@ impl AppBridge {
             let status = self.aggregate_selection_workflow_status();
             return AppSelectionContextSnapshot {
                 headline: format!("{} items selected", self.selected_nodes.len()),
-                detail: "Adaptive actions are based on the primary selection and shared workflow state."
-                    .to_string(),
+                detail:
+                    "Adaptive actions are based on the primary selection and shared workflow state."
+                        .to_string(),
                 selection_count,
                 selection_kind_id: "multi".to_string(),
                 selection_kind_label: "Multi-selection".to_string(),
@@ -485,7 +514,11 @@ impl AppBridge {
 
         AppSelectionContextSnapshot {
             headline: node.name.clone(),
-            detail: format!("{} in {} workspace", node_kind_label(node), self.workspace.label()),
+            detail: format!(
+                "{} in {} workspace",
+                node_kind_label(node),
+                self.workspace.label()
+            ),
             selection_count,
             selection_kind_id: selection_kind.0.to_string(),
             selection_kind_label: selection_kind.1.to_string(),
@@ -608,8 +641,7 @@ impl AppBridge {
         let mut has_sculpt = matches!(node.data, NodeData::Sculpt { .. });
 
         for child_id in node.data.children() {
-            let (child_has_live, child_has_sculpt) =
-                self.subtree_workflow_flags(child_id, visited);
+            let (child_has_live, child_has_sculpt) = self.subtree_workflow_flags(child_id, visited);
             has_live |= child_has_live;
             has_sculpt |= child_has_sculpt;
         }
@@ -618,32 +650,10 @@ impl AppBridge {
     }
 
     fn command_snapshots(&self) -> Vec<AppCommandSnapshot> {
-        [
-            "workspace_blockout",
-            "workspace_sculpt",
-            "workspace_lookdev",
-            "workspace_review",
-            "add_sphere",
-            "add_box",
-            "add_cylinder",
-            "add_torus",
-            "create_transform",
-            "create_light_point",
-            "create_sculpt",
-            "resume_sculpting_selected",
-            "stop_sculpting",
-            "open_sculpt_convert",
-            "focus_selected",
-            "frame_all",
-            "duplicate_selected",
-            "delete_selected",
-            "undo",
-            "redo",
-            "toggle_projection",
-        ]
-        .into_iter()
-        .filter_map(|command_id| self.command_snapshot(command_id))
-        .collect()
+        FAVORITABLE_COMMAND_IDS
+            .into_iter()
+            .filter_map(|command_id| self.command_snapshot(command_id))
+            .collect()
     }
 
     fn command_snapshot(&self, command_id: &str) -> Option<AppCommandSnapshot> {
@@ -882,10 +892,79 @@ impl AppBridge {
             label: label.to_string(),
             category: category.to_string(),
             enabled,
-            workspace_ids: workspace_ids.iter().map(|workspace_id| (*workspace_id).to_string()).collect(),
+            workspace_ids: workspace_ids
+                .iter()
+                .map(|workspace_id| (*workspace_id).to_string())
+                .collect(),
             shortcut_label: shortcut_action
                 .and_then(|action| self.settings.keymap.format_shortcut(action)),
         }
+    }
+
+    fn shell_preferences_snapshot(&self) -> AppShellPreferencesSnapshot {
+        AppShellPreferencesSnapshot {
+            leading_edge_side: self.settings.shell.leading_edge_side.id().to_string(),
+            desktop_scene_pinned: self.settings.shell.desktop_scene_pinned,
+            desktop_properties_pinned: self.settings.shell.desktop_properties_pinned,
+            favorite_command_ids_by_workspace: self
+                .settings
+                .shell
+                .favorite_command_ids_by_workspace
+                .clone(),
+            preferred_drawer_tab: self.settings.shell.preferred_drawer_tab.id().to_string(),
+            quick_wheel_hint_dismissed: self.settings.shell.quick_wheel_hint_dismissed,
+        }
+    }
+
+    fn sanitize_shell_preferences(&mut self) {
+        let default_favorites = Settings::default().shell.favorite_command_ids_by_workspace;
+        let valid_commands: HashSet<&str> = FAVORITABLE_COMMAND_IDS.iter().copied().collect();
+
+        let favorite_command_ids_by_workspace = WorkspaceKind::ALL
+            .into_iter()
+            .map(|workspace| {
+                let workspace_id = workspace.id().to_string();
+                let fallback = default_favorites
+                    .get(&workspace_id)
+                    .cloned()
+                    .unwrap_or_default();
+                let desired_ids = self
+                    .settings
+                    .shell
+                    .favorite_command_ids_by_workspace
+                    .get(&workspace_id)
+                    .cloned()
+                    .filter(|command_ids| !command_ids.is_empty())
+                    .unwrap_or(fallback);
+                let mut seen_command_ids = HashSet::new();
+                let sanitized_ids = desired_ids
+                    .into_iter()
+                    .filter(|command_id| seen_command_ids.insert(command_id.clone()))
+                    .filter(|command_id| valid_commands.contains(command_id.as_str()))
+                    .filter(|command_id| {
+                        self.command_snapshot(command_id)
+                            .map(|command| {
+                                command.workspace_ids.iter().any(|command_workspace_id| {
+                                    command_workspace_id == &workspace_id
+                                })
+                            })
+                            .unwrap_or(false)
+                    })
+                    .collect::<Vec<_>>();
+                let sanitized_ids = if sanitized_ids.is_empty() {
+                    default_favorites
+                        .get(&workspace_id)
+                        .cloned()
+                        .unwrap_or_default()
+                } else {
+                    sanitized_ids
+                };
+
+                (workspace_id, sanitized_ids)
+            })
+            .collect::<HashMap<_, _>>();
+
+        self.settings.shell.favorite_command_ids_by_workspace = favorite_command_ids_by_workspace;
     }
 
     pub fn render_viewport_frame(
@@ -1153,6 +1232,7 @@ impl AppBridge {
         let recent_files = self.settings.recent_files.clone();
         self.settings = Settings::default();
         self.settings.recent_files = recent_files;
+        self.sanitize_shell_preferences();
         self.render_config = self.settings.render.clone();
         self.sync_settings_dependent_state();
         self.settings.save();
@@ -1168,6 +1248,7 @@ impl AppBridge {
             return false;
         }
 
+        self.sanitize_shell_preferences();
         self.render_config = self.settings.render.clone();
         self.sync_settings_dependent_state();
         true
@@ -1210,6 +1291,43 @@ impl AppBridge {
             _ => return false,
         }
 
+        self.settings.save();
+        true
+    }
+
+    pub fn set_shell_preferences(&mut self, update: AppShellPreferencesUpdate) -> bool {
+        if let Some(leading_edge_side) = update.leading_edge_side {
+            let Some(parsed_side) = LeadingEdgeSide::from_id(&leading_edge_side) else {
+                return false;
+            };
+            self.settings.shell.leading_edge_side = parsed_side;
+        }
+
+        if let Some(desktop_scene_pinned) = update.desktop_scene_pinned {
+            self.settings.shell.desktop_scene_pinned = desktop_scene_pinned;
+        }
+
+        if let Some(desktop_properties_pinned) = update.desktop_properties_pinned {
+            self.settings.shell.desktop_properties_pinned = desktop_properties_pinned;
+        }
+
+        if let Some(favorite_command_ids_by_workspace) = update.favorite_command_ids_by_workspace {
+            self.settings.shell.favorite_command_ids_by_workspace =
+                favorite_command_ids_by_workspace;
+        }
+
+        if let Some(preferred_drawer_tab) = update.preferred_drawer_tab {
+            let Some(parsed_tab) = PreferredDrawerTab::from_id(&preferred_drawer_tab) else {
+                return false;
+            };
+            self.settings.shell.preferred_drawer_tab = parsed_tab;
+        }
+
+        if let Some(quick_wheel_hint_dismissed) = update.quick_wheel_hint_dismissed {
+            self.settings.shell.quick_wheel_hint_dismissed = quick_wheel_hint_dismissed;
+        }
+
+        self.sanitize_shell_preferences();
         self.settings.save();
         true
     }
@@ -1928,9 +2046,9 @@ impl AppBridge {
             let color = bridge
                 .scene
                 .nodes
-                    .get(&selected_node)
-                    .map(|node| match &node.data {
-                        NodeData::Primitive { color, .. } => *color,
+                .get(&selected_node)
+                .map(|node| match &node.data {
+                    NodeData::Primitive { color, .. } => *color,
                     _ => Vec3::new(0.8, 0.8, 0.8),
                 })
                 .unwrap_or(Vec3::new(0.8, 0.8, 0.8));
@@ -2900,7 +3018,11 @@ impl AppBridge {
             return;
         };
 
-        if let Some(index) = self.selected_nodes.iter().position(|selected| *selected == node_id) {
+        if let Some(index) = self
+            .selected_nodes
+            .iter()
+            .position(|selected| *selected == node_id)
+        {
             self.selected_nodes.remove(index);
         } else {
             self.selected_nodes.insert(0, node_id);
@@ -2959,9 +3081,7 @@ impl AppBridge {
                 self.create_sculpt();
                 true
             }
-            "resume_sculpting_selected" => {
-                self.resume_sculpting_selected()
-            }
+            "resume_sculpting_selected" => self.resume_sculpting_selected(),
             "stop_sculpting" => {
                 self.stop_sculpting();
                 true
@@ -3005,7 +3125,8 @@ impl AppBridge {
     fn set_primary_selection(&mut self, node_id: Option<NodeId>) {
         self.selected_node = node_id.filter(|id| self.scene.nodes.contains_key(id));
         if let Some(selected_node) = self.selected_node {
-            self.selected_nodes.retain(|node_id| *node_id != selected_node);
+            self.selected_nodes
+                .retain(|node_id| *node_id != selected_node);
             self.selected_nodes.insert(0, selected_node);
             self.hovered_node = Some(selected_node);
         } else {
@@ -3025,7 +3146,11 @@ impl AppBridge {
         self.selected_nodes = normalized;
 
         if let Some(selected_node) = self.selected_node {
-            if let Some(position) = self.selected_nodes.iter().position(|node_id| *node_id == selected_node) {
+            if let Some(position) = self
+                .selected_nodes
+                .iter()
+                .position(|node_id| *node_id == selected_node)
+            {
                 let selected_node = self.selected_nodes.remove(position);
                 self.selected_nodes.insert(0, selected_node);
             } else if self.scene.nodes.contains_key(&selected_node) {
@@ -3151,7 +3276,8 @@ impl AppBridge {
 
     fn restore_history_state(&mut self, restored_scene: Scene, restored_selected: Option<NodeId>) {
         self.scene = restored_scene;
-        self.selected_node = restored_selected.filter(|node_id| self.scene.nodes.contains_key(node_id));
+        self.selected_node =
+            restored_selected.filter(|node_id| self.scene.nodes.contains_key(node_id));
         self.selected_nodes = self.selected_node.into_iter().collect();
         self.hovered_node = self.selected_node;
         self.interactive_edit_active = false;
@@ -3971,6 +4097,7 @@ impl AppBridge {
                         .is_some(),
                 })
                 .collect(),
+            shell_preferences: self.shell_preferences_snapshot(),
             key_options: SerializableKey::ALL
                 .iter()
                 .map(|key| AppKeyOptionSnapshot {
@@ -4920,10 +5047,13 @@ fn sculpt_symmetry_axis_label(axis: Option<u8>) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::{
-        AppBridge, DEFAULT_SCULPT_ENTRY_RESOLUTION, EMISSIVE_INTENSITY_MAX, LIGHT_INTENSITY_MAX,
-        LIGHT_PROXIMITY_RANGE_MAX, LIGHT_RANGE_MIN, LIGHT_VOLUMETRIC_DENSITY_MAX,
-        MATERIAL_FACTOR_MIN, PRIMITIVE_PARAMETER_MAX, PRIMITIVE_PARAMETER_MIN,
+        AppBridge, AppShellPreferencesUpdate, DEFAULT_SCULPT_ENTRY_RESOLUTION,
+        EMISSIVE_INTENSITY_MAX, LIGHT_INTENSITY_MAX, LIGHT_PROXIMITY_RANGE_MAX, LIGHT_RANGE_MIN,
+        LIGHT_VOLUMETRIC_DENSITY_MAX, MATERIAL_FACTOR_MIN, PRIMITIVE_PARAMETER_MAX,
+        PRIMITIVE_PARAMETER_MIN,
     };
     use crate::app_bridge::workflows::{ImportDialogState, SculptConvertMode};
     use crate::app_bridge::{AppScalarPropertySnapshot, AppVec3};
@@ -5023,6 +5153,18 @@ mod tests {
             bridge.settings.max_export_resolution.max(16)
         );
         assert_eq!(settings.camera_bookmarks.len(), 9);
+        assert_eq!(
+            settings.shell_preferences.leading_edge_side,
+            bridge.settings.shell.leading_edge_side.id()
+        );
+        assert_eq!(
+            settings.shell_preferences.preferred_drawer_tab,
+            bridge.settings.shell.preferred_drawer_tab.id()
+        );
+        assert_eq!(
+            settings.shell_preferences.favorite_command_ids_by_workspace,
+            bridge.settings.shell.favorite_command_ids_by_workspace
+        );
         assert_eq!(settings.key_options.len(), SerializableKey::ALL.len());
         assert_eq!(settings.keybindings.len(), ActionBinding::ALL.len());
         assert!(settings.keybindings.iter().any(|binding| {
@@ -5107,6 +5249,65 @@ mod tests {
         assert_eq!(bridge.settings.max_export_resolution, 64);
         assert_eq!(bridge.settings.max_sculpt_resolution, 512);
         assert!(bridge.render_config.show_node_labels);
+    }
+
+    #[test]
+    fn shell_preferences_update_and_sanitize() {
+        let mut bridge = AppBridge::new();
+
+        assert!(bridge.set_shell_preferences(AppShellPreferencesUpdate {
+            leading_edge_side: Some("right".to_string()),
+            desktop_scene_pinned: Some(true),
+            desktop_properties_pinned: Some(true),
+            favorite_command_ids_by_workspace: Some(HashMap::from([
+                (
+                    "blockout".to_string(),
+                    vec![
+                        "add_sphere".to_string(),
+                        "invalid".to_string(),
+                        "add_sphere".to_string(),
+                        "frame_all".to_string(),
+                    ],
+                ),
+                (
+                    "sculpt".to_string(),
+                    vec!["stop_sculpting".to_string(), "focus_selected".to_string()],
+                ),
+            ])),
+            preferred_drawer_tab: Some("sets".to_string()),
+            quick_wheel_hint_dismissed: Some(true),
+        }));
+
+        let shell_preferences = bridge.scene_snapshot().settings.shell_preferences;
+        assert_eq!(shell_preferences.leading_edge_side, "right");
+        assert!(shell_preferences.desktop_scene_pinned);
+        assert!(shell_preferences.desktop_properties_pinned);
+        assert_eq!(shell_preferences.preferred_drawer_tab, "sets");
+        assert!(shell_preferences.quick_wheel_hint_dismissed);
+        assert_eq!(
+            shell_preferences
+                .favorite_command_ids_by_workspace
+                .get("blockout"),
+            Some(&vec!["add_sphere".to_string(), "frame_all".to_string()])
+        );
+        assert_eq!(
+            shell_preferences
+                .favorite_command_ids_by_workspace
+                .get("sculpt"),
+            Some(&vec![
+                "stop_sculpting".to_string(),
+                "focus_selected".to_string(),
+            ])
+        );
+        assert!(shell_preferences
+            .favorite_command_ids_by_workspace
+            .contains_key("review"));
+        assert_eq!(bridge.settings.shell.leading_edge_side.id(), "right");
+        assert!(bridge.settings.shell.quick_wheel_hint_dismissed);
+        assert!(!bridge.set_shell_preferences(AppShellPreferencesUpdate {
+            leading_edge_side: Some("invalid".to_string()),
+            ..AppShellPreferencesUpdate::default()
+        }));
     }
 
     #[test]

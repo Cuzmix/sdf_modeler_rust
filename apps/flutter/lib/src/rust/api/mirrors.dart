@@ -1595,6 +1595,7 @@ class AppSettingsSnapshot {
   final int maxExportResolution;
   final int maxSculptResolution;
   final List<AppCameraBookmarkSnapshot> cameraBookmarks;
+  final AppShellPreferencesSnapshot shellPreferences;
   final List<AppKeyOptionSnapshot> keyOptions;
   final List<AppKeybindingSnapshot> keybindings;
 
@@ -1608,6 +1609,7 @@ class AppSettingsSnapshot {
     required this.maxExportResolution,
     required this.maxSculptResolution,
     required this.cameraBookmarks,
+    required this.shellPreferences,
     required this.keyOptions,
     required this.keybindings,
   });
@@ -1623,6 +1625,7 @@ class AppSettingsSnapshot {
       maxExportResolution.hashCode ^
       maxSculptResolution.hashCode ^
       cameraBookmarks.hashCode ^
+      shellPreferences.hashCode ^
       keyOptions.hashCode ^
       keybindings.hashCode;
 
@@ -1640,8 +1643,89 @@ class AppSettingsSnapshot {
           maxExportResolution == other.maxExportResolution &&
           maxSculptResolution == other.maxSculptResolution &&
           cameraBookmarks == other.cameraBookmarks &&
+          shellPreferences == other.shellPreferences &&
           keyOptions == other.keyOptions &&
           keybindings == other.keybindings;
+}
+
+class AppShellPreferencesSnapshot {
+  final String leadingEdgeSide;
+  final bool desktopScenePinned;
+  final bool desktopPropertiesPinned;
+  final Map<String, List<String>> favoriteCommandIdsByWorkspace;
+  final String preferredDrawerTab;
+  final bool quickWheelHintDismissed;
+
+  const AppShellPreferencesSnapshot({
+    required this.leadingEdgeSide,
+    required this.desktopScenePinned,
+    required this.desktopPropertiesPinned,
+    required this.favoriteCommandIdsByWorkspace,
+    required this.preferredDrawerTab,
+    required this.quickWheelHintDismissed,
+  });
+
+  @override
+  int get hashCode =>
+      leadingEdgeSide.hashCode ^
+      desktopScenePinned.hashCode ^
+      desktopPropertiesPinned.hashCode ^
+      favoriteCommandIdsByWorkspace.hashCode ^
+      preferredDrawerTab.hashCode ^
+      quickWheelHintDismissed.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppShellPreferencesSnapshot &&
+          runtimeType == other.runtimeType &&
+          leadingEdgeSide == other.leadingEdgeSide &&
+          desktopScenePinned == other.desktopScenePinned &&
+          desktopPropertiesPinned == other.desktopPropertiesPinned &&
+          favoriteCommandIdsByWorkspace ==
+              other.favoriteCommandIdsByWorkspace &&
+          preferredDrawerTab == other.preferredDrawerTab &&
+          quickWheelHintDismissed == other.quickWheelHintDismissed;
+}
+
+class AppShellPreferencesUpdate {
+  final String? leadingEdgeSide;
+  final bool? desktopScenePinned;
+  final bool? desktopPropertiesPinned;
+  final Map<String, List<String>>? favoriteCommandIdsByWorkspace;
+  final String? preferredDrawerTab;
+  final bool? quickWheelHintDismissed;
+
+  const AppShellPreferencesUpdate({
+    this.leadingEdgeSide,
+    this.desktopScenePinned,
+    this.desktopPropertiesPinned,
+    this.favoriteCommandIdsByWorkspace,
+    this.preferredDrawerTab,
+    this.quickWheelHintDismissed,
+  });
+
+  @override
+  int get hashCode =>
+      leadingEdgeSide.hashCode ^
+      desktopScenePinned.hashCode ^
+      desktopPropertiesPinned.hashCode ^
+      favoriteCommandIdsByWorkspace.hashCode ^
+      preferredDrawerTab.hashCode ^
+      quickWheelHintDismissed.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppShellPreferencesUpdate &&
+          runtimeType == other.runtimeType &&
+          leadingEdgeSide == other.leadingEdgeSide &&
+          desktopScenePinned == other.desktopScenePinned &&
+          desktopPropertiesPinned == other.desktopPropertiesPinned &&
+          favoriteCommandIdsByWorkspace ==
+              other.favoriteCommandIdsByWorkspace &&
+          preferredDrawerTab == other.preferredDrawerTab &&
+          quickWheelHintDismissed == other.quickWheelHintDismissed;
 }
 
 class AppToolSnapshot {

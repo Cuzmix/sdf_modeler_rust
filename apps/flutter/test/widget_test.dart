@@ -19,6 +19,27 @@ Finder _commandPanelScrollable() => find.descendant(
   matching: find.byType(Scrollable),
 ).first;
 
+Future<Finder> _commandPanelScrollableReady(WidgetTester tester) async {
+  if (find.byKey(const ValueKey('shell-properties-drawer')).evaluate().isEmpty) {
+    final openPropertiesButton = find.byTooltip('Open properties');
+    expect(openPropertiesButton, findsOneWidget);
+    await tester.tap(openPropertiesButton);
+    await _settleUi(tester);
+  }
+
+  final scrollable = _commandPanelScrollable();
+  expect(scrollable, findsOneWidget);
+  return scrollable;
+}
+
+Future<void> _settleUi(
+  WidgetTester tester, {
+  Duration duration = const Duration(milliseconds: 220),
+}) async {
+  await tester.pump();
+  await tester.pump(duration);
+}
+
 class _MockRustApi extends RustLibApi {
   static const String _baseSnapshot = '''{"selected_node":null,"top_level_nodes":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false}],"history":{"can_undo":false,"can_redo":false},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":7,"visible_nodes":7,"top_level_nodes":1,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":1,"structure_key":11,"data_fingerprint":22,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
   static const String _documentSnapshot = '''{"selected_node":null,"top_level_nodes":[{"id":1,"name":"Sphere","kind_label":"Sphere","visible":true,"locked":false}],"history":{"can_undo":false,"can_redo":false},"document":{"current_file_path":"C:\\\\Scenes\\\\hero.sdf","current_file_name":"hero.sdf","has_unsaved_changes":true,"recent_files":["C:\\\\Scenes\\\\hero.sdf","C:\\\\Scenes\\\\blockout.sdf"],"recovery_available":true,"recovery_summary":"Recovered unsaved work found."},"camera":{"yaw":0.7853982,"pitch":0.4,"roll":0.0,"distance":5.0,"fov_degrees":45.0,"orthographic":false,"target":{"x":0.0,"y":0.0,"z":0.0},"eye":{"x":3.26,"y":1.95,"z":3.26}},"stats":{"total_nodes":7,"visible_nodes":7,"top_level_nodes":1,"primitive_nodes":1,"operation_nodes":0,"transform_nodes":3,"modifier_nodes":0,"sculpt_nodes":0,"light_nodes":3,"voxel_memory_bytes":0,"sdf_eval_complexity":1,"structure_key":11,"data_fingerprint":22,"bounds_min":{"x":-2.5,"y":-2.5,"z":-2.5},"bounds_max":{"x":2.5,"y":2.5,"z":2.5}},"tool":{"active_tool_label":"Select","shading_mode_label":"Full","grid_enabled":true}}''';
@@ -658,6 +679,39 @@ class _MockRustApi extends RustLibApi {
           },
           growable: false,
         ),
+        'shell_preferences': <String, Object?>{
+          'leading_edge_side': 'left',
+          'desktop_scene_pinned': false,
+          'desktop_properties_pinned': false,
+          'favorite_command_ids_by_workspace': <String, Object?>{
+            'blockout': <String>[
+              'add_sphere',
+              'add_box',
+              'frame_all',
+              'focus_selected',
+            ],
+            'sculpt': <String>[
+              'resume_sculpting_selected',
+              'stop_sculpting',
+              'focus_selected',
+              'undo',
+            ],
+            'lookdev': <String>[
+              'create_light_point',
+              'frame_all',
+              'toggle_projection',
+              'undo',
+            ],
+            'review': <String>[
+              'frame_all',
+              'focus_selected',
+              'toggle_projection',
+              'redo',
+            ],
+          },
+          'preferred_drawer_tab': 'scene',
+          'quick_wheel_hint_dismissed': false,
+        },
         'key_options': <Map<String, String>>[
           <String, String>{'id': 'z', 'label': 'Z'},
           <String, String>{'id': 'y', 'label': 'Y'},
@@ -872,6 +926,7 @@ class _MockRustApi extends RustLibApi {
   int importSettingsCalls = 0;
   int setSettingsToggleCalls = 0;
   int setSettingsIntegerCalls = 0;
+  int setShellPreferencesCalls = 0;
   int saveCameraBookmarkCalls = 0;
   int restoreCameraBookmarkCalls = 0;
   int clearCameraBookmarkCalls = 0;
@@ -989,6 +1044,7 @@ class _MockRustApi extends RustLibApi {
     importSettingsCalls = 0;
     setSettingsToggleCalls = 0;
     setSettingsIntegerCalls = 0;
+    setShellPreferencesCalls = 0;
     saveCameraBookmarkCalls = 0;
     restoreCameraBookmarkCalls = 0;
     clearCameraBookmarkCalls = 0;
@@ -1382,6 +1438,41 @@ class _MockRustApi extends RustLibApi {
         default:
           settings[fieldId] = value;
       }
+    });
+  }
+
+  @override
+  AppSceneSnapshot crateApiSimpleSetShellPreferences({
+    required AppShellPreferencesUpdate update,
+  }) {
+    setShellPreferencesCalls += 1;
+    return _updateSettingsSnapshot((settings) {
+      final shellPreferences = Map<String, dynamic>.from(
+        settings['shell_preferences'] as Map<String, dynamic>? ??
+            _defaultSettingsPayload()['shell_preferences'] as Map<String, dynamic>,
+      );
+      if (update.leadingEdgeSide != null) {
+        shellPreferences['leading_edge_side'] = update.leadingEdgeSide;
+      }
+      if (update.desktopScenePinned != null) {
+        shellPreferences['desktop_scene_pinned'] = update.desktopScenePinned;
+      }
+      if (update.desktopPropertiesPinned != null) {
+        shellPreferences['desktop_properties_pinned'] =
+            update.desktopPropertiesPinned;
+      }
+      if (update.favoriteCommandIdsByWorkspace != null) {
+        shellPreferences['favorite_command_ids_by_workspace'] =
+            update.favoriteCommandIdsByWorkspace;
+      }
+      if (update.preferredDrawerTab != null) {
+        shellPreferences['preferred_drawer_tab'] = update.preferredDrawerTab;
+      }
+      if (update.quickWheelHintDismissed != null) {
+        shellPreferences['quick_wheel_hint_dismissed'] =
+            update.quickWheelHintDismissed;
+      }
+      settings['shell_preferences'] = shellPreferences;
     });
   }
 
@@ -2459,6 +2550,14 @@ void main() {
     };
   }
 
+  Rect viewportSurfaceRect(WidgetTester tester) {
+    return tester.getRect(find.byType(ViewportSurface));
+  }
+
+  Offset globalViewportOffset(WidgetTester tester, Offset localOffset) {
+    return viewportSurfaceRect(tester).topLeft + localOffset;
+  }
+
   setUpAll(() {
     RustLib.initMock(api: mockApi);
 
@@ -2576,15 +2675,15 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('transform-position-x-slider')),
       200,
-      scrollable: _commandPanelScrollable(),
+      scrollable: await _commandPanelScrollableReady(tester),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
 
     await tester.drag(
       find.byKey(const ValueKey('transform-position-x-slider')),
       const Offset(180, 0),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
 
     expect(mockApi.beginInteractiveEditCalls, greaterThan(0));
     expect(mockApi.previewSelectedTransformPositionCalls, greaterThan(0));
@@ -2594,15 +2693,15 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('transform-rotation-z-slider')),
       200,
-      scrollable: _commandPanelScrollable(),
+      scrollable: await _commandPanelScrollableReady(tester),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
 
     await tester.drag(
       find.byKey(const ValueKey('transform-rotation-z-slider')),
       const Offset(120, 0),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
 
     expect(
       mockApi.previewSelectedTransformRotationDegreesCalls,
@@ -2617,15 +2716,15 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('transform-scale-x-slider')),
       200,
-      scrollable: _commandPanelScrollable(),
+      scrollable: await _commandPanelScrollableReady(tester),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
 
     await tester.drag(
       find.byKey(const ValueKey('transform-scale-x-slider')),
       const Offset(-200, 0),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
 
     expect(mockApi.previewSelectedTransformScaleCalls, greaterThan(0));
     expect(mockApi.setSelectedTransformScaleCalls, 1);
@@ -2751,21 +2850,7 @@ void main() {
     await pumpApp(tester, logicalSize: const Size(1400, 900));
 
     final dynamic state = tester.state(find.byType(BridgeStatusPage));
-    final viewportRect = tester.getRect(find.byType(ViewportSurface));
-    var viewportWidth = viewportRect.width;
-    var viewportHeight = viewportWidth / (16.0 / 9.0);
-    if (viewportHeight > viewportRect.height) {
-      viewportHeight = viewportRect.height;
-      viewportWidth = viewportHeight * (16.0 / 9.0);
-    }
-    final innerViewportTopLeft = Offset(
-      viewportRect.left + (viewportRect.width - viewportWidth) * 0.5,
-      viewportRect.top + (viewportRect.height - viewportHeight) * 0.5,
-    );
-    final localViewportCenter = Offset(
-      viewportWidth * 0.5,
-      viewportHeight * 0.5,
-    );
+    final viewportRect = viewportSurfaceRect(tester);
     final localBillboardPositionBefore =
         state.debugViewportLightBillboardPosition(nodeId: BigInt.from(8))
             as Offset?;
@@ -2777,9 +2862,12 @@ void main() {
     expect(localBillboardPositionBefore, isNotNull);
     expect(localHandlePosition, isNotNull);
 
-    final globalHandlePosition = innerViewportTopLeft + localHandlePosition!;
+    final globalHandlePosition = globalViewportOffset(
+      tester,
+      localHandlePosition!,
+    );
     final dragDirection =
-        globalHandlePosition - (innerViewportTopLeft + localViewportCenter);
+        globalHandlePosition - viewportRect.center;
     final dragDistance = dragDirection.distance;
     expect(dragDistance, greaterThan(0.0));
     final dragStep = Offset(
@@ -2821,21 +2909,8 @@ void main() {
     await pumpApp(tester, logicalSize: const Size(1400, 900));
 
     final dynamic state = tester.state(find.byType(BridgeStatusPage));
-    final viewportRect = tester.getRect(find.byType(ViewportSurface));
-    var viewportWidth = viewportRect.width;
-    var viewportHeight = viewportWidth / (16.0 / 9.0);
-    if (viewportHeight > viewportRect.height) {
-      viewportHeight = viewportRect.height;
-      viewportWidth = viewportHeight * (16.0 / 9.0);
-    }
-    final innerViewportTopLeft = Offset(
-      viewportRect.left + (viewportRect.width - viewportWidth) * 0.5,
-      viewportRect.top + (viewportRect.height - viewportHeight) * 0.5,
-    );
-    final localViewportCenter = Offset(
-      viewportWidth * 0.5,
-      viewportHeight * 0.5,
-    );
+    final viewportRect = viewportSurfaceRect(tester);
+    final localViewportCenter = viewportRect.center - viewportRect.topLeft;
     final localHandlePosition = <Offset?>[
       state.debugViewportGizmoAxisHandlePosition('x') as Offset?,
       state.debugViewportGizmoAxisHandlePosition('y') as Offset?,
@@ -2856,9 +2931,12 @@ void main() {
         );
     expect(localHandlePosition, isNotNull);
 
-    final globalHandlePosition = innerViewportTopLeft + localHandlePosition!;
+    final globalHandlePosition = globalViewportOffset(
+      tester,
+      localHandlePosition!,
+    );
     final dragDirection =
-        globalHandlePosition - (innerViewportTopLeft + localViewportCenter);
+        globalHandlePosition - viewportRect.center;
     final dragDistance = dragDirection.distance;
     expect(dragDistance, greaterThan(0.0));
     final dragStep = Offset(
@@ -2989,7 +3067,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('document-new-command')),
       200,
-      scrollable: _commandPanelScrollable(),
+      scrollable: await _commandPanelScrollableReady(tester),
     );
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('document-new-command')));
@@ -3003,7 +3081,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('document-recover-command')),
       200,
-      scrollable: _commandPanelScrollable(),
+      scrollable: await _commandPanelScrollableReady(tester),
     );
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('document-recover-command')));
@@ -3039,7 +3117,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('scene-tree-node-1')),
       200,
-      scrollable: _commandPanelScrollable(),
+      scrollable: await _commandPanelScrollableReady(tester),
     );
     await tester.pump();
 
@@ -3050,7 +3128,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.text('Box'),
       -200,
-      scrollable: _commandPanelScrollable(),
+      scrollable: await _commandPanelScrollableReady(tester),
     );
     await tester.pump();
     await tester.tap(find.text('Box'));
@@ -3072,24 +3150,24 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('node-basics-visible-toggle')),
       200,
-      scrollable: _commandPanelScrollable(),
+      scrollable: await _commandPanelScrollableReady(tester),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.scrollUntilVisible(
       find.text('Radius: 1.00'),
       -120,
-      scrollable: _commandPanelScrollable(),
+      scrollable: await _commandPanelScrollableReady(tester),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
 
     expect(find.text('Radius: 1.00'), findsOneWidget);
 
     await tester.ensureVisible(
       find.byKey(const ValueKey('node-basics-visible-toggle')),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.tap(find.byKey(const ValueKey('node-basics-visible-toggle')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
 
     expect(mockApi.toggleNodeVisibilityCalls, 1);
     expect(mockApi.currentSnapshot, _MockRustApi._selectedPropertyHiddenSnapshot);
@@ -3105,12 +3183,12 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('node-basics-lock-toggle')),
       200,
-      scrollable: _commandPanelScrollable(),
+      scrollable: await _commandPanelScrollableReady(tester),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
 
     await tester.tap(find.byKey(const ValueKey('node-basics-lock-toggle')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
 
     expect(mockApi.toggleNodeLockCalls, 1);
     expect(mockApi.currentSnapshot, _MockRustApi._selectedPropertyLockedSnapshot);
@@ -3126,15 +3204,15 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('primitive-parameter-radius-slider')),
       200,
-      scrollable: _commandPanelScrollable(),
+      scrollable: await _commandPanelScrollableReady(tester),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
 
     await tester.drag(
       find.byKey(const ValueKey('primitive-parameter-radius-slider')),
       const Offset(220, 0),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
 
     expect(mockApi.beginInteractiveEditCalls, greaterThan(0));
     expect(mockApi.previewSelectedPrimitiveParameterCalls, greaterThan(0));
@@ -3152,15 +3230,15 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('material-roughness-slider')),
       200,
-      scrollable: _commandPanelScrollable(),
+      scrollable: await _commandPanelScrollableReady(tester),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
 
     await tester.drag(
       find.byKey(const ValueKey('material-roughness-slider')),
       const Offset(180, 0),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
 
     expect(mockApi.beginInteractiveEditCalls, greaterThan(0));
     expect(mockApi.previewSelectedMaterialFloatCalls, greaterThan(0));
@@ -3178,15 +3256,15 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('material-color-red-slider')),
       200,
-      scrollable: _commandPanelScrollable(),
+      scrollable: await _commandPanelScrollableReady(tester),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
 
     await tester.drag(
       find.byKey(const ValueKey('material-color-red-slider')),
       const Offset(120, 0),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
 
     expect(mockApi.beginInteractiveEditCalls, greaterThan(0));
     expect(mockApi.previewSelectedMaterialColorCalls, greaterThan(0));
@@ -3205,7 +3283,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('export-resolution-field')),
       200,
-      scrollable: _commandPanelScrollable(),
+      scrollable: await _commandPanelScrollableReady(tester),
     );
     await tester.enterText(
       find.byKey(const ValueKey('export-resolution-field')),
@@ -3217,7 +3295,7 @@ void main() {
 
     await tester.ensureVisible(find.byKey(const ValueKey('export-adaptive-toggle')));
     await tester.tap(find.byKey(const ValueKey('export-adaptive-toggle')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
 
     await tester.tap(find.byKey(const ValueKey('export-start-command')));
     await tester.pump();
@@ -3229,7 +3307,7 @@ void main() {
     expect(find.textContaining('Exporting hero.obj'), findsOneWidget);
 
     await tester.pump(const Duration(milliseconds: 500));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
 
     expect(mockApi.workflowStatusCalls, greaterThanOrEqualTo(3));
     expect(mockApi.sceneSnapshotCalls, 1);
@@ -3248,50 +3326,50 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('render-preset-quality')),
       200,
-      scrollable: _commandPanelScrollable(),
+      scrollable: await _commandPanelScrollableReady(tester),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
 
     await tester.ensureVisible(find.byKey(const ValueKey('render-preset-quality')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.tap(find.byKey(const ValueKey('render-preset-quality')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.ensureVisible(
       find.byKey(const ValueKey('render-shading-cross_section')),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.tap(find.byKey(const ValueKey('render-shading-cross_section')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.ensureVisible(find.byKey(const ValueKey('render-grid-toggle')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.tap(find.byKey(const ValueKey('render-grid-toggle')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.ensureVisible(
       find.byKey(const ValueKey('render-shadow-steps-increase')),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.tap(find.byKey(const ValueKey('render-shadow-steps-increase')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.ensureVisible(find.byKey(const ValueKey('render-bloom-toggle')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.tap(find.byKey(const ValueKey('render-bloom-toggle')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.ensureVisible(
       find.byKey(const ValueKey('render-bloom-intensity-increase')),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.tap(find.byKey(const ValueKey('render-bloom-intensity-increase')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.ensureVisible(
       find.byKey(const ValueKey('render-cross-section-axis-z')),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.tap(find.byKey(const ValueKey('render-cross-section-axis-z')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.tap(
       find.byKey(const ValueKey('render-cross-section-position-increase')),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
 
     expect(mockApi.applyRenderPresetCalls, 1);
     expect(mockApi.setRenderShadingModeCalls, 1);
@@ -3315,48 +3393,48 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('settings-reset-command')),
       200,
-      scrollable: _commandPanelScrollable(),
+      scrollable: await _commandPanelScrollableReady(tester),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
 
     await tester.tap(find.byKey(const ValueKey('settings-reset-command')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.tap(find.byKey(const ValueKey('settings-export-command')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.tap(find.byKey(const ValueKey('settings-fps-overlay-toggle')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.ensureVisible(
       find.byKey(const ValueKey('settings-auto-save-interval-increase')),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.tap(
       find.byKey(const ValueKey('settings-auto-save-interval-increase')),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.ensureVisible(
       find.byKey(const ValueKey('settings-bookmark-save-1')),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.tap(find.byKey(const ValueKey('settings-bookmark-save-1')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.ensureVisible(
       find.byKey(const ValueKey('settings-bookmark-restore-0')),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.tap(find.byKey(const ValueKey('settings-bookmark-restore-0')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.ensureVisible(
       find.byKey(const ValueKey('settings-bookmark-clear-0')),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.tap(find.byKey(const ValueKey('settings-bookmark-clear-0')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.ensureVisible(
       find.byKey(const ValueKey('settings-import-command')),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.tap(find.byKey(const ValueKey('settings-import-command')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
 
     expect(mockApi.resetSettingsCalls, 1);
     expect(mockApi.exportSettingsCalls, 1);
@@ -3383,30 +3461,30 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('keymap-export-command')),
       200,
-      scrollable: _commandPanelScrollable(),
+      scrollable: await _commandPanelScrollableReady(tester),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
 
     await tester.tap(find.byKey(const ValueKey('keymap-export-command')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.tap(find.byKey(const ValueKey('keymap-import-command')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.ensureVisible(find.byKey(const ValueKey('keymap-reset-command')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.tap(find.byKey(const ValueKey('keymap-reset-command')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.ensureVisible(find.byKey(const ValueKey('keybinding-clear-undo')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.tap(find.byKey(const ValueKey('keybinding-clear-undo')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.tap(find.byKey(const ValueKey('keybinding-edit-redo')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.tap(find.byKey(const ValueKey('keybinding-key-dropdown')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.tap(find.byKey(const ValueKey('keybinding-key-option-z')).last);
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.tap(find.byKey(const ValueKey('keybinding-save-command')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
 
     expect(mockApi.exportKeymapCalls, 1);
     expect(mockApi.importKeymapCalls, 1);
@@ -3429,14 +3507,14 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('open-import-dialog-command')),
       200,
-      scrollable: _commandPanelScrollable(),
+      scrollable: await _commandPanelScrollableReady(tester),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
 
     await tester.tap(find.byKey(const ValueKey('open-import-dialog-command')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.tap(find.text('Manual'));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.enterText(
       find.byKey(const ValueKey('import-resolution-field')),
       '144',
@@ -3454,7 +3532,7 @@ void main() {
     expect(find.textContaining('Importing hero_mesh.obj'), findsOneWidget);
 
     await tester.pump(const Duration(milliseconds: 500));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
 
     expect(mockApi.workflowStatusCalls, greaterThanOrEqualTo(3));
     expect(mockApi.sceneSnapshotCalls, 2);
@@ -3474,16 +3552,16 @@ void main() {
       await tester.scrollUntilVisible(
         find.byKey(const ValueKey('open-sculpt-convert-dialog-command')),
         200,
-        scrollable: _commandPanelScrollable(),
+        scrollable: await _commandPanelScrollableReady(tester),
       );
-      await tester.pumpAndSettle();
+      await _settleUi(tester);
 
       await tester.tap(
         find.byKey(const ValueKey('open-sculpt-convert-dialog-command')),
       );
-      await tester.pumpAndSettle();
+      await _settleUi(tester);
       await tester.tap(find.text('Bake whole scene + flatten'));
-      await tester.pumpAndSettle();
+      await _settleUi(tester);
       await tester.enterText(
         find.byKey(const ValueKey('sculpt-convert-resolution-field')),
         '96',
@@ -3495,7 +3573,7 @@ void main() {
       await tester.ensureVisible(
         find.byKey(const ValueKey('start-sculpt-convert-command')),
       );
-      await tester.pumpAndSettle();
+      await _settleUi(tester);
       await tester.tap(find.byKey(const ValueKey('start-sculpt-convert-command')));
       await tester.pump();
 
@@ -3506,7 +3584,7 @@ void main() {
       expect(mockApi.currentSnapshot, _MockRustApi._sculptConvertRunningSnapshot);
 
       await tester.pump(const Duration(milliseconds: 500));
-      await tester.pumpAndSettle();
+      await _settleUi(tester);
 
       expect(mockApi.workflowStatusCalls, greaterThanOrEqualTo(3));
       expect(mockApi.sceneSnapshotCalls, 2);
@@ -3525,7 +3603,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('undo-command')),
       200,
-      scrollable: _commandPanelScrollable(),
+      scrollable: await _commandPanelScrollableReady(tester),
     );
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('undo-command')));
@@ -3546,11 +3624,11 @@ void main() {
       await tester.scrollUntilVisible(
         find.byKey(const ValueKey('rename-command')),
         200,
-        scrollable: _commandPanelScrollable(),
+        scrollable: await _commandPanelScrollableReady(tester),
       );
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('rename-command')));
-      await tester.pumpAndSettle();
+      await _settleUi(tester);
       await tester.enterText(
         find.byKey(const ValueKey('rename-node-field')),
         'Hero Sphere',
@@ -3561,9 +3639,9 @@ void main() {
       await tester.scrollUntilVisible(
         find.text('Selected: Hero Sphere'),
         200,
-        scrollable: _commandPanelScrollable(),
+        scrollable: await _commandPanelScrollableReady(tester),
       );
-      await tester.pumpAndSettle();
+      await _settleUi(tester);
 
       expect(mockApi.renameNodeCalls, 1);
       expect(mockApi.currentSnapshot, _MockRustApi._renamedSnapshot);
@@ -3582,7 +3660,7 @@ void main() {
       await tester.scrollUntilVisible(
         find.byKey(const ValueKey('duplicate-command')),
         200,
-        scrollable: _commandPanelScrollable(),
+        scrollable: await _commandPanelScrollableReady(tester),
       );
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('duplicate-command')));
@@ -3604,10 +3682,10 @@ void main() {
       await tester.scrollUntilVisible(
         find.byKey(const ValueKey('create-transform-command')),
         200,
-        scrollable: _commandPanelScrollable(),
+        scrollable: await _commandPanelScrollableReady(tester),
       );
       await tester.ensureVisible(find.byKey(const ValueKey('create-transform-command')));
-      await tester.pumpAndSettle();
+      await _settleUi(tester);
       await tester.tap(find.byKey(const ValueKey('create-transform-command')));
       await tester.pump();
 
@@ -3625,10 +3703,10 @@ void main() {
       await tester.scrollUntilVisible(
         find.byKey(const ValueKey('create-operation-command')),
         200,
-        scrollable: _commandPanelScrollable(),
+        scrollable: await _commandPanelScrollableReady(tester),
       );
       await tester.tap(find.byKey(const ValueKey('create-operation-command')));
-      await tester.pumpAndSettle();
+      await _settleUi(tester);
       await tester.tap(find.byKey(const ValueKey('operation-option-union')));
       await tester.pump();
 
@@ -3648,12 +3726,12 @@ void main() {
       await tester.scrollUntilVisible(
         find.byKey(const ValueKey('create-modifier-command')),
         200,
-        scrollable: _commandPanelScrollable(),
+        scrollable: await _commandPanelScrollableReady(tester),
       );
       await tester.ensureVisible(find.byKey(const ValueKey('create-modifier-command')));
-      await tester.pumpAndSettle();
+      await _settleUi(tester);
       await tester.tap(find.byKey(const ValueKey('create-modifier-command')));
-      await tester.pumpAndSettle();
+      await _settleUi(tester);
       await tester.tap(find.byKey(const ValueKey('modifier-option-twist')));
       await tester.pump();
 
@@ -3671,12 +3749,12 @@ void main() {
       await tester.scrollUntilVisible(
         find.byKey(const ValueKey('create-light-command')),
         200,
-        scrollable: _commandPanelScrollable(),
+        scrollable: await _commandPanelScrollableReady(tester),
       );
       await tester.ensureVisible(find.byKey(const ValueKey('create-light-command')));
-      await tester.pumpAndSettle();
+      await _settleUi(tester);
       await tester.tap(find.byKey(const ValueKey('create-light-command')));
-      await tester.pumpAndSettle();
+      await _settleUi(tester);
       await tester.tap(find.byKey(const ValueKey('light-option-point')));
       await tester.pump();
 
@@ -3696,28 +3774,28 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('sculpt-brush-mode-grab')),
       200,
-      scrollable: _commandPanelScrollable(),
+      scrollable: await _commandPanelScrollableReady(tester),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
 
     await tester.tap(find.byKey(const ValueKey('sculpt-brush-mode-grab')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.ensureVisible(find.byKey(const ValueKey('sculpt-radius-increase')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.tap(find.byKey(const ValueKey('sculpt-radius-increase')));
     await tester.pump();
     await tester.ensureVisible(find.byKey(const ValueKey('sculpt-strength-increase')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.tap(find.byKey(const ValueKey('sculpt-strength-increase')));
     await tester.pump();
     await tester.ensureVisible(find.byKey(const ValueKey('sculpt-symmetry-z')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.tap(find.byKey(const ValueKey('sculpt-symmetry-z')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.ensureVisible(
       find.byKey(const ValueKey('selected-sculpt-resolution-field')),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.enterText(
       find.byKey(const ValueKey('selected-sculpt-resolution-field')),
       '128',
@@ -3725,22 +3803,22 @@ void main() {
     await tester.ensureVisible(
       find.byKey(const ValueKey('selected-sculpt-apply-resolution')),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.tap(
       find.byKey(const ValueKey('selected-sculpt-apply-resolution')),
     );
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.ensureVisible(find.byKey(const ValueKey('stop-sculpt-command')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.tap(find.byKey(const ValueKey('stop-sculpt-command')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
 
     expect(find.byKey(const ValueKey('resume-sculpt-command')), findsOneWidget);
 
     await tester.ensureVisible(find.byKey(const ValueKey('resume-sculpt-command')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
     await tester.tap(find.byKey(const ValueKey('resume-sculpt-command')));
-    await tester.pumpAndSettle();
+    await _settleUi(tester);
 
     expect(mockApi.setSculptBrushModeCalls, 1);
     expect(mockApi.setSculptBrushRadiusCalls, 1);
@@ -3761,24 +3839,24 @@ void main() {
       await tester.scrollUntilVisible(
         find.byKey(const ValueKey('selected-light-intensity-increase')),
         200,
-        scrollable: _commandPanelScrollable(),
+        scrollable: await _commandPanelScrollableReady(tester),
       );
-      await tester.pumpAndSettle();
+      await _settleUi(tester);
 
       await tester.tap(find.byKey(const ValueKey('selected-light-intensity-increase')));
-      await tester.pumpAndSettle();
+      await _settleUi(tester);
 
       await tester.ensureVisible(
         find.byKey(const ValueKey('selected-light-cast-shadows-toggle')),
       );
-      await tester.pumpAndSettle();
+      await _settleUi(tester);
       await tester.tap(find.byKey(const ValueKey('selected-light-cast-shadows-toggle')));
-      await tester.pumpAndSettle();
+      await _settleUi(tester);
 
       await tester.ensureVisible(
         find.byKey(const ValueKey('selected-light-intensity-expression-field')),
       );
-      await tester.pumpAndSettle();
+      await _settleUi(tester);
       await tester.enterText(
         find.byKey(const ValueKey('selected-light-intensity-expression-field')),
         'time * 4.0',
@@ -3786,32 +3864,32 @@ void main() {
       await tester.tap(
         find.byKey(const ValueKey('selected-light-intensity-expression-apply')),
       );
-      await tester.pumpAndSettle();
+      await _settleUi(tester);
 
       await tester.ensureVisible(
         find.byKey(const ValueKey('light-link-node-1-light-11')),
       );
-      await tester.pumpAndSettle();
+      await _settleUi(tester);
       await tester.tap(find.byKey(const ValueKey('light-link-node-1-light-11')));
-      await tester.pumpAndSettle();
+      await _settleUi(tester);
 
       await tester.ensureVisible(
         find.byKey(const ValueKey('selected-light-type-array')),
       );
-      await tester.pumpAndSettle();
+      await _settleUi(tester);
       await tester.tap(find.byKey(const ValueKey('selected-light-type-array')));
-      await tester.pumpAndSettle();
+      await _settleUi(tester);
 
       await tester.ensureVisible(
         find.byKey(const ValueKey('selected-light-array-pattern-grid')),
       );
-      await tester.pumpAndSettle();
+      await _settleUi(tester);
       await tester.tap(find.byKey(const ValueKey('selected-light-array-pattern-grid')));
-      await tester.pumpAndSettle();
+      await _settleUi(tester);
       await tester.tap(
         find.byKey(const ValueKey('selected-light-array-count-increase')),
       );
-      await tester.pumpAndSettle();
+      await _settleUi(tester);
 
       expect(mockApi.setSelectedLightIntensityCalls, 1);
       expect(mockApi.setSelectedLightCastShadowsCalls, 1);
@@ -3836,7 +3914,7 @@ void main() {
       await tester.scrollUntilVisible(
         find.byKey(const ValueKey('create-sculpt-command')),
         200,
-        scrollable: _commandPanelScrollable(),
+        scrollable: await _commandPanelScrollableReady(tester),
       );
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('create-sculpt-command')));
@@ -3858,7 +3936,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('undo-command')),
       200,
-      scrollable: _commandPanelScrollable(),
+      scrollable: await _commandPanelScrollableReady(tester),
     );
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('undo-command')));
@@ -3866,7 +3944,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.byKey(const ValueKey('redo-command')),
       200,
-      scrollable: _commandPanelScrollable(),
+      scrollable: await _commandPanelScrollableReady(tester),
     );
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('redo-command')));
@@ -4045,24 +4123,13 @@ void main() {
     await pumpApp(tester, logicalSize: const Size(1400, 900));
 
     final dynamic state = tester.state(find.byType(BridgeStatusPage));
-    final viewportRect = tester.getRect(find.byType(ViewportSurface));
-    var viewportWidth = viewportRect.width;
-    var viewportHeight = viewportWidth / (16.0 / 9.0);
-    if (viewportHeight > viewportRect.height) {
-      viewportHeight = viewportRect.height;
-      viewportWidth = viewportHeight * (16.0 / 9.0);
-    }
-    final innerViewportTopLeft = Offset(
-      viewportRect.left + (viewportRect.width - viewportWidth) * 0.5,
-      viewportRect.top + (viewportRect.height - viewportHeight) * 0.5,
-    );
     final localBillboardPosition =
         state.debugViewportLightBillboardPosition(nodeId: BigInt.from(8))
             as Offset?;
 
     expect(localBillboardPosition, isNotNull);
 
-    await tester.tapAt(innerViewportTopLeft + localBillboardPosition!);
+    await tester.tapAt(globalViewportOffset(tester, localBillboardPosition!));
     await tester.pump();
 
     expect(mockApi.selectNodeCalls, 1);
@@ -4133,7 +4200,7 @@ void main() {
     await tester.scrollUntilVisible(
       find.text('Focus Selected'),
       200,
-      scrollable: _commandPanelScrollable(),
+      scrollable: await _commandPanelScrollableReady(tester),
     );
     await tester.pump();
 
@@ -4151,31 +4218,45 @@ void main() {
     expect(requestFrameCalls, greaterThan(0));
   });
 
-  testWidgets('tablet shell keeps the workspace-first surfaces visible', (
+  testWidgets('tablet shell keeps the viewport-first chrome visible', (
     WidgetTester tester,
   ) async {
     await pumpApp(tester);
-    expect(find.text('Scene Drawer'), findsOneWidget);
+    expect(find.byKey(const ValueKey('shell-top-bar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('shell-leading-rail')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('shell-trailing-utility-strip')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('shell-bottom-dock')), findsOneWidget);
     expect(find.byKey(const ValueKey('shell-command-search-button')), findsOneWidget);
-    expect(find.byKey(const ValueKey('scene-drawer-search-field')), findsOneWidget);
+    expect(find.byKey(const ValueKey('shell-scene-edge-handle')), findsOneWidget);
 
-    await tester.ensureVisible(find.widgetWithText(TextButton, 'Box'));
-    await tester.tap(find.widgetWithText(TextButton, 'Box'));
+    await tester.ensureVisible(find.widgetWithText(FilledButton, 'Box'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Box'));
     await tester.pump();
     expect(mockApi.addBoxCalls, 1);
   });
 
-  testWidgets('desktop shell shows the workspace bar, tool rail, and scene drawer', (
+  testWidgets('desktop shell defaults to rails, top bar, and bottom dock', (
     WidgetTester tester,
   ) async {
     await pumpApp(tester, logicalSize: const Size(1400, 900));
 
-    expect(find.text('Scene Drawer'), findsOneWidget);
+    expect(find.byKey(const ValueKey('shell-top-bar')), findsOneWidget);
+    expect(find.byKey(const ValueKey('shell-leading-rail')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('shell-trailing-utility-strip')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('shell-bottom-dock')), findsOneWidget);
+    expect(find.byKey(const ValueKey('shell-scene-edge-handle')), findsOneWidget);
     expect(find.byKey(const ValueKey('shell-command-search-button')), findsOneWidget);
     expect(find.text('Blockout'), findsWidgets);
-    expect(find.widgetWithText(TextButton, 'Sphere'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Sphere'), findsOneWidget);
   });
 }
+
 
 
 

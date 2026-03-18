@@ -347,6 +347,41 @@ rust.AppCameraBookmarkSnapshot _cameraBookmark(Map<String, dynamic> json) =>
       saved: _readBool(json, 'saved'),
     );
 
+Map<String, List<String>> _readFavoriteCommandMap(
+  Map<String, dynamic> json,
+  String key,
+) {
+  final raw = json[key];
+  if (raw is! Map) {
+    return const <String, List<String>>{};
+  }
+
+  return raw.map(
+    (workspaceId, commandIds) => MapEntry(
+      workspaceId.toString(),
+      (commandIds is List ? commandIds.whereType<String>() : const <String>[])
+          .toList(growable: false),
+    ),
+  );
+}
+
+rust.AppShellPreferencesSnapshot _shellPreferences(Map<String, dynamic> json) =>
+    rust.AppShellPreferencesSnapshot(
+      leadingEdgeSide: _readString(json, 'leading_edge_side', defaultValue: 'left'),
+      desktopScenePinned: _readBool(json, 'desktop_scene_pinned'),
+      desktopPropertiesPinned: _readBool(json, 'desktop_properties_pinned'),
+      favoriteCommandIdsByWorkspace: _readFavoriteCommandMap(
+        json,
+        'favorite_command_ids_by_workspace',
+      ),
+      preferredDrawerTab: _readString(
+        json,
+        'preferred_drawer_tab',
+        defaultValue: 'scene',
+      ),
+      quickWheelHintDismissed: _readBool(json, 'quick_wheel_hint_dismissed'),
+    );
+
 rust.AppSettingsSnapshot _settings(Map<String, dynamic> json) =>
     rust.AppSettingsSnapshot(
       showFpsOverlay: _readBool(json, 'show_fps_overlay', defaultValue: true),
@@ -382,6 +417,9 @@ rust.AppSettingsSnapshot _settings(Map<String, dynamic> json) =>
         'camera_bookmarks',
         _cameraBookmark,
       ),
+      shellPreferences: _readOptionalObject(json, 'shell_preferences') == null
+          ? _defaultShellPreferencesSnapshot()
+          : _shellPreferences(_readOptionalObject(json, 'shell_preferences')!),
       keyOptions: _readObjectList(json, 'key_options', _keyOption),
       keybindings: _readObjectList(json, 'keybindings', _keybinding),
     );
@@ -833,7 +871,42 @@ rust.AppRenderSettingsSnapshot _defaultRenderSettings() =>
       crossSectionPosition: 0.0,
     );
 
-rust.AppSettingsSnapshot _defaultSettingsSnapshot() => const rust.AppSettingsSnapshot(
+rust.AppShellPreferencesSnapshot _defaultShellPreferencesSnapshot() =>
+    const rust.AppShellPreferencesSnapshot(
+      leadingEdgeSide: 'left',
+      desktopScenePinned: false,
+      desktopPropertiesPinned: false,
+      favoriteCommandIdsByWorkspace: <String, List<String>>{
+        'blockout': <String>[
+          'add_sphere',
+          'add_box',
+          'frame_all',
+          'focus_selected',
+        ],
+        'sculpt': <String>[
+          'resume_sculpting_selected',
+          'stop_sculpting',
+          'focus_selected',
+          'undo',
+        ],
+        'lookdev': <String>[
+          'create_light_point',
+          'frame_all',
+          'toggle_projection',
+          'undo',
+        ],
+        'review': <String>[
+          'frame_all',
+          'focus_selected',
+          'toggle_projection',
+          'redo',
+        ],
+      },
+      preferredDrawerTab: 'scene',
+      quickWheelHintDismissed: false,
+    );
+
+rust.AppSettingsSnapshot _defaultSettingsSnapshot() => rust.AppSettingsSnapshot(
   showFpsOverlay: true,
   showNodeLabels: false,
   showBoundingBox: true,
@@ -842,9 +915,10 @@ rust.AppSettingsSnapshot _defaultSettingsSnapshot() => const rust.AppSettingsSna
   autoSaveIntervalSecs: 120,
   maxExportResolution: 2048,
   maxSculptResolution: 320,
-  cameraBookmarks: <rust.AppCameraBookmarkSnapshot>[],
-  keyOptions: <rust.AppKeyOptionSnapshot>[],
-  keybindings: <rust.AppKeybindingSnapshot>[],
+  cameraBookmarks: const <rust.AppCameraBookmarkSnapshot>[],
+  shellPreferences: _defaultShellPreferencesSnapshot(),
+  keyOptions: const <rust.AppKeyOptionSnapshot>[],
+  keybindings: const <rust.AppKeybindingSnapshot>[],
 );
 
 rust.AppExportSnapshot _defaultExportSnapshot() => const rust.AppExportSnapshot(

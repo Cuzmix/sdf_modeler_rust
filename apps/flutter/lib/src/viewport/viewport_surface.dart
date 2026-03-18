@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_contract.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_theme.dart';
 
-const double _viewportAspectRatio = 16.0 / 9.0;
-
 typedef ViewportSizeChanged = void Function(
   Size logicalViewportSize,
   double devicePixelRatio,
@@ -446,8 +444,9 @@ class _ViewportSurfaceState extends State<ViewportSurface> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final viewportSize = _containedViewportSize(
-          Size(constraints.maxWidth, constraints.maxHeight),
+        final viewportSize = Size(
+          constraints.maxWidth <= 0 ? 1.0 : constraints.maxWidth,
+          constraints.maxHeight <= 0 ? 1.0 : constraints.maxHeight,
         );
         _currentViewportSize = viewportSize;
         final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
@@ -462,48 +461,42 @@ class _ViewportSurfaceState extends State<ViewportSurface> {
           decoration: ShellSurfaceStyles.viewportFrame(context),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(ShellTokens.surfaceRadius),
-            child: Center(
-              child: SizedBox(
-                width: viewportSize.width,
-                height: viewportSize.height,
-                child: MouseRegion(
-                  cursor: SystemMouseCursors.precise,
-                  onHover: _handleMouseHover,
-                  onExit: _handleMouseExit,
-                  child: Listener(
-                    behavior: HitTestBehavior.opaque,
-                    onPointerDown: _handlePointerDown,
-                    onPointerMove: _handlePointerMove,
-                    onPointerUp: _handlePointerUp,
-                    onPointerCancel: _handlePointerCancel,
-                    onPointerSignal: _handlePointerSignal,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        widget.textureId == null
-                            ? Center(
-                                child: Text(
-                                  'Preparing real viewport...',
-                                  style: Theme.of(context).textTheme.bodyMedium
-                                      ?.copyWith(
-                                        color: shellPalette.overlayMutedText,
-                                      ),
-                                ),
-                              )
-                            : Texture(textureId: widget.textureId!),
-                        if (widget.overlay != null)
-                          ExcludeSemantics(
-                            // This overlay is decorative HUD/gizmo chrome above the
-                            // native texture viewport. Keep it out of the desktop
-                            // accessibility tree so rapid frame/hover updates do not
-                            // churn semantics for non-interactive content.
-                            child: IgnorePointer(child: widget.overlay!),
-                          ),
-                        if (widget.controlsOverlay != null)
-                          widget.controlsOverlay!,
-                      ],
-                    ),
-                  ),
+            child: MouseRegion(
+              cursor: SystemMouseCursors.precise,
+              onHover: _handleMouseHover,
+              onExit: _handleMouseExit,
+              child: Listener(
+                behavior: HitTestBehavior.opaque,
+                onPointerDown: _handlePointerDown,
+                onPointerMove: _handlePointerMove,
+                onPointerUp: _handlePointerUp,
+                onPointerCancel: _handlePointerCancel,
+                onPointerSignal: _handlePointerSignal,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    widget.textureId == null
+                        ? Center(
+                            child: Text(
+                              'Preparing real viewport...',
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(
+                                    color: shellPalette.overlayMutedText,
+                                  ),
+                            ),
+                          )
+                        : Texture(textureId: widget.textureId!),
+                    if (widget.overlay != null)
+                      ExcludeSemantics(
+                        // This overlay is decorative HUD/gizmo chrome above the
+                        // native texture viewport. Keep it out of the desktop
+                        // accessibility tree so rapid frame/hover updates do not
+                        // churn semantics for non-interactive content.
+                        child: IgnorePointer(child: widget.overlay!),
+                      ),
+                    if (widget.controlsOverlay != null)
+                      widget.controlsOverlay!,
+                  ],
                 ),
               ),
             ),
@@ -511,21 +504,5 @@ class _ViewportSurfaceState extends State<ViewportSurface> {
         );
       },
     );
-  }
-
-  Size _containedViewportSize(Size availableSize) {
-    if (availableSize.width <= 0 || availableSize.height <= 0) {
-      return const Size(1, 1);
-    }
-
-    var viewportWidth = availableSize.width;
-    var viewportHeight = viewportWidth / _viewportAspectRatio;
-
-    if (viewportHeight > availableSize.height) {
-      viewportHeight = availableSize.height;
-      viewportWidth = viewportHeight * _viewportAspectRatio;
-    }
-
-    return Size(viewportWidth, viewportHeight);
   }
 }

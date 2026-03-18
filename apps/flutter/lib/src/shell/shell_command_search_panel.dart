@@ -6,11 +6,17 @@ class ShellCommandSearchPanel extends StatefulWidget {
   const ShellCommandSearchPanel({
     super.key,
     required this.commands,
+    required this.currentWorkspaceId,
+    required this.favoriteCommandIds,
     required this.onExecuteCommand,
+    required this.onToggleFavorite,
   });
 
   final List<AppCommandSnapshot> commands;
+  final String currentWorkspaceId;
+  final List<String> favoriteCommandIds;
   final ValueChanged<String> onExecuteCommand;
+  final ValueChanged<String> onToggleFavorite;
 
   @override
   State<ShellCommandSearchPanel> createState() => _ShellCommandSearchPanelState();
@@ -38,8 +44,8 @@ class _ShellCommandSearchPanelState extends State<ShellCommandSearchPanel> {
     }).toList(growable: false);
 
     return SizedBox(
-      width: 720,
-      height: 520,
+      width: 760,
+      height: 560,
       child: Padding(
         padding: const EdgeInsets.all(ShellTokens.panelPadding),
         child: Column(
@@ -51,7 +57,7 @@ class _ShellCommandSearchPanelState extends State<ShellCommandSearchPanel> {
             ),
             const SizedBox(height: ShellTokens.compactGap),
             Text(
-              'Search the backend-owned command registry and run the next action directly.',
+              'Search commands, run them directly, or pin them into the current workspace dock.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: ShellTokens.controlGap),
@@ -77,9 +83,17 @@ class _ShellCommandSearchPanelState extends State<ShellCommandSearchPanel> {
                           const SizedBox(height: ShellTokens.compactGap),
                       itemBuilder: (context, index) {
                         final command = filteredCommands[index];
+                        final isFavorite = widget.favoriteCommandIds.contains(
+                          command.id,
+                        );
+                        final canFavorite = command.workspaceIds.contains(
+                          widget.currentWorkspaceId,
+                        );
+
                         return ListTile(
                           key: ValueKey('command-search-item-${command.id}'),
-                          tileColor: Theme.of(context).colorScheme.surfaceContainerLow,
+                          tileColor:
+                              Theme.of(context).colorScheme.surfaceContainerLow,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(
                               ShellTokens.surfaceRadius,
@@ -87,10 +101,35 @@ class _ShellCommandSearchPanelState extends State<ShellCommandSearchPanel> {
                           ),
                           enabled: command.enabled,
                           title: Text(command.label),
-                          subtitle: Text(command.category),
-                          trailing: command.shortcutLabel == null
-                              ? null
-                              : Text(command.shortcutLabel!),
+                          subtitle: Text(
+                            '${command.category} • ${command.workspaceIds.join(', ')}',
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (command.shortcutLabel != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 6),
+                                  child: Text(command.shortcutLabel!),
+                                ),
+                              IconButton(
+                                tooltip: canFavorite
+                                    ? (isFavorite
+                                          ? 'Remove from favorites'
+                                          : 'Pin to favorites')
+                                    : 'Not available in this workspace',
+                                onPressed: canFavorite
+                                    ? () {
+                                        widget.onToggleFavorite(command.id);
+                                        setState(() {});
+                                      }
+                                    : null,
+                                icon: Icon(
+                                  isFavorite ? Icons.star : Icons.star_border,
+                                ),
+                              ),
+                            ],
+                          ),
                           onTap: command.enabled
                               ? () {
                                   widget.onExecuteCommand(command.id);

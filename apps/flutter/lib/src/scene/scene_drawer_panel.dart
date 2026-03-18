@@ -17,6 +17,8 @@ class SceneDrawerPanel extends StatelessWidget {
     required this.onToggleNodeSelection,
     required this.onToggleNodeVisibility,
     required this.onToggleNodeLock,
+    this.embedded = false,
+    this.showHeader = true,
   });
 
   final List<AppSceneTreeNodeSnapshot> roots;
@@ -29,6 +31,8 @@ class SceneDrawerPanel extends StatelessWidget {
   final ValueChanged<BigInt> onToggleNodeSelection;
   final ValueChanged<BigInt> onToggleNodeVisibility;
   final ValueChanged<BigInt> onToggleNodeLock;
+  final bool embedded;
+  final bool showHeader;
 
   @override
   Widget build(BuildContext context) {
@@ -40,20 +44,21 @@ class SceneDrawerPanel extends StatelessWidget {
               .whereType<AppSceneTreeNodeSnapshot>()
               .toList(growable: false);
 
-    return ShellPanelSurface(
-      child: Column(
+    final content = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Scene Drawer',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: ShellTokens.compactGap),
-          Text(
-            'Search the scene and use ctrl-click or long-press to build a multi-selection.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: ShellTokens.controlGap),
+          if (showHeader) ...[
+            Text(
+              'Scene Drawer',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: ShellTokens.compactGap),
+            Text(
+              'Search the scene and use ctrl-click or long-press to build a multi-selection.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: ShellTokens.controlGap),
+          ],
           TextField(
             key: const ValueKey('scene-drawer-search-field'),
             enabled: enabled,
@@ -80,8 +85,13 @@ class SceneDrawerPanel extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
+      );
+
+    if (embedded) {
+      return content;
+    }
+
+    return ShellPanelSurface(child: content);
   }
 
   AppSceneTreeNodeSnapshot? _filterNode(

@@ -38,20 +38,18 @@ class ShellWorkspaceBar extends StatelessWidget {
     return DecoratedBox(
       decoration: ShellSurfaceStyles.commandStrip(context),
       child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: ShellTokens.panelPadding,
-          vertical: 14,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
         child: Row(
           children: [
             Expanded(
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('SDF Modeler', style: theme.textTheme.titleLarge),
-                  const SizedBox(height: 4),
+                  Text('SDF Modeler', style: theme.textTheme.titleMedium),
+                  const SizedBox(height: 2),
                   Text(
-                    '$currentFileName  •  $saveStatus',
+                    '$currentFileName • $saveStatus',
                     style: theme.textTheme.bodySmall,
                   ),
                 ],
@@ -68,7 +66,7 @@ class ShellWorkspaceBar extends StatelessWidget {
                       ButtonSegment<String>(
                         value: 'blockout',
                         icon: Icon(Icons.category_outlined),
-                        label: Text('Blockout'),
+                        label: Text('Block'),
                       ),
                       ButtonSegment<String>(
                         value: 'sculpt',
@@ -78,7 +76,7 @@ class ShellWorkspaceBar extends StatelessWidget {
                       ButtonSegment<String>(
                         value: 'lookdev',
                         icon: Icon(Icons.light_mode_outlined),
-                        label: Text('Lookdev'),
+                        label: Text('Look'),
                       ),
                       ButtonSegment<String>(
                         value: 'review',
@@ -106,11 +104,11 @@ class ShellWorkspaceBar extends StatelessWidget {
                 alignment: Alignment.centerRight,
                 child: Wrap(
                   crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: ShellTokens.controlGap,
+                  spacing: 10,
                   runSpacing: ShellTokens.compactGap,
                   children: [
                     ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 260),
+                      constraints: const BoxConstraints(maxWidth: 220),
                       child: Text(
                         selectionContext.headline,
                         maxLines: 1,
@@ -125,7 +123,7 @@ class ShellWorkspaceBar extends StatelessWidget {
                         key: const ValueKey('shell-command-search-button'),
                         onPressed: enabled ? onOpenCommandSearch : null,
                         icon: const Icon(Icons.search),
-                        label: const Text('Commands'),
+                        label: const Text('Search'),
                       ),
                     ),
                     IconButton(

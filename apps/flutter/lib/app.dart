@@ -19,12 +19,10 @@ import 'package:sdf_modeler_flutter/src/shell/shell_command_search_panel.dart';
 import 'package:sdf_modeler_flutter/src/settings/settings_panel.dart';
 import 'package:sdf_modeler_flutter/src/session/document_session_panel.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_command_strip.dart';
-import 'package:sdf_modeler_flutter/src/shell/shell_context_shelf.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_contract.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_panel_surface.dart';
 import 'package:sdf_modeler_flutter/src/shell/shell_theme.dart';
-import 'package:sdf_modeler_flutter/src/shell/shell_tool_rail.dart';
-import 'package:sdf_modeler_flutter/src/shell/shell_workspace_bar.dart';
+import 'package:sdf_modeler_flutter/src/shell/shell_viewport_first_frame.dart';
 import 'package:sdf_modeler_flutter/src/texture/texture_bridge.dart';
 import 'package:sdf_modeler_flutter/src/texture/texture_viewport_event.dart';
 import 'package:sdf_modeler_flutter/src/texture/texture_viewport_feedback.dart';
@@ -205,6 +203,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
       ValueNotifier<AppSceneSnapshot?>(null);
   final ValueNotifier<_ViewportOverlayModel> _viewportOverlayNotifier =
       ValueNotifier<_ViewportOverlayModel>(const _ViewportOverlayModel());
+  final ValueNotifier<int> _quickWheelRequestNotifier = ValueNotifier<int>(0);
   late final ViewportTransformGizmoController _viewportTransformGizmoController;
   int? _textureId;
   StreamSubscription<TextureViewportEvent>? _textureEventSubscription;
@@ -861,12 +860,39 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     await showDialog<void>(
       context: context,
       builder: (context) {
+        final favoriteCommandIds =
+            snapshot.settings.shellPreferences.favoriteCommandIdsByWorkspace[snapshot.workspace.id] ??
+                const <String>[];
         return Dialog(
           insetPadding: const EdgeInsets.all(24),
           child: ShellCommandSearchPanel(
             commands: snapshot.commands,
+            currentWorkspaceId: snapshot.workspace.id,
+            favoriteCommandIds: favoriteCommandIds,
             onExecuteCommand: (commandId) =>
                 unawaited(_executeCommand(commandId)),
+            onToggleFavorite: (commandId) => unawaited(
+              _setShellPreferences(
+                AppShellPreferencesUpdate(
+                  favoriteCommandIdsByWorkspace: snapshot
+                      .settings
+                      .shellPreferences
+                      .favoriteCommandIdsByWorkspace
+                      .map(
+                        (workspaceId, commandIds) => MapEntry(
+                          workspaceId,
+                          workspaceId == snapshot.workspace.id
+                              ? [
+                                  for (final value in commandIds)
+                                    if (value != commandId) value,
+                                  if (!commandIds.contains(commandId)) commandId,
+                                ]
+                              : List<String>.from(commandIds),
+                        ),
+                      ),
+                ),
+              ),
+            ),
           ),
         );
       },
@@ -880,6 +906,10 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
       return;
     }
     _openCommandSearchDialog();
+  }
+
+  void _requestQuickWheel() {
+    _quickWheelRequestNotifier.value++;
   }
 
   KeyEventResult _handleShortcutKeyEvent(FocusNode node, KeyEvent event) {
@@ -898,6 +928,15 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
 
     final actionId = _matchingShortcutActionId(event, snapshot);
     if (actionId == null) {
+      final keyboard = HardwareKeyboard.instance;
+      if (!keyboard.isControlPressed &&
+          !keyboard.isAltPressed &&
+          !keyboard.isShiftPressed &&
+          !keyboard.isMetaPressed &&
+          event.logicalKey == LogicalKeyboardKey.keyQ) {
+        _requestQuickWheel();
+        return KeyEventResult.handled;
+      }
       return KeyEventResult.ignored;
     }
 
@@ -1647,6 +1686,13 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
   Future<void> _setSettingsInteger(String fieldId, int value) {
     return _runSceneCommand(
       () => setSettingsInteger(fieldId: fieldId, value: value),
+    );
+  }
+
+  Future<void> _setShellPreferences(AppShellPreferencesUpdate update) {
+    return _runSceneCommand(
+      () => setShellPreferences(update: update),
+      requestNativeFrame: false,
     );
   }
 
@@ -2596,6 +2642,7 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     if (activeTextureId != null) {
       unawaited(TextureBridge.instance.disposeTexture(activeTextureId));
     }
+    _quickWheelRequestNotifier.dispose();
     super.dispose();
   }
 
@@ -2610,13 +2657,103 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
     );
     const defaultSelectionContext = AppSelectionContextSnapshot(
       headline: 'Blockout workspace',
-      detail: 'Choose a shape or use the tool rail to start blocking out.',
+      detail: 'Choose a shape or use the bottom dock to start blocking out.',
       selectionCount: 0,
       selectionKindId: 'none',
       selectionKindLabel: 'Nothing selected',
       workflowStatusId: 'none',
       workflowStatusLabel: 'No selection',
       quickActions: <AppQuickActionSnapshot>[],
+    );
+    const defaultShellPreferences = AppShellPreferencesSnapshot(
+      leadingEdgeSide: 'left',
+      desktopScenePinned: false,
+      desktopPropertiesPinned: false,
+      favoriteCommandIdsByWorkspace: <String, List<String>>{
+        'blockout': <String>[
+          'add_sphere',
+          'add_box',
+          'frame_all',
+          'focus_selected',
+        ],
+        'sculpt': <String>[
+          'resume_sculpting_selected',
+          'stop_sculpting',
+          'focus_selected',
+          'undo',
+        ],
+        'lookdev': <String>[
+          'create_light_point',
+          'frame_all',
+          'toggle_projection',
+          'undo',
+        ],
+        'review': <String>[
+          'frame_all',
+          'focus_selected',
+          'toggle_projection',
+          'redo',
+        ],
+      },
+      preferredDrawerTab: 'scene',
+      quickWheelHintDismissed: false,
+    );
+    const defaultSettings = AppSettingsSnapshot(
+      showFpsOverlay: true,
+      showNodeLabels: false,
+      showBoundingBox: true,
+      showLightGizmos: true,
+      autoSaveEnabled: true,
+      autoSaveIntervalSecs: 120,
+      maxExportResolution: 2048,
+      maxSculptResolution: 320,
+      cameraBookmarks: <AppCameraBookmarkSnapshot>[],
+      shellPreferences: defaultShellPreferences,
+      keyOptions: <AppKeyOptionSnapshot>[],
+      keybindings: <AppKeybindingSnapshot>[],
+    );
+    const defaultRenderSettings = AppRenderSettingsSnapshot(
+      shadingModes: <AppRenderOptionSnapshot>[
+        AppRenderOptionSnapshot(id: 'full', label: 'Full'),
+      ],
+      shadingModeId: 'full',
+      shadingModeLabel: 'Full',
+      showGrid: true,
+      shadowsEnabled: false,
+      shadowSteps: 32,
+      aoEnabled: true,
+      aoSamples: 5,
+      aoIntensity: 3.0,
+      marchMaxSteps: 128,
+      sculptFastMode: false,
+      autoReduceSteps: true,
+      interactionRenderScale: 0.5,
+      restRenderScale: 1.0,
+      fogEnabled: false,
+      fogDensity: 0.02,
+      bloomEnabled: false,
+      bloomIntensity: 0.3,
+      gamma: 2.2,
+      tonemappingAces: false,
+      crossSectionAxis: 0,
+      crossSectionPosition: 0.0,
+    );
+    const defaultCamera = AppCameraSnapshot(
+      yaw: 0.7853982,
+      pitch: 0.4,
+      roll: 0.0,
+      distance: 5.0,
+      fovDegrees: 45.0,
+      orthographic: false,
+      target: AppVec3(x: 0.0, y: 0.0, z: 0.0),
+      eye: AppVec3(x: 3.26, y: 1.95, z: 3.26),
+    );
+    const defaultSculpt = AppSculptSnapshot(
+      selected: null,
+      session: null,
+      canResumeSelected: false,
+      canStop: false,
+      maxResolution: 320,
     );
 
     return Focus(
@@ -2640,6 +2777,11 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                     final workspace = snapshot?.workspace ?? defaultWorkspace;
                     final selectionContext =
                         snapshot?.selectionContext ?? defaultSelectionContext;
+                    final settings = snapshot?.settings ?? defaultSettings;
+                    final renderSettings =
+                        snapshot?.render ?? defaultRenderSettings;
+                    final camera = snapshot?.camera ?? defaultCamera;
+                    final sculpt = snapshot?.sculpt ?? defaultSculpt;
                     final selectedNodeIds = snapshot == null
                         ? <BigInt>{}
                         : snapshot.selectedNodeIds.toSet();
@@ -2665,6 +2807,8 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                       onToggleNodeLock: (nodeId) => unawaited(
                         _runSceneCommand(() => toggleNodeLock(nodeId: nodeId)),
                       ),
+                      embedded: true,
+                      showHeader: false,
                     );
 
                     final inspectorPanel = _buildInspectorPanel(
@@ -2672,115 +2816,48 @@ class _BridgeStatusPageState extends State<BridgeStatusPage> {
                       showSceneDrawerSection: false,
                     );
 
-                    final shellContent = shellLayout.useSidePanel
-                        ? Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              const SizedBox(width: 0),
-                              ShellToolRail(
-                                currentWorkspaceId: workspace.id,
-                                enabled: !_commandInFlight,
-                                onSelectWorkspace: (workspaceId) =>
-                                    unawaited(_setWorkspace(workspaceId)),
-                                onExecuteCommand: (commandId) =>
-                                    unawaited(_executeCommand(commandId)),
-                                onOpenCommandSearch: _openCommandPanel,
-                              ),
-                              SizedBox(width: shellLayout.panelGap),
-                              Expanded(
-                                flex: 5,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                  children: [
-                                    Expanded(child: viewportCard),
-                                    SizedBox(height: shellLayout.panelGap),
-                                    ShellContextShelf(
-                                      workspace: workspace,
-                                      selectionContext: selectionContext,
-                                      enabled: !_commandInFlight,
-                                      onExecuteCommand: (commandId) =>
-                                          unawaited(_executeCommand(commandId)),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              SizedBox(width: shellLayout.panelGap),
-                              SizedBox(
-                                width: shellLayout.inspectorPanelExtent,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                  children: [
-                                    Expanded(flex: 4, child: sceneDrawer),
-                                    SizedBox(height: shellLayout.panelGap),
-                                    Expanded(flex: 5, child: inspectorPanel),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          )
-                        : Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Expanded(
-                                flex: 6,
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                  children: [
-                                    ShellToolRail(
-                                      currentWorkspaceId: workspace.id,
-                                      enabled: !_commandInFlight,
-                                      onSelectWorkspace: (workspaceId) =>
-                                          unawaited(_setWorkspace(workspaceId)),
-                                      onExecuteCommand: (commandId) =>
-                                          unawaited(_executeCommand(commandId)),
-                                      onOpenCommandSearch: _openCommandPanel,
-                                    ),
-                                    SizedBox(width: shellLayout.panelGap),
-                                    Expanded(child: viewportCard),
-                                  ],
-                                ),
-                              ),
-                              SizedBox(height: shellLayout.panelGap),
-                              ShellContextShelf(
-                                workspace: workspace,
-                                selectionContext: selectionContext,
-                                enabled: !_commandInFlight,
-                                onExecuteCommand: (commandId) =>
-                                    unawaited(_executeCommand(commandId)),
-                              ),
-                              SizedBox(height: shellLayout.panelGap),
-                              Expanded(
-                                flex: 5,
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                  children: [
-                                    Expanded(child: sceneDrawer),
-                                    SizedBox(width: shellLayout.panelGap),
-                                    Expanded(child: inspectorPanel),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          );
-
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        ShellWorkspaceBar(
-                          workspace: workspace,
-                          selectionContext: selectionContext,
-                          document: snapshot?.document,
-                          history: snapshot?.history,
-                          enabled: !_commandInFlight,
-                          onSelectWorkspace: (workspaceId) =>
-                              unawaited(_setWorkspace(workspaceId)),
-                          onOpenCommandSearch: _openCommandPanel,
-                          onUndo: () => unawaited(_runSceneCommand(undo)),
-                          onRedo: () => unawaited(_runSceneCommand(redo)),
-                        ),
-                        SizedBox(height: shellLayout.panelGap),
-                        Expanded(child: shellContent),
-                      ],
+                    return ShellViewportFirstFrame(
+                      shellLayout: shellLayout,
+                      viewport: viewportCard,
+                      workspace: workspace,
+                      selectionContext: selectionContext,
+                      document: snapshot?.document,
+                      history: snapshot?.history,
+                      settings: settings,
+                      renderSettings: renderSettings,
+                      camera: camera,
+                      sculpt: sculpt,
+                      commands: snapshot?.commands ?? const <AppCommandSnapshot>[],
+                      sceneDrawer: sceneDrawer,
+                      propertiesPanel: inspectorPanel,
+                      quickWheelRequestListenable: _quickWheelRequestNotifier,
+                      enabled: !_commandInFlight,
+                      adaptiveInteractionResolutionEnabled:
+                          _adaptiveInteractionResolutionEnabled,
+                      onSelectWorkspace: (workspaceId) =>
+                          unawaited(_setWorkspace(workspaceId)),
+                      onExecuteCommand: (commandId) =>
+                          unawaited(_executeCommand(commandId)),
+                      onOpenCommandSearch: _openCommandPanel,
+                      onUpdateShellPreferences: (update) =>
+                          unawaited(_setShellPreferences(update)),
+                      onToggleAdaptiveInteractionResolution:
+                          _toggleAdaptiveInteractionResolution,
+                      onSetRenderShadingMode: (modeId) =>
+                          unawaited(_setRenderShadingMode(modeId)),
+                      onFrameAll: () => unawaited(_runSceneCommand(frameAll)),
+                      onFocusSelected: () =>
+                          unawaited(_runSceneCommand(focusSelected)),
+                      onToggleProjection: () =>
+                          unawaited(_runSceneCommand(toggleOrthographic)),
+                      onSetSculptBrushMode: (modeId) =>
+                          unawaited(_setSculptBrushMode(modeId)),
+                      onSetSculptBrushRadius: (radius) =>
+                          unawaited(_setSculptBrushRadius(radius)),
+                      onSetSculptBrushStrength: (strength) =>
+                          unawaited(_setSculptBrushStrength(strength)),
+                      onSetSculptSymmetryAxis: (axisId) =>
+                          unawaited(_setSculptSymmetryAxis(axisId)),
                     );
                   },
                 );

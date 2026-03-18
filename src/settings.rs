@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 use crate::keymap::KeymapConfig;
@@ -7,6 +9,86 @@ pub enum BackgroundMode {
     #[default]
     SkyGradient,
     SolidColor,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum LeadingEdgeSide {
+    #[default]
+    Left,
+    Right,
+}
+
+impl LeadingEdgeSide {
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Left => "left",
+            Self::Right => "right",
+        }
+    }
+
+    pub fn from_id(side_id: &str) -> Option<Self> {
+        Some(match side_id {
+            "left" => Self::Left,
+            "right" => Self::Right,
+            _ => return None,
+        })
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum PreferredDrawerTab {
+    #[default]
+    Scene,
+    Layers,
+    Sets,
+}
+
+impl PreferredDrawerTab {
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::Scene => "scene",
+            Self::Layers => "layers",
+            Self::Sets => "sets",
+        }
+    }
+
+    pub fn from_id(tab_id: &str) -> Option<Self> {
+        Some(match tab_id {
+            "scene" => Self::Scene,
+            "layers" => Self::Layers,
+            "sets" => Self::Sets,
+            _ => return None,
+        })
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
+pub struct ShellPreferences {
+    #[serde(default)]
+    pub leading_edge_side: LeadingEdgeSide,
+    #[serde(default)]
+    pub desktop_scene_pinned: bool,
+    #[serde(default)]
+    pub desktop_properties_pinned: bool,
+    #[serde(default = "default_favorite_command_ids_by_workspace")]
+    pub favorite_command_ids_by_workspace: HashMap<String, Vec<String>>,
+    #[serde(default)]
+    pub preferred_drawer_tab: PreferredDrawerTab,
+    #[serde(default)]
+    pub quick_wheel_hint_dismissed: bool,
+}
+
+impl Default for ShellPreferences {
+    fn default() -> Self {
+        Self {
+            leading_edge_side: LeadingEdgeSide::Left,
+            desktop_scene_pinned: false,
+            desktop_properties_pinned: false,
+            favorite_command_ids_by_workspace: default_favorite_command_ids_by_workspace(),
+            preferred_drawer_tab: PreferredDrawerTab::Scene,
+            quick_wheel_hint_dismissed: false,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -193,6 +275,8 @@ pub struct Settings {
     #[serde(default = "default_export_presets")]
     pub export_presets: Vec<ExportPreset>,
     #[serde(default)]
+    pub shell: ShellPreferences,
+    #[serde(default)]
     pub keymap: KeymapConfig,
     #[serde(default = "default_true")]
     pub last_clean_exit: bool,
@@ -215,6 +299,7 @@ impl Default for Settings {
             snap: SnapConfig::default(),
             bookmarks: default_bookmarks(),
             export_presets: default_export_presets(),
+            shell: ShellPreferences::default(),
             keymap: KeymapConfig::default(),
             last_clean_exit: true,
         }
@@ -551,6 +636,47 @@ fn default_cross_section_axis() -> u8 {
 }
 fn default_bookmarks() -> Vec<Option<CameraBookmark>> {
     vec![None; 9]
+}
+
+fn default_favorite_command_ids_by_workspace() -> HashMap<String, Vec<String>> {
+    HashMap::from([
+        (
+            "blockout".to_string(),
+            vec![
+                "add_sphere".to_string(),
+                "add_box".to_string(),
+                "frame_all".to_string(),
+                "focus_selected".to_string(),
+            ],
+        ),
+        (
+            "sculpt".to_string(),
+            vec![
+                "resume_sculpting_selected".to_string(),
+                "stop_sculpting".to_string(),
+                "focus_selected".to_string(),
+                "undo".to_string(),
+            ],
+        ),
+        (
+            "lookdev".to_string(),
+            vec![
+                "create_light_point".to_string(),
+                "frame_all".to_string(),
+                "toggle_projection".to_string(),
+                "undo".to_string(),
+            ],
+        ),
+        (
+            "review".to_string(),
+            vec![
+                "frame_all".to_string(),
+                "focus_selected".to_string(),
+                "toggle_projection".to_string(),
+                "redo".to_string(),
+            ],
+        ),
+    ])
 }
 
 impl Default for RenderConfig {

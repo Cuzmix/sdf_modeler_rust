@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -684641965;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1253227830;
 
 // Section: executor
 
@@ -3827,6 +3827,38 @@ fn wire__crate__api__simple__set_settings_toggle_impl(
         },
     )
 }
+fn wire__crate__api__simple__set_shell_preferences_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_shell_preferences",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_update =
+                <crate::api::mirrors::AppShellPreferencesUpdate>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok =
+                    Result::<_, ()>::Ok(crate::api::simple::set_shell_preferences(api_update))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
 fn wire__crate__api__simple__set_workspace_impl(
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -4218,6 +4250,14 @@ fn wire__crate__api__simple__zoom_camera_impl(
 }
 
 // Section: dart2rust
+
+impl SseDecode for std::collections::HashMap<String, Vec<String>> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <Vec<(String, Vec<String>)>>::sse_decode(deserializer);
+        return inner.into_iter().collect();
+    }
+}
 
 impl SseDecode for String {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -5098,6 +5138,8 @@ impl SseDecode for crate::api::mirrors::AppSettingsSnapshot {
         let mut var_maxSculptResolution = <u32>::sse_decode(deserializer);
         let mut var_cameraBookmarks =
             <Vec<crate::api::mirrors::AppCameraBookmarkSnapshot>>::sse_decode(deserializer);
+        let mut var_shellPreferences =
+            <crate::api::mirrors::AppShellPreferencesSnapshot>::sse_decode(deserializer);
         let mut var_keyOptions =
             <Vec<crate::api::mirrors::AppKeyOptionSnapshot>>::sse_decode(deserializer);
         let mut var_keybindings =
@@ -5112,8 +5154,51 @@ impl SseDecode for crate::api::mirrors::AppSettingsSnapshot {
             max_export_resolution: var_maxExportResolution,
             max_sculpt_resolution: var_maxSculptResolution,
             camera_bookmarks: var_cameraBookmarks,
+            shell_preferences: var_shellPreferences,
             key_options: var_keyOptions,
             keybindings: var_keybindings,
+        };
+    }
+}
+
+impl SseDecode for crate::api::mirrors::AppShellPreferencesSnapshot {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_leadingEdgeSide = <String>::sse_decode(deserializer);
+        let mut var_desktopScenePinned = <bool>::sse_decode(deserializer);
+        let mut var_desktopPropertiesPinned = <bool>::sse_decode(deserializer);
+        let mut var_favoriteCommandIdsByWorkspace =
+            <std::collections::HashMap<String, Vec<String>>>::sse_decode(deserializer);
+        let mut var_preferredDrawerTab = <String>::sse_decode(deserializer);
+        let mut var_quickWheelHintDismissed = <bool>::sse_decode(deserializer);
+        return crate::api::mirrors::AppShellPreferencesSnapshot {
+            leading_edge_side: var_leadingEdgeSide,
+            desktop_scene_pinned: var_desktopScenePinned,
+            desktop_properties_pinned: var_desktopPropertiesPinned,
+            favorite_command_ids_by_workspace: var_favoriteCommandIdsByWorkspace,
+            preferred_drawer_tab: var_preferredDrawerTab,
+            quick_wheel_hint_dismissed: var_quickWheelHintDismissed,
+        };
+    }
+}
+
+impl SseDecode for crate::api::mirrors::AppShellPreferencesUpdate {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_leadingEdgeSide = <Option<String>>::sse_decode(deserializer);
+        let mut var_desktopScenePinned = <Option<bool>>::sse_decode(deserializer);
+        let mut var_desktopPropertiesPinned = <Option<bool>>::sse_decode(deserializer);
+        let mut var_favoriteCommandIdsByWorkspace =
+            <Option<std::collections::HashMap<String, Vec<String>>>>::sse_decode(deserializer);
+        let mut var_preferredDrawerTab = <Option<String>>::sse_decode(deserializer);
+        let mut var_quickWheelHintDismissed = <Option<bool>>::sse_decode(deserializer);
+        return crate::api::mirrors::AppShellPreferencesUpdate {
+            leading_edge_side: var_leadingEdgeSide,
+            desktop_scene_pinned: var_desktopScenePinned,
+            desktop_properties_pinned: var_desktopPropertiesPinned,
+            favorite_command_ids_by_workspace: var_favoriteCommandIdsByWorkspace,
+            preferred_drawer_tab: var_preferredDrawerTab,
+            quick_wheel_hint_dismissed: var_quickWheelHintDismissed,
         };
     }
 }
@@ -5495,6 +5580,31 @@ impl SseDecode for Vec<u8> {
     }
 }
 
+impl SseDecode for Vec<(String, Vec<String>)> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<(String, Vec<String>)>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Option<std::collections::HashMap<String, Vec<String>>> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(
+                <std::collections::HashMap<String, Vec<String>>>::sse_decode(deserializer),
+            );
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for Option<String> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -5660,6 +5770,17 @@ impl SseDecode for Option<crate::api::mirrors::AppVec3> {
     }
 }
 
+impl SseDecode for Option<bool> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<bool>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for Option<f32> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -5690,6 +5811,15 @@ impl SseDecode for Option<u64> {
         } else {
             return None;
         }
+    }
+}
+
+impl SseDecode for (String, Vec<String>) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_field0 = <String>::sse_decode(deserializer);
+        let mut var_field1 = <Vec<String>>::sse_decode(deserializer);
+        return (var_field0, var_field1);
     }
 }
 
@@ -6005,19 +6135,20 @@ fn pde_ffi_dispatcher_sync_impl(
         }
         118 => wire__crate__api__simple__set_settings_integer_impl(ptr, rust_vec_len, data_len),
         119 => wire__crate__api__simple__set_settings_toggle_impl(ptr, rust_vec_len, data_len),
-        120 => wire__crate__api__simple__set_workspace_impl(ptr, rust_vec_len, data_len),
-        121 => wire__crate__api__simple__start_export_impl(ptr, rust_vec_len, data_len),
-        122 => wire__crate__api__simple__start_import_impl(ptr, rust_vec_len, data_len),
-        123 => wire__crate__api__simple__start_sculpt_convert_impl(ptr, rust_vec_len, data_len),
-        124 => wire__crate__api__simple__stop_sculpting_impl(ptr, rust_vec_len, data_len),
-        125 => wire__crate__api__simple__toggle_manipulator_space_impl(ptr, rust_vec_len, data_len),
-        126 => wire__crate__api__simple__toggle_node_lock_impl(ptr, rust_vec_len, data_len),
-        127 => wire__crate__api__simple__toggle_node_selection_impl(ptr, rust_vec_len, data_len),
-        128 => wire__crate__api__simple__toggle_node_visibility_impl(ptr, rust_vec_len, data_len),
-        129 => wire__crate__api__simple__toggle_orthographic_impl(ptr, rust_vec_len, data_len),
-        130 => wire__crate__api__simple__undo_impl(ptr, rust_vec_len, data_len),
-        131 => wire__crate__api__simple__workflow_status_impl(ptr, rust_vec_len, data_len),
-        132 => wire__crate__api__simple__zoom_camera_impl(ptr, rust_vec_len, data_len),
+        120 => wire__crate__api__simple__set_shell_preferences_impl(ptr, rust_vec_len, data_len),
+        121 => wire__crate__api__simple__set_workspace_impl(ptr, rust_vec_len, data_len),
+        122 => wire__crate__api__simple__start_export_impl(ptr, rust_vec_len, data_len),
+        123 => wire__crate__api__simple__start_import_impl(ptr, rust_vec_len, data_len),
+        124 => wire__crate__api__simple__start_sculpt_convert_impl(ptr, rust_vec_len, data_len),
+        125 => wire__crate__api__simple__stop_sculpting_impl(ptr, rust_vec_len, data_len),
+        126 => wire__crate__api__simple__toggle_manipulator_space_impl(ptr, rust_vec_len, data_len),
+        127 => wire__crate__api__simple__toggle_node_lock_impl(ptr, rust_vec_len, data_len),
+        128 => wire__crate__api__simple__toggle_node_selection_impl(ptr, rust_vec_len, data_len),
+        129 => wire__crate__api__simple__toggle_node_visibility_impl(ptr, rust_vec_len, data_len),
+        130 => wire__crate__api__simple__toggle_orthographic_impl(ptr, rust_vec_len, data_len),
+        131 => wire__crate__api__simple__undo_impl(ptr, rust_vec_len, data_len),
+        132 => wire__crate__api__simple__workflow_status_impl(ptr, rust_vec_len, data_len),
+        133 => wire__crate__api__simple__zoom_camera_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -7005,6 +7136,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::mirrors::AppSettingsSnapshot 
             self.max_export_resolution.into_into_dart().into_dart(),
             self.max_sculpt_resolution.into_into_dart().into_dart(),
             self.camera_bookmarks.into_into_dart().into_dart(),
+            self.shell_preferences.into_into_dart().into_dart(),
             self.key_options.into_into_dart().into_dart(),
             self.keybindings.into_into_dart().into_dart(),
         ]
@@ -7019,6 +7151,60 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::mirrors::AppSettingsSnapshot>
     for crate::api::mirrors::AppSettingsSnapshot
 {
     fn into_into_dart(self) -> crate::api::mirrors::AppSettingsSnapshot {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::mirrors::AppShellPreferencesSnapshot {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.leading_edge_side.into_into_dart().into_dart(),
+            self.desktop_scene_pinned.into_into_dart().into_dart(),
+            self.desktop_properties_pinned.into_into_dart().into_dart(),
+            self.favorite_command_ids_by_workspace
+                .into_into_dart()
+                .into_dart(),
+            self.preferred_drawer_tab.into_into_dart().into_dart(),
+            self.quick_wheel_hint_dismissed.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::mirrors::AppShellPreferencesSnapshot
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::mirrors::AppShellPreferencesSnapshot>
+    for crate::api::mirrors::AppShellPreferencesSnapshot
+{
+    fn into_into_dart(self) -> crate::api::mirrors::AppShellPreferencesSnapshot {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::mirrors::AppShellPreferencesUpdate {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.leading_edge_side.into_into_dart().into_dart(),
+            self.desktop_scene_pinned.into_into_dart().into_dart(),
+            self.desktop_properties_pinned.into_into_dart().into_dart(),
+            self.favorite_command_ids_by_workspace
+                .into_into_dart()
+                .into_dart(),
+            self.preferred_drawer_tab.into_into_dart().into_dart(),
+            self.quick_wheel_hint_dismissed.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::mirrors::AppShellPreferencesUpdate
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::mirrors::AppShellPreferencesUpdate>
+    for crate::api::mirrors::AppShellPreferencesUpdate
+{
+    fn into_into_dart(self) -> crate::api::mirrors::AppShellPreferencesUpdate {
         self
     }
 }
@@ -7168,6 +7354,13 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::mirrors::AppWorkspaceSnapshot
 {
     fn into_into_dart(self) -> crate::api::mirrors::AppWorkspaceSnapshot {
         self
+    }
+}
+
+impl SseEncode for std::collections::HashMap<String, Vec<String>> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Vec<(String, Vec<String>)>>::sse_encode(self.into_iter().collect(), serializer);
     }
 }
 
@@ -7730,8 +7923,42 @@ impl SseEncode for crate::api::mirrors::AppSettingsSnapshot {
             self.camera_bookmarks,
             serializer,
         );
+        <crate::api::mirrors::AppShellPreferencesSnapshot>::sse_encode(
+            self.shell_preferences,
+            serializer,
+        );
         <Vec<crate::api::mirrors::AppKeyOptionSnapshot>>::sse_encode(self.key_options, serializer);
         <Vec<crate::api::mirrors::AppKeybindingSnapshot>>::sse_encode(self.keybindings, serializer);
+    }
+}
+
+impl SseEncode for crate::api::mirrors::AppShellPreferencesSnapshot {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.leading_edge_side, serializer);
+        <bool>::sse_encode(self.desktop_scene_pinned, serializer);
+        <bool>::sse_encode(self.desktop_properties_pinned, serializer);
+        <std::collections::HashMap<String, Vec<String>>>::sse_encode(
+            self.favorite_command_ids_by_workspace,
+            serializer,
+        );
+        <String>::sse_encode(self.preferred_drawer_tab, serializer);
+        <bool>::sse_encode(self.quick_wheel_hint_dismissed, serializer);
+    }
+}
+
+impl SseEncode for crate::api::mirrors::AppShellPreferencesUpdate {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Option<String>>::sse_encode(self.leading_edge_side, serializer);
+        <Option<bool>>::sse_encode(self.desktop_scene_pinned, serializer);
+        <Option<bool>>::sse_encode(self.desktop_properties_pinned, serializer);
+        <Option<std::collections::HashMap<String, Vec<String>>>>::sse_encode(
+            self.favorite_command_ids_by_workspace,
+            serializer,
+        );
+        <Option<String>>::sse_encode(self.preferred_drawer_tab, serializer);
+        <Option<bool>>::sse_encode(self.quick_wheel_hint_dismissed, serializer);
     }
 }
 
@@ -8005,6 +8232,26 @@ impl SseEncode for Vec<u8> {
     }
 }
 
+impl SseEncode for Vec<(String, Vec<String>)> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <(String, Vec<String>)>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<std::collections::HashMap<String, Vec<String>>> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <std::collections::HashMap<String, Vec<String>>>::sse_encode(value, serializer);
+        }
+    }
+}
+
 impl SseEncode for Option<String> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -8135,6 +8382,16 @@ impl SseEncode for Option<crate::api::mirrors::AppVec3> {
     }
 }
 
+impl SseEncode for Option<bool> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <bool>::sse_encode(value, serializer);
+        }
+    }
+}
+
 impl SseEncode for Option<f32> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -8162,6 +8419,14 @@ impl SseEncode for Option<u64> {
         if let Some(value) = self {
             <u64>::sse_encode(value, serializer);
         }
+    }
+}
+
+impl SseEncode for (String, Vec<String>) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.0, serializer);
+        <Vec<String>>::sse_encode(self.1, serializer);
     }
 }
 

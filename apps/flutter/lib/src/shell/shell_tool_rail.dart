@@ -8,30 +8,42 @@ class ShellToolRail extends StatelessWidget {
     required this.currentWorkspaceId,
     required this.enabled,
     required this.onSelectWorkspace,
-    required this.onExecuteCommand,
-    required this.onOpenCommandSearch,
+    required this.sceneDrawerOpen,
+    required this.onToggleSceneDrawer,
+    required this.onToggleLeadingEdgeSide,
+    required this.leadingEdgeSide,
   });
 
   final String currentWorkspaceId;
   final bool enabled;
   final ValueChanged<String> onSelectWorkspace;
-  final ValueChanged<String> onExecuteCommand;
-  final VoidCallback onOpenCommandSearch;
+  final bool sceneDrawerOpen;
+  final VoidCallback onToggleSceneDrawer;
+  final VoidCallback onToggleLeadingEdgeSide;
+  final String leadingEdgeSide;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 104,
+      width: 80,
       child: ShellPanelSurface(
-        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 10),
+        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
         child: SingleChildScrollView(
           key: const ValueKey('tool-rail-scrollable'),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               _ToolRailButton(
+                tooltip: sceneDrawerOpen ? 'Hide scene drawer' : 'Open scene drawer',
+                label: 'Scene',
+                icon: sceneDrawerOpen ? Icons.inventory_2 : Icons.inventory_2_outlined,
+                selected: sceneDrawerOpen,
+                onPressed: enabled ? onToggleSceneDrawer : null,
+              ),
+              const SizedBox(height: ShellTokens.compactGap),
+              _ToolRailButton(
                 tooltip: 'Blockout workspace',
-                label: 'Blockout',
+                label: 'Block',
                 icon: Icons.category_outlined,
                 selected: currentWorkspaceId == 'blockout',
                 onPressed: enabled ? () => onSelectWorkspace('blockout') : null,
@@ -65,31 +77,12 @@ class ShellToolRail extends StatelessWidget {
                 child: Divider(),
               ),
               _ToolRailButton(
-                tooltip: 'Add sphere',
-                label: 'Sphere',
-                icon: Icons.circle_outlined,
-                onPressed: enabled ? () => onExecuteCommand('add_sphere') : null,
-              ),
-              const SizedBox(height: ShellTokens.compactGap),
-              _ToolRailButton(
-                tooltip: 'Add box',
-                label: 'Box',
-                icon: Icons.crop_square_outlined,
-                onPressed: enabled ? () => onExecuteCommand('add_box') : null,
-              ),
-              const SizedBox(height: ShellTokens.compactGap),
-              _ToolRailButton(
-                tooltip: 'Frame all',
-                label: 'Frame',
-                icon: Icons.center_focus_strong_outlined,
-                onPressed: enabled ? () => onExecuteCommand('frame_all') : null,
-              ),
-              const SizedBox(height: ShellTokens.sectionGap),
-              _ToolRailButton(
-                tooltip: 'Open command search',
-                label: 'Search',
-                icon: Icons.search,
-                onPressed: enabled ? onOpenCommandSearch : null,
+                tooltip: leadingEdgeSide == 'left'
+                    ? 'Mirror shell to the right edge'
+                    : 'Mirror shell to the left edge',
+                label: leadingEdgeSide == 'left' ? 'Right' : 'Left',
+                icon: Icons.swap_horiz,
+                onPressed: enabled ? onToggleLeadingEdgeSide : null,
               ),
             ],
           ),
@@ -120,18 +113,30 @@ class _ToolRailButton extends StatelessWidget {
       message: tooltip,
       child: SizedBox(
         width: double.infinity,
-        child: TextButton.icon(
+        child: TextButton(
           onPressed: onPressed,
-          icon: Icon(icon),
-          label: Text(label),
           style: TextButton.styleFrom(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(ShellTokens.surfaceRadius),
+            ),
             backgroundColor: selected
                 ? Theme.of(context).colorScheme.primaryContainer
                 : Colors.transparent,
             foregroundColor: selected
                 ? Theme.of(context).colorScheme.onPrimaryContainer
                 : Theme.of(context).colorScheme.onSurface,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+          ),
+          child: Column(
+            children: [
+              Icon(icon),
+              const SizedBox(height: 6),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.labelSmall,
+              ),
+            ],
           ),
         ),
       ),

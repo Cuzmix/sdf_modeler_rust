@@ -143,6 +143,10 @@ AppSceneSnapshot setSettingsInteger({
   value: value,
 );
 
+AppSceneSnapshot setShellPreferences({
+  required AppShellPreferencesUpdate update,
+}) => RustLib.instance.api.crateApiSimpleSetShellPreferences(update: update);
+
 AppSceneSnapshot saveCameraBookmark({required int slotIndex}) =>
     RustLib.instance.api.crateApiSimpleSaveCameraBookmark(slotIndex: slotIndex);
 

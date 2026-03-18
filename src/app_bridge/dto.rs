@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -205,6 +207,35 @@ pub struct AppCameraBookmarkSnapshot {
     pub saved: bool,
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct AppShellPreferencesSnapshot {
+    #[serde(default)]
+    pub leading_edge_side: String,
+    pub desktop_scene_pinned: bool,
+    pub desktop_properties_pinned: bool,
+    #[serde(default)]
+    pub favorite_command_ids_by_workspace: HashMap<String, Vec<String>>,
+    #[serde(default)]
+    pub preferred_drawer_tab: String,
+    pub quick_wheel_hint_dismissed: bool,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct AppShellPreferencesUpdate {
+    #[serde(default)]
+    pub leading_edge_side: Option<String>,
+    #[serde(default)]
+    pub desktop_scene_pinned: Option<bool>,
+    #[serde(default)]
+    pub desktop_properties_pinned: Option<bool>,
+    #[serde(default)]
+    pub favorite_command_ids_by_workspace: Option<HashMap<String, Vec<String>>>,
+    #[serde(default)]
+    pub preferred_drawer_tab: Option<String>,
+    #[serde(default)]
+    pub quick_wheel_hint_dismissed: Option<bool>,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AppSettingsSnapshot {
     pub show_fps_overlay: bool,
@@ -216,6 +247,7 @@ pub struct AppSettingsSnapshot {
     pub max_export_resolution: u32,
     pub max_sculpt_resolution: u32,
     pub camera_bookmarks: Vec<AppCameraBookmarkSnapshot>,
+    pub shell_preferences: AppShellPreferencesSnapshot,
     pub key_options: Vec<AppKeyOptionSnapshot>,
     pub keybindings: Vec<AppKeybindingSnapshot>,
 }
