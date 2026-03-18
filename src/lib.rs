@@ -11,7 +11,6 @@ mod material_preset;
 mod mesh_import;
 mod native_paths;
 mod sculpt;
-mod sculpt_history;
 mod settings;
 mod ui;
 

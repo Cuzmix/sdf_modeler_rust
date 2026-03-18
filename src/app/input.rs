@@ -129,8 +129,6 @@ impl SdfApp {
 
     /// Map an ActionBinding to the corresponding app action or direct state mutation.
     fn dispatch_binding(&mut self, binding: ActionBinding, actions: &mut ActionSink) {
-        let is_sculpt = self.doc.sculpt_state.is_active();
-
         match binding {
             // --- Direct action mappings ---
             ActionBinding::ToggleHelp => actions.push(Action::ToggleHelp),
@@ -174,20 +172,8 @@ impl SdfApp {
             ActionBinding::ShowExportDialog => actions.push(Action::ShowExportDialog),
 
             // --- Context-sensitive actions ---
-            ActionBinding::Undo => {
-                if is_sculpt {
-                    actions.push(Action::SculptUndo);
-                } else {
-                    actions.push(Action::Undo);
-                }
-            }
-            ActionBinding::Redo => {
-                if is_sculpt {
-                    actions.push(Action::SculptRedo);
-                } else {
-                    actions.push(Action::Redo);
-                }
-            }
+            ActionBinding::Undo => actions.push(Action::Undo),
+            ActionBinding::Redo => actions.push(Action::Redo),
             ActionBinding::ShowQuickToolbar => {
                 self.ui.show_quick_toolbar = !self.ui.show_quick_toolbar;
             }

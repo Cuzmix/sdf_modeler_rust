@@ -54,7 +54,7 @@ impl SdfApp {
         // Detect sculpt drag end before the draw phase fills pending picks again.
         if self.async_state.sculpt_dragging && !frame_input.pointer_primary_down {
             if self.async_state.last_sculpt_hit.is_some() {
-                self.doc.sculpt_history.end_stroke();
+                self.doc.history.end_sculpt_stroke(&self.doc.scene);
             }
             self.async_state.last_sculpt_hit = None;
             self.async_state.lazy_brush_pos = None;
@@ -207,20 +207,21 @@ impl SdfApp {
         }
         self.perf.timings.composite_dispatch_s = composite_start.elapsed().as_secs_f64();
 
+        let is_anything_dragged = frame_input.is_dragging_ui || self.async_state.sculpt_dragging;
         self.doc.history.end_frame(
             &self.doc.scene,
             self.ui.node_graph_state.selected,
-            frame_input.is_dragging_ui,
+            is_anything_dragged,
         );
 
-        if frame_input.is_dragging_ui || self.doc.sculpt_state.is_active() {
+        if is_anything_dragged || self.doc.sculpt_state.is_active() {
             self.perf.resolution_upgrade_pending = true;
         } else if self.perf.resolution_upgrade_pending {
             self.perf.resolution_upgrade_pending = false;
             commands.request_repaint = true;
         }
 
-        let needs_repaint = frame_input.is_dragging_ui
+        let needs_repaint = is_anything_dragged
             || camera_animating
             || self.ui.turntable_active
             || self.doc.sculpt_state.is_active()

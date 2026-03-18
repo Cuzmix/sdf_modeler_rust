@@ -378,7 +378,6 @@ impl SdfApp {
                 history: crate::graph::history::History::new(),
                 active_tool: ActiveTool::default(),
                 sculpt_state: SculptState::Inactive,
-                sculpt_history: crate::sculpt_history::SculptHistory::new(),
                 clipboard_node: None,
                 soloed_light: None,
             },

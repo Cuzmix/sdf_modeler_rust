@@ -53,8 +53,31 @@ impl SdfApp {
             ],
         }
     }
-    fn clear_sculpt_runtime_cache(&mut self) {
+    pub(super) fn clear_sculpt_runtime_cache(&mut self) {
         self.async_state.sculpt_runtime_cache = None;
+    }
+
+    fn sculpt_stroke_label(base_mode: &BrushMode, ctrl_held: bool, shift_held: bool) -> &'static str {
+        let effective_mode = if shift_held {
+            BrushMode::Smooth
+        } else if ctrl_held {
+            match base_mode {
+                BrushMode::Add => BrushMode::Carve,
+                BrushMode::Carve => BrushMode::Add,
+                BrushMode::Inflate => BrushMode::Carve,
+                other => other.clone(),
+            }
+        } else {
+            base_mode.clone()
+        };
+        match effective_mode {
+            BrushMode::Add => "Sculpt Add",
+            BrushMode::Carve => "Sculpt Carve",
+            BrushMode::Smooth => "Sculpt Smooth",
+            BrushMode::Flatten => "Sculpt Flatten",
+            BrushMode::Inflate => "Sculpt Inflate",
+            BrushMode::Grab => "Sculpt Grab",
+        }
     }
 
     fn world_to_grid_from_bounds(
@@ -391,15 +414,21 @@ impl SdfApp {
         // Per-stroke undo: snapshot grid data at the start of each stroke
         if self.async_state.last_sculpt_hit.is_none() {
             if let SculptState::Active {
-                node_id: active_id, ..
+                node_id: active_id,
+                ref brush_mode,
+                ..
             } = self.doc.sculpt_state
             {
-                self.doc.sculpt_history.set_node(active_id);
-                if let Some(node) = self.doc.scene.nodes.get(&active_id) {
-                    if let NodeData::Sculpt { ref voxel_grid, .. } = node.data {
-                        self.doc.sculpt_history.begin_stroke(&voxel_grid.data);
-                    }
-                }
+                self.doc.history.begin_sculpt_stroke(
+                    &self.doc.scene,
+                    active_id,
+                    self.ui.node_graph_state.selected,
+                    Self::sculpt_stroke_label(
+                        brush_mode,
+                        self.async_state.sculpt_ctrl_held,
+                        self.async_state.sculpt_shift_held,
+                    ),
+                );
             }
         }
         let active_node_id = match self.doc.sculpt_state {
@@ -450,7 +479,6 @@ impl SdfApp {
                     if matches!(hit_node.data, NodeData::Sculpt { .. }) {
                         // Hit another sculpt node - switch to it directly
                         self.doc.sculpt_state = SculptState::new_active(hit_node_id);
-                        self.doc.sculpt_history.set_node(hit_node_id);
                         self.ui.node_graph_state.select_single(hit_node_id);
                         self.async_state.last_sculpt_hit = None;
                         self.async_state.lazy_brush_pos = None;
@@ -463,7 +491,6 @@ impl SdfApp {
                         {
                             // Switch to the sculpt parent
                             self.doc.sculpt_state = SculptState::new_active(sculpt_id);
-                            self.doc.sculpt_history.set_node(sculpt_id);
                             self.ui.node_graph_state.select_single(sculpt_id);
                             self.async_state.last_sculpt_hit = None;
                             self.async_state.lazy_brush_pos = None;
@@ -849,7 +876,7 @@ impl SdfApp {
         {
             // End stroke only if a drag was in progress
             if self.async_state.last_sculpt_hit.is_some() {
-                self.doc.sculpt_history.end_stroke();
+                self.doc.history.end_sculpt_stroke(&self.doc.scene);
             }
 
             self.async_state.last_sculpt_hit = None;
@@ -885,6 +912,7 @@ impl SdfApp {
                 // Original behavior: always deactivate sculpt in Select mode
                 if self.doc.sculpt_state.is_active() {
                     self.doc.sculpt_state = SculptState::Inactive;
+                    self.doc.history.discard_pending_sculpt_stroke();
                     self.async_state.last_sculpt_hit = None;
                     self.async_state.lazy_brush_pos = None;
                     self.clear_sculpt_runtime_cache();
@@ -910,9 +938,11 @@ impl SdfApp {
                             self.doc.sculpt_state = SculptState::new_active(id);
                         } else {
                             self.doc.sculpt_state = SculptState::Inactive;
+                            self.doc.history.discard_pending_sculpt_stroke();
                         }
                     } else {
                         self.doc.sculpt_state = SculptState::Inactive;
+                        self.doc.history.discard_pending_sculpt_stroke();
                     }
                     self.async_state.last_sculpt_hit = None;
                     self.async_state.lazy_brush_pos = None;

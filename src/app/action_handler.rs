@@ -2,7 +2,7 @@ use eframe::egui;
 use glam::Vec3;
 
 use crate::desktop_dialogs::FileDialogSelection;
-use crate::graph::history::History;
+use crate::graph::history::{History, RestoreSnapshot, RestoreState};
 use crate::graph::scene::{NodeData, Scene};
 use crate::sculpt::SculptState;
 
@@ -312,93 +312,21 @@ impl SdfApp {
 
                 // ── History ──────────────────────────────────────────
                 Action::Undo => {
-                    if let Some((restored_scene, restored_sel)) = self
+                    if let Some(restored) = self
                         .doc
                         .history
                         .undo(&self.doc.scene, self.ui.node_graph_state.selected)
                     {
-                        self.doc.scene = restored_scene;
-                        if let Some(id) = restored_sel {
-                            self.ui.node_graph_state.select_single(id);
-                        } else {
-                            self.ui.node_graph_state.clear_selection();
-                        }
-                        self.ui.node_graph_state.needs_initial_rebuild = true;
-                        self.ui.isolation_state = None;
-                        self.gpu.buffer_dirty = true;
+                        self.apply_history_restore(restored);
                     }
                 }
                 Action::Redo => {
-                    if let Some((restored_scene, restored_sel)) = self
+                    if let Some(restored) = self
                         .doc
                         .history
                         .redo(&self.doc.scene, self.ui.node_graph_state.selected)
                     {
-                        self.doc.scene = restored_scene;
-                        if let Some(id) = restored_sel {
-                            self.ui.node_graph_state.select_single(id);
-                        } else {
-                            self.ui.node_graph_state.clear_selection();
-                        }
-                        self.ui.node_graph_state.needs_initial_rebuild = true;
-                        self.ui.isolation_state = None;
-                        self.gpu.buffer_dirty = true;
-                    }
-                }
-                Action::SculptUndo => {
-                    if let SculptState::Active { node_id, .. } = self.doc.sculpt_state {
-                        let current_data =
-                            self.doc
-                                .scene
-                                .nodes
-                                .get(&node_id)
-                                .and_then(|n| match &n.data {
-                                    NodeData::Sculpt { voxel_grid, .. } => {
-                                        Some(voxel_grid.data.clone())
-                                    }
-                                    _ => None,
-                                });
-                        if let Some(current) = current_data {
-                            if let Some(restored) = self.doc.sculpt_history.undo(&current) {
-                                if let Some(node) = self.doc.scene.nodes.get_mut(&node_id) {
-                                    if let NodeData::Sculpt {
-                                        ref mut voxel_grid, ..
-                                    } = node.data
-                                    {
-                                        voxel_grid.data = restored;
-                                    }
-                                }
-                                self.gpu.buffer_dirty = true;
-                            }
-                        }
-                    }
-                }
-                Action::SculptRedo => {
-                    if let SculptState::Active { node_id, .. } = self.doc.sculpt_state {
-                        let current_data =
-                            self.doc
-                                .scene
-                                .nodes
-                                .get(&node_id)
-                                .and_then(|n| match &n.data {
-                                    NodeData::Sculpt { voxel_grid, .. } => {
-                                        Some(voxel_grid.data.clone())
-                                    }
-                                    _ => None,
-                                });
-                        if let Some(current) = current_data {
-                            if let Some(restored) = self.doc.sculpt_history.redo(&current) {
-                                if let Some(node) = self.doc.scene.nodes.get_mut(&node_id) {
-                                    if let NodeData::Sculpt {
-                                        ref mut voxel_grid, ..
-                                    } = node.data
-                                    {
-                                        voxel_grid.data = restored;
-                                    }
-                                }
-                                self.gpu.buffer_dirty = true;
-                            }
-                        }
+                        self.apply_history_restore(restored);
                     }
                 }
 
@@ -1114,6 +1042,39 @@ impl SdfApp {
                 }
             }
         }
+    }
+
+    /// Ensure the Brush Settings tab is visible in the dock when sculpt mode activates.
+    fn apply_history_restore(&mut self, restore: RestoreSnapshot) {
+        match restore.state {
+            RestoreState::Scene(scene) => {
+                self.doc.scene = scene;
+            }
+            RestoreState::Sculpt { node_id, voxel_data } => {
+                let Some(node) = self.doc.scene.nodes.get_mut(&node_id) else {
+                    return;
+                };
+                let NodeData::Sculpt { voxel_grid, .. } = &mut node.data else {
+                    return;
+                };
+                voxel_grid.data = voxel_data;
+            }
+        }
+
+        if let Some(id) = restore.selected {
+            self.ui.node_graph_state.select_single(id);
+        } else {
+            self.ui.node_graph_state.clear_selection();
+        }
+        self.ui.node_graph_state.needs_initial_rebuild = true;
+        self.ui.isolation_state = None;
+        self.async_state.last_sculpt_hit = None;
+        self.async_state.lazy_brush_pos = None;
+        self.async_state.hover_world_pos = None;
+        self.async_state.cursor_over_geometry = false;
+        self.async_state.sculpt_dragging = false;
+        self.clear_sculpt_runtime_cache();
+        self.gpu.buffer_dirty = true;
     }
 
     /// Ensure the Brush Settings tab is visible in the dock when sculpt mode activates.

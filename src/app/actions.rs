@@ -74,10 +74,6 @@ pub enum Action {
     // ── History ──────────────────────────────────────────────────────
     Undo,
     Redo,
-    /// Undo one sculpt stroke (only while sculpt is active).
-    SculptUndo,
-    /// Redo one sculpt stroke (only while sculpt is active).
-    SculptRedo,
 
     // ── Camera ───────────────────────────────────────────────────────
     FocusSelected,

@@ -13,7 +13,6 @@ use crate::graph::history::History;
 use crate::graph::scene::{NodeId, Scene};
 use crate::mesh_import::TriMesh;
 use crate::sculpt::{ActiveTool, SculptState};
-use crate::sculpt_history::SculptHistory;
 use crate::ui::dock::Tab;
 use crate::ui::gizmo::{GizmoMode, GizmoSpace, GizmoState};
 use crate::ui::node_graph::NodeGraphState;
@@ -31,7 +30,6 @@ pub struct DocumentState {
     pub history: History,
     pub active_tool: ActiveTool,
     pub sculpt_state: SculptState,
-    pub sculpt_history: SculptHistory,
     pub clipboard_node: Option<NodeId>,
     /// When set, only this Light node contributes to scene lighting (Solo mode).
     pub soloed_light: Option<NodeId>,
