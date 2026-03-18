@@ -1,5 +1,6 @@
 mod app;
 mod compat;
+mod desktop_dialogs;
 mod export;
 pub mod expression;
 mod gpu;
@@ -8,6 +9,7 @@ mod io;
 pub mod keymap;
 mod material_preset;
 mod mesh_import;
+mod native_paths;
 mod sculpt;
 mod sculpt_history;
 mod settings;
@@ -16,14 +18,10 @@ mod ui;
 // ── Native entry point ──────────────────────────────────────────────────────
 
 #[cfg(not(target_arch = "wasm32"))]
-pub fn run_native() -> eframe::Result<()> {
+fn build_native_options(settings: &settings::Settings) -> eframe::NativeOptions {
     use eframe::egui;
     use eframe::wgpu;
     use std::sync::Arc;
-
-    env_logger::init();
-
-    let settings = settings::Settings::load();
 
     let present_mode = if settings.vsync_enabled {
         wgpu::PresentMode::AutoVsync
@@ -31,7 +29,7 @@ pub fn run_native() -> eframe::Result<()> {
         wgpu::PresentMode::AutoNoVsync
     };
 
-    let options = eframe::NativeOptions {
+    eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1280.0, 800.0])
             .with_title("SDF Modeler"),
@@ -60,13 +58,46 @@ pub fn run_native() -> eframe::Result<()> {
             ..Default::default()
         },
         ..Default::default()
-    };
+    }
+}
 
+#[cfg(not(target_arch = "wasm32"))]
+fn run_native_with_options(
+    native_options: eframe::NativeOptions,
+    settings: settings::Settings,
+) -> eframe::Result<()> {
     eframe::run_native(
         "SDF Modeler",
-        options,
+        native_options,
         Box::new(move |cc| Ok(Box::new(app::SdfApp::new(cc, settings)))),
     )
+}
+
+#[cfg(all(not(target_arch = "wasm32"), not(target_os = "android")))]
+pub fn run_native() -> eframe::Result<()> {
+    let _ = env_logger::builder().is_test(false).try_init();
+
+    let settings = settings::Settings::load();
+    let options = build_native_options(&settings);
+    run_native_with_options(options, settings)
+}
+
+#[cfg(target_os = "android")]
+#[no_mangle]
+fn android_main(app: winit::platform::android::activity::AndroidApp) {
+    use winit::platform::android::EventLoopBuilderExtAndroid;
+
+    let _ = env_logger::builder().is_test(false).try_init();
+
+    let settings = settings::Settings::load();
+    let mut options = build_native_options(&settings);
+    options.event_loop_builder = Some(Box::new(move |event_loop_builder| {
+        event_loop_builder.with_android_app(app);
+    }));
+
+    if let Err(error) = run_native_with_options(options, settings) {
+        log::error!("Android startup failed: {}", error);
+    }
 }
 
 // ── WASM entry point ────────────────────────────────────────────────────────

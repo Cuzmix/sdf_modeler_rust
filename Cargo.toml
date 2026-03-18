@@ -12,11 +12,12 @@ opt-level = 2
 debug = true  # include debug symbols for profiling (flamegraph, samply)
 
 [lib]
-crate-type = ["rlib"]
+name = "sdf_modeler_lib"
+crate-type = ["rlib", "cdylib"]
 
 [dependencies]
 eframe = { version = "0.29", default-features = false, features = [
-    "accesskit", "default_fonts", "wgpu", "wayland", "x11",
+    "accesskit", "default_fonts", "wgpu", "wayland", "x11", "android-native-activity",
 ] }
 egui_dock = "0.14"
 egui_node_graph2 = "0.7"
@@ -29,11 +30,16 @@ log = "0.4"
 [dev-dependencies]
 naga = { version = "22.1", features = ["wgsl-in"] }
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+[target.'cfg(all(not(target_arch = "wasm32"), not(target_os = "android")))'.dependencies]
 rfd = "0.15"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 env_logger = "0.11"
 rayon = "1.11.0"
 image = "0.25"
+
+[target.'cfg(target_os = "android")'.dependencies]
+winit = { version = "0.30.12", default-features = false, features = ["android-native-activity"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-time = "1"
@@ -49,3 +55,34 @@ console_error_panic_hook = "0.1"
 
 [patch.crates-io]
 egui_node_graph2 = { path = "third_party/egui_node_graph2" }
+
+[package.metadata.android]
+use_aapt2 = true
+package = "com.typscript.sdfmodeler"
+build_targets = ["aarch64-linux-android"]
+apk_name = "sdf-modeler"
+
+[package.metadata.android.sdk]
+min_sdk_version = 28
+target_sdk_version = 35
+
+[package.metadata.android.application]
+label = "SDF Modeler"
+theme = "@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen"
+
+[[package.metadata.android.application.activity]]
+name = "android.app.NativeActivity"
+label = "SDF Modeler"
+config_changes = "orientation|keyboardHidden|screenSize|smallestScreenSize|screenLayout|uiMode"
+launch_mode = "singleTop"
+orientation = "landscape"
+exported = true
+resizeable_activity = true
+
+[[package.metadata.android.application.activity.meta_data]]
+name = "android.app.lib_name"
+value = "sdf_modeler_lib"
+
+[[package.metadata.android.application.activity.intent_filter]]
+actions = ["android.intent.action.MAIN"]
+categories = ["android.intent.category.LAUNCHER"]

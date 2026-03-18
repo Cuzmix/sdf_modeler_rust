@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::keymap::KeymapConfig;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::native_paths;
 
 #[derive(Serialize, Deserialize, Clone, PartialEq, Default)]
 pub enum BackgroundMode {
@@ -197,10 +199,7 @@ impl Settings {
 #[cfg(not(target_arch = "wasm32"))]
 impl Settings {
     fn path() -> std::path::PathBuf {
-        let mut path = std::env::current_exe().unwrap_or_default();
-        path.pop();
-        path.push("settings.json");
-        path
+        native_paths::app_storage_file("settings.json")
     }
 
     pub fn load() -> Self {
@@ -214,6 +213,10 @@ impl Settings {
     pub fn save(&self) {
         let path = Self::path();
         if let Ok(json) = serde_json::to_string_pretty(self) {
+            if let Err(e) = native_paths::ensure_parent_dir(&path) {
+                log::error!("Failed to create settings directory: {}", e);
+                return;
+            }
             if let Err(e) = std::fs::write(&path, json) {
                 log::error!("Failed to save settings: {}", e);
             }
@@ -221,39 +224,42 @@ impl Settings {
     }
 
     pub fn export_dialog(&self) {
-        if let Some(path) = rfd::FileDialog::new()
-            .set_title("Export Settings")
-            .add_filter("JSON", &["json"])
-            .set_file_name("settings.json")
-            .save_file()
-        {
-            if let Ok(json) = serde_json::to_string_pretty(self) {
-                if let Err(e) = std::fs::write(&path, json) {
-                    log::error!("Failed to export settings: {}", e);
-                }
+        let crate::desktop_dialogs::FileDialogSelection::Selected(path) =
+            crate::desktop_dialogs::settings_export_dialog("settings.json")
+        else {
+            return;
+        };
+
+        if let Ok(json) = serde_json::to_string_pretty(self) {
+            if let Err(e) = native_paths::ensure_parent_dir(&path) {
+                log::error!("Failed to create export directory: {}", e);
+                return;
+            }
+            if let Err(e) = std::fs::write(&path, json) {
+                log::error!("Failed to export settings: {}", e);
             }
         }
     }
 
     pub fn import_dialog(&mut self) -> bool {
-        if let Some(path) = rfd::FileDialog::new()
-            .set_title("Import Settings")
-            .add_filter("JSON", &["json"])
-            .pick_file()
-        {
-            match std::fs::read_to_string(&path) {
-                Ok(json) => match serde_json::from_str::<Settings>(&json) {
-                    Ok(imported) => {
-                        let recent = std::mem::take(&mut self.recent_files);
-                        *self = imported;
-                        self.recent_files = recent;
-                        self.save();
-                        return true;
-                    }
-                    Err(e) => log::error!("Failed to parse settings file: {}", e),
-                },
-                Err(e) => log::error!("Failed to read settings file: {}", e),
-            }
+        let crate::desktop_dialogs::FileDialogSelection::Selected(path) =
+            crate::desktop_dialogs::settings_import_dialog()
+        else {
+            return false;
+        };
+
+        match std::fs::read_to_string(&path) {
+            Ok(json) => match serde_json::from_str::<Settings>(&json) {
+                Ok(imported) => {
+                    let recent = std::mem::take(&mut self.recent_files);
+                    *self = imported;
+                    self.recent_files = recent;
+                    self.save();
+                    return true;
+                }
+                Err(e) => log::error!("Failed to parse settings file: {}", e),
+            },
+            Err(e) => log::error!("Failed to read settings file: {}", e),
         }
         false
     }

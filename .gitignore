@@ -1,3 +1,11 @@
 /target
 *.log
 /target_build_validation/
+/.android-sdk/
+/.android-user/
+*.apk
+*.apks
+*.aab
+*.idsig
+*.keystore
+*.jks

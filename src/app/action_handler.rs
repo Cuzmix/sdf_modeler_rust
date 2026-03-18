@@ -1,6 +1,7 @@
 use eframe::egui;
 use glam::Vec3;
 
+use crate::desktop_dialogs::FileDialogSelection;
 use crate::graph::history::History;
 use crate::graph::scene::{NodeData, Scene};
 use crate::sculpt::SculptState;
@@ -15,6 +16,15 @@ const MAX_STORAGE_BUFFER_BYTES: u64 = 1 << 27;
 /// Maximum safe sculpt resolution per node (cube root of max voxels at 4 bytes each).
 /// 320^3 * 4 = 131,072,000 bytes < 128MB limit. 322 is the true max but 320 is a clean value.
 pub const MAX_SCULPT_RESOLUTION: u32 = 320;
+
+fn push_platform_unsupported_toast(app: &mut SdfApp, feature: &str) {
+    app.ui.toasts.push(super::Toast {
+        message: format!("{feature} is not supported on this platform yet"),
+        is_error: true,
+        created: crate::compat::Instant::now(),
+        duration: crate::compat::Duration::from_secs(4),
+    });
+}
 
 impl SdfApp {
     /// Process all collected actions. This is the single mutation point — the
@@ -41,8 +51,14 @@ impl SdfApp {
                 Action::OpenProject =>
                 {
                     #[cfg(not(target_arch = "wasm32"))]
-                    if let Some(path) = crate::io::open_dialog() {
-                        self.load_project_from_path(&path);
+                    match crate::io::open_dialog() {
+                        FileDialogSelection::Selected(path) => {
+                            self.load_project_from_path(&path);
+                        }
+                        FileDialogSelection::Unsupported => {
+                            push_platform_unsupported_toast(self, "Opening project files");
+                        }
+                        FileDialogSelection::Cancelled => {}
                     }
                 }
                 Action::OpenRecentProject(ref recent_path) => {
@@ -58,10 +74,17 @@ impl SdfApp {
                 Action::SaveProject => {
                     #[cfg(not(target_arch = "wasm32"))]
                     {
-                        let path = if let Some(ref p) = self.persistence.current_file_path {
-                            Some(p.clone())
+                        let path = if let Some(path) = self.persistence.current_file_path.clone() {
+                            Some(path)
                         } else {
-                            crate::io::save_dialog()
+                            match crate::io::save_dialog() {
+                                FileDialogSelection::Selected(path) => Some(path),
+                                FileDialogSelection::Unsupported => {
+                                    push_platform_unsupported_toast(self, "Saving project files");
+                                    None
+                                }
+                                FileDialogSelection::Cancelled => None,
+                            }
                         };
                         if let Some(path) = path {
                             if let Err(e) =
@@ -96,31 +119,36 @@ impl SdfApp {
                             .get(&node_id)
                             .map(|n| format!("{}.sdfpreset", n.name.replace(' ', "_")))
                             .unwrap_or_else(|| "node_preset.sdfpreset".to_string());
-                        if let Some(path) = rfd::FileDialog::new()
-                            .set_title("Save Node Preset")
-                            .set_file_name(&default_name)
-                            .add_filter("SDF Node Preset", &["sdfpreset"])
-                            .save_file()
-                        {
-                            match crate::io::save_subtree_preset(&self.doc.scene, node_id, &path) {
-                                Ok(()) => {
-                                    self.ui.toasts.push(super::Toast {
-                                        message: format!("Saved preset: {}", path.display()),
-                                        is_error: false,
-                                        created: crate::compat::Instant::now(),
-                                        duration: crate::compat::Duration::from_secs(4),
-                                    });
-                                }
-                                Err(e) => {
-                                    log::error!("Failed to save node preset: {}", e);
-                                    self.ui.toasts.push(super::Toast {
-                                        message: format!("Failed to save preset: {}", e),
-                                        is_error: true,
-                                        created: crate::compat::Instant::now(),
-                                        duration: crate::compat::Duration::from_secs(5),
-                                    });
+                        match crate::desktop_dialogs::save_node_preset_dialog(&default_name) {
+                            FileDialogSelection::Selected(path) => {
+                                match crate::io::save_subtree_preset(
+                                    &self.doc.scene,
+                                    node_id,
+                                    &path,
+                                ) {
+                                    Ok(()) => {
+                                        self.ui.toasts.push(super::Toast {
+                                            message: format!("Saved preset: {}", path.display()),
+                                            is_error: false,
+                                            created: crate::compat::Instant::now(),
+                                            duration: crate::compat::Duration::from_secs(4),
+                                        });
+                                    }
+                                    Err(e) => {
+                                        log::error!("Failed to save node preset: {}", e);
+                                        self.ui.toasts.push(super::Toast {
+                                            message: format!("Failed to save preset: {}", e),
+                                            is_error: true,
+                                            created: crate::compat::Instant::now(),
+                                            duration: crate::compat::Duration::from_secs(5),
+                                        });
+                                    }
                                 }
                             }
+                            FileDialogSelection::Unsupported => {
+                                push_platform_unsupported_toast(self, "Saving node presets");
+                            }
+                            FileDialogSelection::Cancelled => {}
                         }
                     }
                     #[cfg(target_arch = "wasm32")]
@@ -136,33 +164,35 @@ impl SdfApp {
                 Action::LoadNodePreset => {
                     #[cfg(not(target_arch = "wasm32"))]
                     {
-                        if let Some(path) = rfd::FileDialog::new()
-                            .set_title("Load Node Preset")
-                            .add_filter("SDF Node Preset", &["sdfpreset"])
-                            .pick_file()
-                        {
-                            match crate::io::load_subtree_preset(&mut self.doc.scene, &path) {
-                                Ok(root_id) => {
-                                    self.ui.node_graph_state.select_single(root_id);
-                                    self.ui.node_graph_state.needs_initial_rebuild = true;
-                                    self.gpu.buffer_dirty = true;
-                                    self.ui.toasts.push(super::Toast {
-                                        message: format!("Loaded preset: {}", path.display()),
-                                        is_error: false,
-                                        created: crate::compat::Instant::now(),
-                                        duration: crate::compat::Duration::from_secs(4),
-                                    });
-                                }
-                                Err(e) => {
-                                    log::error!("Failed to load node preset: {}", e);
-                                    self.ui.toasts.push(super::Toast {
-                                        message: format!("Failed to load preset: {}", e),
-                                        is_error: true,
-                                        created: crate::compat::Instant::now(),
-                                        duration: crate::compat::Duration::from_secs(5),
-                                    });
+                        match crate::desktop_dialogs::load_node_preset_dialog() {
+                            FileDialogSelection::Selected(path) => {
+                                match crate::io::load_subtree_preset(&mut self.doc.scene, &path) {
+                                    Ok(root_id) => {
+                                        self.ui.node_graph_state.select_single(root_id);
+                                        self.ui.node_graph_state.needs_initial_rebuild = true;
+                                        self.gpu.buffer_dirty = true;
+                                        self.ui.toasts.push(super::Toast {
+                                            message: format!("Loaded preset: {}", path.display()),
+                                            is_error: false,
+                                            created: crate::compat::Instant::now(),
+                                            duration: crate::compat::Duration::from_secs(4),
+                                        });
+                                    }
+                                    Err(e) => {
+                                        log::error!("Failed to load node preset: {}", e);
+                                        self.ui.toasts.push(super::Toast {
+                                            message: format!("Failed to load preset: {}", e),
+                                            is_error: true,
+                                            created: crate::compat::Instant::now(),
+                                            duration: crate::compat::Duration::from_secs(5),
+                                        });
+                                    }
                                 }
                             }
+                            FileDialogSelection::Unsupported => {
+                                push_platform_unsupported_toast(self, "Loading node presets");
+                            }
+                            FileDialogSelection::Cancelled => {}
                         }
                     }
                     #[cfg(target_arch = "wasm32")]
@@ -178,33 +208,35 @@ impl SdfApp {
                 Action::AddReferenceImage => {
                     #[cfg(not(target_arch = "wasm32"))]
                     {
-                        if let Some(path) = rfd::FileDialog::new()
-                            .set_title("Add Reference Image")
-                            .add_filter("Images", &["png", "jpg", "jpeg"])
-                            .pick_file()
-                        {
-                            match self.ui.reference_images.add_from_path(ctx, &path) {
-                                Ok(()) => {
-                                    self.ui.toasts.push(super::Toast {
-                                        message: format!(
-                                            "Loaded reference image: {}",
-                                            path.display()
-                                        ),
-                                        is_error: false,
-                                        created: crate::compat::Instant::now(),
-                                        duration: crate::compat::Duration::from_secs(4),
-                                    });
-                                }
-                                Err(e) => {
-                                    log::error!("Failed to load reference image: {}", e);
-                                    self.ui.toasts.push(super::Toast {
-                                        message: format!("Failed to load image: {}", e),
-                                        is_error: true,
-                                        created: crate::compat::Instant::now(),
-                                        duration: crate::compat::Duration::from_secs(5),
-                                    });
+                        match crate::desktop_dialogs::reference_image_dialog() {
+                            FileDialogSelection::Selected(path) => {
+                                match self.ui.reference_images.add_from_path(ctx, &path) {
+                                    Ok(()) => {
+                                        self.ui.toasts.push(super::Toast {
+                                            message: format!(
+                                                "Loaded reference image: {}",
+                                                path.display()
+                                            ),
+                                            is_error: false,
+                                            created: crate::compat::Instant::now(),
+                                            duration: crate::compat::Duration::from_secs(4),
+                                        });
+                                    }
+                                    Err(e) => {
+                                        log::error!("Failed to load reference image: {}", e);
+                                        self.ui.toasts.push(super::Toast {
+                                            message: format!("Failed to load image: {}", e),
+                                            is_error: true,
+                                            created: crate::compat::Instant::now(),
+                                            duration: crate::compat::Duration::from_secs(5),
+                                        });
+                                    }
                                 }
                             }
+                            FileDialogSelection::Unsupported => {
+                                push_platform_unsupported_toast(self, "Picking reference images");
+                            }
+                            FileDialogSelection::Cancelled => {}
                         }
                     }
                     #[cfg(target_arch = "wasm32")]

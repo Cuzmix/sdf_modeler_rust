@@ -32,7 +32,7 @@ pub fn draw(
                     settings.save();
                 }
                 ui.separator();
-                #[cfg(not(target_arch = "wasm32"))]
+                #[cfg(all(not(target_arch = "wasm32"), not(target_os = "android")))]
                 {
                     if ui.button("Export...").on_hover_text("Save settings to a file").clicked() {
                         settings.export_dialog();
@@ -256,7 +256,7 @@ fn draw_keybindings_section(
                     keymap.reset_to_defaults();
                     *rebinding_action = None;
                 }
-                #[cfg(not(target_arch = "wasm32"))]
+                #[cfg(all(not(target_arch = "wasm32"), not(target_os = "android")))]
                 {
                     ui.separator();
                     if ui
@@ -399,39 +399,42 @@ fn capture_rebind_key(
 
 #[cfg(not(target_arch = "wasm32"))]
 fn export_keymap_dialog(keymap: &KeymapConfig) {
-    if let Some(path) = rfd::FileDialog::new()
-        .set_title("Export Keybindings")
-        .add_filter("JSON", &["json"])
-        .set_file_name("keybindings.json")
-        .save_file()
-    {
-        match serde_json::to_string_pretty(keymap) {
-            Ok(json) => {
-                if let Err(err) = std::fs::write(&path, json) {
-                    log::error!("Failed to export keybindings: {}", err);
-                }
+    let crate::desktop_dialogs::FileDialogSelection::Selected(path) =
+        crate::desktop_dialogs::keybindings_export_dialog()
+    else {
+        return;
+    };
+
+    match serde_json::to_string_pretty(keymap) {
+        Ok(json) => {
+            if let Err(err) = crate::native_paths::ensure_parent_dir(&path) {
+                log::error!("Failed to create keybinding export directory: {}", err);
+                return;
             }
-            Err(err) => log::error!("Failed to serialize keybindings: {}", err),
+            if let Err(err) = std::fs::write(&path, json) {
+                log::error!("Failed to export keybindings: {}", err);
+            }
         }
+        Err(err) => log::error!("Failed to serialize keybindings: {}", err),
     }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 fn import_keymap_dialog(keymap: &mut KeymapConfig) {
-    if let Some(path) = rfd::FileDialog::new()
-        .set_title("Import Keybindings")
-        .add_filter("JSON", &["json"])
-        .pick_file()
-    {
-        match std::fs::read_to_string(&path) {
-            Ok(json) => match serde_json::from_str::<KeymapConfig>(&json) {
-                Ok(imported) => {
-                    *keymap = imported;
-                }
-                Err(err) => log::error!("Failed to parse keybindings file: {}", err),
-            },
-            Err(err) => log::error!("Failed to read keybindings file: {}", err),
-        }
+    let crate::desktop_dialogs::FileDialogSelection::Selected(path) =
+        crate::desktop_dialogs::keybindings_import_dialog()
+    else {
+        return;
+    };
+
+    match std::fs::read_to_string(&path) {
+        Ok(json) => match serde_json::from_str::<KeymapConfig>(&json) {
+            Ok(imported) => {
+                *keymap = imported;
+            }
+            Err(err) => log::error!("Failed to parse keybindings file: {}", err),
+        },
+        Err(err) => log::error!("Failed to read keybindings file: {}", err),
     }
 }
 

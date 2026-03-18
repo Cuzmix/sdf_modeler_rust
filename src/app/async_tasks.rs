@@ -4,6 +4,7 @@ use std::sync::Arc;
 use eframe::egui;
 use glam::Vec3;
 
+use crate::desktop_dialogs::FileDialogSelection;
 use crate::graph::scene::NodeData;
 use crate::graph::voxel;
 use crate::sculpt::SculptState;
@@ -11,6 +12,15 @@ use crate::sculpt::SculptState;
 use super::{BakeRequest, SdfApp};
 #[cfg(not(target_arch = "wasm32"))]
 use super::{BakeStatus, ExportStatus, ImportStatus};
+
+fn push_platform_unsupported_toast(app: &mut SdfApp, feature: &str) {
+    app.ui.toasts.push(super::Toast {
+        message: format!("{feature} is not supported on this platform yet"),
+        is_error: true,
+        created: crate::compat::Instant::now(),
+        duration: crate::compat::Duration::from_secs(4),
+    });
+}
 
 impl SdfApp {
     // ── Bake ─────────────────────────────────────────────────────────────
@@ -185,15 +195,18 @@ impl SdfApp {
     // ── Screenshot ───────────────────────────────────────────────────────
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub(super) fn take_screenshot(&self) {
+    pub(super) fn take_screenshot(&mut self) {
         use crate::ui::viewport::ViewportResources;
 
-        let Some(path) = rfd::FileDialog::new()
-            .set_title("Save Screenshot")
-            .add_filter("PNG Image", &["png"])
-            .save_file()
-        else {
-            return;
+        let path = match crate::desktop_dialogs::screenshot_dialog() {
+            FileDialogSelection::Selected(path) => path,
+            FileDialogSelection::Unsupported => {
+                push_platform_unsupported_toast(self, "Saving screenshots");
+                return;
+            }
+            FileDialogSelection::Cancelled => {
+                return;
+            }
         };
 
         let renderer = self.gpu.render_state.renderer.read();
@@ -273,7 +286,7 @@ impl SdfApp {
     }
 
     #[cfg(target_arch = "wasm32")]
-    pub(super) fn take_screenshot(&self) {
+    pub(super) fn take_screenshot(&mut self) {
         log::warn!("Screenshot is not supported on web");
     }
 
@@ -281,16 +294,15 @@ impl SdfApp {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn start_export(&mut self, ctx: &egui::Context) {
-        let Some(path) = rfd::FileDialog::new()
-            .set_title("Export Mesh")
-            .add_filter("Wavefront OBJ", &["obj"])
-            .add_filter("STL Binary", &["stl"])
-            .add_filter("Stanford PLY", &["ply"])
-            .add_filter("glTF Binary", &["glb"])
-            .add_filter("USD ASCII", &["usda"])
-            .save_file()
-        else {
-            return;
+        let path = match crate::desktop_dialogs::mesh_export_dialog() {
+            FileDialogSelection::Selected(path) => path,
+            FileDialogSelection::Unsupported => {
+                push_platform_unsupported_toast(self, "Mesh export dialogs");
+                return;
+            }
+            FileDialogSelection::Cancelled => {
+                return;
+            }
         };
 
         let scene_clone = self.doc.scene.clone();
@@ -454,14 +466,15 @@ impl SdfApp {
     /// Open a file picker, load the mesh, and show the import settings dialog.
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn open_import_dialog(&mut self) {
-        let Some(path) = rfd::FileDialog::new()
-            .set_title("Import Mesh")
-            .add_filter("Wavefront OBJ", &["obj"])
-            .add_filter("STL Binary", &["stl"])
-            .add_filter("All Mesh Files", &["obj", "stl"])
-            .pick_file()
-        else {
-            return;
+        let path = match crate::desktop_dialogs::mesh_import_dialog() {
+            FileDialogSelection::Selected(path) => path,
+            FileDialogSelection::Unsupported => {
+                push_platform_unsupported_toast(self, "Mesh import dialogs");
+                return;
+            }
+            FileDialogSelection::Cancelled => {
+                return;
+            }
         };
 
         let mesh = match crate::mesh_import::load_mesh(&path) {

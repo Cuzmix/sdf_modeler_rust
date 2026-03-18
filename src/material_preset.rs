@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
 
+#[cfg(not(target_arch = "wasm32"))]
+use crate::native_paths;
+
 /// A material preset with physically-based properties.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MaterialPreset {
@@ -292,10 +295,7 @@ impl MaterialLibrary {
     /// Returns the file path for persisting user presets.
     #[cfg(not(target_arch = "wasm32"))]
     fn library_path() -> std::path::PathBuf {
-        let mut path = std::env::current_exe().unwrap_or_default();
-        path.pop();
-        path.push("materials.json");
-        path
+        native_paths::app_storage_file("materials.json")
     }
 
     /// Load user presets from disk.
@@ -313,6 +313,10 @@ impl MaterialLibrary {
     pub fn save(&self) {
         let path = Self::library_path();
         if let Ok(json) = serde_json::to_string_pretty(self) {
+            if let Err(e) = native_paths::ensure_parent_dir(&path) {
+                log::error!("Failed to create material library directory: {}", e);
+                return;
+            }
             if let Err(e) = std::fs::write(&path, json) {
                 log::error!("Failed to save material library: {}", e);
             }

@@ -4,8 +4,12 @@ use std::collections::HashMap;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[cfg(not(target_arch = "wasm32"))]
+use crate::desktop_dialogs::FileDialogSelection;
 use crate::gpu::camera::Camera;
 use crate::graph::scene::{NodeData, NodeId, Scene, SceneNode};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::native_paths;
 
 const CURRENT_VERSION: u32 = 5;
 
@@ -98,18 +102,12 @@ pub fn json_to_project(json: &str) -> Result<ProjectFile, String> {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn auto_save_path() -> std::path::PathBuf {
-    let mut path = std::env::current_exe().unwrap_or_default();
-    path.pop();
-    path.push("autosave.sdf");
-    path
+    native_paths::app_storage_file("autosave.sdf")
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn auto_save_meta_path() -> std::path::PathBuf {
-    let mut path = std::env::current_exe().unwrap_or_default();
-    path.pop();
-    path.push("autosave.meta");
-    path
+    native_paths::app_storage_file("autosave.meta")
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -139,7 +137,9 @@ pub fn write_recovery_meta(project_path: Option<&std::path::Path>) -> Result<(),
         last_project_save_unix_secs,
     };
     let json = serde_json::to_string_pretty(&meta).map_err(|e| e.to_string())?;
-    std::fs::write(auto_save_meta_path(), json).map_err(|e| e.to_string())
+    let path = auto_save_meta_path();
+    native_paths::ensure_parent_dir(&path)?;
+    std::fs::write(path, json).map_err(|e| e.to_string())
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -256,6 +256,7 @@ pub fn save_subtree_preset(
         nodes: preset_nodes,
     };
     let json = serde_json::to_string_pretty(&preset).map_err(|e| e.to_string())?;
+    native_paths::ensure_parent_dir(path)?;
     std::fs::write(path, json).map_err(|e| e.to_string())
 }
 
@@ -326,6 +327,7 @@ pub fn save_project(
     path: &std::path::PathBuf,
 ) -> Result<(), String> {
     let json = project_to_json(scene, camera)?;
+    native_paths::ensure_parent_dir(path)?;
     std::fs::write(path, json).map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -337,19 +339,13 @@ pub fn load_project(path: &std::path::PathBuf) -> Result<ProjectFile, String> {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub fn save_dialog() -> Option<std::path::PathBuf> {
-    rfd::FileDialog::new()
-        .set_title("Save Project")
-        .add_filter("SDF Project", &["sdf", "json"])
-        .save_file()
+pub fn save_dialog() -> FileDialogSelection {
+    crate::desktop_dialogs::save_project_dialog()
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub fn open_dialog() -> Option<std::path::PathBuf> {
-    rfd::FileDialog::new()
-        .set_title("Open Project")
-        .add_filter("SDF Project", &["sdf", "json"])
-        .pick_file()
+pub fn open_dialog() -> FileDialogSelection {
+    crate::desktop_dialogs::open_project_dialog()
 }
 
 // ── WASM browser I/O ────────────────────────────────────────────────────────
