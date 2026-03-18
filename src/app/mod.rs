@@ -238,13 +238,51 @@ pub struct SdfApp {
 
 impl SdfApp {
     #[cfg(not(target_arch = "wasm32"))]
-    fn recovery_summary_from_meta(meta: Option<&crate::io::RecoveryMeta>) -> String {
-        let timestamp = meta.map(|m| m.autosave_unix_secs).unwrap_or(0);
+    fn format_recovery_timestamp_in_time_zone(
+        unix_secs: u64,
+        time_zone: &jiff::tz::TimeZone,
+    ) -> Option<String> {
+        let unix_secs = i64::try_from(unix_secs).ok()?;
+        let timestamp = jiff::Timestamp::from_second(unix_secs).ok()?;
+        let zoned = timestamp.to_zoned(time_zone.clone());
+        Some(
+            zoned
+                .strftime("%A, %B %d, %Y at %-I:%M %p %Z")
+                .to_string(),
+        )
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn format_recovery_timestamp(unix_secs: u64) -> String {
+        Self::format_recovery_timestamp_in_time_zone(unix_secs, &jiff::tz::TimeZone::system())
+            .unwrap_or_else(|| "an unknown time".to_string())
+    }
+
+    #[cfg(all(not(target_arch = "wasm32"), test))]
+    fn recovery_summary_from_meta_in_time_zone(
+        meta: Option<&crate::io::RecoveryMeta>,
+        time_zone: &jiff::tz::TimeZone,
+    ) -> String {
+        let recovered_at = meta
+            .and_then(|m| Self::format_recovery_timestamp_in_time_zone(m.autosave_unix_secs, time_zone))
+            .unwrap_or_else(|| "an unknown time".to_string());
         let project_hint = meta
             .and_then(|m| m.project_path.as_deref())
             .map(|path| format!("\nSource project: {path}"))
             .unwrap_or_default();
-        format!("Recovered unsaved work found from UNIX timestamp {timestamp}.{project_hint}")
+        format!("Recovered unsaved work found from {recovered_at}.{project_hint}")
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn recovery_summary_from_meta(meta: Option<&crate::io::RecoveryMeta>) -> String {
+        let recovered_at = meta
+            .map(|m| Self::format_recovery_timestamp(m.autosave_unix_secs))
+            .unwrap_or_else(|| "an unknown time".to_string());
+        let project_hint = meta
+            .and_then(|m| m.project_path.as_deref())
+            .map(|path| format!("\nSource project: {path}"))
+            .unwrap_or_default();
+        format!("Recovered unsaved work found from {recovered_at}.{project_hint}")
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -480,6 +518,35 @@ impl eframe::App for SdfApp {
     fn on_exit(&mut self) {
         self.settings.last_clean_exit = true;
         self.settings.save();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SdfApp;
+
+    #[test]
+    fn format_recovery_timestamp_uses_human_readable_local_style() {
+        let time_zone = jiff::tz::TimeZone::get("US/Eastern").unwrap();
+        assert_eq!(
+            SdfApp::format_recovery_timestamp_in_time_zone(1_777_386_018, &time_zone).as_deref(),
+            Some("Tuesday, April 28, 2026 at 10:20 AM EDT")
+        );
+    }
+
+    #[test]
+    fn recovery_summary_uses_human_readable_time() {
+        let time_zone = jiff::tz::TimeZone::get("US/Eastern").unwrap();
+        let meta = crate::io::RecoveryMeta {
+            autosave_unix_secs: 1_777_386_018,
+            project_path: Some("C:\\projects\\dragon.sdf".to_string()),
+            last_project_save_unix_secs: None,
+        };
+
+        assert_eq!(
+            SdfApp::recovery_summary_from_meta_in_time_zone(Some(&meta), &time_zone),
+            "Recovered unsaved work found from Tuesday, April 28, 2026 at 10:20 AM EDT.\nSource project: C:\\projects\\dragon.sdf"
+        );
     }
 }
 
