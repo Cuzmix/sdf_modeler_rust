@@ -5,7 +5,10 @@ const MAX_UNDO_DEPTH: usize = 50;
 #[derive(Clone)]
 enum SnapshotState {
     Scene(Scene),
-    Sculpt { node_id: NodeId, voxel_data: Vec<f32> },
+    Sculpt {
+        node_id: NodeId,
+        voxel_data: Vec<f32>,
+    },
 }
 
 #[derive(Clone)]
@@ -43,9 +46,13 @@ impl Snapshot {
     fn into_restore(self) -> RestoreSnapshot {
         let state = match self.state {
             SnapshotState::Scene(scene) => RestoreState::Scene(scene),
-            SnapshotState::Sculpt { node_id, voxel_data } => {
-                RestoreState::Sculpt { node_id, voxel_data }
-            }
+            SnapshotState::Sculpt {
+                node_id,
+                voxel_data,
+            } => RestoreState::Sculpt {
+                node_id,
+                voxel_data,
+            },
         };
         RestoreSnapshot {
             state,
@@ -56,7 +63,10 @@ impl Snapshot {
 
 pub enum RestoreState {
     Scene(Scene),
-    Sculpt { node_id: NodeId, voxel_data: Vec<f32> },
+    Sculpt {
+        node_id: NodeId,
+        voxel_data: Vec<f32>,
+    },
 }
 
 pub struct RestoreSnapshot {
@@ -241,7 +251,9 @@ impl History {
     ) -> Option<Snapshot> {
         let label = label.into();
         match state {
-            SnapshotState::Scene(_) => Some(Snapshot::scene(current_scene, current_selected, label)),
+            SnapshotState::Scene(_) => {
+                Some(Snapshot::scene(current_scene, current_selected, label))
+            }
             SnapshotState::Sculpt { node_id, .. } => Some(Snapshot::sculpt(
                 *node_id,
                 &Self::capture_sculpt_data(current_scene, *node_id)?,
@@ -360,9 +372,10 @@ mod tests {
 
     fn unwrap_sculpt_restore(restore: RestoreSnapshot) -> (NodeId, Vec<f32>, Option<NodeId>) {
         match restore.state {
-            RestoreState::Sculpt { node_id, voxel_data } => {
-                (node_id, voxel_data, restore.selected)
-            }
+            RestoreState::Sculpt {
+                node_id,
+                voxel_data,
+            } => (node_id, voxel_data, restore.selected),
             RestoreState::Scene(_) => panic!("expected a sculpt restore"),
         }
     }

@@ -1050,7 +1050,10 @@ impl SdfApp {
             RestoreState::Scene(scene) => {
                 self.doc.scene = scene;
             }
-            RestoreState::Sculpt { node_id, voxel_data } => {
+            RestoreState::Sculpt {
+                node_id,
+                voxel_data,
+            } => {
                 let Some(node) = self.doc.scene.nodes.get_mut(&node_id) else {
                     return;
                 };

@@ -134,7 +134,9 @@ impl SdfApp {
         if let Some(ref pending_pick) = ui_feedback.pending_pick {
             if !ui_feedback.is_hover_pick {
                 // During active Grab drags, keep sculpting from live cursor rays.
-                if live_grab_drag || matches!(self.async_state.pick_state, PickState::Pending { .. }) {
+                if live_grab_drag
+                    || matches!(self.async_state.pick_state, PickState::Pending { .. })
+                {
                     let _ = self.predict_sculpt_from_pending_pick(pending_pick);
                 }
             }

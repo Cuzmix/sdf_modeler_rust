@@ -245,11 +245,7 @@ impl SdfApp {
         let unix_secs = i64::try_from(unix_secs).ok()?;
         let timestamp = jiff::Timestamp::from_second(unix_secs).ok()?;
         let zoned = timestamp.to_zoned(time_zone.clone());
-        Some(
-            zoned
-                .strftime("%A, %B %d, %Y at %-I:%M %p %Z")
-                .to_string(),
-        )
+        Some(zoned.strftime("%A, %B %d, %Y at %-I:%M %p %Z").to_string())
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -264,7 +260,9 @@ impl SdfApp {
         time_zone: &jiff::tz::TimeZone,
     ) -> String {
         let recovered_at = meta
-            .and_then(|m| Self::format_recovery_timestamp_in_time_zone(m.autosave_unix_secs, time_zone))
+            .and_then(|m| {
+                Self::format_recovery_timestamp_in_time_zone(m.autosave_unix_secs, time_zone)
+            })
             .unwrap_or_else(|| "an unknown time".to_string());
         let project_hint = meta
             .and_then(|m| m.project_path.as_deref())
@@ -548,5 +546,3 @@ mod tests {
         );
     }
 }
-
-

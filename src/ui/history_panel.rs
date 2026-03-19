@@ -61,7 +61,12 @@ pub fn draw(ui: &mut egui::Ui, history: &History, actions: &mut ActionSink) {
 
 fn draw_timeline_row(ui: &mut egui::Ui, label: &str, phase: TimelinePhase) {
     let visuals = ui.visuals();
-    let subtle_stroke = visuals.widgets.noninteractive.bg_stroke.color.gamma_multiply(0.35);
+    let subtle_stroke = visuals
+        .widgets
+        .noninteractive
+        .bg_stroke
+        .color
+        .gamma_multiply(0.35);
     let (icon, fill, stroke, text_color, strong) = match phase {
         TimelinePhase::Future => (
             "\u{25A1}",
