@@ -5,8 +5,8 @@ use eframe::egui;
 use crate::app::actions::{Action, ActionSink, LightingPreset};
 use crate::desktop_dialogs::FileDialogSelection;
 use crate::settings::{
-    AmbientOcclusionMode, BackgroundMode, EnvironmentBackgroundMode, EnvironmentSource, Settings,
-    ShadingMode,
+    AmbientOcclusionMode, BackgroundMode, EnvironmentBackgroundMode, EnvironmentSource,
+    LocalReflectionMode, Settings, ShadingMode,
 };
 
 /// Draw the Render Settings panel. Pushes `Action::SettingsChanged` if a shader-affecting
@@ -271,6 +271,16 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
                 .on_hover_text(
                     "Broadens unstable sub-pixel glossy highlights from scene lights and environment reflections without changing the stored material roughness.",
                 );
+            ui.horizontal(|ui| {
+                ui.label("Local Reflections");
+                for mode in [LocalReflectionMode::Off, LocalReflectionMode::Single] {
+                    ui.selectable_value(&mut config.local_reflection_mode, mode, mode.label());
+                }
+            })
+            .response
+            .on_hover_text(
+                "Off disables nearby scene reflections on glossy materials. Single enables one bounded local reflection bounce on smooth surfaces.",
+            );
             ui.add_enabled_ui(config.env_reflection_enabled, |ui| {
                 labeled_slider(
                     ui,
@@ -688,6 +698,7 @@ fn apply_preset_fast(config: &mut crate::settings::RenderConfig) {
     config.fog_enabled = false;
     config.tonemapping_aces = false;
     config.specular_aa_enabled = false;
+    config.local_reflection_mode = LocalReflectionMode::Off;
     config.sculpt_fast_mode = true;
     config.auto_reduce_steps = true;
     config.interaction_render_scale = 0.35;
@@ -706,6 +717,7 @@ fn apply_preset_balanced(config: &mut crate::settings::RenderConfig) {
     config.march_epsilon = 0.002;
     config.march_step_multiplier = 0.9;
     config.specular_aa_enabled = true;
+    config.local_reflection_mode = LocalReflectionMode::Single;
     config.sculpt_fast_mode = false;
     config.auto_reduce_steps = true;
     config.interaction_render_scale = 0.5;
@@ -727,6 +739,7 @@ fn apply_preset_quality(config: &mut crate::settings::RenderConfig) {
     config.march_step_multiplier = 0.9;
     config.tonemapping_aces = true;
     config.specular_aa_enabled = true;
+    config.local_reflection_mode = LocalReflectionMode::Single;
     config.sculpt_fast_mode = false;
     config.auto_reduce_steps = false;
     config.interaction_render_scale = 0.5;

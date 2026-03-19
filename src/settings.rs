@@ -53,6 +53,29 @@ impl AmbientOcclusionMode {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Default, Debug)]
+pub enum LocalReflectionMode {
+    Off,
+    #[default]
+    Single,
+}
+
+impl LocalReflectionMode {
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Off => "Off",
+            Self::Single => "Single",
+        }
+    }
+
+    pub fn flag_bit(&self) -> u32 {
+        match self {
+            Self::Off => 0,
+            Self::Single => 1 << 1,
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Shading modes
 // ---------------------------------------------------------------------------
@@ -383,6 +406,8 @@ pub struct RenderConfig {
     pub env_reflection_intensity: f32,
     #[serde(default = "default_true")]
     pub specular_aa_enabled: bool,
+    #[serde(default)]
+    pub local_reflection_mode: LocalReflectionMode,
 
     // Environment Source
     #[serde(default)]
@@ -630,6 +655,7 @@ impl Default for RenderConfig {
             env_reflection_enabled: false,
             env_reflection_intensity: 0.3,
             specular_aa_enabled: true,
+            local_reflection_mode: LocalReflectionMode::Single,
             environment_source: EnvironmentSource::ProceduralSky,
             hdri_path: None,
             environment_rotation_degrees: 0.0,
@@ -775,6 +801,7 @@ impl RenderConfig {
         self.env_reflection_enabled = d.env_reflection_enabled;
         self.env_reflection_intensity = d.env_reflection_intensity;
         self.specular_aa_enabled = d.specular_aa_enabled;
+        self.local_reflection_mode = d.local_reflection_mode;
         self.environment_source = d.environment_source;
         self.hdri_path = d.hdri_path;
         self.environment_rotation_degrees = d.environment_rotation_degrees;
@@ -856,7 +883,7 @@ impl RenderConfig {
 mod tests {
     use super::{
         AmbientOcclusionMode, BackgroundMode, EnvironmentBackgroundMode, EnvironmentSource,
-        RenderConfig, ShadingMode,
+        LocalReflectionMode, RenderConfig, ShadingMode,
     };
 
     #[test]
@@ -886,6 +913,7 @@ mod tests {
         changed.env_reflection_enabled = !changed.env_reflection_enabled;
         changed.env_reflection_intensity = 0.9;
         changed.specular_aa_enabled = !changed.specular_aa_enabled;
+        changed.local_reflection_mode = LocalReflectionMode::Off;
         changed.environment_source = EnvironmentSource::Hdri;
         changed.hdri_path = Some("studio.hdr".into());
         changed.environment_rotation_degrees = 45.0;
@@ -905,6 +933,14 @@ mod tests {
         let base = RenderConfig::default();
         let mut changed = base.clone();
         changed.ao_mode = AmbientOcclusionMode::Quality;
+        assert!(!changed.needs_shader_rebuild(&base));
+    }
+
+    #[test]
+    fn local_reflection_mode_toggle_does_not_require_shader_rebuild() {
+        let base = RenderConfig::default();
+        let mut changed = base.clone();
+        changed.local_reflection_mode = LocalReflectionMode::Off;
         assert!(!changed.needs_shader_rebuild(&base));
     }
 

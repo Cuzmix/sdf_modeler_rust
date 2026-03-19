@@ -446,8 +446,20 @@ fn compute_indirect_diffuse_lighting(n: vec3f) -> vec3f {
     return sample_irradiance_environment(n);
 }
 
+fn environment_flags() -> i32 {
+    return i32(camera.environment_info.w + 0.5);
+}
+
+fn specular_aa_enabled() -> bool {
+    return (environment_flags() & 1) != 0;
+}
+
+fn local_reflections_enabled() -> bool {
+    return (environment_flags() & 2) != 0;
+}
+
 fn apply_specular_antialiasing(normal: vec3f, roughness: f32) -> f32 {
-    if camera.environment_info.w < 0.5 {
+    if !specular_aa_enabled() {
         return roughness;
     }
     let du = dpdx(normal);
@@ -458,7 +470,7 @@ fn apply_specular_antialiasing(normal: vec3f, roughness: f32) -> f32 {
     return clamp(sqrt(square_roughness), roughness, 1.0);
 }
 
-fn compute_environment_specular(
+fn compute_environment_specular_base(
     view_dir: vec3f,
     n: vec3f,
     NoV: f32,
@@ -484,6 +496,33 @@ fn compute_environment_specular(
     let horizon_ao = compute_horizon_specular_occlusion(reflection_dir, occlusion_normal);
     let brdf = f0 * env_brdf.x + vec3f(env_brdf.y);
     return env_color * brdf * specular_ao * horizon_ao * camera.ambient_info.y;
+}
+
+fn compute_environment_specular(
+    p: vec3f,
+    view_dir: vec3f,
+    n: vec3f,
+    NoV: f32,
+    roughness: f32,
+    f0: vec3f,
+    ao_result: AoResult,
+    ao_mode: i32,
+    allow_local_reflections: bool,
+) -> vec3f {
+    var color = compute_environment_specular_base(view_dir, n, NoV, roughness, f0, ao_result, ao_mode);
+    if allow_local_reflections {
+        color += compute_local_reflection(
+            p,
+            view_dir,
+            n,
+            NoV,
+            roughness,
+            f0,
+            ao_result,
+            ao_mode,
+        );
+    }
+    return color;
 }
 
 fn compute_transmission_absorption(base_color: vec3f, distance: f32) -> vec3f {
@@ -590,7 +629,7 @@ fn trace_transmission_path(
     return TransmissionPath(0.0, p, view_dir, total_distance);
 }
 
-fn sample_transmission_secondary_hit(
+fn sample_secondary_surface_hit(
     origin: vec3f,
     direction: vec3f,
     fallback_roughness: f32,
@@ -612,6 +651,10 @@ fn sample_transmission_secondary_hit(
 
     let albedo = get_blended_color(mat_id, mat_b_id, blend_factor);
     let metallic = get_blended_metallic(mat_id, mat_b_id, blend_factor);
+    let transmission = clamp(get_blended_transmission(mat_id, mat_b_id, blend_factor), 0.0, 1.0)
+        * (1.0 - metallic);
+    let thickness = get_blended_thickness(mat_id, mat_b_id, blend_factor);
+    let ior = get_blended_ior(mat_id, mat_b_id, blend_factor);
     let clearcoat = get_blended_clearcoat(mat_id, mat_b_id, blend_factor);
     let clearcoat_roughness = clamp(
         apply_specular_antialiasing(
@@ -672,8 +715,16 @@ fn sample_transmission_secondary_hit(
         light_mask,
         false,
     );
-    color += compute_environment_specular(view_dir, n, NoV, roughness, f0, ao_result, min(ao_mode, 1));
-    color += compute_environment_specular(
+    color += compute_environment_specular_base(
+        view_dir,
+        n,
+        NoV,
+        roughness,
+        f0,
+        ao_result,
+        min(ao_mode, 1),
+    ) * base_layer_energy;
+    color += compute_environment_specular_base(
         view_dir,
         n,
         NoV,
@@ -689,8 +740,64 @@ fn sample_transmission_secondary_hit(
         sheen_color * (1.0 - metallic),
         sheen_roughness,
     );
+    color += compute_environment_transmission(
+        view_dir,
+        n,
+        NoV,
+        roughness,
+        albedo,
+        transmission,
+        thickness,
+        ior,
+        base_layer_energy,
+    );
     color += get_node_emissive(mat_id) * get_node_emissive_intensity(mat_id);
     return color;
+}
+
+fn compute_local_reflection(
+    p: vec3f,
+    view_dir: vec3f,
+    n: vec3f,
+    NoV: f32,
+    roughness: f32,
+    f0: vec3f,
+    ao_result: AoResult,
+    ao_mode: i32,
+) -> vec3f {
+    if !local_reflections_enabled() || camera.quality_mode > 0.5 || roughness >= 0.35 {
+        return vec3f(0.0);
+    }
+
+    let reflection_dir = reflect(-view_dir, n);
+    let dominant_reflection_dir = normalize(mix(reflection_dir, n, roughness * roughness));
+    let reflection_weight = 1.0 - smoothstep(0.08, 0.35, roughness);
+    if reflection_weight <= 0.0 {
+        return vec3f(0.0);
+    }
+
+    let reflection_bias = max(0.01, 0.02 * (1.0 - roughness));
+    let hit_origin = p + n * reflection_bias + reflection_dir * reflection_bias;
+    let hit = ray_march(hit_origin, dominant_reflection_dir);
+    if hit.x > /*SKY_CUTOFF*/ || hit.x < reflection_bias * 2.0 {
+        return vec3f(0.0);
+    }
+
+    let occlusion_normal = select(n, ao_result.bent_normal, ao_mode >= 2);
+    let specular_ao = select(
+        1.0,
+        compute_specular_ao(NoV, ao_result.visibility, roughness),
+        ao_mode >= 1,
+    );
+    let horizon_ao = compute_horizon_specular_occlusion(reflection_dir, occlusion_normal);
+    let fresnel = F_Schlick_vec3(NoV, f0);
+    let reflected_color = sample_secondary_surface_hit(
+        hit_origin,
+        dominant_reflection_dir,
+        roughness,
+        min(ao_mode, 1),
+    );
+    return reflected_color * fresnel * specular_ao * horizon_ao * reflection_weight;
 }
 
 fn compute_environment_transmission(
@@ -761,7 +868,7 @@ fn compute_geometry_aware_transmission(
     }
 
     let transmitted_color =
-        sample_transmission_secondary_hit(path.exit_point, path.exit_dir, roughness, ao_mode);
+        sample_secondary_surface_hit(path.exit_point, path.exit_dir, roughness, ao_mode);
     let absorption =
         compute_transmission_absorption(base_color, path.travel_distance * max(thickness, 0.05));
     let fresnel = F_Schlick_vec3(NoV, vec3f(ior_to_reflectance_f0(ior)));
@@ -1388,9 +1495,20 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
         );
 
         // Split-sum environment specular from the prefiltered cubemap + BRDF LUT.
-        color += compute_environment_specular(view_dir, n, NoV, roughness, f0, ao_result, ao_mode)
+        color += compute_environment_specular(
+            p,
+            view_dir,
+            n,
+            NoV,
+            roughness,
+            f0,
+            ao_result,
+            ao_mode,
+            true,
+        )
             * base_layer_energy;
         color += compute_environment_specular(
+            p,
             view_dir,
             n,
             NoV,
@@ -1398,6 +1516,7 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
             vec3f(0.04 * mat_clearcoat),
             ao_result,
             ao_mode,
+            false,
         );
         color += compute_sheen_environment(
             view_dir,

@@ -261,7 +261,9 @@ pub struct CameraUniform {
     pub background_secondary: [f32; 4],
     /// Procedural background solid color.
     pub background_tertiary: [f32; 4],
-    /// Environment controls: [rotation_radians, exposure_scale, hdri_background_available, specular_aa_enabled].
+    /// Environment controls:
+    /// [rotation_radians, exposure_scale, hdri_background_available, packed_environment_flags].
+    /// Packed flags: bit 0 = specular AA enabled, bit 1 = single local reflections enabled.
     pub environment_info: [f32; 4],
     /// Scene light info: [count, volumetric_count, volumetric_steps, 0].
     pub scene_light_info: [f32; 4],

@@ -661,15 +661,16 @@ pub fn draw(
         render_config.sky_zenith[2],
         0.0,
     ];
+    let environment_flags = (if render_config.specular_aa_enabled {
+        1_u32
+    } else {
+        0_u32
+    }) | render_config.local_reflection_mode.flag_bit();
     let environment_info = [
         render_config.environment_rotation_degrees.to_radians(),
         render_config.environment_exposure.exp2(),
         0.0,
-        if render_config.specular_aa_enabled {
-            1.0
-        } else {
-            0.0
-        },
+        environment_flags as f32,
     ];
 
     let render_uniform = camera.to_uniform(

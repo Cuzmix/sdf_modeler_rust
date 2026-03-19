@@ -279,6 +279,11 @@ impl SdfApp {
             },
             0.0,
         ];
+        let environment_flags = (if self.settings.render.specular_aa_enabled {
+            1_u32
+        } else {
+            0_u32
+        }) | self.settings.render.local_reflection_mode.flag_bit();
         let environment_info = [
             self.settings
                 .render
@@ -290,11 +295,7 @@ impl SdfApp {
             } else {
                 0.0
             },
-            if self.settings.render.specular_aa_enabled {
-                1.0
-            } else {
-                0.0
-            },
+            environment_flags as f32,
         ];
         let uniform = self.doc.camera.to_uniform(
             viewport,

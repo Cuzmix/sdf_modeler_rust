@@ -1952,9 +1952,10 @@ mod tests {
             "let env_color = sample_prefiltered_environment(dominant_reflection_dir, roughness);"
         ));
         assert!(shader.contains("let env_brdf = sample_brdf_lut(NoV, roughness);"));
-        assert!(shader.contains(
-            "return env_color * brdf * specular_ao * horizon_ao * camera.ambient_info.y;"
-        ));
+        assert!(shader.contains("fn compute_local_reflection("));
+        assert!(shader.contains("fn local_reflections_enabled() -> bool {"));
+        assert!(shader.contains("color += compute_local_reflection("));
+        assert!(shader.contains("return color;"));
     }
 
     #[test]
@@ -1967,6 +1968,7 @@ mod tests {
         assert!(shader.contains("fn calc_bent_normal_ao(p: vec3f, n: vec3f) -> AoResult {"));
         assert!(shader
             .contains("fn apply_specular_antialiasing(normal: vec3f, roughness: f32) -> f32 {"));
+        assert!(shader.contains("fn specular_aa_enabled() -> bool {"));
         assert!(shader.contains("let roughness = apply_specular_antialiasing(n, base_roughness);"));
         assert!(shader.contains("let ao_mode = i32(camera.ambient_info.w + 0.5);"));
         assert!(shader.contains("ao_result = calc_ao_result(p, n, ao_mode);"));
@@ -2612,6 +2614,8 @@ mod tests {
         let shader = generate_shader(&scene, &RenderConfig::default());
         assert!(shader.contains("fn D_GGX_Anisotropic"));
         assert!(shader.contains("fn compute_scene_direct_lighting"));
+        assert!(shader.contains("fn sample_secondary_surface_hit"));
+        assert!(shader.contains("fn compute_local_reflection"));
         assert!(shader.contains("fn compute_environment_transmission"));
         assert!(shader.contains("fn compute_geometry_aware_transmission"));
         assert!(shader.contains("fn trace_transmission_path"));
