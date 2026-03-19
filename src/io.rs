@@ -458,9 +458,9 @@ fn migrate_v2_to_v3(project: &mut ProjectFile) {
             NodeData::Primitive {
                 voxel_grid: Some(_),
                 position,
-                color,
+                material,
                 ..
-            } => Some((n.id, *position, *color)),
+            } => Some((n.id, *position, material.base_color)),
             _ => None,
         })
         .collect();
@@ -527,16 +527,10 @@ mod tests {
             }
         }
         if let Some(node) = source.nodes.get_mut(&sphere) {
-            if let NodeData::Primitive {
-                color,
-                roughness,
-                metallic,
-                ..
-            } = &mut node.data
-            {
-                *color = Vec3::new(0.2, 0.8, 0.4);
-                *roughness = 0.32;
-                *metallic = 0.65;
+            if let NodeData::Primitive { material, .. } = &mut node.data {
+                material.base_color = Vec3::new(0.2, 0.8, 0.4);
+                material.roughness = 0.32;
+                material.metallic = 0.65;
             }
         }
         source.hidden_nodes.insert(sphere);
@@ -579,15 +573,10 @@ mod tests {
         };
 
         match &target.nodes[&loaded_child].data {
-            NodeData::Primitive {
-                color,
-                roughness,
-                metallic,
-                ..
-            } => {
-                assert_eq!(*color, Vec3::new(0.2, 0.8, 0.4));
-                assert!((*roughness - 0.32).abs() < 1e-6);
-                assert!((*metallic - 0.65).abs() < 1e-6);
+            NodeData::Primitive { material, .. } => {
+                assert_eq!(material.base_color, Vec3::new(0.2, 0.8, 0.4));
+                assert!((material.roughness - 0.32).abs() < 1e-6);
+                assert!((material.metallic - 0.65).abs() < 1e-6);
             }
             _ => panic!("loaded child should be Primitive"),
         }

@@ -378,7 +378,8 @@ fn collect_leaf_colors(scene: &Scene) -> Vec<(crate::graph::scene::NodeId, [f32;
     for &id in &order {
         if let Some(node) = scene.nodes.get(&id) {
             match &node.data {
-                NodeData::Primitive { color, .. } | NodeData::Sculpt { color, .. } => {
+                NodeData::Primitive { material, .. } | NodeData::Sculpt { material, .. } => {
+                    let color = material.base_color;
                     leaves.push((id, [color.x, color.y, color.z]));
                 }
                 _ => {}
@@ -1060,12 +1061,15 @@ mod tests {
                 position: Vec3::ZERO,
                 rotation: Vec3::ZERO,
                 scale: Vec3::ONE,
-                color: Vec3::new(1.0, 0.0, 0.0),
-                roughness: 0.5,
-                metallic: 0.0,
-                emissive: Vec3::ZERO,
-                emissive_intensity: 0.0,
-                fresnel: 0.04,
+                material: crate::graph::scene::MaterialParams {
+                    base_color: Vec3::new(1.0, 0.0, 0.0),
+                    roughness: 0.5,
+                    metallic: 0.0,
+                    emissive_color: Vec3::ZERO,
+                    emissive_intensity: 0.0,
+                    reflectance_f0: 0.04,
+                    ..crate::graph::scene::MaterialParams::default()
+                },
                 voxel_grid: None,
             },
         );
@@ -1082,12 +1086,15 @@ mod tests {
                 position: Vec3::ZERO,
                 rotation: Vec3::ZERO,
                 scale: Vec3::ONE,
-                color: Vec3::new(0.0, 1.0, 0.0),
-                roughness: 0.5,
-                metallic: 0.0,
-                emissive: Vec3::ZERO,
-                emissive_intensity: 0.0,
-                fresnel: 0.04,
+                material: crate::graph::scene::MaterialParams {
+                    base_color: Vec3::new(0.0, 1.0, 0.0),
+                    roughness: 0.5,
+                    metallic: 0.0,
+                    emissive_color: Vec3::ZERO,
+                    emissive_intensity: 0.0,
+                    reflectance_f0: 0.04,
+                    ..crate::graph::scene::MaterialParams::default()
+                },
                 voxel_grid: None,
             },
         );
@@ -1277,12 +1284,15 @@ mod tests {
                 position: Vec3::ZERO,
                 rotation: Vec3::ZERO,
                 scale: Vec3::ONE,
-                color: Vec3::new(1.0, 0.0, 0.0),
-                roughness: 0.5,
-                metallic: 0.0,
-                emissive: Vec3::ZERO,
-                emissive_intensity: 0.0,
-                fresnel: 0.04,
+                material: crate::graph::scene::MaterialParams {
+                    base_color: Vec3::new(1.0, 0.0, 0.0),
+                    roughness: 0.5,
+                    metallic: 0.0,
+                    emissive_color: Vec3::ZERO,
+                    emissive_intensity: 0.0,
+                    reflectance_f0: 0.04,
+                    ..crate::graph::scene::MaterialParams::default()
+                },
                 voxel_grid: None,
             },
         );
@@ -1295,12 +1305,15 @@ mod tests {
                 position: Vec3::new(5.0, 0.0, 0.0),
                 rotation: Vec3::ZERO,
                 scale: Vec3::ONE,
-                color: Vec3::new(0.0, 0.0, 1.0),
-                roughness: 0.5,
-                metallic: 0.0,
-                emissive: Vec3::ZERO,
-                emissive_intensity: 0.0,
-                fresnel: 0.04,
+                material: crate::graph::scene::MaterialParams {
+                    base_color: Vec3::new(0.0, 0.0, 1.0),
+                    roughness: 0.5,
+                    metallic: 0.0,
+                    emissive_color: Vec3::ZERO,
+                    emissive_intensity: 0.0,
+                    reflectance_f0: 0.04,
+                    ..crate::graph::scene::MaterialParams::default()
+                },
                 voxel_grid: None,
             },
         );
@@ -2029,12 +2042,15 @@ mod tests {
                 position: Vec3::new(-0.5, 0.0, 0.0),
                 rotation: Vec3::ZERO,
                 scale: Vec3::ONE,
-                color: Vec3::ONE,
-                roughness: 0.5,
-                metallic: 0.0,
-                emissive: Vec3::ZERO,
-                emissive_intensity: 0.0,
-                fresnel: 0.04,
+                material: crate::graph::scene::MaterialParams {
+                    base_color: Vec3::ONE,
+                    roughness: 0.5,
+                    metallic: 0.0,
+                    emissive_color: Vec3::ZERO,
+                    emissive_intensity: 0.0,
+                    reflectance_f0: 0.04,
+                    ..crate::graph::scene::MaterialParams::default()
+                },
                 voxel_grid: None,
             },
         );
@@ -2046,12 +2062,15 @@ mod tests {
                 position: Vec3::new(0.5, 0.0, 0.0),
                 rotation: Vec3::ZERO,
                 scale: Vec3::ONE,
-                color: Vec3::ONE,
-                roughness: 0.5,
-                metallic: 0.0,
-                emissive: Vec3::ZERO,
-                emissive_intensity: 0.0,
-                fresnel: 0.04,
+                material: crate::graph::scene::MaterialParams {
+                    base_color: Vec3::ONE,
+                    roughness: 0.5,
+                    metallic: 0.0,
+                    emissive_color: Vec3::ZERO,
+                    emissive_intensity: 0.0,
+                    reflectance_f0: 0.04,
+                    ..crate::graph::scene::MaterialParams::default()
+                },
                 voxel_grid: None,
             },
         );

@@ -524,8 +524,23 @@ impl Default for LightArrayConfig {
 fn default_roughness() -> f32 {
     0.5
 }
-fn default_fresnel() -> f32 {
+fn default_reflectance_f0() -> f32 {
     0.04
+}
+fn default_clearcoat_roughness() -> f32 {
+    0.2
+}
+fn default_sheen_roughness() -> f32 {
+    0.5
+}
+fn default_thickness() -> f32 {
+    1.0
+}
+fn default_ior() -> f32 {
+    1.5
+}
+fn default_anisotropy_direction_local() -> Vec3 {
+    Vec3::X
 }
 fn default_layer_intensity() -> f32 {
     1.0
@@ -555,6 +570,99 @@ fn default_cast_shadows_true() -> bool {
     true
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct MaterialParams {
+    #[serde(default = "default_material_base_color")]
+    pub base_color: Vec3,
+    #[serde(default = "default_roughness")]
+    pub roughness: f32,
+    #[serde(default)]
+    pub metallic: f32,
+    #[serde(default)]
+    pub emissive_color: Vec3,
+    #[serde(default)]
+    pub emissive_intensity: f32,
+    #[serde(default = "default_reflectance_f0", alias = "fresnel")]
+    pub reflectance_f0: f32,
+    #[serde(default)]
+    pub clearcoat: f32,
+    #[serde(default = "default_clearcoat_roughness")]
+    pub clearcoat_roughness: f32,
+    #[serde(default)]
+    pub sheen_color: Vec3,
+    #[serde(default = "default_sheen_roughness")]
+    pub sheen_roughness: f32,
+    #[serde(default)]
+    pub transmission: f32,
+    #[serde(default = "default_thickness")]
+    pub thickness: f32,
+    #[serde(default = "default_ior")]
+    pub ior: f32,
+    #[serde(default)]
+    pub anisotropy_strength: f32,
+    #[serde(default = "default_anisotropy_direction_local")]
+    pub anisotropy_direction_local: Vec3,
+}
+
+fn default_material_base_color() -> Vec3 {
+    Vec3::ONE
+}
+
+impl Default for MaterialParams {
+    fn default() -> Self {
+        Self {
+            base_color: default_material_base_color(),
+            roughness: default_roughness(),
+            metallic: 0.0,
+            emissive_color: Vec3::ZERO,
+            emissive_intensity: 0.0,
+            reflectance_f0: default_reflectance_f0(),
+            clearcoat: 0.0,
+            clearcoat_roughness: default_clearcoat_roughness(),
+            sheen_color: Vec3::ZERO,
+            sheen_roughness: default_sheen_roughness(),
+            transmission: 0.0,
+            thickness: default_thickness(),
+            ior: default_ior(),
+            anisotropy_strength: 0.0,
+            anisotropy_direction_local: default_anisotropy_direction_local(),
+        }
+    }
+}
+
+impl MaterialParams {
+    pub fn with_base_color(base_color: Vec3) -> Self {
+        Self {
+            base_color,
+            ..Self::default()
+        }
+    }
+}
+
+fn hash_vec3<H: Hasher>(value: Vec3, hasher: &mut H) {
+    value.x.to_bits().hash(hasher);
+    value.y.to_bits().hash(hasher);
+    value.z.to_bits().hash(hasher);
+}
+
+fn hash_material_params<H: Hasher>(material: &MaterialParams, hasher: &mut H) {
+    hash_vec3(material.base_color, hasher);
+    material.roughness.to_bits().hash(hasher);
+    material.metallic.to_bits().hash(hasher);
+    hash_vec3(material.emissive_color, hasher);
+    material.emissive_intensity.to_bits().hash(hasher);
+    material.reflectance_f0.to_bits().hash(hasher);
+    material.clearcoat.to_bits().hash(hasher);
+    material.clearcoat_roughness.to_bits().hash(hasher);
+    hash_vec3(material.sheen_color, hasher);
+    material.sheen_roughness.to_bits().hash(hasher);
+    material.transmission.to_bits().hash(hasher);
+    material.thickness.to_bits().hash(hasher);
+    material.ior.to_bits().hash(hasher);
+    material.anisotropy_strength.to_bits().hash(hasher);
+    hash_vec3(material.anisotropy_direction_local, hasher);
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum NodeData {
     Primitive {
@@ -562,17 +670,8 @@ pub enum NodeData {
         position: Vec3,
         rotation: Vec3,
         scale: Vec3,
-        color: Vec3,
-        #[serde(default = "default_roughness")]
-        roughness: f32,
         #[serde(default)]
-        metallic: f32,
-        #[serde(default)]
-        emissive: Vec3,
-        #[serde(default)]
-        emissive_intensity: f32,
-        #[serde(default = "default_fresnel")]
-        fresnel: f32,
+        material: MaterialParams,
         /// Legacy: kept for v2 save file migration only. Always None at runtime.
         #[serde(default, skip_serializing)]
         voxel_grid: Option<VoxelGrid>,
@@ -592,17 +691,8 @@ pub enum NodeData {
         input: Option<NodeId>,
         position: Vec3,
         rotation: Vec3,
-        color: Vec3,
-        #[serde(default = "default_roughness")]
-        roughness: f32,
         #[serde(default)]
-        metallic: f32,
-        #[serde(default)]
-        emissive: Vec3,
-        #[serde(default)]
-        emissive_intensity: f32,
-        #[serde(default = "default_fresnel")]
-        fresnel: f32,
+        material: MaterialParams,
         #[serde(default = "default_layer_intensity")]
         layer_intensity: f32,
         voxel_grid: VoxelGrid,
@@ -706,6 +796,24 @@ impl ProximityMode {
 }
 
 impl NodeData {
+    pub fn material(&self) -> Option<&MaterialParams> {
+        match self {
+            NodeData::Primitive { material, .. } | NodeData::Sculpt { material, .. } => {
+                Some(material)
+            }
+            _ => None,
+        }
+    }
+
+    pub fn material_mut(&mut self) -> Option<&mut MaterialParams> {
+        match self {
+            NodeData::Primitive { material, .. } | NodeData::Sculpt { material, .. } => {
+                Some(material)
+            }
+            _ => None,
+        }
+    }
+
     /// Iterate over child node IDs (0-2 children depending on variant).
     pub fn children(&self) -> impl Iterator<Item = NodeId> {
         let (a, b) = match self {
@@ -930,12 +1038,7 @@ impl Scene {
                 position: kind.default_position(),
                 rotation: Vec3::ZERO,
                 scale: kind.default_scale(),
-                color: kind.default_color(),
-                roughness: 0.5,
-                metallic: 0.0,
-                emissive: Vec3::ZERO,
-                emissive_intensity: 0.0,
-                fresnel: 0.04,
+                material: MaterialParams::with_base_color(kind.default_color()),
                 kind,
                 voxel_grid: None,
             },
@@ -979,12 +1082,7 @@ impl Scene {
                 input: Some(input),
                 position,
                 rotation,
-                color,
-                roughness: 0.5,
-                metallic: 0.0,
-                emissive: Vec3::ZERO,
-                emissive_intensity: 0.0,
-                fresnel: 0.04,
+                material: MaterialParams::with_base_color(color),
                 layer_intensity: 1.0,
                 voxel_grid,
                 desired_resolution,
@@ -1581,33 +1679,13 @@ impl Scene {
                     position,
                     rotation,
                     scale,
-                    color,
-                    metallic,
-                    roughness,
-                    emissive,
-                    emissive_intensity,
-                    fresnel,
+                    material,
                     ..
                 } => {
-                    position.x.to_bits().hash(&mut hasher);
-                    position.y.to_bits().hash(&mut hasher);
-                    position.z.to_bits().hash(&mut hasher);
-                    rotation.x.to_bits().hash(&mut hasher);
-                    rotation.y.to_bits().hash(&mut hasher);
-                    rotation.z.to_bits().hash(&mut hasher);
-                    scale.x.to_bits().hash(&mut hasher);
-                    scale.y.to_bits().hash(&mut hasher);
-                    scale.z.to_bits().hash(&mut hasher);
-                    color.x.to_bits().hash(&mut hasher);
-                    color.y.to_bits().hash(&mut hasher);
-                    color.z.to_bits().hash(&mut hasher);
-                    metallic.to_bits().hash(&mut hasher);
-                    roughness.to_bits().hash(&mut hasher);
-                    emissive.x.to_bits().hash(&mut hasher);
-                    emissive.y.to_bits().hash(&mut hasher);
-                    emissive.z.to_bits().hash(&mut hasher);
-                    emissive_intensity.to_bits().hash(&mut hasher);
-                    fresnel.to_bits().hash(&mut hasher);
+                    hash_vec3(*position, &mut hasher);
+                    hash_vec3(*rotation, &mut hasher);
+                    hash_vec3(*scale, &mut hasher);
+                    hash_material_params(material, &mut hasher);
                 }
                 NodeData::Operation {
                     smooth_k,
@@ -1622,31 +1700,13 @@ impl Scene {
                 NodeData::Sculpt {
                     position,
                     rotation,
-                    color,
-                    metallic,
-                    roughness,
-                    emissive,
-                    emissive_intensity,
-                    fresnel,
+                    material,
                     desired_resolution,
                     ..
                 } => {
-                    position.x.to_bits().hash(&mut hasher);
-                    position.y.to_bits().hash(&mut hasher);
-                    position.z.to_bits().hash(&mut hasher);
-                    rotation.x.to_bits().hash(&mut hasher);
-                    rotation.y.to_bits().hash(&mut hasher);
-                    rotation.z.to_bits().hash(&mut hasher);
-                    color.x.to_bits().hash(&mut hasher);
-                    color.y.to_bits().hash(&mut hasher);
-                    color.z.to_bits().hash(&mut hasher);
-                    metallic.to_bits().hash(&mut hasher);
-                    roughness.to_bits().hash(&mut hasher);
-                    emissive.x.to_bits().hash(&mut hasher);
-                    emissive.y.to_bits().hash(&mut hasher);
-                    emissive.z.to_bits().hash(&mut hasher);
-                    emissive_intensity.to_bits().hash(&mut hasher);
-                    fresnel.to_bits().hash(&mut hasher);
+                    hash_vec3(*position, &mut hasher);
+                    hash_vec3(*rotation, &mut hasher);
+                    hash_material_params(material, &mut hasher);
                     desired_resolution.hash(&mut hasher);
                 }
                 NodeData::Transform {
@@ -1929,24 +1989,14 @@ impl Scene {
                         position,
                         rotation,
                         scale,
-                        color,
-                        roughness,
-                        metallic,
-                        emissive,
-                        emissive_intensity,
-                        fresnel,
+                        material,
                         ..
                     } => NodeData::Primitive {
                         kind: kind.clone(),
                         position: *position,
                         rotation: *rotation,
                         scale: *scale,
-                        color: *color,
-                        roughness: *roughness,
-                        metallic: *metallic,
-                        emissive: *emissive,
-                        emissive_intensity: *emissive_intensity,
-                        fresnel: *fresnel,
+                        material: material.clone(),
                         voxel_grid: None,
                     },
                     NodeData::Operation {
@@ -1968,12 +2018,7 @@ impl Scene {
                         input,
                         position,
                         rotation,
-                        color,
-                        roughness,
-                        metallic,
-                        emissive,
-                        emissive_intensity,
-                        fresnel,
+                        material,
                         layer_intensity,
                         voxel_grid,
                         desired_resolution,
@@ -1981,12 +2026,7 @@ impl Scene {
                         input: remap(input),
                         position: *position,
                         rotation: *rotation,
-                        color: *color,
-                        roughness: *roughness,
-                        metallic: *metallic,
-                        emissive: *emissive,
-                        emissive_intensity: *emissive_intensity,
-                        fresnel: *fresnel,
+                        material: material.clone(),
                         layer_intensity: *layer_intensity,
                         voxel_grid: voxel_grid.clone(),
                         desired_resolution: *desired_resolution,
@@ -2174,12 +2214,7 @@ impl Scene {
                 input: None,
                 position: center,
                 rotation: Vec3::ZERO,
-                color,
-                roughness: 0.5,
-                metallic: 0.0,
-                emissive: Vec3::ZERO,
-                emissive_intensity: 0.0,
-                fresnel: 0.04,
+                material: MaterialParams::with_base_color(color),
                 layer_intensity: 1.0,
                 voxel_grid,
                 desired_resolution,
@@ -2322,12 +2357,7 @@ impl Scene {
                         position: p1,
                         rotation: r1,
                         scale: s1,
-                        color: c1,
-                        roughness: rgh1,
-                        metallic: m1,
-                        emissive: e1,
-                        emissive_intensity: ei1,
-                        fresnel: f1,
+                        material: m1,
                         ..
                     },
                     NodeData::Primitive {
@@ -2335,12 +2365,7 @@ impl Scene {
                         position: p2,
                         rotation: r2,
                         scale: s2,
-                        color: c2,
-                        roughness: rgh2,
-                        metallic: m2,
-                        emissive: e2,
-                        emissive_intensity: ei2,
-                        fresnel: f2,
+                        material: m2,
                         ..
                     },
                 ) => {
@@ -2348,12 +2373,7 @@ impl Scene {
                         || p1 != p2
                         || r1 != r2
                         || s1 != s2
-                        || c1 != c2
-                        || rgh1 != rgh2
                         || m1 != m2
-                        || e1 != e2
-                        || ei1 != ei2
-                        || f1 != f2
                     {
                         return false;
                     }
@@ -2391,12 +2411,7 @@ impl Scene {
                         input: i1,
                         position: p1,
                         rotation: r1,
-                        color: c1,
-                        roughness: rgh1,
-                        metallic: m1,
-                        emissive: e1,
-                        emissive_intensity: ei1,
-                        fresnel: f1,
+                        material: m1,
                         layer_intensity: li1,
                         voxel_grid: v1,
                         desired_resolution: dr1,
@@ -2405,12 +2420,7 @@ impl Scene {
                         input: i2,
                         position: p2,
                         rotation: r2,
-                        color: c2,
-                        roughness: rgh2,
-                        metallic: m2,
-                        emissive: e2,
-                        emissive_intensity: ei2,
-                        fresnel: f2,
+                        material: m2,
                         layer_intensity: li2,
                         voxel_grid: v2,
                         desired_resolution: dr2,
@@ -2419,12 +2429,7 @@ impl Scene {
                     if i1 != i2
                         || p1 != p2
                         || r1 != r2
-                        || c1 != c2
-                        || rgh1 != rgh2
                         || m1 != m2
-                        || e1 != e2
-                        || ei1 != ei2
-                        || f1 != f2
                         || li1 != li2
                         || dr1 != dr2
                         || !v1.content_eq(v2)
@@ -3173,12 +3178,7 @@ mod tests {
             position: Vec3::ZERO,
             rotation: Vec3::ZERO,
             scale: Vec3::ONE,
-            color: Vec3::ONE,
-            roughness: 0.5,
-            metallic: 0.0,
-            emissive: Vec3::ZERO,
-            emissive_intensity: 0.0,
-            fresnel: 0.04,
+            material: MaterialParams::with_base_color(Vec3::ONE),
             voxel_grid: None,
         };
         assert_eq!(data.children().count(), 0);

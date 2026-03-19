@@ -205,6 +205,15 @@ fn tangent_frame(normal: vec3f) -> mat3x3f {
     return mat3x3f(tangent, bitangent, normal);
 }
 
+fn project_direction_onto_surface(normal: vec3f, direction: vec3f) -> vec3f {
+    let projected = direction - normal * dot(direction, normal);
+    if dot(projected, projected) > 1e-6 {
+        return normalize(projected);
+    }
+    let fallback_frame = tangent_frame(normal);
+    return normalize(fallback_frame[0]);
+}
+
 fn cosine_sample_hemisphere(sample_index: i32, sample_count: i32) -> vec3f {
     let u = (f32(sample_index) + 0.5) / max(f32(sample_count), 1.0);
     let v = fract((f32(sample_index) + 0.5) * 0.61803398875);
@@ -281,9 +290,51 @@ fn G_SmithGGX(NoV: f32, NoL: f32, roughness: f32) -> f32 {
     return 0.5 / max(ggx_v + ggx_l, 0.0001);
 }
 
+fn anisotropy_to_alpha_pair(roughness: f32, anisotropy: f32) -> vec2f {
+    let alpha = max(roughness * roughness, 0.001);
+    let clamped_anisotropy = clamp(anisotropy, -0.95, 0.95);
+    return vec2f(
+        max(alpha * (1.0 + clamped_anisotropy), 0.001),
+        max(alpha * (1.0 - clamped_anisotropy), 0.001),
+    );
+}
+
+fn D_GGX_Anisotropic(NoH: f32, ToH: f32, BoH: f32, alpha_t: f32, alpha_b: f32) -> f32 {
+    let t = ToH / max(alpha_t, 0.001);
+    let b = BoH / max(alpha_b, 0.001);
+    let denom = t * t + b * b + NoH * NoH;
+    return 1.0 / max(PI * alpha_t * alpha_b * denom * denom, 0.0001);
+}
+
+fn G_SmithGGX_Anisotropic(
+    NoV: f32,
+    ToV: f32,
+    BoV: f32,
+    NoL: f32,
+    ToL: f32,
+    BoL: f32,
+    alpha_t: f32,
+    alpha_b: f32,
+) -> f32 {
+    let lambda_v = NoL * length(vec3f(alpha_t * ToV, alpha_b * BoV, NoV));
+    let lambda_l = NoV * length(vec3f(alpha_t * ToL, alpha_b * BoL, NoL));
+    return 0.5 / max(lambda_v + lambda_l, 0.0001);
+}
+
 // Schlick Fresnel approximation (vec3f for metallic F0 = albedo)
 fn F_Schlick_vec3(VoH: f32, f0: vec3f) -> vec3f {
     return f0 + (vec3f(1.0) - f0) * pow(1.0 - VoH, 5.0);
+}
+
+fn F_Schlick_scalar(VoH: f32, f0: f32) -> f32 {
+    return f0 + (1.0 - f0) * pow(1.0 - VoH, 5.0);
+}
+
+fn ior_to_reflectance_f0(ior: f32) -> f32 {
+    let eta = max(ior, 1.0);
+    let numerator = eta - 1.0;
+    let denominator = eta + 1.0;
+    return clamp((numerator * numerator) / max(denominator * denominator, 0.0001), 0.0, 1.0);
 }
 
 fn max_component(v: vec3f) -> f32 {
@@ -336,6 +387,17 @@ fn sample_prefiltered_environment(dir: vec3f, roughness: f32) -> vec3f {
     let max_lod = max(camera.ambient_info.z, 0.0);
     let lod = clamp(roughness, 0.0, 1.0) * max_lod;
     return textureSampleLevel(env_prefiltered_tex, env_sampler, normalize(dir), lod).xyz;
+}
+
+fn sample_transmission_environment(dir: vec3f, roughness: f32) -> vec3f {
+    let blur = clamp(roughness, 0.0, 1.0);
+    if blur <= 0.0001 && camera.environment_info.z > 0.5 {
+        return sample_hdri_background(dir);
+    }
+    if blur <= 0.0001 {
+        return sample_source_environment(dir);
+    }
+    return sample_prefiltered_environment(dir, blur);
 }
 
 fn sample_brdf_lut(NoV: f32, roughness: f32) -> vec2f {
@@ -417,6 +479,94 @@ fn compute_environment_specular(
     return env_color * brdf * specular_ao * horizon_ao * camera.ambient_info.y;
 }
 
+fn compute_transmission_absorption(base_color: vec3f, distance: f32) -> vec3f {
+    let tint = clamp(base_color, vec3f(0.02), vec3f(1.0));
+    return pow(tint, vec3f(max(distance, 0.0)));
+}
+
+fn compute_environment_transmission(
+    view_dir: vec3f,
+    n: vec3f,
+    NoV: f32,
+    roughness: f32,
+    base_color: vec3f,
+    transmission: f32,
+    thickness: f32,
+    ior: f32,
+    base_layer_energy: f32,
+) -> vec3f {
+    if transmission <= 0.0 || camera.ambient_info.y <= 0.0 {
+        return vec3f(0.0);
+    }
+    let eta = 1.0 / max(ior, 1.0001);
+    var refracted_dir = refract(-view_dir, n, eta);
+    if dot(refracted_dir, refracted_dir) < 1e-6 {
+        refracted_dir = reflect(-view_dir, n);
+    }
+    let env_color = sample_transmission_environment(refracted_dir, roughness);
+    let travel_distance = max(thickness, 0.0) / max(NoV, 0.15);
+    let absorption = compute_transmission_absorption(base_color, travel_distance);
+    let fresnel = F_Schlick_vec3(NoV, vec3f(ior_to_reflectance_f0(ior)));
+    return env_color
+        * absorption
+        * (vec3f(1.0) - fresnel)
+        * transmission
+        * base_layer_energy
+        * camera.ambient_info.y;
+}
+
+fn compute_direct_specular(
+    light_dir: vec3f,
+    view_dir: vec3f,
+    n: vec3f,
+    tangent: vec3f,
+    bitangent: vec3f,
+    NoV: f32,
+    roughness: f32,
+    f0: vec3f,
+    anisotropy_strength: f32,
+) -> vec3f {
+    let h = normalize(light_dir + view_dir);
+    let NoL = max(dot(n, light_dir), 0.0);
+    let NoH = max(dot(n, h), 0.0);
+    let VoH = max(dot(view_dir, h), 0.0);
+    if abs(anisotropy_strength) <= 0.001 {
+        let D = D_GGX(NoH, roughness);
+        let G = G_SmithGGX(NoV, NoL, roughness);
+        let F = F_Schlick_vec3(VoH, f0);
+        return D * G * F;
+    }
+
+    let alphas = anisotropy_to_alpha_pair(roughness, anisotropy_strength);
+    let ToV = dot(tangent, view_dir);
+    let BoV = dot(bitangent, view_dir);
+    let ToL = dot(tangent, light_dir);
+    let BoL = dot(bitangent, light_dir);
+    let ToH = dot(tangent, h);
+    let BoH = dot(bitangent, h);
+    let D = D_GGX_Anisotropic(NoH, ToH, BoH, alphas.x, alphas.y);
+    let G = G_SmithGGX_Anisotropic(NoV, ToV, BoV, NoL, ToL, BoL, alphas.x, alphas.y);
+    let F = F_Schlick_vec3(VoH, f0);
+    return D * G * F;
+}
+
+fn compute_sheen_environment(
+    view_dir: vec3f,
+    n: vec3f,
+    NoV: f32,
+    sheen_color: vec3f,
+    sheen_roughness: f32,
+) -> vec3f {
+    if all(sheen_color == vec3f(0.0)) || camera.ambient_info.y <= 0.0 {
+        return vec3f(0.0);
+    }
+    let reflection_dir = reflect(-view_dir, n);
+    let env_color = sample_prefiltered_environment(reflection_dir, clamp(sheen_roughness, 0.0, 1.0));
+    let exponent = mix(7.0, 2.0, clamp(sheen_roughness, 0.0, 1.0));
+    let grazing = pow(1.0 - clamp(NoV, 0.0, 1.0), exponent);
+    return env_color * sheen_color * grazing * camera.ambient_info.y;
+}
+
 fn get_node_color(mat_id: i32) -> vec3f {
     if mat_id < 0 { return vec3f(0.5); }
     return nodes[mat_id].color.xyz;
@@ -427,38 +577,69 @@ fn is_selected(mat_id: i32) -> bool {
     return nodes[mat_id].color.w > 0.5;
 }
 
-// Material helpers: Primitive packs emissive in extra1/extra2, Sculpt uses spare .w slots
 fn get_node_emissive(mat_id: i32) -> vec3f {
     if mat_id < 0 { return vec3f(0.0); }
-    let is_sculpt = nodes[mat_id].type_op.x > 19.5;
-    if is_sculpt {
-        // Sculpt: extra0.zw = emissive.xy, extra1.w = emissive.z
-        return vec3f(nodes[mat_id].extra0.z, nodes[mat_id].extra0.w, nodes[mat_id].extra1.w);
-    }
-    // Primitive: extra1.xyz = emissive
-    return nodes[mat_id].extra1.xyz;
+    return nodes[mat_id].material0.xyz;
 }
 
 fn get_node_emissive_intensity(mat_id: i32) -> f32 {
     if mat_id < 0 { return 0.0; }
-    let is_sculpt = nodes[mat_id].type_op.x > 19.5;
-    if is_sculpt {
-        // Sculpt: type_op.y = emissive_intensity
-        return nodes[mat_id].type_op.y;
-    }
-    // Primitive: extra1.w = emissive_intensity
-    return nodes[mat_id].extra1.w;
+    return nodes[mat_id].material0.w;
 }
 
-fn get_node_fresnel(mat_id: i32) -> f32 {
+fn get_node_reflectance_f0(mat_id: i32) -> f32 {
     if mat_id < 0 { return 0.04; }
-    let is_sculpt = nodes[mat_id].type_op.x > 19.5;
-    if is_sculpt {
-        // Sculpt: extra2.w = fresnel
-        return nodes[mat_id].extra2.w;
+    return nodes[mat_id].material1.x;
+}
+
+fn get_node_clearcoat(mat_id: i32) -> f32 {
+    if mat_id < 0 { return 0.0; }
+    return nodes[mat_id].material1.y;
+}
+
+fn get_node_clearcoat_roughness(mat_id: i32) -> f32 {
+    if mat_id < 0 { return 0.2; }
+    return nodes[mat_id].material1.z;
+}
+
+fn get_node_sheen_roughness(mat_id: i32) -> f32 {
+    if mat_id < 0 { return 0.5; }
+    return nodes[mat_id].material1.w;
+}
+
+fn get_node_sheen_color(mat_id: i32) -> vec3f {
+    if mat_id < 0 { return vec3f(0.0); }
+    return nodes[mat_id].material2.xyz;
+}
+
+fn get_node_transmission(mat_id: i32) -> f32 {
+    if mat_id < 0 { return 0.0; }
+    return nodes[mat_id].material2.w;
+}
+
+fn get_node_anisotropy_direction_world(mat_id: i32, n: vec3f) -> vec3f {
+    if mat_id < 0 {
+        let fallback_frame = tangent_frame(n);
+        return fallback_frame[0];
     }
-    // Primitive: extra2.x = fresnel
-    return nodes[mat_id].extra2.x;
+    let local_direction = nodes[mat_id].material3.xyz;
+    let rotated_direction = rotate_euler(local_direction, nodes[mat_id].rotation.xyz);
+    return project_direction_onto_surface(n, rotated_direction);
+}
+
+fn get_node_thickness(mat_id: i32) -> f32 {
+    if mat_id < 0 { return 1.0; }
+    return nodes[mat_id].material3.w;
+}
+
+fn get_node_anisotropy_strength(mat_id: i32) -> f32 {
+    if mat_id < 0 { return 0.0; }
+    return nodes[mat_id].material4.x;
+}
+
+fn get_node_ior(mat_id: i32) -> f32 {
+    if mat_id < 0 { return 1.5; }
+    return nodes[mat_id].material4.y;
 }
 
 // Material blending helpers: interpolate properties between two materials at CSG boundaries.
@@ -490,13 +671,91 @@ fn get_blended_metallic(mat_a: i32, mat_b: i32, blend_factor: f32) -> f32 {
     return mix(metal_a, metal_b, blend_factor);
 }
 
-fn get_blended_fresnel(mat_a: i32, mat_b: i32, blend_factor: f32) -> f32 {
-    let fresnel_a = get_node_fresnel(mat_a);
+fn get_blended_reflectance_f0(mat_a: i32, mat_b: i32, blend_factor: f32) -> f32 {
+    let reflectance_a = get_node_reflectance_f0(mat_a);
     if mat_b < 0 || blend_factor <= 0.0 {
-        return fresnel_a;
+        return reflectance_a;
     }
-    let fresnel_b = get_node_fresnel(mat_b);
-    return mix(fresnel_a, fresnel_b, blend_factor);
+    let reflectance_b = get_node_reflectance_f0(mat_b);
+    return mix(reflectance_a, reflectance_b, blend_factor);
+}
+
+fn get_blended_clearcoat(mat_a: i32, mat_b: i32, blend_factor: f32) -> f32 {
+    let clearcoat_a = get_node_clearcoat(mat_a);
+    if mat_b < 0 || blend_factor <= 0.0 {
+        return clearcoat_a;
+    }
+    return mix(clearcoat_a, get_node_clearcoat(mat_b), blend_factor);
+}
+
+fn get_blended_clearcoat_roughness(mat_a: i32, mat_b: i32, blend_factor: f32) -> f32 {
+    let roughness_a = get_node_clearcoat_roughness(mat_a);
+    if mat_b < 0 || blend_factor <= 0.0 {
+        return roughness_a;
+    }
+    return mix(roughness_a, get_node_clearcoat_roughness(mat_b), blend_factor);
+}
+
+fn get_blended_sheen_color(mat_a: i32, mat_b: i32, blend_factor: f32) -> vec3f {
+    let sheen_color_a = get_node_sheen_color(mat_a);
+    if mat_b < 0 || blend_factor <= 0.0 {
+        return sheen_color_a;
+    }
+    return mix(sheen_color_a, get_node_sheen_color(mat_b), blend_factor);
+}
+
+fn get_blended_sheen_roughness(mat_a: i32, mat_b: i32, blend_factor: f32) -> f32 {
+    let roughness_a = get_node_sheen_roughness(mat_a);
+    if mat_b < 0 || blend_factor <= 0.0 {
+        return roughness_a;
+    }
+    return mix(roughness_a, get_node_sheen_roughness(mat_b), blend_factor);
+}
+
+fn get_blended_transmission(mat_a: i32, mat_b: i32, blend_factor: f32) -> f32 {
+    let transmission_a = get_node_transmission(mat_a);
+    if mat_b < 0 || blend_factor <= 0.0 {
+        return transmission_a;
+    }
+    return mix(transmission_a, get_node_transmission(mat_b), blend_factor);
+}
+
+fn get_blended_thickness(mat_a: i32, mat_b: i32, blend_factor: f32) -> f32 {
+    let thickness_a = get_node_thickness(mat_a);
+    if mat_b < 0 || blend_factor <= 0.0 {
+        return thickness_a;
+    }
+    return mix(thickness_a, get_node_thickness(mat_b), blend_factor);
+}
+
+fn get_blended_anisotropy_strength(mat_a: i32, mat_b: i32, blend_factor: f32) -> f32 {
+    let anisotropy_a = get_node_anisotropy_strength(mat_a);
+    if mat_b < 0 || blend_factor <= 0.0 {
+        return anisotropy_a;
+    }
+    return mix(anisotropy_a, get_node_anisotropy_strength(mat_b), blend_factor);
+}
+
+fn get_blended_anisotropy_direction_world(
+    mat_a: i32,
+    mat_b: i32,
+    blend_factor: f32,
+    n: vec3f,
+) -> vec3f {
+    let direction_a = get_node_anisotropy_direction_world(mat_a, n);
+    if mat_b < 0 || blend_factor <= 0.0 {
+        return direction_a;
+    }
+    let direction_b = get_node_anisotropy_direction_world(mat_b, n);
+    return project_direction_onto_surface(n, mix(direction_a, direction_b, blend_factor));
+}
+
+fn get_blended_ior(mat_a: i32, mat_b: i32, blend_factor: f32) -> f32 {
+    let ior_a = get_node_ior(mat_a);
+    if mat_b < 0 || blend_factor <= 0.0 {
+        return ior_a;
+    }
+    return mix(ior_a, get_node_ior(mat_b), blend_factor);
 }
 
 @fragment
@@ -659,32 +918,51 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
         // Material properties (blended at smooth CSG boundaries)
         let mat_metallic = get_blended_metallic(mat_id, mat_b_id, blend_factor);
         let mat_roughness = get_blended_roughness(mat_id, mat_b_id, blend_factor);
-        let mat_fresnel = get_blended_fresnel(mat_id, mat_b_id, blend_factor);
+        let mat_reflectance_f0 = get_blended_reflectance_f0(mat_id, mat_b_id, blend_factor);
+        let mat_clearcoat = get_blended_clearcoat(mat_id, mat_b_id, blend_factor);
+        let mat_clearcoat_roughness =
+            get_blended_clearcoat_roughness(mat_id, mat_b_id, blend_factor);
+        let mat_sheen_color = get_blended_sheen_color(mat_id, mat_b_id, blend_factor);
+        let mat_sheen_roughness = get_blended_sheen_roughness(mat_id, mat_b_id, blend_factor);
+        let mat_transmission = get_blended_transmission(mat_id, mat_b_id, blend_factor);
+        let mat_thickness = get_blended_thickness(mat_id, mat_b_id, blend_factor);
+        let mat_ior = get_blended_ior(mat_id, mat_b_id, blend_factor);
+        let mat_anisotropy_strength =
+            get_blended_anisotropy_strength(mat_id, mat_b_id, blend_factor);
+        let mat_anisotropy_direction =
+            get_blended_anisotropy_direction_world(mat_id, mat_b_id, blend_factor, n);
 
         let albedo = get_blended_color(mat_id, mat_b_id, blend_factor);
         let view_dir = -rd;
         let NoV = max(dot(n, view_dir), 0.0001);
         let ao_mode = i32(camera.ambient_info.w + 0.5);
+        let tangent = mat_anisotropy_direction;
+        let bitangent = normalize(cross(n, tangent));
 
-        // Dielectric F0 from fresnel parameter; metallic F0 = albedo
-        let f0 = mix(vec3f(mat_fresnel), albedo, mat_metallic);
+        // Dielectric F0 defaults to the reflectance slider but will not go below the IOR-implied value.
+        let dielectric_f0 = max(mat_reflectance_f0, ior_to_reflectance_f0(mat_ior));
+        let f0 = mix(vec3f(dielectric_f0), albedo, mat_metallic);
         // Clamp roughness to avoid division artifacts at perfectly smooth
         let base_roughness = clamp(mat_roughness, 0.045, 1.0);
         let roughness = apply_specular_antialiasing(n, base_roughness);
+        let clearcoat_roughness =
+            clamp(apply_specular_antialiasing(n, clamp(mat_clearcoat_roughness, 0.045, 1.0)), 0.045, 1.0);
+        let base_layer_energy = 1.0 - 0.25 * clamp(mat_clearcoat, 0.0, 1.0);
+        let transmission = clamp(mat_transmission, 0.0, 1.0) * (1.0 - mat_metallic);
 
         // Lambertian diffuse (energy-conserving: metals have no diffuse)
-        let diffuse_color = albedo * (1.0 - mat_metallic) / PI;
+        let diffuse_color = albedo * (1.0 - mat_metallic) * (1.0 - transmission) / PI;
 
         /*SHADOW_LINE*/
 
         // Ambient occlusion
         /*AO_LINE*/
 
-        // Diffuse indirect from the procedural sky environment.
+        // Diffuse indirect from the baked environment.
         let indirect_diffuse = compute_indirect_diffuse_lighting(ao_result.bent_normal);
         let diffuse_ao = compute_multi_bounce_ao(ao, albedo);
         let ambient_i = camera.ambient_info.x;
-        color = diffuse_color * indirect_diffuse * ambient_i * diffuse_ao;
+        color = diffuse_color * indirect_diffuse * ambient_i * diffuse_ao * base_layer_energy;
 
         // --- Scene lights (up to 8 lights from Light nodes) ---
         let scene_light_count = i32(camera.scene_light_info.x + 0.5);
@@ -760,12 +1038,32 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
             let sl_NoL = max(dot(n, sl_light_dir), 0.0);
             let sl_NoH = max(dot(n, sl_h), 0.0);
             let sl_VoH = max(dot(view_dir, sl_h), 0.0);
-            let sl_D = D_GGX(sl_NoH, roughness);
-            let sl_G = G_SmithGGX(NoV, sl_NoL, roughness);
-            let sl_F = F_Schlick_vec3(sl_VoH, f0);
-            let sl_specular = sl_D * sl_G * sl_F;
+            let sl_specular = compute_direct_specular(
+                sl_light_dir,
+                view_dir,
+                n,
+                tangent,
+                bitangent,
+                NoV,
+                roughness,
+                f0,
+                mat_anisotropy_strength,
+            );
+            let sl_clearcoat_D = D_GGX(sl_NoH, clearcoat_roughness);
+            let sl_clearcoat_G = G_SmithGGX(NoV, sl_NoL, clearcoat_roughness);
+            let sl_clearcoat_F = F_Schlick_scalar(sl_VoH, 0.04);
+            let sl_clearcoat = vec3f(mat_clearcoat * sl_clearcoat_D * sl_clearcoat_G * sl_clearcoat_F);
+            let sl_sheen_exponent = mix(7.0, 2.0, clamp(mat_sheen_roughness, 0.0, 1.0));
+            let sl_sheen = mat_sheen_color
+                * pow(1.0 - clamp(sl_VoH, 0.0, 1.0), sl_sheen_exponent)
+                * (1.0 - mat_metallic);
 
-            let sl_contribution = (diffuse_color + sl_specular) * sl_NoL * sl_intensity * sl_atten * sl_color;
+            let sl_contribution =
+                ((diffuse_color + sl_specular) * base_layer_energy + sl_clearcoat + sl_sheen)
+                * sl_NoL
+                * sl_intensity
+                * sl_atten
+                * sl_color;
 
             // Per-light shadow (budget: max 2 shadow-casting lights for performance)
             var sl_shadow_factor = vec3f(1.0);
@@ -785,7 +1083,35 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
         }
 
         // Split-sum environment specular from the prefiltered cubemap + BRDF LUT.
-        color += compute_environment_specular(view_dir, n, NoV, roughness, f0, ao_result, ao_mode);
+        color += compute_environment_specular(view_dir, n, NoV, roughness, f0, ao_result, ao_mode)
+            * base_layer_energy;
+        color += compute_environment_specular(
+            view_dir,
+            n,
+            NoV,
+            clearcoat_roughness,
+            vec3f(0.04 * mat_clearcoat),
+            ao_result,
+            ao_mode,
+        );
+        color += compute_sheen_environment(
+            view_dir,
+            n,
+            NoV,
+            mat_sheen_color * (1.0 - mat_metallic),
+            mat_sheen_roughness,
+        );
+        color += compute_environment_transmission(
+            view_dir,
+            n,
+            NoV,
+            roughness,
+            albedo,
+            transmission,
+            mat_thickness,
+            mat_ior,
+            base_layer_energy,
+        );
 
         // Emissive contribution (added before tonemapping for natural overbright bloom)
         let emissive_col = get_node_emissive(mat_id);

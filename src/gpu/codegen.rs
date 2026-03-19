@@ -1704,12 +1704,15 @@ mod tests {
                 input: None,
                 position: Vec3::ZERO,
                 rotation: Vec3::ZERO,
-                color: Vec3::new(0.5, 0.5, 0.5),
-                roughness: 0.5,
-                metallic: 0.0,
-                emissive: Vec3::ZERO,
-                emissive_intensity: 0.0,
-                fresnel: 0.04,
+                material: crate::graph::scene::MaterialParams {
+                    base_color: Vec3::new(0.5, 0.5, 0.5),
+                    roughness: 0.5,
+                    metallic: 0.0,
+                    emissive_color: Vec3::ZERO,
+                    emissive_intensity: 0.0,
+                    reflectance_f0: 0.04,
+                    ..crate::graph::scene::MaterialParams::default()
+                },
                 layer_intensity: 1.0,
                 voxel_grid: grid,
                 desired_resolution: 8,
@@ -1792,12 +1795,15 @@ mod tests {
                 input: None,
                 position: Vec3::ZERO,
                 rotation: Vec3::ZERO,
-                color: Vec3::new(0.5, 0.5, 0.5),
-                roughness: 0.5,
-                metallic: 0.0,
-                emissive: Vec3::ZERO,
-                emissive_intensity: 0.0,
-                fresnel: 0.04,
+                material: crate::graph::scene::MaterialParams {
+                    base_color: Vec3::new(0.5, 0.5, 0.5),
+                    roughness: 0.5,
+                    metallic: 0.0,
+                    emissive_color: Vec3::ZERO,
+                    emissive_intensity: 0.0,
+                    reflectance_f0: 0.04,
+                    ..crate::graph::scene::MaterialParams::default()
+                },
                 layer_intensity: 1.0,
                 voxel_grid: grid,
                 desired_resolution: 8,
@@ -1837,12 +1843,15 @@ mod tests {
                 input: None,
                 position: Vec3::ZERO,
                 rotation: Vec3::ZERO,
-                color: Vec3::new(0.5, 0.5, 0.5),
-                roughness: 0.5,
-                metallic: 0.0,
-                emissive: Vec3::ZERO,
-                emissive_intensity: 0.0,
-                fresnel: 0.04,
+                material: crate::graph::scene::MaterialParams {
+                    base_color: Vec3::new(0.5, 0.5, 0.5),
+                    roughness: 0.5,
+                    metallic: 0.0,
+                    emissive_color: Vec3::ZERO,
+                    emissive_intensity: 0.0,
+                    reflectance_f0: 0.04,
+                    ..crate::graph::scene::MaterialParams::default()
+                },
                 layer_intensity: 1.0,
                 voxel_grid: grid,
                 desired_resolution: 8,
@@ -2032,12 +2041,15 @@ mod tests {
                 input: None,
                 position: Vec3::ZERO,
                 rotation: Vec3::ZERO,
-                color: Vec3::new(0.5, 0.5, 0.5),
-                roughness: 0.5,
-                metallic: 0.0,
-                emissive: Vec3::ZERO,
-                emissive_intensity: 0.0,
-                fresnel: 0.04,
+                material: crate::graph::scene::MaterialParams {
+                    base_color: Vec3::new(0.5, 0.5, 0.5),
+                    roughness: 0.5,
+                    metallic: 0.0,
+                    emissive_color: Vec3::ZERO,
+                    emissive_intensity: 0.0,
+                    reflectance_f0: 0.04,
+                    ..crate::graph::scene::MaterialParams::default()
+                },
                 layer_intensity: 1.0,
                 voxel_grid: grid,
                 desired_resolution: 8,
@@ -2082,12 +2094,15 @@ mod tests {
                 input: None,
                 position: Vec3::ZERO,
                 rotation: Vec3::ZERO,
-                color: Vec3::new(0.5, 0.5, 0.5),
-                roughness: 0.5,
-                metallic: 0.0,
-                emissive: Vec3::ZERO,
-                emissive_intensity: 0.0,
-                fresnel: 0.04,
+                material: crate::graph::scene::MaterialParams {
+                    base_color: Vec3::new(0.5, 0.5, 0.5),
+                    roughness: 0.5,
+                    metallic: 0.0,
+                    emissive_color: Vec3::ZERO,
+                    emissive_intensity: 0.0,
+                    reflectance_f0: 0.04,
+                    ..crate::graph::scene::MaterialParams::default()
+                },
                 layer_intensity: 1.0,
                 voxel_grid: grid,
                 desired_resolution: 8,
@@ -2264,12 +2279,15 @@ mod tests {
                 input: None,
                 position: Vec3::ZERO,
                 rotation: Vec3::ZERO,
-                color: Vec3::new(0.5, 0.5, 0.5),
-                roughness: 0.5,
-                metallic: 0.0,
-                emissive: Vec3::ZERO,
-                emissive_intensity: 0.0,
-                fresnel: 0.04,
+                material: crate::graph::scene::MaterialParams {
+                    base_color: Vec3::new(0.5, 0.5, 0.5),
+                    roughness: 0.5,
+                    metallic: 0.0,
+                    emissive_color: Vec3::ZERO,
+                    emissive_intensity: 0.0,
+                    reflectance_f0: 0.04,
+                    ..crate::graph::scene::MaterialParams::default()
+                },
                 layer_intensity: 1.0,
                 voxel_grid: grid,
                 desired_resolution: 8,
@@ -2585,6 +2603,16 @@ mod tests {
             [1.0, 1.0, 1.0],
         );
         validate_wgsl(&shader, "composite render shader");
+    }
+
+    #[test]
+    fn render_shader_includes_anisotropy_and_transmission_support() {
+        let mut scene = empty_scene();
+        scene.create_primitive(SdfPrimitive::Sphere);
+        let shader = generate_shader(&scene, &RenderConfig::default());
+        assert!(shader.contains("fn D_GGX_Anisotropic"));
+        assert!(shader.contains("fn compute_environment_transmission"));
+        assert!(shader.contains("get_blended_anisotropy_direction_world"));
     }
 
     // ═══════════════════════════════════════════════════════════════

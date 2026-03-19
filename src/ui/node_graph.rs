@@ -215,9 +215,7 @@ impl NodeDataTrait for SdfNodeData {
                 ref mut position,
                 ref mut rotation,
                 ref mut scale,
-                ref mut color,
-                ref mut metallic,
-                ref mut roughness,
+                ref mut material,
                 ..
             } => {
                 let mut new_kind = kind.clone();
@@ -264,20 +262,24 @@ impl NodeDataTrait for SdfNodeData {
                     });
                 }
 
-                let mut c = [color.x, color.y, color.z];
+                let mut c = [
+                    material.base_color.x,
+                    material.base_color.y,
+                    material.base_color.z,
+                ];
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new("Col").small());
                     if ui.color_edit_button_rgb(&mut c).changed() {
                         changed = true;
                     }
                 });
-                *color = glam::Vec3::new(c[0], c[1], c[2]);
+                material.base_color = glam::Vec3::new(c[0], c[1], c[2]);
 
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new("Met").small());
                     if ui
                         .add(
-                            egui::DragValue::new(metallic)
+                            egui::DragValue::new(&mut material.metallic)
                                 .speed(0.01)
                                 .range(0.0..=1.0)
                                 .max_decimals(2),
@@ -289,7 +291,7 @@ impl NodeDataTrait for SdfNodeData {
                     ui.label(egui::RichText::new("Rgh").small());
                     if ui
                         .add(
-                            egui::DragValue::new(roughness)
+                            egui::DragValue::new(&mut material.roughness)
                                 .speed(0.01)
                                 .range(0.0..=1.0)
                                 .max_decimals(2),
@@ -470,28 +472,30 @@ impl NodeDataTrait for SdfNodeData {
             NodeData::Sculpt {
                 ref mut position,
                 ref mut rotation,
-                ref mut color,
-                ref mut metallic,
-                ref mut roughness,
+                ref mut material,
                 ..
             } => {
                 changed |= compact_vec3(ui, "Pos", position, 0.05, None);
                 changed |= compact_rotation(ui, "Rot", rotation);
 
-                let mut c = [color.x, color.y, color.z];
+                let mut c = [
+                    material.base_color.x,
+                    material.base_color.y,
+                    material.base_color.z,
+                ];
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new("Col").small());
                     if ui.color_edit_button_rgb(&mut c).changed() {
                         changed = true;
                     }
                 });
-                *color = glam::Vec3::new(c[0], c[1], c[2]);
+                material.base_color = glam::Vec3::new(c[0], c[1], c[2]);
 
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new("Met").small());
                     if ui
                         .add(
-                            egui::DragValue::new(metallic)
+                            egui::DragValue::new(&mut material.metallic)
                                 .speed(0.01)
                                 .range(0.0..=1.0)
                                 .max_decimals(2),
@@ -503,7 +507,7 @@ impl NodeDataTrait for SdfNodeData {
                     ui.label(egui::RichText::new("Rgh").small());
                     if ui
                         .add(
-                            egui::DragValue::new(roughness)
+                            egui::DragValue::new(&mut material.roughness)
                                 .speed(0.01)
                                 .range(0.0..=1.0)
                                 .max_decimals(2),

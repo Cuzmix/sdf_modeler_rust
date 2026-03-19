@@ -6,18 +6,23 @@ use crate::gpu::codegen::build_cookie_mapping;
 use crate::graph::scene::{LightType, NodeData, NodeId, ProximityMode, Scene, MAX_SCENE_LIGHTS};
 use crate::graph::voxel::evaluate_scene_sdf_at_point;
 
-/// 128-byte GPU node (8 x vec4f).
+/// 208-byte GPU node (13 x vec4f).
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]
 pub struct SdfNodeGpu {
-    pub type_op: [f32; 4],  // [type_val, smooth_k, metallic, roughness]
-    pub position: [f32; 4], // [x, y, z, 0]
-    pub rotation: [f32; 4], // [rx, ry, rz, 0] (radians)
-    pub scale: [f32; 4],    // [sx, sy, sz, 0]
-    pub color: [f32; 4],    // [r, g, b, is_selected]
-    pub extra0: [f32; 4], // prim: [0,0,0,0]; sculpt: [voxel_offset, resolution, emissive.x, emissive.y]
-    pub extra1: [f32; 4], // prim: [emissive.xyz, emissive_intensity]; sculpt: [bounds_min.xyz, emissive.z]
-    pub extra2: [f32; 4], // prim: [fresnel,0,0,0]; sculpt: [bounds_max.xyz, fresnel]
+    pub type_op: [f32; 4],   // [type_val, smooth_k, metallic, roughness]
+    pub position: [f32; 4],  // [x, y, z, 0]
+    pub rotation: [f32; 4],  // [rx, ry, rz, 0] (radians)
+    pub scale: [f32; 4],     // [sx, sy, sz, 0]
+    pub color: [f32; 4],     // [base_color.r, base_color.g, base_color.b, is_selected]
+    pub extra0: [f32; 4],    // prim: unused; sculpt: [voxel_offset, resolution, 0, 0]
+    pub extra1: [f32; 4],    // prim: unused; sculpt: [bounds_min.xyz, 0]
+    pub extra2: [f32; 4],    // prim: unused; sculpt: [bounds_max.xyz, 0]
+    pub material0: [f32; 4], // [emissive.rgb, emissive_intensity]
+    pub material1: [f32; 4], // [reflectance_f0, clearcoat, clearcoat_roughness, sheen_roughness]
+    pub material2: [f32; 4], // [sheen_color.rgb, transmission]
+    pub material3: [f32; 4], // [anisotropy_direction_local.xyz, thickness]
+    pub material4: [f32; 4], // [anisotropy_strength, ior, 0, 0]
 }
 
 /// Info about sculpt nodes for texture binding.
@@ -92,23 +97,53 @@ pub fn build_node_buffer(
                 position,
                 rotation,
                 scale,
-                color,
-                metallic,
-                roughness,
-                emissive,
-                emissive_intensity,
-                fresnel,
+                material,
                 ..
             } => {
                 buffer.push(SdfNodeGpu {
-                    type_op: [kind.gpu_type_id(), 0.0, *metallic, *roughness],
+                    type_op: [
+                        kind.gpu_type_id(),
+                        0.0,
+                        material.metallic,
+                        material.roughness,
+                    ],
                     position: [position.x, position.y, position.z, 0.0],
                     rotation: [rotation.x, rotation.y, rotation.z, 0.0],
                     scale: [scale.x, scale.y, scale.z, light_mask],
-                    color: [color.x, color.y, color.z, is_sel],
+                    color: [
+                        material.base_color.x,
+                        material.base_color.y,
+                        material.base_color.z,
+                        is_sel,
+                    ],
                     extra0: [0.0; 4],
-                    extra1: [emissive.x, emissive.y, emissive.z, *emissive_intensity],
-                    extra2: [*fresnel, 0.0, 0.0, 0.0],
+                    extra1: [0.0; 4],
+                    extra2: [0.0; 4],
+                    material0: [
+                        material.emissive_color.x,
+                        material.emissive_color.y,
+                        material.emissive_color.z,
+                        material.emissive_intensity,
+                    ],
+                    material1: [
+                        material.reflectance_f0,
+                        material.clearcoat,
+                        material.clearcoat_roughness,
+                        material.sheen_roughness,
+                    ],
+                    material2: [
+                        material.sheen_color.x,
+                        material.sheen_color.y,
+                        material.sheen_color.z,
+                        material.transmission,
+                    ],
+                    material3: [
+                        material.anisotropy_direction_local.x,
+                        material.anisotropy_direction_local.y,
+                        material.anisotropy_direction_local.z,
+                        material.thickness,
+                    ],
+                    material4: [material.anisotropy_strength, material.ior, 0.0, 0.0],
                 });
             }
             NodeData::Operation {
@@ -127,46 +162,71 @@ pub fn build_node_buffer(
                     extra0: [0.0; 4],
                     extra1: [0.0; 4],
                     extra2: [0.0; 4],
+                    material0: [0.0; 4],
+                    material1: [0.0; 4],
+                    material2: [0.0; 4],
+                    material3: [0.0; 4],
+                    material4: [0.0; 4],
                 });
             }
             NodeData::Sculpt {
                 position,
                 rotation,
-                color,
-                metallic,
-                roughness,
-                emissive,
-                emissive_intensity,
-                fresnel,
+                material,
                 layer_intensity,
                 voxel_grid,
                 ..
             } => {
                 let offset = voxel_offsets.get(&node_id).copied().unwrap_or(0);
                 buffer.push(SdfNodeGpu {
-                    type_op: [20.0, *emissive_intensity, *metallic, *roughness],
+                    type_op: [20.0, 0.0, material.metallic, material.roughness],
                     position: [position.x, position.y, position.z, *layer_intensity],
                     rotation: [rotation.x, rotation.y, rotation.z, 0.0],
                     scale: [1.0, 1.0, 1.0, light_mask],
-                    color: [color.x, color.y, color.z, is_sel],
-                    extra0: [
-                        offset as f32,
-                        voxel_grid.resolution as f32,
-                        emissive.x,
-                        emissive.y,
+                    color: [
+                        material.base_color.x,
+                        material.base_color.y,
+                        material.base_color.z,
+                        is_sel,
                     ],
+                    extra0: [offset as f32, voxel_grid.resolution as f32, 0.0, 0.0],
                     extra1: [
                         voxel_grid.bounds_min.x,
                         voxel_grid.bounds_min.y,
                         voxel_grid.bounds_min.z,
-                        emissive.z,
+                        0.0,
                     ],
                     extra2: [
                         voxel_grid.bounds_max.x,
                         voxel_grid.bounds_max.y,
                         voxel_grid.bounds_max.z,
-                        *fresnel,
+                        0.0,
                     ],
+                    material0: [
+                        material.emissive_color.x,
+                        material.emissive_color.y,
+                        material.emissive_color.z,
+                        material.emissive_intensity,
+                    ],
+                    material1: [
+                        material.reflectance_f0,
+                        material.clearcoat,
+                        material.clearcoat_roughness,
+                        material.sheen_roughness,
+                    ],
+                    material2: [
+                        material.sheen_color.x,
+                        material.sheen_color.y,
+                        material.sheen_color.z,
+                        material.transmission,
+                    ],
+                    material3: [
+                        material.anisotropy_direction_local.x,
+                        material.anisotropy_direction_local.y,
+                        material.anisotropy_direction_local.z,
+                        material.thickness,
+                    ],
+                    material4: [material.anisotropy_strength, material.ior, 0.0, 0.0],
                 });
             }
             NodeData::Transform {
@@ -184,6 +244,11 @@ pub fn build_node_buffer(
                     extra0: [0.0; 4],
                     extra1: [0.0; 4],
                     extra2: [0.0; 4],
+                    material0: [0.0; 4],
+                    material1: [0.0; 4],
+                    material2: [0.0; 4],
+                    material3: [0.0; 4],
+                    material4: [0.0; 4],
                 });
             }
             NodeData::Modifier {
@@ -198,6 +263,11 @@ pub fn build_node_buffer(
                     extra0: [0.0; 4],
                     extra1: [0.0; 4],
                     extra2: [0.0; 4],
+                    material0: [0.0; 4],
+                    material1: [0.0; 4],
+                    material2: [0.0; 4],
+                    material3: [0.0; 4],
+                    material4: [0.0; 4],
                 });
             }
             NodeData::Light {
@@ -224,6 +294,11 @@ pub fn build_node_buffer(
                     extra0: [0.0; 4],
                     extra1: [0.0; 4],
                     extra2: [0.0; 4],
+                    material0: [0.0; 4],
+                    material1: [0.0; 4],
+                    material2: [0.0; 4],
+                    material3: [0.0; 4],
+                    material4: [0.0; 4],
                 });
             }
         }
@@ -674,6 +749,41 @@ mod tests {
         }
     }
 
+    #[test]
+    fn build_node_buffer_packs_transmission_and_anisotropy_material_fields() {
+        let mut scene = empty_scene();
+        scene.add_node(
+            "Sphere".to_string(),
+            NodeData::Primitive {
+                kind: crate::graph::scene::SdfPrimitive::Sphere,
+                position: Vec3::ZERO,
+                rotation: Vec3::new(0.1, 0.2, 0.3),
+                scale: Vec3::ONE,
+                material: crate::graph::scene::MaterialParams {
+                    base_color: Vec3::new(0.8, 0.9, 1.0),
+                    roughness: 0.35,
+                    metallic: 0.0,
+                    transmission: 0.85,
+                    thickness: 1.75,
+                    ior: 1.45,
+                    anisotropy_strength: 0.6,
+                    anisotropy_direction_local: Vec3::new(0.0, 1.0, 0.0),
+                    ..crate::graph::scene::MaterialParams::default()
+                },
+                voxel_grid: None,
+            },
+        );
+
+        let buffer = build_node_buffer(&scene, &HashSet::new(), &HashMap::new());
+        assert_eq!(buffer.len(), 1);
+        let node = buffer[0];
+        assert!((node.material2[3] - 0.85).abs() < 1e-6);
+        assert!((node.material3[1] - 1.0).abs() < 1e-6);
+        assert!((node.material3[3] - 1.75).abs() < 1e-6);
+        assert!((node.material4[0] - 0.6).abs() < 1e-6);
+        assert!((node.material4[1] - 1.45).abs() < 1e-6);
+    }
+
     // -----------------------------------------------------------------------
     // collect_scene_lights
     // -----------------------------------------------------------------------
@@ -1023,12 +1133,15 @@ mod tests {
                 position: Vec3::ZERO,
                 rotation: Vec3::ZERO,
                 scale: Vec3::ONE,
-                color: Vec3::ONE,
-                roughness: 0.5,
-                metallic: 0.0,
-                emissive: Vec3::ZERO,
-                emissive_intensity: 0.0,
-                fresnel: 0.04,
+                material: crate::graph::scene::MaterialParams {
+                    base_color: Vec3::ONE,
+                    roughness: 0.5,
+                    metallic: 0.0,
+                    emissive_color: Vec3::ZERO,
+                    emissive_intensity: 0.0,
+                    reflectance_f0: 0.04,
+                    ..crate::graph::scene::MaterialParams::default()
+                },
                 voxel_grid: None,
             },
         );
@@ -1080,12 +1193,15 @@ mod tests {
                 position: Vec3::ZERO,
                 rotation: Vec3::ZERO,
                 scale: Vec3::ONE,
-                color: Vec3::ONE,
-                roughness: 0.5,
-                metallic: 0.0,
-                emissive: Vec3::ZERO,
-                emissive_intensity: 0.0,
-                fresnel: 0.04,
+                material: crate::graph::scene::MaterialParams {
+                    base_color: Vec3::ONE,
+                    roughness: 0.5,
+                    metallic: 0.0,
+                    emissive_color: Vec3::ZERO,
+                    emissive_intensity: 0.0,
+                    reflectance_f0: 0.04,
+                    ..crate::graph::scene::MaterialParams::default()
+                },
                 voxel_grid: None,
             },
         );

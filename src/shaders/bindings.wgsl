@@ -39,6 +39,11 @@ struct SdfNode {
     extra0: vec4f,
     extra1: vec4f,
     extra2: vec4f,
+    material0: vec4f,
+    material1: vec4f,
+    material2: vec4f,
+    material3: vec4f,
+    material4: vec4f,
 }
 
 @group(0) @binding(0) var<uniform> camera: Camera;

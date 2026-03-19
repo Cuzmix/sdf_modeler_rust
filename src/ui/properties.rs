@@ -1,10 +1,13 @@
 use std::collections::HashSet;
 
 use eframe::egui;
+use glam::Vec3;
 
 use crate::app::actions::{Action, ActionSink};
 use crate::app::BakeRequest;
-use crate::graph::scene::{CsgOp, ModifierKind, NodeData, NodeId, Scene, SdfPrimitive};
+use crate::graph::scene::{
+    CsgOp, MaterialParams, ModifierKind, NodeData, NodeId, Scene, SdfPrimitive,
+};
 use crate::graph::voxel;
 use crate::material_preset::{self, MaterialLibrary};
 use crate::sculpt::SculptState;
@@ -114,35 +117,19 @@ fn get_node_position(data: &NodeData) -> Option<glam::Vec3> {
 }
 
 fn get_node_color(data: &NodeData) -> Option<glam::Vec3> {
-    match data {
-        NodeData::Primitive { color, .. } => Some(*color),
-        NodeData::Sculpt { color, .. } => Some(*color),
-        _ => None,
-    }
+    data.material().map(|material| material.base_color)
 }
 
 fn get_node_roughness(data: &NodeData) -> Option<f32> {
-    match data {
-        NodeData::Primitive { roughness, .. } => Some(*roughness),
-        NodeData::Sculpt { roughness, .. } => Some(*roughness),
-        _ => None,
-    }
+    data.material().map(|material| material.roughness)
 }
 
 fn get_node_metallic(data: &NodeData) -> Option<f32> {
-    match data {
-        NodeData::Primitive { metallic, .. } => Some(*metallic),
-        NodeData::Sculpt { metallic, .. } => Some(*metallic),
-        _ => None,
-    }
+    data.material().map(|material| material.metallic)
 }
 
-fn get_node_fresnel(data: &NodeData) -> Option<f32> {
-    match data {
-        NodeData::Primitive { fresnel, .. } => Some(*fresnel),
-        NodeData::Sculpt { fresnel, .. } => Some(*fresnel),
-        _ => None,
-    }
+fn get_node_reflectance_f0(data: &NodeData) -> Option<f32> {
+    data.material().map(|material| material.reflectance_f0)
 }
 
 /// Apply a position delta to a node (Primitive, Sculpt, or Transform).
@@ -167,38 +154,297 @@ fn apply_rotation_delta(data: &mut NodeData, delta: glam::Vec3) {
 
 /// Set color on a node (Primitive or Sculpt).
 fn set_node_color(data: &mut NodeData, new_color: glam::Vec3) {
-    match data {
-        NodeData::Primitive { color, .. } => *color = new_color,
-        NodeData::Sculpt { color, .. } => *color = new_color,
-        _ => {}
+    if let Some(material) = data.material_mut() {
+        material.base_color = new_color;
     }
 }
 
 /// Set roughness on a node (Primitive or Sculpt).
 fn set_node_roughness(data: &mut NodeData, val: f32) {
-    match data {
-        NodeData::Primitive { roughness, .. } => *roughness = val,
-        NodeData::Sculpt { roughness, .. } => *roughness = val,
-        _ => {}
+    if let Some(material) = data.material_mut() {
+        material.roughness = val;
     }
 }
 
 /// Set metallic on a node (Primitive or Sculpt).
 fn set_node_metallic(data: &mut NodeData, val: f32) {
-    match data {
-        NodeData::Primitive { metallic, .. } => *metallic = val,
-        NodeData::Sculpt { metallic, .. } => *metallic = val,
-        _ => {}
+    if let Some(material) = data.material_mut() {
+        material.metallic = val;
     }
 }
 
-/// Set fresnel on a node (Primitive or Sculpt).
-fn set_node_fresnel(data: &mut NodeData, val: f32) {
-    match data {
-        NodeData::Primitive { fresnel, .. } => *fresnel = val,
-        NodeData::Sculpt { fresnel, .. } => *fresnel = val,
-        _ => {}
+/// Set reflectance F0 on a node (Primitive or Sculpt).
+fn set_node_reflectance_f0(data: &mut NodeData, val: f32) {
+    if let Some(material) = data.material_mut() {
+        material.reflectance_f0 = val;
     }
+}
+
+fn apply_material_preset(material: &mut MaterialParams, preset: &material_preset::MaterialPreset) {
+    let preserved_color = material.base_color;
+    *material = preset.material.clone();
+    if preset.preserve_existing_base_color {
+        material.base_color = preserved_color;
+    }
+}
+
+fn save_material_preset(material_library: &mut MaterialLibrary, material: &MaterialParams) {
+    let preset_name = format!("Custom {}", material_library.user_presets.len() + 1);
+    let preset =
+        material_preset::MaterialPreset::from_node_material(&preset_name, material.clone());
+    material_library.save_preset(preset);
+    material_library.save();
+}
+
+fn normalize_direction_or_x(direction: Vec3) -> Vec3 {
+    if direction.length_squared() <= 1e-6 {
+        Vec3::X
+    } else {
+        direction.normalize()
+    }
+}
+
+fn draw_material_editor(
+    ui: &mut egui::Ui,
+    id_prefix: &str,
+    material: &mut MaterialParams,
+    material_library: &mut MaterialLibrary,
+) {
+    let built_in = material_preset::built_in_presets();
+
+    ui.horizontal(|ui| {
+        ui.label("Preset:");
+        egui::ComboBox::from_id_salt(format!("{id_prefix}_mat_preset"))
+            .selected_text("Apply...")
+            .width(120.0)
+            .show_ui(ui, |ui| {
+                for category in material_preset::CATEGORIES {
+                    if *category == material_preset::CATEGORY_USER {
+                        continue;
+                    }
+                    let in_category: Vec<_> = built_in
+                        .iter()
+                        .filter(|preset| preset.category == *category)
+                        .collect();
+                    if in_category.is_empty() {
+                        continue;
+                    }
+                    ui.label(egui::RichText::new(*category).strong().small());
+                    for preset in in_category {
+                        if ui.selectable_label(false, &preset.name).clicked() {
+                            apply_material_preset(material, preset);
+                        }
+                    }
+                    ui.separator();
+                }
+                if !material_library.user_presets.is_empty() {
+                    ui.label(egui::RichText::new("User").strong().small());
+                    let mut remove_index = None;
+                    for (idx, preset) in material_library.user_presets.iter().enumerate() {
+                        ui.horizontal(|ui| {
+                            if ui.selectable_label(false, &preset.name).clicked() {
+                                apply_material_preset(material, preset);
+                            }
+                            if ui
+                                .small_button("\u{2715}")
+                                .on_hover_text("Delete preset")
+                                .clicked()
+                            {
+                                remove_index = Some(idx);
+                            }
+                        });
+                    }
+                    if let Some(idx) = remove_index {
+                        material_library.remove_preset(idx);
+                        material_library.save();
+                    }
+                }
+            });
+        if ui
+            .small_button("\u{1F4BE}")
+            .on_hover_text("Save current material as preset")
+            .clicked()
+        {
+            save_material_preset(material_library, material);
+        }
+    });
+
+    egui::CollapsingHeader::new("Base")
+        .default_open(true)
+        .id_salt(format!("{id_prefix}_base"))
+        .show(ui, |ui| {
+            ui.label("Color");
+            let mut color_arr = [
+                material.base_color.x,
+                material.base_color.y,
+                material.base_color.z,
+            ];
+            ui.horizontal(|ui| {
+                ui.color_edit_button_rgb(&mut color_arr);
+                color_presets_row(ui, &mut color_arr);
+            });
+            material.base_color = Vec3::new(color_arr[0], color_arr[1], color_arr[2]);
+
+            ui.horizontal(|ui| {
+                ui.label("Metallic:");
+                ui.add(egui::Slider::new(&mut material.metallic, 0.0..=1.0));
+            });
+            ui.horizontal(|ui| {
+                ui.label("Roughness:");
+                ui.add(egui::Slider::new(&mut material.roughness, 0.0..=1.0));
+            });
+            ui.horizontal(|ui| {
+                ui.label("Reflectance F0:");
+                ui.add(egui::Slider::new(&mut material.reflectance_f0, 0.0..=1.0));
+            });
+        });
+
+    egui::CollapsingHeader::new("Emissive")
+        .default_open(false)
+        .id_salt(format!("{id_prefix}_emissive"))
+        .show(ui, |ui| {
+            let mut emissive_arr = [
+                material.emissive_color.x,
+                material.emissive_color.y,
+                material.emissive_color.z,
+            ];
+            ui.horizontal(|ui| {
+                ui.color_edit_button_rgb(&mut emissive_arr);
+                if ui
+                    .small_button("= Base")
+                    .on_hover_text("Set emissive to base color")
+                    .clicked()
+                {
+                    emissive_arr = [
+                        material.base_color.x,
+                        material.base_color.y,
+                        material.base_color.z,
+                    ];
+                }
+            });
+            material.emissive_color = Vec3::new(emissive_arr[0], emissive_arr[1], emissive_arr[2]);
+            ui.horizontal(|ui| {
+                ui.label("Intensity:");
+                ui.add(egui::Slider::new(
+                    &mut material.emissive_intensity,
+                    0.0..=5.0,
+                ));
+            });
+        });
+
+    egui::CollapsingHeader::new("Clearcoat")
+        .default_open(false)
+        .id_salt(format!("{id_prefix}_clearcoat"))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label("Amount:");
+                ui.add(egui::Slider::new(&mut material.clearcoat, 0.0..=1.0));
+            });
+            ui.horizontal(|ui| {
+                ui.label("Roughness:");
+                ui.add(egui::Slider::new(
+                    &mut material.clearcoat_roughness,
+                    0.0..=1.0,
+                ));
+            });
+        });
+
+    egui::CollapsingHeader::new("Sheen")
+        .default_open(false)
+        .id_salt(format!("{id_prefix}_sheen"))
+        .show(ui, |ui| {
+            let mut sheen_arr = [
+                material.sheen_color.x,
+                material.sheen_color.y,
+                material.sheen_color.z,
+            ];
+            ui.horizontal(|ui| {
+                ui.color_edit_button_rgb(&mut sheen_arr);
+                if ui
+                    .small_button("= Base")
+                    .on_hover_text("Set sheen tint to base color")
+                    .clicked()
+                {
+                    sheen_arr = [
+                        material.base_color.x,
+                        material.base_color.y,
+                        material.base_color.z,
+                    ];
+                }
+            });
+            material.sheen_color = Vec3::new(sheen_arr[0], sheen_arr[1], sheen_arr[2]);
+            ui.horizontal(|ui| {
+                ui.label("Roughness:");
+                ui.add(egui::Slider::new(&mut material.sheen_roughness, 0.0..=1.0));
+            });
+        });
+
+    egui::CollapsingHeader::new("Transmission")
+        .default_open(false)
+        .id_salt(format!("{id_prefix}_transmission"))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label("Amount:");
+                ui.add(egui::Slider::new(&mut material.transmission, 0.0..=1.0));
+            });
+            ui.horizontal(|ui| {
+                ui.label("Thickness:");
+                ui.add(egui::Slider::new(&mut material.thickness, 0.0..=8.0));
+            });
+            ui.horizontal(|ui| {
+                ui.label("IOR:");
+                ui.add(egui::Slider::new(&mut material.ior, 1.0..=2.5));
+            });
+            ui.small("Base color tints transmitted light.");
+        });
+
+    egui::CollapsingHeader::new("Anisotropy")
+        .default_open(false)
+        .id_salt(format!("{id_prefix}_anisotropy"))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label("Amount:");
+                ui.add(egui::Slider::new(
+                    &mut material.anisotropy_strength,
+                    -0.95..=0.95,
+                ));
+            });
+
+            let mut direction = normalize_direction_or_x(material.anisotropy_direction_local);
+            ui.horizontal(|ui| {
+                ui.label("Direction:");
+                ui.add(
+                    egui::DragValue::new(&mut direction.x)
+                        .speed(0.05)
+                        .range(-1.0..=1.0)
+                        .max_decimals(2),
+                );
+                ui.add(
+                    egui::DragValue::new(&mut direction.y)
+                        .speed(0.05)
+                        .range(-1.0..=1.0)
+                        .max_decimals(2),
+                );
+                ui.add(
+                    egui::DragValue::new(&mut direction.z)
+                        .speed(0.05)
+                        .range(-1.0..=1.0)
+                        .max_decimals(2),
+                );
+            });
+            ui.horizontal(|ui| {
+                if ui.small_button("X").clicked() {
+                    direction = Vec3::X;
+                }
+                if ui.small_button("Y").clicked() {
+                    direction = Vec3::Y;
+                }
+                if ui.small_button("Z").clicked() {
+                    direction = Vec3::Z;
+                }
+            });
+            material.anisotropy_direction_local = normalize_direction_or_x(direction);
+        });
 }
 
 /// Draw properties panel for multiple selected nodes (batch editing).
@@ -352,20 +598,25 @@ fn draw_multi_properties(
                     }
                 }
 
-                // Fresnel — use first node's value
-                let first_fresnel = ids
+                // Reflectance F0 — use first node's value
+                let first_reflectance_f0 = ids
                     .iter()
-                    .find_map(|id| scene.nodes.get(id).and_then(|n| get_node_fresnel(&n.data)))
+                    .find_map(|id| {
+                        scene
+                            .nodes
+                            .get(id)
+                            .and_then(|n| get_node_reflectance_f0(&n.data))
+                    })
                     .unwrap_or(0.04);
-                let mut fresnel = first_fresnel;
+                let mut reflectance_f0 = first_reflectance_f0;
                 ui.horizontal(|ui| {
-                    ui.label("Fresnel:");
-                    ui.add(egui::Slider::new(&mut fresnel, 0.0..=1.0));
+                    ui.label("Reflectance F0:");
+                    ui.add(egui::Slider::new(&mut reflectance_f0, 0.0..=1.0));
                 });
-                if (fresnel - first_fresnel).abs() > f32::EPSILON {
+                if (reflectance_f0 - first_reflectance_f0).abs() > f32::EPSILON {
                     for &id in &ids {
                         if let Some(node) = scene.nodes.get_mut(&id) {
-                            set_node_fresnel(&mut node.data, fresnel);
+                            set_node_reflectance_f0(&mut node.data, reflectance_f0);
                         }
                     }
                 }
@@ -454,12 +705,7 @@ pub fn draw(
             mut position,
             mut rotation,
             mut scale,
-            mut color,
-            mut roughness,
-            mut metallic,
-            mut emissive,
-            mut emissive_intensity,
-            mut fresnel,
+            mut material,
             ..
         } => {
             let mut new_kind = kind.clone();
@@ -518,136 +764,7 @@ pub fn draw(
             egui::CollapsingHeader::new("Material")
                 .default_open(true)
                 .show(ui, |ui| {
-                    // Material presets
-                    // Material preset dropdown (built-in + user presets)
-                    let built_in = material_preset::built_in_presets();
-                    ui.horizontal(|ui| {
-                        ui.label("Preset:");
-                        egui::ComboBox::from_id_salt("prim_mat_preset")
-                            .selected_text("Apply...")
-                            .width(120.0)
-                            .show_ui(ui, |ui| {
-                                let mut apply_preset =
-                                    |preset: &material_preset::MaterialPreset| {
-                                        if let Some(c) = preset.color {
-                                            color = glam::Vec3::new(c[0], c[1], c[2]);
-                                        }
-                                        metallic = preset.metallic;
-                                        roughness = preset.roughness;
-                                        fresnel = preset.fresnel;
-                                        emissive_intensity = preset.emissive_intensity;
-                                        if preset.emissive_intensity > 0.0
-                                            && emissive == glam::Vec3::ZERO
-                                        {
-                                            emissive = color;
-                                        }
-                                    };
-                                // Built-in categories
-                                for category in material_preset::CATEGORIES {
-                                    if *category == material_preset::CATEGORY_USER {
-                                        continue; // user presets shown separately below
-                                    }
-                                    let in_category: Vec<_> = built_in
-                                        .iter()
-                                        .filter(|p| p.category == *category)
-                                        .collect();
-                                    if in_category.is_empty() {
-                                        continue;
-                                    }
-                                    ui.label(egui::RichText::new(*category).strong().small());
-                                    for preset in &in_category {
-                                        if ui.selectable_label(false, &preset.name).clicked() {
-                                            apply_preset(preset);
-                                        }
-                                    }
-                                    ui.separator();
-                                }
-                                // User presets
-                                if !material_library.user_presets.is_empty() {
-                                    ui.label(egui::RichText::new("User").strong().small());
-                                    let mut remove_index = None;
-                                    for (idx, preset) in
-                                        material_library.user_presets.iter().enumerate()
-                                    {
-                                        ui.horizontal(|ui| {
-                                            if ui.selectable_label(false, &preset.name).clicked() {
-                                                apply_preset(preset);
-                                            }
-                                            if ui
-                                                .small_button("\u{2715}")
-                                                .on_hover_text("Delete preset")
-                                                .clicked()
-                                            {
-                                                remove_index = Some(idx);
-                                            }
-                                        });
-                                    }
-                                    if let Some(idx) = remove_index {
-                                        material_library.remove_preset(idx);
-                                        material_library.save();
-                                    }
-                                }
-                            });
-                        // Save as Preset button
-                        if ui
-                            .small_button("\u{1F4BE}")
-                            .on_hover_text("Save current material as preset")
-                            .clicked()
-                        {
-                            let preset_name =
-                                format!("Custom {}", material_library.user_presets.len() + 1);
-                            let preset = material_preset::MaterialPreset::from_node_material(
-                                &preset_name,
-                                [color.x, color.y, color.z],
-                                roughness,
-                                metallic,
-                                fresnel,
-                                emissive_intensity,
-                            );
-                            material_library.save_preset(preset);
-                            material_library.save();
-                        }
-                    });
-
-                    ui.label("Color");
-                    let mut color_arr = [color.x, color.y, color.z];
-                    ui.horizontal(|ui| {
-                        ui.color_edit_button_rgb(&mut color_arr);
-                        color_presets_row(ui, &mut color_arr);
-                    });
-                    color = glam::Vec3::new(color_arr[0], color_arr[1], color_arr[2]);
-
-                    ui.horizontal(|ui| {
-                        ui.label("Metallic:");
-                        ui.add(egui::Slider::new(&mut metallic, 0.0..=1.0));
-                    });
-                    ui.horizontal(|ui| {
-                        ui.label("Roughness:");
-                        ui.add(egui::Slider::new(&mut roughness, 0.0..=1.0));
-                    });
-                    ui.horizontal(|ui| {
-                        ui.label("Fresnel:");
-                        ui.add(egui::Slider::new(&mut fresnel, 0.0..=1.0));
-                    });
-
-                    ui.separator();
-                    ui.label("Emissive");
-                    let mut emissive_arr = [emissive.x, emissive.y, emissive.z];
-                    ui.horizontal(|ui| {
-                        ui.color_edit_button_rgb(&mut emissive_arr);
-                        if ui
-                            .small_button("= Color")
-                            .on_hover_text("Set emissive to object color")
-                            .clicked()
-                        {
-                            emissive_arr = [color.x, color.y, color.z];
-                        }
-                    });
-                    emissive = glam::Vec3::new(emissive_arr[0], emissive_arr[1], emissive_arr[2]);
-                    ui.horizontal(|ui| {
-                        ui.label("Intensity:");
-                        ui.add(egui::Slider::new(&mut emissive_intensity, 0.0..=5.0));
-                    });
+                    draw_material_editor(ui, "prim", &mut material, material_library);
                 });
 
             // Add Sculpt Modifier button
@@ -663,7 +780,7 @@ pub fn draw(
                         actions.push(Action::RequestBake(BakeRequest {
                             subtree_root: id,
                             resolution: voxel::DEFAULT_RESOLUTION,
-                            color,
+                            color: material.base_color,
                             existing_sculpt: None,
                             flatten: false,
                         }));
@@ -692,12 +809,7 @@ pub fn draw(
                     position: ref mut p,
                     rotation: ref mut r,
                     scale: ref mut s,
-                    color: ref mut c,
-                    metallic: ref mut m,
-                    roughness: ref mut rgh,
-                    emissive: ref mut em,
-                    emissive_intensity: ref mut ei,
-                    fresnel: ref mut fr,
+                    material: ref mut mat,
                     ..
                 } = node.data
                 {
@@ -705,12 +817,7 @@ pub fn draw(
                     *p = position;
                     *r = rotation;
                     *s = scale;
-                    *c = color;
-                    *m = metallic;
-                    *rgh = roughness;
-                    *em = emissive;
-                    *ei = emissive_intensity;
-                    *fr = fresnel;
+                    *mat = material;
                 }
             }
         }
@@ -860,12 +967,7 @@ pub fn draw(
             input,
             mut position,
             mut rotation,
-            mut color,
-            mut roughness,
-            mut metallic,
-            mut emissive,
-            mut emissive_intensity,
-            mut fresnel,
+            mut material,
             mut layer_intensity,
             voxel_grid: _,
             mut desired_resolution,
@@ -918,116 +1020,7 @@ pub fn draw(
                 .default_open(true)
                 .id_salt("sculpt_material")
                 .show(ui, |ui| {
-                    // Material preset dropdown (built-in + user presets)
-                    let built_in_sculpt = material_preset::built_in_presets();
-                    ui.horizontal(|ui| {
-                        ui.label("Preset:");
-                        egui::ComboBox::from_id_salt("sculpt_mat_preset")
-                            .selected_text("Apply...")
-                            .width(120.0)
-                            .show_ui(ui, |ui| {
-                                let mut apply_preset =
-                                    |preset: &material_preset::MaterialPreset| {
-                                        if let Some(c) = preset.color {
-                                            color = glam::Vec3::new(c[0], c[1], c[2]);
-                                        }
-                                        metallic = preset.metallic;
-                                        roughness = preset.roughness;
-                                        fresnel = preset.fresnel;
-                                        emissive_intensity = preset.emissive_intensity;
-                                        if preset.emissive_intensity > 0.0
-                                            && emissive == glam::Vec3::ZERO
-                                        {
-                                            emissive = color;
-                                        }
-                                    };
-                                for category in material_preset::CATEGORIES {
-                                    if *category == material_preset::CATEGORY_USER {
-                                        continue;
-                                    }
-                                    let in_category: Vec<_> = built_in_sculpt
-                                        .iter()
-                                        .filter(|p| p.category == *category)
-                                        .collect();
-                                    if in_category.is_empty() {
-                                        continue;
-                                    }
-                                    ui.label(egui::RichText::new(*category).strong().small());
-                                    for preset in &in_category {
-                                        if ui.selectable_label(false, &preset.name).clicked() {
-                                            apply_preset(preset);
-                                        }
-                                    }
-                                    ui.separator();
-                                }
-                                if !material_library.user_presets.is_empty() {
-                                    ui.label(egui::RichText::new("User").strong().small());
-                                    for preset in material_library.user_presets.iter() {
-                                        if ui.selectable_label(false, &preset.name).clicked() {
-                                            apply_preset(preset);
-                                        }
-                                    }
-                                }
-                            });
-                        if ui
-                            .small_button("\u{1F4BE}")
-                            .on_hover_text("Save current material as preset")
-                            .clicked()
-                        {
-                            let preset_name =
-                                format!("Custom {}", material_library.user_presets.len() + 1);
-                            let preset = material_preset::MaterialPreset::from_node_material(
-                                &preset_name,
-                                [color.x, color.y, color.z],
-                                roughness,
-                                metallic,
-                                fresnel,
-                                emissive_intensity,
-                            );
-                            material_library.save_preset(preset);
-                            material_library.save();
-                        }
-                    });
-
-                    ui.label("Color");
-                    let mut color_arr = [color.x, color.y, color.z];
-                    ui.horizontal(|ui| {
-                        ui.color_edit_button_rgb(&mut color_arr);
-                        color_presets_row(ui, &mut color_arr);
-                    });
-                    color = glam::Vec3::new(color_arr[0], color_arr[1], color_arr[2]);
-
-                    ui.horizontal(|ui| {
-                        ui.label("Metallic:");
-                        ui.add(egui::Slider::new(&mut metallic, 0.0..=1.0));
-                    });
-                    ui.horizontal(|ui| {
-                        ui.label("Roughness:");
-                        ui.add(egui::Slider::new(&mut roughness, 0.0..=1.0));
-                    });
-                    ui.horizontal(|ui| {
-                        ui.label("Fresnel:");
-                        ui.add(egui::Slider::new(&mut fresnel, 0.0..=1.0));
-                    });
-
-                    ui.separator();
-                    ui.label("Emissive");
-                    let mut emissive_arr = [emissive.x, emissive.y, emissive.z];
-                    ui.horizontal(|ui| {
-                        ui.color_edit_button_rgb(&mut emissive_arr);
-                        if ui
-                            .small_button("= Color")
-                            .on_hover_text("Set emissive to object color")
-                            .clicked()
-                        {
-                            emissive_arr = [color.x, color.y, color.z];
-                        }
-                    });
-                    emissive = glam::Vec3::new(emissive_arr[0], emissive_arr[1], emissive_arr[2]);
-                    ui.horizontal(|ui| {
-                        ui.label("Intensity:");
-                        ui.add(egui::Slider::new(&mut emissive_intensity, 0.0..=5.0));
-                    });
+                    draw_material_editor(ui, "sculpt", &mut material, material_library);
                 });
 
             egui::CollapsingHeader::new("Sculpting")
@@ -1110,7 +1103,7 @@ pub fn draw(
                                 actions.push(Action::RequestBake(BakeRequest {
                                     subtree_root: input_id,
                                     resolution: desired_resolution,
-                                    color,
+                                    color: material.base_color,
                                     existing_sculpt: Some(id),
                                     flatten: false,
                                 }));
@@ -1139,7 +1132,7 @@ pub fn draw(
                     actions.push(Action::RequestBake(BakeRequest {
                         subtree_root: id,
                         resolution,
-                        color,
+                        color: material.base_color,
                         existing_sculpt: None,
                         flatten: true,
                     }));
@@ -1155,12 +1148,7 @@ pub fn draw(
                 if let NodeData::Sculpt {
                     position: ref mut p,
                     rotation: ref mut r,
-                    color: ref mut c,
-                    metallic: ref mut m,
-                    roughness: ref mut rgh,
-                    emissive: ref mut em,
-                    emissive_intensity: ref mut ei,
-                    fresnel: ref mut fr,
+                    material: ref mut mat,
                     layer_intensity: ref mut li,
                     desired_resolution: ref mut dr,
                     ..
@@ -1168,12 +1156,7 @@ pub fn draw(
                 {
                     *p = position;
                     *r = rotation;
-                    *c = color;
-                    *m = metallic;
-                    *rgh = roughness;
-                    *em = emissive;
-                    *ei = emissive_intensity;
-                    *fr = fresnel;
+                    *mat = material;
                     *li = layer_intensity;
                     *dr = desired_resolution;
                 }

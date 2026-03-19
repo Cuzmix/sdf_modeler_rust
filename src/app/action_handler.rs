@@ -515,10 +515,7 @@ impl SdfApp {
                             .scene
                             .nodes
                             .get(&subtree_root)
-                            .map(|n| match &n.data {
-                                NodeData::Primitive { color, .. } => *color,
-                                _ => Vec3::new(0.8, 0.8, 0.8),
-                            })
+                            .and_then(|n| n.data.material().map(|material| material.base_color))
                             .unwrap_or(Vec3::new(0.8, 0.8, 0.8));
 
                         let req = super::BakeRequest {
@@ -753,41 +750,11 @@ impl SdfApp {
                 Action::CopyProperties => {
                     if let Some(sel) = self.ui.node_graph_state.selected {
                         if let Some(node) = self.doc.scene.nodes.get(&sel) {
-                            let clip = match &node.data {
-                                crate::graph::scene::NodeData::Primitive {
-                                    color,
-                                    roughness,
-                                    metallic,
-                                    emissive,
-                                    emissive_intensity,
-                                    fresnel,
-                                    ..
-                                } => Some(super::state::PropertyClipboard {
-                                    color: [color.x, color.y, color.z],
-                                    roughness: *roughness,
-                                    metallic: *metallic,
-                                    emissive: [emissive.x, emissive.y, emissive.z],
-                                    emissive_intensity: *emissive_intensity,
-                                    fresnel: *fresnel,
-                                }),
-                                crate::graph::scene::NodeData::Sculpt {
-                                    color,
-                                    roughness,
-                                    metallic,
-                                    emissive,
-                                    emissive_intensity,
-                                    fresnel,
-                                    ..
-                                } => Some(super::state::PropertyClipboard {
-                                    color: [color.x, color.y, color.z],
-                                    roughness: *roughness,
-                                    metallic: *metallic,
-                                    emissive: [emissive.x, emissive.y, emissive.z],
-                                    emissive_intensity: *emissive_intensity,
-                                    fresnel: *fresnel,
-                                }),
-                                _ => None,
-                            };
+                            let clip = node
+                                .data
+                                .material()
+                                .cloned()
+                                .map(|material| super::state::PropertyClipboard { material });
                             if let Some(c) = clip {
                                 self.ui.property_clipboard = Some(c);
                                 self.ui.toasts.push(super::Toast {
@@ -804,52 +771,11 @@ impl SdfApp {
                     if let Some(ref clip) = self.ui.property_clipboard.clone() {
                         if let Some(sel) = self.ui.node_graph_state.selected {
                             if let Some(node) = self.doc.scene.nodes.get_mut(&sel) {
-                                let applied = match &mut node.data {
-                                    crate::graph::scene::NodeData::Primitive {
-                                        color,
-                                        roughness,
-                                        metallic,
-                                        emissive,
-                                        emissive_intensity,
-                                        fresnel,
-                                        ..
-                                    } => {
-                                        *color =
-                                            Vec3::new(clip.color[0], clip.color[1], clip.color[2]);
-                                        *roughness = clip.roughness;
-                                        *metallic = clip.metallic;
-                                        *emissive = Vec3::new(
-                                            clip.emissive[0],
-                                            clip.emissive[1],
-                                            clip.emissive[2],
-                                        );
-                                        *emissive_intensity = clip.emissive_intensity;
-                                        *fresnel = clip.fresnel;
-                                        true
-                                    }
-                                    crate::graph::scene::NodeData::Sculpt {
-                                        color,
-                                        roughness,
-                                        metallic,
-                                        emissive,
-                                        emissive_intensity,
-                                        fresnel,
-                                        ..
-                                    } => {
-                                        *color =
-                                            Vec3::new(clip.color[0], clip.color[1], clip.color[2]);
-                                        *roughness = clip.roughness;
-                                        *metallic = clip.metallic;
-                                        *emissive = Vec3::new(
-                                            clip.emissive[0],
-                                            clip.emissive[1],
-                                            clip.emissive[2],
-                                        );
-                                        *emissive_intensity = clip.emissive_intensity;
-                                        *fresnel = clip.fresnel;
-                                        true
-                                    }
-                                    _ => false,
+                                let applied = if let Some(material) = node.data.material_mut() {
+                                    *material = clip.material.clone();
+                                    true
+                                } else {
+                                    false
                                 };
                                 if applied {
                                     self.gpu.buffer_dirty = true;

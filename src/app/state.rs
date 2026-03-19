@@ -10,7 +10,7 @@ use crate::compat::Instant;
 use crate::gpu::camera::Camera;
 use crate::gpu::picking::PendingPick;
 use crate::graph::history::History;
-use crate::graph::scene::{NodeId, Scene};
+use crate::graph::scene::{MaterialParams, NodeId, Scene};
 use crate::mesh_import::TriMesh;
 use crate::sculpt::{ActiveTool, SculptState};
 use crate::ui::dock::Tab;
@@ -116,12 +116,7 @@ pub struct IsolationState {
 /// Clipboard for property copy/paste.
 #[derive(Clone)]
 pub struct PropertyClipboard {
-    pub color: [f32; 3],
-    pub roughness: f32,
-    pub metallic: f32,
-    pub emissive: [f32; 3],
-    pub emissive_intensity: f32,
-    pub fresnel: f32,
+    pub material: MaterialParams,
 }
 
 /// State for the "Convert to Sculpt" dialog shown by Ctrl+R.

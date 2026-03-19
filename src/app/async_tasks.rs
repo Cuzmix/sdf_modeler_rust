@@ -5,7 +5,7 @@ use eframe::egui;
 use glam::Vec3;
 
 use crate::desktop_dialogs::FileDialogSelection;
-use crate::graph::scene::NodeData;
+use crate::graph::scene::{MaterialParams, NodeData};
 use crate::graph::voxel;
 use crate::sculpt::SculptState;
 
@@ -647,12 +647,7 @@ impl SdfApp {
                     input: None,
                     position: center,
                     rotation: Vec3::ZERO,
-                    color: Vec3::new(0.7, 0.7, 0.7),
-                    roughness: 0.5,
-                    metallic: 0.0,
-                    emissive: Vec3::ZERO,
-                    emissive_intensity: 0.0,
-                    fresnel: 0.04,
+                    material: MaterialParams::with_base_color(Vec3::new(0.7, 0.7, 0.7)),
                     layer_intensity: 1.0,
                     voxel_grid: grid,
                     desired_resolution,

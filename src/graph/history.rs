@@ -623,8 +623,11 @@ mod tests {
         let prim_id = find_primitive_id(&scene);
         // Change a property without adding/removing nodes or changing selection
         if let Some(node) = modified.nodes.get_mut(&prim_id) {
-            if let crate::graph::scene::NodeData::Primitive { ref mut color, .. } = node.data {
-                *color = glam::Vec3::new(1.0, 0.0, 0.0);
+            if let crate::graph::scene::NodeData::Primitive {
+                ref mut material, ..
+            } = node.data
+            {
+                material.base_color = glam::Vec3::new(1.0, 0.0, 0.0);
             }
         }
         let label = History::detect_change_label(&scene, &modified, None, None);
@@ -832,8 +835,11 @@ mod tests {
         history.begin_frame(&original_scene, Some(node_id));
         let mut scene = original_scene.clone();
         if let Some(n) = scene.nodes.get_mut(&node_id) {
-            if let NodeData::Primitive { ref mut color, .. } = n.data {
-                *color = glam::Vec3::new(1.0, 0.0, 0.0); // red preset
+            if let NodeData::Primitive {
+                ref mut material, ..
+            } = n.data
+            {
+                material.base_color = glam::Vec3::new(1.0, 0.0, 0.0); // red preset
             }
         }
         history.end_frame(&scene, Some(node_id), false);
@@ -842,7 +848,7 @@ mod tests {
         // Undo restores original color
         let (restored, _) = unwrap_scene_restore(history.undo(&scene, Some(node_id)).unwrap());
         let restored_color = match &restored.nodes.get(&node_id).unwrap().data {
-            NodeData::Primitive { color, .. } => *color,
+            NodeData::Primitive { material, .. } => material.base_color,
             _ => panic!("expected primitive"),
         };
         assert_ne!(
