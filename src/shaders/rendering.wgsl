@@ -272,6 +272,13 @@ struct AoResult {
     bent_normal: vec3f,
 }
 
+struct TransmissionPath {
+    valid: f32,
+    exit_point: vec3f,
+    exit_dir: vec3f,
+    travel_distance: f32,
+}
+
 // GGX (Trowbridge-Reitz) normal distribution function
 fn D_GGX(NoH: f32, roughness: f32) -> f32 {
     let a = roughness * roughness;
@@ -484,6 +491,125 @@ fn compute_transmission_absorption(base_color: vec3f, distance: f32) -> vec3f {
     return pow(tint, vec3f(max(distance, 0.0)));
 }
 
+fn refine_transmission_exit(
+    origin: vec3f,
+    direction: vec3f,
+    start_t: f32,
+    end_t: f32,
+) -> f32 {
+    var near_t = start_t;
+    var far_t = end_t;
+    for (var i = 0; i < 5; i++) {
+        let mid_t = 0.5 * (near_t + far_t);
+        let mid_d = scene_sdf(origin + direction * mid_t).x;
+        if mid_d <= 0.0 {
+            near_t = mid_t;
+        } else {
+            far_t = mid_t;
+        }
+    }
+    return far_t;
+}
+
+fn trace_transmission_path(
+    p: vec3f,
+    n: vec3f,
+    view_dir: vec3f,
+    ior: f32,
+    thickness: f32,
+) -> TransmissionPath {
+    let eta_in = 1.0 / max(ior, 1.0001);
+    var inside_dir = refract(-view_dir, n, eta_in);
+    if dot(inside_dir, inside_dir) < 1e-6 {
+        inside_dir = reflect(-view_dir, n);
+    }
+    inside_dir = normalize(inside_dir);
+
+    let bias = max(0.003, max(thickness, 0.05) * 0.01);
+    let origin = p + inside_dir * bias - n * bias;
+    let scene_extent = max(length(camera.scene_max.xyz - camera.scene_min.xyz), 1.0);
+    let max_distance = min(scene_extent, max(thickness * 6.0, 1.0));
+
+    var prev_t = 0.0;
+    var prev_d = min(scene_sdf(origin).x, -bias);
+    var t = bias;
+
+    for (var i = 0; i < 24; i++) {
+        let sample_p = origin + inside_dir * t;
+        let d = scene_sdf(sample_p).x;
+        if d > 0.0 && prev_d <= 0.0 {
+            let exit_t = refine_transmission_exit(origin, inside_dir, prev_t, t);
+            let exit_point = origin + inside_dir * exit_t;
+            let exit_normal = calc_normal(exit_point, max(exit_t, 0.001));
+            var exit_dir = refract(inside_dir, -exit_normal, ior);
+            if dot(exit_dir, exit_dir) < 1e-6 {
+                exit_dir = reflect(inside_dir, exit_normal);
+            }
+            return TransmissionPath(
+                1.0,
+                exit_point + normalize(exit_dir) * bias + exit_normal * bias,
+                normalize(exit_dir),
+                exit_t,
+            );
+        }
+        prev_t = t;
+        prev_d = d;
+        t += clamp(abs(d), 0.01, 0.35);
+        if t > max_distance {
+            break;
+        }
+    }
+
+    return TransmissionPath(0.0, p, view_dir, 0.0);
+}
+
+fn sample_transmission_secondary_hit(
+    origin: vec3f,
+    direction: vec3f,
+    fallback_roughness: f32,
+    ao_mode: i32,
+) -> vec3f {
+    let hit = ray_march(origin, direction);
+    let t = hit.x;
+    if t > /*SKY_CUTOFF*/ {
+        return sample_transmission_environment(direction, fallback_roughness);
+    }
+
+    let mat_id = i32(hit.y + 0.5);
+    let mat_b_id = i32(hit.z + 0.5);
+    let blend_factor = hit.w;
+    let p = origin + direction * t;
+    let n = calc_normal(p, t);
+    let view_dir = -direction;
+    let NoV = max(dot(n, view_dir), 0.0001);
+
+    let albedo = get_blended_color(mat_id, mat_b_id, blend_factor);
+    let metallic = get_blended_metallic(mat_id, mat_b_id, blend_factor);
+    let roughness = apply_specular_antialiasing(
+        n,
+        clamp(get_blended_roughness(mat_id, mat_b_id, blend_factor), 0.045, 1.0),
+    );
+    let dielectric_f0 = max(
+        get_blended_reflectance_f0(mat_id, mat_b_id, blend_factor),
+        ior_to_reflectance_f0(get_blended_ior(mat_id, mat_b_id, blend_factor)),
+    );
+    let f0 = mix(vec3f(dielectric_f0), albedo, metallic);
+
+    var ao_result = make_default_ao_result(n);
+    if camera.quality_mode < 0.5 {
+        ao_result = calc_ao_result(p, n, min(ao_mode, 1));
+    }
+
+    let diffuse = albedo * (1.0 - metallic) / PI;
+    let diffuse_ao = compute_multi_bounce_ao(ao_result.visibility, albedo);
+    var color =
+        diffuse * compute_indirect_diffuse_lighting(ao_result.bent_normal) * camera.ambient_info.x
+        * diffuse_ao;
+    color += compute_environment_specular(view_dir, n, NoV, roughness, f0, ao_result, min(ao_mode, 1));
+    color += get_node_emissive(mat_id) * get_node_emissive_intensity(mat_id);
+    return color;
+}
+
 fn compute_environment_transmission(
     view_dir: vec3f,
     n: vec3f,
@@ -513,6 +639,51 @@ fn compute_environment_transmission(
         * transmission
         * base_layer_energy
         * camera.ambient_info.y;
+}
+
+fn compute_geometry_aware_transmission(
+    p: vec3f,
+    view_dir: vec3f,
+    n: vec3f,
+    NoV: f32,
+    roughness: f32,
+    base_color: vec3f,
+    transmission: f32,
+    thickness: f32,
+    ior: f32,
+    base_layer_energy: f32,
+    ao_mode: i32,
+) -> vec3f {
+    let fallback = compute_environment_transmission(
+        view_dir,
+        n,
+        NoV,
+        roughness,
+        base_color,
+        transmission,
+        thickness,
+        ior,
+        base_layer_energy,
+    );
+    if transmission <= 0.0 || camera.quality_mode > 0.5 {
+        return fallback;
+    }
+
+    let path = trace_transmission_path(p, n, view_dir, ior, thickness);
+    if path.valid < 0.5 {
+        return fallback;
+    }
+
+    let transmitted_color =
+        sample_transmission_secondary_hit(path.exit_point, path.exit_dir, roughness, ao_mode);
+    let absorption =
+        compute_transmission_absorption(base_color, path.travel_distance * max(thickness, 0.05));
+    let fresnel = F_Schlick_vec3(NoV, vec3f(ior_to_reflectance_f0(ior)));
+    return transmitted_color
+        * absorption
+        * (vec3f(1.0) - fresnel)
+        * transmission
+        * base_layer_energy;
 }
 
 fn compute_direct_specular(
@@ -1101,7 +1272,8 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
             mat_sheen_color * (1.0 - mat_metallic),
             mat_sheen_roughness,
         );
-        color += compute_environment_transmission(
+        color += compute_geometry_aware_transmission(
+            p,
             view_dir,
             n,
             NoV,
@@ -1111,6 +1283,7 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
             mat_thickness,
             mat_ior,
             base_layer_energy,
+            ao_mode,
         );
 
         // Emissive contribution (added before tonemapping for natural overbright bloom)

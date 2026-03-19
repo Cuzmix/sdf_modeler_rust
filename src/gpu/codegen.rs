@@ -2612,6 +2612,8 @@ mod tests {
         let shader = generate_shader(&scene, &RenderConfig::default());
         assert!(shader.contains("fn D_GGX_Anisotropic"));
         assert!(shader.contains("fn compute_environment_transmission"));
+        assert!(shader.contains("fn compute_geometry_aware_transmission"));
+        assert!(shader.contains("fn trace_transmission_path"));
         assert!(shader.contains("get_blended_anisotropy_direction_world"));
     }
 
