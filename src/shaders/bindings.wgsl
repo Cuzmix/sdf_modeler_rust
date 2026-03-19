@@ -21,6 +21,8 @@ struct Camera {
     background_primary: vec4f,
     background_secondary: vec4f,
     background_tertiary: vec4f,
+    // Environment controls: x = rotation radians, y = exposure scale, z = direct HDR background available
+    environment_info: vec4f,
     // Scene lights (up to 8, packed as 4 vec4f per light)
     scene_light_info: vec4f,   // x = count, y = volumetric_count, z = volumetric_steps, w = unused
     scene_lights: array<vec4f, 32>, // 8 lights × 4 vec4f
@@ -47,3 +49,4 @@ struct SdfNode {
 @group(3) @binding(2) var env_irradiance_tex: texture_cube<f32>;
 @group(3) @binding(3) var env_prefiltered_tex: texture_cube<f32>;
 @group(3) @binding(4) var env_brdf_lut_tex: texture_2d<f32>;
+@group(3) @binding(5) var env_background_tex: texture_2d<f32>;

@@ -9,10 +9,18 @@ use crate::settings::{EnvironmentSource, RenderConfig};
 use super::environment_bake::{EnvironmentBakeGpu, EnvironmentBakeInputs};
 use super::ViewportResources;
 
-pub(crate) const SOURCE_ENV_RESOLUTION: u32 = 512;
-pub(crate) const IRRADIANCE_ENV_RESOLUTION: u32 = 32;
-pub(crate) const PREFILTERED_ENV_RESOLUTION: u32 = 128;
+pub(crate) const DEFAULT_PROCEDURAL_ENV_RESOLUTION: u32 = 512;
+pub(crate) const MIN_IRRADIANCE_ENV_RESOLUTION: u32 = 16;
+pub(crate) const MAX_IRRADIANCE_ENV_RESOLUTION: u32 = 64;
 pub(crate) const BRDF_LUT_RESOLUTION: u32 = 256;
+
+#[derive(Copy, Clone)]
+pub(crate) struct EnvironmentBakeResolutionSet {
+    pub source_resolution: u32,
+    pub irradiance_resolution: u32,
+    pub prefiltered_resolution: u32,
+    pub brdf_lut_resolution: u32,
+}
 
 struct EnvironmentImageMap {
     width: u32,
@@ -23,6 +31,16 @@ struct EnvironmentImageMap {
 struct EnvironmentSourceTexture {
     _texture: wgpu::Texture,
     view: wgpu::TextureView,
+    width: u32,
+    height: u32,
+}
+
+struct EnvironmentBindViews<'a> {
+    source_view: &'a wgpu::TextureView,
+    irradiance_view: &'a wgpu::TextureView,
+    prefiltered_view: &'a wgpu::TextureView,
+    brdf_lut_view: &'a wgpu::TextureView,
+    background_view: &'a wgpu::TextureView,
 }
 
 pub struct EnvironmentResources {
@@ -38,6 +56,8 @@ pub struct EnvironmentResources {
     pub brdf_lut_texture: wgpu::Texture,
     pub brdf_lut_view: wgpu::TextureView,
     pub prefiltered_mip_count: u32,
+    _fallback_background_texture: wgpu::Texture,
+    fallback_background_view: wgpu::TextureView,
     bake_gpu: EnvironmentBakeGpu,
     cached_hdri_path: Option<String>,
     cached_hdri_texture: Option<EnvironmentSourceTexture>,
@@ -95,7 +115,7 @@ impl EnvironmentResources {
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
             mipmap_filter: wgpu::FilterMode::Linear,
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_u: wgpu::AddressMode::Repeat,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
             ..Default::default()
@@ -109,14 +129,19 @@ impl EnvironmentResources {
             Self::create_cube_texture(device, 1, 1, "Env Prefiltered");
         let (brdf_lut_texture, brdf_lut_view) =
             Self::create_brdf_lut_texture(device, 1, "Env BRDF LUT");
+        let (fallback_background_texture, fallback_background_view) =
+            Self::create_2d_texture(device, 1, 1, "Env Background Fallback");
         let bind_group = Self::create_bind_group(
             device,
             &bind_group_layout,
             &sampler,
-            &source_view,
-            &irradiance_view,
-            &prefiltered_view,
-            &brdf_lut_view,
+            EnvironmentBindViews {
+                source_view: &source_view,
+                irradiance_view: &irradiance_view,
+                prefiltered_view: &prefiltered_view,
+                brdf_lut_view: &brdf_lut_view,
+                background_view: &fallback_background_view,
+            },
         );
 
         Self {
@@ -132,6 +157,8 @@ impl EnvironmentResources {
             brdf_lut_texture,
             brdf_lut_view,
             prefiltered_mip_count: 1,
+            _fallback_background_texture: fallback_background_texture,
+            fallback_background_view,
             bake_gpu,
             cached_hdri_path: None,
             cached_hdri_texture: None,
@@ -180,6 +207,16 @@ impl EnvironmentResources {
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 4,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 5,
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Texture {
                         sample_type: wgpu::TextureSampleType::Float { filterable: true },
@@ -243,14 +280,35 @@ impl EnvironmentResources {
         (texture, view)
     }
 
+    fn create_2d_texture(
+        device: &wgpu::Device,
+        width: u32,
+        height: u32,
+        label: &str,
+    ) -> (wgpu::Texture, wgpu::TextureView) {
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some(label),
+            size: wgpu::Extent3d {
+                width: width.max(1),
+                height: height.max(1),
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba16Float,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        (texture, view)
+    }
+
     fn create_bind_group(
         device: &wgpu::Device,
         bind_group_layout: &wgpu::BindGroupLayout,
         sampler: &wgpu::Sampler,
-        source_view: &wgpu::TextureView,
-        irradiance_view: &wgpu::TextureView,
-        prefiltered_view: &wgpu::TextureView,
-        brdf_lut_view: &wgpu::TextureView,
+        views: EnvironmentBindViews<'_>,
     ) -> wgpu::BindGroup {
         device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Environment BG"),
@@ -262,19 +320,23 @@ impl EnvironmentResources {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView(source_view),
+                    resource: wgpu::BindingResource::TextureView(views.source_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: wgpu::BindingResource::TextureView(irradiance_view),
+                    resource: wgpu::BindingResource::TextureView(views.irradiance_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
-                    resource: wgpu::BindingResource::TextureView(prefiltered_view),
+                    resource: wgpu::BindingResource::TextureView(views.prefiltered_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 4,
-                    resource: wgpu::BindingResource::TextureView(brdf_lut_view),
+                    resource: wgpu::BindingResource::TextureView(views.brdf_lut_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 5,
+                    resource: wgpu::BindingResource::TextureView(views.background_view),
                 },
             ],
         })
@@ -323,6 +385,8 @@ impl EnvironmentResources {
         EnvironmentSourceTexture {
             _texture: texture,
             view,
+            width: map.width.max(1),
+            height: map.height.max(1),
         }
     }
 
@@ -368,31 +432,61 @@ impl EnvironmentResources {
         }
     }
 
+    pub fn has_hdri_background_texture(&self) -> bool {
+        self.cached_hdri_texture.is_some()
+    }
+
+    fn resolved_bake_resolutions(
+        &self,
+        config: &RenderConfig,
+        device_limits: &wgpu::Limits,
+    ) -> EnvironmentBakeResolutionSet {
+        let hdri_dimensions = self
+            .cached_hdri_texture
+            .as_ref()
+            .map(|texture| (texture.width, texture.height));
+        resolve_environment_bake_resolutions(
+            config.environment_bake_resolution,
+            hdri_dimensions,
+            device_limits.max_texture_dimension_2d,
+        )
+    }
+
     pub fn rebuild(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, config: &RenderConfig) {
-        let prefiltered_mip_count = PREFILTERED_ENV_RESOLUTION.ilog2() + 1;
+        self.ensure_hdri_texture_loaded(device, queue, config);
+        let bake_resolutions = self.resolved_bake_resolutions(config, &device.limits());
+        let prefiltered_mip_count = bake_resolutions.prefiltered_resolution.ilog2() + 1;
         let (source_texture, source_view) =
-            Self::create_cube_texture(device, SOURCE_ENV_RESOLUTION, 1, "Env Source");
-        let (irradiance_texture, irradiance_view) =
-            Self::create_cube_texture(device, IRRADIANCE_ENV_RESOLUTION, 1, "Env Irradiance");
+            Self::create_cube_texture(device, bake_resolutions.source_resolution, 1, "Env Source");
+        let (irradiance_texture, irradiance_view) = Self::create_cube_texture(
+            device,
+            bake_resolutions.irradiance_resolution,
+            1,
+            "Env Irradiance",
+        );
         let (prefiltered_texture, prefiltered_view) = Self::create_cube_texture(
             device,
-            PREFILTERED_ENV_RESOLUTION,
+            bake_resolutions.prefiltered_resolution,
             prefiltered_mip_count,
             "Env Prefiltered",
         );
-        let (brdf_lut_texture, brdf_lut_view) =
-            Self::create_brdf_lut_texture(device, BRDF_LUT_RESOLUTION, "Env BRDF LUT");
-        self.ensure_hdri_texture_loaded(device, queue, config);
+        let (brdf_lut_texture, brdf_lut_view) = Self::create_brdf_lut_texture(
+            device,
+            bake_resolutions.brdf_lut_resolution,
+            "Env BRDF LUT",
+        );
         let hdri_view = self
             .cached_hdri_texture
             .as_ref()
             .map(|texture| &texture.view);
+        let background_view = hdri_view.unwrap_or(&self.fallback_background_view);
 
         self.bake_gpu.bake(
             device,
             queue,
             config,
             EnvironmentBakeInputs {
+                resolutions: bake_resolutions,
                 source_texture: &source_texture,
                 irradiance_texture: &irradiance_texture,
                 prefiltered_texture: &prefiltered_texture,
@@ -406,10 +500,13 @@ impl EnvironmentResources {
             device,
             &self.bind_group_layout,
             &self.sampler,
-            &source_view,
-            &irradiance_view,
-            &prefiltered_view,
-            &brdf_lut_view,
+            EnvironmentBindViews {
+                source_view: &source_view,
+                irradiance_view: &irradiance_view,
+                prefiltered_view: &prefiltered_view,
+                brdf_lut_view: &brdf_lut_view,
+                background_view,
+            },
         );
 
         self.source_texture = source_texture;
@@ -436,9 +533,53 @@ impl ViewportResources {
     }
 }
 
+fn resolve_environment_bake_resolutions(
+    requested_source_resolution: u32,
+    hdri_dimensions: Option<(u32, u32)>,
+    max_texture_dimension: u32,
+) -> EnvironmentBakeResolutionSet {
+    let source_resolution = resolve_source_environment_resolution(
+        requested_source_resolution,
+        hdri_dimensions,
+        max_texture_dimension,
+    );
+    let irradiance_resolution = (source_resolution / 16)
+        .clamp(MIN_IRRADIANCE_ENV_RESOLUTION, MAX_IRRADIANCE_ENV_RESOLUTION);
+
+    EnvironmentBakeResolutionSet {
+        source_resolution,
+        irradiance_resolution,
+        prefiltered_resolution: source_resolution,
+        brdf_lut_resolution: BRDF_LUT_RESOLUTION.min(max_texture_dimension.max(1)),
+    }
+}
+
+fn resolve_source_environment_resolution(
+    requested_source_resolution: u32,
+    hdri_dimensions: Option<(u32, u32)>,
+    max_texture_dimension: u32,
+) -> u32 {
+    let base_resolution = if requested_source_resolution > 0 {
+        requested_source_resolution
+    } else if let Some((width, height)) = hdri_dimensions {
+        cube_face_resolution_from_equirect(width, height)
+    } else {
+        DEFAULT_PROCEDURAL_ENV_RESOLUTION
+    };
+
+    base_resolution.clamp(1, max_texture_dimension.max(1))
+}
+
+pub(crate) fn cube_face_resolution_from_equirect(width: u32, height: u32) -> u32 {
+    width.div_ceil(4).max(height.div_ceil(2)).max(1)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::EnvironmentImageMap;
+    use super::{
+        cube_face_resolution_from_equirect, resolve_environment_bake_resolutions,
+        resolve_source_environment_resolution, EnvironmentImageMap,
+    };
 
     #[test]
     fn rgba16f_pixels_keep_rgb_and_write_opaque_alpha() {
@@ -457,5 +598,39 @@ mod tests {
         assert!((pixels[0][1].to_f32() - 0.5).abs() < 0.0001);
         assert!((pixels[0][2].to_f32() - 0.25).abs() < 0.0001);
         assert!((pixels[0][3].to_f32() - 1.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn cube_face_resolution_matches_equirect_layout() {
+        assert_eq!(cube_face_resolution_from_equirect(4096, 2048), 1024);
+        assert_eq!(cube_face_resolution_from_equirect(8192, 4096), 2048);
+        assert_eq!(cube_face_resolution_from_equirect(1536, 1024), 512);
+    }
+
+    #[test]
+    fn source_environment_resolution_prefers_explicit_override() {
+        let resolution = resolve_source_environment_resolution(256, Some((4096, 2048)), 8192);
+        assert_eq!(resolution, 256);
+    }
+
+    #[test]
+    fn source_environment_resolution_uses_hdri_face_equivalent_in_auto_mode() {
+        let resolution = resolve_source_environment_resolution(0, Some((4096, 2048)), 8192);
+        assert_eq!(resolution, 1024);
+    }
+
+    #[test]
+    fn source_environment_resolution_clamps_to_device_limit() {
+        let resolution = resolve_source_environment_resolution(0, Some((16384, 8192)), 2048);
+        assert_eq!(resolution, 2048);
+    }
+
+    #[test]
+    fn derived_environment_bake_resolutions_scale_with_source_face_size() {
+        let resolutions = resolve_environment_bake_resolutions(0, Some((4096, 2048)), 8192);
+        assert_eq!(resolutions.source_resolution, 1024);
+        assert_eq!(resolutions.prefiltered_resolution, 1024);
+        assert_eq!(resolutions.irradiance_resolution, 64);
+        assert_eq!(resolutions.brdf_lut_resolution, 256);
     }
 }

@@ -228,6 +228,12 @@ impl egui_wgpu::CallbackTrait for ViewportCallback {
             .environment
             .prefiltered_mip_count
             .saturating_sub(1) as f32;
+        render_uniform.environment_info[2] = if resources.environment.has_hdri_background_texture()
+        {
+            1.0
+        } else {
+            0.0
+        };
 
         // Write camera uniform (viewport = render dimensions for the SDF shader)
         queue.write_buffer(
@@ -655,6 +661,12 @@ pub fn draw(
         render_config.sky_zenith[2],
         0.0,
     ];
+    let environment_info = [
+        render_config.environment_rotation_degrees.to_radians(),
+        render_config.environment_exposure.exp2(),
+        0.0,
+        0.0,
+    ];
 
     let render_uniform = camera.to_uniform(
         render_viewport,
@@ -681,6 +693,7 @@ pub fn draw(
             render_config.bg_solid_color[2],
             0.0,
         ],
+        environment_info,
         scene_light_info,
         scene_lights_flat,
         scene_light_vol,
@@ -832,6 +845,7 @@ pub fn draw(
                             [0.0; 4],
                             [0.0; 4],
                             [0.0; 4],
+                            [0.0; 4],
                             [[0.0; 4]; 32],
                             [[0.0; 4]; 8],
                         ),
@@ -878,6 +892,7 @@ pub fn draw(
                             scene_bounds,
                             -1.0,
                             0.0,
+                            [0.0; 4],
                             [0.0; 4],
                             [0.0; 4],
                             [0.0; 4],
@@ -1008,6 +1023,7 @@ pub fn draw(
                     scene_bounds,
                     -1.0,
                     0.0,
+                    [0.0; 4],
                     [0.0; 4],
                     [0.0; 4],
                     [0.0; 4],

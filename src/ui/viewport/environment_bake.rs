@@ -6,9 +6,10 @@ use eframe::wgpu;
 use crate::settings::{BackgroundMode, EnvironmentSource, RenderConfig};
 
 const ENVIRONMENT_BAKE_SHADER_SRC: &str = include_str!("../../shaders/environment_bake.wgsl");
-const MAX_BAKE_PASS_COUNT: u32 = 64;
+const INITIAL_BAKE_PASS_CAPACITY: u32 = 64;
 
 pub struct EnvironmentBakeInputs<'a> {
+    pub resolutions: super::environment::EnvironmentBakeResolutionSet,
     pub source_texture: &'a wgpu::Texture,
     pub irradiance_texture: &'a wgpu::Texture,
     pub prefiltered_texture: &'a wgpu::Texture,
@@ -19,8 +20,10 @@ pub struct EnvironmentBakeInputs<'a> {
 
 pub struct EnvironmentBakeGpu {
     uniform_buffer: wgpu::Buffer,
+    uniform_bgl: wgpu::BindGroupLayout,
     uniform_stride: u64,
     uniform_bind_group: wgpu::BindGroup,
+    uniform_capacity: u32,
     source_bgl: wgpu::BindGroupLayout,
     source_sampler: wgpu::Sampler,
     _fallback_source_texture: wgpu::Texture,
@@ -61,12 +64,8 @@ struct BakePassDescriptor {
 impl EnvironmentBakeGpu {
     pub fn new(device: &wgpu::Device) -> Self {
         let uniform_stride = Self::uniform_stride(device);
-        let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Environment Bake Uniform"),
-            size: uniform_stride * MAX_BAKE_PASS_COUNT as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let uniform_buffer =
+            Self::create_uniform_buffer(device, uniform_stride, INITIAL_BAKE_PASS_CAPACITY);
         let uniform_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Environment Bake Uniform BGL"),
             entries: &[wgpu::BindGroupLayoutEntry {
@@ -80,18 +79,8 @@ impl EnvironmentBakeGpu {
                 count: None,
             }],
         });
-        let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Environment Bake Uniform BG"),
-            layout: &uniform_bgl,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                    buffer: &uniform_buffer,
-                    offset: 0,
-                    size: Some(Self::uniform_binding_size()),
-                }),
-            }],
-        });
+        let uniform_bind_group =
+            Self::create_uniform_bind_group(device, &uniform_bgl, &uniform_buffer);
         let source_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Environment Bake Source BGL"),
             entries: &[
@@ -156,8 +145,10 @@ impl EnvironmentBakeGpu {
 
         Self {
             uniform_buffer,
+            uniform_bgl,
             uniform_stride,
             uniform_bind_group,
+            uniform_capacity: INITIAL_BAKE_PASS_CAPACITY,
             source_bgl,
             source_sampler,
             _fallback_source_texture: fallback_source_texture,
@@ -193,17 +184,14 @@ impl EnvironmentBakeGpu {
     }
 
     pub fn bake(
-        &self,
+        &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         config: &RenderConfig,
         inputs: EnvironmentBakeInputs<'_>,
     ) {
-        let bake_passes = Self::build_bake_passes(inputs.prefiltered_mip_count);
-        assert!(
-            bake_passes.len() <= MAX_BAKE_PASS_COUNT as usize,
-            "Environment bake pass capacity exceeded"
-        );
+        let bake_passes = Self::build_bake_passes(inputs.resolutions, inputs.prefiltered_mip_count);
+        self.ensure_uniform_capacity(device, bake_passes.len() as u32);
 
         let uniform_bytes = self.encode_uniforms(config, &bake_passes);
         queue.write_buffer(&self.uniform_buffer, 0, &uniform_bytes);
@@ -266,6 +254,53 @@ impl EnvironmentBakeGpu {
         }
 
         queue.submit(Some(encoder.finish()));
+    }
+
+    fn create_uniform_buffer(
+        device: &wgpu::Device,
+        uniform_stride: u64,
+        uniform_capacity: u32,
+    ) -> wgpu::Buffer {
+        device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Environment Bake Uniform"),
+            size: uniform_stride * uniform_capacity.max(1) as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        })
+    }
+
+    fn create_uniform_bind_group(
+        device: &wgpu::Device,
+        uniform_bgl: &wgpu::BindGroupLayout,
+        uniform_buffer: &wgpu::Buffer,
+    ) -> wgpu::BindGroup {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Environment Bake Uniform BG"),
+            layout: uniform_bgl,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: uniform_buffer,
+                    offset: 0,
+                    size: Some(Self::uniform_binding_size()),
+                }),
+            }],
+        })
+    }
+
+    fn ensure_uniform_capacity(&mut self, device: &wgpu::Device, required_pass_count: u32) {
+        if required_pass_count <= self.uniform_capacity {
+            return;
+        }
+
+        let new_capacity = required_pass_count
+            .next_power_of_two()
+            .max(self.uniform_capacity);
+        self.uniform_buffer =
+            Self::create_uniform_buffer(device, self.uniform_stride, new_capacity);
+        self.uniform_bind_group =
+            Self::create_uniform_bind_group(device, &self.uniform_bgl, &self.uniform_buffer);
+        self.uniform_capacity = new_capacity;
     }
 
     fn create_cube_pipeline(
@@ -373,26 +408,28 @@ impl EnvironmentBakeGpu {
         })
     }
 
-    fn build_bake_passes(prefiltered_mip_count: u32) -> Vec<BakePassDescriptor> {
+    fn build_bake_passes(
+        resolutions: super::environment::EnvironmentBakeResolutionSet,
+        prefiltered_mip_count: u32,
+    ) -> Vec<BakePassDescriptor> {
         let mut passes = Vec::with_capacity((6 * (2 + prefiltered_mip_count) + 1) as usize);
         for face in 0..6 {
             passes.push(BakePassDescriptor {
                 kind: BakePassKind::Source,
                 face,
                 mip_level: 0,
-                resolution: super::environment::SOURCE_ENV_RESOLUTION,
+                resolution: resolutions.source_resolution,
                 roughness: 0.0,
             });
             passes.push(BakePassDescriptor {
                 kind: BakePassKind::Irradiance,
                 face,
                 mip_level: 0,
-                resolution: super::environment::IRRADIANCE_ENV_RESOLUTION,
+                resolution: resolutions.irradiance_resolution,
                 roughness: 0.0,
             });
             for mip_level in 0..prefiltered_mip_count {
-                let resolution =
-                    (super::environment::PREFILTERED_ENV_RESOLUTION >> mip_level).max(1);
+                let resolution = (resolutions.prefiltered_resolution >> mip_level).max(1);
                 let roughness = if prefiltered_mip_count <= 1 {
                     0.0
                 } else {
@@ -411,7 +448,7 @@ impl EnvironmentBakeGpu {
             kind: BakePassKind::BrdfLut,
             face: 0,
             mip_level: 0,
-            resolution: super::environment::BRDF_LUT_RESOLUTION,
+            resolution: resolutions.brdf_lut_resolution,
             roughness: 0.0,
         });
         passes
@@ -490,6 +527,7 @@ mod tests {
     use naga::valid::{Capabilities, ValidationFlags, Validator};
 
     use super::{EnvironmentBakeGpu, ENVIRONMENT_BAKE_SHADER_SRC};
+    use crate::ui::viewport::environment::EnvironmentBakeResolutionSet;
 
     #[test]
     fn environment_bake_shader_validates_with_naga() {
@@ -502,10 +540,15 @@ mod tests {
     }
 
     #[test]
-    fn environment_bake_pass_count_matches_capacity_budget() {
-        let mip_count = super::super::environment::PREFILTERED_ENV_RESOLUTION.ilog2() + 1;
-        let pass_count = EnvironmentBakeGpu::build_bake_passes(mip_count).len();
-        assert!(pass_count <= 64);
-        assert_eq!(pass_count, 61);
+    fn environment_bake_pass_count_scales_with_prefilter_mips() {
+        let resolutions = EnvironmentBakeResolutionSet {
+            source_resolution: 1024,
+            irradiance_resolution: 64,
+            prefiltered_resolution: 1024,
+            brdf_lut_resolution: 256,
+        };
+        let mip_count = resolutions.prefiltered_resolution.ilog2() + 1;
+        let pass_count = EnvironmentBakeGpu::build_bake_passes(resolutions, mip_count).len();
+        assert_eq!(pass_count, 79);
     }
 }

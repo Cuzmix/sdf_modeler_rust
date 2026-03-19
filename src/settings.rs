@@ -362,6 +362,9 @@ pub struct RenderConfig {
     pub environment_rotation_degrees: f32,
     #[serde(default)]
     pub environment_exposure: f32,
+    /// Lighting cubemap bake resolution. 0 = auto from imported HDR/EXR face-equivalent size.
+    #[serde(default)]
+    pub environment_bake_resolution: u32,
 
     // Visible Background
     #[serde(default)]
@@ -598,6 +601,7 @@ impl Default for RenderConfig {
             hdri_path: None,
             environment_rotation_degrees: 0.0,
             environment_exposure: 0.0,
+            environment_bake_resolution: 0,
             environment_background_mode: EnvironmentBackgroundMode::Environment,
             environment_background_blur: 0.0,
 
@@ -665,6 +669,7 @@ impl RenderConfig {
             .to_bits()
             .hash(&mut hasher);
         self.environment_exposure.to_bits().hash(&mut hasher);
+        self.environment_bake_resolution.hash(&mut hasher);
 
         match self.environment_source {
             EnvironmentSource::ProceduralSky => {
@@ -739,6 +744,7 @@ impl RenderConfig {
         self.hdri_path = d.hdri_path;
         self.environment_rotation_degrees = d.environment_rotation_degrees;
         self.environment_exposure = d.environment_exposure;
+        self.environment_bake_resolution = d.environment_bake_resolution;
         self.environment_background_mode = d.environment_background_mode;
         self.environment_background_blur = d.environment_background_blur;
         self.sky_horizon = d.sky_horizon;
@@ -847,6 +853,7 @@ mod tests {
         changed.hdri_path = Some("studio.hdr".into());
         changed.environment_rotation_degrees = 45.0;
         changed.environment_exposure = 1.0;
+        changed.environment_bake_resolution = 512;
         changed.environment_background_mode = EnvironmentBackgroundMode::Procedural;
         changed.environment_background_blur = 0.35;
         changed.background_mode = BackgroundMode::SolidColor;
@@ -875,6 +882,7 @@ mod tests {
         changed.hdri_path = Some("studio.hdr".into());
         changed.environment_rotation_degrees = 30.0;
         changed.environment_exposure = 1.5;
+        changed.environment_bake_resolution = 512;
         assert_ne!(
             changed.environment_fingerprint(),
             base.environment_fingerprint()

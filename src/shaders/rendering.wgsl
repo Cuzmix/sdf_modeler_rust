@@ -232,6 +232,32 @@ fn sample_source_environment(dir: vec3f) -> vec3f {
     return textureSampleLevel(env_source_tex, env_sampler, normalize(dir), 0.0).xyz;
 }
 
+fn rotate_environment_direction(direction: vec3f, rotation_radians: f32) -> vec3f {
+    let s = sin(rotation_radians);
+    let c = cos(rotation_radians);
+    return vec3f(
+        c * direction.x + s * direction.z,
+        direction.y,
+        -s * direction.x + c * direction.z,
+    );
+}
+
+fn direction_to_equirect_uv(direction: vec3f) -> vec2f {
+    let dir = normalize(direction);
+    let phi = atan2(dir.z, dir.x);
+    let theta = acos(clamp(dir.y, -1.0, 1.0));
+    let u = fract(phi / (2.0 * PI) + 0.5);
+    let v = clamp(theta / PI, 0.0, 1.0);
+    return vec2f(u, v);
+}
+
+fn sample_hdri_background(dir: vec3f) -> vec3f {
+    let rotated_dir = rotate_environment_direction(dir, camera.environment_info.x);
+    let uv = direction_to_equirect_uv(rotated_dir);
+    let color = textureSampleLevel(env_background_tex, env_sampler, uv, 0.0).xyz;
+    return color * camera.environment_info.y;
+}
+
 fn sample_procedural_background(dir: vec3f) -> vec3f {
     if camera.background_info.z > 0.5 {
         return camera.background_tertiary.xyz;
@@ -260,6 +286,9 @@ fn sample_visible_background(dir: vec3f) -> vec3f {
         return sample_procedural_background(dir);
     }
     let blur = clamp(camera.background_info.y, 0.0, 1.0);
+    if blur <= 0.0001 && camera.environment_info.z > 0.5 {
+        return sample_hdri_background(dir);
+    }
     if blur <= 0.0001 {
         return sample_source_environment(dir);
     }

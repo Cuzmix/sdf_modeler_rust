@@ -126,6 +126,7 @@ impl Camera {
         background_primary: [f32; 4],
         background_secondary: [f32; 4],
         background_tertiary: [f32; 4],
+        environment_info: [f32; 4],
         scene_light_info: [f32; 4],
         scene_lights: [[f32; 4]; 32],
         scene_light_vol: [[f32; 4]; 8],
@@ -157,6 +158,7 @@ impl Camera {
             background_primary,
             background_secondary,
             background_tertiary,
+            environment_info,
             scene_light_info,
             scene_lights,
             scene_light_vol,
@@ -259,6 +261,8 @@ pub struct CameraUniform {
     pub background_secondary: [f32; 4],
     /// Procedural background solid color.
     pub background_tertiary: [f32; 4],
+    /// Environment controls: [rotation_radians, exposure_scale, hdri_background_available, 0].
+    pub environment_info: [f32; 4],
     /// Scene light info: [count, volumetric_count, volumetric_steps, 0].
     pub scene_light_info: [f32; 4],
     /// Scene lights: up to 8 lights × 4 vec4f = 32 vec4f.

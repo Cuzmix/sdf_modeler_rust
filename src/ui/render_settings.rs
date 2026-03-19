@@ -282,6 +282,39 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
                 false,
                 "Global environment exposure in stops before diffuse/specular scaling",
             );
+            ui.horizontal(|ui| {
+                ui.label("Lighting Bake");
+
+                let mut use_auto_bake_resolution = config.environment_bake_resolution == 0;
+                if ui
+                    .checkbox(&mut use_auto_bake_resolution, "Auto")
+                    .on_hover_text(
+                        "Auto uses the imported HDR/EXR cubemap face-equivalent resolution. Procedural sky falls back to the default bake size.",
+                    )
+                    .changed()
+                {
+                    if use_auto_bake_resolution {
+                        config.environment_bake_resolution = 0;
+                    } else if config.environment_bake_resolution == 0 {
+                        config.environment_bake_resolution = 512;
+                    }
+                }
+
+                let mut bake_resolution = config.environment_bake_resolution.max(16) as i32;
+                let response = ui.add_enabled(
+                    !use_auto_bake_resolution,
+                    egui::DragValue::new(&mut bake_resolution)
+                        .speed(16)
+                        .range(16..=4096)
+                        .suffix(" px"),
+                );
+                if response.changed() {
+                    config.environment_bake_resolution = bake_resolution as u32;
+                }
+            });
+            ui.small(
+                "This controls lighting cubemap quality. The visible HDR/EXR background stays sharp at blur 0 and can be rebaked lower separately for performance.",
+            );
 
             if config.environment_source == EnvironmentSource::Hdri {
                 ui.horizontal(|ui| {

@@ -279,6 +279,19 @@ impl SdfApp {
             },
             0.0,
         ];
+        let environment_info = [
+            self.settings
+                .render
+                .environment_rotation_degrees
+                .to_radians(),
+            self.settings.render.environment_exposure.exp2(),
+            if resources.environment.has_hdri_background_texture() {
+                1.0
+            } else {
+                0.0
+            },
+            0.0,
+        ];
         let uniform = self.doc.camera.to_uniform(
             viewport,
             0.0,
@@ -309,6 +322,7 @@ impl SdfApp {
                 self.settings.render.bg_solid_color[2],
                 0.0,
             ],
+            environment_info,
             scene_light_info,
             scene_lights_flat,
             scene_light_vol,

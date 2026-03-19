@@ -17,6 +17,12 @@
 - Keep the codebase **junior-friendly, explicit, and easy to navigate**.
 - Avoid over-engineering — only make changes that are directly requested or clearly necessary.
 
+### Pushback and Decision Quality
+- **Push back when a request is technically unsound, unnecessary, or likely to create future maintenance/performance problems.**
+- Do not implement a change just because it was requested if the evidence says the change is the wrong fix.
+- Identify the underlying issue first, explain the tradeoff plainly, and prefer the smallest correct solution over the broadest possible change.
+- When a user asks for something overly configurable or overly complex, prefer a narrower product-facing solution and keep engine-internal/debug controls out of the main UX unless they are genuinely needed.
+
 ### Performance (Top Priority)
 - **Performance must never be degraded.**
 - Every change must **preserve or improve** runtime efficiency, memory usage, and architectural stability.
