@@ -2614,6 +2614,7 @@ mod tests {
         assert!(shader.contains("fn compute_environment_transmission"));
         assert!(shader.contains("fn compute_geometry_aware_transmission"));
         assert!(shader.contains("fn trace_transmission_path"));
+        assert!(shader.contains("reflect(march_dir, exit_normal)"));
         assert!(shader.contains("get_blended_anisotropy_direction_world"));
     }
 

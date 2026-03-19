@@ -526,41 +526,68 @@ fn trace_transmission_path(
     inside_dir = normalize(inside_dir);
 
     let bias = max(0.003, max(thickness, 0.05) * 0.01);
-    let origin = p + inside_dir * bias - n * bias;
     let scene_extent = max(length(camera.scene_max.xyz - camera.scene_min.xyz), 1.0);
-    let max_distance = min(scene_extent, max(thickness * 6.0, 1.0));
+    let max_segment_distance = min(scene_extent, max(thickness * 6.0, 1.0));
+    let max_total_distance = min(scene_extent * 2.0, max(thickness * 12.0, 2.0));
 
-    var prev_t = 0.0;
-    var prev_d = min(scene_sdf(origin).x, -bias);
-    var t = bias;
+    var march_origin = p + inside_dir * bias - n * bias;
+    var march_dir = inside_dir;
+    var total_distance = 0.0;
 
-    for (var i = 0; i < 24; i++) {
-        let sample_p = origin + inside_dir * t;
-        let d = scene_sdf(sample_p).x;
-        if d > 0.0 && prev_d <= 0.0 {
-            let exit_t = refine_transmission_exit(origin, inside_dir, prev_t, t);
-            let exit_point = origin + inside_dir * exit_t;
-            let exit_normal = calc_normal(exit_point, max(exit_t, 0.001));
-            var exit_dir = refract(inside_dir, -exit_normal, ior);
-            if dot(exit_dir, exit_dir) < 1e-6 {
-                exit_dir = reflect(inside_dir, exit_normal);
+    for (var bounce = 0; bounce < 3; bounce++) {
+        var prev_t = 0.0;
+        var prev_d = min(scene_sdf(march_origin).x, -bias);
+        var t = bias;
+        var bounced = false;
+
+        for (var i = 0; i < 24; i++) {
+            let sample_p = march_origin + march_dir * t;
+            let d = scene_sdf(sample_p).x;
+            if d > 0.0 && prev_d <= 0.0 {
+                let exit_t = refine_transmission_exit(march_origin, march_dir, prev_t, t);
+                let exit_point = march_origin + march_dir * exit_t;
+                let exit_normal = calc_normal(exit_point, max(total_distance + exit_t, 0.001));
+                let exit_dir = refract(march_dir, -exit_normal, ior);
+                if dot(exit_dir, exit_dir) > 1e-6 {
+                    total_distance += exit_t;
+                    return TransmissionPath(
+                        1.0,
+                        exit_point + normalize(exit_dir) * bias + exit_normal * bias,
+                        normalize(exit_dir),
+                        total_distance,
+                    );
+                }
+
+                if bounce >= 2 {
+                    return TransmissionPath(-1.0, exit_point, march_dir, total_distance + exit_t);
+                }
+
+                let reflected_dir = normalize(reflect(march_dir, exit_normal));
+                total_distance += exit_t;
+                march_origin = exit_point + reflected_dir * bias - exit_normal * bias;
+                march_dir = reflected_dir;
+                bounced = true;
+                break;
             }
-            return TransmissionPath(
-                1.0,
-                exit_point + normalize(exit_dir) * bias + exit_normal * bias,
-                normalize(exit_dir),
-                exit_t,
-            );
+
+            let step = clamp(abs(d), 0.01, 0.35);
+            prev_t = t;
+            prev_d = d;
+            if t > max_segment_distance || total_distance + t > max_total_distance {
+                break;
+            }
+            if total_distance + t + step > max_total_distance {
+                break;
+            }
+            t += step;
         }
-        prev_t = t;
-        prev_d = d;
-        t += clamp(abs(d), 0.01, 0.35);
-        if t > max_distance {
+
+        if !bounced {
             break;
         }
     }
 
-    return TransmissionPath(0.0, p, view_dir, 0.0);
+    return TransmissionPath(0.0, p, view_dir, total_distance);
 }
 
 fn sample_transmission_secondary_hit(
@@ -670,6 +697,9 @@ fn compute_geometry_aware_transmission(
     }
 
     let path = trace_transmission_path(p, n, view_dir, ior, thickness);
+    if path.valid < -0.5 {
+        return vec3f(0.0);
+    }
     if path.valid < 0.5 {
         return fallback;
     }
