@@ -290,6 +290,10 @@ impl SdfApp {
             Ok(project) => {
                 self.doc.scene = project.scene;
                 self.doc.camera = project.camera;
+                if let Some(render_config) = project.render_config {
+                    self.settings.render = render_config;
+                    self.gpu.last_environment_fingerprint = 0;
+                }
                 self.doc.history = crate::graph::history::History::new();
                 self.ui.node_graph_state.clear_selection();
                 self.ui.node_graph_state.needs_initial_rebuild = true;

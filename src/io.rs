@@ -10,14 +10,17 @@ use crate::gpu::camera::Camera;
 use crate::graph::scene::{NodeData, NodeId, Scene, SceneNode};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::native_paths;
+use crate::settings::RenderConfig;
 
-const CURRENT_VERSION: u32 = 5;
+const CURRENT_VERSION: u32 = 6;
 
 #[derive(Serialize, Deserialize)]
 pub struct ProjectFile {
     pub version: u32,
     pub scene: Scene,
     pub camera: Camera,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub render_config: Option<RenderConfig>,
 }
 
 const PRESET_VERSION: u32 = 1;
@@ -51,7 +54,11 @@ pub struct RecoveryMeta {
 
 // ── Pure serialization (shared by native + WASM) ────────────────────────────
 
-pub fn project_to_json(scene: &Scene, camera: &Camera) -> Result<String, String> {
+pub fn project_to_json(
+    scene: &Scene,
+    camera: &Camera,
+    render_config: Option<&RenderConfig>,
+) -> Result<String, String> {
     let project = ProjectFile {
         version: CURRENT_VERSION,
         scene: scene.clone(),
@@ -65,6 +72,7 @@ pub fn project_to_json(scene: &Scene, camera: &Camera) -> Result<String, String>
             orthographic: camera.orthographic,
             transition: None,
         },
+        render_config: render_config.cloned(),
     };
     serde_json::to_string_pretty(&project).map_err(|e| e.to_string())
 }
@@ -324,9 +332,10 @@ pub fn load_subtree_preset(scene: &mut Scene, path: &std::path::Path) -> Result<
 pub fn save_project(
     scene: &Scene,
     camera: &Camera,
+    render_config: &RenderConfig,
     path: &std::path::PathBuf,
 ) -> Result<(), String> {
-    let json = project_to_json(scene, camera)?;
+    let json = project_to_json(scene, camera, Some(render_config))?;
     native_paths::ensure_parent_dir(path)?;
     std::fs::write(path, json).map_err(|e| e.to_string())?;
     Ok(())
@@ -383,8 +392,8 @@ pub fn web_download(filename: &str, data: &[u8], mime: &str) {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub fn web_save_project(scene: &Scene, camera: &Camera) {
-    match project_to_json(scene, camera) {
+pub fn web_save_project(scene: &Scene, camera: &Camera, render_config: &RenderConfig) {
+    match project_to_json(scene, camera, Some(render_config)) {
         Ok(json) => web_download("project.sdf", json.as_bytes(), "application/json"),
         Err(e) => log::error!("Failed to serialize project: {}", e),
     }
@@ -493,7 +502,8 @@ fn migrate_v2_to_v3(project: &mut ProjectFile) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graph::scene::{NodeData, SdfPrimitive};
+    use crate::graph::scene::{LightType, NodeData, SdfPrimitive};
+    use crate::settings::{AmbientOcclusionMode, EnvironmentSource, RenderConfig};
     use std::collections::{HashMap, HashSet};
 
     fn empty_scene() -> Scene {
@@ -504,6 +514,132 @@ mod tests {
             hidden_nodes: HashSet::new(),
             light_masks: HashMap::new(),
         }
+    }
+
+    #[test]
+    fn project_json_roundtrip_preserves_render_config() {
+        let scene = empty_scene();
+        let camera = Camera::default();
+        let mut render = RenderConfig::default();
+        render.env_reflection_enabled = true;
+        render.env_reflection_intensity = 1.6;
+        render.environment_source = EnvironmentSource::ProceduralSky;
+        render.ao_mode = AmbientOcclusionMode::Quality;
+        render.show_grid = false;
+
+        let json =
+            project_to_json(&scene, &camera, Some(&render)).expect("serialize project with render");
+        let project = json_to_project(&json).expect("deserialize project with render");
+
+        assert_eq!(project.version, CURRENT_VERSION);
+        assert_eq!(project.render_config, Some(render));
+    }
+
+    #[test]
+    fn material_showcase_scene_loads_and_covers_material_features() {
+        let project = json_to_project(include_str!("../docs/scenes/material_showcase.sdf"))
+            .expect("load material showcase project");
+        let render = project
+            .render_config
+            .as_ref()
+            .expect("material showcase should include render config");
+        assert!(render.env_reflection_enabled);
+        assert!(render.specular_aa_enabled);
+        assert!(
+            render.environment_source == EnvironmentSource::ProceduralSky
+                || render.hdri_path.is_some(),
+            "fixture should use either procedural IBL or a concrete HDRI path"
+        );
+
+        let mut found_clearcoat = false;
+        let mut found_sheen = false;
+        let mut found_anisotropy = false;
+        let mut found_transmission = false;
+        let mut found_emissive = false;
+
+        for node in project.scene.nodes.values() {
+            match &node.data {
+                NodeData::Primitive { material, .. } | NodeData::Sculpt { material, .. } => {
+                    found_clearcoat |= material.clearcoat > 0.01;
+                    found_sheen |= material.sheen_color.length_squared() > 0.001;
+                    found_anisotropy |= material.anisotropy_strength > 0.01;
+                    found_transmission |= material.transmission > 0.01;
+                    found_emissive |= material.emissive_intensity > 0.01;
+                }
+                _ => {}
+            }
+        }
+
+        assert!(found_clearcoat, "fixture should cover clearcoat");
+        assert!(found_sheen, "fixture should cover sheen");
+        assert!(found_anisotropy, "fixture should cover anisotropy");
+        assert!(found_transmission, "fixture should cover transmission");
+        assert!(found_emissive, "fixture should cover emissive");
+    }
+
+    #[test]
+    fn glass_contact_lab_loads_and_covers_glass_stress_cases() {
+        let project = json_to_project(include_str!("../docs/scenes/glass_contact_lab.sdf"))
+            .expect("load glass contact lab project");
+        let render = project
+            .render_config
+            .as_ref()
+            .expect("glass contact lab should include render config");
+        assert!(render.shadows_enabled);
+        assert!(render.env_reflection_enabled);
+        assert!(render.specular_aa_enabled);
+
+        let mut transmissive_nodes = 0;
+        let mut metallic_nodes = 0;
+        let mut emissive_nodes = 0;
+        let mut box_primitives = 0;
+        let mut point_lights = 0;
+
+        for node in project.scene.nodes.values() {
+            match &node.data {
+                NodeData::Primitive { kind, material, .. } => {
+                    if matches!(kind, SdfPrimitive::Box) {
+                        box_primitives += 1;
+                    }
+                    if material.transmission > 0.01 {
+                        transmissive_nodes += 1;
+                    }
+                    if material.metallic > 0.01 {
+                        metallic_nodes += 1;
+                    }
+                    if material.emissive_intensity > 0.01 {
+                        emissive_nodes += 1;
+                    }
+                }
+                NodeData::Light { light_type, .. } => {
+                    if matches!(light_type, LightType::Point) {
+                        point_lights += 1;
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        assert!(
+            transmissive_nodes >= 2,
+            "fixture should include at least two transmissive objects"
+        );
+        assert!(
+            metallic_nodes >= 1,
+            "fixture should include at least one metallic/glossy neighbor"
+        );
+        assert!(
+            emissive_nodes >= 1,
+            "fixture should include an emissive reference object"
+        );
+        assert!(
+            box_primitives >= 4,
+            "fixture should include enclosing box geometry for contact context"
+        );
+        assert!(
+            point_lights >= 1,
+            "fixture should include a point light for close highlight response"
+        );
     }
 
     #[cfg(not(target_arch = "wasm32"))]

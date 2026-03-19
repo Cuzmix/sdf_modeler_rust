@@ -87,9 +87,12 @@ impl SdfApp {
                             }
                         };
                         if let Some(path) = path {
-                            if let Err(e) =
-                                crate::io::save_project(&self.doc.scene, &self.doc.camera, &path)
-                            {
+                            if let Err(e) = crate::io::save_project(
+                                &self.doc.scene,
+                                &self.doc.camera,
+                                &self.settings.render,
+                                &path,
+                            ) {
                                 log::error!("Failed to save project: {}", e);
                             } else {
                                 self.persistence.current_file_path = Some(path.clone());
@@ -102,7 +105,11 @@ impl SdfApp {
                     }
                     #[cfg(target_arch = "wasm32")]
                     {
-                        crate::io::web_save_project(&self.doc.scene, &self.doc.camera);
+                        crate::io::web_save_project(
+                            &self.doc.scene,
+                            &self.doc.camera,
+                            &self.settings.render,
+                        );
                         self.persistence.saved_fingerprint = self.doc.scene.data_fingerprint();
                         self.persistence.scene_dirty = false;
                     }
@@ -1060,6 +1067,11 @@ impl SdfApp {
             Ok(project) => {
                 self.doc.scene = project.scene;
                 self.doc.camera = project.camera;
+                if let Some(render_config) = project.render_config {
+                    self.settings.render = render_config;
+                    self.gpu.last_environment_fingerprint = 0;
+                    self.settings.save();
+                }
                 self.doc.history = History::new();
                 self.ui.node_graph_state.clear_selection();
                 self.ui.node_graph_state.needs_initial_rebuild = true;

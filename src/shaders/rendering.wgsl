@@ -612,6 +612,20 @@ fn sample_transmission_secondary_hit(
 
     let albedo = get_blended_color(mat_id, mat_b_id, blend_factor);
     let metallic = get_blended_metallic(mat_id, mat_b_id, blend_factor);
+    let clearcoat = get_blended_clearcoat(mat_id, mat_b_id, blend_factor);
+    let clearcoat_roughness = clamp(
+        apply_specular_antialiasing(
+            n,
+            clamp(get_blended_clearcoat_roughness(mat_id, mat_b_id, blend_factor), 0.045, 1.0),
+        ),
+        0.045,
+        1.0,
+    );
+    let sheen_color = get_blended_sheen_color(mat_id, mat_b_id, blend_factor);
+    let sheen_roughness = get_blended_sheen_roughness(mat_id, mat_b_id, blend_factor);
+    let anisotropy_strength = get_blended_anisotropy_strength(mat_id, mat_b_id, blend_factor);
+    let tangent = get_blended_anisotropy_direction_world(mat_id, mat_b_id, blend_factor, n);
+    let bitangent = normalize(cross(n, tangent));
     let roughness = apply_specular_antialiasing(
         n,
         clamp(get_blended_roughness(mat_id, mat_b_id, blend_factor), 0.045, 1.0),
@@ -627,12 +641,54 @@ fn sample_transmission_secondary_hit(
         ao_result = calc_ao_result(p, n, min(ao_mode, 1));
     }
 
+    let base_layer_energy = 1.0 - 0.25 * clamp(clearcoat, 0.0, 1.0);
     let diffuse = albedo * (1.0 - metallic) / PI;
     let diffuse_ao = compute_multi_bounce_ao(ao_result.visibility, albedo);
     var color =
         diffuse * compute_indirect_diffuse_lighting(ao_result.bent_normal) * camera.ambient_info.x
-        * diffuse_ao;
+        * diffuse_ao
+        * base_layer_energy;
+    var light_mask = 255u;
+    if mat_id >= 0 {
+        light_mask = u32(nodes[mat_id].scale.w + 0.5);
+    }
+    color += compute_scene_direct_lighting(
+        p,
+        n,
+        view_dir,
+        NoV,
+        diffuse,
+        roughness,
+        f0,
+        base_layer_energy,
+        clearcoat,
+        clearcoat_roughness,
+        sheen_color,
+        sheen_roughness,
+        metallic,
+        tangent,
+        bitangent,
+        anisotropy_strength,
+        light_mask,
+        false,
+    );
     color += compute_environment_specular(view_dir, n, NoV, roughness, f0, ao_result, min(ao_mode, 1));
+    color += compute_environment_specular(
+        view_dir,
+        n,
+        NoV,
+        clearcoat_roughness,
+        vec3f(0.04 * clearcoat),
+        ao_result,
+        min(ao_mode, 1),
+    );
+    color += compute_sheen_environment(
+        view_dir,
+        n,
+        NoV,
+        sheen_color * (1.0 - metallic),
+        sheen_roughness,
+    );
     color += get_node_emissive(mat_id) * get_node_emissive_intensity(mat_id);
     return color;
 }
@@ -749,6 +805,145 @@ fn compute_direct_specular(
     let G = G_SmithGGX_Anisotropic(NoV, ToV, BoV, NoL, ToL, BoL, alphas.x, alphas.y);
     let F = F_Schlick_vec3(VoH, f0);
     return D * G * F;
+}
+
+fn compute_scene_direct_lighting(
+    p: vec3f,
+    n: vec3f,
+    view_dir: vec3f,
+    NoV: f32,
+    diffuse_color: vec3f,
+    roughness: f32,
+    f0: vec3f,
+    base_layer_energy: f32,
+    mat_clearcoat: f32,
+    clearcoat_roughness: f32,
+    mat_sheen_color: vec3f,
+    mat_sheen_roughness: f32,
+    mat_metallic: f32,
+    tangent: vec3f,
+    bitangent: vec3f,
+    mat_anisotropy_strength: f32,
+    light_mask: u32,
+    allow_shadows: bool,
+) -> vec3f {
+    let scene_light_count = i32(camera.scene_light_info.x + 0.5);
+    var color = vec3f(0.0);
+    var shadow_budget = 0;
+
+    for (var li = 0; li < 8; li++) {
+        if li >= scene_light_count { break; }
+        if (light_mask & (1u << u32(li))) == 0u { continue; }
+
+        let base = li * 4;
+        let sl_pos_type = camera.scene_lights[base];
+        let sl_dir_int = camera.scene_lights[base + 1];
+        let sl_col_range = camera.scene_lights[base + 2];
+        let sl_params = camera.scene_lights[base + 3];
+
+        let sl_type = i32(sl_pos_type.w + 0.5);
+        let sl_intensity = sl_dir_int.w;
+        let sl_color = sl_col_range.xyz;
+        let sl_range = sl_col_range.w;
+        let sl_cast_shadows = sl_params.y > 0.5;
+        let sl_shadow_softness = sl_params.z;
+        let sl_sc_packed = sl_params.w;
+        let sl_shadow_color = vec3f(
+            floor(sl_sc_packed / 65536.0) / 255.0,
+            floor(fract(sl_sc_packed / 65536.0) * 256.0) / 255.0,
+            fract(sl_sc_packed / 256.0) * 256.0 / 255.0,
+        );
+
+        var sl_light_dir: vec3f;
+        var sl_atten = 1.0;
+        if sl_type == 2 {
+            sl_light_dir = normalize(-sl_dir_int.xyz);
+        } else {
+            let to_light = sl_pos_type.xyz - p;
+            let dist = length(to_light);
+            sl_light_dir = to_light / max(dist, 0.0001);
+            let dist_ratio = dist / max(sl_range, 0.001);
+            let window = max(1.0 - dist_ratio * dist_ratio, 0.0);
+            sl_atten = (window * window) / max(dist * dist, 0.01);
+        }
+
+        if sl_type == 1 {
+            let cos_half_angle = sl_params.x;
+            let cos_theta = dot(-sl_light_dir, normalize(sl_dir_int.xyz));
+            let inner_cos = mix(1.0, cos_half_angle, 0.8);
+            sl_atten *= clamp(
+                (cos_theta - cos_half_angle) / max(inner_cos - cos_half_angle, 0.0001),
+                0.0,
+                1.0,
+            );
+        }
+
+        let sl_has_cookie = camera.scene_light_vol[li].z > 0.5;
+        if sl_has_cookie {
+            let sl_cookie_idx = i32(camera.scene_light_vol[li].w + 0.5);
+            let sl_cookie_dist = eval_cookie_sdf(sl_cookie_idx, p);
+            sl_atten *= smoothstep(0.02, -0.02, sl_cookie_dist);
+        }
+
+        let sl_h = normalize(sl_light_dir + view_dir);
+        let sl_NoL = max(dot(n, sl_light_dir), 0.0);
+        let sl_NoH = max(dot(n, sl_h), 0.0);
+        let sl_VoH = max(dot(view_dir, sl_h), 0.0);
+        let sl_specular = compute_direct_specular(
+            sl_light_dir,
+            view_dir,
+            n,
+            tangent,
+            bitangent,
+            NoV,
+            roughness,
+            f0,
+            mat_anisotropy_strength,
+        );
+        let sl_clearcoat_D = D_GGX(sl_NoH, clearcoat_roughness);
+        let sl_clearcoat_G = G_SmithGGX(NoV, sl_NoL, clearcoat_roughness);
+        let sl_clearcoat_F = F_Schlick_scalar(sl_VoH, 0.04);
+        let sl_clearcoat = vec3f(
+            mat_clearcoat * sl_clearcoat_D * sl_clearcoat_G * sl_clearcoat_F
+        );
+        let sl_sheen_exponent = mix(7.0, 2.0, clamp(mat_sheen_roughness, 0.0, 1.0));
+        let sl_sheen = mat_sheen_color
+            * pow(1.0 - clamp(sl_VoH, 0.0, 1.0), sl_sheen_exponent)
+            * (1.0 - mat_metallic);
+
+        let sl_contribution =
+            ((diffuse_color + sl_specular) * base_layer_energy + sl_clearcoat + sl_sheen)
+            * sl_NoL
+            * sl_intensity
+            * sl_atten
+            * sl_color;
+
+        var sl_shadow_factor = vec3f(1.0);
+        if allow_shadows
+            && SHADOWS_ENABLED
+            && sl_cast_shadows
+            && shadow_budget < 2
+            && camera.quality_mode < 0.5
+        {
+            let sl_grazing = 1.0 - sl_NoL;
+            let sl_normal_bias = SHADOW_BIAS * (1.0 + sl_grazing * 1.5);
+            let sl_slope_bias = SHADOW_BIAS * (0.5 + sl_grazing * 2.0);
+            let sl_shadow_origin = p + n * sl_normal_bias + sl_light_dir * sl_slope_bias;
+            let sl_shadow_mint = max(SHADOW_MINT, sl_normal_bias + sl_slope_bias);
+            let sl_shadow = soft_shadow(
+                sl_shadow_origin,
+                sl_light_dir,
+                sl_shadow_mint,
+                SHADOW_MAXT,
+                sl_shadow_softness,
+            );
+            sl_shadow_factor = mix(sl_shadow_color, vec3f(1.0), sl_shadow);
+            shadow_budget += 1;
+        }
+        color += sl_contribution * sl_shadow_factor;
+    }
+
+    return color;
 }
 
 fn compute_sheen_environment(
@@ -1165,123 +1360,32 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
         let ambient_i = camera.ambient_info.x;
         color = diffuse_color * indirect_diffuse * ambient_i * diffuse_ao * base_layer_energy;
 
-        // --- Scene lights (up to 8 lights from Light nodes) ---
-        let scene_light_count = i32(camera.scene_light_info.x + 0.5);
         // Light linking bitmask: packed in nodes[mat_id].scale.w
+        let scene_light_count = i32(camera.scene_light_info.x + 0.5);
         var light_mask = 255u;
         if mat_id >= 0 {
             light_mask = u32(nodes[mat_id].scale.w + 0.5);
         }
-        // Track how many shadow-casting lights we've evaluated (budget: max 2)
-        var shadow_budget = 0;
-        for (var li = 0; li < 8; li++) {
-            if li >= scene_light_count { break; }
-            // Skip this light if the geometry's bitmask excludes it
-            if (light_mask & (1u << u32(li))) == 0u { continue; }
-            let base = li * 4;
-            let sl_pos_type = camera.scene_lights[base];
-            let sl_dir_int = camera.scene_lights[base + 1];
-            let sl_col_range = camera.scene_lights[base + 2];
-            let sl_params = camera.scene_lights[base + 3];
-
-            let sl_type = i32(sl_pos_type.w + 0.5); // 0=point, 1=spot, 2=directional
-            let sl_intensity = sl_dir_int.w;
-            let sl_color = sl_col_range.xyz;
-            let sl_range = sl_col_range.w;
-            let sl_cast_shadows = sl_params.y > 0.5;
-            let sl_shadow_softness = sl_params.z;
-            // Unpack shadow color from RGB8 encoded float (r*65536 + g*256 + b)
-            let sl_sc_packed = sl_params.w;
-            let sl_shadow_color = vec3f(
-                floor(sl_sc_packed / 65536.0) / 255.0,
-                floor(fract(sl_sc_packed / 65536.0) * 256.0) / 255.0,
-                fract(sl_sc_packed / 256.0) * 256.0 / 255.0,
-            );
-
-            // Compute light direction and attenuation
-            var sl_light_dir: vec3f;
-            var sl_atten = 1.0;
-            if sl_type == 2 {
-                // Directional: constant direction, no attenuation
-                sl_light_dir = normalize(-sl_dir_int.xyz);
-            } else {
-                // Point/Spot: direction from surface to light
-                let to_light = sl_pos_type.xyz - p;
-                let dist = length(to_light);
-                sl_light_dir = to_light / max(dist, 0.0001);
-                // Inverse square falloff with range-based windowing
-                let dist_ratio = dist / max(sl_range, 0.001);
-                let window = max(1.0 - dist_ratio * dist_ratio, 0.0);
-                sl_atten = (window * window) / max(dist * dist, 0.01);
-            }
-
-            // Spot cone falloff
-            if sl_type == 1 {
-                let cos_half_angle = sl_params.x;
-                let cos_theta = dot(-sl_light_dir, normalize(sl_dir_int.xyz));
-                // Smooth falloff from inner to outer cone
-                let inner_cos = mix(1.0, cos_half_angle, 0.8); // inner cone at 80% of angle
-                sl_atten *= clamp((cos_theta - cos_half_angle) / max(inner_cos - cos_half_angle, 0.0001), 0.0, 1.0);
-            }
-
-            // SDF cookie shape modulation
-            let sl_has_cookie = camera.scene_light_vol[li].z > 0.5;
-            if sl_has_cookie {
-                let sl_cookie_idx = i32(camera.scene_light_vol[li].w + 0.5);
-                let sl_cookie_dist = eval_cookie_sdf(sl_cookie_idx, p);
-                // Inside cookie shape (dist < 0) = full light, outside = no light
-                // smoothstep provides a soft edge at the boundary
-                sl_atten *= smoothstep(0.02, -0.02, sl_cookie_dist);
-            }
-
-            // Cook-Torrance BRDF for this light
-            let sl_h = normalize(sl_light_dir + view_dir);
-            let sl_NoL = max(dot(n, sl_light_dir), 0.0);
-            let sl_NoH = max(dot(n, sl_h), 0.0);
-            let sl_VoH = max(dot(view_dir, sl_h), 0.0);
-            let sl_specular = compute_direct_specular(
-                sl_light_dir,
-                view_dir,
-                n,
-                tangent,
-                bitangent,
-                NoV,
-                roughness,
-                f0,
-                mat_anisotropy_strength,
-            );
-            let sl_clearcoat_D = D_GGX(sl_NoH, clearcoat_roughness);
-            let sl_clearcoat_G = G_SmithGGX(NoV, sl_NoL, clearcoat_roughness);
-            let sl_clearcoat_F = F_Schlick_scalar(sl_VoH, 0.04);
-            let sl_clearcoat = vec3f(mat_clearcoat * sl_clearcoat_D * sl_clearcoat_G * sl_clearcoat_F);
-            let sl_sheen_exponent = mix(7.0, 2.0, clamp(mat_sheen_roughness, 0.0, 1.0));
-            let sl_sheen = mat_sheen_color
-                * pow(1.0 - clamp(sl_VoH, 0.0, 1.0), sl_sheen_exponent)
-                * (1.0 - mat_metallic);
-
-            let sl_contribution =
-                ((diffuse_color + sl_specular) * base_layer_energy + sl_clearcoat + sl_sheen)
-                * sl_NoL
-                * sl_intensity
-                * sl_atten
-                * sl_color;
-
-            // Per-light shadow (budget: max 2 shadow-casting lights for performance)
-            var sl_shadow_factor = vec3f(1.0);
-            if SHADOWS_ENABLED && sl_cast_shadows && shadow_budget < 2 && camera.quality_mode < 0.5 {
-                // Stronger slope-scaled offset helps stabilize voxel/sculpt seams at grazing angles.
-                let sl_grazing = 1.0 - sl_NoL;
-                let sl_normal_bias = SHADOW_BIAS * (1.0 + sl_grazing * 1.5);
-                let sl_slope_bias = SHADOW_BIAS * (0.5 + sl_grazing * 2.0);
-                let sl_shadow_origin = p + n * sl_normal_bias + sl_light_dir * sl_slope_bias;
-                let sl_shadow_mint = max(SHADOW_MINT, sl_normal_bias + sl_slope_bias);
-                let sl_shadow = soft_shadow(sl_shadow_origin, sl_light_dir, sl_shadow_mint, SHADOW_MAXT, sl_shadow_softness);
-                // Apply shadow color: mix shadow_color -> white by shadow factor
-                sl_shadow_factor = mix(sl_shadow_color, vec3f(1.0), sl_shadow);
-                shadow_budget += 1;
-            }
-            color += sl_contribution * sl_shadow_factor;
-        }
+        color += compute_scene_direct_lighting(
+            p,
+            n,
+            view_dir,
+            NoV,
+            diffuse_color,
+            roughness,
+            f0,
+            base_layer_energy,
+            mat_clearcoat,
+            clearcoat_roughness,
+            mat_sheen_color,
+            mat_sheen_roughness,
+            mat_metallic,
+            tangent,
+            bitangent,
+            mat_anisotropy_strength,
+            light_mask,
+            true,
+        );
 
         // Split-sum environment specular from the prefiltered cubemap + BRDF LUT.
         color += compute_environment_specular(view_dir, n, NoV, roughness, f0, ao_result, ao_mode)

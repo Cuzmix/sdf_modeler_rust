@@ -6,7 +6,7 @@ use crate::keymap::KeymapConfig;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::native_paths;
 
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Default, Debug)]
 pub enum BackgroundMode {
     #[default]
     SkyGradient,
@@ -337,7 +337,8 @@ impl Settings {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[serde(default)]
 pub struct RenderConfig {
     // Shadows
     pub shadows_enabled: bool,

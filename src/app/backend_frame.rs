@@ -180,7 +180,12 @@ impl SdfApp {
         {
             self.persistence.last_auto_save = Instant::now();
             let path = crate::io::auto_save_path();
-            if let Err(error) = crate::io::save_project(&self.doc.scene, &self.doc.camera, &path) {
+            if let Err(error) = crate::io::save_project(
+                &self.doc.scene,
+                &self.doc.camera,
+                &self.settings.render,
+                &path,
+            ) {
                 log::error!("Auto-save failed: {}", error);
             } else {
                 if let Err(error) =

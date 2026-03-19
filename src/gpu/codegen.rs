@@ -2611,6 +2611,7 @@ mod tests {
         scene.create_primitive(SdfPrimitive::Sphere);
         let shader = generate_shader(&scene, &RenderConfig::default());
         assert!(shader.contains("fn D_GGX_Anisotropic"));
+        assert!(shader.contains("fn compute_scene_direct_lighting"));
         assert!(shader.contains("fn compute_environment_transmission"));
         assert!(shader.contains("fn compute_geometry_aware_transmission"));
         assert!(shader.contains("fn trace_transmission_path"));
