@@ -196,6 +196,7 @@ impl SdfApp {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn take_screenshot(&mut self) {
+        use crate::settings::{BackgroundMode, EnvironmentBackgroundMode};
         use crate::ui::viewport::ViewportResources;
 
         let path = match crate::desktop_dialogs::screenshot_dialog() {
@@ -257,7 +258,25 @@ impl SdfApp {
         let ambient_info = [
             effective_ambient,
             self.settings.render.environment_specular_intensity(),
-            resources.environment.prefiltered_mip_count.saturating_sub(1) as f32,
+            resources
+                .environment
+                .prefiltered_mip_count
+                .saturating_sub(1) as f32,
+            0.0,
+        ];
+        let background_info = [
+            match self.settings.render.environment_background_mode {
+                EnvironmentBackgroundMode::Procedural => 0.0,
+                EnvironmentBackgroundMode::Environment => 1.0,
+            },
+            self.settings
+                .render
+                .environment_background_blur
+                .clamp(0.0, 1.0),
+            match self.settings.render.background_mode {
+                BackgroundMode::SkyGradient => 0.0,
+                BackgroundMode::SolidColor => 1.0,
+            },
             0.0,
         ];
         let uniform = self.doc.camera.to_uniform(
@@ -271,6 +290,25 @@ impl SdfApp {
             [0.0; 4],
             [0.0; 4],
             ambient_info,
+            background_info,
+            [
+                self.settings.render.sky_horizon[0],
+                self.settings.render.sky_horizon[1],
+                self.settings.render.sky_horizon[2],
+                0.0,
+            ],
+            [
+                self.settings.render.sky_zenith[0],
+                self.settings.render.sky_zenith[1],
+                self.settings.render.sky_zenith[2],
+                0.0,
+            ],
+            [
+                self.settings.render.bg_solid_color[0],
+                self.settings.render.bg_solid_color[1],
+                self.settings.render.bg_solid_color[2],
+                0.0,
+            ],
             scene_light_info,
             scene_lights_flat,
             scene_light_vol,

@@ -1955,7 +1955,8 @@ mod tests {
         let shader = generate_shader(&scene, &RenderConfig::default());
         assert!(shader.contains("@group(3) @binding(1) var env_source_tex: texture_cube<f32>;"));
         assert!(shader.contains("@group(3) @binding(2) var env_irradiance_tex: texture_cube<f32>;"));
-        assert!(shader.contains("var color = sample_source_environment(rd);"));
+        assert!(shader.contains("fn sample_visible_background(dir: vec3f) -> vec3f {"));
+        assert!(shader.contains("var color = sample_visible_background(rd);"));
         assert!(shader.contains("return sample_irradiance_environment(n);"));
     }
 
@@ -1985,7 +1986,7 @@ mod tests {
         assert!(
             shader.contains("@group(3) @binding(3) var env_prefiltered_tex: texture_cube<f32>;")
         );
-        assert!(shader.contains("var color = sample_source_environment(rd);"));
+        assert!(shader.contains("var color = sample_visible_background(rd);"));
         assert!(shader.contains("let env_brdf = sample_brdf_lut(NoV, roughness);"));
     }
 

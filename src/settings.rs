@@ -13,6 +13,20 @@ pub enum BackgroundMode {
     SolidColor,
 }
 
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Default, Debug)]
+pub enum EnvironmentSource {
+    #[default]
+    ProceduralSky,
+    Hdri,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Default, Debug)]
+pub enum EnvironmentBackgroundMode {
+    #[default]
+    Environment,
+    Procedural,
+}
+
 // ---------------------------------------------------------------------------
 // Shading modes
 // ---------------------------------------------------------------------------
@@ -339,7 +353,23 @@ pub struct RenderConfig {
     #[serde(default = "default_env_reflection_intensity")]
     pub env_reflection_intensity: f32,
 
-    // Sky / Background
+    // Environment Source
+    #[serde(default)]
+    pub environment_source: EnvironmentSource,
+    #[serde(default)]
+    pub hdri_path: Option<String>,
+    #[serde(default)]
+    pub environment_rotation_degrees: f32,
+    #[serde(default)]
+    pub environment_exposure: f32,
+
+    // Visible Background
+    #[serde(default)]
+    pub environment_background_mode: EnvironmentBackgroundMode,
+    #[serde(default)]
+    pub environment_background_blur: f32,
+
+    // Procedural Sky / Background
     pub sky_horizon: [f32; 3],
     pub sky_zenith: [f32; 3],
     #[serde(default)]
@@ -564,6 +594,12 @@ impl Default for RenderConfig {
 
             env_reflection_enabled: false,
             env_reflection_intensity: 0.3,
+            environment_source: EnvironmentSource::ProceduralSky,
+            hdri_path: None,
+            environment_rotation_degrees: 0.0,
+            environment_exposure: 0.0,
+            environment_background_mode: EnvironmentBackgroundMode::Environment,
+            environment_background_blur: 0.0,
 
             sky_horizon: [0.10, 0.10, 0.16],
             sky_zenith: [0.02, 0.02, 0.05],
@@ -621,17 +657,36 @@ impl Default for RenderConfig {
 impl RenderConfig {
     pub fn environment_fingerprint(&self) -> u64 {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        match self.background_mode {
-            BackgroundMode::SkyGradient => 0_u8.hash(&mut hasher),
-            BackgroundMode::SolidColor => 1_u8.hash(&mut hasher),
+        match self.environment_source {
+            EnvironmentSource::ProceduralSky => 0_u8.hash(&mut hasher),
+            EnvironmentSource::Hdri => 1_u8.hash(&mut hasher),
         }
-        for value in self
-            .sky_horizon
-            .iter()
-            .chain(self.sky_zenith.iter())
-            .chain(self.bg_solid_color.iter())
-        {
-            value.to_bits().hash(&mut hasher);
+        self.environment_rotation_degrees
+            .to_bits()
+            .hash(&mut hasher);
+        self.environment_exposure.to_bits().hash(&mut hasher);
+
+        match self.environment_source {
+            EnvironmentSource::ProceduralSky => {
+                match self.background_mode {
+                    BackgroundMode::SkyGradient => 0_u8.hash(&mut hasher),
+                    BackgroundMode::SolidColor => 1_u8.hash(&mut hasher),
+                }
+                for value in self
+                    .sky_horizon
+                    .iter()
+                    .chain(self.sky_zenith.iter())
+                    .chain(self.bg_solid_color.iter())
+                {
+                    value.to_bits().hash(&mut hasher);
+                }
+            }
+            EnvironmentSource::Hdri => {
+                self.hdri_path
+                    .as_deref()
+                    .unwrap_or_default()
+                    .hash(&mut hasher);
+            }
         }
         hasher.finish()
     }
@@ -676,8 +731,16 @@ impl RenderConfig {
         self.ambient = d.ambient;
     }
 
-    pub fn reset_sky(&mut self) {
+    pub fn reset_environment(&mut self) {
         let d = Self::default();
+        self.env_reflection_enabled = d.env_reflection_enabled;
+        self.env_reflection_intensity = d.env_reflection_intensity;
+        self.environment_source = d.environment_source;
+        self.hdri_path = d.hdri_path;
+        self.environment_rotation_degrees = d.environment_rotation_degrees;
+        self.environment_exposure = d.environment_exposure;
+        self.environment_background_mode = d.environment_background_mode;
+        self.environment_background_blur = d.environment_background_blur;
         self.sky_horizon = d.sky_horizon;
         self.sky_zenith = d.sky_zenith;
         self.background_mode = d.background_mode;
@@ -750,7 +813,9 @@ impl RenderConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::{BackgroundMode, RenderConfig, ShadingMode};
+    use super::{
+        BackgroundMode, EnvironmentBackgroundMode, EnvironmentSource, RenderConfig, ShadingMode,
+    };
 
     #[test]
     fn shading_mode_cycle_includes_field_quality() {
@@ -778,6 +843,12 @@ mod tests {
         let mut changed = base.clone();
         changed.env_reflection_enabled = !changed.env_reflection_enabled;
         changed.env_reflection_intensity = 0.9;
+        changed.environment_source = EnvironmentSource::Hdri;
+        changed.hdri_path = Some("studio.hdr".into());
+        changed.environment_rotation_degrees = 45.0;
+        changed.environment_exposure = 1.0;
+        changed.environment_background_mode = EnvironmentBackgroundMode::Procedural;
+        changed.environment_background_blur = 0.35;
         changed.background_mode = BackgroundMode::SolidColor;
         changed.sky_horizon = [0.3, 0.2, 0.1];
         changed.sky_zenith = [0.1, 0.2, 0.3];
@@ -790,6 +861,20 @@ mod tests {
         let base = RenderConfig::default();
         let mut changed = base.clone();
         changed.sky_zenith = [0.3, 0.4, 0.5];
+        assert_ne!(
+            changed.environment_fingerprint(),
+            base.environment_fingerprint()
+        );
+    }
+
+    #[test]
+    fn environment_fingerprint_tracks_hdri_inputs() {
+        let base = RenderConfig::default();
+        let mut changed = base.clone();
+        changed.environment_source = EnvironmentSource::Hdri;
+        changed.hdri_path = Some("studio.hdr".into());
+        changed.environment_rotation_degrees = 30.0;
+        changed.environment_exposure = 1.5;
         assert_ne!(
             changed.environment_fingerprint(),
             base.environment_fingerprint()

@@ -111,6 +111,23 @@ pub fn reference_image_dialog() -> FileDialogSelection {
     }
 }
 
+pub fn environment_hdri_dialog() -> FileDialogSelection {
+    #[cfg(all(not(target_arch = "wasm32"), not(target_os = "android")))]
+    {
+        dialog_selection(
+            rfd::FileDialog::new()
+                .set_title("Import HDR / EXR Environment")
+                .add_filter("HDR Environment", &["hdr", "exr"])
+                .pick_file(),
+        )
+    }
+
+    #[cfg(any(target_arch = "wasm32", target_os = "android"))]
+    {
+        unsupported_dialog()
+    }
+}
+
 pub fn screenshot_dialog() -> FileDialogSelection {
     #[cfg(all(not(target_arch = "wasm32"), not(target_os = "android")))]
     {

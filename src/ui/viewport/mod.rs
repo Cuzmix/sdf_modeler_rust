@@ -1,6 +1,7 @@
 mod composite;
 mod draw;
 mod environment;
+mod environment_bake;
 mod gpu_ops;
 mod pipelines;
 mod textures;

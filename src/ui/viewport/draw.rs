@@ -7,7 +7,7 @@ use crate::gpu::camera::{Camera, CameraUniform};
 use crate::gpu::picking::PendingPick;
 use crate::graph::scene::{CsgOp, ModifierKind, NodeData, NodeId, Scene, SdfPrimitive};
 use crate::sculpt::{self, ActiveTool, BrushMode, SculptState};
-use crate::settings::SnapConfig;
+use crate::settings::{EnvironmentBackgroundMode, SnapConfig};
 use crate::ui::gizmo::{self, GizmoMode, GizmoSpace, GizmoState};
 
 use super::ViewportResources;
@@ -637,6 +637,24 @@ pub fn draw(
         0.0,
         0.0,
     ];
+    let background_info = [
+        match render_config.environment_background_mode {
+            EnvironmentBackgroundMode::Procedural => 0.0,
+            EnvironmentBackgroundMode::Environment => 1.0,
+        },
+        render_config.environment_background_blur.clamp(0.0, 1.0),
+        match render_config.background_mode {
+            crate::settings::BackgroundMode::SkyGradient => 0.0,
+            crate::settings::BackgroundMode::SolidColor => 1.0,
+        },
+        0.0,
+    ];
+    let background_secondary = [
+        render_config.sky_zenith[0],
+        render_config.sky_zenith[1],
+        render_config.sky_zenith[2],
+        0.0,
+    ];
 
     let render_uniform = camera.to_uniform(
         render_viewport,
@@ -649,6 +667,20 @@ pub fn draw(
         brush_pos,
         cross_section,
         ambient_info,
+        background_info,
+        [
+            render_config.sky_horizon[0],
+            render_config.sky_horizon[1],
+            render_config.sky_horizon[2],
+            0.0,
+        ],
+        background_secondary,
+        [
+            render_config.bg_solid_color[0],
+            render_config.bg_solid_color[1],
+            render_config.bg_solid_color[2],
+            0.0,
+        ],
         scene_light_info,
         scene_lights_flat,
         scene_light_vol,
@@ -796,6 +828,10 @@ pub fn draw(
                             [0.0; 4],
                             [0.0; 4],
                             [0.0; 4],
+                            [0.0; 4],
+                            [0.0; 4],
+                            [0.0; 4],
+                            [0.0; 4],
                             [[0.0; 4]; 32],
                             [[0.0; 4]; 8],
                         ),
@@ -842,6 +878,10 @@ pub fn draw(
                             scene_bounds,
                             -1.0,
                             0.0,
+                            [0.0; 4],
+                            [0.0; 4],
+                            [0.0; 4],
+                            [0.0; 4],
                             [0.0; 4],
                             [0.0; 4],
                             [0.0; 4],
@@ -968,6 +1008,10 @@ pub fn draw(
                     scene_bounds,
                     -1.0,
                     0.0,
+                    [0.0; 4],
+                    [0.0; 4],
+                    [0.0; 4],
+                    [0.0; 4],
                     [0.0; 4],
                     [0.0; 4],
                     [0.0; 4],

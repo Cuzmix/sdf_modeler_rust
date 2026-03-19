@@ -232,6 +232,14 @@ fn sample_source_environment(dir: vec3f) -> vec3f {
     return textureSampleLevel(env_source_tex, env_sampler, normalize(dir), 0.0).xyz;
 }
 
+fn sample_procedural_background(dir: vec3f) -> vec3f {
+    if camera.background_info.z > 0.5 {
+        return camera.background_tertiary.xyz;
+    }
+    let t = clamp(dir.y * 0.5 + 0.5, 0.0, 1.0);
+    return mix(camera.background_primary.xyz, camera.background_secondary.xyz, t);
+}
+
 fn sample_irradiance_environment(dir: vec3f) -> vec3f {
     return textureSampleLevel(env_irradiance_tex, env_sampler, normalize(dir), 0.0).xyz;
 }
@@ -245,6 +253,17 @@ fn sample_prefiltered_environment(dir: vec3f, roughness: f32) -> vec3f {
 fn sample_brdf_lut(NoV: f32, roughness: f32) -> vec2f {
     let uv = vec2f(clamp(NoV, 0.0, 1.0), clamp(roughness, 0.0, 1.0));
     return textureSampleLevel(env_brdf_lut_tex, env_sampler, uv, 0.0).xy;
+}
+
+fn sample_visible_background(dir: vec3f) -> vec3f {
+    if camera.background_info.x < 0.5 {
+        return sample_procedural_background(dir);
+    }
+    let blur = clamp(camera.background_info.y, 0.0, 1.0);
+    if blur <= 0.0001 {
+        return sample_source_environment(dir);
+    }
+    return sample_prefiltered_environment(dir, blur);
 }
 
 fn compute_multi_bounce_ao(visibility: f32, albedo: vec3f) -> vec3f {
@@ -393,8 +412,8 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
     let dwdx = fwidth(gp.x);
     let dwdz = fwidth(gp.z);
 
-    // --- Compute base color: sky or shaded SDF ---
-    var color = sample_source_environment(rd);
+    // --- Compute base color: visible background or shaded SDF ---
+    var color = sample_visible_background(rd);
     let shading_mode = camera.scene_min.w;
 
     // Cross-Section mode: 2D slice heatmap, no raymarching needed

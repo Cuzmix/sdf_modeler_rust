@@ -1,7 +1,12 @@
+use std::path::Path;
+
 use eframe::egui;
 
 use crate::app::actions::{Action, ActionSink, LightingPreset};
-use crate::settings::{BackgroundMode, Settings, ShadingMode};
+use crate::desktop_dialogs::FileDialogSelection;
+use crate::settings::{
+    BackgroundMode, EnvironmentBackgroundMode, EnvironmentSource, Settings, ShadingMode,
+};
 
 /// Draw the Render Settings panel. Pushes `Action::SettingsChanged` if a shader-affecting
 /// setting changed.
@@ -218,71 +223,162 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
             ui.separator();
             labeled_slider(
                 ui,
-                "Ambient",
+                "Diffuse IBL",
                 &mut config.ambient,
                 0.0..=0.5,
                 false,
-                "Intensity of diffuse indirect sky lighting",
+                "Intensity of diffuse indirect environment lighting",
             );
             if ui.small_button("Reset").clicked() {
                 config.reset_lighting();
             }
         });
 
-    // --- Environment Reflection ---
-    egui::CollapsingHeader::new("Environment Reflection")
-        .default_open(false)
-        .show(ui, |ui| {
-            ui.checkbox(&mut config.env_reflection_enabled, "Enable Env Reflection")
-                .on_hover_text("Enable roughness-aware indirect specular from the sky environment");
-            ui.add_enabled_ui(config.env_reflection_enabled, |ui| {
-                labeled_slider(
-                    ui,
-                    "Intensity",
-                    &mut config.env_reflection_intensity,
-                    0.0..=2.0,
-                    false,
-                    "Strength of indirect sky specular; direct scene lights are unaffected",
-                );
-            });
-        });
-
-    // --- Sky / Background ---
-    egui::CollapsingHeader::new("Sky / Background")
+    // --- Environment ---
+    egui::CollapsingHeader::new("Environment")
         .default_open(false)
         .show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.selectable_value(
-                    &mut config.background_mode,
-                    BackgroundMode::SkyGradient,
-                    "Sky Gradient",
+                    &mut config.environment_source,
+                    EnvironmentSource::ProceduralSky,
+                    "Procedural Sky",
                 );
                 ui.selectable_value(
-                    &mut config.background_mode,
-                    BackgroundMode::SolidColor,
-                    "Solid Color",
+                    &mut config.environment_source,
+                    EnvironmentSource::Hdri,
+                    "HDR / EXR",
                 );
             });
-            match config.background_mode {
-                BackgroundMode::SkyGradient => {
-                    ui.horizontal(|ui| {
-                        ui.label("Horizon:");
-                        ui.color_edit_button_rgb(&mut config.sky_horizon);
-                    });
-                    ui.horizontal(|ui| {
-                        ui.label("Zenith:");
-                        ui.color_edit_button_rgb(&mut config.sky_zenith);
-                    });
-                }
-                BackgroundMode::SolidColor => {
-                    ui.horizontal(|ui| {
-                        ui.label("Color:");
-                        ui.color_edit_button_rgb(&mut config.bg_solid_color);
-                    });
+
+            ui.checkbox(&mut config.env_reflection_enabled, "Enable Specular IBL")
+                .on_hover_text(
+                    "Enable roughness-aware indirect specular from the active environment",
+                );
+            ui.add_enabled_ui(config.env_reflection_enabled, |ui| {
+                labeled_slider(
+                    ui,
+                    "Specular IBL",
+                    &mut config.env_reflection_intensity,
+                    0.0..=2.0,
+                    false,
+                    "Strength of indirect environment specular; direct scene lights are unaffected",
+                );
+            });
+
+            labeled_slider(
+                ui,
+                "Rotation",
+                &mut config.environment_rotation_degrees,
+                -180.0..=180.0,
+                false,
+                "Rotate the environment around the world Y axis",
+            );
+            labeled_slider(
+                ui,
+                "Exposure",
+                &mut config.environment_exposure,
+                -8.0..=8.0,
+                false,
+                "Global environment exposure in stops before diffuse/specular scaling",
+            );
+
+            if config.environment_source == EnvironmentSource::Hdri {
+                ui.horizontal(|ui| {
+                    if ui.button("Import HDR / EXR").clicked() {
+                        match crate::desktop_dialogs::environment_hdri_dialog() {
+                            FileDialogSelection::Selected(path) => {
+                                config.hdri_path = Some(path.to_string_lossy().into_owned());
+                            }
+                            FileDialogSelection::Cancelled | FileDialogSelection::Unsupported => {}
+                        }
+                    }
+
+                    if ui
+                        .add_enabled(config.hdri_path.is_some(), egui::Button::new("Clear"))
+                        .clicked()
+                    {
+                        config.hdri_path = None;
+                    }
+                });
+
+                if let Some(path) = config.hdri_path.as_deref() {
+                    let label = Path::new(path)
+                        .file_name()
+                        .and_then(|name| name.to_str())
+                        .unwrap_or(path);
+                    ui.label(format!("Loaded: {label}"));
+                    ui.small(path);
+                } else {
+                    ui.weak("No HDR or EXR environment selected. Lighting falls back to the procedural sky until one is imported.");
                 }
             }
+
+            ui.separator();
+            ui.label("Visible Background");
+            ui.horizontal(|ui| {
+                ui.selectable_value(
+                    &mut config.environment_background_mode,
+                    EnvironmentBackgroundMode::Environment,
+                    "Environment",
+                );
+                ui.selectable_value(
+                    &mut config.environment_background_mode,
+                    EnvironmentBackgroundMode::Procedural,
+                    "Procedural",
+                );
+            });
+
+            if config.environment_background_mode == EnvironmentBackgroundMode::Environment {
+                labeled_slider(
+                    ui,
+                    "Background Blur",
+                    &mut config.environment_background_blur,
+                    0.0..=1.0,
+                    false,
+                    "0 keeps the environment sharp, 1 uses the fully blurred prefiltered background",
+                );
+            }
+
+            if config.environment_source == EnvironmentSource::ProceduralSky
+                || config.environment_background_mode == EnvironmentBackgroundMode::Procedural
+            {
+                ui.separator();
+                ui.label("Procedural Background");
+                ui.horizontal(|ui| {
+                    ui.selectable_value(
+                        &mut config.background_mode,
+                        BackgroundMode::SkyGradient,
+                        "Sky Gradient",
+                    );
+                    ui.selectable_value(
+                        &mut config.background_mode,
+                        BackgroundMode::SolidColor,
+                        "Solid Color",
+                    );
+                });
+                match config.background_mode {
+                    BackgroundMode::SkyGradient => {
+                        ui.horizontal(|ui| {
+                            ui.label("Horizon:");
+                            ui.color_edit_button_rgb(&mut config.sky_horizon);
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Zenith:");
+                            ui.color_edit_button_rgb(&mut config.sky_zenith);
+                        });
+                    }
+                    BackgroundMode::SolidColor => {
+                        ui.horizontal(|ui| {
+                            ui.label("Color:");
+                            ui.color_edit_button_rgb(&mut config.bg_solid_color);
+                        });
+                    }
+                }
+            }
+
             if ui.small_button("Reset").clicked() {
-                config.reset_sky();
+                config.reset_environment();
             }
         });
 
