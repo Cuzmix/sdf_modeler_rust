@@ -2,6 +2,26 @@
 // sdf_voxel_grid: trilinear interpolation of a full SDF voxel grid (storage buffer path).
 // disp_voxel_grid: displacement-only sampling for differential sculpt nodes.
 
+fn mix_voxel_corners(
+    c000: f32,
+    c100: f32,
+    c010: f32,
+    c110: f32,
+    c001: f32,
+    c101: f32,
+    c011: f32,
+    c111: f32,
+    f: vec3f,
+) -> f32 {
+    let c00 = mix(c000, c100, f.x);
+    let c10 = mix(c010, c110, f.x);
+    let c01 = mix(c001, c101, f.x);
+    let c11 = mix(c011, c111, f.x);
+    let c0  = mix(c00, c10, f.y);
+    let c1  = mix(c01, c11, f.y);
+    return mix(c0, c1, f.z);
+}
+
 fn sdf_voxel_grid(local_p: vec3f, node_idx: u32) -> f32 {
     let offset = u32(nodes[node_idx].extra0.x);
     let res    = u32(nodes[node_idx].extra0.y);
@@ -12,7 +32,7 @@ fn sdf_voxel_grid(local_p: vec3f, node_idx: u32) -> f32 {
     let clamped = clamp(local_p, bmin, bmax);
     let box_dist = length(local_p - clamped);
 
-    // Trilinear interp at clamped point + box_dist for continuity.
+    // Trilinear interpolation at the clamped point + box_dist for continuity.
     // When inside, clamped == local_p and box_dist == 0 (same as before).
     // When outside, samples boundary voxels and adds box_dist.
     let size = bmax - bmin;
@@ -34,13 +54,7 @@ fn sdf_voxel_grid(local_p: vec3f, node_idx: u32) -> f32 {
     let c011 = voxel_data[offset + i1.z * r2 + i1.y * res + i0.x];
     let c111 = voxel_data[offset + i1.z * r2 + i1.y * res + i1.x];
 
-    let c00 = mix(c000, c100, f.x);
-    let c10 = mix(c010, c110, f.x);
-    let c01 = mix(c001, c101, f.x);
-    let c11 = mix(c011, c111, f.x);
-    let c0  = mix(c00, c10, f.y);
-    let c1  = mix(c01, c11, f.y);
-    return mix(c0, c1, f.z) + box_dist;
+    return mix_voxel_corners(c000, c100, c010, c110, c001, c101, c011, c111, f) + box_dist;
 }
 
 // Displacement-only grid sampling (for differential SDF sculpt nodes with analytical child).
@@ -74,11 +88,5 @@ fn disp_voxel_grid(local_p: vec3f, node_idx: u32) -> f32 {
     let c011 = voxel_data[offset + i1.z * r2 + i1.y * res + i0.x];
     let c111 = voxel_data[offset + i1.z * r2 + i1.y * res + i1.x];
 
-    let c00 = mix(c000, c100, f.x);
-    let c10 = mix(c010, c110, f.x);
-    let c01 = mix(c001, c101, f.x);
-    let c11 = mix(c011, c111, f.x);
-    let c0  = mix(c00, c10, f.y);
-    let c1  = mix(c01, c11, f.y);
-    return mix(c0, c1, f.z);
+    return mix_voxel_corners(c000, c100, c010, c110, c001, c101, c011, c111, f);
 }

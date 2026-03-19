@@ -589,6 +589,14 @@ Assembles WGSL from individual `.wgsl` files via `include_str!()`:
 - Overshoot detection: if combined radii exceed step, fallback to omega = 1.0
 - ~20% fewer steps than basic sphere tracing
 
+**Sculpt-aware tracing note (2026-03):**
+- Do not jump to cone tracing or a full renderer rewrite just because sculpted voxel surfaces show artifacts.
+- The main issue is that sculpt fields are less trustworthy than analytic primitives, so aggressive sphere tracing can overskip in sculpt-heavy regions even when the same marcher works well elsewhere.
+- The renderer now emits a separate `sculpt_trace_hint()` from WGSL codegen using top-level sculpt subtree bounding spheres.
+- Primary rays automatically blend toward conservative stepping near sculpt regions and run a short near-hit refinement pass before accepting the final hit.
+- Keep scalar voxel reconstruction linear and stable; use broader filtered gradients for shading normals instead of smoothing the scalar field itself.
+- If lowering `Step Multiplier` makes sculpts read much better, treat that as evidence that the marcher is trusting the sculpt field too much, not as proof that a different tracing method is required.
+
 **Lighting pipeline:**
 - Tetrahedron normals (4 SDF evals vs 6 central differences)
 - Distance-adaptive normal epsilon: `clamp(0.001*t, 0.0005, 0.05)`

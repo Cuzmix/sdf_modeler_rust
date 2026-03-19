@@ -51,9 +51,42 @@ fn generate_voxel_texture_decls(scene: &Scene) -> (String, HashMap<NodeId, usize
                 "    if any(norm < vec3f(0.0)) || any(norm > vec3f(1.0)) { return 0.0; }"
                     .to_string(),
             );
+            lines.push(format!("    let dims = textureDimensions(voxel_tex_{i});"));
+            lines.push("    let max_c = vec3f(dims - vec3u(1u));".to_string());
+            lines.push("    let gc = norm * max_c;".to_string());
+            lines.push(
+                "    let i0 = vec3<u32>(vec3f(floor(gc.x), floor(gc.y), floor(gc.z)));".to_string(),
+            );
+            lines.push("    let i1 = min(i0 + vec3u(1u), dims - vec3u(1u));".to_string());
+            lines.push("    let f = fract(gc);".to_string());
             lines.push(format!(
-                "    return textureSampleLevel(voxel_tex_{i}, voxel_sampler, norm, 0.0).x;"
+                "    let c000 = textureLoad(voxel_tex_{i}, vec3u(i0.x, i0.y, i0.z), 0).x;"
             ));
+            lines.push(format!(
+                "    let c100 = textureLoad(voxel_tex_{i}, vec3u(i1.x, i0.y, i0.z), 0).x;"
+            ));
+            lines.push(format!(
+                "    let c010 = textureLoad(voxel_tex_{i}, vec3u(i0.x, i1.y, i0.z), 0).x;"
+            ));
+            lines.push(format!(
+                "    let c110 = textureLoad(voxel_tex_{i}, vec3u(i1.x, i1.y, i0.z), 0).x;"
+            ));
+            lines.push(format!(
+                "    let c001 = textureLoad(voxel_tex_{i}, vec3u(i0.x, i0.y, i1.z), 0).x;"
+            ));
+            lines.push(format!(
+                "    let c101 = textureLoad(voxel_tex_{i}, vec3u(i1.x, i0.y, i1.z), 0).x;"
+            ));
+            lines.push(format!(
+                "    let c011 = textureLoad(voxel_tex_{i}, vec3u(i0.x, i1.y, i1.z), 0).x;"
+            ));
+            lines.push(format!(
+                "    let c111 = textureLoad(voxel_tex_{i}, vec3u(i1.x, i1.y, i1.z), 0).x;"
+            ));
+            lines.push(
+                "    return mix_voxel_corners(c000, c100, c010, c110, c001, c101, c011, c111, f);"
+                    .to_string(),
+            );
             lines.push("}".to_string());
         } else {
             // Standalone sculpt: total-SDF sampling (clamp to edge + box_dist)
@@ -65,9 +98,42 @@ fn generate_voxel_texture_decls(scene: &Scene) -> (String, HashMap<NodeId, usize
             lines.push("    let clamped = clamp(local_p, bmin, bmax);".to_string());
             lines.push("    let box_dist = length(local_p - clamped);".to_string());
             lines.push("    let uv = (clamped - bmin) / (bmax - bmin);".to_string());
+            lines.push(format!("    let dims = textureDimensions(voxel_tex_{i});"));
+            lines.push("    let max_c = vec3f(dims - vec3u(1u));".to_string());
+            lines.push("    let gc = clamp(uv * max_c, vec3f(0.0), max_c);".to_string());
+            lines.push(
+                "    let i0 = vec3<u32>(vec3f(floor(gc.x), floor(gc.y), floor(gc.z)));".to_string(),
+            );
+            lines.push("    let i1 = min(i0 + vec3u(1u), dims - vec3u(1u));".to_string());
+            lines.push("    let f = fract(gc);".to_string());
             lines.push(format!(
-                "    return textureSampleLevel(voxel_tex_{i}, voxel_sampler, uv, 0.0).x + box_dist;"
+                "    let c000 = textureLoad(voxel_tex_{i}, vec3u(i0.x, i0.y, i0.z), 0).x;"
             ));
+            lines.push(format!(
+                "    let c100 = textureLoad(voxel_tex_{i}, vec3u(i1.x, i0.y, i0.z), 0).x;"
+            ));
+            lines.push(format!(
+                "    let c010 = textureLoad(voxel_tex_{i}, vec3u(i0.x, i1.y, i0.z), 0).x;"
+            ));
+            lines.push(format!(
+                "    let c110 = textureLoad(voxel_tex_{i}, vec3u(i1.x, i1.y, i0.z), 0).x;"
+            ));
+            lines.push(format!(
+                "    let c001 = textureLoad(voxel_tex_{i}, vec3u(i0.x, i0.y, i1.z), 0).x;"
+            ));
+            lines.push(format!(
+                "    let c101 = textureLoad(voxel_tex_{i}, vec3u(i1.x, i0.y, i1.z), 0).x;"
+            ));
+            lines.push(format!(
+                "    let c011 = textureLoad(voxel_tex_{i}, vec3u(i0.x, i1.y, i1.z), 0).x;"
+            ));
+            lines.push(format!(
+                "    let c111 = textureLoad(voxel_tex_{i}, vec3u(i1.x, i1.y, i1.z), 0).x;"
+            ));
+            lines.push(
+                "    return mix_voxel_corners(c000, c100, c010, c110, c001, c101, c011, c111, f) + box_dist;"
+                    .to_string(),
+            );
             lines.push("}".to_string());
         }
         lines.push(String::new());
@@ -81,20 +147,27 @@ fn generate_voxel_texture_decls(scene: &Scene) -> (String, HashMap<NodeId, usize
 // ---------------------------------------------------------------------------
 
 pub fn generate_shader(scene: &Scene, config: &RenderConfig) -> String {
-    let (tex_decls, sculpt_tex_map) = generate_voxel_texture_decls(scene);
-    let tex_map = if sculpt_tex_map.is_empty() {
+    let use_texture_sampling = !config.debug_force_manual_sculpt_sampling;
+    let (tex_decls, sculpt_tex_map) = if use_texture_sampling {
+        generate_voxel_texture_decls(scene)
+    } else {
+        (String::new(), HashMap::new())
+    };
+    let tex_map = if sculpt_tex_map.is_empty() || !use_texture_sampling {
         None
     } else {
         Some(&sculpt_tex_map)
     };
     let scene_sdf = generate_scene_sdf(scene, tex_map);
+    let sculpt_trace_hint = generate_sculpt_trace_hint(scene);
     let cookie_sdfs = generate_cookie_sdf_functions(scene, tex_map);
     let postlude = build_postlude(config);
     format!(
-        "{}\n{}\n{}\n{}\n{}",
+        "{}\n{}\n{}\n{}\n{}\n{}",
         render_prelude(),
         tex_decls,
         scene_sdf,
+        sculpt_trace_hint,
         cookie_sdfs,
         postlude
     )
@@ -109,8 +182,13 @@ pub fn generate_pick_shader(scene: &Scene, config: &RenderConfig) -> String {
 /// Generate the composite compute shader that pre-evaluates scene_sdf at every voxel
 /// in a 3D grid and writes SDF + material ID to storage textures.
 pub fn generate_composite_shader(scene: &Scene, _config: &RenderConfig) -> String {
-    let (tex_decls, sculpt_tex_map) = generate_voxel_texture_decls(scene);
-    let tex_map = if sculpt_tex_map.is_empty() {
+    let use_texture_sampling = !_config.debug_force_manual_sculpt_sampling;
+    let (tex_decls, sculpt_tex_map) = if use_texture_sampling {
+        generate_voxel_texture_decls(scene)
+    } else {
+        (String::new(), HashMap::new())
+    };
+    let tex_map = if sculpt_tex_map.is_empty() || !use_texture_sampling {
         None
     } else {
         Some(&sculpt_tex_map)
@@ -164,6 +242,14 @@ fn scene_sdf(p: vec3f) -> vec4f {{
     let mat_id = f32(mat_raw) - 1.0;
     return vec4f(d, mat_id, -1.0, 0.0);
 }}
+
+fn sculpt_trace_hint(p: vec3f) -> f32 {{
+    return 1e10 + p.x * 0.0;
+}}
+
+fn eval_cookie_sdf(idx: i32, p: vec3f) -> f32 {{
+    return 1e10 + f32(idx) * 0.0 + p.x * 0.0;
+}}
 "#,
         bmin = format_vec3(bounds_min),
         bmax = format_vec3(bounds_max),
@@ -172,16 +258,13 @@ fn scene_sdf(p: vec3f) -> vec4f {{
 
     // Replace calc_normal with precomputed normal texture lookup
     let old_calc_normal = r#"fn calc_normal(p: vec3f, t: f32) -> vec3f {
-    // Tetrahedron technique: 4 SDF evals instead of 6.
-    // Distance-adaptive epsilon: larger at distance (reduces aliasing), tighter up close (more detail).
-    let e = clamp(0.001 * t, 0.0005, 0.05);
-    let k = vec2f(1.0, -1.0);
-    return normalize(
-        k.xyy * scene_sdf(p + k.xyy * e).x +
-        k.yyx * scene_sdf(p + k.yyx * e).x +
-        k.yxy * scene_sdf(p + k.yxy * e).x +
-        k.xxx * scene_sdf(p + k.xxx * e).x
-    );
+    // Use a broader derivative estimate for shading than for diagnostics.
+    // This damps high-frequency voxel ripple without changing the surfaced SDF.
+    let fine_e = clamp(0.001 * t, 0.0005, 0.05);
+    let coarse_e = clamp(fine_e * 4.0, 0.003, 0.08);
+    let fine = calc_gradient_at_scale(p, fine_e);
+    let coarse = calc_gradient_at_scale(p, coarse_e);
+    return normalize(mix(coarse, fine, 0.35));
 }"#;
     let new_calc_normal = r#"fn calc_normal(p: vec3f, t: f32) -> vec3f {
     // Precomputed normal from composite volume (single texture lookup).
@@ -611,6 +694,37 @@ fn generate_scene_sdf(scene: &Scene, sculpt_tex_map: Option<&HashMap<NodeId, usi
     lines.join("\n")
 }
 
+fn generate_sculpt_trace_hint(scene: &Scene) -> String {
+    let parent_map = scene.build_parent_map();
+    let sculpt_tops: Vec<NodeId> = scene
+        .top_level_nodes()
+        .into_iter()
+        .filter(|&top_id| !scene.is_hidden(top_id) && scene.subtree_has_sculpt(top_id))
+        .collect();
+
+    if sculpt_tops.is_empty() {
+        return "fn sculpt_trace_hint(p: vec3f) -> f32 {\n    return 1e10 + p.x * 0.0;\n}"
+            .to_string();
+    }
+
+    let mut lines = Vec::new();
+    lines.push("fn sculpt_trace_hint(p: vec3f) -> f32 {".to_string());
+    lines.push("    var hint = 1e10;".to_string());
+    for top_id in sculpt_tops {
+        let (center, radius) = scene.compute_subtree_sphere(top_id, &parent_map);
+        lines.push(format!(
+            "    hint = min(hint, length(p - vec3f({}, {}, {})) / max({}, 1e-4) - 1.0);",
+            format_f32(center[0]),
+            format_f32(center[1]),
+            format_f32(center[2]),
+            format_f32(radius),
+        ));
+    }
+    lines.push("    return hint;".to_string());
+    lines.push("}".to_string());
+    lines.join("\n")
+}
+
 /// Original flat codegen (no expensive subtrees).
 fn generate_scene_sdf_flat(
     scene: &Scene,
@@ -815,6 +929,36 @@ mod tests {
         assert!(wgsl.contains("fn scene_sdf(p: vec3f) -> vec4f"));
         assert!(wgsl.contains("1e10"));
         assert!(wgsl.contains("-1.0"));
+    }
+
+    #[test]
+    fn sculpt_trace_hint_without_sculpts_returns_far_sentinel() {
+        let mut scene = empty_scene();
+        scene.create_primitive(SdfPrimitive::Sphere);
+        let wgsl = generate_sculpt_trace_hint(&scene);
+        assert!(wgsl.contains("fn sculpt_trace_hint(p: vec3f) -> f32"));
+        assert!(wgsl.contains("return 1e10 + p.x * 0.0;"));
+    }
+
+    #[test]
+    fn sculpt_trace_hint_uses_normalized_subtree_sphere_distance() {
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        let grid = VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0));
+        scene.create_sculpt(
+            sphere,
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::new(0.5, 0.5, 0.5),
+            grid,
+        );
+
+        let wgsl = generate_sculpt_trace_hint(&scene);
+        assert!(wgsl.contains("fn sculpt_trace_hint(p: vec3f) -> f32"));
+        assert!(wgsl.contains("length(p - vec3f("));
+        assert!(wgsl.contains("/ max("));
+        assert!(wgsl.contains("- 1.0);"));
+        assert!(!wgsl.contains("let _ = p;"));
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -1656,6 +1800,73 @@ mod tests {
         assert!(wgsl.contains("disp_voxel_tex_2("));
     }
 
+    #[test]
+    fn generate_shader_can_force_manual_sculpt_sampling() {
+        let mut scene = empty_scene();
+        let grid = VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0));
+        scene.add_node(
+            "Sculpt".to_string(),
+            NodeData::Sculpt {
+                input: None,
+                position: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                color: Vec3::new(0.5, 0.5, 0.5),
+                roughness: 0.5,
+                metallic: 0.0,
+                emissive: Vec3::ZERO,
+                emissive_intensity: 0.0,
+                fresnel: 0.04,
+                layer_intensity: 1.0,
+                voxel_grid: grid,
+                desired_resolution: 8,
+            },
+        );
+        let mut config = RenderConfig::default();
+        config.debug_force_manual_sculpt_sampling = true;
+        let shader = generate_shader(&scene, &config);
+        assert!(shader.contains("sdf_voxel_grid("));
+        assert!(!shader.contains("sdf_voxel_tex_0("));
+        assert!(!shader.contains("@group(2) @binding(0) var voxel_sampler"));
+    }
+
+    #[test]
+    fn generate_shader_includes_sculpt_aware_step_logic() {
+        let mut scene = empty_scene();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        let grid = VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0));
+        scene.create_sculpt(
+            sphere,
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::new(0.5, 0.5, 0.5),
+            grid,
+        );
+
+        let shader = generate_shader(&scene, &RenderConfig::default());
+        assert!(shader.contains("fn sculpt_trace_hint(p: vec3f) -> f32"));
+        assert!(shader
+            .contains("let sculpt_factor = 1.0 - smoothstep(0.0, 0.15, sculpt_trace_hint(p));"));
+        assert!(shader.contains(
+            "let local_step_mult = mix(base_step_mult, min(base_step_mult, 0.30), sculpt_factor);"
+        ));
+        assert!(shader.contains("var local_omega = mix(base_omega, 1.0, sculpt_factor);"));
+    }
+
+    #[test]
+    fn composite_render_shader_uses_normal_volume_and_sentinel_trace_hint() {
+        let shader = generate_composite_render_shader(
+            &RenderConfig::default(),
+            [-1.0, -1.0, -1.0],
+            [1.0, 1.0, 1.0],
+        );
+        assert!(shader.contains("fn sculpt_trace_hint(p: vec3f) -> f32"));
+        assert!(shader.contains("return 1e10 + p.x * 0.0;"));
+        assert!(shader.contains(
+            "return normalize(textureSampleLevel(comp_normal_tex, comp_sampler, uv, 0.0).xyz);"
+        ));
+        assert!(!shader.contains("coarse_e = clamp(fine_e * 4.0, 0.003, 0.08);"));
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // generate_voxel_texture_decls
     // ═══════════════════════════════════════════════════════════════
@@ -1695,6 +1906,8 @@ mod tests {
         assert!(decls.contains("voxel_tex_0"));
         assert!(decls.contains("fn sdf_voxel_tex_0("));
         assert!(decls.contains("box_dist"));
+        assert!(decls.contains("textureLoad(voxel_tex_0"));
+        assert!(!decls.contains("textureSampleLevel(voxel_tex_0"));
         assert_eq!(tex_map.len(), 1);
     }
 
@@ -1713,6 +1926,7 @@ mod tests {
         let (decls, tex_map) = generate_voxel_texture_decls(&scene);
         assert!(decls.contains("fn disp_voxel_tex_0("));
         assert!(decls.contains("return 0.0"));
+        assert!(decls.contains("mix_voxel_corners("));
         assert!(tex_map.contains_key(&sculpt_id));
     }
 
@@ -2219,6 +2433,16 @@ mod tests {
         config.tonemapping_aces = true;
         let shader = generate_shader(&scene, &config);
         validate_wgsl(&shader, "render shader with all postlude features enabled");
+    }
+
+    #[test]
+    fn naga_validates_composite_render_shader() {
+        let shader = generate_composite_render_shader(
+            &RenderConfig::default(),
+            [-1.0, -1.0, -1.0],
+            [1.0, 1.0, 1.0],
+        );
+        validate_wgsl(&shader, "composite render shader");
     }
 
     // ═══════════════════════════════════════════════════════════════

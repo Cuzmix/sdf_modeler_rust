@@ -57,7 +57,11 @@ impl SdfApp {
         self.async_state.sculpt_runtime_cache = None;
     }
 
-    fn sculpt_stroke_label(base_mode: &BrushMode, ctrl_held: bool, shift_held: bool) -> &'static str {
+    fn sculpt_stroke_label(
+        base_mode: &BrushMode,
+        ctrl_held: bool,
+        shift_held: bool,
+    ) -> &'static str {
         let effective_mode = if shift_held {
             BrushMode::Smooth
         } else if ctrl_held {
@@ -665,7 +669,11 @@ impl SdfApp {
                     None
                 };
 
-                if let Some((z0, z1)) = dirty {
+                if let Some(region) = dirty {
+                    let repaired =
+                        sculpt::repair_sdf_region_scene(&mut self.doc.scene, node_id, region, 2)
+                            .unwrap_or(region);
+                    let (z0, z1) = repaired.z_range();
                     self.try_incremental_voxel_upload(node_id, z0, z1);
                     self.upload_voxel_texture_region(node_id, z0, z1);
                 }
@@ -698,7 +706,7 @@ impl SdfApp {
 
         let eye = self.doc.camera.eye();
         let mut gpu_dispatches: Vec<BrushDispatch> = Vec::new();
-        let mut dirty_range: Option<(u32, u32)> = None;
+        let mut dirty_region: Option<sculpt::VoxelEditRegion> = None;
 
         {
             let Some(node) = self.doc.scene.nodes.get_mut(&node_id) else {
@@ -725,7 +733,7 @@ impl SdfApp {
                     Vec3::ZERO
                 };
 
-                let (z0, z1) = sculpt::apply_brush_local(
+                let region = sculpt::apply_brush_local(
                     voxel_grid,
                     local_hit,
                     local_view_dir,
@@ -739,9 +747,9 @@ impl SdfApp {
                     surface_constraint,
                 );
 
-                dirty_range = Some(match dirty_range {
-                    Some((min_z, max_z)) => (min_z.min(z0), max_z.max(z1)),
-                    None => (z0, z1),
+                dirty_region = Some(match dirty_region {
+                    Some(existing) => existing.merge(region),
+                    None => region,
                 });
 
                 if brush_mode != BrushMode::Smooth {
@@ -762,15 +770,6 @@ impl SdfApp {
             }
         }
 
-        if let Some((z0, z1)) = dirty_range {
-            if brush_mode == BrushMode::Smooth {
-                // Smooth mode: upload CPU data to GPU storage buffer (no GPU compute)
-                self.try_incremental_voxel_upload(node_id, z0, z1);
-            }
-            // Keep texture3D in sync with CPU sculpt updates.
-            self.upload_voxel_texture_region(node_id, z0, z1);
-        }
-
         let dispatch_count = gpu_dispatches.len() as u32;
         let mut submit_count = 0;
         if !gpu_dispatches.is_empty() {
@@ -784,6 +783,14 @@ impl SdfApp {
                     submit_count = 1;
                 }
             }
+        }
+
+        if let Some(region) = dirty_region {
+            let repaired = sculpt::repair_sdf_region_scene(&mut self.doc.scene, node_id, region, 2)
+                .unwrap_or(region);
+            let (z0, z1) = repaired.z_range();
+            self.try_incremental_voxel_upload(node_id, z0, z1);
+            self.upload_voxel_texture_region(node_id, z0, z1);
         }
         self.perf.timings.record_sculpt_brush_batch(
             all_hits.len() as u32,

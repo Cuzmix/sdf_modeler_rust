@@ -27,7 +27,9 @@ fn ray_march(ro: vec3f, rd: vec3f) -> vec4f {
     let fast = camera.quality_mode > 0.5;
     let eff_steps = select(/*MARCH_MAX_STEPS*/, /*MARCH_MAX_STEPS*/ / 2, fast);
     let eps = select(/*MARCH_EPSILON*/, /*MARCH_EPSILON*/ * 4.0, fast);
-    let step_mult = select(/*MARCH_STEP_MULT*/, min(/*MARCH_STEP_MULT*/ * 1.5, 1.0), fast);
+    let base_step_mult = select(/*MARCH_STEP_MULT*/, min(/*MARCH_STEP_MULT*/ * 1.5, 1.0), fast);
+    let scene_extent = length(camera.scene_max.xyz - camera.scene_min.xyz);
+    let refine_threshold = max(eps * 8.0, scene_extent * 0.0005);
 
     // Scene-level ray-AABB: skip empty space before the scene
     let inv_rd = 1.0 / rd;
@@ -39,7 +41,7 @@ fn ray_march(ro: vec3f, rd: vec3f) -> vec4f {
     var t = max(aabb.x - 0.01, 0.0);
 
     // Enhanced sphere tracing (Keinert over-relaxation)
-    var omega = select(1.2, 1.0, fast);
+    var base_omega = select(1.2, 1.0, fast);
     var prev_d = 1e10;
     var prev_step = 0.0;
     var mat_a = -1.0;
@@ -50,24 +52,58 @@ fn ray_march(ro: vec3f, rd: vec3f) -> vec4f {
         if i >= eff_steps { break; }
         steps_taken = i + 1;
         let p = ro + rd * t;
-        let hit = scene_sdf(p);
-        let d = hit.x;
-        let step = d * omega * step_mult;
+        let sculpt_factor = 1.0 - smoothstep(0.0, 0.15, sculpt_trace_hint(p));
+        let local_step_mult = mix(base_step_mult, min(base_step_mult, 0.30), sculpt_factor);
+        var local_omega = mix(base_omega, 1.0, sculpt_factor);
+        var sample_t = t;
+        var hit = scene_sdf(p);
+        var d = hit.x;
+
+        if d < refine_threshold {
+            var refine_t = sample_t;
+            var refine_hit = hit;
+            var best_t = sample_t;
+            var best_hit = hit;
+            var best_abs_d = abs(d);
+            local_omega = 1.0;
+            for (var refine_i = 0; refine_i < 6; refine_i++) {
+                if refine_hit.x < eps {
+                    best_t = refine_t;
+                    best_hit = refine_hit;
+                    best_abs_d = abs(refine_hit.x);
+                    break;
+                }
+                refine_t += refine_hit.x * 0.25;
+                refine_hit = scene_sdf(ro + rd * refine_t);
+                let refine_abs_d = abs(refine_hit.x);
+                if refine_abs_d < best_abs_d {
+                    best_t = refine_t;
+                    best_hit = refine_hit;
+                    best_abs_d = refine_abs_d;
+                }
+            }
+            sample_t = best_t;
+            hit = best_hit;
+            d = hit.x;
+        }
+
         // Overshoot detection: if combined radii can't bridge the step, undo
-        if omega > 1.0 && prev_d + d < prev_step {
+        if local_omega > 1.0 && prev_d + d < prev_step {
             t -= prev_step;
-            omega = 1.0;
+            base_omega = 1.0;
             prev_d = 1e10;
             prev_step = 0.0;
             continue;
         }
         if d < eps {
+            t = sample_t;
             mat_a = hit.y;
             mat_b = hit.z;
             blend = hit.w;
             break;
         }
-        t += step;
+        let step = d * local_omega * local_step_mult;
+        t = sample_t + step;
         prev_step = step;
         prev_d = d;
         if t > max_dist { break; }
@@ -79,18 +115,34 @@ fn ray_march(ro: vec3f, rd: vec3f) -> vec4f {
     return vec4f(t, mat_a, mat_b, blend);
 }
 
-// PERFORMANCE CRITICAL: keep simple, avoid branches.
-fn calc_normal(p: vec3f, t: f32) -> vec3f {
+fn calc_gradient_at_scale(p: vec3f, e: f32) -> vec3f {
     // Tetrahedron technique: 4 SDF evals instead of 6.
-    // Distance-adaptive epsilon: larger at distance (reduces aliasing), tighter up close (more detail).
-    let e = clamp(0.001 * t, 0.0005, 0.05);
     let k = vec2f(1.0, -1.0);
-    return normalize(
+    // The tetrahedral sum approximates 4 * e * grad(SDF), so rescale back to
+    // a true gradient before using its magnitude for diagnostics.
+    return (
         k.xyy * scene_sdf(p + k.xyy * e).x +
         k.yyx * scene_sdf(p + k.yyx * e).x +
         k.yxy * scene_sdf(p + k.yxy * e).x +
         k.xxx * scene_sdf(p + k.xxx * e).x
-    );
+    ) * (0.25 / e);
+}
+
+fn calc_gradient(p: vec3f, t: f32) -> vec3f {
+    // Distance-adaptive epsilon: larger at distance (reduces aliasing), tighter up close (more detail).
+    let e = clamp(0.001 * t, 0.0005, 0.05);
+    return calc_gradient_at_scale(p, e);
+}
+
+// PERFORMANCE CRITICAL: keep simple, avoid branches.
+fn calc_normal(p: vec3f, t: f32) -> vec3f {
+    // Use a broader derivative estimate for shading than for diagnostics.
+    // This damps high-frequency voxel ripple without changing the surfaced SDF.
+    let fine_e = clamp(0.001 * t, 0.0005, 0.05);
+    let coarse_e = clamp(fine_e * 4.0, 0.003, 0.08);
+    let fine = calc_gradient_at_scale(p, fine_e);
+    let coarse = calc_gradient_at_scale(p, coarse_e);
+    return normalize(mix(coarse, fine, 0.35));
 }
 
 fn soft_shadow(ro: vec3f, rd: vec3f, mint: f32, maxt: f32, k: f32) -> f32 {
@@ -279,7 +331,7 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
     let shading_mode = camera.scene_min.w;
 
     // Cross-Section mode: 2D slice heatmap, no raymarching needed
-    if shading_mode > 5.5 {
+    if shading_mode > 6.5 {
         let axis = i32(camera.cross_section.x + 0.5);
         let slice_pos = camera.cross_section.y;
 
@@ -316,15 +368,31 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
         return vec4f(color, 1.0);
     }
 
+    let field_quality_mode = shading_mode > 5.5;
+    let step_heatmap_mode = shading_mode > 4.5 && !field_quality_mode;
+
     // Step Heatmap applies to ALL pixels (including misses) to show full cost
-    if shading_mode > 4.5 {
+    if step_heatmap_mode {
         let ratio = debug_step_count;
         let r = smoothstep(0.3, 0.7, ratio);
         let g = 1.0 - smoothstep(0.5, 1.0, ratio);
         color = vec3f(r, g, 0.0);
     }
 
-    if !sdf_miss && !(shading_mode > 4.5) {
+    if !sdf_miss && field_quality_mode {
+        let p = ro + rd * t;
+        let grad = calc_gradient(p, t);
+        let drift = abs(length(grad) - 1.0);
+        let severity = clamp(drift / 0.4, 0.0, 1.0);
+        let low = vec3f(0.12, 0.60, 0.18);
+        let mid = vec3f(0.90, 0.78, 0.18);
+        let high = vec3f(0.92, 0.18, 0.12);
+        color = mix(low, mid, smoothstep(0.05, 0.35, severity));
+        color = mix(color, high, smoothstep(0.45, 1.0, severity));
+        color = pow(color, vec3f(1.0 / /*GAMMA*/));
+    }
+
+    if !sdf_miss && !(step_heatmap_mode || field_quality_mode) {
         let p = ro + rd * t;
         let n = calc_normal(p, t);
 

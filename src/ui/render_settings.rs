@@ -164,7 +164,7 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
                 &mut config.march_step_multiplier,
                 0.01..=1.0,
                 false,
-                "Conservative step factor (<1.0 prevents artifacts on thin features)",
+                "Global base step factor. Sculpt regions may march more conservatively automatically to reduce overskip artifacts.",
             );
             labeled_slider(
                 ui,
@@ -421,6 +421,29 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
         });
 
     // --- Cross-Section ---
+    egui::CollapsingHeader::new("Visualization")
+        .default_open(false)
+        .show(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                for mode in [
+                    ShadingMode::Full,
+                    ShadingMode::Solid,
+                    ShadingMode::Clay,
+                    ShadingMode::Normals,
+                    ShadingMode::Matcap,
+                    ShadingMode::StepHeatmap,
+                    ShadingMode::FieldQuality,
+                    ShadingMode::CrossSection,
+                ] {
+                    ui.selectable_value(&mut config.shading_mode, mode, mode.label());
+                }
+            });
+            ui.label(
+                "Field Quality visualizes signed-distance drift: green is close to |grad| = 1, red indicates a degraded field.",
+            );
+        });
+
+    // --- Cross-Section ---
     if config.shading_mode == ShadingMode::CrossSection {
         egui::CollapsingHeader::new("Cross-Section")
             .default_open(true)
@@ -452,6 +475,13 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
                 0.0..=0.15,
                 false,
                 "Border zone that always triggers navigation (fraction of viewport, 0 = disabled)",
+            );
+            ui.checkbox(
+                &mut config.debug_force_manual_sculpt_sampling,
+                "Force Manual Sculpt Sampling",
+            )
+            .on_hover_text(
+                "Render sculpt nodes through the manual storage-buffer sampler instead of the texture path.\nUseful for isolating texture interpolation artifacts.",
             );
         });
 

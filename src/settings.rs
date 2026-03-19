@@ -24,6 +24,7 @@ pub enum ShadingMode {
     Normals,
     Matcap,
     StepHeatmap,
+    FieldQuality,
     CrossSection,
 }
 
@@ -36,7 +37,8 @@ impl ShadingMode {
             Self::Normals => 3.0,
             Self::Matcap => 4.0,
             Self::StepHeatmap => 5.0,
-            Self::CrossSection => 6.0,
+            Self::FieldQuality => 6.0,
+            Self::CrossSection => 7.0,
         }
     }
     pub fn label(&self) -> &'static str {
@@ -47,6 +49,7 @@ impl ShadingMode {
             Self::Normals => "Normals",
             Self::Matcap => "Matcap",
             Self::StepHeatmap => "Step Heatmap",
+            Self::FieldQuality => "Field Quality",
             Self::CrossSection => "Cross-Section",
         }
     }
@@ -57,7 +60,8 @@ impl ShadingMode {
             Self::Clay => Self::Normals,
             Self::Normals => Self::Matcap,
             Self::Matcap => Self::StepHeatmap,
-            Self::StepHeatmap => Self::CrossSection,
+            Self::StepHeatmap => Self::FieldQuality,
+            Self::FieldQuality => Self::CrossSection,
             Self::CrossSection => Self::Full,
         }
     }
@@ -402,6 +406,10 @@ pub struct RenderConfig {
     /// Resolution of the composite scene volume (64-256).
     #[serde(default = "default_composite_resolution")]
     pub composite_volume_resolution: u32,
+    /// Force render/composite shaders to use the manual storage-buffer voxel path.
+    /// Useful for diagnosing texture-vs-storage sculpt sampling mismatches.
+    #[serde(default)]
+    pub debug_force_manual_sculpt_sampling: bool,
 
     // Touch input
     #[serde(default = "default_touch_zoom_sensitivity")]
@@ -589,6 +597,7 @@ impl Default for RenderConfig {
             rest_render_scale: 1.0,
             composite_volume_enabled: false,
             composite_volume_resolution: 128,
+            debug_force_manual_sculpt_sampling: false,
 
             touch_zoom_sensitivity: 500.0,
             invert_touch_pan: false,
@@ -714,5 +723,31 @@ impl RenderConfig {
             || self.tonemapping_aces != other.tonemapping_aces
             || self.outline_color != other.outline_color
             || self.outline_thickness != other.outline_thickness
+            || self.debug_force_manual_sculpt_sampling != other.debug_force_manual_sculpt_sampling
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{RenderConfig, ShadingMode};
+
+    #[test]
+    fn shading_mode_cycle_includes_field_quality() {
+        assert_eq!(ShadingMode::StepHeatmap.cycle(), ShadingMode::FieldQuality);
+        assert_eq!(ShadingMode::FieldQuality.cycle(), ShadingMode::CrossSection);
+    }
+
+    #[test]
+    fn field_quality_mode_has_expected_metadata() {
+        assert_eq!(ShadingMode::FieldQuality.gpu_value(), 6.0);
+        assert_eq!(ShadingMode::FieldQuality.label(), "Field Quality");
+    }
+
+    #[test]
+    fn manual_sculpt_sampling_requires_shader_rebuild() {
+        let base = RenderConfig::default();
+        let mut changed = base.clone();
+        changed.debug_force_manual_sculpt_sampling = true;
+        assert!(changed.needs_shader_rebuild(&base));
     }
 }

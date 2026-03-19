@@ -208,6 +208,45 @@ pub enum SculptState {
     },
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct VoxelEditRegion {
+    pub x0: u32,
+    pub y0: u32,
+    pub z0: u32,
+    pub x1: u32,
+    pub y1: u32,
+    pub z1: u32,
+}
+
+impl VoxelEditRegion {
+    pub fn merge(self, other: Self) -> Self {
+        Self {
+            x0: self.x0.min(other.x0),
+            y0: self.y0.min(other.y0),
+            z0: self.z0.min(other.z0),
+            x1: self.x1.max(other.x1),
+            y1: self.y1.max(other.y1),
+            z1: self.z1.max(other.z1),
+        }
+    }
+
+    pub fn padded(self, padding: u32, resolution: u32) -> Self {
+        let max = resolution.saturating_sub(1);
+        Self {
+            x0: self.x0.saturating_sub(padding),
+            y0: self.y0.saturating_sub(padding),
+            z0: self.z0.saturating_sub(padding),
+            x1: (self.x1 + padding).min(max),
+            y1: (self.y1 + padding).min(max),
+            z1: (self.z1 + padding).min(max),
+        }
+    }
+
+    pub fn z_range(self) -> (u32, u32) {
+        (self.z0, self.z1)
+    }
+}
+
 impl SculptState {
     /// Create a new Active sculpt state with default brush settings.
     pub fn new_active(node_id: NodeId) -> Self {
@@ -294,7 +333,7 @@ pub fn apply_brush_local(
     smooth_iterations: u32,
     flatten_ref: f32,
     surface_constraint: f32,
-) -> (u32, u32) {
+) -> VoxelEditRegion {
     match brush_mode {
         BrushMode::Smooth => apply_smooth_to_grid(
             voxel_grid,
@@ -479,7 +518,7 @@ fn apply_brush_to_grid(
     flatten_ref: f32,
     surface_constraint: f32,
     view_dir_local: Vec3,
-) -> (u32, u32) {
+) -> VoxelEditRegion {
     let res = grid.resolution;
     let voxel_step = max_voxel_step(grid);
 
@@ -541,7 +580,14 @@ fn apply_brush_to_grid(
         }
     }
 
-    (z0, z1)
+    VoxelEditRegion {
+        x0,
+        y0,
+        z0,
+        x1,
+        y1,
+        z1,
+    }
 }
 
 /// Apply Laplacian smoothing within the brush sphere.
@@ -556,7 +602,7 @@ fn apply_smooth_to_grid(
     iterations: u32,
     surface_constraint: f32,
     view_dir_local: Vec3,
-) -> (u32, u32) {
+) -> VoxelEditRegion {
     let res = grid.resolution;
 
     let brush_min = center - Vec3::splat(radius);
@@ -647,7 +693,14 @@ fn apply_smooth_to_grid(
         }
     }
 
-    (z0, z1)
+    VoxelEditRegion {
+        x0,
+        y0,
+        z0,
+        x1,
+        y1,
+        z1,
+    }
 }
 
 /// Apply grab brush using a Kelvinlet warp sampled from the grab-start snapshot.
@@ -663,13 +716,23 @@ pub fn apply_grab_to_grid(
     _falloff_mode: &FalloffMode,
     _surface_constraint: f32,
     _view_dir_local: Vec3,
-) -> (u32, u32) {
+) -> VoxelEditRegion {
     let res = grid.resolution;
     let displacement = grab_delta * strength;
     let disp_len = displacement.length();
     if disp_len <= 1e-6 || radius <= 1e-6 {
         let z = grid.world_to_grid(center).z.clamp(0.0, (res - 1) as f32) as u32;
-        return (z, z);
+        let xy = grid
+            .world_to_grid(center)
+            .clamp(Vec3::ZERO, Vec3::splat((res - 1) as f32));
+        return VoxelEditRegion {
+            x0: xy.x as u32,
+            y0: xy.y as u32,
+            z0: z,
+            x1: xy.x as u32,
+            y1: xy.y as u32,
+            z1: z,
+        };
     }
 
     let extent = grid.bounds_max - grid.bounds_min;
@@ -706,7 +769,14 @@ pub fn apply_grab_to_grid(
         }
     }
 
-    (z0, z1)
+    VoxelEditRegion {
+        x0,
+        y0,
+        z0,
+        x1,
+        y1,
+        z1,
+    }
 }
 /// Apply grab brush for differential sculpts using a displacement snapshot.
 /// Reconstructs total SDF on demand: displacement(sample) + analytical(sample).
@@ -727,14 +797,24 @@ pub fn apply_grab_to_grid_differential(
     child_id: NodeId,
     sculpt_position: Vec3,
     sculpt_rotation: Vec3,
-) -> (u32, u32) {
+) -> VoxelEditRegion {
     let res = grid.resolution;
     let analytical_snapshot = analytical_snapshot.filter(|data| data.len() == grid.data.len());
     let displacement = grab_delta * strength;
     let disp_len = displacement.length();
     if disp_len <= 1e-6 || radius <= 1e-6 {
         let z = grid.world_to_grid(center).z.clamp(0.0, (res - 1) as f32) as u32;
-        return (z, z);
+        let xy = grid
+            .world_to_grid(center)
+            .clamp(Vec3::ZERO, Vec3::splat((res - 1) as f32));
+        return VoxelEditRegion {
+            x0: xy.x as u32,
+            y0: xy.y as u32,
+            z0: z,
+            x1: xy.x as u32,
+            y1: xy.y as u32,
+            z1: z,
+        };
     }
 
     let extent = grid.bounds_max - grid.bounds_min;
@@ -790,7 +870,14 @@ pub fn apply_grab_to_grid_differential(
         }
     }
 
-    (z0, z1)
+    VoxelEditRegion {
+        x0,
+        y0,
+        z0,
+        x1,
+        y1,
+        z1,
+    }
 }
 /// Wrapper that handles the borrow conflict: need &Scene for evaluate_sdf_tree and &mut VoxelGrid.
 /// Temporarily swaps the VoxelGrid out of the scene, applies grab, then swaps it back.
@@ -810,7 +897,7 @@ pub fn apply_grab_to_grid_differential_scene(
     child_id: NodeId,
     sculpt_position: Vec3,
     sculpt_rotation: Vec3,
-) -> Option<(u32, u32)> {
+) -> Option<VoxelEditRegion> {
     // Extract VoxelGrid from the scene node temporarily
     let node = scene.nodes.get_mut(&node_id)?;
     let mut grid = if let NodeData::Sculpt {
@@ -862,6 +949,436 @@ pub fn apply_grab_to_grid_differential_scene(
     Some(result)
 }
 
+fn axis_voxel_step(grid: &VoxelGrid) -> Vec3 {
+    let extent = grid.bounds_max - grid.bounds_min;
+    let denom = grid.resolution.saturating_sub(1).max(1) as f32;
+    Vec3::new(
+        (extent.x / denom).max(1e-6),
+        (extent.y / denom).max(1e-6),
+        (extent.z / denom).max(1e-6),
+    )
+}
+
+fn repair_region_index(
+    x: u32,
+    y: u32,
+    z: u32,
+    region: VoxelEditRegion,
+    size_x: usize,
+    size_y: usize,
+) -> usize {
+    let lx = (x - region.x0) as usize;
+    let ly = (y - region.y0) as usize;
+    let lz = (z - region.z0) as usize;
+    (lz * size_y + ly) * size_x + lx
+}
+
+fn field_index(x: usize, y: usize, z: usize, size_x: usize, size_y: usize) -> usize {
+    (z * size_y + y) * size_x + x
+}
+
+fn clamped_field_value(
+    values: &[f32],
+    size_x: usize,
+    size_y: usize,
+    size_z: usize,
+    x: isize,
+    y: isize,
+    z: isize,
+) -> f32 {
+    let cx = x.clamp(0, size_x.saturating_sub(1) as isize) as usize;
+    let cy = y.clamp(0, size_y.saturating_sub(1) as isize) as usize;
+    let cz = z.clamp(0, size_z.saturating_sub(1) as isize) as usize;
+    values[field_index(cx, cy, cz, size_x, size_y)]
+}
+
+fn has_sign_change_neighbor(
+    values: &[f32],
+    size_x: usize,
+    size_y: usize,
+    size_z: usize,
+    x: usize,
+    y: usize,
+    z: usize,
+) -> bool {
+    let center = values[field_index(x, y, z, size_x, size_y)];
+    let center_sign = center.signum();
+    for (dx, dy, dz) in [
+        (-1isize, 0isize, 0isize),
+        (1, 0, 0),
+        (0, -1, 0),
+        (0, 1, 0),
+        (0, 0, -1),
+        (0, 0, 1),
+    ] {
+        let nx = x as isize + dx;
+        let ny = y as isize + dy;
+        let nz = z as isize + dz;
+        if nx < 0
+            || ny < 0
+            || nz < 0
+            || nx >= size_x as isize
+            || ny >= size_y as isize
+            || nz >= size_z as isize
+        {
+            continue;
+        }
+        let neighbor = values[field_index(nx as usize, ny as usize, nz as usize, size_x, size_y)];
+        if neighbor.signum() != center_sign {
+            return true;
+        }
+    }
+    false
+}
+
+fn godunov_gradient_magnitude(
+    values: &[f32],
+    dimensions: (usize, usize, usize),
+    x: usize,
+    y: usize,
+    z: usize,
+    step: Vec3,
+    sign: f32,
+) -> f32 {
+    let (size_x, size_y, size_z) = dimensions;
+    let center = values[field_index(x, y, z, size_x, size_y)];
+    let left = clamped_field_value(
+        values,
+        size_x,
+        size_y,
+        size_z,
+        x as isize - 1,
+        y as isize,
+        z as isize,
+    );
+    let right = clamped_field_value(
+        values,
+        size_x,
+        size_y,
+        size_z,
+        x as isize + 1,
+        y as isize,
+        z as isize,
+    );
+    let down = clamped_field_value(
+        values,
+        size_x,
+        size_y,
+        size_z,
+        x as isize,
+        y as isize - 1,
+        z as isize,
+    );
+    let up = clamped_field_value(
+        values,
+        size_x,
+        size_y,
+        size_z,
+        x as isize,
+        y as isize + 1,
+        z as isize,
+    );
+    let back = clamped_field_value(
+        values,
+        size_x,
+        size_y,
+        size_z,
+        x as isize,
+        y as isize,
+        z as isize - 1,
+    );
+    let front = clamped_field_value(
+        values,
+        size_x,
+        size_y,
+        size_z,
+        x as isize,
+        y as isize,
+        z as isize + 1,
+    );
+
+    let dx_minus = (center - left) / step.x;
+    let dx_plus = (right - center) / step.x;
+    let dy_minus = (center - down) / step.y;
+    let dy_plus = (up - center) / step.y;
+    let dz_minus = (center - back) / step.z;
+    let dz_plus = (front - center) / step.z;
+
+    let axis_term = |minus: f32, plus: f32| {
+        if sign >= 0.0 {
+            (minus.max(0.0).powi(2)).max(plus.min(0.0).powi(2))
+        } else {
+            (minus.min(0.0).powi(2)).max(plus.max(0.0).powi(2))
+        }
+    };
+
+    (axis_term(dx_minus, dx_plus) + axis_term(dy_minus, dy_plus) + axis_term(dz_minus, dz_plus))
+        .sqrt()
+}
+
+fn reinitialize_signed_distance_field(
+    values: &mut [f32],
+    size_x: usize,
+    size_y: usize,
+    size_z: usize,
+    step: Vec3,
+) -> bool {
+    let count = values.len();
+    if count == 0 {
+        return false;
+    }
+
+    let original = values.to_vec();
+    let mut current = original.clone();
+    let mut next = original.clone();
+    let min_step = step.min_element().max(1e-6);
+    let interface_band = min_step * 0.75;
+    let pseudo_dt = min_step * 0.3;
+    let max_dim = size_x.max(size_y).max(size_z);
+    let iterations = max_dim.clamp(6, 24);
+    let mut locked = vec![false; count];
+    let mut seed_count = 0usize;
+
+    for z in 0..size_z {
+        for y in 0..size_y {
+            for x in 0..size_x {
+                let idx = field_index(x, y, z, size_x, size_y);
+                let phi0 = original[idx];
+                let is_border = x == 0
+                    || y == 0
+                    || z == 0
+                    || x + 1 == size_x
+                    || y + 1 == size_y
+                    || z + 1 == size_z;
+                let is_surface_anchor = phi0.abs() <= interface_band
+                    || has_sign_change_neighbor(&original, size_x, size_y, size_z, x, y, z);
+                if is_border || is_surface_anchor {
+                    locked[idx] = true;
+                    seed_count += usize::from(is_surface_anchor);
+                }
+            }
+        }
+    }
+
+    if seed_count == 0 {
+        return false;
+    }
+
+    for _ in 0..iterations {
+        for z in 0..size_z {
+            for y in 0..size_y {
+                for x in 0..size_x {
+                    let idx = field_index(x, y, z, size_x, size_y);
+                    let phi0 = original[idx];
+                    if locked[idx] {
+                        next[idx] = phi0;
+                        continue;
+                    }
+
+                    let sign = phi0 / (phi0 * phi0 + min_step * min_step).sqrt();
+                    let grad = godunov_gradient_magnitude(
+                        &current,
+                        (size_x, size_y, size_z),
+                        x,
+                        y,
+                        z,
+                        step,
+                        sign,
+                    );
+                    let updated = current[idx] - pseudo_dt * sign * (grad - 1.0);
+                    next[idx] = if phi0 >= 0.0 {
+                        updated.max(0.0)
+                    } else {
+                        updated.min(0.0)
+                    };
+                }
+            }
+        }
+        std::mem::swap(&mut current, &mut next);
+    }
+
+    values.copy_from_slice(&current);
+    true
+}
+
+fn repair_total_sdf_region(
+    grid: &mut VoxelGrid,
+    dirty_region: VoxelEditRegion,
+    padding: u32,
+) -> VoxelEditRegion {
+    let region = dirty_region.padded(padding, grid.resolution);
+    let size_x = (region.x1 - region.x0 + 1) as usize;
+    let size_y = (region.y1 - region.y0 + 1) as usize;
+    let size_z = (region.z1 - region.z0 + 1) as usize;
+
+    let mut values = vec![0.0f32; size_x * size_y * size_z];
+    for z in region.z0..=region.z1 {
+        for y in region.y0..=region.y1 {
+            for x in region.x0..=region.x1 {
+                let local_idx = repair_region_index(x, y, z, region, size_x, size_y);
+                values[local_idx] = grid.data[VoxelGrid::index(x, y, z, grid.resolution)];
+            }
+        }
+    }
+
+    if !reinitialize_signed_distance_field(
+        &mut values,
+        size_x,
+        size_y,
+        size_z,
+        axis_voxel_step(grid),
+    ) {
+        return dirty_region;
+    }
+
+    for z in region.z0..=region.z1 {
+        for y in region.y0..=region.y1 {
+            for x in region.x0..=region.x1 {
+                let local_idx = repair_region_index(x, y, z, region, size_x, size_y);
+                let global_idx = VoxelGrid::index(x, y, z, grid.resolution);
+                grid.data[global_idx] = values[local_idx];
+            }
+        }
+    }
+
+    region
+}
+
+#[allow(clippy::too_many_arguments)]
+fn repair_differential_sdf_region(
+    grid: &mut VoxelGrid,
+    scene: &Scene,
+    child_id: NodeId,
+    sculpt_position: Vec3,
+    sculpt_rotation: Vec3,
+    layer_intensity: f32,
+    dirty_region: VoxelEditRegion,
+    padding: u32,
+) -> VoxelEditRegion {
+    if layer_intensity.abs() <= 1e-5 {
+        return dirty_region;
+    }
+
+    let region = dirty_region.padded(padding, grid.resolution);
+    let size_x = (region.x1 - region.x0 + 1) as usize;
+    let size_y = (region.y1 - region.y0 + 1) as usize;
+    let size_z = (region.z1 - region.z0 + 1) as usize;
+
+    let mut analytical = vec![0.0f32; size_x * size_y * size_z];
+    let mut total_values = vec![0.0f32; size_x * size_y * size_z];
+
+    for z in region.z0..=region.z1 {
+        for y in region.y0..=region.y1 {
+            for x in region.x0..=region.x1 {
+                let local_idx = repair_region_index(x, y, z, region, size_x, size_y);
+                let local_pos = grid.grid_to_world(x as f32, y as f32, z as f32);
+                let world_pos = sculpt_position + inverse_rotate_euler(local_pos, sculpt_rotation);
+                let analytical_value = voxel::evaluate_sdf_tree(scene, child_id, world_pos);
+                let global_idx = VoxelGrid::index(x, y, z, grid.resolution);
+                analytical[local_idx] = analytical_value;
+                total_values[local_idx] =
+                    analytical_value + grid.data[global_idx] * layer_intensity;
+            }
+        }
+    }
+
+    if !reinitialize_signed_distance_field(
+        &mut total_values,
+        size_x,
+        size_y,
+        size_z,
+        axis_voxel_step(grid),
+    ) {
+        return dirty_region;
+    }
+
+    for z in region.z0..=region.z1 {
+        for y in region.y0..=region.y1 {
+            for x in region.x0..=region.x1 {
+                let local_idx = repair_region_index(x, y, z, region, size_x, size_y);
+                let global_idx = VoxelGrid::index(x, y, z, grid.resolution);
+                grid.data[global_idx] =
+                    (total_values[local_idx] - analytical[local_idx]) / layer_intensity;
+            }
+        }
+    }
+
+    region
+}
+
+pub fn repair_sdf_region_scene(
+    scene: &mut Scene,
+    node_id: NodeId,
+    dirty_region: VoxelEditRegion,
+    padding: u32,
+) -> Option<VoxelEditRegion> {
+    let (child_id, sculpt_position, sculpt_rotation, layer_intensity) = {
+        let node = scene.nodes.get(&node_id)?;
+        let NodeData::Sculpt {
+            input,
+            position,
+            rotation,
+            layer_intensity,
+            ..
+        } = node.data
+        else {
+            return None;
+        };
+        (input, position, rotation, layer_intensity)
+    };
+
+    if let Some(child_id) = child_id {
+        let node = scene.nodes.get_mut(&node_id)?;
+        let mut grid = if let NodeData::Sculpt {
+            ref mut voxel_grid, ..
+        } = node.data
+        {
+            std::mem::replace(
+                voxel_grid,
+                VoxelGrid {
+                    resolution: 1,
+                    bounds_min: Vec3::ZERO,
+                    bounds_max: Vec3::ONE,
+                    is_displacement: true,
+                    data: vec![0.0],
+                },
+            )
+        } else {
+            return None;
+        };
+
+        let repaired = repair_differential_sdf_region(
+            &mut grid,
+            scene,
+            child_id,
+            sculpt_position,
+            sculpt_rotation,
+            layer_intensity,
+            dirty_region,
+            padding,
+        );
+
+        if let Some(node) = scene.nodes.get_mut(&node_id) {
+            if let NodeData::Sculpt {
+                ref mut voxel_grid, ..
+            } = node.data
+            {
+                *voxel_grid = grid;
+            }
+        }
+        Some(repaired)
+    } else {
+        let node = scene.nodes.get_mut(&node_id)?;
+        let NodeData::Sculpt {
+            ref mut voxel_grid, ..
+        } = node.data
+        else {
+            return None;
+        };
+        Some(repair_total_sdf_region(voxel_grid, dirty_region, padding))
+    }
+}
+
 /// Build an analytical child-SDF snapshot in sculpt-local voxel space.
 /// Used to amortize differential grab cost over the whole stroke.
 pub fn build_analytical_snapshot(
@@ -898,4 +1415,96 @@ pub fn inverse_rotate_euler(p: Vec3, r: Vec3) -> Vec3 {
     let (sx, cx) = r.x.sin_cos();
     q = Vec3::new(q.x, cx * q.y + sx * q.z, -sx * q.y + cx * q.z);
     q
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn voxel_edit_region_merge_and_padding_work() {
+        let a = VoxelEditRegion {
+            x0: 2,
+            y0: 3,
+            z0: 4,
+            x1: 5,
+            y1: 6,
+            z1: 7,
+        };
+        let b = VoxelEditRegion {
+            x0: 1,
+            y0: 4,
+            z0: 2,
+            x1: 8,
+            y1: 5,
+            z1: 9,
+        };
+
+        let merged = a.merge(b);
+        assert_eq!(
+            merged,
+            VoxelEditRegion {
+                x0: 1,
+                y0: 3,
+                z0: 2,
+                x1: 8,
+                y1: 6,
+                z1: 9,
+            }
+        );
+
+        let padded = merged.padded(2, 10);
+        assert_eq!(
+            padded,
+            VoxelEditRegion {
+                x0: 0,
+                y0: 1,
+                z0: 0,
+                x1: 9,
+                y1: 8,
+                z1: 9,
+            }
+        );
+    }
+
+    #[test]
+    fn repair_signed_distance_values_keeps_simple_line_field_ordered() {
+        let mut values = vec![-1.0, 0.0, 1.0];
+        let repaired = reinitialize_signed_distance_field(&mut values, 3, 1, 1, Vec3::ONE);
+        assert!(repaired);
+        assert!(values[0] < 0.0);
+        assert!(values[1].abs() < 1e-5);
+        assert!(values[2] > 0.0);
+        assert!(values[0].abs() <= values[2].abs() + 1e-5);
+    }
+
+    #[test]
+    fn repair_signed_distance_values_reduces_obvious_drift() {
+        let line = [
+            -2.5_f32, -1.9_f32, -0.5_f32, 0.5_f32, 2.1_f32, 3.0_f32, 3.5_f32,
+        ];
+        let mut values = vec![0.0_f32; 7 * 3 * 3];
+        for z in 0..3 {
+            for y in 0..3 {
+                for (x, value) in line.iter().enumerate() {
+                    values[field_index(x, y, z, 7, 3)] = *value;
+                }
+            }
+        }
+        let target_error = |samples: &[f32]| -> f32 {
+            let line_sample = |x: usize| samples[field_index(x, 1, 1, 7, 3)];
+            (line_sample(1) + 1.5).abs()
+                + (line_sample(4) - 1.5).abs()
+                + (line_sample(5) - 2.5).abs()
+        };
+        let before_target_error = target_error(&values);
+        let repaired = reinitialize_signed_distance_field(&mut values, 7, 3, 3, Vec3::ONE);
+        assert!(repaired);
+        let after_target_error = target_error(&values);
+        assert!(after_target_error < before_target_error);
+        let line_sample = |x: usize| values[field_index(x, 1, 1, 7, 3)];
+        assert!(line_sample(0) < 0.0 && line_sample(1) < 0.0 && line_sample(2) < 0.0);
+        assert!(line_sample(3) > 0.0);
+        assert!(line_sample(4) > 0.0 && line_sample(5) > 0.0 && line_sample(6) > 0.0);
+    }
 }
