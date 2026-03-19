@@ -57,6 +57,7 @@ pub struct GpuSyncState {
     pub current_structure_key: u64,
     pub buffer_dirty: bool,
     pub last_data_fingerprint: u64,
+    pub last_environment_fingerprint: u64,
     pub voxel_gpu_offsets: HashMap<NodeId, u32>,
     pub sculpt_tex_indices: HashMap<NodeId, usize>,
 }

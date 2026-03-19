@@ -1,10 +1,12 @@
+use std::hash::{Hash, Hasher};
+
 use serde::{Deserialize, Serialize};
 
 use crate::keymap::KeymapConfig;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::native_paths;
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Default)]
 pub enum BackgroundMode {
     #[default]
     SkyGradient,
@@ -541,9 +543,9 @@ impl Default for RenderConfig {
 
             ao_enabled: true,
             ao_samples: 5,
-            ao_step: 0.08,
+            ao_step: 0.4,
             ao_decay: 0.95,
-            ao_intensity: 3.0,
+            ao_intensity: 1.0,
 
             march_max_steps: 128,
             march_epsilon: 0.002,
@@ -617,6 +619,31 @@ impl Default for RenderConfig {
 }
 
 impl RenderConfig {
+    pub fn environment_fingerprint(&self) -> u64 {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        match self.background_mode {
+            BackgroundMode::SkyGradient => 0_u8.hash(&mut hasher),
+            BackgroundMode::SolidColor => 1_u8.hash(&mut hasher),
+        }
+        for value in self
+            .sky_horizon
+            .iter()
+            .chain(self.sky_zenith.iter())
+            .chain(self.bg_solid_color.iter())
+        {
+            value.to_bits().hash(&mut hasher);
+        }
+        hasher.finish()
+    }
+
+    pub fn environment_specular_intensity(&self) -> f32 {
+        if self.env_reflection_enabled {
+            self.env_reflection_intensity
+        } else {
+            0.0
+        }
+    }
+
     pub fn reset_shadows(&mut self) {
         let d = Self::default();
         self.shadows_enabled = d.shadows_enabled;
@@ -688,8 +715,8 @@ impl RenderConfig {
     }
 
     /// Returns true if the change between self and other requires a shader
-    /// recompilation (i.e., a placeholder-affecting field changed). Light
-    /// parameters are now in the uniform buffer and don't need rebuild.
+    /// recompilation (i.e., a placeholder-affecting field changed). Lighting
+    /// intensities and environment content now update through uniforms/resources.
     pub fn needs_shader_rebuild(&self, other: &Self) -> bool {
         // Compare all fields EXCEPT lighting (those are in uniform now)
         self.shadows_enabled != other.shadows_enabled
@@ -707,12 +734,6 @@ impl RenderConfig {
             || self.march_epsilon != other.march_epsilon
             || self.march_step_multiplier != other.march_step_multiplier
             || self.march_max_distance != other.march_max_distance
-            || self.env_reflection_enabled != other.env_reflection_enabled
-            || self.env_reflection_intensity != other.env_reflection_intensity
-            || self.sky_horizon != other.sky_horizon
-            || self.sky_zenith != other.sky_zenith
-            || self.background_mode != other.background_mode
-            || self.bg_solid_color != other.bg_solid_color
             || self.sss_enabled != other.sss_enabled
             || self.sss_strength != other.sss_strength
             || self.sss_color != other.sss_color
@@ -729,7 +750,7 @@ impl RenderConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::{RenderConfig, ShadingMode};
+    use super::{BackgroundMode, RenderConfig, ShadingMode};
 
     #[test]
     fn shading_mode_cycle_includes_field_quality() {
@@ -749,5 +770,29 @@ mod tests {
         let mut changed = base.clone();
         changed.debug_force_manual_sculpt_sampling = true;
         assert!(changed.needs_shader_rebuild(&base));
+    }
+
+    #[test]
+    fn environment_settings_do_not_require_shader_rebuild() {
+        let base = RenderConfig::default();
+        let mut changed = base.clone();
+        changed.env_reflection_enabled = !changed.env_reflection_enabled;
+        changed.env_reflection_intensity = 0.9;
+        changed.background_mode = BackgroundMode::SolidColor;
+        changed.sky_horizon = [0.3, 0.2, 0.1];
+        changed.sky_zenith = [0.1, 0.2, 0.3];
+        changed.bg_solid_color = [0.5, 0.4, 0.3];
+        assert!(!changed.needs_shader_rebuild(&base));
+    }
+
+    #[test]
+    fn environment_fingerprint_tracks_background_bake_inputs() {
+        let base = RenderConfig::default();
+        let mut changed = base.clone();
+        changed.sky_zenith = [0.3, 0.4, 0.5];
+        assert_ne!(
+            changed.environment_fingerprint(),
+            base.environment_fingerprint()
+        );
     }
 }

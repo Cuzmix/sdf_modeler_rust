@@ -107,15 +107,15 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
                     "Samples",
                     &mut config.ao_samples,
                     1..=16,
-                    "Number of AO sample steps. More = smoother but slower",
+                    "Number of samples across the AO radius. More = smoother but not wider",
                 );
                 labeled_slider(
                     ui,
-                    "Step Size",
+                    "Radius",
                     &mut config.ao_step,
                     0.01..=0.5,
                     false,
-                    "Distance between AO samples. Larger = wider darkening",
+                    "Maximum AO reach in world units. More samples smooth the result without widening it",
                 );
                 labeled_slider(
                     ui,
@@ -123,7 +123,7 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
                     &mut config.ao_decay,
                     0.5..=1.0,
                     false,
-                    "How quickly AO fades with distance (closer to 1.0 = slower fade)",
+                    "Weight falloff across the AO radius. Lower values emphasize near-contact occlusion",
                 );
                 labeled_slider(
                     ui,
@@ -131,7 +131,7 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
                     &mut config.ao_intensity,
                     0.5..=10.0,
                     false,
-                    "Strength of the AO effect. Higher = darker crevices",
+                    "Strength of the normalized AO effect. Higher = darker contact shadows without changing reach",
                 );
             });
             if ui.small_button("Reset").clicked() {
@@ -222,7 +222,7 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
                 &mut config.ambient,
                 0.0..=0.5,
                 false,
-                "Minimum base lighting (prevents fully black areas)",
+                "Intensity of diffuse indirect sky lighting",
             );
             if ui.small_button("Reset").clicked() {
                 config.reset_lighting();
@@ -234,7 +234,7 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
         .default_open(false)
         .show(ui, |ui| {
             ui.checkbox(&mut config.env_reflection_enabled, "Enable Env Reflection")
-                .on_hover_text("Reflect the sky gradient on glossy/metallic surfaces");
+                .on_hover_text("Enable roughness-aware indirect specular from the sky environment");
             ui.add_enabled_ui(config.env_reflection_enabled, |ui| {
                 labeled_slider(
                     ui,
@@ -242,7 +242,7 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
                     &mut config.env_reflection_intensity,
                     0.0..=2.0,
                     false,
-                    "Strength of environment reflections",
+                    "Strength of indirect sky specular; direct scene lights are unaffected",
                 );
             });
         });
@@ -551,7 +551,9 @@ fn apply_preset_balanced(config: &mut crate::settings::RenderConfig) {
     config.shadows_enabled = false;
     config.ao_enabled = true;
     config.ao_samples = 5;
-    config.ao_step = 0.08;
+    config.ao_step = 0.4;
+    config.ao_decay = 0.95;
+    config.ao_intensity = 1.0;
     config.march_max_steps = 128;
     config.march_epsilon = 0.002;
     config.march_step_multiplier = 0.9;
@@ -567,8 +569,9 @@ fn apply_preset_quality(config: &mut crate::settings::RenderConfig) {
     config.shadow_penumbra_k = 8.0;
     config.ao_enabled = true;
     config.ao_samples = 8;
-    config.ao_step = 0.06;
-    config.ao_intensity = 4.0;
+    config.ao_step = 0.45;
+    config.ao_decay = 0.98;
+    config.ao_intensity = 1.25;
     config.march_max_steps = 256;
     config.march_epsilon = 0.001;
     config.march_step_multiplier = 0.9;

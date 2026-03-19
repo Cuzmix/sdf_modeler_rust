@@ -11,6 +11,7 @@ impl ViewportResources {
         camera_bgl: &wgpu::BindGroupLayout,
         scene_bgl: &wgpu::BindGroupLayout,
         voxel_tex_bgl: &wgpu::BindGroupLayout,
+        environment_bgl: &wgpu::BindGroupLayout,
         target_format: wgpu::TextureFormat,
     ) -> wgpu::RenderPipeline {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -20,7 +21,7 @@ impl ViewportResources {
 
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("SDF Pipeline Layout"),
-            bind_group_layouts: &[camera_bgl, scene_bgl, voxel_tex_bgl],
+            bind_group_layouts: &[camera_bgl, scene_bgl, voxel_tex_bgl, environment_bgl],
             push_constant_ranges: &[],
         });
 

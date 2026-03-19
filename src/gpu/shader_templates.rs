@@ -111,23 +111,6 @@ pub(crate) fn build_postlude(config: &RenderConfig) -> String {
         "    let ao = 1.0;".to_string()
     };
 
-    let env_refl_line = if config.env_reflection_enabled {
-        format!(
-            "    {{ let refl_dir = reflect(rd, n); let env_t = refl_dir.y * 0.5 + 0.5; let env_col = mix(vec3f({}), vec3f({}), env_t); let env_f = F_Schlick_vec3(max(dot(view_dir, n), 0.0), f0); color += env_col * env_f * {} * ao; }}",
-            format_vec3(match config.background_mode {
-                crate::settings::BackgroundMode::SkyGradient => config.sky_horizon,
-                crate::settings::BackgroundMode::SolidColor => config.bg_solid_color,
-            }),
-            format_vec3(match config.background_mode {
-                crate::settings::BackgroundMode::SkyGradient => config.sky_zenith,
-                crate::settings::BackgroundMode::SolidColor => config.bg_solid_color,
-            }),
-            format_f32(config.env_reflection_intensity),
-        )
-    } else {
-        "".to_string()
-    };
-
     let sss_line = if config.sss_enabled {
         format!(
             "    {{ let sss_d = scene_sdf(p + primary_light_dir * 0.05).x + scene_sdf(p + primary_light_dir * 0.1).x + scene_sdf(p + primary_light_dir * 0.2).x; let sss_thick = max(0.0, sss_d); let sss_trans = exp(-sss_thick * {}) * clamp(dot(-rd, primary_light_dir), 0.0, 1.0) * 0.5; color += albedo * vec3f({}) * sss_trans; }}",
@@ -161,19 +144,10 @@ pub(crate) fn build_postlude(config: &RenderConfig) -> String {
         .replace("/*AO_STEP*/", &format_f32(config.ao_step))
         .replace("/*AO_DECAY*/", &format_f32(config.ao_decay))
         .replace("/*AO_INTENSITY*/", &format_f32(config.ao_intensity))
-        .replace("/*SKY_HORIZON*/", &format_vec3(match config.background_mode {
-            crate::settings::BackgroundMode::SkyGradient => config.sky_horizon,
-            crate::settings::BackgroundMode::SolidColor => config.bg_solid_color,
-        }))
-        .replace("/*SKY_ZENITH*/", &format_vec3(match config.background_mode {
-            crate::settings::BackgroundMode::SkyGradient => config.sky_zenith,
-            crate::settings::BackgroundMode::SolidColor => config.bg_solid_color,
-        }))
         .replace("/*SKY_CUTOFF*/", &format_f32(sky_cutoff))
         .replace("/*GAMMA*/", &format_f32(config.gamma))
         .replace("/*SHADOW_LINE*/", shadow_line)
         .replace("/*AO_LINE*/", &ao_line)
-        .replace("/*ENV_REFL_LINE*/", &env_refl_line)
         .replace("/*SSS_LINE*/", &sss_line)
         .replace("/*FOG_LINE*/", &fog_line)
         .replace("/*OUTLINE_COLOR*/", &format_vec3(config.outline_color))

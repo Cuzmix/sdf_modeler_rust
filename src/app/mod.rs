@@ -357,6 +357,7 @@ impl SdfApp {
                 .callback_resources
                 .get_mut::<ViewportResources>()
                 .unwrap();
+            res.rebuild_environment(&render_state.device, &render_state.queue, &settings.render);
             res.update_scene_buffer(&render_state.device, &render_state.queue, &node_data);
             res.update_voxel_buffer(&render_state.device, &render_state.queue, &voxel_data);
         }
@@ -392,6 +393,7 @@ impl SdfApp {
                 current_structure_key: structure_key,
                 buffer_dirty: false, // initial upload already done above
                 last_data_fingerprint: 0,
+                last_environment_fingerprint: settings.render.environment_fingerprint(),
                 voxel_gpu_offsets: voxel_offsets,
                 sculpt_tex_indices: HashMap::new(),
             },

@@ -223,11 +223,17 @@ impl egui_wgpu::CallbackTrait for ViewportCallback {
         // Ensure offscreen texture + blit bind group are the right size
         resources.ensure_offscreen_texture(device, render_w, render_h);
 
+        let mut render_uniform = self.render_uniform;
+        render_uniform.ambient_info[2] = resources
+            .environment
+            .prefiltered_mip_count
+            .saturating_sub(1) as f32;
+
         // Write camera uniform (viewport = render dimensions for the SDF shader)
         queue.write_buffer(
             &resources.camera_buffer,
             0,
-            bytemuck::bytes_of(&self.render_uniform),
+            bytemuck::bytes_of(&render_uniform),
         );
 
         // Write blit params (display viewport + outline settings + bloom for the blit shader)
@@ -279,12 +285,14 @@ impl egui_wgpu::CallbackTrait for ViewportCallback {
                     pass.set_bind_group(0, &resources.camera_bind_group, &[]);
                     pass.set_bind_group(1, &resources.scene_bind_group, &[]);
                     pass.set_bind_group(2, &comp.render_bg, &[]);
+                    pass.set_bind_group(3, &resources.environment.bind_group, &[]);
                 }
             } else {
                 pass.set_pipeline(&resources.pipeline);
                 pass.set_bind_group(0, &resources.camera_bind_group, &[]);
                 pass.set_bind_group(1, &resources.scene_bind_group, &[]);
                 pass.set_bind_group(2, &resources.voxel_tex_bind_group, &[]);
+                pass.set_bind_group(3, &resources.environment.bind_group, &[]);
             }
             pass.draw(0..3, 0..1);
         }
@@ -623,6 +631,12 @@ pub fn draw(
     } else {
         render_config.ambient
     };
+    let ambient_info = [
+        effective_ambient,
+        render_config.environment_specular_intensity(),
+        0.0,
+        0.0,
+    ];
 
     let render_uniform = camera.to_uniform(
         render_viewport,
@@ -634,7 +648,7 @@ pub fn draw(
         shading_mode_val,
         brush_pos,
         cross_section,
-        effective_ambient,
+        ambient_info,
         scene_light_info,
         scene_lights_flat,
         scene_light_vol,
@@ -780,7 +794,7 @@ pub fn draw(
                             0.0,
                             [0.0; 4],
                             [0.0; 4],
-                            0.0,
+                            [0.0; 4],
                             [0.0; 4],
                             [[0.0; 4]; 32],
                             [[0.0; 4]; 8],
@@ -830,7 +844,7 @@ pub fn draw(
                             0.0,
                             [0.0; 4],
                             [0.0; 4],
-                            0.0,
+                            [0.0; 4],
                             [0.0; 4],
                             [[0.0; 4]; 32],
                             [[0.0; 4]; 8],
@@ -956,7 +970,7 @@ pub fn draw(
                     0.0,
                     [0.0; 4],
                     [0.0; 4],
-                    0.0,
+                    [0.0; 4],
                     [0.0; 4],
                     [[0.0; 4]; 32],
                     [[0.0; 4]; 8],

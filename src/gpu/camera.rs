@@ -121,7 +121,7 @@ impl Camera {
         shading_mode: f32,
         brush_pos: [f32; 4],
         cross_section: [f32; 4],
-        ambient: f32,
+        ambient_info: [f32; 4],
         scene_light_info: [f32; 4],
         scene_lights: [[f32; 4]; 32],
         scene_light_vol: [[f32; 4]; 8],
@@ -148,7 +148,7 @@ impl Camera {
             scene_max: [scene_bounds.1[0], scene_bounds.1[1], scene_bounds.1[2], 0.0],
             brush_pos,
             cross_section,
-            ambient_info: [ambient, 0.0, 0.0, 0.0],
+            ambient_info,
             scene_light_info,
             scene_lights,
             scene_light_vol,
@@ -241,7 +241,7 @@ pub struct CameraUniform {
     pub brush_pos: [f32; 4],
     /// Cross-section visualization params: [axis (0=X,1=Y,2=Z), position, 0, 0].
     pub cross_section: [f32; 4],
-    /// Ambient lighting info: [ambient_intensity, 0, 0, 0].
+    /// Indirect lighting info: [diffuse_ibl_intensity, specular_ibl_intensity, max_prefilter_lod, unused].
     pub ambient_info: [f32; 4],
     /// Scene light info: [count, volumetric_count, volumetric_steps, 0].
     pub scene_light_info: [f32; 4],

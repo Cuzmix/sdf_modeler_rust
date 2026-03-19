@@ -261,7 +261,8 @@ impl ViewportResources {
             cache: None,
         });
 
-        // Render pipeline: groups 0-1 = existing (camera, scene), group 2 = composite textures
+        // Render pipeline: groups 0-1 = existing (camera, scene), group 2 = composite textures,
+        // group 3 = environment cubemaps + BRDF LUT.
         let render_bgl = Self::create_comp_render_bgl(device);
         let render_bg = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Comp Render BG"),
@@ -292,7 +293,12 @@ impl ViewportResources {
         });
         let render_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Comp Render Layout"),
-            bind_group_layouts: &[&self.camera_bgl, &self.scene_bgl, &render_bgl],
+            bind_group_layouts: &[
+                &self.camera_bgl,
+                &self.scene_bgl,
+                &render_bgl,
+                &self.environment.bind_group_layout,
+            ],
             push_constant_ranges: &[],
         });
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {

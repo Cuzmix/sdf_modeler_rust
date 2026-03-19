@@ -311,6 +311,7 @@ impl ViewportResources {
             pass.set_bind_group(0, &self.camera_bind_group, &[]);
             pass.set_bind_group(1, &self.scene_bind_group, &[]);
             pass.set_bind_group(2, &self.voxel_tex_bind_group, &[]);
+            pass.set_bind_group(3, &self.environment.bind_group, &[]);
             pass.draw(0..3, 0..1);
         }
 

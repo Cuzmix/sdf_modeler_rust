@@ -254,6 +254,12 @@ impl SdfApp {
         } else {
             self.settings.render.ambient
         };
+        let ambient_info = [
+            effective_ambient,
+            self.settings.render.environment_specular_intensity(),
+            resources.environment.prefiltered_mip_count.saturating_sub(1) as f32,
+            0.0,
+        ];
         let uniform = self.doc.camera.to_uniform(
             viewport,
             0.0,
@@ -264,7 +270,7 @@ impl SdfApp {
             0.0,
             [0.0; 4],
             [0.0; 4],
-            effective_ambient,
+            ambient_info,
             scene_light_info,
             scene_lights_flat,
             scene_light_vol,

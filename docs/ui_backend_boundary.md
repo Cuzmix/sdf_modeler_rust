@@ -47,3 +47,15 @@ This document defines the required separation between application core logic and
 4. `process_actions()` remains the structural mutation gate.
 5. Validation passes in order: `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, `cargo build`.
 6. Manual visual verification is done for visual/behavioral changes.
+
+ok next the i want fix and enhance the voxel sculpting , I noticed i see alot of artifacts i belive to be raymarching artifacts, to help reduce the noise i have to tone down the step muliplier
+
+not sure why this helps the visual aspect
+
+i have a couple of questions is there a better way t
+
+ok next the i want fix and enhance the voxel sculpting , I noticed i see alot of artifacts i belive to be raymarching artifacts, to help reduce the noise i have to tone down the step muliplier
+
+not sure why this helps the visual aspect
+
+i have a couple of questions is there a better way t

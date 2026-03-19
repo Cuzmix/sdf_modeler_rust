@@ -67,7 +67,7 @@ fn ray_march(ro: vec3f, rd: vec3f) -> vec4f {
             var best_abs_d = abs(d);
             local_omega = 1.0;
             for (var refine_i = 0; refine_i < 6; refine_i++) {
-                if refine_hit.x < eps {
+                if abs(refine_hit.x) < eps {
                     best_t = refine_t;
                     best_hit = refine_hit;
                     best_abs_d = abs(refine_hit.x);
@@ -95,7 +95,7 @@ fn ray_march(ro: vec3f, rd: vec3f) -> vec4f {
             prev_step = 0.0;
             continue;
         }
-        if d < eps {
+        if abs(d) < eps {
             t = sample_t;
             mat_a = hit.y;
             mat_b = hit.z;
@@ -180,15 +180,22 @@ fn soft_shadow(ro: vec3f, rd: vec3f, mint: f32, maxt: f32, k: f32) -> f32 {
 }
 
 fn calc_ao(p: vec3f, n: vec3f) -> f32 {
+    // Start slightly off the surface and use unsigned distance so tiny
+    // raymarch/normal errors do not collapse convex surfaces into black AO.
+    let ao_bias = max(0.002, AO_STEP * 0.05);
     var occ = 0.0;
+    var total_weight = 0.0;
     var weight = 1.0;
     for (var i = 1; i <= AO_SAMPLES; i++) {
-        let dist = AO_STEP * f32(i);
-        let d = scene_sdf(p + n * dist).x;
-        occ += (dist - d) * weight;
+        let sample_t = ao_bias + AO_STEP * (f32(i) / f32(AO_SAMPLES));
+        let d = abs(scene_sdf(p + n * sample_t).x);
+        let sample_occ = max(sample_t - d, 0.0) / max(sample_t, 0.0001);
+        occ += sample_occ * weight;
+        total_weight += weight;
         weight *= AO_DECAY;
     }
-    return clamp(1.0 - /*AO_INTENSITY*/ * occ, 0.0, 1.0);
+    let normalized_occ = occ / max(total_weight, 0.0001);
+    return clamp(1.0 - /*AO_INTENSITY*/ * normalized_occ, 0.0, 1.0);
 }
 
 // --- Cook-Torrance GGX BRDF functions (Filament reference) ---
@@ -215,6 +222,70 @@ fn G_SmithGGX(NoV: f32, NoL: f32, roughness: f32) -> f32 {
 // Schlick Fresnel approximation (vec3f for metallic F0 = albedo)
 fn F_Schlick_vec3(VoH: f32, f0: vec3f) -> vec3f {
     return f0 + (vec3f(1.0) - f0) * pow(1.0 - VoH, 5.0);
+}
+
+fn max_component(v: vec3f) -> f32 {
+    return max(v.x, max(v.y, v.z));
+}
+
+fn sample_source_environment(dir: vec3f) -> vec3f {
+    return textureSampleLevel(env_source_tex, env_sampler, normalize(dir), 0.0).xyz;
+}
+
+fn sample_irradiance_environment(dir: vec3f) -> vec3f {
+    return textureSampleLevel(env_irradiance_tex, env_sampler, normalize(dir), 0.0).xyz;
+}
+
+fn sample_prefiltered_environment(dir: vec3f, roughness: f32) -> vec3f {
+    let max_lod = max(camera.ambient_info.z, 0.0);
+    let lod = clamp(roughness, 0.0, 1.0) * max_lod;
+    return textureSampleLevel(env_prefiltered_tex, env_sampler, normalize(dir), lod).xyz;
+}
+
+fn sample_brdf_lut(NoV: f32, roughness: f32) -> vec2f {
+    let uv = vec2f(clamp(NoV, 0.0, 1.0), clamp(roughness, 0.0, 1.0));
+    return textureSampleLevel(env_brdf_lut_tex, env_sampler, uv, 0.0).xy;
+}
+
+fn compute_multi_bounce_ao(visibility: f32, albedo: vec3f) -> vec3f {
+    let a = 2.0404 * albedo - vec3f(0.3324);
+    let b = -4.7951 * albedo + vec3f(0.6417);
+    let c = 2.7552 * albedo + vec3f(0.6903);
+    return max(vec3f(visibility), ((visibility * a + b) * visibility + c) * visibility);
+}
+
+fn compute_specular_ao(NoV: f32, ao: f32, roughness: f32) -> f32 {
+    return clamp(pow(NoV + ao, exp2(-16.0 * roughness - 1.0)) - 1.0 + ao, 0.0, 1.0);
+}
+
+fn compute_horizon_specular_occlusion(reflection_dir: vec3f, n: vec3f) -> f32 {
+    let horizon = min(1.0 + dot(reflection_dir, n), 1.0);
+    return horizon * horizon;
+}
+
+fn compute_indirect_diffuse_lighting(n: vec3f) -> vec3f {
+    return sample_irradiance_environment(n);
+}
+
+fn compute_environment_specular(
+    view_dir: vec3f,
+    n: vec3f,
+    NoV: f32,
+    roughness: f32,
+    f0: vec3f,
+    ao: f32,
+) -> vec3f {
+    if camera.ambient_info.y <= 0.0 {
+        return vec3f(0.0);
+    }
+    let reflection_dir = reflect(-view_dir, n);
+    let dominant_reflection_dir = normalize(mix(reflection_dir, n, roughness * roughness));
+    let env_color = sample_prefiltered_environment(dominant_reflection_dir, roughness);
+    let env_brdf = sample_brdf_lut(NoV, roughness);
+    let specular_ao = compute_specular_ao(NoV, ao, roughness);
+    let horizon_ao = compute_horizon_specular_occlusion(reflection_dir, n);
+    let brdf = f0 * env_brdf.x + vec3f(env_brdf.y);
+    return env_color * brdf * specular_ao * horizon_ao * camera.ambient_info.y;
 }
 
 fn get_node_color(mat_id: i32) -> vec3f {
@@ -322,12 +393,8 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
     let dwdx = fwidth(gp.x);
     let dwdz = fwidth(gp.z);
 
-    // Sky gradient (base color when no SDF hit)
-    let sky_grad_t = uv.y * 0.5 + 0.5;
-    let bg_sky = mix(vec3f(/*SKY_HORIZON*/), vec3f(/*SKY_ZENITH*/), sky_grad_t);
-
     // --- Compute base color: sky or shaded SDF ---
-    var color = bg_sky;
+    var color = sample_source_environment(rd);
     let shading_mode = camera.scene_min.w;
 
     // Cross-Section mode: 2D slice heatmap, no raymarching needed
@@ -482,11 +549,11 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
         // Ambient occlusion
         /*AO_LINE*/
 
-        // Hemispherical sky light (iq outdoor lighting)
-        let sky = clamp(0.5 + 0.5 * n.y, 0.0, 1.0);
-        // Ambient contribution
+        // Diffuse indirect from the procedural sky environment.
+        let indirect_diffuse = compute_indirect_diffuse_lighting(n);
+        let diffuse_ao = compute_multi_bounce_ao(ao, albedo);
         let ambient_i = camera.ambient_info.x;
-        color = diffuse_color * sky * ambient_i * ao;
+        color = diffuse_color * indirect_diffuse * ambient_i * diffuse_ao;
 
         // --- Scene lights (up to 8 lights from Light nodes) ---
         let scene_light_count = i32(camera.scene_light_info.x + 0.5);
@@ -583,11 +650,11 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
                 sl_shadow_factor = mix(sl_shadow_color, vec3f(1.0), sl_shadow);
                 shadow_budget += 1;
             }
-            color += sl_contribution * sl_shadow_factor * ao;
+            color += sl_contribution * sl_shadow_factor;
         }
 
-        // Environment reflection (sky gradient sampled along reflected ray)
-        /*ENV_REFL_LINE*/
+        // Split-sum environment specular from the prefiltered cubemap + BRDF LUT.
+        color += compute_environment_specular(view_dir, n, NoV, roughness, f0, ao);
 
         // Emissive contribution (added before tonemapping for natural overbright bloom)
         let emissive_col = get_node_emissive(mat_id);

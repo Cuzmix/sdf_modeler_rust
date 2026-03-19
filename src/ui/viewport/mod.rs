@@ -1,11 +1,13 @@
 mod composite;
 mod draw;
+mod environment;
 mod gpu_ops;
 mod pipelines;
 mod textures;
 
 pub use composite::CompositeResources;
 pub use draw::draw;
+pub use environment::EnvironmentResources;
 
 use std::num::NonZeroU64;
 
@@ -77,6 +79,9 @@ pub struct ViewportResources {
     pub voxel_sampler: wgpu::Sampler,
     pub voxel_tex_bgl: wgpu::BindGroupLayout,
     pub voxel_tex_bind_group: wgpu::BindGroup,
+
+    // --- Environment resources (IBL cubemaps + BRDF LUT) ---
+    pub environment: EnvironmentResources,
 
     // --- Pick compute pipeline ---
     pub pick_pipeline: wgpu::ComputePipeline,
@@ -207,6 +212,7 @@ impl ViewportResources {
         let voxel_tex_bgl = Self::create_voxel_tex_bgl(device, 0);
         let voxel_tex_bind_group =
             Self::create_voxel_tex_bind_group(device, &voxel_tex_bgl, &voxel_sampler, &[]);
+        let environment = EnvironmentResources::new(device);
 
         let pipeline = Self::create_render_pipeline(
             device,
@@ -214,6 +220,7 @@ impl ViewportResources {
             &camera_bgl,
             &scene_bgl,
             &voxel_tex_bgl,
+            &environment.bind_group_layout,
             target_format,
         );
 
@@ -346,6 +353,7 @@ impl ViewportResources {
             voxel_sampler,
             voxel_tex_bgl,
             voxel_tex_bind_group,
+            environment,
             pick_pipeline,
             pick_input_buffer,
             pick_output_buffer,
@@ -389,6 +397,7 @@ impl ViewportResources {
             &self.camera_bgl,
             &self.scene_bgl,
             &self.voxel_tex_bgl,
+            &self.environment.bind_group_layout,
             self.target_format,
         );
         self.pick_pipeline = Self::create_pick_pipeline(

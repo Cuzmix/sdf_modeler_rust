@@ -14,8 +14,8 @@ struct Camera {
     scene_max: vec4f,
     brush_pos: vec4f,
     cross_section: vec4f,
-    // Ambient lighting (global key/fill migrated to scene Directional nodes)
-    ambient_info: vec4f,    // x = ambient_intensity, yzw = unused
+    // Indirect lighting controls: x = diffuse IBL, y = specular IBL, z = max prefiltered LOD
+    ambient_info: vec4f,
     // Scene lights (up to 8, packed as 4 vec4f per light)
     scene_light_info: vec4f,   // x = count, y = volumetric_count, z = volumetric_steps, w = unused
     scene_lights: array<vec4f, 32>, // 8 lights × 4 vec4f
@@ -37,3 +37,8 @@ struct SdfNode {
 @group(0) @binding(0) var<uniform> camera: Camera;
 @group(1) @binding(0) var<storage, read> nodes: array<SdfNode>;
 @group(1) @binding(1) var<storage, read> voxel_data: array<f32>;
+@group(3) @binding(0) var env_sampler: sampler;
+@group(3) @binding(1) var env_source_tex: texture_cube<f32>;
+@group(3) @binding(2) var env_irradiance_tex: texture_cube<f32>;
+@group(3) @binding(3) var env_prefiltered_tex: texture_cube<f32>;
+@group(3) @binding(4) var env_brdf_lut_tex: texture_2d<f32>;

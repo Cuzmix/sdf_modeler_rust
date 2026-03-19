@@ -9,6 +9,19 @@ use super::SdfApp;
 
 impl SdfApp {
     pub(super) fn sync_gpu_pipeline(&mut self) {
+        let new_environment_key = self.settings.render.environment_fingerprint();
+        if new_environment_key != self.gpu.last_environment_fingerprint {
+            let mut renderer = self.gpu.render_state.renderer.write();
+            if let Some(res) = renderer.callback_resources.get_mut::<ViewportResources>() {
+                res.rebuild_environment(
+                    &self.gpu.render_state.device,
+                    &self.gpu.render_state.queue,
+                    &self.settings.render,
+                );
+            }
+            self.gpu.last_environment_fingerprint = new_environment_key;
+        }
+
         let new_key = self.doc.scene.structure_key();
         if new_key != self.gpu.current_structure_key {
             let shader_src = codegen::generate_shader(&self.doc.scene, &self.settings.render);

@@ -277,7 +277,34 @@ fn eval_cookie_sdf(idx: i32, p: vec3f) -> f32 {{
         log::warn!("Composite render: calc_normal string replace FAILED — using analytical normals as fallback");
     }
 
+    if !postlude.contains("textureSampleLevel(comp_normal_tex, comp_sampler, uv, 0.0).xyz") {
+        if let Some(replaced) = replace_wgsl_function(
+            &postlude,
+            "fn calc_normal(p: vec3f, t: f32) -> vec3f {",
+            "\nfn soft_shadow(",
+            new_calc_normal,
+        ) {
+            postlude = replaced;
+        }
+    }
+
     format!("{}\n{}\n{}", render_prelude(), comp_scene_sdf, postlude)
+}
+
+fn replace_wgsl_function(
+    source: &str,
+    function_signature: &str,
+    next_function_signature: &str,
+    replacement: &str,
+) -> Option<String> {
+    let start = source.find(function_signature)?;
+    let end = source[start..].find(next_function_signature)? + start;
+
+    let mut updated = String::with_capacity(source.len() - (end - start) + replacement.len());
+    updated.push_str(&source[..start]);
+    updated.push_str(replacement);
+    updated.push_str(&source[end..]);
+    Some(updated)
 }
 
 // ---------------------------------------------------------------------------
@@ -1853,6 +1880,86 @@ mod tests {
     }
 
     #[test]
+    fn generate_shader_uses_absolute_hit_threshold_for_surface_refinement() {
+        let mut scene = empty_scene();
+        scene.create_primitive(SdfPrimitive::Sphere);
+
+        let shader = generate_shader(&scene, &RenderConfig::default());
+        assert!(shader.contains("if abs(refine_hit.x) < eps {"));
+        assert!(shader.contains("if abs(d) < eps {"));
+    }
+
+    #[test]
+    fn generate_shader_uses_ao_radius_instead_of_per_sample_spacing() {
+        let mut scene = empty_scene();
+        scene.create_primitive(SdfPrimitive::Sphere);
+
+        let shader = generate_shader(&scene, &RenderConfig::default());
+        assert!(shader.contains("let sample_t = ao_bias + AO_STEP * (f32(i) / f32(AO_SAMPLES));"));
+    }
+
+    #[test]
+    fn generate_shader_normalizes_ao_accumulation() {
+        let mut scene = empty_scene();
+        scene.create_primitive(SdfPrimitive::Sphere);
+
+        let shader = generate_shader(&scene, &RenderConfig::default());
+        assert!(shader.contains("var total_weight = 0.0;"));
+        assert!(shader.contains("let sample_occ = max(sample_t - d, 0.0) / max(sample_t, 0.0001);"));
+        assert!(shader.contains("let normalized_occ = occ / max(total_weight, 0.0001);"));
+    }
+
+    #[test]
+    fn generate_shader_uses_multi_bounce_ao_for_diffuse_indirect() {
+        let mut scene = empty_scene();
+        scene.create_primitive(SdfPrimitive::Sphere);
+
+        let shader = generate_shader(&scene, &RenderConfig::default());
+        assert!(
+            shader.contains("fn compute_multi_bounce_ao(visibility: f32, albedo: vec3f) -> vec3f")
+        );
+        assert!(shader.contains("let diffuse_ao = compute_multi_bounce_ao(ao, albedo);"));
+        assert!(shader.contains(
+            "return max(vec3f(visibility), ((visibility * a + b) * visibility + c) * visibility);"
+        ));
+    }
+
+    #[test]
+    fn generate_shader_uses_specular_ao_for_environment_specular() {
+        let mut scene = empty_scene();
+        scene.create_primitive(SdfPrimitive::Sphere);
+
+        let mut config = RenderConfig::default();
+        config.env_reflection_enabled = true;
+        let shader = generate_shader(&scene, &config);
+        assert!(shader.contains("fn compute_specular_ao(NoV: f32, ao: f32, roughness: f32) -> f32"));
+        assert!(shader.contains("let specular_ao = compute_specular_ao(NoV, ao, roughness);"));
+        assert!(
+            shader.contains("@group(3) @binding(3) var env_prefiltered_tex: texture_cube<f32>;")
+        );
+        assert!(shader.contains("@group(3) @binding(4) var env_brdf_lut_tex: texture_2d<f32>;"));
+        assert!(shader.contains(
+            "let env_color = sample_prefiltered_environment(dominant_reflection_dir, roughness);"
+        ));
+        assert!(shader.contains("let env_brdf = sample_brdf_lut(NoV, roughness);"));
+        assert!(shader.contains(
+            "return env_color * brdf * specular_ao * horizon_ao * camera.ambient_info.y;"
+        ));
+    }
+
+    #[test]
+    fn generate_shader_uses_split_sum_ibl_for_background_and_diffuse_indirect() {
+        let mut scene = empty_scene();
+        scene.create_primitive(SdfPrimitive::Sphere);
+
+        let shader = generate_shader(&scene, &RenderConfig::default());
+        assert!(shader.contains("@group(3) @binding(1) var env_source_tex: texture_cube<f32>;"));
+        assert!(shader.contains("@group(3) @binding(2) var env_irradiance_tex: texture_cube<f32>;"));
+        assert!(shader.contains("var color = sample_source_environment(rd);"));
+        assert!(shader.contains("return sample_irradiance_environment(n);"));
+    }
+
+    #[test]
     fn composite_render_shader_uses_normal_volume_and_sentinel_trace_hint() {
         let shader = generate_composite_render_shader(
             &RenderConfig::default(),
@@ -1865,6 +1972,21 @@ mod tests {
             "return normalize(textureSampleLevel(comp_normal_tex, comp_sampler, uv, 0.0).xyz);"
         ));
         assert!(!shader.contains("coarse_e = clamp(fine_e * 4.0, 0.003, 0.08);"));
+    }
+
+    #[test]
+    fn composite_render_shader_shares_environment_ibl_path() {
+        let shader = generate_composite_render_shader(
+            &RenderConfig::default(),
+            [-1.0, -1.0, -1.0],
+            [1.0, 1.0, 1.0],
+        );
+        assert!(shader.contains("@group(3) @binding(1) var env_source_tex: texture_cube<f32>;"));
+        assert!(
+            shader.contains("@group(3) @binding(3) var env_prefiltered_tex: texture_cube<f32>;")
+        );
+        assert!(shader.contains("var color = sample_source_environment(rd);"));
+        assert!(shader.contains("let env_brdf = sample_brdf_lut(NoV, roughness);"));
     }
 
     // ═══════════════════════════════════════════════════════════════
