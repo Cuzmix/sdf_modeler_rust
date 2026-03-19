@@ -251,7 +251,7 @@ pub struct CameraUniform {
     pub brush_pos: [f32; 4],
     /// Cross-section visualization params: [axis (0=X,1=Y,2=Z), position, 0, 0].
     pub cross_section: [f32; 4],
-    /// Indirect lighting info: [diffuse_ibl_intensity, specular_ibl_intensity, max_prefilter_lod, unused].
+    /// Indirect lighting info: [diffuse_ibl_intensity, specular_ibl_intensity, max_prefilter_lod, ao_mode].
     pub ambient_info: [f32; 4],
     /// Visible background controls: [background_mode, blur_amount, procedural_mode, unused].
     pub background_info: [f32; 4],
@@ -261,7 +261,7 @@ pub struct CameraUniform {
     pub background_secondary: [f32; 4],
     /// Procedural background solid color.
     pub background_tertiary: [f32; 4],
-    /// Environment controls: [rotation_radians, exposure_scale, hdri_background_available, 0].
+    /// Environment controls: [rotation_radians, exposure_scale, hdri_background_available, specular_aa_enabled].
     pub environment_info: [f32; 4],
     /// Scene light info: [count, volumetric_count, volumetric_steps, 0].
     pub scene_light_info: [f32; 4],

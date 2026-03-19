@@ -106,9 +106,10 @@ pub(crate) fn build_postlude(config: &RenderConfig) -> String {
     let shadow_line = "";
 
     let ao_line = if config.ao_enabled {
-        "    var ao = 1.0;\n    if camera.quality_mode < 0.5 { ao = calc_ao(p, n); }".to_string()
+        "    var ao_result = make_default_ao_result(n);\n    if camera.quality_mode < 0.5 { ao_result = calc_ao_result(p, n, ao_mode); }\n    let ao = ao_result.visibility;".to_string()
     } else {
-        "    let ao = 1.0;".to_string()
+        "    let ao_result = make_default_ao_result(n);\n    let ao = ao_result.visibility;"
+            .to_string()
     };
 
     let sss_line = if config.sss_enabled {

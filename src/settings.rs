@@ -27,6 +27,32 @@ pub enum EnvironmentBackgroundMode {
     Procedural,
 }
 
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Default, Debug)]
+pub enum AmbientOcclusionMode {
+    Fast,
+    #[default]
+    Balanced,
+    Quality,
+}
+
+impl AmbientOcclusionMode {
+    pub fn gpu_value(&self) -> f32 {
+        match self {
+            Self::Fast => 0.0,
+            Self::Balanced => 1.0,
+            Self::Quality => 2.0,
+        }
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Fast => "Fast",
+            Self::Balanced => "Balanced",
+            Self::Quality => "Quality",
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Shading modes
 // ---------------------------------------------------------------------------
@@ -327,6 +353,8 @@ pub struct RenderConfig {
     pub ao_step: f32,
     pub ao_decay: f32,
     pub ao_intensity: f32,
+    #[serde(default)]
+    pub ao_mode: AmbientOcclusionMode,
 
     // Raymarching
     pub march_max_steps: i32,
@@ -352,6 +380,8 @@ pub struct RenderConfig {
     pub env_reflection_enabled: bool,
     #[serde(default = "default_env_reflection_intensity")]
     pub env_reflection_intensity: f32,
+    #[serde(default = "default_true")]
+    pub specular_aa_enabled: bool,
 
     // Environment Source
     #[serde(default)]
@@ -579,6 +609,7 @@ impl Default for RenderConfig {
             ao_step: 0.4,
             ao_decay: 0.95,
             ao_intensity: 1.0,
+            ao_mode: AmbientOcclusionMode::Balanced,
 
             march_max_steps: 128,
             march_epsilon: 0.002,
@@ -597,6 +628,7 @@ impl Default for RenderConfig {
 
             env_reflection_enabled: false,
             env_reflection_intensity: 0.3,
+            specular_aa_enabled: true,
             environment_source: EnvironmentSource::ProceduralSky,
             hdri_path: None,
             environment_rotation_degrees: 0.0,
@@ -721,6 +753,7 @@ impl RenderConfig {
         self.ao_step = d.ao_step;
         self.ao_decay = d.ao_decay;
         self.ao_intensity = d.ao_intensity;
+        self.ao_mode = d.ao_mode;
     }
 
     pub fn reset_raymarching(&mut self) {
@@ -740,6 +773,7 @@ impl RenderConfig {
         let d = Self::default();
         self.env_reflection_enabled = d.env_reflection_enabled;
         self.env_reflection_intensity = d.env_reflection_intensity;
+        self.specular_aa_enabled = d.specular_aa_enabled;
         self.environment_source = d.environment_source;
         self.hdri_path = d.hdri_path;
         self.environment_rotation_degrees = d.environment_rotation_degrees;
@@ -820,7 +854,8 @@ impl RenderConfig {
 #[cfg(test)]
 mod tests {
     use super::{
-        BackgroundMode, EnvironmentBackgroundMode, EnvironmentSource, RenderConfig, ShadingMode,
+        AmbientOcclusionMode, BackgroundMode, EnvironmentBackgroundMode, EnvironmentSource,
+        RenderConfig, ShadingMode,
     };
 
     #[test]
@@ -849,6 +884,7 @@ mod tests {
         let mut changed = base.clone();
         changed.env_reflection_enabled = !changed.env_reflection_enabled;
         changed.env_reflection_intensity = 0.9;
+        changed.specular_aa_enabled = !changed.specular_aa_enabled;
         changed.environment_source = EnvironmentSource::Hdri;
         changed.hdri_path = Some("studio.hdr".into());
         changed.environment_rotation_degrees = 45.0;
@@ -860,6 +896,14 @@ mod tests {
         changed.sky_horizon = [0.3, 0.2, 0.1];
         changed.sky_zenith = [0.1, 0.2, 0.3];
         changed.bg_solid_color = [0.5, 0.4, 0.3];
+        assert!(!changed.needs_shader_rebuild(&base));
+    }
+
+    #[test]
+    fn ao_mode_toggle_does_not_require_shader_rebuild() {
+        let base = RenderConfig::default();
+        let mut changed = base.clone();
+        changed.ao_mode = AmbientOcclusionMode::Quality;
         assert!(!changed.needs_shader_rebuild(&base));
     }
 

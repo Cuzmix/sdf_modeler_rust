@@ -198,8 +198,70 @@ fn calc_ao(p: vec3f, n: vec3f) -> f32 {
     return clamp(1.0 - /*AO_INTENSITY*/ * normalized_occ, 0.0, 1.0);
 }
 
+fn tangent_frame(normal: vec3f) -> mat3x3f {
+    let up = select(vec3f(1.0, 0.0, 0.0), vec3f(0.0, 0.0, 1.0), abs(normal.z) < 0.999);
+    let tangent = normalize(cross(up, normal));
+    let bitangent = cross(normal, tangent);
+    return mat3x3f(tangent, bitangent, normal);
+}
+
+fn cosine_sample_hemisphere(sample_index: i32, sample_count: i32) -> vec3f {
+    let u = (f32(sample_index) + 0.5) / max(f32(sample_count), 1.0);
+    let v = fract((f32(sample_index) + 0.5) * 0.61803398875);
+    let r = sqrt(u);
+    let phi = 2.0 * PI * v;
+    return vec3f(r * cos(phi), r * sin(phi), sqrt(max(0.0, 1.0 - u)));
+}
+
+fn make_default_ao_result(n: vec3f) -> AoResult {
+    return AoResult(1.0, n);
+}
+
+fn calc_bent_normal_ao(p: vec3f, n: vec3f) -> AoResult {
+    let ao_bias = max(0.002, AO_STEP * 0.05);
+    let frame = tangent_frame(n);
+    var occ = 0.0;
+    var total_weight = 0.0;
+    var bent = vec3f(0.0);
+    var weight = 1.0;
+    for (var i = 0; i < AO_SAMPLES; i++) {
+        let local_dir = cosine_sample_hemisphere(i, AO_SAMPLES);
+        let dir = normalize(frame * local_dir);
+        let sample_t = ao_bias + AO_STEP * ((f32(i) + 0.5) / f32(AO_SAMPLES));
+        let d = abs(scene_sdf(p + dir * sample_t).x);
+        let sample_occ = max(sample_t - d, 0.0) / max(sample_t, 0.0001);
+        let open_weight = (1.0 - sample_occ) * weight;
+        occ += sample_occ * weight;
+        total_weight += weight;
+        bent += dir * open_weight;
+        weight *= AO_DECAY;
+    }
+    let normalized_occ = occ / max(total_weight, 0.0001);
+    let visibility = clamp(1.0 - /*AO_INTENSITY*/ * normalized_occ, 0.0, 1.0);
+    let bent_length = length(bent);
+    var bent_normal = n;
+    if bent_length > 0.0001 {
+        bent_normal = bent / bent_length;
+    }
+    return AoResult(visibility, bent_normal);
+}
+
+fn calc_ao_result(p: vec3f, n: vec3f, ao_mode: i32) -> AoResult {
+    if ao_mode >= 2 {
+        return calc_bent_normal_ao(p, n);
+    }
+    return AoResult(calc_ao(p, n), n);
+}
+
 // --- Cook-Torrance GGX BRDF functions (Filament reference) ---
 const PI: f32 = 3.14159265359;
+const SPECULAR_AA_VARIANCE: f32 = 0.15;
+const SPECULAR_AA_THRESHOLD: f32 = 0.18;
+
+struct AoResult {
+    visibility: f32,
+    bent_normal: vec3f,
+}
 
 // GGX (Trowbridge-Reitz) normal distribution function
 fn D_GGX(NoH: f32, roughness: f32) -> f32 {
@@ -315,23 +377,42 @@ fn compute_indirect_diffuse_lighting(n: vec3f) -> vec3f {
     return sample_irradiance_environment(n);
 }
 
+fn apply_specular_antialiasing(normal: vec3f, roughness: f32) -> f32 {
+    if camera.environment_info.w < 0.5 {
+        return roughness;
+    }
+    let du = dpdx(normal);
+    let dv = dpdy(normal);
+    let variance = SPECULAR_AA_VARIANCE * (dot(du, du) + dot(dv, dv));
+    let kernel_roughness = min(2.0 * variance, SPECULAR_AA_THRESHOLD);
+    let square_roughness = clamp(roughness * roughness + kernel_roughness, 0.0, 1.0);
+    return clamp(sqrt(square_roughness), roughness, 1.0);
+}
+
 fn compute_environment_specular(
     view_dir: vec3f,
     n: vec3f,
     NoV: f32,
     roughness: f32,
     f0: vec3f,
-    ao: f32,
+    ao_result: AoResult,
+    ao_mode: i32,
 ) -> vec3f {
     if camera.ambient_info.y <= 0.0 {
         return vec3f(0.0);
     }
+    let occlusion_normal = select(n, ao_result.bent_normal, ao_mode >= 2);
     let reflection_dir = reflect(-view_dir, n);
-    let dominant_reflection_dir = normalize(mix(reflection_dir, n, roughness * roughness));
+    let dominant_reflection_dir =
+        normalize(mix(reflection_dir, occlusion_normal, roughness * roughness));
     let env_color = sample_prefiltered_environment(dominant_reflection_dir, roughness);
     let env_brdf = sample_brdf_lut(NoV, roughness);
-    let specular_ao = compute_specular_ao(NoV, ao, roughness);
-    let horizon_ao = compute_horizon_specular_occlusion(reflection_dir, n);
+    let specular_ao = select(
+        1.0,
+        compute_specular_ao(NoV, ao_result.visibility, roughness),
+        ao_mode >= 1,
+    );
+    let horizon_ao = compute_horizon_specular_occlusion(reflection_dir, occlusion_normal);
     let brdf = f0 * env_brdf.x + vec3f(env_brdf.y);
     return env_color * brdf * specular_ao * horizon_ao * camera.ambient_info.y;
 }
@@ -583,11 +664,13 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
         let albedo = get_blended_color(mat_id, mat_b_id, blend_factor);
         let view_dir = -rd;
         let NoV = max(dot(n, view_dir), 0.0001);
+        let ao_mode = i32(camera.ambient_info.w + 0.5);
 
         // Dielectric F0 from fresnel parameter; metallic F0 = albedo
         let f0 = mix(vec3f(mat_fresnel), albedo, mat_metallic);
         // Clamp roughness to avoid division artifacts at perfectly smooth
-        let roughness = clamp(mat_roughness, 0.045, 1.0);
+        let base_roughness = clamp(mat_roughness, 0.045, 1.0);
+        let roughness = apply_specular_antialiasing(n, base_roughness);
 
         // Lambertian diffuse (energy-conserving: metals have no diffuse)
         let diffuse_color = albedo * (1.0 - mat_metallic) / PI;
@@ -598,7 +681,7 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
         /*AO_LINE*/
 
         // Diffuse indirect from the procedural sky environment.
-        let indirect_diffuse = compute_indirect_diffuse_lighting(n);
+        let indirect_diffuse = compute_indirect_diffuse_lighting(ao_result.bent_normal);
         let diffuse_ao = compute_multi_bounce_ao(ao, albedo);
         let ambient_i = camera.ambient_info.x;
         color = diffuse_color * indirect_diffuse * ambient_i * diffuse_ao;
@@ -702,7 +785,7 @@ fn fs_main(@builtin(position) frag_coord: vec4f) -> @location(0) vec4f {
         }
 
         // Split-sum environment specular from the prefiltered cubemap + BRDF LUT.
-        color += compute_environment_specular(view_dir, n, NoV, roughness, f0, ao);
+        color += compute_environment_specular(view_dir, n, NoV, roughness, f0, ao_result, ao_mode);
 
         // Emissive contribution (added before tonemapping for natural overbright bloom)
         let emissive_col = get_node_emissive(mat_id);

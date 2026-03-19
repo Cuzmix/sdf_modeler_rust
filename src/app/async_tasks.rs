@@ -262,7 +262,7 @@ impl SdfApp {
                 .environment
                 .prefiltered_mip_count
                 .saturating_sub(1) as f32,
-            0.0,
+            self.settings.render.ao_mode.gpu_value(),
         ];
         let background_info = [
             match self.settings.render.environment_background_mode {
@@ -290,7 +290,11 @@ impl SdfApp {
             } else {
                 0.0
             },
-            0.0,
+            if self.settings.render.specular_aa_enabled {
+                1.0
+            } else {
+                0.0
+            },
         ];
         let uniform = self.doc.camera.to_uniform(
             viewport,

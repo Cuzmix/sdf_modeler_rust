@@ -641,7 +641,7 @@ pub fn draw(
         effective_ambient,
         render_config.environment_specular_intensity(),
         0.0,
-        0.0,
+        render_config.ao_mode.gpu_value(),
     ];
     let background_info = [
         match render_config.environment_background_mode {
@@ -665,7 +665,11 @@ pub fn draw(
         render_config.environment_rotation_degrees.to_radians(),
         render_config.environment_exposure.exp2(),
         0.0,
-        0.0,
+        if render_config.specular_aa_enabled {
+            1.0
+        } else {
+            0.0
+        },
     ];
 
     let render_uniform = camera.to_uniform(

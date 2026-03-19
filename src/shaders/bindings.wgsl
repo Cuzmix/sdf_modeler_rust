@@ -14,14 +14,14 @@ struct Camera {
     scene_max: vec4f,
     brush_pos: vec4f,
     cross_section: vec4f,
-    // Indirect lighting controls: x = diffuse IBL, y = specular IBL, z = max prefiltered LOD
+    // Indirect lighting controls: x = diffuse IBL, y = specular IBL, z = max prefiltered LOD, w = AO mode
     ambient_info: vec4f,
     // Visible background controls: x = 0 procedural / 1 environment, y = blur, z = 0 gradient / 1 solid
     background_info: vec4f,
     background_primary: vec4f,
     background_secondary: vec4f,
     background_tertiary: vec4f,
-    // Environment controls: x = rotation radians, y = exposure scale, z = direct HDR background available
+    // Environment controls: x = rotation radians, y = exposure scale, z = direct HDR background available, w = specular AA enabled
     environment_info: vec4f,
     // Scene lights (up to 8, packed as 4 vec4f per light)
     scene_light_info: vec4f,   // x = count, y = volumetric_count, z = volumetric_steps, w = unused

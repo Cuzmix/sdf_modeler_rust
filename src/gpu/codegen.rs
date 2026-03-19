@@ -1933,7 +1933,8 @@ mod tests {
         config.env_reflection_enabled = true;
         let shader = generate_shader(&scene, &config);
         assert!(shader.contains("fn compute_specular_ao(NoV: f32, ao: f32, roughness: f32) -> f32"));
-        assert!(shader.contains("let specular_ao = compute_specular_ao(NoV, ao, roughness);"));
+        assert!(shader.contains("let specular_ao = select("));
+        assert!(shader.contains("compute_specular_ao(NoV, ao_result.visibility, roughness)"));
         assert!(
             shader.contains("@group(3) @binding(3) var env_prefiltered_tex: texture_cube<f32>;")
         );
@@ -1945,6 +1946,21 @@ mod tests {
         assert!(shader.contains(
             "return env_color * brdf * specular_ao * horizon_ao * camera.ambient_info.y;"
         ));
+    }
+
+    #[test]
+    fn generate_shader_supports_bent_normal_ao_and_specular_antialiasing() {
+        let mut scene = empty_scene();
+        scene.create_primitive(SdfPrimitive::Sphere);
+
+        let shader = generate_shader(&scene, &RenderConfig::default());
+        assert!(shader.contains("struct AoResult {"));
+        assert!(shader.contains("fn calc_bent_normal_ao(p: vec3f, n: vec3f) -> AoResult {"));
+        assert!(shader
+            .contains("fn apply_specular_antialiasing(normal: vec3f, roughness: f32) -> f32 {"));
+        assert!(shader.contains("let roughness = apply_specular_antialiasing(n, base_roughness);"));
+        assert!(shader.contains("let ao_mode = i32(camera.ambient_info.w + 0.5);"));
+        assert!(shader.contains("ao_result = calc_ao_result(p, n, ao_mode);"));
     }
 
     #[test]
