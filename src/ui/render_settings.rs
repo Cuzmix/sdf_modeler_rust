@@ -691,6 +691,7 @@ fn labeled_slider_i32(
 
 fn apply_preset_fast(config: &mut crate::settings::RenderConfig) {
     apply_default_environment_preset(config);
+    config.env_reflection_enabled = false;
     config.shadows_enabled = false;
     config.ao_enabled = false;
     config.ao_mode = AmbientOcclusionMode::Fast;
@@ -708,6 +709,7 @@ fn apply_preset_fast(config: &mut crate::settings::RenderConfig) {
 
 fn apply_preset_balanced(config: &mut crate::settings::RenderConfig) {
     apply_default_environment_preset(config);
+    config.env_reflection_enabled = true;
     config.shadows_enabled = false;
     config.ao_enabled = true;
     config.ao_samples = 5;
@@ -728,6 +730,7 @@ fn apply_preset_balanced(config: &mut crate::settings::RenderConfig) {
 
 fn apply_preset_quality(config: &mut crate::settings::RenderConfig) {
     apply_default_environment_preset(config);
+    config.env_reflection_enabled = true;
     config.shadows_enabled = true;
     config.shadow_steps = 64;
     config.shadow_penumbra_k = 8.0;
@@ -751,6 +754,8 @@ fn apply_preset_quality(config: &mut crate::settings::RenderConfig) {
 
 fn apply_default_environment_preset(config: &mut crate::settings::RenderConfig) {
     let defaults = crate::settings::RenderConfig::default();
+    config.env_reflection_enabled = defaults.env_reflection_enabled;
+    config.env_reflection_intensity = defaults.env_reflection_intensity;
     config.environment_source = defaults.environment_source;
     config.hdri_path = defaults.hdri_path;
     config.environment_rotation_degrees = defaults.environment_rotation_degrees;
@@ -766,7 +771,7 @@ mod tests {
     use crate::settings::{EnvironmentBackgroundMode, EnvironmentSource, RenderConfig};
 
     #[test]
-    fn presets_restore_default_environment_selection() {
+    fn presets_restore_default_environment_selection_and_shared_environment_defaults() {
         let defaults = RenderConfig::default();
 
         for apply_preset in [
@@ -777,6 +782,8 @@ mod tests {
             let mut config = RenderConfig::default();
             config.environment_source = EnvironmentSource::ProceduralSky;
             config.hdri_path = Some("custom/custom.exr".into());
+            config.env_reflection_enabled = !defaults.env_reflection_enabled;
+            config.env_reflection_intensity = 1.1;
             config.environment_rotation_degrees = 32.0;
             config.environment_exposure = 1.5;
             config.environment_bake_resolution = 1024;
@@ -785,6 +792,10 @@ mod tests {
 
             apply_preset(&mut config);
 
+            assert_eq!(
+                config.env_reflection_intensity,
+                defaults.env_reflection_intensity
+            );
             assert_eq!(config.environment_source, defaults.environment_source);
             assert_eq!(config.hdri_path, defaults.hdri_path);
             assert_eq!(
@@ -803,6 +814,41 @@ mod tests {
             assert_eq!(
                 config.environment_background_blur,
                 defaults.environment_background_blur
+            );
+        }
+    }
+
+    #[test]
+    fn fast_preset_disables_specular_ibl_and_restores_default_intensity() {
+        let defaults = RenderConfig::default();
+        let mut config = RenderConfig::default();
+        config.env_reflection_enabled = true;
+        config.env_reflection_intensity = 1.4;
+
+        apply_preset_fast(&mut config);
+
+        assert!(!config.env_reflection_enabled);
+        assert_eq!(
+            config.env_reflection_intensity,
+            defaults.env_reflection_intensity
+        );
+    }
+
+    #[test]
+    fn balanced_and_quality_presets_enable_specular_ibl_and_restore_default_intensity() {
+        let defaults = RenderConfig::default();
+
+        for apply_preset in [apply_preset_balanced, apply_preset_quality] {
+            let mut config = RenderConfig::default();
+            config.env_reflection_enabled = false;
+            config.env_reflection_intensity = 1.4;
+
+            apply_preset(&mut config);
+
+            assert!(config.env_reflection_enabled);
+            assert_eq!(
+                config.env_reflection_intensity,
+                defaults.env_reflection_intensity
             );
         }
     }

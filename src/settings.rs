@@ -619,6 +619,9 @@ fn default_cross_section_axis() -> u8 {
 fn default_bookmarks() -> Vec<Option<CameraBookmark>> {
     vec![None; 9]
 }
+fn default_env_reflection_enabled_config() -> bool {
+    !cfg!(any(target_arch = "wasm32", target_os = "android"))
+}
 fn default_environment_source_config() -> EnvironmentSource {
     if cfg!(any(target_arch = "wasm32", target_os = "android")) {
         EnvironmentSource::ProceduralSky
@@ -673,7 +676,7 @@ impl Default for RenderConfig {
             fill_light_color: [1.0, 1.0, 1.0],
             ambient: 0.06,
 
-            env_reflection_enabled: false,
+            env_reflection_enabled: default_env_reflection_enabled_config(),
             env_reflection_intensity: 0.3,
             specular_aa_enabled: true,
             local_reflection_mode: LocalReflectionMode::Single,
@@ -997,6 +1000,7 @@ mod tests {
     fn render_defaults_use_platform_expected_environment_defaults() {
         let defaults = RenderConfig::default();
         if cfg!(any(target_arch = "wasm32", target_os = "android")) {
+            assert!(!defaults.env_reflection_enabled);
             assert_eq!(
                 defaults.environment_source,
                 EnvironmentSource::ProceduralSky
@@ -1007,6 +1011,7 @@ mod tests {
                 EnvironmentBackgroundMode::Environment
             );
         } else {
+            assert!(defaults.env_reflection_enabled);
             assert_eq!(defaults.environment_source, EnvironmentSource::Hdri);
             assert_eq!(
                 defaults.hdri_path.as_deref(),
@@ -1022,6 +1027,8 @@ mod tests {
     #[test]
     fn reset_environment_restores_platform_expected_environment_defaults() {
         let mut config = RenderConfig::default();
+        config.env_reflection_enabled = !config.env_reflection_enabled;
+        config.env_reflection_intensity = 0.9;
         config.environment_source = EnvironmentSource::ProceduralSky;
         config.hdri_path = Some("custom.hdr".into());
         config.environment_background_mode = EnvironmentBackgroundMode::Environment;
@@ -1032,6 +1039,14 @@ mod tests {
         config.reset_environment();
 
         let defaults = RenderConfig::default();
+        assert_eq!(
+            config.env_reflection_enabled,
+            defaults.env_reflection_enabled
+        );
+        assert_eq!(
+            config.env_reflection_intensity,
+            defaults.env_reflection_intensity
+        );
         assert_eq!(config.environment_source, defaults.environment_source);
         assert_eq!(config.hdri_path, defaults.hdri_path);
         assert_eq!(
@@ -1043,6 +1058,39 @@ mod tests {
             defaults.environment_rotation_degrees
         );
         assert_eq!(config.environment_exposure, defaults.environment_exposure);
+        assert_eq!(
+            config.environment_background_blur,
+            defaults.environment_background_blur
+        );
+    }
+
+    #[test]
+    fn reset_all_restores_platform_expected_environment_defaults() {
+        let mut config = RenderConfig::default();
+        config.env_reflection_enabled = !config.env_reflection_enabled;
+        config.env_reflection_intensity = 1.2;
+        config.environment_source = EnvironmentSource::ProceduralSky;
+        config.hdri_path = Some("custom.hdr".into());
+        config.environment_background_mode = EnvironmentBackgroundMode::Environment;
+        config.environment_background_blur = 0.65;
+
+        config.reset_all();
+
+        let defaults = RenderConfig::default();
+        assert_eq!(
+            config.env_reflection_enabled,
+            defaults.env_reflection_enabled
+        );
+        assert_eq!(
+            config.env_reflection_intensity,
+            defaults.env_reflection_intensity
+        );
+        assert_eq!(config.environment_source, defaults.environment_source);
+        assert_eq!(config.hdri_path, defaults.hdri_path);
+        assert_eq!(
+            config.environment_background_mode,
+            defaults.environment_background_mode
+        );
         assert_eq!(
             config.environment_background_blur,
             defaults.environment_background_blur
