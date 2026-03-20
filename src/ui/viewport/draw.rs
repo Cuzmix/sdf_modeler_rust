@@ -1232,6 +1232,7 @@ pub fn draw(
             sculpt_state.preview_radius_with_modifiers(modifiers.ctrl, modifiers.shift);
         let effective_strength = sculpt_state.profile(effective_mode).strength;
         let detail_size = active_sculpt_detail_size(scene, sculpt_state).unwrap_or(0.0);
+        let detail_state = sculpt_state.detail_state();
         let symmetry = sculpt_state
             .symmetry_axis()
             .map(|axis| match axis {
@@ -1248,16 +1249,26 @@ pub fn draw(
             BrushMode::Inflate => "Inflate",
             BrushMode::Grab => "Grab",
         };
+        let detail_status = if detail_state.detail_limited_after_growth {
+            "  Detail limited"
+        } else if detail_state.last_pre_expand_detail_size.is_some() {
+            "  Detail coarser"
+        } else {
+            ""
+        };
         let text = if let Some(adjust) = sculpt_brush_adjust.as_ref() {
             match adjust.mode {
-                SculptBrushAdjustMode::Radius => format!("Adjust Radius  {:.2}", preview_radius),
-                SculptBrushAdjustMode::Strength => {
-                    format!("Adjust Strength  {:.3}", sculpt_state.selected_profile().strength)
+                SculptBrushAdjustMode::Radius => {
+                    format!("Adjust Radius  {:.2}  LMB/Enter confirm  Esc/RMB cancel", preview_radius)
                 }
+                SculptBrushAdjustMode::Strength => format!(
+                    "Adjust Strength  {:.3}  LMB/Enter confirm  Esc/RMB cancel",
+                    sculpt_state.selected_profile().strength
+                ),
             }
         } else {
             format!(
-                "{label}  Radius {:.2}  Strength {:.3}  Detail {:.4}  Sym {}",
+                "{label}  Radius {:.2}  Strength {:.3}  Detail {:.4}{detail_status}  Sym {}",
                 preview_radius, effective_strength, detail_size, symmetry
             )
         };

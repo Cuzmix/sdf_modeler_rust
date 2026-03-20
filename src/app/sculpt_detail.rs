@@ -48,6 +48,8 @@ impl SdfApp {
         else {
             return;
         };
+        let previous_pitch =
+            voxel::voxel_pitch_for_bounds(bounds_min, bounds_max, current_resolution);
         let new_resolution = next_detail_resolution(
             current_resolution,
             true,
@@ -59,9 +61,17 @@ impl SdfApp {
         }
 
         self.resample_sculpt_node(node_id, new_resolution, bounds_min, bounds_max);
+        let new_pitch = voxel::voxel_pitch_for_bounds(bounds_min, bounds_max, new_resolution);
         let detail_state = self.doc.sculpt_state.detail_state_mut();
         detail_state.last_pre_expand_detail_size = None;
         detail_state.detail_limited_after_growth = false;
+        self.push_sculpt_toast(
+            &format!(
+                "Increased sculpt detail from {:.4} to {:.4}.",
+                previous_pitch, new_pitch
+            ),
+            false,
+        );
     }
 
     pub(super) fn decrease_sculpt_detail(&mut self, node_id: NodeId) {
@@ -69,6 +79,8 @@ impl SdfApp {
         else {
             return;
         };
+        let previous_pitch =
+            voxel::voxel_pitch_for_bounds(bounds_min, bounds_max, current_resolution);
         let new_resolution = next_detail_resolution(
             current_resolution,
             false,
@@ -80,9 +92,17 @@ impl SdfApp {
         }
 
         self.resample_sculpt_node(node_id, new_resolution, bounds_min, bounds_max);
+        let new_pitch = voxel::voxel_pitch_for_bounds(bounds_min, bounds_max, new_resolution);
         let detail_state = self.doc.sculpt_state.detail_state_mut();
         detail_state.last_pre_expand_detail_size = None;
         detail_state.detail_limited_after_growth = false;
+        self.push_sculpt_toast(
+            &format!(
+                "Decreased sculpt detail from {:.4} to {:.4}.",
+                previous_pitch, new_pitch
+            ),
+            false,
+        );
     }
 
     pub(super) fn expand_sculpt_volume(&mut self, node_id: NodeId) {
@@ -94,9 +114,18 @@ impl SdfApp {
         let (new_bounds_min, new_bounds_max) = expanded_volume_bounds(bounds_min, bounds_max);
 
         self.resample_sculpt_node(node_id, current_resolution, new_bounds_min, new_bounds_max);
+        let new_pitch =
+            voxel::voxel_pitch_for_bounds(new_bounds_min, new_bounds_max, current_resolution);
         let detail_state = self.doc.sculpt_state.detail_state_mut();
         detail_state.last_pre_expand_detail_size = Some(current_pitch);
         detail_state.detail_limited_after_growth = true;
+        self.push_sculpt_toast(
+            &format!(
+                "Expanded sculpt volume. Detail size changed from {:.4} to {:.4}; use Remesh at Current Detail to restore density.",
+                current_pitch, new_pitch
+            ),
+            false,
+        );
     }
 
     pub(super) fn remesh_sculpt_at_current_detail(&mut self, node_id: NodeId) {
@@ -116,6 +145,7 @@ impl SdfApp {
             target_pitch,
             self.settings.max_sculpt_resolution,
         );
+        let remeshed_pitch = voxel::voxel_pitch_for_bounds(bounds_min, bounds_max, new_resolution);
 
         if new_resolution != current_resolution {
             self.resample_sculpt_node(node_id, new_resolution, bounds_min, bounds_max);
@@ -130,6 +160,11 @@ impl SdfApp {
         detail_state.detail_limited_after_growth = limited;
         if limited {
             self.push_sculpt_toast("Detail remesh hit the sculpt resolution cap", false);
+        } else {
+            self.push_sculpt_toast(
+                &format!("Remeshed sculpt to detail size {:.4}.", remeshed_pitch),
+                false,
+            );
         }
     }
 
@@ -142,9 +177,18 @@ impl SdfApp {
             return;
         };
         self.resample_sculpt_node(node_id, current_resolution, new_bounds_min, new_bounds_max);
+        let new_pitch =
+            voxel::voxel_pitch_for_bounds(new_bounds_min, new_bounds_max, current_resolution);
         let detail_state = self.doc.sculpt_state.detail_state_mut();
         detail_state.last_pre_expand_detail_size = None;
         detail_state.detail_limited_after_growth = false;
+        self.push_sculpt_toast(
+            &format!(
+                "Fit sculpt volume to the surface. Detail size is now {:.4}.",
+                new_pitch
+            ),
+            false,
+        );
     }
 
     fn sculpt_grid_info(&self, node_id: NodeId) -> Option<(u32, Vec3, Vec3)> {

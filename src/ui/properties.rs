@@ -1028,7 +1028,7 @@ pub fn draw(
                 .show(ui, |ui| {
                     let detail_size = voxel_grid.voxel_pitch();
                     ui.horizontal(|ui| {
-                        ui.label("Detail Size:");
+                        ui.label("Detail Size (voxel pitch):");
                         ui.monospace(format!("{detail_size:.4}"));
                     });
                     ui.horizontal(|ui| {
@@ -1038,37 +1038,53 @@ pub fn draw(
                     let detail_state = sculpt_state.detail_state();
                     if sculpt_state.active_node() == Some(id) {
                         if let Some(previous_detail) = detail_state.last_pre_expand_detail_size {
+                            let coarsening = (detail_size / previous_detail).max(1.0);
                             ui.colored_label(
                                 egui::Color32::YELLOW,
                                 format!(
-                                    "Volume expansion made detail coarser. Previous detail size was {:.4}.",
-                                    previous_detail
+                                    "Volume expansion made detail coarser. Previous {:.4}, current {:.4} ({:.2}x larger voxels).",
+                                    previous_detail, detail_size, coarsening
                                 ),
                             );
                         }
                         if detail_state.detail_limited_after_growth {
                             ui.colored_label(
                                 egui::Color32::from_rgb(255, 170, 80),
-                                "Remesh is limited by the current sculpt resolution cap.",
+                                "Remesh is limited by the current sculpt resolution cap. Increase Detail if you need to recover more density.",
                             );
                         }
                     }
-                    ui.weak("Expand Volume adds room but makes detail coarser until you remesh.");
+                    ui.weak("Workflow: Expand Volume for room, then Remesh at Current Detail to restore the old density.");
                     ui.add_space(6.0);
                     ui.horizontal_wrapped(|ui| {
-                        if ui.button("Increase Detail").clicked() {
+                        let response = ui
+                            .button("Increase Detail")
+                            .on_hover_text("Remesh the current sculpt volume at a higher voxel density.");
+                        if response.clicked() {
                             actions.push(Action::IncreaseSculptDetail(id));
                         }
-                        if ui.button("Decrease Detail").clicked() {
+                        let response = ui
+                            .button("Decrease Detail")
+                            .on_hover_text("Remesh the current sculpt volume at a lower voxel density.");
+                        if response.clicked() {
                             actions.push(Action::DecreaseSculptDetail(id));
                         }
-                        if ui.button("Remesh at Current Detail").clicked() {
+                        let response = ui
+                            .button("Remesh at Current Detail")
+                            .on_hover_text("Restore the pre-expand detail size, clamped by the sculpt resolution cap.");
+                        if response.clicked() {
                             actions.push(Action::RemeshSculptAtCurrentDetail(id));
                         }
-                        if ui.button("Expand Volume").clicked() {
+                        let response = ui
+                            .button("Expand Volume")
+                            .on_hover_text("Make the sculpt bounds larger without adding detail. This gives more room but makes the current detail coarser.");
+                        if response.clicked() {
                             actions.push(Action::ExpandSculptVolume(id));
                         }
-                        if ui.button("Fit Volume to Sculpt").clicked() {
+                        let response = ui
+                            .button("Fit Volume to Sculpt")
+                            .on_hover_text("Shrink the sculpt bounds around the current surface to recover working density.");
+                        if response.clicked() {
                             actions.push(Action::FitSculptVolume(id));
                         }
                     });
