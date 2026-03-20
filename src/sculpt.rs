@@ -14,6 +14,8 @@ pub const DEFAULT_BRUSH_STRENGTH: f32 = 0.05;
 pub const DEFAULT_SMOOTH_STRENGTH: f32 = 0.16;
 pub const DEFAULT_GRAB_STRENGTH: f32 = 1.0;
 pub const DEFAULT_STROKE_SPACING: f32 = 0.08;
+const GRAB_MAX_SUPPORT_MULTIPLIER: f32 = 3.0;
+const GRAB_SUPPORT_CUTOFF_RATIO: f32 = 0.1;
 
 // ---------------------------------------------------------------------------
 // Tool system
@@ -846,6 +848,99 @@ fn kelvinlet_effect_radius(eps: f32, disp_len: f32, min_displacement: f32) -> f3
         (k * k - eps * eps).sqrt().max(eps)
     }
 }
+
+fn bounded_grab_effect_radius(radius: f32, disp_len: f32, voxel_step: f32) -> f32 {
+    let min_displacement = (voxel_step * 0.2).max(1e-4);
+    let bounded_disp_len = disp_len.min(radius.max(min_displacement));
+    let support_cutoff = min_displacement.max(radius * GRAB_SUPPORT_CUTOFF_RATIO);
+    let kelvinlet_radius = kelvinlet_effect_radius(radius, bounded_disp_len, support_cutoff);
+    let max_support = (radius * GRAB_MAX_SUPPORT_MULTIPLIER).max(voxel_step * 4.0);
+    kelvinlet_radius
+        .min(max_support)
+        .max(radius.max(voxel_step))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn apply_grab_to_grid_differential_cached(
+    grid: &mut VoxelGrid,
+    snapshot: &[f32],
+    analytical_snapshot: &[f32],
+    center: Vec3,
+    radius: f32,
+    strength: f32,
+    grab_delta: Vec3,
+    _falloff_mode: &FalloffMode,
+    _surface_constraint: f32,
+    _view_dir_local: Vec3,
+) -> VoxelEditRegion {
+    let res = grid.resolution;
+    let displacement = grab_delta * strength;
+    let disp_len = displacement.length();
+    if disp_len <= 1e-6 || radius <= 1e-6 {
+        let z = grid.world_to_grid(center).z.clamp(0.0, (res - 1) as f32) as u32;
+        let xy = grid
+            .world_to_grid(center)
+            .clamp(Vec3::ZERO, Vec3::splat((res - 1) as f32));
+        return VoxelEditRegion {
+            x0: xy.x as u32,
+            y0: xy.y as u32,
+            z0: z,
+            x1: xy.x as u32,
+            y1: xy.y as u32,
+            z1: z,
+        };
+    }
+
+    let voxel_step = max_voxel_step(grid);
+    let min_displacement = (voxel_step * 0.2).max(1e-4);
+    let min_disp2 = min_displacement * min_displacement;
+    let effect_radius = bounded_grab_effect_radius(radius, disp_len, voxel_step);
+    let effect_radius_sq = effect_radius * effect_radius;
+
+    let brush_min = center - Vec3::splat(effect_radius);
+    let brush_max = center + Vec3::splat(effect_radius);
+    let g_min = grid.world_to_grid(brush_min);
+    let g_max = grid.world_to_grid(brush_max);
+
+    let x0 = (g_min.x.floor().max(0.0) as u32).min(res - 1);
+    let y0 = (g_min.y.floor().max(0.0) as u32).min(res - 1);
+    let z0 = (g_min.z.floor().max(0.0) as u32).min(res - 1);
+    let x1 = (g_max.x.ceil().max(0.0) as u32).min(res - 1);
+    let y1 = (g_max.y.ceil().max(0.0) as u32).min(res - 1);
+    let z1 = (g_max.z.ceil().max(0.0) as u32).min(res - 1);
+
+    for z in z0..=z1 {
+        for y in y0..=y1 {
+            for x in x0..=x1 {
+                let local_pos = grid.grid_to_world(x as f32, y as f32, z as f32);
+                let offset = local_pos - center;
+                if offset.length_squared() > effect_radius_sq {
+                    continue;
+                }
+
+                let warp = kelvinlet_displacement(offset, displacement, radius);
+                if warp.length_squared() <= min_disp2 {
+                    continue;
+                }
+
+                let idx = VoxelGrid::index(x, y, z, res);
+                let sample_pos = local_pos - warp;
+                let displacement_sampled = sample_from_data(grid, snapshot, sample_pos);
+                let analytical_sampled = sample_from_data(grid, analytical_snapshot, sample_pos);
+                grid.data[idx] = displacement_sampled + analytical_sampled - analytical_snapshot[idx];
+            }
+        }
+    }
+
+    VoxelEditRegion {
+        x0,
+        y0,
+        z0,
+        x1,
+        y1,
+        z1,
+    }
+}
 /// Returns (z0, z1) inclusive range of z-slabs that were modified.
 #[allow(clippy::too_many_arguments)]
 fn apply_brush_to_grid(
@@ -1076,11 +1171,11 @@ pub fn apply_grab_to_grid(
         };
     }
 
-    let extent = grid.bounds_max - grid.bounds_min;
-    let voxel_step = extent.max_element() / (res.saturating_sub(1).max(1) as f32);
+    let voxel_step = max_voxel_step(grid);
     let min_displacement = (voxel_step * 0.2).max(1e-4);
     let min_disp2 = min_displacement * min_displacement;
-    let effect_radius = kelvinlet_effect_radius(radius, disp_len, min_displacement);
+    let effect_radius = bounded_grab_effect_radius(radius, disp_len, voxel_step);
+    let effect_radius_sq = effect_radius * effect_radius;
 
     let brush_min = center - Vec3::splat(effect_radius);
     let brush_max = center + Vec3::splat(effect_radius);
@@ -1098,7 +1193,11 @@ pub fn apply_grab_to_grid(
         for y in y0..=y1 {
             for x in x0..=x1 {
                 let local_pos = grid.grid_to_world(x as f32, y as f32, z as f32);
-                let warp = kelvinlet_displacement(local_pos - center, displacement, radius);
+                let offset = local_pos - center;
+                if offset.length_squared() > effect_radius_sq {
+                    continue;
+                }
+                let warp = kelvinlet_displacement(offset, displacement, radius);
                 if warp.length_squared() <= min_disp2 {
                     continue;
                 }
@@ -1130,17 +1229,32 @@ pub fn apply_grab_to_grid_differential(
     radius: f32,
     strength: f32,
     grab_delta: Vec3,
-    _falloff_mode: &FalloffMode,
-    _surface_constraint: f32,
-    _view_dir_local: Vec3,
+    falloff_mode: &FalloffMode,
+    surface_constraint: f32,
+    view_dir_local: Vec3,
     analytical_snapshot: Option<&[f32]>,
     scene: &Scene,
     child_id: NodeId,
     sculpt_position: Vec3,
     sculpt_rotation: Vec3,
 ) -> VoxelEditRegion {
+    if let Some(analytical_snapshot) = analytical_snapshot.filter(|data| data.len() == grid.data.len())
+    {
+        return apply_grab_to_grid_differential_cached(
+            grid,
+            snapshot,
+            analytical_snapshot,
+            center,
+            radius,
+            strength,
+            grab_delta,
+            falloff_mode,
+            surface_constraint,
+            view_dir_local,
+        );
+    }
+
     let res = grid.resolution;
-    let analytical_snapshot = analytical_snapshot.filter(|data| data.len() == grid.data.len());
     let displacement = grab_delta * strength;
     let disp_len = displacement.length();
     if disp_len <= 1e-6 || radius <= 1e-6 {
@@ -1158,11 +1272,11 @@ pub fn apply_grab_to_grid_differential(
         };
     }
 
-    let extent = grid.bounds_max - grid.bounds_min;
-    let voxel_step = extent.max_element() / (res.saturating_sub(1).max(1) as f32);
+    let voxel_step = max_voxel_step(grid);
     let min_displacement = (voxel_step * 0.2).max(1e-4);
     let min_disp2 = min_displacement * min_displacement;
-    let effect_radius = kelvinlet_effect_radius(radius, disp_len, min_displacement);
+    let effect_radius = bounded_grab_effect_radius(radius, disp_len, voxel_step);
+    let effect_radius_sq = effect_radius * effect_radius;
 
     let brush_min = center - Vec3::splat(effect_radius);
     let brush_max = center + Vec3::splat(effect_radius);
@@ -1180,7 +1294,11 @@ pub fn apply_grab_to_grid_differential(
         for y in y0..=y1 {
             for x in x0..=x1 {
                 let local_pos = grid.grid_to_world(x as f32, y as f32, z as f32);
-                let warp = kelvinlet_displacement(local_pos - center, displacement, radius);
+                let offset = local_pos - center;
+                if offset.length_squared() > effect_radius_sq {
+                    continue;
+                }
+                let warp = kelvinlet_displacement(offset, displacement, radius);
                 if warp.length_squared() <= min_disp2 {
                     continue;
                 }
@@ -1239,6 +1357,28 @@ pub fn apply_grab_to_grid_differential_scene(
     sculpt_position: Vec3,
     sculpt_rotation: Vec3,
 ) -> Option<VoxelEditRegion> {
+    if let Some(analytical_snapshot) = analytical_snapshot {
+        let node = scene.nodes.get_mut(&node_id)?;
+        if let NodeData::Sculpt {
+            ref mut voxel_grid, ..
+        } = node.data
+        {
+            return Some(apply_grab_to_grid_differential_cached(
+                voxel_grid,
+                snapshot,
+                analytical_snapshot,
+                center,
+                radius,
+                strength,
+                grab_delta,
+                falloff_mode,
+                surface_constraint,
+                view_dir_local,
+            ));
+        }
+        return None;
+    }
+
     // Extract VoxelGrid from the scene node temporarily
     let node = scene.nodes.get_mut(&node_id)?;
     let mut grid = if let NodeData::Sculpt {
@@ -1872,6 +2012,49 @@ mod tests {
         assert!(line_sample(0) < 0.0 && line_sample(1) < 0.0 && line_sample(2) < 0.0);
         assert!(line_sample(3) > 0.0);
         assert!(line_sample(4) > 0.0 && line_sample(5) > 0.0 && line_sample(6) > 0.0);
+    }
+
+    #[test]
+    fn bounded_grab_effect_radius_stays_near_brush_scale_for_large_drags() {
+        let radius = 0.25;
+        let voxel_step = 0.02;
+        let effect_radius = bounded_grab_effect_radius(radius, 8.0, voxel_step);
+        let max_expected = (radius * GRAB_MAX_SUPPORT_MULTIPLIER).max(voxel_step * 4.0);
+        assert!(effect_radius <= max_expected + 1e-5);
+        assert!(effect_radius >= radius);
+    }
+
+    #[test]
+    fn grab_brush_large_drag_keeps_dirty_region_bounded() {
+        let mut grid = VoxelGrid::new_displacement(64, Vec3::splat(-1.0), Vec3::splat(1.0));
+        for z in 0..grid.resolution {
+            for y in 0..grid.resolution {
+                for x in 0..grid.resolution {
+                    let idx = VoxelGrid::index(x, y, z, grid.resolution);
+                    let local = grid.grid_to_world(x as f32, y as f32, z as f32);
+                    grid.data[idx] = local.length() - 0.35;
+                }
+            }
+        }
+        let snapshot = grid.data.clone();
+        let radius = 0.2;
+        let region = apply_grab_to_grid(
+            &mut grid,
+            &snapshot,
+            Vec3::ZERO,
+            radius,
+            1.0,
+            Vec3::new(5.0, 0.0, 0.0),
+            &FalloffMode::Smooth,
+            0.0,
+            Vec3::ZERO,
+        );
+
+        let max_support = (radius * GRAB_MAX_SUPPORT_MULTIPLIER).max(max_voxel_step(&grid) * 4.0);
+        let expected_max_width = ((max_support * 2.0) / max_voxel_step(&grid)).ceil() as u32 + 2;
+        assert!(region.x1 - region.x0 <= expected_max_width);
+        assert!(region.y1 - region.y0 <= expected_max_width);
+        assert!(region.z1 - region.z0 <= expected_max_width);
     }
 
     #[test]
