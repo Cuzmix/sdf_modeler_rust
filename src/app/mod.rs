@@ -6,6 +6,7 @@ mod egui_frontend;
 mod frontend_bridge;
 mod gpu_sync;
 mod input;
+mod sculpt_detail;
 mod sculpting;
 pub(crate) mod state;
 mod ui_panels;
@@ -290,6 +291,15 @@ impl SdfApp {
             Ok(project) => {
                 self.doc.scene = project.scene;
                 self.doc.camera = project.camera;
+                self.doc.sculpt_state = project
+                    .sculpt_state
+                    .map(|persisted| SculptState::from_persisted(persisted, &self.doc.scene))
+                    .unwrap_or_else(SculptState::new_inactive);
+                self.doc.active_tool = if self.doc.sculpt_state.is_active() {
+                    ActiveTool::Sculpt
+                } else {
+                    ActiveTool::Select
+                };
                 if let Some(render_config) = project.render_config {
                     self.settings.render = render_config;
                     self.gpu.last_environment_fingerprint = 0;
@@ -297,7 +307,6 @@ impl SdfApp {
                 self.doc.history = crate::graph::history::History::new();
                 self.ui.node_graph_state.clear_selection();
                 self.ui.node_graph_state.needs_initial_rebuild = true;
-                self.doc.sculpt_state = SculptState::Inactive;
                 self.gpu.current_structure_key = 0;
                 self.gpu.buffer_dirty = true;
                 self.persistence.current_file_path = None;
@@ -381,7 +390,7 @@ impl SdfApp {
                 scene,
                 history: crate::graph::history::History::new(),
                 active_tool: ActiveTool::default(),
-                sculpt_state: SculptState::Inactive,
+                sculpt_state: SculptState::new_inactive(),
                 clipboard_node: None,
                 soloed_light: None,
             },
@@ -447,6 +456,7 @@ impl SdfApp {
                 show_recovery_dialog,
                 recovery_summary,
                 reference_images: crate::ui::reference_image::ReferenceImageManager::default(),
+                sculpt_brush_adjust: None,
                 show_distance_readout: false,
                 measurement_mode: false,
                 measurement_points: Vec::new(),

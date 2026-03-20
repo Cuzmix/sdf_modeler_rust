@@ -153,6 +153,7 @@ impl SdfApp {
                 is_hover_pick: &mut is_hover_pick,
                 hover_world_pos: self.async_state.hover_world_pos,
                 cursor_over_geometry: self.async_state.cursor_over_geometry,
+                sculpt_brush_adjust: &mut self.ui.sculpt_brush_adjust,
                 soloed_light: self.doc.soloed_light,
                 solo_label: solo_label.clone(),
                 show_distance_readout: &mut self.ui.show_distance_readout,

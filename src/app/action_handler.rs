@@ -39,7 +39,7 @@ impl SdfApp {
                     self.doc.history = History::new();
                     self.ui.node_graph_state.clear_selection();
                     self.ui.node_graph_state.needs_initial_rebuild = true;
-                    self.doc.sculpt_state = SculptState::Inactive;
+                    self.doc.sculpt_state = SculptState::new_inactive();
                     self.ui.isolation_state = None;
                     self.doc.soloed_light = None;
                     self.gpu.current_structure_key = 0;
@@ -87,10 +87,11 @@ impl SdfApp {
                             }
                         };
                         if let Some(path) = path {
-                            if let Err(e) = crate::io::save_project(
+                            if let Err(e) = crate::io::save_project_with_sculpt(
                                 &self.doc.scene,
                                 &self.doc.camera,
                                 &self.settings.render,
+                                Some(&self.doc.sculpt_state),
                                 &path,
                             ) {
                                 log::error!("Failed to save project: {}", e);
@@ -105,10 +106,11 @@ impl SdfApp {
                     }
                     #[cfg(target_arch = "wasm32")]
                     {
-                        crate::io::web_save_project(
+                        crate::io::web_save_project_with_sculpt(
                             &self.doc.scene,
                             &self.doc.camera,
                             &self.settings.render,
+                            Some(&self.doc.sculpt_state),
                         );
                         self.persistence.saved_fingerprint = self.doc.scene.data_fingerprint();
                         self.persistence.scene_dirty = false;
@@ -297,7 +299,7 @@ impl SdfApp {
                             self.doc.soloed_light = None;
                         }
                         self.ui.node_graph_state.needs_initial_rebuild = true;
-                        self.doc.sculpt_state = SculptState::Inactive;
+                        self.doc.sculpt_state = SculptState::new_inactive();
                         self.gpu.buffer_dirty = true;
                     }
                 }
@@ -395,7 +397,7 @@ impl SdfApp {
                     self.doc.active_tool = tool;
                     match tool {
                         crate::sculpt::ActiveTool::Select => {
-                            self.doc.sculpt_state = SculptState::Inactive;
+                            self.doc.sculpt_state = SculptState::new_inactive();
                             self.async_state.last_sculpt_hit = None;
                             self.async_state.lazy_brush_pos = None;
                         }
@@ -409,8 +411,9 @@ impl SdfApp {
                                     .is_some_and(|n| matches!(n.data, NodeData::Sculpt { .. }))
                                 {
                                     let extent = self.scene_avg_extent();
-                                    self.doc.sculpt_state =
-                                        SculptState::new_active_with_radius(sel, extent);
+                                    self.doc
+                                        .sculpt_state
+                                        .activate_preserving_session(sel, Some(extent));
                                     self.ensure_brush_settings_tab();
                                 }
                             }
@@ -443,8 +446,9 @@ impl SdfApp {
                                 // Case 1: already a sculpt node — activate immediately
                                 let extent = self.scene_avg_extent();
                                 self.doc.active_tool = crate::sculpt::ActiveTool::Sculpt;
-                                self.doc.sculpt_state =
-                                    SculptState::new_active_with_radius(sel, extent);
+                                self.doc
+                                    .sculpt_state
+                                    .activate_preserving_session(sel, Some(extent));
                                 self.ensure_brush_settings_tab();
                             } else {
                                 // Case 2: check for sculpt parent
@@ -454,8 +458,9 @@ impl SdfApp {
                                 {
                                     let extent = self.scene_avg_extent();
                                     self.doc.active_tool = crate::sculpt::ActiveTool::Sculpt;
-                                    self.doc.sculpt_state =
-                                        SculptState::new_active_with_radius(sculpt_id, extent);
+                                    self.doc
+                                        .sculpt_state
+                                        .activate_preserving_session(sculpt_id, Some(extent));
                                     self.ui.node_graph_state.select_single(sculpt_id);
                                     self.ensure_brush_settings_tab();
                                 } else {
@@ -550,8 +555,9 @@ impl SdfApp {
                                 {
                                     let extent = self.scene_avg_extent();
                                     self.doc.active_tool = crate::sculpt::ActiveTool::Sculpt;
-                                    self.doc.sculpt_state =
-                                        SculptState::new_active_with_radius(sculpt_id, extent);
+                                    self.doc
+                                        .sculpt_state
+                                        .activate_preserving_session(sculpt_id, Some(extent));
                                     self.ui.node_graph_state.select_single(sculpt_id);
                                     self.ensure_brush_settings_tab();
                                 }
@@ -563,6 +569,21 @@ impl SdfApp {
                 }
 
                 // ── Scene mutations (structural) ─────────────────────
+                Action::IncreaseSculptDetail(node_id) => {
+                    self.increase_sculpt_detail(node_id);
+                }
+                Action::DecreaseSculptDetail(node_id) => {
+                    self.decrease_sculpt_detail(node_id);
+                }
+                Action::RemeshSculptAtCurrentDetail(node_id) => {
+                    self.remesh_sculpt_at_current_detail(node_id);
+                }
+                Action::ExpandSculptVolume(node_id) => {
+                    self.expand_sculpt_volume(node_id);
+                }
+                Action::FitSculptVolume(node_id) => {
+                    self.fit_sculpt_volume(node_id);
+                }
                 Action::CreatePrimitive(prim) => {
                     let id = self.doc.scene.create_primitive(prim);
                     self.ui.node_graph_state.select_single(id);
@@ -1067,6 +1088,15 @@ impl SdfApp {
             Ok(project) => {
                 self.doc.scene = project.scene;
                 self.doc.camera = project.camera;
+                self.doc.sculpt_state = project
+                    .sculpt_state
+                    .map(|persisted| SculptState::from_persisted(persisted, &self.doc.scene))
+                    .unwrap_or_else(SculptState::new_inactive);
+                self.doc.active_tool = if self.doc.sculpt_state.is_active() {
+                    crate::sculpt::ActiveTool::Sculpt
+                } else {
+                    crate::sculpt::ActiveTool::Select
+                };
                 if let Some(render_config) = project.render_config {
                     self.settings.render = render_config;
                     self.gpu.last_environment_fingerprint = 0;
@@ -1075,7 +1105,6 @@ impl SdfApp {
                 self.doc.history = History::new();
                 self.ui.node_graph_state.clear_selection();
                 self.ui.node_graph_state.needs_initial_rebuild = true;
-                self.doc.sculpt_state = SculptState::Inactive;
                 self.gpu.current_structure_key = 0;
                 self.gpu.buffer_dirty = true;
                 self.persistence.saved_fingerprint = self.doc.scene.data_fingerprint();

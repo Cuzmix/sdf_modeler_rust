@@ -61,21 +61,8 @@ impl SdfApp {
             self.async_state.sculpt_runtime_cache = None;
             self.async_state.sculpt_dragging = false;
             self.async_state.cursor_over_geometry = false;
-            if let SculptState::Active {
-                ref mut flatten_reference,
-                ref mut grab_snapshot,
-                ref mut grab_analytical_snapshot,
-                ref mut grab_start,
-                ref mut grab_child_input,
-                ..
-            } = self.doc.sculpt_state
-            {
-                *flatten_reference = None;
-                *grab_snapshot = None;
-                *grab_analytical_snapshot = None;
-                *grab_start = None;
-                *grab_child_input = None;
-            }
+            self.finalize_pending_grab_repair();
+            self.doc.sculpt_state.clear_stroke_state();
         }
 
         // Reset pivot when selection changes.
@@ -107,7 +94,7 @@ impl SdfApp {
             if !self.doc.scene.nodes.contains_key(&selected_node) {
                 self.ui.node_graph_state.clear_selection();
                 self.ui.node_graph_state.needs_initial_rebuild = true;
-                self.doc.sculpt_state = SculptState::Inactive;
+                self.doc.sculpt_state = SculptState::new_inactive();
                 self.gpu.buffer_dirty = true;
             }
         }
@@ -125,10 +112,10 @@ impl SdfApp {
             && matches!(
                 self.doc.sculpt_state,
                 SculptState::Active {
-                    ref brush_mode,
-                    grab_start: Some(_),
+                    ref session,
+                    ref stroke_state,
                     ..
-                } if *brush_mode == BrushMode::Grab
+                } if session.selected_brush == BrushMode::Grab && stroke_state.grab_start.is_some()
             );
 
         if let Some(ref pending_pick) = ui_feedback.pending_pick {
@@ -180,10 +167,11 @@ impl SdfApp {
         {
             self.persistence.last_auto_save = Instant::now();
             let path = crate::io::auto_save_path();
-            if let Err(error) = crate::io::save_project(
+            if let Err(error) = crate::io::save_project_with_sculpt(
                 &self.doc.scene,
                 &self.doc.camera,
                 &self.settings.render,
+                Some(&self.doc.sculpt_state),
                 &path,
             ) {
                 log::error!("Auto-save failed: {}", error);

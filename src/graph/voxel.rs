@@ -318,6 +318,53 @@ impl VoxelGrid {
         let c1 = c01 + (c11 - c01) * fy;
         c0 + (c1 - c0) * fz
     }
+
+    pub fn voxel_pitch(&self) -> f32 {
+        voxel_pitch_for_bounds(self.bounds_min, self.bounds_max, self.resolution)
+    }
+
+    pub fn resampled_to(&self, resolution: u32, bounds_min: Vec3, bounds_max: Vec3) -> Self {
+        let resolution = resolution.max(2);
+        let total = (resolution as usize).pow(3);
+        let mut data = Vec::with_capacity(total);
+        let new_grid = Self {
+            resolution,
+            bounds_min,
+            bounds_max,
+            is_displacement: self.is_displacement,
+            data: Vec::new(),
+        };
+
+        for z in 0..resolution {
+            for y in 0..resolution {
+                for x in 0..resolution {
+                    let local_pos = new_grid.grid_to_world(x as f32, y as f32, z as f32);
+                    data.push(self.sample(local_pos));
+                }
+            }
+        }
+
+        Self {
+            resolution,
+            bounds_min,
+            bounds_max,
+            is_displacement: self.is_displacement,
+            data,
+        }
+    }
+}
+
+pub fn voxel_pitch_for_bounds(bounds_min: Vec3, bounds_max: Vec3, resolution: u32) -> f32 {
+    let extent = bounds_max - bounds_min;
+    let denom = resolution.saturating_sub(1).max(1) as f32;
+    (extent.max_element() / denom).max(1e-6)
+}
+
+pub fn resolution_for_voxel_pitch(bounds_min: Vec3, bounds_max: Vec3, target_pitch: f32) -> u32 {
+    let target_pitch = target_pitch.max(1e-6);
+    let extent = bounds_max - bounds_min;
+    let steps = (extent.max_element() / target_pitch).ceil().max(1.0);
+    steps as u32 + 1
 }
 
 // ---------------------------------------------------------------------------

@@ -10,6 +10,7 @@ use crate::gpu::camera::Camera;
 use crate::graph::scene::{NodeData, NodeId, Scene, SceneNode};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::native_paths;
+use crate::sculpt::{PersistedSculptState, SculptState};
 use crate::settings::RenderConfig;
 
 const CURRENT_VERSION: u32 = 6;
@@ -21,6 +22,8 @@ pub struct ProjectFile {
     pub camera: Camera,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub render_config: Option<RenderConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sculpt_state: Option<PersistedSculptState>,
 }
 
 const PRESET_VERSION: u32 = 1;
@@ -54,10 +57,20 @@ pub struct RecoveryMeta {
 
 // ── Pure serialization (shared by native + WASM) ────────────────────────────
 
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn project_to_json(
     scene: &Scene,
     camera: &Camera,
     render_config: Option<&RenderConfig>,
+) -> Result<String, String> {
+    project_to_json_with_sculpt(scene, camera, render_config, None)
+}
+
+pub fn project_to_json_with_sculpt(
+    scene: &Scene,
+    camera: &Camera,
+    render_config: Option<&RenderConfig>,
+    sculpt_state: Option<&SculptState>,
 ) -> Result<String, String> {
     let project = ProjectFile {
         version: CURRENT_VERSION,
@@ -73,6 +86,7 @@ pub fn project_to_json(
             transition: None,
         },
         render_config: render_config.cloned(),
+        sculpt_state: sculpt_state.map(SculptState::to_persisted),
     };
     serde_json::to_string_pretty(&project).map_err(|e| e.to_string())
 }
@@ -329,13 +343,25 @@ pub fn load_subtree_preset(scene: &mut Scene, path: &std::path::Path) -> Result<
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+#[allow(dead_code)]
 pub fn save_project(
     scene: &Scene,
     camera: &Camera,
     render_config: &RenderConfig,
     path: &std::path::PathBuf,
 ) -> Result<(), String> {
-    let json = project_to_json(scene, camera, Some(render_config))?;
+    save_project_with_sculpt(scene, camera, render_config, None, path)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn save_project_with_sculpt(
+    scene: &Scene,
+    camera: &Camera,
+    render_config: &RenderConfig,
+    sculpt_state: Option<&SculptState>,
+    path: &std::path::PathBuf,
+) -> Result<(), String> {
+    let json = project_to_json_with_sculpt(scene, camera, Some(render_config), sculpt_state)?;
     native_paths::ensure_parent_dir(path)?;
     std::fs::write(path, json).map_err(|e| e.to_string())?;
     Ok(())
@@ -393,7 +419,17 @@ pub fn web_download(filename: &str, data: &[u8], mime: &str) {
 
 #[cfg(target_arch = "wasm32")]
 pub fn web_save_project(scene: &Scene, camera: &Camera, render_config: &RenderConfig) {
-    match project_to_json(scene, camera, Some(render_config)) {
+    web_save_project_with_sculpt(scene, camera, render_config, None)
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn web_save_project_with_sculpt(
+    scene: &Scene,
+    camera: &Camera,
+    render_config: &RenderConfig,
+    sculpt_state: Option<&SculptState>,
+) {
+    match project_to_json_with_sculpt(scene, camera, Some(render_config), sculpt_state) {
         Ok(json) => web_download("project.sdf", json.as_bytes(), "application/json"),
         Err(e) => log::error!("Failed to serialize project: {}", e),
     }
@@ -503,6 +539,7 @@ fn migrate_v2_to_v3(project: &mut ProjectFile) {
 mod tests {
     use super::*;
     use crate::graph::scene::{LightType, NodeData, SdfPrimitive};
+    use crate::sculpt::{BrushMode, SculptState};
     use crate::settings::{AmbientOcclusionMode, EnvironmentSource, RenderConfig};
     use std::collections::{HashMap, HashSet};
 
@@ -533,6 +570,46 @@ mod tests {
 
         assert_eq!(project.version, CURRENT_VERSION);
         assert_eq!(project.render_config, Some(render));
+    }
+
+    #[test]
+    fn project_json_roundtrip_preserves_sculpt_state() {
+        let mut scene = Scene::new();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        let sculpt = scene.create_sculpt(
+            sphere,
+            glam::Vec3::ZERO,
+            glam::Vec3::ZERO,
+            glam::Vec3::new(0.8, 0.4, 0.2),
+            crate::graph::voxel::VoxelGrid::new_displacement(
+                16,
+                glam::Vec3::splat(-1.0),
+                glam::Vec3::splat(1.0),
+            ),
+        );
+        let camera = Camera::default();
+        let mut sculpt_state = SculptState::new_active(sculpt);
+        sculpt_state.set_selected_brush(BrushMode::Grab);
+        sculpt_state.profile_mut(BrushMode::Grab).strength = 1.7;
+        sculpt_state.detail_state_mut().last_pre_expand_detail_size = Some(0.2);
+        sculpt_state.detail_state_mut().detail_limited_after_growth = true;
+
+        let json = project_to_json_with_sculpt(&scene, &camera, None, Some(&sculpt_state))
+            .expect("serialize project with sculpt state");
+        let project = json_to_project(&json).expect("deserialize project with sculpt state");
+        let restored = project
+            .sculpt_state
+            .map(|persisted| SculptState::from_persisted(persisted, &project.scene))
+            .expect("sculpt state should deserialize");
+
+        assert_eq!(restored.active_node(), Some(sculpt));
+        assert_eq!(restored.selected_brush(), BrushMode::Grab);
+        assert!((restored.profile(BrushMode::Grab).strength - 1.7).abs() < 1e-5);
+        assert_eq!(
+            restored.detail_state().last_pre_expand_detail_size,
+            Some(0.2)
+        );
+        assert!(restored.detail_state().detail_limited_after_growth);
     }
 
     #[test]

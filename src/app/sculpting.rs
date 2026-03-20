@@ -69,10 +69,10 @@ impl SdfApp {
                 BrushMode::Add => BrushMode::Carve,
                 BrushMode::Carve => BrushMode::Add,
                 BrushMode::Inflate => BrushMode::Carve,
-                other => other.clone(),
+                other => *other,
             }
         } else {
-            base_mode.clone()
+            *base_mode
         };
         match effective_mode {
             BrushMode::Add => "Sculpt Add",
@@ -213,13 +213,15 @@ impl SdfApp {
             None => return false,
         };
         if let SculptState::Active {
-            ref brush_mode,
-            grab_start: Some(origin),
+            ref session,
+            ref stroke_state,
             ..
         } = self.doc.sculpt_state
         {
-            if *brush_mode == BrushMode::Grab {
-                anchor = origin;
+            if session.selected_brush == BrushMode::Grab {
+                if let Some(origin) = stroke_state.grab_start {
+                    anchor = origin;
+                }
             }
         }
 
@@ -266,10 +268,12 @@ impl SdfApp {
         let (active_node, grab_origin) = match self.doc.sculpt_state {
             SculptState::Active {
                 node_id,
-                ref brush_mode,
-                grab_start: Some(origin),
+                ref session,
+                ref stroke_state,
                 ..
-            } if *brush_mode == BrushMode::Grab => (node_id, origin),
+            } if session.selected_brush == BrushMode::Grab && stroke_state.grab_start.is_some() => {
+                (node_id, stroke_state.grab_start.unwrap_or(Vec3::ZERO))
+            }
             _ => return false,
         };
 
@@ -345,10 +349,10 @@ impl SdfApp {
             let live_grab_drag = matches!(
                 self.doc.sculpt_state,
                 SculptState::Active {
-                    ref brush_mode,
-                    grab_start: Some(_),
+                    ref session,
+                    ref stroke_state,
                     ..
-                } if *brush_mode == BrushMode::Grab
+                } if session.selected_brush == BrushMode::Grab && stroke_state.grab_start.is_some()
             );
 
             if live_grab_drag {
@@ -417,60 +421,45 @@ impl SdfApp {
 
         // Per-stroke undo: snapshot grid data at the start of each stroke
         if self.async_state.last_sculpt_hit.is_none() {
-            if let SculptState::Active {
-                node_id: active_id,
-                ref brush_mode,
-                ..
-            } = self.doc.sculpt_state
-            {
+            if let Some(active_id) = self.doc.sculpt_state.active_node() {
+                let selected_brush = self.doc.sculpt_state.selected_brush();
                 self.doc.history.begin_sculpt_stroke(
                     &self.doc.scene,
                     active_id,
                     self.ui.node_graph_state.selected,
                     Self::sculpt_stroke_label(
-                        brush_mode,
+                        &selected_brush,
                         self.async_state.sculpt_ctrl_held,
                         self.async_state.sculpt_shift_held,
                     ),
                 );
             }
         }
-        let active_node_id = match self.doc.sculpt_state {
-            SculptState::Active { node_id, .. } => node_id,
-            _ => return,
-        };
-        let cached_ctx = self.sculpt_runtime_cache(active_node_id);
-        let SculptState::Active {
-            node_id,
-            ref brush_mode,
-            brush_radius,
-            brush_strength: base_brush_strength,
-            ref falloff_mode,
-            ref brush_shape,
-            smooth_iterations,
-            ref mut flatten_reference,
-            lazy_radius,
-            stroke_spacing,
-            surface_constraint,
-            front_faces_only,
-            symmetry_axis,
-            ref mut grab_snapshot,
-            ref mut grab_analytical_snapshot,
-            ref mut grab_start,
-            ref mut grab_child_input,
-        } = self.doc.sculpt_state
-        else {
+        let Some(node_id) = self.doc.sculpt_state.active_node() else {
             return;
         };
-
-        // Apply pen pressure sensitivity if enabled
-        let brush_strength = if self.settings.render.pressure_sensitivity
-            && self.async_state.sculpt_pressure > 0.0
-        {
-            base_brush_strength * self.async_state.sculpt_pressure
-        } else {
-            base_brush_strength
-        };
+        let cached_ctx = self.sculpt_runtime_cache(node_id);
+        let mut resolved_brush = self.doc.sculpt_state.resolved_brush_for_stroke(
+            self.async_state.sculpt_ctrl_held,
+            self.async_state.sculpt_shift_held,
+        );
+        if self.settings.render.pressure_sensitivity && self.async_state.sculpt_pressure > 0.0 {
+            resolved_brush.profile.strength *= self.async_state.sculpt_pressure;
+        }
+        resolved_brush
+            .profile
+            .clamp_strength_for_mode(resolved_brush.mode);
+        let brush_mode = resolved_brush.mode;
+        let brush_radius = resolved_brush.profile.radius;
+        let brush_strength = resolved_brush.profile.strength;
+        let falloff_mode = resolved_brush.profile.falloff_mode;
+        let brush_shape = resolved_brush.profile.brush_shape;
+        let smooth_iterations = resolved_brush.profile.smooth_iterations;
+        let lazy_radius = resolved_brush.profile.lazy_radius;
+        let stroke_spacing = resolved_brush.profile.stroke_spacing;
+        let surface_constraint = resolved_brush.profile.surface_constraint;
+        let front_faces_only = resolved_brush.profile.front_faces_only;
+        let symmetry_axis = self.doc.sculpt_state.symmetry_axis();
 
         if hit_node_id != node_id {
             // Differential sculpt: material ID is the child primitive's, not the sculpt's.
@@ -482,7 +471,9 @@ impl SdfApp {
                 if let Some(hit_node) = self.doc.scene.nodes.get(&hit_node_id) {
                     if matches!(hit_node.data, NodeData::Sculpt { .. }) {
                         // Hit another sculpt node - switch to it directly
-                        self.doc.sculpt_state = SculptState::new_active(hit_node_id);
+                        self.doc
+                            .sculpt_state
+                            .activate_preserving_session(hit_node_id, None);
                         self.ui.node_graph_state.select_single(hit_node_id);
                         self.async_state.last_sculpt_hit = None;
                         self.async_state.lazy_brush_pos = None;
@@ -494,7 +485,9 @@ impl SdfApp {
                             self.doc.scene.find_sculpt_parent(hit_node_id, &parent_map)
                         {
                             // Switch to the sculpt parent
-                            self.doc.sculpt_state = SculptState::new_active(sculpt_id);
+                            self.doc
+                                .sculpt_state
+                                .activate_preserving_session(sculpt_id, None);
                             self.ui.node_graph_state.select_single(sculpt_id);
                             self.async_state.last_sculpt_hit = None;
                             self.async_state.lazy_brush_pos = None;
@@ -516,22 +509,6 @@ impl SdfApp {
             result.world_pos[1],
             result.world_pos[2],
         );
-        // Apply Ctrl/Shift modifier overrides (ZBrush/Blender convention)
-        let brush_mode = if self.async_state.sculpt_shift_held {
-            BrushMode::Smooth
-        } else if self.async_state.sculpt_ctrl_held {
-            match brush_mode {
-                BrushMode::Add => BrushMode::Carve,
-                BrushMode::Carve => BrushMode::Add,
-                BrushMode::Inflate => BrushMode::Carve,
-                _ => brush_mode.clone(),
-            }
-        } else {
-            brush_mode.clone()
-        };
-        let falloff_mode = falloff_mode.clone();
-        let brush_shape = brush_shape.clone();
-
         let Some(cache) = cached_ctx else {
             return;
         };
@@ -539,7 +516,15 @@ impl SdfApp {
         // Grab brush: initialize snapshot and start position on first hit.
         // Differential sculpts store displacement only; analytical SDF is sampled on demand.
         let is_grab = brush_mode == BrushMode::Grab;
-        if is_grab && grab_snapshot.is_none() {
+        let needs_grab_snapshot = self
+            .doc
+            .sculpt_state
+            .stroke_state()
+            .is_some_and(|stroke_state| stroke_state.grab_snapshot.is_none());
+        if is_grab && needs_grab_snapshot {
+            let mut snapshot = None;
+            let mut analytical_snapshot = None;
+            let mut child_input = None;
             if let Some(node) = self.doc.scene.nodes.get(&node_id) {
                 if let NodeData::Sculpt {
                     input,
@@ -547,10 +532,9 @@ impl SdfApp {
                     ..
                 } = node.data
                 {
-                    *grab_snapshot = Some(voxel_grid.data.clone().into());
-                    *grab_child_input = input;
-                    *grab_start = Some(hit_world);
-                    *grab_analytical_snapshot = input.map(|child_id| {
+                    snapshot = Some(voxel_grid.data.clone().into());
+                    child_input = input;
+                    analytical_snapshot = input.map(|child_id| {
                         sculpt::build_analytical_snapshot(
                             voxel_grid,
                             &self.doc.scene,
@@ -562,11 +546,26 @@ impl SdfApp {
                     });
                 }
             }
+            if let Some(stroke_state) = self.doc.sculpt_state.stroke_state_mut() {
+                stroke_state.grab_snapshot = snapshot;
+                stroke_state.grab_child_input = child_input;
+                stroke_state.grab_start = Some(hit_world);
+                stroke_state.grab_analytical_snapshot = analytical_snapshot;
+            }
         }
-        let grab_snap = grab_snapshot.clone();
-        let grab_analytic_snap = grab_analytical_snapshot.clone();
-        let grab_origin = *grab_start;
-        let grab_child = *grab_child_input;
+        let (grab_snap, grab_analytic_snap, grab_origin, grab_child) = self
+            .doc
+            .sculpt_state
+            .stroke_state()
+            .map(|stroke_state| {
+                (
+                    stroke_state.grab_snapshot.clone(),
+                    stroke_state.grab_analytical_snapshot.clone(),
+                    stroke_state.grab_start,
+                    stroke_state.grab_child_input,
+                )
+            })
+            .unwrap_or((None, None, None, None));
 
         // Lazy brush: smooth cursor with elastic dead zone
         let effective_hit = if lazy_radius > 0.0 {
@@ -588,27 +587,42 @@ impl SdfApp {
         };
 
         // Capture flatten reference on first hit of a Flatten stroke
-        if brush_mode == BrushMode::Flatten && flatten_reference.is_none() {
+        let needs_flatten_reference = brush_mode == BrushMode::Flatten
+            && self
+                .doc
+                .sculpt_state
+                .stroke_state()
+                .is_some_and(|stroke_state| stroke_state.flatten_reference.is_none());
+        if needs_flatten_reference {
+            let mut flatten_reference = None;
             if let Some(node) = self.doc.scene.nodes.get(&node_id) {
                 if let NodeData::Sculpt { ref voxel_grid, .. } = node.data {
                     let local_hit = sculpt::inverse_rotate_euler(
                         effective_hit - cache.position,
                         cache.rotation,
                     );
-                    *flatten_reference = Some(voxel_grid.sample(local_hit));
+                    flatten_reference = Some(voxel_grid.sample(local_hit));
                 }
             }
+            if let Some(stroke_state) = self.doc.sculpt_state.stroke_state_mut() {
+                stroke_state.flatten_reference = flatten_reference;
+            }
         }
-        let flatten_ref_val = flatten_reference.unwrap_or(0.0);
+        let flatten_ref_val = self
+            .doc
+            .sculpt_state
+            .stroke_state()
+            .and_then(|stroke_state| stroke_state.flatten_reference)
+            .unwrap_or(0.0);
 
         // Grab brush: single application per frame, centered at grab start
         if is_grab {
-            if let (Some(ref snap), Some(origin)) = (&grab_snap, grab_origin) {
+            if let (Some(snap), Some(origin)) = (grab_snap.as_deref(), grab_origin) {
                 // Project mouse ray onto camera-facing plane at grab depth (like Blender).
                 // This gives 1:1 screen-to-world mapping regardless of surface curvature.
                 let eye = self.doc.camera.eye();
-                let forward = (self.doc.camera.target - eye).normalize();
-                let ray_dir = (hit_world - eye).normalize();
+                let forward = (self.doc.camera.target - eye).normalize_or_zero();
+                let ray_dir = (hit_world - eye).normalize_or_zero();
                 let denom = ray_dir.dot(forward);
                 let grab_delta = if denom.abs() > 1e-6 {
                     let t = (origin - eye).dot(forward) / denom;
@@ -670,10 +684,14 @@ impl SdfApp {
                 };
 
                 if let Some(region) = dirty {
-                    let repaired =
-                        sculpt::repair_sdf_region_scene(&mut self.doc.scene, node_id, region, 2)
-                            .unwrap_or(region);
-                    let (z0, z1) = repaired.z_range();
+                    if let Some(stroke_state) = self.doc.sculpt_state.stroke_state_mut() {
+                        stroke_state.pending_grab_repair_region =
+                            Some(match stroke_state.pending_grab_repair_region {
+                                Some(existing) => existing.merge(region),
+                                None => region,
+                            });
+                    }
+                    let (z0, z1) = region.z_range();
                     self.try_incremental_voxel_upload(node_id, z0, z1);
                     self.upload_voxel_texture_region(node_id, z0, z1);
                 }
@@ -894,22 +912,8 @@ impl SdfApp {
             // until a hover pick re-confirms geometry. hover_world_pos is kept
             // so the 3D brush ring stays visible during hover.
             self.async_state.cursor_over_geometry = false;
-
-            if let SculptState::Active {
-                ref mut flatten_reference,
-                ref mut grab_snapshot,
-                ref mut grab_analytical_snapshot,
-                ref mut grab_start,
-                ref mut grab_child_input,
-                ..
-            } = self.doc.sculpt_state
-            {
-                *flatten_reference = None;
-                *grab_snapshot = None;
-                *grab_analytical_snapshot = None;
-                *grab_start = None;
-                *grab_child_input = None;
-            }
+            self.finalize_pending_grab_repair();
+            self.doc.sculpt_state.clear_stroke_state();
         }
     }
 
@@ -918,7 +922,8 @@ impl SdfApp {
             ActiveTool::Select => {
                 // Original behavior: always deactivate sculpt in Select mode
                 if self.doc.sculpt_state.is_active() {
-                    self.doc.sculpt_state = SculptState::Inactive;
+                    self.finalize_pending_grab_repair();
+                    self.doc.sculpt_state.deactivate();
                     self.doc.history.discard_pending_sculpt_stroke();
                     self.async_state.last_sculpt_hit = None;
                     self.async_state.lazy_brush_pos = None;
@@ -942,13 +947,18 @@ impl SdfApp {
                             .get(&id)
                             .is_some_and(|n| matches!(n.data, NodeData::Sculpt { .. }))
                         {
-                            self.doc.sculpt_state = SculptState::new_active(id);
+                            self.finalize_pending_grab_repair();
+                            self.doc
+                                .sculpt_state
+                                .activate_preserving_session(id, Some(self.scene_avg_extent()));
                         } else {
-                            self.doc.sculpt_state = SculptState::Inactive;
+                            self.finalize_pending_grab_repair();
+                            self.doc.sculpt_state.deactivate();
                             self.doc.history.discard_pending_sculpt_stroke();
                         }
                     } else {
-                        self.doc.sculpt_state = SculptState::Inactive;
+                        self.finalize_pending_grab_repair();
+                        self.doc.sculpt_state.deactivate();
                         self.doc.history.discard_pending_sculpt_stroke();
                     }
                     self.async_state.last_sculpt_hit = None;
@@ -973,5 +983,25 @@ impl SdfApp {
             }
         }
         self.async_state.pick_state = PickState::Idle;
+    }
+
+    pub(super) fn finalize_pending_grab_repair(&mut self) {
+        let Some(node_id) = self.doc.sculpt_state.active_node() else {
+            return;
+        };
+        let pending_region = self
+            .doc
+            .sculpt_state
+            .stroke_state_mut()
+            .and_then(|stroke_state| stroke_state.pending_grab_repair_region.take());
+        let Some(region) = pending_region else {
+            return;
+        };
+
+        let repaired = sculpt::repair_sdf_region_scene(&mut self.doc.scene, node_id, region, 2)
+            .unwrap_or(region);
+        let (z0, z1) = repaired.z_range();
+        self.try_incremental_voxel_upload(node_id, z0, z1);
+        self.upload_voxel_texture_region(node_id, z0, z1);
     }
 }

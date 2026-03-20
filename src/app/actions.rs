@@ -106,6 +106,11 @@ pub enum Action {
         mode: SculptConvertMode,
         resolution: u32,
     },
+    IncreaseSculptDetail(NodeId),
+    DecreaseSculptDetail(NodeId),
+    RemeshSculptAtCurrentDetail(NodeId),
+    ExpandSculptVolume(NodeId),
+    FitSculptVolume(NodeId),
 
     // ── Scene mutations (structural) ─────────────────────────────────
     CreatePrimitive(SdfPrimitive),

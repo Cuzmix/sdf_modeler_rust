@@ -169,6 +169,8 @@ pub struct ViewportContext<'a> {
     pub hover_world_pos: Option<Vec3>,
     /// Whether cursor is currently over geometry (from last hover pick).
     pub cursor_over_geometry: bool,
+    /// Modal `F` / `Shift+F` brush adjustment state.
+    pub sculpt_brush_adjust: &'a mut Option<crate::app::state::SculptBrushAdjustState>,
     /// Currently soloed light node ID (None = no solo).
     pub soloed_light: Option<NodeId>,
     /// Label for solo mode indicator (None = not soloed).
@@ -268,6 +270,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.viewport.last_sculpt_hit,
                     self.viewport.hover_world_pos,
                     self.viewport.cursor_over_geometry,
+                    self.viewport.sculpt_brush_adjust,
                     self.active_light_ids,
                     self.viewport.soloed_light,
                     self.viewport.solo_label.as_deref(),
@@ -284,18 +287,14 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     *self.viewport.sculpt_pressure = vp_output.sculpt_pressure;
                 }
                 // Apply Ctrl+right-drag brush resize/strength adjustments
-                if vp_output.brush_radius_delta != 0.0 || vp_output.brush_strength_delta != 0.0 {
-                    if let crate::sculpt::SculptState::Active {
-                        ref mut brush_radius,
-                        ref mut brush_strength,
-                        ..
-                    } = self.sculpt_state
-                    {
-                        *brush_radius =
-                            (*brush_radius + vp_output.brush_radius_delta).clamp(0.05, 2.0);
-                        *brush_strength =
-                            (*brush_strength + vp_output.brush_strength_delta).clamp(0.01, 3.0);
-                    }
+                if (vp_output.brush_radius_delta != 0.0 || vp_output.brush_strength_delta != 0.0)
+                    && self.sculpt_state.is_active()
+                {
+                    let selected_mode = self.sculpt_state.selected_brush();
+                    let profile = self.sculpt_state.selected_profile_mut();
+                    profile.radius = (profile.radius + vp_output.brush_radius_delta).clamp(0.05, 2.0);
+                    profile.strength += vp_output.brush_strength_delta;
+                    profile.clamp_strength_for_mode(selected_mode);
                 }
             }
             Tab::NodeGraph => {

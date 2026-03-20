@@ -1,4 +1,5 @@
 use glam::Vec3;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 use crate::graph::scene::{NodeData, NodeId, Scene};
@@ -10,7 +11,9 @@ use crate::graph::voxel::{self, VoxelGrid};
 
 pub const DEFAULT_BRUSH_RADIUS: f32 = 0.3;
 pub const DEFAULT_BRUSH_STRENGTH: f32 = 0.05;
-pub const DEFAULT_STROKE_SPACING: f32 = 0.15;
+pub const DEFAULT_SMOOTH_STRENGTH: f32 = 0.16;
+pub const DEFAULT_GRAB_STRENGTH: f32 = 1.0;
+pub const DEFAULT_STROKE_SPACING: f32 = 0.08;
 
 // ---------------------------------------------------------------------------
 // Tool system
@@ -28,8 +31,9 @@ pub enum ActiveTool {
 // Brush types
 // ---------------------------------------------------------------------------
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 pub enum BrushMode {
+    #[default]
     Add,
     Carve,
     Smooth,
@@ -39,7 +43,7 @@ pub enum BrushMode {
 }
 
 impl BrushMode {
-    pub fn sign(&self) -> f32 {
+    pub fn sign(self) -> f32 {
         match self {
             Self::Add => -1.0,  // decrease distance = add material
             Self::Carve => 1.0, // increase distance = remove material
@@ -51,7 +55,7 @@ impl BrushMode {
     }
 
     /// GPU brush_mode encoding: 0=Add, 1=Carve, 2=Smooth, 3=Flatten, 4=Inflate.
-    pub fn gpu_mode(&self) -> f32 {
+    pub fn gpu_mode(self) -> f32 {
         match self {
             Self::Add => 0.0,
             Self::Carve => 1.0,
@@ -67,7 +71,7 @@ impl BrushMode {
 // Falloff types
 // ---------------------------------------------------------------------------
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FalloffMode {
     Smooth,
     Linear,
@@ -77,7 +81,7 @@ pub enum FalloffMode {
 
 impl FalloffMode {
     /// GPU falloff_mode encoding: 0=Smooth, 1=Linear, 2=Sharp, 3=Flat.
-    pub fn gpu_mode(&self) -> f32 {
+    pub fn gpu_mode(self) -> f32 {
         match self {
             Self::Smooth => 0.0,
             Self::Linear => 1.0,
@@ -87,7 +91,7 @@ impl FalloffMode {
     }
 
     /// Evaluate falloff at normalized distance nt in [0, 1).
-    pub fn evaluate(&self, nt: f32) -> f32 {
+    pub fn evaluate(self, nt: f32) -> f32 {
         match self {
             Self::Smooth => 1.0 - nt * nt * (3.0 - 2.0 * nt),
             Self::Linear => 1.0 - nt,
@@ -101,7 +105,7 @@ impl FalloffMode {
 // Brush shapes (alphas/stamps)
 // ---------------------------------------------------------------------------
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BrushShape {
     Sphere,
     Cube,
@@ -169,42 +173,229 @@ impl BrushShape {
 // Sculpt state
 // ---------------------------------------------------------------------------
 
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SculptBrushProfile {
+    pub radius: f32,
+    pub strength: f32,
+    pub falloff_mode: FalloffMode,
+    pub brush_shape: BrushShape,
+    pub smooth_iterations: u32,
+    pub lazy_radius: f32,
+    pub stroke_spacing: f32,
+    pub surface_constraint: f32,
+    pub front_faces_only: bool,
+}
+
+impl SculptBrushProfile {
+    pub fn default_for_mode(mode: BrushMode) -> Self {
+        match mode {
+            BrushMode::Add => Self {
+                radius: DEFAULT_BRUSH_RADIUS,
+                strength: DEFAULT_BRUSH_STRENGTH,
+                falloff_mode: FalloffMode::Smooth,
+                brush_shape: BrushShape::Sphere,
+                smooth_iterations: 2,
+                lazy_radius: 0.0,
+                stroke_spacing: DEFAULT_STROKE_SPACING,
+                surface_constraint: 0.0,
+                front_faces_only: true,
+            },
+            BrushMode::Carve => Self {
+                strength: DEFAULT_BRUSH_STRENGTH,
+                ..Self::default_for_mode(BrushMode::Add)
+            },
+            BrushMode::Smooth => Self {
+                radius: DEFAULT_BRUSH_RADIUS,
+                strength: DEFAULT_SMOOTH_STRENGTH,
+                falloff_mode: FalloffMode::Smooth,
+                brush_shape: BrushShape::Sphere,
+                smooth_iterations: 2,
+                lazy_radius: 0.0,
+                stroke_spacing: DEFAULT_STROKE_SPACING,
+                surface_constraint: 0.2,
+                front_faces_only: true,
+            },
+            BrushMode::Flatten => Self {
+                radius: DEFAULT_BRUSH_RADIUS,
+                strength: DEFAULT_BRUSH_STRENGTH,
+                falloff_mode: FalloffMode::Smooth,
+                brush_shape: BrushShape::Sphere,
+                smooth_iterations: 2,
+                lazy_radius: 0.0,
+                stroke_spacing: DEFAULT_STROKE_SPACING,
+                surface_constraint: 0.0,
+                front_faces_only: true,
+            },
+            BrushMode::Inflate => Self {
+                radius: DEFAULT_BRUSH_RADIUS,
+                strength: 0.04,
+                falloff_mode: FalloffMode::Smooth,
+                brush_shape: BrushShape::Sphere,
+                smooth_iterations: 2,
+                lazy_radius: 0.0,
+                stroke_spacing: DEFAULT_STROKE_SPACING,
+                surface_constraint: 0.2,
+                front_faces_only: true,
+            },
+            BrushMode::Grab => Self {
+                radius: DEFAULT_BRUSH_RADIUS,
+                strength: DEFAULT_GRAB_STRENGTH,
+                falloff_mode: FalloffMode::Smooth,
+                brush_shape: BrushShape::Sphere,
+                smooth_iterations: 2,
+                lazy_radius: 0.0,
+                stroke_spacing: DEFAULT_STROKE_SPACING,
+                surface_constraint: 0.0,
+                front_faces_only: false,
+            },
+        }
+    }
+
+    pub fn strength_limits(mode: BrushMode) -> (f32, f32) {
+        match mode {
+            BrushMode::Grab => (0.1, 3.0),
+            _ => (0.01, 0.5),
+        }
+    }
+
+    pub fn clamp_strength_for_mode(&mut self, mode: BrushMode) {
+        let (min_strength, max_strength) = Self::strength_limits(mode);
+        self.strength = self.strength.clamp(min_strength, max_strength);
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SculptBrushProfileSet {
+    pub add: SculptBrushProfile,
+    pub carve: SculptBrushProfile,
+    pub smooth: SculptBrushProfile,
+    pub flatten: SculptBrushProfile,
+    pub inflate: SculptBrushProfile,
+    pub grab: SculptBrushProfile,
+}
+
+impl Default for SculptBrushProfileSet {
+    fn default() -> Self {
+        Self {
+            add: SculptBrushProfile::default_for_mode(BrushMode::Add),
+            carve: SculptBrushProfile::default_for_mode(BrushMode::Carve),
+            smooth: SculptBrushProfile::default_for_mode(BrushMode::Smooth),
+            flatten: SculptBrushProfile::default_for_mode(BrushMode::Flatten),
+            inflate: SculptBrushProfile::default_for_mode(BrushMode::Inflate),
+            grab: SculptBrushProfile::default_for_mode(BrushMode::Grab),
+        }
+    }
+}
+
+impl SculptBrushProfileSet {
+    pub fn profile(&self, mode: BrushMode) -> &SculptBrushProfile {
+        match mode {
+            BrushMode::Add => &self.add,
+            BrushMode::Carve => &self.carve,
+            BrushMode::Smooth => &self.smooth,
+            BrushMode::Flatten => &self.flatten,
+            BrushMode::Inflate => &self.inflate,
+            BrushMode::Grab => &self.grab,
+        }
+    }
+
+    pub fn profile_mut(&mut self, mode: BrushMode) -> &mut SculptBrushProfile {
+        match mode {
+            BrushMode::Add => &mut self.add,
+            BrushMode::Carve => &mut self.carve,
+            BrushMode::Smooth => &mut self.smooth,
+            BrushMode::Flatten => &mut self.flatten,
+            BrushMode::Inflate => &mut self.inflate,
+            BrushMode::Grab => &mut self.grab,
+        }
+    }
+
+    pub fn set_radius_for_all(&mut self, radius: f32) {
+        for mode in [
+            BrushMode::Add,
+            BrushMode::Carve,
+            BrushMode::Smooth,
+            BrushMode::Flatten,
+            BrushMode::Inflate,
+            BrushMode::Grab,
+        ] {
+            self.profile_mut(mode).radius = radius;
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct SculptDetailState {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_pre_expand_detail_size: Option<f32>,
+    #[serde(default)]
+    pub detail_limited_after_growth: bool,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct SculptStrokeState {
+    /// SDF value at brush center when Flatten drag started. Reset on mouse release.
+    pub flatten_reference: Option<f32>,
+    /// Snapshot of grid data for grab brush (cloned on grab start).
+    /// For differential sculpts this stores displacement only; analytical
+    /// SDF is sampled on demand during warp write-back.
+    pub grab_snapshot: Option<Arc<[f32]>>,
+    /// Optional analytical child SDF snapshot for differential grab.
+    /// Cached once at stroke start to avoid per-voxel tree evals per frame.
+    pub grab_analytical_snapshot: Option<Arc<[f32]>>,
+    /// World position where grab stroke started.
+    pub grab_start: Option<Vec3>,
+    /// Child input node for differential grab (used to subtract analytical SDF on write-back).
+    pub grab_child_input: Option<NodeId>,
+    /// Deferred repair region for Grab so active drags stay responsive.
+    pub pending_grab_repair_region: Option<VoxelEditRegion>,
+    /// Shift-smooth inherits the current active brush radius for the duration of a stroke.
+    pub temporary_smooth_radius: Option<f32>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SculptSessionData {
+    pub selected_brush: BrushMode,
+    pub brush_profiles: SculptBrushProfileSet,
+    pub symmetry_axis: Option<u8>,
+    #[serde(default)]
+    pub detail_state: SculptDetailState,
+}
+
+impl Default for SculptSessionData {
+    fn default() -> Self {
+        Self {
+            selected_brush: BrushMode::Add,
+            brush_profiles: SculptBrushProfileSet::default(),
+            symmetry_axis: None,
+            detail_state: SculptDetailState::default(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct PersistedSculptState {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active_node: Option<NodeId>,
+    #[serde(default)]
+    pub session: SculptSessionData,
+}
+
+#[derive(Clone, Debug)]
+pub struct ResolvedSculptBrush {
+    pub mode: BrushMode,
+    pub profile: SculptBrushProfile,
+}
+
 #[derive(Clone, Debug)]
 pub enum SculptState {
-    Inactive,
+    Inactive {
+        session: SculptSessionData,
+    },
     Active {
         node_id: NodeId,
-        brush_mode: BrushMode,
-        brush_radius: f32,
-        brush_strength: f32,
-        falloff_mode: FalloffMode,
-        brush_shape: BrushShape,
-        smooth_iterations: u32,
-        /// SDF value at brush center when Flatten drag started. Reset on mouse release.
-        flatten_reference: Option<f32>,
-        /// Lazy brush dead zone radius (0.0 = disabled).
-        lazy_radius: f32,
-        /// Stroke interpolation spacing as a fraction of brush radius.
-        /// Lower values produce denser, smoother stroke samples.
-        stroke_spacing: f32,
-        /// Surface constraint multiplier (0.0 = off). Attenuates brush near surface only.
-        surface_constraint: f32,
-        /// If true, attenuate brush influence toward back-facing voxels.
-        /// Mimics "front faces only" behavior from DCC sculpt tools.
-        front_faces_only: bool,
-        /// Mirror axis: None = off, Some(0) = X, Some(1) = Y, Some(2) = Z.
-        symmetry_axis: Option<u8>,
-        /// Snapshot of grid data for grab brush (cloned on grab start).
-        /// For differential sculpts this stores displacement only; analytical
-        /// SDF is sampled on demand during warp write-back.
-        grab_snapshot: Option<Arc<[f32]>>,
-        /// Optional analytical child SDF snapshot for differential grab.
-        /// Cached once at stroke start to avoid per-voxel tree evals per frame.
-        grab_analytical_snapshot: Option<Arc<[f32]>>,
-        /// World position where grab stroke started.
-        grab_start: Option<Vec3>,
-        /// Child input node for differential grab (used to subtract analytical SDF on write-back).
-        grab_child_input: Option<NodeId>,
+        session: SculptSessionData,
+        stroke_state: SculptStrokeState,
     },
 }
 
@@ -248,51 +439,37 @@ impl VoxelEditRegion {
 }
 
 impl SculptState {
+    fn default_session_with_radius(extent: f32) -> SculptSessionData {
+        let radius = (extent * 0.15).clamp(0.05, 2.0);
+        let mut session = SculptSessionData::default();
+        session.brush_profiles.set_radius_for_all(radius);
+        session
+    }
+
+    pub fn new_inactive() -> Self {
+        Self::Inactive {
+            session: SculptSessionData::default(),
+        }
+    }
+
     /// Create a new Active sculpt state with default brush settings.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn new_active(node_id: NodeId) -> Self {
         Self::Active {
             node_id,
-            brush_mode: BrushMode::Add,
-            brush_radius: DEFAULT_BRUSH_RADIUS,
-            brush_strength: DEFAULT_BRUSH_STRENGTH,
-            falloff_mode: FalloffMode::Sharp,
-            brush_shape: BrushShape::Sphere,
-            smooth_iterations: 3,
-            flatten_reference: None,
-            lazy_radius: 0.0,
-            stroke_spacing: DEFAULT_STROKE_SPACING,
-            surface_constraint: 0.0,
-            front_faces_only: true,
-            symmetry_axis: None,
-            grab_snapshot: None,
-            grab_analytical_snapshot: None,
-            grab_start: None,
-            grab_child_input: None,
+            session: SculptSessionData::default(),
+            stroke_state: SculptStrokeState::default(),
         }
     }
 
     /// Create Active state with adaptive brush radius based on object bounds.
     /// `extent` is the average half-extent of the bounding box (e.g. from `compute_bounds()`).
+    #[allow(dead_code)]
     pub fn new_active_with_radius(node_id: NodeId, extent: f32) -> Self {
-        let radius = (extent * 0.15).clamp(0.05, 2.0);
         Self::Active {
             node_id,
-            brush_mode: BrushMode::Add,
-            brush_radius: radius,
-            brush_strength: DEFAULT_BRUSH_STRENGTH,
-            falloff_mode: FalloffMode::Sharp,
-            brush_shape: BrushShape::Sphere,
-            smooth_iterations: 3,
-            flatten_reference: None,
-            lazy_radius: 0.0,
-            stroke_spacing: DEFAULT_STROKE_SPACING,
-            surface_constraint: 0.0,
-            front_faces_only: true,
-            symmetry_axis: None,
-            grab_snapshot: None,
-            grab_analytical_snapshot: None,
-            grab_start: None,
-            grab_child_input: None,
+            session: Self::default_session_with_radius(extent),
+            stroke_state: SculptStrokeState::default(),
         }
     }
 
@@ -307,10 +484,174 @@ impl SculptState {
         }
     }
 
-    pub fn symmetry_axis(&self) -> Option<u8> {
+    pub fn activate_preserving_session(&mut self, node_id: NodeId, extent: Option<f32>) {
+        let mut session = match std::mem::replace(self, Self::new_inactive()) {
+            Self::Inactive { session } | Self::Active { session, .. } => session,
+        };
+        if session == SculptSessionData::default() {
+            if let Some(extent) = extent {
+                session = Self::default_session_with_radius(extent);
+            }
+        }
+        *self = Self::Active {
+            node_id,
+            session,
+            stroke_state: SculptStrokeState::default(),
+        };
+    }
+
+    pub fn deactivate(&mut self) {
+        let session = match std::mem::replace(self, Self::new_inactive()) {
+            Self::Inactive { session } | Self::Active { session, .. } => session,
+        };
+        *self = Self::Inactive { session };
+    }
+
+    pub fn session(&self) -> &SculptSessionData {
         match self {
-            Self::Active { symmetry_axis, .. } => *symmetry_axis,
-            _ => None,
+            Self::Inactive { session } | Self::Active { session, .. } => session,
+        }
+    }
+
+    pub fn session_mut(&mut self) -> &mut SculptSessionData {
+        match self {
+            Self::Inactive { session } | Self::Active { session, .. } => session,
+        }
+    }
+
+    pub fn stroke_state(&self) -> Option<&SculptStrokeState> {
+        match self {
+            Self::Active { stroke_state, .. } => Some(stroke_state),
+            Self::Inactive { .. } => None,
+        }
+    }
+
+    pub fn stroke_state_mut(&mut self) -> Option<&mut SculptStrokeState> {
+        match self {
+            Self::Active { stroke_state, .. } => Some(stroke_state),
+            Self::Inactive { .. } => None,
+        }
+    }
+
+    pub fn clear_stroke_state(&mut self) {
+        if let Some(stroke_state) = self.stroke_state_mut() {
+            *stroke_state = SculptStrokeState::default();
+        }
+    }
+
+    pub fn selected_brush(&self) -> BrushMode {
+        self.session().selected_brush
+    }
+
+    pub fn set_selected_brush(&mut self, mode: BrushMode) {
+        self.session_mut().selected_brush = mode;
+    }
+
+    pub fn profile(&self, mode: BrushMode) -> &SculptBrushProfile {
+        self.session().brush_profiles.profile(mode)
+    }
+
+    pub fn profile_mut(&mut self, mode: BrushMode) -> &mut SculptBrushProfile {
+        self.session_mut().brush_profiles.profile_mut(mode)
+    }
+
+    pub fn selected_profile(&self) -> &SculptBrushProfile {
+        self.profile(self.selected_brush())
+    }
+
+    pub fn selected_profile_mut(&mut self) -> &mut SculptBrushProfile {
+        let selected_brush = self.selected_brush();
+        self.profile_mut(selected_brush)
+    }
+
+    pub fn symmetry_axis(&self) -> Option<u8> {
+        self.session().symmetry_axis
+    }
+
+    pub fn set_symmetry_axis(&mut self, axis: Option<u8>) {
+        self.session_mut().symmetry_axis = axis;
+    }
+
+    pub fn detail_state(&self) -> &SculptDetailState {
+        &self.session().detail_state
+    }
+
+    pub fn detail_state_mut(&mut self) -> &mut SculptDetailState {
+        &mut self.session_mut().detail_state
+    }
+
+    pub fn to_persisted(&self) -> PersistedSculptState {
+        PersistedSculptState {
+            active_node: self.active_node(),
+            session: self.session().clone(),
+        }
+    }
+
+    pub fn from_persisted(persisted: PersistedSculptState, scene: &Scene) -> Self {
+        if let Some(active_node) = persisted.active_node {
+            if scene
+                .nodes
+                .get(&active_node)
+                .is_some_and(|node| matches!(node.data, NodeData::Sculpt { .. }))
+            {
+                return Self::Active {
+                    node_id: active_node,
+                    session: persisted.session,
+                    stroke_state: SculptStrokeState::default(),
+                };
+            }
+        }
+        Self::Inactive {
+            session: persisted.session,
+        }
+    }
+
+    pub fn effective_brush_mode(&self, ctrl: bool, shift: bool) -> BrushMode {
+        let base = self.selected_brush();
+        if shift {
+            return BrushMode::Smooth;
+        }
+        if ctrl {
+            return match base {
+                BrushMode::Add => BrushMode::Carve,
+                BrushMode::Carve => BrushMode::Add,
+                BrushMode::Inflate => BrushMode::Carve,
+                other => other,
+            };
+        }
+        base
+    }
+
+    pub fn preview_radius_with_modifiers(&self, ctrl: bool, shift: bool) -> f32 {
+        let base_brush = self.selected_brush();
+        if shift && base_brush != BrushMode::Smooth {
+            return self.profile(base_brush).radius;
+        }
+        self.profile(self.effective_brush_mode(ctrl, shift)).radius
+    }
+
+    pub fn resolved_brush_for_stroke(&mut self, ctrl: bool, shift: bool) -> ResolvedSculptBrush {
+        let selected_brush = self.selected_brush();
+        let effective_mode = self.effective_brush_mode(ctrl, shift);
+        let active_radius = self.profile(selected_brush).radius;
+        let mut profile = self.profile(effective_mode).clone();
+
+        if shift && selected_brush != BrushMode::Smooth {
+            if let Some(stroke_state) = self.stroke_state_mut() {
+                if stroke_state.temporary_smooth_radius.is_none() {
+                    stroke_state.temporary_smooth_radius = Some(active_radius);
+                }
+                if let Some(temporary_radius) = stroke_state.temporary_smooth_radius {
+                    profile.radius = temporary_radius;
+                }
+            } else {
+                profile.radius = active_radius;
+            }
+        }
+
+        ResolvedSculptBrush {
+            mode: effective_mode,
+            profile,
         }
     }
 }
@@ -1420,6 +1761,31 @@ pub fn inverse_rotate_euler(p: Vec3, r: Vec3) -> Vec3 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::graph::scene::{MaterialParams, NodeData, Scene, SdfPrimitive};
+    use crate::graph::voxel::VoxelGrid;
+
+    fn scene_with_sculpt_node() -> (Scene, NodeId) {
+        let mut scene = Scene::new();
+        let input = scene.add_node(
+            "Sphere".into(),
+            NodeData::Primitive {
+                kind: SdfPrimitive::Sphere,
+                position: Vec3::ZERO,
+                rotation: Vec3::ZERO,
+                scale: Vec3::ONE,
+                material: MaterialParams::default(),
+                voxel_grid: None,
+            },
+        );
+        let sculpt = scene.create_sculpt(
+            input,
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::ONE,
+            VoxelGrid::new_displacement(16, Vec3::splat(-1.0), Vec3::splat(1.0)),
+        );
+        (scene, sculpt)
+    }
 
     #[test]
     fn voxel_edit_region_merge_and_padding_work() {
@@ -1506,5 +1872,64 @@ mod tests {
         assert!(line_sample(0) < 0.0 && line_sample(1) < 0.0 && line_sample(2) < 0.0);
         assert!(line_sample(3) > 0.0);
         assert!(line_sample(4) > 0.0 && line_sample(5) > 0.0 && line_sample(6) > 0.0);
+    }
+
+    #[test]
+    fn brush_profiles_keep_independent_settings() {
+        let mut sculpt_state = SculptState::new_inactive();
+        sculpt_state.profile_mut(BrushMode::Add).radius = 0.6;
+        sculpt_state.profile_mut(BrushMode::Smooth).radius = 1.1;
+        sculpt_state.profile_mut(BrushMode::Grab).strength = 2.4;
+
+        assert!((sculpt_state.profile(BrushMode::Add).radius - 0.6).abs() < 1e-5);
+        assert!((sculpt_state.profile(BrushMode::Smooth).radius - 1.1).abs() < 1e-5);
+        assert!((sculpt_state.profile(BrushMode::Grab).strength - 2.4).abs() < 1e-5);
+    }
+
+    #[test]
+    fn shift_smooth_uses_smooth_profile_but_keeps_active_radius() {
+        let mut sculpt_state = SculptState::new_active(7);
+        sculpt_state.set_selected_brush(BrushMode::Add);
+        sculpt_state.profile_mut(BrushMode::Add).radius = 0.85;
+        sculpt_state.profile_mut(BrushMode::Smooth).radius = 0.25;
+        sculpt_state.profile_mut(BrushMode::Smooth).strength = 0.21;
+
+        let resolved = sculpt_state.resolved_brush_for_stroke(false, true);
+        assert_eq!(resolved.mode, BrushMode::Smooth);
+        assert!((resolved.profile.radius - 0.85).abs() < 1e-5);
+        assert!((resolved.profile.strength - 0.21).abs() < 1e-5);
+    }
+
+    #[test]
+    fn ctrl_invert_swaps_add_and_carve_but_preserves_other_modes() {
+        let mut sculpt_state = SculptState::new_inactive();
+        sculpt_state.set_selected_brush(BrushMode::Add);
+        assert_eq!(sculpt_state.effective_brush_mode(true, false), BrushMode::Carve);
+
+        sculpt_state.set_selected_brush(BrushMode::Carve);
+        assert_eq!(sculpt_state.effective_brush_mode(true, false), BrushMode::Add);
+
+        sculpt_state.set_selected_brush(BrushMode::Grab);
+        assert_eq!(sculpt_state.effective_brush_mode(true, false), BrushMode::Grab);
+    }
+
+    #[test]
+    fn persisted_state_round_trips_active_node_and_session() {
+        let (scene, sculpt_node) = scene_with_sculpt_node();
+        let mut sculpt_state = SculptState::new_active(sculpt_node);
+        sculpt_state.set_selected_brush(BrushMode::Flatten);
+        sculpt_state.profile_mut(BrushMode::Flatten).strength = 0.19;
+        sculpt_state.detail_state_mut().last_pre_expand_detail_size = Some(0.125);
+        sculpt_state.detail_state_mut().detail_limited_after_growth = true;
+
+        let restored = SculptState::from_persisted(sculpt_state.to_persisted(), &scene);
+        assert_eq!(restored.active_node(), Some(sculpt_node));
+        assert_eq!(restored.selected_brush(), BrushMode::Flatten);
+        assert!((restored.profile(BrushMode::Flatten).strength - 0.19).abs() < 1e-5);
+        assert_eq!(
+            restored.detail_state().last_pre_expand_detail_size,
+            Some(0.125)
+        );
+        assert!(restored.detail_state().detail_limited_after_growth);
     }
 }

@@ -969,7 +969,7 @@ pub fn draw(
             mut rotation,
             mut material,
             mut layer_intensity,
-            voxel_grid: _,
+            ref voxel_grid,
             mut desired_resolution,
         } => {
             ui.label("Type: Sculpt Modifier");
@@ -1026,9 +1026,58 @@ pub fn draw(
             egui::CollapsingHeader::new("Sculpting")
                 .default_open(true)
                 .show(ui, |ui| {
-                    // Resolution presets
+                    let detail_size = voxel_grid.voxel_pitch();
+                    ui.horizontal(|ui| {
+                        ui.label("Detail Size:");
+                        ui.monospace(format!("{detail_size:.4}"));
+                    });
                     ui.horizontal(|ui| {
                         ui.label("Resolution:");
+                        ui.monospace(format!("{}^3", desired_resolution));
+                    });
+                    let detail_state = sculpt_state.detail_state();
+                    if sculpt_state.active_node() == Some(id) {
+                        if let Some(previous_detail) = detail_state.last_pre_expand_detail_size {
+                            ui.colored_label(
+                                egui::Color32::YELLOW,
+                                format!(
+                                    "Volume expansion made detail coarser. Previous detail size was {:.4}.",
+                                    previous_detail
+                                ),
+                            );
+                        }
+                        if detail_state.detail_limited_after_growth {
+                            ui.colored_label(
+                                egui::Color32::from_rgb(255, 170, 80),
+                                "Remesh is limited by the current sculpt resolution cap.",
+                            );
+                        }
+                    }
+                    ui.weak("Expand Volume adds room but makes detail coarser until you remesh.");
+                    ui.add_space(6.0);
+                    ui.horizontal_wrapped(|ui| {
+                        if ui.button("Increase Detail").clicked() {
+                            actions.push(Action::IncreaseSculptDetail(id));
+                        }
+                        if ui.button("Decrease Detail").clicked() {
+                            actions.push(Action::DecreaseSculptDetail(id));
+                        }
+                        if ui.button("Remesh at Current Detail").clicked() {
+                            actions.push(Action::RemeshSculptAtCurrentDetail(id));
+                        }
+                        if ui.button("Expand Volume").clicked() {
+                            actions.push(Action::ExpandSculptVolume(id));
+                        }
+                        if ui.button("Fit Volume to Sculpt").clicked() {
+                            actions.push(Action::FitSculptVolume(id));
+                        }
+                    });
+                    ui.add_space(6.0);
+                    ui.separator();
+
+                    // Resolution presets
+                    ui.horizontal(|ui| {
+                        ui.label("Manual Resolution:");
                         for &(label, res) in &[
                             ("Low", 32u32),
                             ("Med", 64),
@@ -1119,11 +1168,11 @@ pub fn draw(
             } else {
                 ui.horizontal(|ui| {
                     if ui.button("Resume Sculpting").clicked() {
-                        *sculpt_state = SculptState::new_active(id);
+                        sculpt_state.activate_preserving_session(id, None);
                     }
                     if ui.button("Remove Modifier").clicked() {
                         actions.push(Action::DeleteNode(id));
-                        *sculpt_state = SculptState::Inactive;
+                        sculpt_state.deactivate();
                     }
                 });
                 // Flatten: merge this sculpt + its input into a standalone Sculpt
@@ -1136,7 +1185,7 @@ pub fn draw(
                         existing_sculpt: None,
                         flatten: true,
                     }));
-                    *sculpt_state = SculptState::Inactive;
+                    sculpt_state.deactivate();
                 }
             }
 

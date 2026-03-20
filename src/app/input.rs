@@ -1,7 +1,7 @@
 use eframe::egui;
 
 use crate::keymap::ActionBinding;
-use crate::sculpt::{ActiveTool, BrushMode, SculptState, DEFAULT_BRUSH_STRENGTH};
+use crate::sculpt::{ActiveTool, BrushMode, SculptState};
 use crate::ui::gizmo::GizmoMode;
 
 use super::actions::{Action, ActionSink};
@@ -9,16 +9,8 @@ use super::{ExportStatus, SdfApp};
 
 /// Switch brush mode, resetting grab-specific strength if leaving Grab mode.
 fn set_brush_mode(sculpt_state: &mut SculptState, target: BrushMode) {
-    if let SculptState::Active {
-        brush_mode,
-        brush_strength,
-        ..
-    } = sculpt_state
-    {
-        if *brush_mode == BrushMode::Grab && *brush_strength > 0.5 {
-            *brush_strength = DEFAULT_BRUSH_STRENGTH;
-        }
-        *brush_mode = target;
+    if sculpt_state.is_active() {
+        sculpt_state.set_selected_brush(target);
     }
 }
 
@@ -28,7 +20,7 @@ impl SdfApp {
             self.doc.scene.remove_node(sel);
             self.ui.node_graph_state.clear_selection();
             self.ui.node_graph_state.needs_initial_rebuild = true;
-            self.doc.sculpt_state = SculptState::Inactive;
+            self.doc.sculpt_state = SculptState::new_inactive();
             self.gpu.buffer_dirty = true;
         }
     }
@@ -55,6 +47,10 @@ impl SdfApp {
             }
             // CycleShadingMode (Z) conflicts with SculptSymmetryZ in sculpt mode
             if is_sculpt && matches!(binding, ActionBinding::CycleShadingMode) {
+                continue;
+            }
+            // In sculpt mode, F is repurposed for Blender-style brush radius modal editing.
+            if is_sculpt && matches!(binding, ActionBinding::FocusSelected) {
                 continue;
             }
             // Turntable toggle should not fire when a text field is focused
@@ -206,75 +202,46 @@ impl SdfApp {
                 set_brush_mode(&mut self.doc.sculpt_state, BrushMode::Inflate);
             }
             ActionBinding::SculptBrushGrab => {
-                if let SculptState::Active {
-                    ref mut brush_mode,
-                    ref mut brush_strength,
-                    ..
-                } = self.doc.sculpt_state
-                {
-                    *brush_mode = BrushMode::Grab;
-                    if *brush_strength < 0.5 {
-                        *brush_strength = 1.0;
-                    }
+                if self.doc.sculpt_state.is_active() {
+                    self.doc.sculpt_state.set_selected_brush(BrushMode::Grab);
                 }
             }
             ActionBinding::SculptBrushShrink => {
-                if let SculptState::Active {
-                    ref mut brush_radius,
-                    ..
-                } = self.doc.sculpt_state
-                {
-                    *brush_radius = (*brush_radius - 0.05).max(0.05);
+                if self.doc.sculpt_state.is_active() {
+                    let brush = self.doc.sculpt_state.selected_profile_mut();
+                    brush.radius = (brush.radius - 0.05).max(0.05);
                 }
             }
             ActionBinding::SculptBrushGrow => {
-                if let SculptState::Active {
-                    ref mut brush_radius,
-                    ..
-                } = self.doc.sculpt_state
-                {
-                    *brush_radius = (*brush_radius + 0.05).min(2.0);
+                if self.doc.sculpt_state.is_active() {
+                    let brush = self.doc.sculpt_state.selected_profile_mut();
+                    brush.radius = (brush.radius + 0.05).min(2.0);
                 }
             }
 
             // --- Sculpt symmetry toggles ---
             ActionBinding::SculptSymmetryX => {
-                if let SculptState::Active {
-                    ref mut symmetry_axis,
-                    ..
-                } = self.doc.sculpt_state
-                {
-                    *symmetry_axis = if *symmetry_axis == Some(0) {
-                        None
-                    } else {
-                        Some(0)
-                    };
+                if self.doc.sculpt_state.is_active() {
+                    let axis = self.doc.sculpt_state.symmetry_axis();
+                    self.doc
+                        .sculpt_state
+                        .set_symmetry_axis(if axis == Some(0) { None } else { Some(0) });
                 }
             }
             ActionBinding::SculptSymmetryY => {
-                if let SculptState::Active {
-                    ref mut symmetry_axis,
-                    ..
-                } = self.doc.sculpt_state
-                {
-                    *symmetry_axis = if *symmetry_axis == Some(1) {
-                        None
-                    } else {
-                        Some(1)
-                    };
+                if self.doc.sculpt_state.is_active() {
+                    let axis = self.doc.sculpt_state.symmetry_axis();
+                    self.doc
+                        .sculpt_state
+                        .set_symmetry_axis(if axis == Some(1) { None } else { Some(1) });
                 }
             }
             ActionBinding::SculptSymmetryZ => {
-                if let SculptState::Active {
-                    ref mut symmetry_axis,
-                    ..
-                } = self.doc.sculpt_state
-                {
-                    *symmetry_axis = if *symmetry_axis == Some(2) {
-                        None
-                    } else {
-                        Some(2)
-                    };
+                if self.doc.sculpt_state.is_active() {
+                    let axis = self.doc.sculpt_state.symmetry_axis();
+                    self.doc
+                        .sculpt_state
+                        .set_symmetry_axis(if axis == Some(2) { None } else { Some(2) });
                 }
             }
         }

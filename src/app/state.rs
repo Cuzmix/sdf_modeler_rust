@@ -119,6 +119,19 @@ pub struct PropertyClipboard {
     pub material: MaterialParams,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SculptBrushAdjustMode {
+    Radius,
+    Strength,
+}
+
+#[derive(Clone, Debug)]
+pub struct SculptBrushAdjustState {
+    pub mode: SculptBrushAdjustMode,
+    pub anchor_pos: [f32; 2],
+    pub initial_value: f32,
+}
+
 /// State for the "Convert to Sculpt" dialog shown by Ctrl+R.
 pub struct SculptConvertDialog {
     pub target: NodeId,
@@ -233,6 +246,8 @@ pub struct UiState {
     pub recovery_summary: String,
     /// Reference images used as modeling guides in the viewport.
     pub reference_images: ReferenceImageManager,
+    /// Active Blender-style modal brush adjustment (`F` / `Shift+F`).
+    pub sculpt_brush_adjust: Option<SculptBrushAdjustState>,
     /// Show a cursor-relative SDF distance readout in the viewport.
     pub show_distance_readout: bool,
     /// Interactive two-point measurement mode.

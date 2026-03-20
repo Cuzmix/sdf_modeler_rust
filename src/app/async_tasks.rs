@@ -7,7 +7,6 @@ use glam::Vec3;
 use crate::desktop_dialogs::FileDialogSelection;
 use crate::graph::scene::{MaterialParams, NodeData};
 use crate::graph::voxel;
-use crate::sculpt::SculptState;
 
 use super::{BakeRequest, SdfApp};
 #[cfg(not(target_arch = "wasm32"))]
@@ -108,7 +107,9 @@ impl SdfApp {
             self.ui.node_graph_state.select_single(sculpt_id);
             let extent = self.scene_avg_extent();
             self.doc.active_tool = crate::sculpt::ActiveTool::Sculpt;
-            self.doc.sculpt_state = SculptState::new_active_with_radius(sculpt_id, extent);
+            self.doc
+                .sculpt_state
+                .activate_preserving_session(sculpt_id, Some(extent));
             self.ensure_brush_settings_tab();
         }
         self.gpu.buffer_dirty = true;
@@ -164,7 +165,9 @@ impl SdfApp {
             self.ui.node_graph_state.needs_initial_rebuild = true;
             let extent = self.scene_avg_extent();
             self.doc.active_tool = crate::sculpt::ActiveTool::Sculpt;
-            self.doc.sculpt_state = SculptState::new_active_with_radius(new_id, extent);
+            self.doc
+                .sculpt_state
+                .activate_preserving_session(new_id, Some(extent));
             self.ensure_brush_settings_tab();
         } else if let Some(sculpt_id) = existing_sculpt {
             if let Some(node) = self.doc.scene.nodes.get_mut(&sculpt_id) {
@@ -186,7 +189,9 @@ impl SdfApp {
             self.ui.node_graph_state.select_single(sculpt_id);
             let extent = self.scene_avg_extent();
             self.doc.active_tool = crate::sculpt::ActiveTool::Sculpt;
-            self.doc.sculpt_state = SculptState::new_active_with_radius(sculpt_id, extent);
+            self.doc
+                .sculpt_state
+                .activate_preserving_session(sculpt_id, Some(extent));
             self.ensure_brush_settings_tab();
         }
         self.gpu.buffer_dirty = true;
@@ -656,7 +661,9 @@ impl SdfApp {
             );
             self.ui.node_graph_state.select_single(sculpt_id);
             self.ui.node_graph_state.needs_initial_rebuild = true;
-            self.doc.sculpt_state = SculptState::new_active(sculpt_id);
+            self.doc
+                .sculpt_state
+                .activate_preserving_session(sculpt_id, Some(self.scene_avg_extent()));
             self.gpu.buffer_dirty = true;
             self.ui.toasts.push(super::Toast {
                 message: "Mesh imported successfully".into(),

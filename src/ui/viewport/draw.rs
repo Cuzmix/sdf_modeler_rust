@@ -2,11 +2,12 @@ use eframe::egui;
 use eframe::egui_wgpu;
 use eframe::wgpu;
 
+use crate::app::state::{SculptBrushAdjustMode, SculptBrushAdjustState};
 use crate::app::actions::{Action, ActionSink};
 use crate::gpu::camera::{Camera, CameraUniform};
 use crate::gpu::picking::PendingPick;
 use crate::graph::scene::{CsgOp, ModifierKind, NodeData, NodeId, Scene, SdfPrimitive};
-use crate::sculpt::{self, ActiveTool, BrushMode, SculptState};
+use crate::sculpt::{self, ActiveTool, BrushMode, SculptBrushProfile, SculptState};
 use crate::settings::{EnvironmentBackgroundMode, SnapConfig};
 use crate::ui::gizmo::{self, GizmoMode, GizmoSpace, GizmoState};
 
@@ -340,23 +341,17 @@ fn brush_cursor_color(mode: &BrushMode) -> egui::Color32 {
     }
 }
 
-/// Compute the effective brush mode given modifier key state.
-/// Shift → Smooth (overrides everything), Ctrl → invert (Add↔Carve, Inflate→Carve).
-fn effective_brush_mode(base: &BrushMode, ctrl: bool, shift: bool) -> BrushMode {
-    if shift {
-        return BrushMode::Smooth;
-    }
-    if ctrl {
-        return match base {
-            BrushMode::Add => BrushMode::Carve,
-            BrushMode::Carve => BrushMode::Add,
-            BrushMode::Inflate => BrushMode::Carve,
-            other => other.clone(),
-        };
-    }
-    base.clone()
+fn active_sculpt_detail_size(scene: &Scene, sculpt_state: &SculptState) -> Option<f32> {
+    let node_id = sculpt_state.active_node()?;
+    let node = scene.nodes.get(&node_id)?;
+    let NodeData::Sculpt { voxel_grid, .. } = &node.data else {
+        return None;
+    };
+    Some(voxel_grid.voxel_pitch())
 }
 
+/// Compute the effective brush mode given modifier key state.
+/// Shift → Smooth (overrides everything), Ctrl → invert (Add↔Carve, Inflate→Carve).
 /// Draw a semi-transparent symmetry plane overlay at the mirror axis with axis label.
 /// `scene_bounds` is used to adaptively size the plane to the scene.
 fn draw_symmetry_plane(
@@ -475,6 +470,26 @@ pub struct ViewportOutput {
     pub is_hover_pick: bool,
 }
 
+fn apply_modal_brush_adjustment(
+    profile: &mut SculptBrushProfile,
+    selected_mode: BrushMode,
+    adjust_mode: SculptBrushAdjustMode,
+    initial_value: f32,
+    delta_x: f32,
+    camera_distance: f32,
+) {
+    match adjust_mode {
+        SculptBrushAdjustMode::Radius => {
+            let sensitivity = 0.005 * camera_distance.max(0.1);
+            profile.radius = (initial_value + delta_x * sensitivity).clamp(0.05, 2.0);
+        }
+        SculptBrushAdjustMode::Strength => {
+            profile.strength = initial_value + delta_x * 0.002;
+            profile.clamp_strength_for_mode(selected_mode);
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn draw(
     ui: &mut egui::Ui,
@@ -486,7 +501,7 @@ pub fn draw(
     gizmo_space: &GizmoSpace,
     gizmo_visible: bool,
     pivot_offset: &mut glam::Vec3,
-    sculpt_state: &SculptState,
+    sculpt_state: &mut SculptState,
     active_tool: &ActiveTool,
     time: f32,
     render_config: &crate::settings::RenderConfig,
@@ -499,6 +514,7 @@ pub fn draw(
     last_sculpt_hit: Option<glam::Vec3>,
     hover_world_pos: Option<glam::Vec3>,
     _cursor_over_geometry: bool,
+    sculpt_brush_adjust: &mut Option<SculptBrushAdjustState>,
     active_light_ids: &std::collections::HashSet<crate::graph::scene::NodeId>,
     soloed_light: Option<NodeId>,
     solo_label: Option<&str>,
@@ -518,6 +534,73 @@ pub fn draw(
     };
     let rect = ui.available_rect_before_wrap();
     let response = ui.allocate_rect(rect, egui::Sense::click_and_drag());
+    let multi_touch_active = ui.input(|i| i.multi_touch()).is_some();
+    let sculpt_active = sculpt_state.is_active();
+
+    if sculpt_active
+        && !multi_touch_active
+        && response.hovered()
+        && !ui.ctx().wants_keyboard_input()
+        && ui.input(|i| i.key_pressed(egui::Key::F))
+    {
+        let mode = if ui.input(|i| i.modifiers.shift) {
+            SculptBrushAdjustMode::Strength
+        } else {
+            SculptBrushAdjustMode::Radius
+        };
+        let anchor = response.hover_pos().unwrap_or(rect.center());
+        let initial_value = match mode {
+            SculptBrushAdjustMode::Radius => sculpt_state.selected_profile().radius,
+            SculptBrushAdjustMode::Strength => sculpt_state.selected_profile().strength,
+        };
+        *sculpt_brush_adjust = Some(SculptBrushAdjustState {
+            mode,
+            anchor_pos: [anchor.x, anchor.y],
+            initial_value,
+        });
+    }
+
+    if let Some(adjust) = sculpt_brush_adjust.as_ref() {
+        if sculpt_state.is_active() {
+            let pointer_pos = response.hover_pos().unwrap_or(rect.center());
+            let delta_x = pointer_pos.x - adjust.anchor_pos[0];
+            let selected_mode = sculpt_state.selected_brush();
+            let profile = sculpt_state.selected_profile_mut();
+            apply_modal_brush_adjustment(
+                profile,
+                selected_mode,
+                adjust.mode,
+                adjust.initial_value,
+                delta_x,
+                camera.distance,
+            );
+        }
+
+        let cancel = ui.input(|i| i.key_pressed(egui::Key::Escape))
+            || response.clicked_by(egui::PointerButton::Secondary);
+        let confirm = response.clicked_by(egui::PointerButton::Primary)
+            || ui.input(|i| i.key_pressed(egui::Key::Enter) || i.key_pressed(egui::Key::Space));
+
+        if cancel {
+            if sculpt_state.is_active() {
+                let selected_mode = sculpt_state.selected_brush();
+                let profile = sculpt_state.selected_profile_mut();
+                match adjust.mode {
+                    SculptBrushAdjustMode::Radius => profile.radius = adjust.initial_value,
+                    SculptBrushAdjustMode::Strength => {
+                        profile.strength = adjust.initial_value;
+                        profile.clamp_strength_for_mode(selected_mode);
+                    }
+                }
+            }
+            *sculpt_brush_adjust = None;
+        } else if confirm {
+            *sculpt_brush_adjust = None;
+        } else {
+            ui.ctx().request_repaint();
+        }
+    }
+    let sculpt_adjust_active = sculpt_brush_adjust.is_some();
 
     // --- Paint the SDF viewport (WGPU callback) ---
     let pixels_per_point = ui.ctx().pixels_per_point();
@@ -528,9 +611,9 @@ pub fn draw(
         rect.height() * pixels_per_point,
     ];
     // Interaction detection
-    let multi_touch_active = ui.input(|i| i.multi_touch()).is_some();
-    let sculpt_active = sculpt_state.is_active();
-    let camera_dragging = if sculpt_active {
+    let camera_dragging = if sculpt_adjust_active {
+        false
+    } else if sculpt_active {
         response.dragged_by(egui::PointerButton::Secondary)
             || response.dragged_by(egui::PointerButton::Middle)
     } else {
@@ -538,7 +621,8 @@ pub fn draw(
             || response.dragged_by(egui::PointerButton::Secondary)
             || response.dragged_by(egui::PointerButton::Middle)
     };
-    let sculpt_brushing = sculpt_active && response.dragged_by(egui::PointerButton::Primary);
+    let sculpt_brushing =
+        sculpt_active && !sculpt_adjust_active && response.dragged_by(egui::PointerButton::Primary);
     let multi_sculpt_reduce = render_config.auto_reduce_steps && sculpt_count >= 2;
     let is_interacting = camera_dragging || sculpt_brushing;
     // Stop turntable on any camera interaction
@@ -578,7 +662,10 @@ pub fn draw(
     // Compute brush_pos for 3D brush preview: [x, y, z, radius] or [0,0,0,0] when inactive.
     // Zero-latency tracking: project cursor through camera at last known surface depth.
     // GPU hover picks refine the depth each frame, but projection gives instant feedback.
-    let brush_pos = if let SculptState::Active { brush_radius, .. } = sculpt_state {
+    let brush_pos = if sculpt_state.is_active() {
+        let preview_radius = ui.input(|i| {
+            sculpt_state.preview_radius_with_modifiers(i.modifiers.ctrl, i.modifiers.shift)
+        });
         let reference_hit = hover_world_pos.or(last_sculpt_hit);
         let cursor = response.hover_pos();
 
@@ -596,9 +683,9 @@ pub fn draw(
                 let ray_dir = (far - near).normalize();
                 let depth = (hit - near).dot(ray_dir).max(0.001);
                 let approx = near + ray_dir * depth;
-                [approx.x, approx.y, approx.z, *brush_radius]
+                [approx.x, approx.y, approx.z, preview_radius]
             }
-            (_, Some(hit)) => [hit.x, hit.y, hit.z, *brush_radius],
+            (_, Some(hit)) => [hit.x, hit.y, hit.z, preview_radius],
             _ => [0.0; 4],
         }
     } else {
@@ -925,7 +1012,10 @@ pub fn draw(
         }
 
         // Ctrl+right-drag: horizontal = resize brush, vertical = adjust strength
-        if response.dragged_by(egui::PointerButton::Secondary) && !multi_touch_active {
+        if response.dragged_by(egui::PointerButton::Secondary)
+            && !multi_touch_active
+            && !sculpt_adjust_active
+        {
             let modifiers = ui.input(|i| i.modifiers);
             if modifiers.ctrl {
                 let delta = response.drag_delta();
@@ -939,17 +1029,18 @@ pub fn draw(
         }
 
         // Minimal 2D crosshair cursor (3D shader ring is the primary brush preview)
-        if let SculptState::Active { ref brush_mode, .. } = sculpt_state {
+        if sculpt_state.is_active() {
             if let Some(hover_pos) = response.hover_pos() {
                 let modifiers = ui.input(|i| i.modifiers);
                 let effective_mode =
-                    effective_brush_mode(brush_mode, modifiers.ctrl, modifiers.shift);
+                    sculpt_state.effective_brush_mode(modifiers.ctrl, modifiers.shift);
                 let mode_color = brush_cursor_color(&effective_mode);
 
-                // Small center dot
+                // Strong center cue + outer ring to make falloff direction clearer.
                 ui.painter()
-                    .circle_filled(hover_pos, 2.5, egui::Color32::from_white_alpha(180));
-                // Thin crosshair lines (6px each direction)
+                    .circle_stroke(hover_pos, 8.0, egui::Stroke::new(1.0, mode_color));
+                ui.painter()
+                    .circle_filled(hover_pos, 3.0, egui::Color32::from_white_alpha(220));
                 let cross = 6.0;
                 let stroke = egui::Stroke::new(1.0, mode_color);
                 ui.painter().line_segment(
@@ -990,9 +1081,12 @@ pub fn draw(
         }
 
         // Right-click still orbits in sculpt mode, secondary drag pans
-        if response.dragged_by(egui::PointerButton::Secondary) {
+        if response.dragged_by(egui::PointerButton::Secondary) && !sculpt_adjust_active {
             let delta = response.drag_delta();
-            camera.pan(delta.x, delta.y);
+            let modifiers = ui.input(|i| i.modifiers);
+            if !modifiers.ctrl {
+                camera.pan(delta.x, delta.y);
+            }
         }
         if response.dragged_by(egui::PointerButton::Middle) {
             let delta = response.drag_delta();
@@ -1129,6 +1223,60 @@ pub fn draw(
         };
         ui.painter()
             .text(pos, egui::Align2::LEFT_TOP, &text, font, color);
+    }
+
+    if sculpt_state.is_active() {
+        let modifiers = ui.input(|i| i.modifiers);
+        let effective_mode = sculpt_state.effective_brush_mode(modifiers.ctrl, modifiers.shift);
+        let preview_radius =
+            sculpt_state.preview_radius_with_modifiers(modifiers.ctrl, modifiers.shift);
+        let effective_strength = sculpt_state.profile(effective_mode).strength;
+        let detail_size = active_sculpt_detail_size(scene, sculpt_state).unwrap_or(0.0);
+        let symmetry = sculpt_state
+            .symmetry_axis()
+            .map(|axis| match axis {
+                0 => "X",
+                1 => "Y",
+                _ => "Z",
+            })
+            .unwrap_or("Off");
+        let label = match effective_mode {
+            BrushMode::Add => "Add",
+            BrushMode::Carve => "Carve",
+            BrushMode::Smooth => "Smooth",
+            BrushMode::Flatten => "Flatten",
+            BrushMode::Inflate => "Inflate",
+            BrushMode::Grab => "Grab",
+        };
+        let text = if let Some(adjust) = sculpt_brush_adjust.as_ref() {
+            match adjust.mode {
+                SculptBrushAdjustMode::Radius => format!("Adjust Radius  {:.2}", preview_radius),
+                SculptBrushAdjustMode::Strength => {
+                    format!("Adjust Strength  {:.3}", sculpt_state.selected_profile().strength)
+                }
+            }
+        } else {
+            format!(
+                "{label}  Radius {:.2}  Strength {:.3}  Detail {:.4}  Sym {}",
+                preview_radius, effective_strength, detail_size, symmetry
+            )
+        };
+        let font = egui::FontId::monospace(11.0);
+        let pos = egui::pos2(rect.min.x + 6.0, rect.min.y + 22.0);
+        ui.painter().text(
+            pos + egui::vec2(1.0, 1.0),
+            egui::Align2::LEFT_TOP,
+            &text,
+            font.clone(),
+            egui::Color32::from_black_alpha(180),
+        );
+        ui.painter().text(
+            pos,
+            egui::Align2::LEFT_TOP,
+            &text,
+            font,
+            egui::Color32::from_rgb(220, 220, 220),
+        );
     }
 
     // --- Isolation mode indicator ---
@@ -1606,6 +1754,40 @@ pub fn draw(
     }
 
     output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sculpt::{BrushMode, SculptBrushProfile};
+
+    #[test]
+    fn modal_radius_adjustment_updates_radius_with_camera_scale() {
+        let mut profile = SculptBrushProfile::default_for_mode(BrushMode::Add);
+        apply_modal_brush_adjustment(
+            &mut profile,
+            BrushMode::Add,
+            SculptBrushAdjustMode::Radius,
+            0.5,
+            20.0,
+            4.0,
+        );
+        assert!((profile.radius - 0.9).abs() < 1e-5);
+    }
+
+    #[test]
+    fn modal_strength_adjustment_clamps_to_brush_limits() {
+        let mut profile = SculptBrushProfile::default_for_mode(BrushMode::Grab);
+        apply_modal_brush_adjustment(
+            &mut profile,
+            BrushMode::Grab,
+            SculptBrushAdjustMode::Strength,
+            1.0,
+            2000.0,
+            1.0,
+        );
+        assert_eq!(profile.strength, 3.0);
+    }
 }
 
 fn draw_node_labels(

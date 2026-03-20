@@ -319,12 +319,8 @@ impl SdfApp {
                 ui.horizontal_centered(|ui| {
                     // Mode indicator
                     match &self.doc.sculpt_state {
-                        SculptState::Active {
-                            brush_mode,
-                            symmetry_axis,
-                            ..
-                        } => {
-                            let mode_name = match brush_mode {
+                        SculptState::Active { session, .. } => {
+                            let mode_name = match session.selected_brush {
                                 BrushMode::Add => "Add",
                                 BrushMode::Carve => "Carve",
                                 BrushMode::Smooth => "Smooth",
@@ -336,7 +332,7 @@ impl SdfApp {
                                 egui::Color32::from_rgb(180, 130, 255),
                                 format!("Sculpt: {}", mode_name),
                             );
-                            if let Some(axis) = symmetry_axis {
+                            if let Some(axis) = session.symmetry_axis {
                                 let axis_name = match axis {
                                     0 => "X",
                                     1 => "Y",
@@ -346,7 +342,7 @@ impl SdfApp {
                                 ui.label(format!("Sym: {}", axis_name));
                             }
                         }
-                        SculptState::Inactive => {
+                        SculptState::Inactive { .. } => {
                             ui.colored_label(
                                 egui::Color32::from_rgb(130, 200, 255),
                                 self.gizmo.mode.label(),
@@ -368,7 +364,9 @@ impl SdfApp {
                     // Right-aligned control hints
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if self.doc.sculpt_state.is_active() {
-                            ui.weak("LMB: Paint | RMB: Pan | MMB: Orbit | 1-6: Brush | X/Y/Z: Sym");
+                            ui.weak(
+                                "LMB: Sculpt | Shift+LMB: Smooth | F: Radius | Shift+F: Strength",
+                            );
                         } else {
                             ui.weak("LMB: Orbit | RMB: Pan | Scroll: Zoom | Del: Delete");
                         }
