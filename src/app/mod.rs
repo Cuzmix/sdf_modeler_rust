@@ -342,6 +342,7 @@ impl SdfApp {
 
         let resources = ViewportResources::new(
             &render_state.device,
+            &render_state.adapter,
             render_state.target_format,
             &shader_src,
             &pick_shader_src,

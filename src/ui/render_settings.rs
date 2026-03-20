@@ -690,6 +690,7 @@ fn labeled_slider_i32(
 }
 
 fn apply_preset_fast(config: &mut crate::settings::RenderConfig) {
+    apply_default_environment_preset(config);
     config.shadows_enabled = false;
     config.ao_enabled = false;
     config.ao_mode = AmbientOcclusionMode::Fast;
@@ -706,6 +707,7 @@ fn apply_preset_fast(config: &mut crate::settings::RenderConfig) {
 }
 
 fn apply_preset_balanced(config: &mut crate::settings::RenderConfig) {
+    apply_default_environment_preset(config);
     config.shadows_enabled = false;
     config.ao_enabled = true;
     config.ao_samples = 5;
@@ -725,6 +727,7 @@ fn apply_preset_balanced(config: &mut crate::settings::RenderConfig) {
 }
 
 fn apply_preset_quality(config: &mut crate::settings::RenderConfig) {
+    apply_default_environment_preset(config);
     config.shadows_enabled = true;
     config.shadow_steps = 64;
     config.shadow_penumbra_k = 8.0;
@@ -744,4 +747,63 @@ fn apply_preset_quality(config: &mut crate::settings::RenderConfig) {
     config.auto_reduce_steps = false;
     config.interaction_render_scale = 0.5;
     config.rest_render_scale = 1.0;
+}
+
+fn apply_default_environment_preset(config: &mut crate::settings::RenderConfig) {
+    let defaults = crate::settings::RenderConfig::default();
+    config.environment_source = defaults.environment_source;
+    config.hdri_path = defaults.hdri_path;
+    config.environment_rotation_degrees = defaults.environment_rotation_degrees;
+    config.environment_exposure = defaults.environment_exposure;
+    config.environment_bake_resolution = defaults.environment_bake_resolution;
+    config.environment_background_mode = defaults.environment_background_mode;
+    config.environment_background_blur = defaults.environment_background_blur;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{apply_preset_balanced, apply_preset_fast, apply_preset_quality};
+    use crate::settings::{EnvironmentBackgroundMode, EnvironmentSource, RenderConfig};
+
+    #[test]
+    fn presets_restore_default_environment_selection() {
+        let defaults = RenderConfig::default();
+
+        for apply_preset in [
+            apply_preset_fast,
+            apply_preset_balanced,
+            apply_preset_quality,
+        ] {
+            let mut config = RenderConfig::default();
+            config.environment_source = EnvironmentSource::ProceduralSky;
+            config.hdri_path = Some("custom/custom.exr".into());
+            config.environment_rotation_degrees = 32.0;
+            config.environment_exposure = 1.5;
+            config.environment_bake_resolution = 1024;
+            config.environment_background_mode = EnvironmentBackgroundMode::Environment;
+            config.environment_background_blur = 0.65;
+
+            apply_preset(&mut config);
+
+            assert_eq!(config.environment_source, defaults.environment_source);
+            assert_eq!(config.hdri_path, defaults.hdri_path);
+            assert_eq!(
+                config.environment_rotation_degrees,
+                defaults.environment_rotation_degrees
+            );
+            assert_eq!(config.environment_exposure, defaults.environment_exposure);
+            assert_eq!(
+                config.environment_bake_resolution,
+                defaults.environment_bake_resolution
+            );
+            assert_eq!(
+                config.environment_background_mode,
+                defaults.environment_background_mode
+            );
+            assert_eq!(
+                config.environment_background_blur,
+                defaults.environment_background_blur
+            );
+        }
+    }
 }

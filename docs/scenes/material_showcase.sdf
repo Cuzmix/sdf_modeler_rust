@@ -710,7 +710,7 @@
     "env_reflection_intensity": 1.6,
     "specular_aa_enabled": true,
     "environment_source": "Hdri",
-    "hdri_path": "C:\\Users\\Manny\\Downloads\\glasshouse_interior_4k.exr",
+    "hdri_path": "assets/environments/glasshouse_interior_4k.exr",
     "environment_rotation_degrees": 0.0,
     "environment_exposure": 0.0,
     "environment_bake_resolution": 0,

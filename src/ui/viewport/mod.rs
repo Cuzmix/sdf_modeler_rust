@@ -134,6 +134,7 @@ impl ViewportResources {
 
     pub fn new(
         device: &wgpu::Device,
+        adapter: &wgpu::Adapter,
         target_format: wgpu::TextureFormat,
         shader_src: &str,
         pick_shader_src: &str,
@@ -213,7 +214,7 @@ impl ViewportResources {
         let voxel_tex_bgl = Self::create_voxel_tex_bgl(device, 0);
         let voxel_tex_bind_group =
             Self::create_voxel_tex_bind_group(device, &voxel_tex_bgl, &voxel_sampler, &[]);
-        let environment = EnvironmentResources::new(device);
+        let environment = EnvironmentResources::new(device, adapter);
 
         let pipeline = Self::create_render_pipeline(
             device,

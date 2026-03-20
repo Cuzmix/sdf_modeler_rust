@@ -62,7 +62,11 @@ struct BakePassDescriptor {
 }
 
 impl EnvironmentBakeGpu {
-    pub fn new(device: &wgpu::Device) -> Self {
+    pub fn new(
+        device: &wgpu::Device,
+        cube_texture_format: wgpu::TextureFormat,
+        brdf_lut_format: wgpu::TextureFormat,
+    ) -> Self {
         let uniform_stride = Self::uniform_stride(device);
         let uniform_buffer =
             Self::create_uniform_buffer(device, uniform_stride, INITIAL_BAKE_PASS_CAPACITY);
@@ -122,7 +126,7 @@ impl EnvironmentBakeGpu {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba16Float,
+            format: cube_texture_format,
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         });
@@ -159,6 +163,7 @@ impl EnvironmentBakeGpu {
                 &cube_layout,
                 "fs_source_cube",
                 "Environment Source Bake Pipeline",
+                cube_texture_format,
             ),
             irradiance_pipeline: Self::create_cube_pipeline(
                 device,
@@ -166,6 +171,7 @@ impl EnvironmentBakeGpu {
                 &cube_layout,
                 "fs_irradiance_cube",
                 "Environment Irradiance Bake Pipeline",
+                cube_texture_format,
             ),
             prefiltered_pipeline: Self::create_cube_pipeline(
                 device,
@@ -173,12 +179,14 @@ impl EnvironmentBakeGpu {
                 &cube_layout,
                 "fs_prefiltered_cube",
                 "Environment Prefiltered Bake Pipeline",
+                cube_texture_format,
             ),
             brdf_lut_pipeline: Self::create_brdf_pipeline(
                 device,
                 &shader,
                 &brdf_layout,
                 "Environment BRDF LUT Bake Pipeline",
+                brdf_lut_format,
             ),
         }
     }
@@ -309,6 +317,7 @@ impl EnvironmentBakeGpu {
         layout: &wgpu::PipelineLayout,
         fragment_entry_point: &str,
         label: &str,
+        target_format: wgpu::TextureFormat,
     ) -> wgpu::RenderPipeline {
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some(label),
@@ -323,7 +332,7 @@ impl EnvironmentBakeGpu {
                 module: shader,
                 entry_point: fragment_entry_point,
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: wgpu::TextureFormat::Rgba16Float,
+                    format: target_format,
                     blend: None,
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
@@ -342,6 +351,7 @@ impl EnvironmentBakeGpu {
         shader: &wgpu::ShaderModule,
         layout: &wgpu::PipelineLayout,
         label: &str,
+        target_format: wgpu::TextureFormat,
     ) -> wgpu::RenderPipeline {
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some(label),
@@ -356,7 +366,7 @@ impl EnvironmentBakeGpu {
                 module: shader,
                 entry_point: "fs_brdf_lut",
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: wgpu::TextureFormat::Rg16Float,
+                    format: target_format,
                     blend: None,
                     write_mask: wgpu::ColorWrites::ALL,
                 })],

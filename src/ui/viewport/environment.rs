@@ -1,10 +1,12 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use eframe::wgpu;
 use glam::Vec3;
 use half::f16;
 
-use crate::settings::{EnvironmentSource, RenderConfig};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::native_paths;
+use crate::settings::{BackgroundMode, EnvironmentSource, RenderConfig};
 
 use super::environment_bake::{EnvironmentBakeGpu, EnvironmentBakeInputs};
 use super::ViewportResources;
@@ -43,6 +45,37 @@ struct EnvironmentBindViews<'a> {
     background_view: &'a wgpu::TextureView,
 }
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum EnvironmentPipelineMode {
+    FullFloatBaked,
+    CompatibleFallback,
+}
+
+#[derive(Copy, Clone)]
+struct EnvironmentTextureFormats {
+    cube: wgpu::TextureFormat,
+    brdf_lut: wgpu::TextureFormat,
+}
+
+impl EnvironmentPipelineMode {
+    fn formats(self) -> EnvironmentTextureFormats {
+        match self {
+            Self::FullFloatBaked => EnvironmentTextureFormats {
+                cube: wgpu::TextureFormat::Rgba16Float,
+                brdf_lut: wgpu::TextureFormat::Rg16Float,
+            },
+            Self::CompatibleFallback => EnvironmentTextureFormats {
+                cube: wgpu::TextureFormat::Rgba8Unorm,
+                brdf_lut: wgpu::TextureFormat::Rg8Unorm,
+            },
+        }
+    }
+
+    fn supports_baked_environment(self) -> bool {
+        matches!(self, Self::FullFloatBaked)
+    }
+}
+
 pub struct EnvironmentResources {
     pub sampler: wgpu::Sampler,
     pub bind_group_layout: wgpu::BindGroupLayout,
@@ -58,7 +91,9 @@ pub struct EnvironmentResources {
     pub prefiltered_mip_count: u32,
     _fallback_background_texture: wgpu::Texture,
     fallback_background_view: wgpu::TextureView,
-    bake_gpu: EnvironmentBakeGpu,
+    pipeline_mode: EnvironmentPipelineMode,
+    texture_formats: EnvironmentTextureFormats,
+    bake_gpu: Option<EnvironmentBakeGpu>,
     cached_hdri_path: Option<String>,
     cached_hdri_texture: Option<EnvironmentSourceTexture>,
 }
@@ -109,7 +144,19 @@ impl EnvironmentImageMap {
 }
 
 impl EnvironmentResources {
-    pub fn new(device: &wgpu::Device) -> Self {
+    pub fn new(device: &wgpu::Device, adapter: &wgpu::Adapter) -> Self {
+        let pipeline_mode = Self::select_pipeline_mode(adapter);
+        let texture_formats = pipeline_mode.formats();
+        let cube_usage = if pipeline_mode.supports_baked_environment() {
+            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT
+        } else {
+            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST
+        };
+        let brdf_usage = if pipeline_mode.supports_baked_environment() {
+            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT
+        } else {
+            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST
+        };
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("Environment Sampler"),
             mag_filter: wgpu::FilterMode::Linear,
@@ -121,16 +168,42 @@ impl EnvironmentResources {
             ..Default::default()
         });
         let bind_group_layout = Self::create_bind_group_layout(device);
-        let bake_gpu = EnvironmentBakeGpu::new(device);
-        let (source_texture, source_view) = Self::create_cube_texture(device, 1, 1, "Env Source");
-        let (irradiance_texture, irradiance_view) =
-            Self::create_cube_texture(device, 1, 1, "Env Irradiance");
-        let (prefiltered_texture, prefiltered_view) =
-            Self::create_cube_texture(device, 1, 1, "Env Prefiltered");
-        let (brdf_lut_texture, brdf_lut_view) =
-            Self::create_brdf_lut_texture(device, 1, "Env BRDF LUT");
-        let (fallback_background_texture, fallback_background_view) =
-            Self::create_2d_texture(device, 1, 1, "Env Background Fallback");
+        let bake_gpu = pipeline_mode.supports_baked_environment().then(|| {
+            EnvironmentBakeGpu::new(device, texture_formats.cube, texture_formats.brdf_lut)
+        });
+        let (source_texture, source_view) =
+            Self::create_cube_texture(device, 1, 1, "Env Source", texture_formats.cube, cube_usage);
+        let (irradiance_texture, irradiance_view) = Self::create_cube_texture(
+            device,
+            1,
+            1,
+            "Env Irradiance",
+            texture_formats.cube,
+            cube_usage,
+        );
+        let (prefiltered_texture, prefiltered_view) = Self::create_cube_texture(
+            device,
+            1,
+            1,
+            "Env Prefiltered",
+            texture_formats.cube,
+            cube_usage,
+        );
+        let (brdf_lut_texture, brdf_lut_view) = Self::create_brdf_lut_texture(
+            device,
+            1,
+            "Env BRDF LUT",
+            texture_formats.brdf_lut,
+            brdf_usage,
+        );
+        let (fallback_background_texture, fallback_background_view) = Self::create_2d_texture(
+            device,
+            1,
+            1,
+            "Env Background Fallback",
+            texture_formats.cube,
+            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        );
         let bind_group = Self::create_bind_group(
             device,
             &bind_group_layout,
@@ -159,10 +232,57 @@ impl EnvironmentResources {
             prefiltered_mip_count: 1,
             _fallback_background_texture: fallback_background_texture,
             fallback_background_view,
+            pipeline_mode,
+            texture_formats,
             bake_gpu,
             cached_hdri_path: None,
             cached_hdri_texture: None,
         }
+    }
+
+    fn select_pipeline_mode(adapter: &wgpu::Adapter) -> EnvironmentPipelineMode {
+        if cfg!(target_os = "android") {
+            log::warn!(
+                "Using Android-compatible environment fallback; skipping baked float IBL pipelines"
+            );
+            return EnvironmentPipelineMode::CompatibleFallback;
+        }
+
+        let required_usages =
+            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT;
+        let cube_features = adapter.get_texture_format_features(wgpu::TextureFormat::Rgba16Float);
+        let brdf_features = adapter.get_texture_format_features(wgpu::TextureFormat::Rg16Float);
+        let supports_float_bake =
+            Self::supports_baked_environment_format(cube_features, required_usages)
+                && Self::supports_baked_environment_format(brdf_features, required_usages);
+
+        if supports_float_bake {
+            EnvironmentPipelineMode::FullFloatBaked
+        } else {
+            let adapter_info = adapter.get_info();
+            log::warn!(
+                "Adapter '{}' lacks baked float environment support; using compatibility fallback",
+                adapter_info.name
+            );
+            EnvironmentPipelineMode::CompatibleFallback
+        }
+    }
+
+    fn supports_baked_environment_format(
+        features: wgpu::TextureFormatFeatures,
+        required_usages: wgpu::TextureUsages,
+    ) -> bool {
+        features.allowed_usages.contains(required_usages)
+            && features
+                .flags
+                .contains(wgpu::TextureFormatFeatureFlags::FILTERABLE)
+    }
+
+    pub fn uses_compatibility_fallback(&self) -> bool {
+        matches!(
+            self.pipeline_mode,
+            EnvironmentPipelineMode::CompatibleFallback
+        )
     }
 
     fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
@@ -234,6 +354,8 @@ impl EnvironmentResources {
         resolution: u32,
         mip_level_count: u32,
         label: &str,
+        format: wgpu::TextureFormat,
+        usage: wgpu::TextureUsages,
     ) -> (wgpu::Texture, wgpu::TextureView) {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some(label),
@@ -245,8 +367,8 @@ impl EnvironmentResources {
             mip_level_count,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba16Float,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format,
+            usage,
             view_formats: &[],
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor {
@@ -261,6 +383,8 @@ impl EnvironmentResources {
         device: &wgpu::Device,
         resolution: u32,
         label: &str,
+        format: wgpu::TextureFormat,
+        usage: wgpu::TextureUsages,
     ) -> (wgpu::Texture, wgpu::TextureView) {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some(label),
@@ -272,8 +396,8 @@ impl EnvironmentResources {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rg16Float,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format,
+            usage,
             view_formats: &[],
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -285,6 +409,8 @@ impl EnvironmentResources {
         width: u32,
         height: u32,
         label: &str,
+        format: wgpu::TextureFormat,
+        usage: wgpu::TextureUsages,
     ) -> (wgpu::Texture, wgpu::TextureView) {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some(label),
@@ -296,8 +422,8 @@ impl EnvironmentResources {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba16Float,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            format,
+            usage,
             view_formats: &[],
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -390,9 +516,185 @@ impl EnvironmentResources {
         }
     }
 
+    fn fallback_environment_color(config: &RenderConfig) -> [f32; 4] {
+        let base_color = match config.background_mode {
+            BackgroundMode::SolidColor => Vec3::from_array(config.bg_solid_color),
+            BackgroundMode::SkyGradient => {
+                let horizon = Vec3::from_array(config.sky_horizon);
+                let zenith = Vec3::from_array(config.sky_zenith);
+                horizon.lerp(zenith, 0.35)
+            }
+        };
+        let exposed = base_color * config.environment_exposure.exp2();
+        [
+            exposed.x.clamp(0.0, 1.0),
+            exposed.y.clamp(0.0, 1.0),
+            exposed.z.clamp(0.0, 1.0),
+            1.0,
+        ]
+    }
+
+    fn write_rgba_texture(
+        queue: &wgpu::Queue,
+        texture: &wgpu::Texture,
+        format: wgpu::TextureFormat,
+        width: u32,
+        height: u32,
+        depth_or_array_layers: u32,
+        color: [f32; 4],
+    ) {
+        match format {
+            wgpu::TextureFormat::Rgba16Float => {
+                let pixel = [
+                    f16::from_f32(color[0]),
+                    f16::from_f32(color[1]),
+                    f16::from_f32(color[2]),
+                    f16::from_f32(color[3]),
+                ];
+                let pixels = vec![pixel; (width * height * depth_or_array_layers) as usize];
+                queue.write_texture(
+                    wgpu::ImageCopyTexture {
+                        texture,
+                        mip_level: 0,
+                        origin: wgpu::Origin3d::ZERO,
+                        aspect: wgpu::TextureAspect::All,
+                    },
+                    bytemuck::cast_slice(&pixels),
+                    wgpu::ImageDataLayout {
+                        offset: 0,
+                        bytes_per_row: Some(width * 4 * std::mem::size_of::<f16>() as u32),
+                        rows_per_image: Some(height),
+                    },
+                    wgpu::Extent3d {
+                        width,
+                        height,
+                        depth_or_array_layers,
+                    },
+                );
+            }
+            wgpu::TextureFormat::Rgba8Unorm => {
+                let pixel = [
+                    (color[0] * 255.0).round().clamp(0.0, 255.0) as u8,
+                    (color[1] * 255.0).round().clamp(0.0, 255.0) as u8,
+                    (color[2] * 255.0).round().clamp(0.0, 255.0) as u8,
+                    (color[3] * 255.0).round().clamp(0.0, 255.0) as u8,
+                ];
+                let pixels = vec![pixel; (width * height * depth_or_array_layers) as usize];
+                queue.write_texture(
+                    wgpu::ImageCopyTexture {
+                        texture,
+                        mip_level: 0,
+                        origin: wgpu::Origin3d::ZERO,
+                        aspect: wgpu::TextureAspect::All,
+                    },
+                    bytemuck::cast_slice(&pixels),
+                    wgpu::ImageDataLayout {
+                        offset: 0,
+                        bytes_per_row: Some(width * 4),
+                        rows_per_image: Some(height),
+                    },
+                    wgpu::Extent3d {
+                        width,
+                        height,
+                        depth_or_array_layers,
+                    },
+                );
+            }
+            _ => unreachable!("unsupported RGBA environment format"),
+        }
+    }
+
+    fn write_rg_texture(
+        queue: &wgpu::Queue,
+        texture: &wgpu::Texture,
+        format: wgpu::TextureFormat,
+        width: u32,
+        height: u32,
+        color: [f32; 2],
+    ) {
+        match format {
+            wgpu::TextureFormat::Rg16Float => {
+                let pixel = [f16::from_f32(color[0]), f16::from_f32(color[1])];
+                let pixels = vec![pixel; (width * height) as usize];
+                queue.write_texture(
+                    wgpu::ImageCopyTexture {
+                        texture,
+                        mip_level: 0,
+                        origin: wgpu::Origin3d::ZERO,
+                        aspect: wgpu::TextureAspect::All,
+                    },
+                    bytemuck::cast_slice(&pixels),
+                    wgpu::ImageDataLayout {
+                        offset: 0,
+                        bytes_per_row: Some(width * 2 * std::mem::size_of::<f16>() as u32),
+                        rows_per_image: Some(height),
+                    },
+                    wgpu::Extent3d {
+                        width,
+                        height,
+                        depth_or_array_layers: 1,
+                    },
+                );
+            }
+            wgpu::TextureFormat::Rg8Unorm => {
+                let pixel = [
+                    (color[0] * 255.0).round().clamp(0.0, 255.0) as u8,
+                    (color[1] * 255.0).round().clamp(0.0, 255.0) as u8,
+                ];
+                let pixels = vec![pixel; (width * height) as usize];
+                queue.write_texture(
+                    wgpu::ImageCopyTexture {
+                        texture,
+                        mip_level: 0,
+                        origin: wgpu::Origin3d::ZERO,
+                        aspect: wgpu::TextureAspect::All,
+                    },
+                    bytemuck::cast_slice(&pixels),
+                    wgpu::ImageDataLayout {
+                        offset: 0,
+                        bytes_per_row: Some(width * 2),
+                        rows_per_image: Some(height),
+                    },
+                    wgpu::Extent3d {
+                        width,
+                        height,
+                        depth_or_array_layers: 1,
+                    },
+                );
+            }
+            _ => unreachable!("unsupported RG environment format"),
+        }
+    }
+
     fn clear_hdri_cache(&mut self) {
         self.cached_hdri_path = None;
         self.cached_hdri_texture = None;
+    }
+
+    fn resolve_hdri_path(path: &str) -> Option<PathBuf> {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            native_paths::resolve_bundled_asset_path(path)
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            if path.trim().is_empty() {
+                None
+            } else {
+                Some(PathBuf::from(path))
+            }
+        }
+    }
+
+    fn runtime_environment_config(&self, config: &RenderConfig) -> RenderConfig {
+        let mut runtime_config = config.clone();
+        if runtime_config.environment_source == EnvironmentSource::Hdri
+            && self.cached_hdri_texture.is_none()
+        {
+            runtime_config.environment_source = EnvironmentSource::ProceduralSky;
+        }
+        runtime_config
     }
 
     fn ensure_hdri_texture_loaded(
@@ -418,13 +720,28 @@ impl EnvironmentResources {
 
         let should_reload = self.cached_hdri_path.as_deref() != Some(path);
         if should_reload {
-            match EnvironmentImageMap::load(Path::new(path)) {
-                Ok(map) => {
-                    self.cached_hdri_texture = Some(Self::create_hdri_texture(device, queue, &map));
-                    self.cached_hdri_path = Some(path.to_string());
-                }
-                Err(error) => {
-                    log::warn!("Failed to load environment map '{}': {}", path, error);
+            match Self::resolve_hdri_path(path) {
+                Some(resolved_path) => match EnvironmentImageMap::load(&resolved_path) {
+                    Ok(map) => {
+                        self.cached_hdri_texture =
+                            Some(Self::create_hdri_texture(device, queue, &map));
+                        self.cached_hdri_path = Some(path.to_string());
+                    }
+                    Err(error) => {
+                        log::warn!(
+                            "Failed to load environment map '{}': {}. Falling back to procedural sky.",
+                            path,
+                            error
+                        );
+                        self.cached_hdri_path = Some(path.to_string());
+                        self.cached_hdri_texture = None;
+                    }
+                },
+                None => {
+                    log::warn!(
+                        "Failed to resolve environment map '{}'. Falling back to procedural sky.",
+                        path
+                    );
                     self.cached_hdri_path = Some(path.to_string());
                     self.cached_hdri_texture = None;
                 }
@@ -453,27 +770,46 @@ impl EnvironmentResources {
     }
 
     pub fn rebuild(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, config: &RenderConfig) {
+        if !self.pipeline_mode.supports_baked_environment() {
+            self.clear_hdri_cache();
+            self.rebuild_compatible_fallback(device, queue, config);
+            return;
+        }
+
         self.ensure_hdri_texture_loaded(device, queue, config);
-        let bake_resolutions = self.resolved_bake_resolutions(config, &device.limits());
+        let runtime_config = self.runtime_environment_config(config);
+        let bake_resolutions = self.resolved_bake_resolutions(&runtime_config, &device.limits());
         let prefiltered_mip_count = bake_resolutions.prefiltered_resolution.ilog2() + 1;
-        let (source_texture, source_view) =
-            Self::create_cube_texture(device, bake_resolutions.source_resolution, 1, "Env Source");
+        let (source_texture, source_view) = Self::create_cube_texture(
+            device,
+            bake_resolutions.source_resolution,
+            1,
+            "Env Source",
+            self.texture_formats.cube,
+            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
+        );
         let (irradiance_texture, irradiance_view) = Self::create_cube_texture(
             device,
             bake_resolutions.irradiance_resolution,
             1,
             "Env Irradiance",
+            self.texture_formats.cube,
+            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
         );
         let (prefiltered_texture, prefiltered_view) = Self::create_cube_texture(
             device,
             bake_resolutions.prefiltered_resolution,
             prefiltered_mip_count,
             "Env Prefiltered",
+            self.texture_formats.cube,
+            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
         );
         let (brdf_lut_texture, brdf_lut_view) = Self::create_brdf_lut_texture(
             device,
             bake_resolutions.brdf_lut_resolution,
             "Env BRDF LUT",
+            self.texture_formats.brdf_lut,
+            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
         );
         let hdri_view = self
             .cached_hdri_texture
@@ -481,20 +817,23 @@ impl EnvironmentResources {
             .map(|texture| &texture.view);
         let background_view = hdri_view.unwrap_or(&self.fallback_background_view);
 
-        self.bake_gpu.bake(
-            device,
-            queue,
-            config,
-            EnvironmentBakeInputs {
-                resolutions: bake_resolutions,
-                source_texture: &source_texture,
-                irradiance_texture: &irradiance_texture,
-                prefiltered_texture: &prefiltered_texture,
-                brdf_lut_texture: &brdf_lut_texture,
-                prefiltered_mip_count,
-                hdri_view,
-            },
-        );
+        self.bake_gpu
+            .as_mut()
+            .expect("baked environment pipeline should exist")
+            .bake(
+                device,
+                queue,
+                &runtime_config,
+                EnvironmentBakeInputs {
+                    resolutions: bake_resolutions,
+                    source_texture: &source_texture,
+                    irradiance_texture: &irradiance_texture,
+                    prefiltered_texture: &prefiltered_texture,
+                    brdf_lut_texture: &brdf_lut_texture,
+                    prefiltered_mip_count,
+                    hdri_view,
+                },
+            );
 
         let bind_group = Self::create_bind_group(
             device,
@@ -519,6 +858,126 @@ impl EnvironmentResources {
         self.brdf_lut_view = brdf_lut_view;
         self.bind_group = bind_group;
         self.prefiltered_mip_count = prefiltered_mip_count;
+    }
+
+    fn rebuild_compatible_fallback(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        config: &RenderConfig,
+    ) {
+        let texture_usage = wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST;
+        let fallback_color = Self::fallback_environment_color(config);
+        let (source_texture, source_view) = Self::create_cube_texture(
+            device,
+            1,
+            1,
+            "Env Source",
+            self.texture_formats.cube,
+            texture_usage,
+        );
+        let (irradiance_texture, irradiance_view) = Self::create_cube_texture(
+            device,
+            1,
+            1,
+            "Env Irradiance",
+            self.texture_formats.cube,
+            texture_usage,
+        );
+        let (prefiltered_texture, prefiltered_view) = Self::create_cube_texture(
+            device,
+            1,
+            1,
+            "Env Prefiltered",
+            self.texture_formats.cube,
+            texture_usage,
+        );
+        let (brdf_lut_texture, brdf_lut_view) = Self::create_brdf_lut_texture(
+            device,
+            1,
+            "Env BRDF LUT",
+            self.texture_formats.brdf_lut,
+            texture_usage,
+        );
+        let (fallback_background_texture, fallback_background_view) = Self::create_2d_texture(
+            device,
+            1,
+            1,
+            "Env Background Fallback",
+            self.texture_formats.cube,
+            texture_usage,
+        );
+
+        Self::write_rgba_texture(
+            queue,
+            &source_texture,
+            self.texture_formats.cube,
+            1,
+            1,
+            6,
+            fallback_color,
+        );
+        Self::write_rgba_texture(
+            queue,
+            &irradiance_texture,
+            self.texture_formats.cube,
+            1,
+            1,
+            6,
+            fallback_color,
+        );
+        Self::write_rgba_texture(
+            queue,
+            &prefiltered_texture,
+            self.texture_formats.cube,
+            1,
+            1,
+            6,
+            fallback_color,
+        );
+        Self::write_rgba_texture(
+            queue,
+            &fallback_background_texture,
+            self.texture_formats.cube,
+            1,
+            1,
+            1,
+            fallback_color,
+        );
+        Self::write_rg_texture(
+            queue,
+            &brdf_lut_texture,
+            self.texture_formats.brdf_lut,
+            1,
+            1,
+            [0.0, 0.0],
+        );
+
+        let bind_group = Self::create_bind_group(
+            device,
+            &self.bind_group_layout,
+            &self.sampler,
+            EnvironmentBindViews {
+                source_view: &source_view,
+                irradiance_view: &irradiance_view,
+                prefiltered_view: &prefiltered_view,
+                brdf_lut_view: &brdf_lut_view,
+                background_view: &fallback_background_view,
+            },
+        );
+
+        self.source_texture = source_texture;
+        self.source_view = source_view;
+        self.irradiance_texture = irradiance_texture;
+        self.irradiance_view = irradiance_view;
+        self.prefiltered_texture = prefiltered_texture;
+        self.prefiltered_view = prefiltered_view;
+        self.brdf_lut_texture = brdf_lut_texture;
+        self.brdf_lut_view = brdf_lut_view;
+        self._fallback_background_texture = fallback_background_texture;
+        self.fallback_background_view = fallback_background_view;
+        self.bind_group = bind_group;
+        self.prefiltered_mip_count = 1;
     }
 }
 

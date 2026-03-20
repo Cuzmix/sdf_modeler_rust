@@ -619,6 +619,27 @@ fn default_cross_section_axis() -> u8 {
 fn default_bookmarks() -> Vec<Option<CameraBookmark>> {
     vec![None; 9]
 }
+fn default_environment_source_config() -> EnvironmentSource {
+    if cfg!(any(target_arch = "wasm32", target_os = "android")) {
+        EnvironmentSource::ProceduralSky
+    } else {
+        EnvironmentSource::Hdri
+    }
+}
+fn default_hdri_path_config() -> Option<String> {
+    if cfg!(any(target_arch = "wasm32", target_os = "android")) {
+        None
+    } else {
+        Some(crate::native_paths::DEFAULT_BUNDLED_ENVIRONMENT_HDRI_PATH.into())
+    }
+}
+fn default_environment_background_mode_config() -> EnvironmentBackgroundMode {
+    if cfg!(any(target_arch = "wasm32", target_os = "android")) {
+        EnvironmentBackgroundMode::Environment
+    } else {
+        EnvironmentBackgroundMode::Procedural
+    }
+}
 
 impl Default for RenderConfig {
     fn default() -> Self {
@@ -656,12 +677,12 @@ impl Default for RenderConfig {
             env_reflection_intensity: 0.3,
             specular_aa_enabled: true,
             local_reflection_mode: LocalReflectionMode::Single,
-            environment_source: EnvironmentSource::ProceduralSky,
-            hdri_path: None,
+            environment_source: default_environment_source_config(),
+            hdri_path: default_hdri_path_config(),
             environment_rotation_degrees: 0.0,
             environment_exposure: 0.0,
             environment_bake_resolution: 0,
-            environment_background_mode: EnvironmentBackgroundMode::Environment,
+            environment_background_mode: default_environment_background_mode_config(),
             environment_background_blur: 0.0,
 
             sky_horizon: [0.10, 0.10, 0.16],
@@ -946,7 +967,9 @@ mod tests {
 
     #[test]
     fn environment_fingerprint_tracks_background_bake_inputs() {
-        let base = RenderConfig::default();
+        let mut base = RenderConfig::default();
+        base.environment_source = EnvironmentSource::ProceduralSky;
+        base.hdri_path = None;
         let mut changed = base.clone();
         changed.sky_zenith = [0.3, 0.4, 0.5];
         assert_ne!(
@@ -967,6 +990,62 @@ mod tests {
         assert_ne!(
             changed.environment_fingerprint(),
             base.environment_fingerprint()
+        );
+    }
+
+    #[test]
+    fn render_defaults_use_platform_expected_environment_defaults() {
+        let defaults = RenderConfig::default();
+        if cfg!(any(target_arch = "wasm32", target_os = "android")) {
+            assert_eq!(
+                defaults.environment_source,
+                EnvironmentSource::ProceduralSky
+            );
+            assert_eq!(defaults.hdri_path, None);
+            assert_eq!(
+                defaults.environment_background_mode,
+                EnvironmentBackgroundMode::Environment
+            );
+        } else {
+            assert_eq!(defaults.environment_source, EnvironmentSource::Hdri);
+            assert_eq!(
+                defaults.hdri_path.as_deref(),
+                Some(crate::native_paths::DEFAULT_BUNDLED_ENVIRONMENT_HDRI_PATH)
+            );
+            assert_eq!(
+                defaults.environment_background_mode,
+                EnvironmentBackgroundMode::Procedural
+            );
+        }
+    }
+
+    #[test]
+    fn reset_environment_restores_platform_expected_environment_defaults() {
+        let mut config = RenderConfig::default();
+        config.environment_source = EnvironmentSource::ProceduralSky;
+        config.hdri_path = Some("custom.hdr".into());
+        config.environment_background_mode = EnvironmentBackgroundMode::Environment;
+        config.environment_background_blur = 0.5;
+        config.environment_rotation_degrees = 22.0;
+        config.environment_exposure = 1.0;
+
+        config.reset_environment();
+
+        let defaults = RenderConfig::default();
+        assert_eq!(config.environment_source, defaults.environment_source);
+        assert_eq!(config.hdri_path, defaults.hdri_path);
+        assert_eq!(
+            config.environment_background_mode,
+            defaults.environment_background_mode
+        );
+        assert_eq!(
+            config.environment_rotation_degrees,
+            defaults.environment_rotation_degrees
+        );
+        assert_eq!(config.environment_exposure, defaults.environment_exposure);
+        assert_eq!(
+            config.environment_background_blur,
+            defaults.environment_background_blur
         );
     }
 }

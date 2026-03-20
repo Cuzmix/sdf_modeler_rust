@@ -234,6 +234,14 @@ impl egui_wgpu::CallbackTrait for ViewportCallback {
         } else {
             0.0
         };
+        if resources.environment.uses_compatibility_fallback() {
+            // Mobile compatibility mode keeps diffuse ambient, but avoids the
+            // baked float IBL/specular path that can hard-fail older drivers.
+            render_uniform.ambient_info[1] = 0.0;
+            render_uniform.background_info[0] = 0.0;
+            render_uniform.environment_info[2] = 0.0;
+            render_uniform.environment_info[3] = 0.0;
+        }
 
         // Write camera uniform (viewport = render dimensions for the SDF shader)
         queue.write_buffer(
