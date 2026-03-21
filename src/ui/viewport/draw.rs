@@ -2,8 +2,10 @@ use eframe::egui;
 use eframe::egui_wgpu;
 use eframe::wgpu;
 
-use crate::app::state::{SculptBrushAdjustMode, SculptBrushAdjustState};
 use crate::app::actions::{Action, ActionSink};
+use crate::app::state::{
+    MultiTransformSessionState, SculptBrushAdjustMode, SculptBrushAdjustState,
+};
 use crate::gpu::camera::{Camera, CameraUniform};
 use crate::gpu::picking::PendingPick;
 use crate::graph::scene::{CsgOp, ModifierKind, NodeData, NodeId, Scene, SdfPrimitive};
@@ -29,6 +31,61 @@ fn in_safety_border(pos: egui::Pos2, rect: egui::Rect, fraction: f32) -> bool {
         || pos.x > rect.max.x - border
         || pos.y < rect.min.y + border
         || pos.y > rect.max.y - border
+}
+
+fn selection_set_key(selected_set: &std::collections::HashSet<NodeId>) -> Vec<NodeId> {
+    let mut ids: Vec<_> = selected_set.iter().copied().collect();
+    ids.sort_unstable();
+    ids
+}
+
+fn sync_multi_transform_session_from_scene(
+    scene: &Scene,
+    selected: Option<NodeId>,
+    selected_set: &std::collections::HashSet<NodeId>,
+    gizmo_space: &GizmoSpace,
+    session: &mut MultiTransformSessionState,
+) {
+    if selected_set.len() <= 1 {
+        session.reset_for_selection(&[]);
+        return;
+    }
+
+    let selection_key = selection_set_key(selected_set);
+    session.reset_for_selection(&selection_key);
+    if session.baseline_selection.is_none() {
+        session.baseline_selection = gizmo::collect_gizmo_selection(scene, selected, selected_set);
+    }
+
+    let Some(baseline_selection) = session.baseline_selection.as_ref() else {
+        session.position_delta = glam::Vec3::ZERO;
+        session.rotation_delta_deg = glam::Vec3::ZERO;
+        session.scale_factor = glam::Vec3::ONE;
+        return;
+    };
+
+    if let Some(readout) = gizmo::derive_multi_transform_readout(
+        scene,
+        baseline_selection,
+        gizmo_space,
+        glam::Vec3::new(
+            session.rotation_delta_deg.x.to_radians(),
+            session.rotation_delta_deg.y.to_radians(),
+            session.rotation_delta_deg.z.to_radians(),
+        ),
+    ) {
+        session.position_delta = readout.position_delta;
+        session.rotation_delta_deg = glam::Vec3::new(
+            readout.rotation_delta_rad.x.to_degrees(),
+            readout.rotation_delta_rad.y.to_degrees(),
+            readout.rotation_delta_rad.z.to_degrees(),
+        );
+        session.scale_factor = if readout.scale_enabled {
+            readout.scale_factor
+        } else {
+            glam::Vec3::ONE
+        };
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -468,6 +525,8 @@ pub struct ViewportOutput {
     pub brush_strength_delta: f32,
     /// True if this pick is a hover-only pick (no brush application).
     pub is_hover_pick: bool,
+    /// True while the transform gizmo is actively dragging.
+    pub gizmo_drag_active: bool,
 }
 
 fn apply_modal_brush_adjustment(
@@ -496,6 +555,8 @@ pub fn draw(
     camera: &mut Camera,
     scene: &mut Scene,
     selected: &mut Option<NodeId>,
+    selected_set: &std::collections::HashSet<NodeId>,
+    multi_transform_session: &mut MultiTransformSessionState,
     gizmo_state: &mut GizmoState,
     gizmo_mode: &GizmoMode,
     gizmo_space: &GizmoSpace,
@@ -531,6 +592,7 @@ pub fn draw(
         brush_radius_delta: 0.0,
         brush_strength_delta: 0.0,
         is_hover_pick: false,
+        gizmo_drag_active: false,
     };
     let rect = ui.available_rect_before_wrap();
     let response = ui.allocate_rect(rect, egui::Sense::click_and_drag());
@@ -868,6 +930,7 @@ pub fn draw(
         camera,
         scene,
         *selected,
+        selected_set,
         gizmo_state,
         gizmo_mode,
         gizmo_space,
@@ -875,6 +938,14 @@ pub fn draw(
         rect,
         snap_config,
         gizmo_visible,
+    );
+    output.gizmo_drag_active = !matches!(gizmo_state, GizmoState::Idle);
+    sync_multi_transform_session_from_scene(
+        scene,
+        *selected,
+        selected_set,
+        gizmo_space,
+        multi_transform_session,
     );
 
     // --- Interaction priority: sculpt > gizmo > pick > orbit ---
@@ -1259,7 +1330,10 @@ pub fn draw(
         let text = if let Some(adjust) = sculpt_brush_adjust.as_ref() {
             match adjust.mode {
                 SculptBrushAdjustMode::Radius => {
-                    format!("Adjust Radius  {:.2}  LMB/Enter confirm  Esc/RMB cancel", preview_radius)
+                    format!(
+                        "Adjust Radius  {:.2}  LMB/Enter confirm  Esc/RMB cancel",
+                        preview_radius
+                    )
                 }
                 SculptBrushAdjustMode::Strength => format!(
                     "Adjust Strength  {:.3}  LMB/Enter confirm  Esc/RMB cancel",

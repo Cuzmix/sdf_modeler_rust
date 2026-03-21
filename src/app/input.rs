@@ -223,25 +223,31 @@ impl SdfApp {
             ActionBinding::SculptSymmetryX => {
                 if self.doc.sculpt_state.is_active() {
                     let axis = self.doc.sculpt_state.symmetry_axis();
-                    self.doc
-                        .sculpt_state
-                        .set_symmetry_axis(if axis == Some(0) { None } else { Some(0) });
+                    self.doc.sculpt_state.set_symmetry_axis(if axis == Some(0) {
+                        None
+                    } else {
+                        Some(0)
+                    });
                 }
             }
             ActionBinding::SculptSymmetryY => {
                 if self.doc.sculpt_state.is_active() {
                     let axis = self.doc.sculpt_state.symmetry_axis();
-                    self.doc
-                        .sculpt_state
-                        .set_symmetry_axis(if axis == Some(1) { None } else { Some(1) });
+                    self.doc.sculpt_state.set_symmetry_axis(if axis == Some(1) {
+                        None
+                    } else {
+                        Some(1)
+                    });
                 }
             }
             ActionBinding::SculptSymmetryZ => {
                 if self.doc.sculpt_state.is_active() {
                     let axis = self.doc.sculpt_state.symmetry_axis();
-                    self.doc
-                        .sculpt_state
-                        .set_symmetry_axis(if axis == Some(2) { None } else { Some(2) });
+                    self.doc.sculpt_state.set_symmetry_axis(if axis == Some(2) {
+                        None
+                    } else {
+                        Some(2)
+                    });
                 }
             }
         }

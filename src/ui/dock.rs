@@ -165,6 +165,8 @@ pub struct ViewportContext<'a> {
     pub turntable_active: bool,
     /// Output: whether the submitted pick is hover-only (no brush application).
     pub is_hover_pick: &'a mut bool,
+    /// Output: whether the viewport gizmo is actively dragging this frame.
+    pub gizmo_drag_active: &'a mut bool,
     /// Hover world position for 3D brush preview (from hover picks).
     pub hover_world_pos: Option<Vec3>,
     /// Whether cursor is currently over geometry (from last hover pick).
@@ -220,6 +222,8 @@ pub struct SdfTabViewer<'a> {
     pub material_library: &'a mut crate::material_preset::MaterialLibrary,
     /// Reference image manager used by viewport/properties panels.
     pub reference_images: &'a mut crate::ui::reference_image::ReferenceImageManager,
+    /// Batch transform UI state for multi-selection property editing.
+    pub multi_transform_edit: &'a mut crate::app::state::MultiTransformSessionState,
     /// Frame timing data for scene stats panel.
     pub timings: &'a crate::app::FrameTimings,
 }
@@ -252,6 +256,8 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.camera,
                     self.scene,
                     &mut self.node_graph_state.selected,
+                    &self.node_graph_state.selected_set,
+                    self.multi_transform_edit,
                     self.viewport.gizmo_state,
                     self.viewport.gizmo_mode,
                     self.viewport.gizmo_space,
@@ -286,13 +292,15 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     *self.viewport.sculpt_shift_held = vp_output.sculpt_shift_held;
                     *self.viewport.sculpt_pressure = vp_output.sculpt_pressure;
                 }
+                *self.viewport.gizmo_drag_active = vp_output.gizmo_drag_active;
                 // Apply Ctrl+right-drag brush resize/strength adjustments
                 if (vp_output.brush_radius_delta != 0.0 || vp_output.brush_strength_delta != 0.0)
                     && self.sculpt_state.is_active()
                 {
                     let selected_mode = self.sculpt_state.selected_brush();
                     let profile = self.sculpt_state.selected_profile_mut();
-                    profile.radius = (profile.radius + vp_output.brush_radius_delta).clamp(0.05, 2.0);
+                    profile.radius =
+                        (profile.radius + vp_output.brush_radius_delta).clamp(0.05, 2.0);
                     profile.strength += vp_output.brush_strength_delta;
                     profile.clamp_strength_for_mode(selected_mode);
                 }
@@ -313,6 +321,8 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.settings.max_sculpt_resolution,
                     self.viewport.soloed_light,
                     self.material_library,
+                    self.multi_transform_edit,
+                    self.viewport.gizmo_space,
                 );
                 // Defensive: clear selection if the node was deleted by properties panel
                 if let Some(sel) = self.node_graph_state.selected {

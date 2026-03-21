@@ -11,6 +11,8 @@ use crate::graph::scene::{
 use crate::graph::voxel;
 use crate::material_preset::{self, MaterialLibrary};
 use crate::sculpt::SculptState;
+use crate::app::state::MultiTransformSessionState;
+use crate::ui::gizmo::{self, GizmoSpace};
 
 const SCALE_MIN: f32 = 0.01;
 const SCALE_MAX: f32 = 100.0;
@@ -105,17 +107,6 @@ fn collect_modifier_chain(scene: &Scene, leaf_id: NodeId) -> Vec<NodeId> {
     chain
 }
 
-/// Helper: extract position/rotation from a node (Primitive or Sculpt have position/rotation,
-/// Transform has translation/rotation).
-fn get_node_position(data: &NodeData) -> Option<glam::Vec3> {
-    match data {
-        NodeData::Primitive { position, .. } => Some(*position),
-        NodeData::Sculpt { position, .. } => Some(*position),
-        NodeData::Transform { translation, .. } => Some(*translation),
-        _ => None,
-    }
-}
-
 fn get_node_color(data: &NodeData) -> Option<glam::Vec3> {
     data.material().map(|material| material.base_color)
 }
@@ -130,26 +121,6 @@ fn get_node_metallic(data: &NodeData) -> Option<f32> {
 
 fn get_node_reflectance_f0(data: &NodeData) -> Option<f32> {
     data.material().map(|material| material.reflectance_f0)
-}
-
-/// Apply a position delta to a node (Primitive, Sculpt, or Transform).
-fn apply_position_delta(data: &mut NodeData, delta: glam::Vec3) {
-    match data {
-        NodeData::Primitive { position, .. } => *position += delta,
-        NodeData::Sculpt { position, .. } => *position += delta,
-        NodeData::Transform { translation, .. } => *translation += delta,
-        _ => {}
-    }
-}
-
-/// Apply a rotation delta to a node.
-fn apply_rotation_delta(data: &mut NodeData, delta: glam::Vec3) {
-    match data {
-        NodeData::Primitive { rotation, .. } => *rotation += delta,
-        NodeData::Sculpt { rotation, .. } => *rotation += delta,
-        NodeData::Transform { rotation, .. } => *rotation += delta,
-        _ => {}
-    }
 }
 
 /// Set color on a node (Primitive or Sculpt).
@@ -451,21 +422,37 @@ fn draw_material_editor(
 fn draw_multi_properties(
     ui: &mut egui::Ui,
     scene: &mut Scene,
+    selected: Option<NodeId>,
     selected_set: &HashSet<NodeId>,
     actions: &mut ActionSink,
+    multi_transform_edit: &mut MultiTransformSessionState,
+    gizmo_space: &GizmoSpace,
 ) {
     let count = selected_set.len();
     ui.heading(format!("{} nodes selected", count));
     ui.separator();
 
     // Determine which property groups are available across all selected nodes
-    let ids: Vec<NodeId> = selected_set.iter().copied().collect();
-    let all_have_position = ids.iter().all(|id| {
-        scene
-            .nodes
-            .get(id)
-            .is_some_and(|n| get_node_position(&n.data).is_some())
-    });
+    let mut ids = Vec::new();
+    if let Some(primary_selected) = selected.filter(|id| selected_set.contains(id)) {
+        ids.push(primary_selected);
+    }
+    let mut extra_ids: Vec<_> = selected_set
+        .iter()
+        .copied()
+        .filter(|node_id| Some(*node_id) != selected)
+        .collect();
+    extra_ids.sort_unstable();
+    ids.extend(extra_ids);
+
+    let mut selection_key: Vec<_> = selected_set.iter().copied().collect();
+    selection_key.sort_unstable();
+    multi_transform_edit.reset_for_selection(&selection_key);
+    if multi_transform_edit.baseline_selection.is_none() {
+        multi_transform_edit.baseline_selection =
+            gizmo::collect_gizmo_selection(scene, selected, selected_set);
+    }
+
     let all_have_color = ids.iter().all(|id| {
         scene
             .nodes
@@ -473,60 +460,86 @@ fn draw_multi_properties(
             .is_some_and(|n| get_node_color(&n.data).is_some())
     });
 
-    // --- Transform (delta-based) ---
-    if all_have_position {
+    // --- Transform (session-based) ---
+    if let Some(baseline_selection) = multi_transform_edit.baseline_selection.clone() {
         egui::CollapsingHeader::new("Transform")
             .default_open(true)
             .show(ui, |ui| {
-                // Position — delta mode: start at zero, apply delta to all
-                let mut pos_delta = glam::Vec3::ZERO;
-                ui.label("Position (delta)");
-                ui.horizontal(|ui| {
-                    for (axis_label, component) in [
-                        ("X:", &mut pos_delta.x),
-                        ("Y:", &mut pos_delta.y),
-                        ("Z:", &mut pos_delta.z),
-                    ] {
-                        ui.label(axis_label);
-                        ui.add(egui::DragValue::new(component).speed(0.05));
-                    }
-                });
-                if pos_delta != glam::Vec3::ZERO {
-                    for &id in &ids {
-                        if let Some(node) = scene.nodes.get_mut(&id) {
-                            apply_position_delta(&mut node.data, pos_delta);
-                        }
-                    }
+                let ignored_count = ids.len().saturating_sub(baseline_selection.target_count());
+                let scale_enabled = baseline_selection.supports_scale();
+                if ignored_count > 0 {
+                    ui.small(format!(
+                        "{} selected node{} ignored by transform editing.",
+                        ignored_count,
+                        if ignored_count == 1 { "" } else { "s are" }
+                    ));
                 }
 
-                // Rotation — delta mode (display in degrees)
-                let mut rot_delta_deg = glam::Vec3::ZERO;
-                ui.label("Rotation (delta)");
-                ui.horizontal(|ui| {
-                    for (axis_label, component) in [
-                        ("X:", &mut rot_delta_deg.x),
-                        ("Y:", &mut rot_delta_deg.y),
-                        ("Z:", &mut rot_delta_deg.z),
-                    ] {
-                        ui.label(axis_label);
-                        ui.add(
-                            egui::DragValue::new(component)
-                                .speed(1.0)
-                                .suffix("\u{00B0}"),
-                        );
-                    }
+                let mut position_delta = multi_transform_edit.position_delta;
+                let mut rotation_delta_deg = multi_transform_edit.rotation_delta_deg;
+                let mut scale_factor = multi_transform_edit.scale_factor;
+
+                ui.label("Position Delta");
+                vec3_editor(
+                    ui,
+                    "",
+                    &mut position_delta,
+                    0.05,
+                    None,
+                    "",
+                );
+
+                ui.separator();
+
+                ui.label(format!("Rotation Delta ({})", gizmo_space.label()));
+                vec3_editor(
+                    ui,
+                    "",
+                    &mut rotation_delta_deg,
+                    1.0,
+                    None,
+                    "\u{00B0}",
+                );
+
+                ui.separator();
+
+                ui.label("Scale Factor");
+                ui.add_enabled_ui(scale_enabled, |ui| {
+                    vec3_editor(ui, "", &mut scale_factor, 0.05, Some(0.01..=100.0), "");
                 });
-                if rot_delta_deg != glam::Vec3::ZERO {
-                    let rot_delta_rad = glam::Vec3::new(
-                        rot_delta_deg.x.to_radians(),
-                        rot_delta_deg.y.to_radians(),
-                        rot_delta_deg.z.to_radians(),
+                if !scale_enabled {
+                    ui.small("Scale is disabled because at least one selected transform target cannot scale.");
+                    scale_factor = glam::Vec3::ONE;
+                }
+
+                let reset_clicked = ui.small_button("Reset").clicked();
+                if reset_clicked {
+                    gizmo::restore_multi_transform_baseline(scene, &baseline_selection);
+                    multi_transform_edit.position_delta = glam::Vec3::ZERO;
+                    multi_transform_edit.rotation_delta_deg = glam::Vec3::ZERO;
+                    multi_transform_edit.scale_factor = glam::Vec3::ONE;
+                    return;
+                }
+
+                let transform_changed = position_delta != multi_transform_edit.position_delta
+                    || rotation_delta_deg != multi_transform_edit.rotation_delta_deg
+                    || scale_factor != multi_transform_edit.scale_factor;
+                if transform_changed {
+                    gizmo::apply_multi_transform_from_baseline(
+                        scene,
+                        &baseline_selection,
+                        gizmo_space,
+                        position_delta,
+                        glam::Vec3::new(
+                            rotation_delta_deg.x.to_radians(),
+                            rotation_delta_deg.y.to_radians(),
+                            rotation_delta_deg.z.to_radians(),
+                        ),
+                        scale_factor,
                     );
-                    for &id in &ids {
-                        if let Some(node) = scene.nodes.get_mut(&id) {
-                            apply_rotation_delta(&mut node.data, rot_delta_rad);
-                        }
-                    }
+                    multi_transform_edit.position_delta = position_delta;
+                    multi_transform_edit.rotation_delta_deg = rotation_delta_deg;
+                    multi_transform_edit.scale_factor = scale_factor;
                 }
             });
     }
@@ -656,10 +669,20 @@ pub fn draw(
     max_sculpt_resolution: u32,
     soloed_light: Option<NodeId>,
     material_library: &mut MaterialLibrary,
+    multi_transform_edit: &mut MultiTransformSessionState,
+    gizmo_space: &GizmoSpace,
 ) {
     // Multi-select: show batch properties when more than 1 node is selected
     if selected_set.len() > 1 {
-        draw_multi_properties(ui, scene, selected_set, actions);
+        draw_multi_properties(
+            ui,
+            scene,
+            selected,
+            selected_set,
+            actions,
+            multi_transform_edit,
+            gizmo_space,
+        );
         return;
     }
 

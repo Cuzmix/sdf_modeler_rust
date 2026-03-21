@@ -927,7 +927,8 @@ fn apply_grab_to_grid_differential_cached(
                 let sample_pos = local_pos - warp;
                 let displacement_sampled = sample_from_data(grid, snapshot, sample_pos);
                 let analytical_sampled = sample_from_data(grid, analytical_snapshot, sample_pos);
-                grid.data[idx] = displacement_sampled + analytical_sampled - analytical_snapshot[idx];
+                grid.data[idx] =
+                    displacement_sampled + analytical_sampled - analytical_snapshot[idx];
             }
         }
     }
@@ -1238,7 +1239,8 @@ pub fn apply_grab_to_grid_differential(
     sculpt_position: Vec3,
     sculpt_rotation: Vec3,
 ) -> VoxelEditRegion {
-    if let Some(analytical_snapshot) = analytical_snapshot.filter(|data| data.len() == grid.data.len())
+    if let Some(analytical_snapshot) =
+        analytical_snapshot.filter(|data| data.len() == grid.data.len())
     {
         return apply_grab_to_grid_differential_cached(
             grid,
@@ -2087,13 +2089,22 @@ mod tests {
     fn ctrl_invert_swaps_add_and_carve_but_preserves_other_modes() {
         let mut sculpt_state = SculptState::new_inactive();
         sculpt_state.set_selected_brush(BrushMode::Add);
-        assert_eq!(sculpt_state.effective_brush_mode(true, false), BrushMode::Carve);
+        assert_eq!(
+            sculpt_state.effective_brush_mode(true, false),
+            BrushMode::Carve
+        );
 
         sculpt_state.set_selected_brush(BrushMode::Carve);
-        assert_eq!(sculpt_state.effective_brush_mode(true, false), BrushMode::Add);
+        assert_eq!(
+            sculpt_state.effective_brush_mode(true, false),
+            BrushMode::Add
+        );
 
         sculpt_state.set_selected_brush(BrushMode::Grab);
-        assert_eq!(sculpt_state.effective_brush_mode(true, false), BrushMode::Grab);
+        assert_eq!(
+            sculpt_state.effective_brush_mode(true, false),
+            BrushMode::Grab
+        );
     }
 
     #[test]

@@ -81,6 +81,7 @@ impl SdfApp {
         let mut sculpt_shift_held = false;
         let mut sculpt_pressure: f32 = 0.0;
         let mut is_hover_pick = false;
+        let mut gizmo_drag_active = false;
         let sculpt_count = self.gpu.sculpt_tex_indices.len();
         let isolation_label: Option<String> =
             self.ui.isolation_state.as_ref().and_then(|isolation| {
@@ -151,6 +152,7 @@ impl SdfApp {
                 isolation_label: isolation_label.clone(),
                 turntable_active: self.ui.turntable_active,
                 is_hover_pick: &mut is_hover_pick,
+                gizmo_drag_active: &mut gizmo_drag_active,
                 hover_world_pos: self.async_state.hover_world_pos,
                 cursor_over_geometry: self.async_state.cursor_over_geometry,
                 sculpt_brush_adjust: &mut self.ui.sculpt_brush_adjust,
@@ -171,6 +173,7 @@ impl SdfApp {
             active_light_ids: &self.ui.active_light_ids,
             material_library: &mut self.material_library,
             reference_images: &mut self.ui.reference_images,
+            multi_transform_edit: &mut self.ui.multi_transform_edit,
             timings: &self.perf.timings,
         };
 
@@ -198,6 +201,7 @@ impl SdfApp {
             sculpt_shift_held,
             sculpt_pressure,
             is_hover_pick,
+            gizmo_drag_active,
         }
     }
 }

@@ -14,7 +14,7 @@ use crate::graph::scene::{MaterialParams, NodeId, Scene};
 use crate::mesh_import::TriMesh;
 use crate::sculpt::{ActiveTool, SculptState};
 use crate::ui::dock::Tab;
-use crate::ui::gizmo::{GizmoMode, GizmoSpace, GizmoState};
+use crate::ui::gizmo::{GizmoMode, GizmoSelection, GizmoSpace, GizmoState};
 use crate::ui::node_graph::NodeGraphState;
 use crate::ui::reference_image::ReferenceImageManager;
 
@@ -44,7 +44,7 @@ pub struct GizmoContext {
     pub mode: GizmoMode,
     pub space: GizmoSpace,
     pub pivot_offset: Vec3,
-    pub last_selection: Option<NodeId>,
+    pub last_selection_ids: Vec<NodeId>,
     pub gizmo_visible: bool,
 }
 
@@ -130,6 +130,46 @@ pub struct SculptBrushAdjustState {
     pub mode: SculptBrushAdjustMode,
     pub anchor_pos: [f32; 2],
     pub initial_value: f32,
+}
+
+#[derive(Clone, Debug)]
+pub struct MultiTransformSessionState {
+    pub selection_key: Vec<NodeId>,
+    pub baseline_selection: Option<GizmoSelection>,
+    pub position_delta: Vec3,
+    pub rotation_delta_deg: Vec3,
+    pub scale_factor: Vec3,
+}
+
+impl Default for MultiTransformSessionState {
+    fn default() -> Self {
+        Self {
+            selection_key: Vec::new(),
+            baseline_selection: None,
+            position_delta: Vec3::ZERO,
+            rotation_delta_deg: Vec3::ZERO,
+            scale_factor: Vec3::ONE,
+        }
+    }
+}
+
+impl MultiTransformSessionState {
+    pub fn reset_for_selection(&mut self, selection_ids: &[NodeId]) -> bool {
+        let mut normalized_selection = selection_ids.to_vec();
+        normalized_selection.sort_unstable();
+        normalized_selection.dedup();
+
+        if self.selection_key != normalized_selection {
+            self.selection_key = normalized_selection;
+            self.baseline_selection = None;
+            self.position_delta = Vec3::ZERO;
+            self.rotation_delta_deg = Vec3::ZERO;
+            self.scale_factor = Vec3::ONE;
+            true
+        } else {
+            false
+        }
+    }
 }
 
 /// State for the "Convert to Sculpt" dialog shown by Ctrl+R.
@@ -254,6 +294,8 @@ pub struct UiState {
     pub measurement_mode: bool,
     /// Measurement points in world space (0, 1, or 2 points).
     pub measurement_points: Vec<Vec3>,
+    /// Batch-edit inputs for multi-selection transforms in the Properties panel.
+    pub multi_transform_edit: MultiTransformSessionState,
 }
 
 // ---------------------------------------------------------------------------
@@ -377,5 +419,36 @@ mod tests {
         let dialog = ImportDialog::new(mesh, "test.obj".into(), 320);
         assert!(dialog.use_auto);
         assert_eq!(dialog.resolution, dialog.auto_resolution);
+    }
+
+    #[test]
+    fn multi_transform_edit_state_resets_when_selection_changes() {
+        let mut state = MultiTransformSessionState::default();
+        state.reset_for_selection(&[1, 2]);
+        state.position_delta = Vec3::new(1.0, 2.0, 3.0);
+        state.rotation_delta_deg = Vec3::new(10.0, 20.0, 30.0);
+        state.scale_factor = Vec3::splat(2.0);
+
+        state.reset_for_selection(&[1, 2]);
+        assert_eq!(state.position_delta, Vec3::new(1.0, 2.0, 3.0));
+        assert_eq!(state.rotation_delta_deg, Vec3::new(10.0, 20.0, 30.0));
+        assert_eq!(state.scale_factor, Vec3::splat(2.0));
+
+        state.reset_for_selection(&[2, 3]);
+        assert_eq!(state.position_delta, Vec3::ZERO);
+        assert_eq!(state.rotation_delta_deg, Vec3::ZERO);
+        assert_eq!(state.scale_factor, Vec3::ONE);
+        assert!(state.baseline_selection.is_none());
+    }
+
+    #[test]
+    fn multi_transform_edit_state_ignores_selection_order() {
+        let mut state = MultiTransformSessionState::default();
+        state.reset_for_selection(&[1, 2]);
+        state.position_delta = Vec3::new(1.0, 2.0, 3.0);
+
+        state.reset_for_selection(&[2, 1]);
+        assert_eq!(state.position_delta, Vec3::new(1.0, 2.0, 3.0));
+        assert_eq!(state.selection_key, vec![1, 2]);
     }
 }

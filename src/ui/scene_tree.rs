@@ -351,7 +351,7 @@ fn draw_node_recursive(
                     // Ctrl+click: toggle in/out of selection
                     if selected_set.remove(&id) {
                         if *selected == Some(id) {
-                            *selected = selected_set.iter().next().copied();
+                            *selected = selected_set.iter().copied().min();
                         }
                     } else {
                         selected_set.insert(id);
@@ -436,7 +436,7 @@ fn draw_node_recursive(
                 if ctrl {
                     if selected_set.remove(&id) {
                         if *selected == Some(id) {
-                            *selected = selected_set.iter().next().copied();
+                            *selected = selected_set.iter().copied().min();
                         }
                     } else {
                         selected_set.insert(id);
@@ -581,7 +581,7 @@ fn draw_flat_node(
             if ctrl {
                 if selected_set.remove(&id) {
                     if *selected == Some(id) {
-                        *selected = selected_set.iter().next().copied();
+                        *selected = selected_set.iter().copied().min();
                     }
                 } else {
                     selected_set.insert(id);

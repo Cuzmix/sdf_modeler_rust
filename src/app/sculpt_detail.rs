@@ -110,7 +110,8 @@ impl SdfApp {
         else {
             return;
         };
-        let current_pitch = voxel::voxel_pitch_for_bounds(bounds_min, bounds_max, current_resolution);
+        let current_pitch =
+            voxel::voxel_pitch_for_bounds(bounds_min, bounds_max, current_resolution);
         let (new_bounds_min, new_bounds_max) = expanded_volume_bounds(bounds_min, bounds_max);
 
         self.resample_sculpt_node(node_id, current_resolution, new_bounds_min, new_bounds_max);
@@ -138,7 +139,9 @@ impl SdfApp {
             .sculpt_state
             .detail_state()
             .last_pre_expand_detail_size
-            .unwrap_or_else(|| voxel::voxel_pitch_for_bounds(bounds_min, bounds_max, current_resolution));
+            .unwrap_or_else(|| {
+                voxel::voxel_pitch_for_bounds(bounds_min, bounds_max, current_resolution)
+            });
         let (new_resolution, limited) = remesh_resolution_for_detail(
             bounds_min,
             bounds_max,
@@ -278,8 +281,8 @@ impl SdfApp {
                     let idx = VoxelGrid::index(x, y, z, voxel_grid.resolution);
                     let value = if voxel_grid.is_displacement {
                         if let Some(child_id) = input {
-                            let world_pos =
-                                *position + crate::sculpt::inverse_rotate_euler(local_pos, *rotation);
+                            let world_pos = *position
+                                + crate::sculpt::inverse_rotate_euler(local_pos, *rotation);
                             voxel::evaluate_sdf_tree(&self.doc.scene, *child_id, world_pos)
                                 + voxel_grid.data[idx]
                         } else {

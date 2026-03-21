@@ -1711,7 +1711,7 @@ impl NodeGraphState {
         if self.selected_set.remove(&id) {
             // Was selected - deselected. Update primary if needed.
             if self.selected == Some(id) {
-                self.selected = self.selected_set.iter().next().copied();
+                self.selected = self.selected_set.iter().copied().min();
             }
         } else {
             // Wasn't selected - add it and make it primary.
@@ -2172,6 +2172,24 @@ pub fn draw_lights(
     }
 }
 
+fn visible_graph_selection_from_state(state: &NodeGraphState) -> Vec<NodeId> {
+    let mut graph_selection = Vec::new();
+    if let Some(sel) = state.selected {
+        if let Some(&graph_id) = state.id_map.scene_to_graph.get(&sel) {
+            graph_selection.push(graph_id);
+        }
+    }
+    let extra_graph_ids: Vec<_> = state
+        .selected_set
+        .iter()
+        .copied()
+        .filter(|sid| Some(*sid) != state.selected)
+        .filter_map(|sid| state.id_map.scene_to_graph.get(&sid).copied())
+        .collect();
+    graph_selection.extend(extra_graph_ids);
+    graph_selection
+}
+
 fn draw_with_filter(
     ui: &mut egui::Ui,
     scene: &mut Scene,
@@ -2209,12 +2227,7 @@ fn draw_with_filter(
         state.needs_initial_rebuild = false;
         state.layout_dirty = false;
 
-        // Restore selection in graph
-        if let Some(sel) = state.selected {
-            if let Some(&graph_id) = state.id_map.scene_to_graph.get(&sel) {
-                state.graph_state.selected_nodes = vec![graph_id];
-            }
-        }
+        state.graph_state.selected_nodes = visible_graph_selection_from_state(state);
         let spawn_anchor = state
             .pending_spawn_anchor
             .take()
@@ -2233,6 +2246,7 @@ fn draw_with_filter(
             .insert(*sid, node.data.clone());
     }
     state.user_state.zoom = state.graph_state.pan_zoom.zoom;
+    let graph_selection_before_draw = state.graph_state.selected_nodes.clone();
     let responses = ui
         .allocate_ui(graph_rect.size(), |ui| match filter_mode {
             GraphFilterMode::SdfOnly => state.graph_state.draw_graph_editor(
@@ -2348,30 +2362,71 @@ fn draw_with_filter(
         place_unpositioned_nodes(scene, &mut state.graph_state, &state.id_map, spawn_anchor);
         state.layout_dirty = false;
 
-        // Restore selection in graph
-        if let Some(sel) = state.selected {
-            if let Some(&graph_id) = state.id_map.scene_to_graph.get(&sel) {
-                state.graph_state.selected_nodes = vec![graph_id];
-            }
-        }
+        state.graph_state.selected_nodes = visible_graph_selection_from_state(state);
     }
 
-    // Sync selection from graph to our state
-    if let Some(first_selected) = state.graph_state.selected_nodes.first() {
-        if let Some(&scene_id) = state.id_map.graph_to_scene.get(first_selected) {
-            state.select_single(scene_id);
+    let visible_scene_ids: HashSet<_> = state.id_map.graph_to_scene.values().copied().collect();
+    let graph_selection_changed = state.graph_state.selected_nodes != graph_selection_before_draw;
+
+    // Only accept graph -> scene selection writes when selection changed in the graph this frame.
+    if graph_selection_changed {
+        if !state.graph_state.selected_nodes.is_empty() {
+            let mut graph_selected_scene_ids = Vec::new();
+            for graph_node_id in &state.graph_state.selected_nodes {
+                if let Some(&scene_id) = state.id_map.graph_to_scene.get(graph_node_id) {
+                    if !graph_selected_scene_ids.contains(&scene_id) {
+                        graph_selected_scene_ids.push(scene_id);
+                    }
+                }
+            }
+
+            if !graph_selected_scene_ids.is_empty() {
+                let mut next_selected_set: HashSet<_> = state
+                    .selected_set
+                    .iter()
+                    .copied()
+                    .filter(|sid| !visible_scene_ids.contains(sid))
+                    .collect();
+                for scene_id in &graph_selected_scene_ids {
+                    next_selected_set.insert(*scene_id);
+                }
+                state.selected_set = next_selected_set;
+
+                let graph_selected_lookup: HashSet<_> =
+                    graph_selected_scene_ids.iter().copied().collect();
+                let next_primary = state
+                    .selected
+                    .filter(|sid| graph_selected_lookup.contains(sid))
+                    .or_else(|| graph_selected_scene_ids.last().copied())
+                    .or_else(|| state.selected_set.iter().copied().min());
+                state.selected = next_primary;
+            }
+        } else if responses.cursor_in_editor && !responses.cursor_in_finder {
+            // User clicked empty space in this graph view: clear only visible selections.
+            let preserved_hidden_selection: HashSet<_> = state
+                .selected_set
+                .iter()
+                .copied()
+                .filter(|sid| !visible_scene_ids.contains(sid))
+                .collect();
+
+            if preserved_hidden_selection.is_empty() {
+                state.clear_selection();
+            } else {
+                state.selected_set = preserved_hidden_selection;
+                if !state
+                    .selected
+                    .is_some_and(|sid| state.selected_set.contains(&sid))
+                {
+                    state.selected = state.selected_set.iter().copied().min();
+                }
+            }
         }
-    } else if responses.cursor_in_editor && !responses.cursor_in_finder {
-        // User clicked empty space in the graph.
-        // Don't clear selection for nodes that are intentionally filtered out in this view.
-        let selected_is_visible = state
-            .selected
-            .and_then(|sid| state.id_map.scene_to_graph.get(&sid).copied())
-            .is_some();
-        if state.graph_state.selected_nodes.is_empty()
-            && (selected_is_visible || state.selected.is_none())
-        {
-            state.clear_selection();
+    } else {
+        // No graph selection change this frame: keep graph UI selection in sync with scene state.
+        let desired_graph_selection = visible_graph_selection_from_state(state);
+        if state.graph_state.selected_nodes != desired_graph_selection {
+            state.graph_state.selected_nodes = desired_graph_selection;
         }
     }
 

@@ -399,7 +399,7 @@ impl SdfApp {
                 mode: GizmoMode::Translate,
                 space: GizmoSpace::Local,
                 pivot_offset: Vec3::ZERO,
-                last_selection: None,
+                last_selection_ids: Vec::new(),
                 gizmo_visible: true,
             },
             gpu: GpuSyncState {
@@ -460,6 +460,7 @@ impl SdfApp {
                 show_distance_readout: false,
                 measurement_mode: false,
                 measurement_points: Vec::new(),
+            multi_transform_edit: crate::app::state::MultiTransformSessionState::default(),
             },
             persistence: PersistenceState {
                 current_file_path: None,

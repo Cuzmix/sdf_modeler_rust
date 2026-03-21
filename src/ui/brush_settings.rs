@@ -10,10 +10,7 @@ use crate::sculpt::{BrushMode, BrushShape, FalloffMode, SculptState};
 /// When not sculpting, shows an informational message.
 pub fn draw(ui: &mut egui::Ui, sculpt_state: &mut SculptState) {
     if sculpt_state.is_active() {
-        draw_active_brush_controls(
-            ui,
-            sculpt_state,
-        );
+        draw_active_brush_controls(ui, sculpt_state);
     } else {
         ui.add_space(20.0);
         ui.vertical_centered(|ui| {
@@ -81,7 +78,8 @@ fn draw_active_brush_controls(ui: &mut egui::Ui, sculpt_state: &mut SculptState)
     // Strength
     ui.horizontal(|ui| {
         ui.label("Strength:");
-        let (min_strength, max_strength) = crate::sculpt::SculptBrushProfile::strength_limits(brush_mode);
+        let (min_strength, max_strength) =
+            crate::sculpt::SculptBrushProfile::strength_limits(brush_mode);
         ui.add(egui::Slider::new(
             &mut profile.strength,
             min_strength..=max_strength,
@@ -116,7 +114,10 @@ fn draw_active_brush_controls(ui: &mut egui::Ui, sculpt_state: &mut SculptState)
     // Surface constraint
     ui.horizontal(|ui| {
         ui.label("Surface:");
-        ui.add(egui::Slider::new(&mut profile.surface_constraint, 0.0..=1.0));
+        ui.add(egui::Slider::new(
+            &mut profile.surface_constraint,
+            0.0..=1.0,
+        ));
     });
 
     ui.checkbox(&mut profile.front_faces_only, "Front Faces")

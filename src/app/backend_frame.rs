@@ -18,6 +18,7 @@ pub(super) struct UiFrameFeedback {
     pub sculpt_shift_held: bool,
     pub sculpt_pressure: f32,
     pub is_hover_pick: bool,
+    pub gizmo_drag_active: bool,
 }
 
 #[derive(Debug, Default)]
@@ -66,10 +67,22 @@ impl SdfApp {
         }
 
         // Reset pivot when selection changes.
-        let current_selection = self.ui.node_graph_state.selected;
-        if current_selection != self.gizmo.last_selection {
+        let mut current_selection_ids: Vec<_> = self
+            .ui
+            .node_graph_state
+            .selected_set
+            .iter()
+            .copied()
+            .collect();
+        if let Some(primary_selected) = self.ui.node_graph_state.selected {
+            if !current_selection_ids.contains(&primary_selected) {
+                current_selection_ids.push(primary_selected);
+            }
+        }
+        current_selection_ids.sort_unstable();
+        if current_selection_ids != self.gizmo.last_selection_ids {
             self.gizmo.pivot_offset = Vec3::ZERO;
-            self.gizmo.last_selection = current_selection;
+            self.gizmo.last_selection_ids = current_selection_ids;
         }
 
         let pipeline_start = Instant::now();
@@ -202,7 +215,9 @@ impl SdfApp {
         }
         self.perf.timings.composite_dispatch_s = composite_start.elapsed().as_secs_f64();
 
-        let is_anything_dragged = frame_input.is_dragging_ui || self.async_state.sculpt_dragging;
+        let is_anything_dragged = frame_input.is_dragging_ui
+            || self.async_state.sculpt_dragging
+            || ui_feedback.gizmo_drag_active;
         self.doc.history.end_frame(
             &self.doc.scene,
             self.ui.node_graph_state.selected,

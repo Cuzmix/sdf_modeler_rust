@@ -89,9 +89,9 @@ fn axis_color(
 }
 
 #[derive(Clone, Debug)]
-pub enum GizmoState {
+pub(crate) enum GizmoState {
     Idle,
-    Dragging {
+    DraggingSingle {
         axis: GizmoAxis,
         node_id: NodeId,
         _start_screen_pos: Pos2,
@@ -99,6 +99,21 @@ pub enum GizmoState {
         _start_rotation: Vec3,
         _start_scale: Vec3,
     },
+    DraggingMulti {
+        axis: GizmoAxis,
+        drag_session: GizmoDragSession,
+    },
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Debug)]
+pub(crate) struct GizmoDragSession {
+    start_center_world: Vec3,
+    start_origin_screen: Pos2,
+    start_pivot_offset: Vec3,
+    axis_directions: [Vec3; 3],
+    targets: Vec<GizmoTarget>,
+    accumulated_drag_delta: Vec2,
 }
 
 // ---------------------------------------------------------------------------
@@ -128,6 +143,7 @@ const COLOR_Z_HOVER: Color32 = Color32::from_rgb(120, 160, 255);
 // Math helpers
 // ---------------------------------------------------------------------------
 
+#[allow(dead_code)]
 fn rotate_euler(p: Vec3, r: Vec3) -> Vec3 {
     let mut q = p;
     let (sx, cx) = r.x.sin_cos();
@@ -230,11 +246,45 @@ fn screen_axis_dir(
 // Node transform extraction
 // ---------------------------------------------------------------------------
 
+#[derive(Clone, Debug)]
 struct NodeTransform {
     position: Vec3,
     rotation: Vec3,
     scale: Vec3,
     has_scale: bool,
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Debug)]
+pub(crate) struct GizmoTarget {
+    node_id: NodeId,
+    local_transform: NodeTransform,
+    parent_world_inverse: Mat4,
+    parent_world_rotation: Quat,
+    world_position: Vec3,
+    world_rotation: Quat,
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Debug)]
+pub(crate) struct GizmoSelection {
+    targets: Vec<GizmoTarget>,
+    base_center_world: Vec3,
+    reference_rotation_world: Quat,
+}
+
+#[allow(dead_code)]
+fn local_to_world_rotation(rotation: Vec3) -> Quat {
+    euler_to_quat(rotation).inverse()
+}
+
+#[allow(dead_code)]
+fn transform_local_to_parent_matrix(transform: &NodeTransform) -> Mat4 {
+    Mat4::from_scale_rotation_translation(
+        transform.scale,
+        local_to_world_rotation(transform.rotation),
+        transform.position,
+    )
 }
 
 fn extract_node_transform(scene: &Scene, node_id: NodeId) -> Option<NodeTransform> {
@@ -273,6 +323,216 @@ fn extract_node_transform(scene: &Scene, node_id: NodeId) -> Option<NodeTransfor
     }
 }
 
+#[allow(dead_code)]
+fn build_parent_world_transform(
+    scene: &Scene,
+    node_id: NodeId,
+    parent_map: &std::collections::HashMap<NodeId, NodeId>,
+) -> (Mat4, Mat4, Quat) {
+    let mut transform_chain = Vec::new();
+    let mut current = node_id;
+
+    while let Some(&parent_id) = parent_map.get(&current) {
+        if let Some(NodeData::Transform {
+            translation,
+            rotation,
+            scale,
+            ..
+        }) = scene.nodes.get(&parent_id).map(|node| &node.data)
+        {
+            transform_chain.push(NodeTransform {
+                position: *translation,
+                rotation: *rotation,
+                scale: *scale,
+                has_scale: true,
+            });
+        }
+        current = parent_id;
+    }
+
+    let mut parent_world_matrix = Mat4::IDENTITY;
+    let mut parent_world_rotation = Quat::IDENTITY;
+    for transform in transform_chain.iter().rev() {
+        parent_world_matrix *= transform_local_to_parent_matrix(transform);
+        parent_world_rotation *= local_to_world_rotation(transform.rotation);
+    }
+
+    (
+        parent_world_matrix,
+        parent_world_matrix.inverse(),
+        parent_world_rotation,
+    )
+}
+
+#[allow(dead_code)]
+fn build_gizmo_target(
+    scene: &Scene,
+    node_id: NodeId,
+    parent_map: &std::collections::HashMap<NodeId, NodeId>,
+) -> Option<GizmoTarget> {
+    let local_transform = extract_node_transform(scene, node_id)?;
+    let (parent_world_matrix, parent_world_inverse, parent_world_rotation) =
+        build_parent_world_transform(scene, node_id, parent_map);
+    let world_position = parent_world_matrix.transform_point3(local_transform.position);
+    let world_rotation = parent_world_rotation * local_to_world_rotation(local_transform.rotation);
+
+    Some(GizmoTarget {
+        node_id,
+        local_transform,
+        parent_world_inverse,
+        parent_world_rotation,
+        world_position,
+        world_rotation,
+    })
+}
+
+#[allow(dead_code)]
+pub(crate) fn collect_gizmo_selection(
+    scene: &Scene,
+    selected: Option<NodeId>,
+    selected_set: &std::collections::HashSet<NodeId>,
+) -> Option<GizmoSelection> {
+    let mut ordered_ids = Vec::new();
+    if let Some(primary_selected) = selected {
+        ordered_ids.push(primary_selected);
+    }
+
+    let mut extra_ids: Vec<_> = selected_set
+        .iter()
+        .copied()
+        .filter(|node_id| Some(*node_id) != selected)
+        .collect();
+    extra_ids.sort_unstable();
+    ordered_ids.extend(extra_ids);
+
+    if ordered_ids.is_empty() {
+        return None;
+    }
+
+    let parent_map = scene.build_parent_map();
+    let ordered_id_set: std::collections::HashSet<_> = ordered_ids.iter().copied().collect();
+    let mut targets = Vec::new();
+    for node_id in ordered_ids {
+        let mut current = node_id;
+        let mut has_selected_ancestor = false;
+        while let Some(&parent_id) = parent_map.get(&current) {
+            if ordered_id_set.contains(&parent_id) {
+                has_selected_ancestor = true;
+                break;
+            }
+            current = parent_id;
+        }
+        if has_selected_ancestor {
+            continue;
+        }
+        if let Some(target) = build_gizmo_target(scene, node_id, &parent_map) {
+            targets.push(target);
+        }
+    }
+
+    if targets.is_empty() {
+        return None;
+    }
+
+    let mut base_center_world = Vec3::ZERO;
+    for target in &targets {
+        base_center_world += target.world_position;
+    }
+    base_center_world /= targets.len() as f32;
+
+    Some(GizmoSelection {
+        reference_rotation_world: targets[0].world_rotation,
+        targets,
+        base_center_world,
+    })
+}
+
+impl GizmoSelection {
+    pub(crate) fn supports_scale(&self) -> bool {
+        self.targets
+            .iter()
+            .all(|target| target.local_transform.has_scale)
+    }
+
+    pub(crate) fn target_count(&self) -> usize {
+        self.targets.len()
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct MultiTransformReadout {
+    pub position_delta: Vec3,
+    pub rotation_delta_rad: Vec3,
+    pub scale_factor: Vec3,
+    pub scale_enabled: bool,
+}
+
+fn current_targets_from_baseline(
+    scene: &Scene,
+    baseline: &GizmoSelection,
+) -> Option<Vec<GizmoTarget>> {
+    let parent_map = scene.build_parent_map();
+    baseline
+        .targets
+        .iter()
+        .map(|target| build_gizmo_target(scene, target.node_id, &parent_map))
+        .collect()
+}
+
+fn rotation_delta_quat_from_euler(
+    rotation_delta_rad: Vec3,
+    gizmo_space: &GizmoSpace,
+    reference_rotation_world: Quat,
+) -> Quat {
+    let frame_delta = local_to_world_rotation(rotation_delta_rad);
+    match gizmo_space {
+        GizmoSpace::World => frame_delta,
+        GizmoSpace::Local => {
+            reference_rotation_world * frame_delta * reference_rotation_world.inverse()
+        }
+    }
+}
+
+fn rotation_delta_euler_from_world_quat(
+    rotation_delta_world: Quat,
+    gizmo_space: &GizmoSpace,
+    reference_rotation_world: Quat,
+    previous_rotation_delta_rad: Vec3,
+) -> Vec3 {
+    let frame_delta = match gizmo_space {
+        GizmoSpace::World => rotation_delta_world,
+        GizmoSpace::Local => {
+            reference_rotation_world.inverse() * rotation_delta_world * reference_rotation_world
+        }
+    };
+    quat_to_euler_stable(frame_delta.inverse(), previous_rotation_delta_rad)
+}
+
+fn scale_offset_in_basis(offset: Vec3, basis_axes: [Vec3; 3], scale_factor: Vec3) -> Vec3 {
+    basis_axes[0] * offset.dot(basis_axes[0]) * scale_factor.x
+        + basis_axes[1] * offset.dot(basis_axes[1]) * scale_factor.y
+        + basis_axes[2] * offset.dot(basis_axes[2]) * scale_factor.z
+}
+
+#[allow(dead_code)]
+fn build_drag_session(
+    selection: &GizmoSelection,
+    axis_directions: [Vec3; 3],
+    origin_screen: Pos2,
+    pivot_offset: Vec3,
+) -> GizmoDragSession {
+    let targets = selection.targets.to_vec();
+
+    GizmoDragSession {
+        start_center_world: selection.base_center_world + pivot_offset,
+        start_origin_screen: origin_screen,
+        start_pivot_offset: pivot_offset,
+        axis_directions,
+        targets,
+        accumulated_drag_delta: Vec2::ZERO,
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Axis direction computation
 // ---------------------------------------------------------------------------
@@ -284,6 +544,17 @@ fn compute_axis_directions(node_rotation: Vec3, space: &GizmoSpace) -> [Vec3; 3]
             inverse_rotate_euler(Vec3::X, node_rotation),
             inverse_rotate_euler(Vec3::Y, node_rotation),
             inverse_rotate_euler(Vec3::Z, node_rotation),
+        ],
+    }
+}
+
+fn compute_world_axis_directions(reference_rotation_world: Quat, space: &GizmoSpace) -> [Vec3; 3] {
+    match space {
+        GizmoSpace::World => [Vec3::X, Vec3::Y, Vec3::Z],
+        GizmoSpace::Local => [
+            (reference_rotation_world * Vec3::X).normalize_or_zero(),
+            (reference_rotation_world * Vec3::Y).normalize_or_zero(),
+            (reference_rotation_world * Vec3::Z).normalize_or_zero(),
         ],
     }
 }
@@ -504,7 +775,6 @@ fn handle_translate_drag(
     let world_scale = camera.distance * TRANSLATE_SENSITIVITY;
     let world_delta = axis_dir * projected * world_scale;
 
-    // When pivot is offset, translate moves position normally (pivot follows)
     let _ = pivot_offset;
     let _ = node_rotation;
 
@@ -545,7 +815,7 @@ fn handle_scale_drag(
             } => (scale, translation),
             _ => return,
         };
-        // When pivot is offset, scaling around pivot shifts position
+
         if pivot_offset.length_squared() > 1e-6 {
             let pivot_world = *position + inverse_rotate_euler(*pivot_offset, node_rotation);
             let offset = *position - pivot_world;
@@ -628,6 +898,124 @@ fn handle_rotate_drag(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+fn handle_multi_translate_drag(
+    response: &egui::Response,
+    drag_session: &mut GizmoDragSession,
+    axis_dir: Vec3,
+    camera: &Camera,
+    vp: &Mat4,
+    rect: Rect,
+    scene: &mut Scene,
+    snap_config: &SnapConfig,
+    ctrl_held: bool,
+) {
+    let axis_sd = screen_axis_dir(
+        drag_session.start_center_world,
+        axis_dir,
+        drag_session.start_origin_screen,
+        vp,
+        rect,
+    );
+    drag_session.accumulated_drag_delta += response.drag_delta();
+    let delta = drag_session.accumulated_drag_delta;
+    let projected = delta.dot(axis_sd);
+    let world_scale = camera.distance * TRANSLATE_SENSITIVITY;
+    let mut projected_world = projected * world_scale;
+    if ctrl_held {
+        projected_world = snap_value(projected_world, snap_config.translate_snap);
+    }
+    let world_delta = axis_dir * projected_world;
+
+    apply_world_translation_to_targets(scene, &drag_session.targets, world_delta);
+}
+
+#[allow(clippy::too_many_arguments)]
+fn handle_multi_rotate_drag(
+    response: &egui::Response,
+    drag_session: &mut GizmoDragSession,
+    axis_dir: Vec3,
+    scene: &mut Scene,
+    view_dir: Vec3,
+    snap_config: &SnapConfig,
+    ctrl_held: bool,
+) {
+    let mouse_pos = response
+        .hover_pos()
+        .unwrap_or(drag_session.start_origin_screen);
+    let radius_vec = mouse_pos - drag_session.start_origin_screen;
+    let radius_len = radius_vec.length();
+    if radius_len < 1.0 {
+        return;
+    }
+    let radius_norm = radius_vec / radius_len;
+    let tangent_dir = Vec2::new(-radius_norm.y, radius_norm.x);
+    drag_session.accumulated_drag_delta += response.drag_delta();
+    let delta = drag_session.accumulated_drag_delta;
+    let projected = delta.dot(tangent_dir);
+
+    let sign = if axis_dir.dot(view_dir) >= 0.0 {
+        1.0
+    } else {
+        -1.0
+    };
+    let mut angle_delta = projected * ROTATE_SENSITIVITY * sign;
+    if ctrl_held {
+        angle_delta = snap_value(angle_delta, snap_config.rotate_snap.to_radians());
+    }
+
+    let delta_quat = Quat::from_axis_angle(axis_dir, angle_delta);
+    apply_world_rotation_to_targets(
+        scene,
+        &drag_session.targets,
+        drag_session.start_center_world,
+        delta_quat,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn handle_multi_scale_drag(
+    response: &egui::Response,
+    drag_session: &mut GizmoDragSession,
+    axis: &GizmoAxis,
+    axis_dir: Vec3,
+    vp: &Mat4,
+    rect: Rect,
+    scene: &mut Scene,
+    snap_config: &SnapConfig,
+    ctrl_held: bool,
+) {
+    let axis_sd = screen_axis_dir(
+        drag_session.start_center_world,
+        axis_dir,
+        drag_session.start_origin_screen,
+        vp,
+        rect,
+    );
+    drag_session.accumulated_drag_delta += response.drag_delta();
+    let delta = drag_session.accumulated_drag_delta;
+    let projected = delta.dot(axis_sd);
+    let factor = 1.0 + projected * SCALE_SENSITIVITY;
+
+    apply_axis_scale_to_targets(
+        scene,
+        &drag_session.targets,
+        drag_session.start_center_world,
+        axis_dir,
+        axis,
+        factor,
+    );
+    if ctrl_held {
+        snap_target_scales(
+            scene,
+            &drag_session.targets,
+            axis.euler_index(),
+            snap_config.scale_snap,
+        );
+    }
+}
+
+#[allow(dead_code)]
 fn apply_rotation_delta(
     rotation: &mut Vec3,
     _axis: &GizmoAxis,
@@ -647,6 +1035,7 @@ fn apply_rotation_delta(
     *rotation = quat_to_euler_stable(new_quat, prev);
 }
 
+#[allow(dead_code)]
 fn apply_position_delta(scene: &mut Scene, node_id: NodeId, delta: Vec3) {
     if let Some(node) = scene.nodes.get_mut(&node_id) {
         match &mut node.data {
@@ -661,6 +1050,264 @@ fn apply_position_delta(scene: &mut Scene, node_id: NodeId, delta: Vec3) {
                 ..
             } => *translation += delta,
             _ => {}
+        }
+    }
+}
+
+#[allow(dead_code)]
+fn set_node_position(scene: &mut Scene, node_id: NodeId, position: Vec3) {
+    let Some(node) = scene.nodes.get_mut(&node_id) else {
+        return;
+    };
+    match &mut node.data {
+        NodeData::Primitive {
+            position: node_position,
+            ..
+        } => *node_position = position,
+        NodeData::Sculpt {
+            position: node_position,
+            ..
+        } => *node_position = position,
+        NodeData::Transform { translation, .. } => *translation = position,
+        _ => {}
+    }
+}
+
+#[allow(dead_code)]
+fn set_node_rotation(scene: &mut Scene, node_id: NodeId, rotation: Vec3) {
+    let Some(node) = scene.nodes.get_mut(&node_id) else {
+        return;
+    };
+    match &mut node.data {
+        NodeData::Primitive {
+            rotation: node_rotation,
+            ..
+        } => *node_rotation = rotation,
+        NodeData::Sculpt {
+            rotation: node_rotation,
+            ..
+        } => *node_rotation = rotation,
+        NodeData::Transform {
+            rotation: node_rotation,
+            ..
+        } => *node_rotation = rotation,
+        _ => {}
+    }
+}
+
+#[allow(dead_code)]
+fn set_node_scale(scene: &mut Scene, node_id: NodeId, scale: Vec3) {
+    let Some(node) = scene.nodes.get_mut(&node_id) else {
+        return;
+    };
+    match &mut node.data {
+        NodeData::Primitive {
+            scale: node_scale, ..
+        } => *node_scale = scale,
+        NodeData::Transform {
+            scale: node_scale, ..
+        } => *node_scale = scale,
+        _ => {}
+    }
+}
+
+#[allow(dead_code)]
+fn apply_world_translation_to_targets(
+    scene: &mut Scene,
+    targets: &[GizmoTarget],
+    world_delta: Vec3,
+) {
+    for target in targets {
+        let new_world_position = target.world_position + world_delta;
+        let new_local_position = target
+            .parent_world_inverse
+            .transform_point3(new_world_position);
+        set_node_position(scene, target.node_id, new_local_position);
+    }
+}
+
+#[allow(dead_code)]
+fn apply_world_rotation_to_targets(
+    scene: &mut Scene,
+    targets: &[GizmoTarget],
+    pivot_world: Vec3,
+    delta_quat: Quat,
+) {
+    for target in targets {
+        let rotated_world_position = pivot_world + delta_quat * (target.world_position - pivot_world);
+        let rotated_world_orientation = delta_quat * target.world_rotation;
+        let local_world_rotation =
+            target.parent_world_rotation.inverse() * rotated_world_orientation;
+        let local_rotation_quat = local_world_rotation.inverse();
+        let local_rotation =
+            quat_to_euler_stable(local_rotation_quat, target.local_transform.rotation);
+        let new_local_position = target
+            .parent_world_inverse
+            .transform_point3(rotated_world_position);
+
+        set_node_position(scene, target.node_id, new_local_position);
+        set_node_rotation(scene, target.node_id, local_rotation);
+    }
+}
+
+#[allow(dead_code)]
+fn apply_axis_scale_to_targets(
+    scene: &mut Scene,
+    targets: &[GizmoTarget],
+    pivot_world: Vec3,
+    axis_dir: Vec3,
+    axis: &GizmoAxis,
+    factor: f32,
+) {
+    for target in targets {
+        let offset = target.world_position - pivot_world;
+        let parallel = axis_dir * offset.dot(axis_dir);
+        let perpendicular = offset - parallel;
+        let scaled_world_position = pivot_world + perpendicular + parallel * factor;
+        let new_local_position = target
+            .parent_world_inverse
+            .transform_point3(scaled_world_position);
+        set_node_position(scene, target.node_id, new_local_position);
+
+        if !target.local_transform.has_scale {
+            continue;
+        }
+
+        let mut scaled_local = target.local_transform.scale;
+        match axis {
+            GizmoAxis::X => scaled_local.x = (scaled_local.x * factor).max(0.01),
+            GizmoAxis::Y => scaled_local.y = (scaled_local.y * factor).max(0.01),
+            GizmoAxis::Z => scaled_local.z = (scaled_local.z * factor).max(0.01),
+        }
+        set_node_scale(scene, target.node_id, scaled_local);
+    }
+}
+
+#[allow(dead_code)]
+fn snap_target_scales(
+    scene: &mut Scene,
+    targets: &[GizmoTarget],
+    axis_index: usize,
+    snap: f32,
+) {
+    for target in targets {
+        if target.local_transform.has_scale {
+            snap_scale(scene, target.node_id, axis_index, snap);
+        }
+    }
+}
+
+pub(crate) fn derive_multi_transform_readout(
+    scene: &Scene,
+    baseline: &GizmoSelection,
+    gizmo_space: &GizmoSpace,
+    previous_rotation_delta_rad: Vec3,
+) -> Option<MultiTransformReadout> {
+    let current_targets = current_targets_from_baseline(scene, baseline)?;
+    if current_targets.is_empty() {
+        return None;
+    }
+
+    let mut current_center_world = Vec3::ZERO;
+    for target in &current_targets {
+        current_center_world += target.world_position;
+    }
+    current_center_world /= current_targets.len() as f32;
+    let position_delta = current_center_world - baseline.base_center_world;
+
+    let reference_current = &current_targets[0];
+    let reference_baseline = &baseline.targets[0];
+    let rotation_delta_world =
+        reference_current.world_rotation * reference_baseline.world_rotation.inverse();
+    let rotation_delta_rad = rotation_delta_euler_from_world_quat(
+        rotation_delta_world,
+        gizmo_space,
+        baseline.reference_rotation_world,
+        previous_rotation_delta_rad,
+    );
+
+    let scale_enabled = baseline.supports_scale();
+    let scale_factor = if scale_enabled {
+        let current_scale = current_targets[0].local_transform.scale;
+        let baseline_scale = baseline.targets[0].local_transform.scale;
+        Vec3::new(
+            current_scale.x / baseline_scale.x.max(0.01),
+            current_scale.y / baseline_scale.y.max(0.01),
+            current_scale.z / baseline_scale.z.max(0.01),
+        )
+    } else {
+        Vec3::ONE
+    };
+
+    Some(MultiTransformReadout {
+        position_delta,
+        rotation_delta_rad,
+        scale_factor,
+        scale_enabled,
+    })
+}
+
+pub(crate) fn restore_multi_transform_baseline(scene: &mut Scene, baseline: &GizmoSelection) {
+    for target in &baseline.targets {
+        set_node_position(scene, target.node_id, target.local_transform.position);
+        set_node_rotation(scene, target.node_id, target.local_transform.rotation);
+        if target.local_transform.has_scale {
+            set_node_scale(scene, target.node_id, target.local_transform.scale);
+        }
+    }
+}
+
+pub(crate) fn apply_multi_transform_from_baseline(
+    scene: &mut Scene,
+    baseline: &GizmoSelection,
+    gizmo_space: &GizmoSpace,
+    position_delta: Vec3,
+    rotation_delta_rad: Vec3,
+    scale_factor: Vec3,
+) {
+    let clamped_scale_factor = Vec3::new(
+        scale_factor.x.max(0.01),
+        scale_factor.y.max(0.01),
+        scale_factor.z.max(0.01),
+    );
+    let rotation_delta_world = rotation_delta_quat_from_euler(
+        rotation_delta_rad,
+        gizmo_space,
+        baseline.reference_rotation_world,
+    );
+    let scale_axes = compute_world_axis_directions(baseline.reference_rotation_world, gizmo_space);
+    let scale_enabled = baseline.supports_scale();
+
+    for target in &baseline.targets {
+        let scaled_offset = if scale_enabled {
+            scale_offset_in_basis(
+                target.world_position - baseline.base_center_world,
+                scale_axes,
+                clamped_scale_factor,
+            )
+        } else {
+            target.world_position - baseline.base_center_world
+        };
+        let rotated_offset = rotation_delta_world * scaled_offset;
+        let new_world_position =
+            baseline.base_center_world + rotated_offset + position_delta;
+        let new_local_position = target
+            .parent_world_inverse
+            .transform_point3(new_world_position);
+
+        let rotated_world_orientation = rotation_delta_world * target.world_rotation;
+        let local_world_rotation =
+            target.parent_world_rotation.inverse() * rotated_world_orientation;
+        let local_rotation_quat = local_world_rotation.inverse();
+        let local_rotation =
+            quat_to_euler_stable(local_rotation_quat, target.local_transform.rotation);
+
+        set_node_position(scene, target.node_id, new_local_position);
+        set_node_rotation(scene, target.node_id, local_rotation);
+
+        if scale_enabled && target.local_transform.has_scale {
+            let scaled_local = target.local_transform.scale * clamped_scale_factor;
+            set_node_scale(scene, target.node_id, scaled_local);
         }
     }
 }
@@ -687,11 +1334,11 @@ fn handle_pivot_drag(
     let world_scale = camera.distance * TRANSLATE_SENSITIVITY;
     let world_delta = axis_dir * projected * world_scale;
 
-    // Convert world delta to local space for the pivot offset
     let inv_delta = inverse_rotate_euler(world_delta, node_rotation);
     *pivot_offset += inv_delta;
 }
 
+#[allow(dead_code)]
 fn inverse_rotate_euler(p: Vec3, r: Vec3) -> Vec3 {
     let mut q = p;
     let (sz, cz) = r.z.sin_cos();
@@ -714,6 +1361,7 @@ pub fn draw_and_interact(
     camera: &Camera,
     scene: &mut Scene,
     selected: Option<NodeId>,
+    selected_set: &std::collections::HashSet<NodeId>,
     gizmo_state: &mut GizmoState,
     gizmo_mode: &GizmoMode,
     gizmo_space: &GizmoSpace,
@@ -727,36 +1375,82 @@ pub fn draw_and_interact(
         return false;
     }
 
-    let Some(node_id) = selected else {
-        *gizmo_state = GizmoState::Idle;
-        return false;
-    };
-
-    let Some(nt) = extract_node_transform(scene, node_id) else {
-        *gizmo_state = GizmoState::Idle;
-        return false;
-    };
-
-    // Skip scale gizmo for nodes without scale
-    if *gizmo_mode == GizmoMode::Scale && !nt.has_scale {
-        *gizmo_state = GizmoState::Idle;
-        return false;
-    }
-
-    let axes = compute_axis_directions(nt.rotation, gizmo_space);
-    let gizmo_center = nt.position + rotate_euler(*pivot_offset, nt.rotation);
-
     let aspect = rect.width() / rect.height().max(1.0);
     let view = camera.view_matrix();
     let proj = camera.projection_matrix(aspect);
     let vp = proj * view;
 
+    let mut raw_selected_count = selected_set.len();
+    if let Some(primary_selected) = selected {
+        if !selected_set.contains(&primary_selected) {
+            raw_selected_count += 1;
+        }
+    }
+
+    let multi_drag_active = matches!(gizmo_state, GizmoState::DraggingMulti { .. });
+    let multi_selection_active = match gizmo_state {
+        GizmoState::DraggingSingle { .. } => false,
+        GizmoState::DraggingMulti { .. } => true,
+        GizmoState::Idle => raw_selected_count > 1,
+    };
+
+    let selection = if multi_selection_active {
+        collect_gizmo_selection(scene, selected, selected_set)
+    } else {
+        None
+    };
+
+    let single_node_id = match gizmo_state {
+        GizmoState::DraggingSingle { node_id, .. } => Some(*node_id),
+        _ => selected,
+    };
+
+    let mut single_transform = None;
+    let axes;
+    let gizmo_center;
+
+    if multi_selection_active {
+        if let Some(selection) = selection.as_ref() {
+            if *gizmo_mode == GizmoMode::Scale && !selection.supports_scale() && !multi_drag_active {
+                *gizmo_state = GizmoState::Idle;
+                return false;
+            }
+            axes = compute_world_axis_directions(selection.reference_rotation_world, gizmo_space);
+            gizmo_center = selection.base_center_world;
+        } else if let GizmoState::DraggingMulti { drag_session, .. } = gizmo_state {
+            axes = drag_session.axis_directions;
+            gizmo_center = drag_session.start_center_world;
+        } else {
+            *gizmo_state = GizmoState::Idle;
+            return false;
+        }
+    } else {
+        let Some(node_id) = single_node_id else {
+            *gizmo_state = GizmoState::Idle;
+            return false;
+        };
+
+        let Some(node_transform) = extract_node_transform(scene, node_id) else {
+            *gizmo_state = GizmoState::Idle;
+            return false;
+        };
+
+        if *gizmo_mode == GizmoMode::Scale && !node_transform.has_scale {
+            *gizmo_state = GizmoState::Idle;
+            return false;
+        }
+
+        axes = compute_axis_directions(node_transform.rotation, gizmo_space);
+        gizmo_center =
+            node_transform.position + rotate_euler(*pivot_offset, node_transform.rotation);
+        single_transform = Some((node_id, node_transform));
+    }
+
     let Some(origin_screen) = world_to_screen(gizmo_center, &vp, rect) else {
         return false;
     };
 
-    // Check if Alt is held (pivot drag mode)
-    let alt_held = response.ctx.input(|i| i.modifiers.alt);
+    let allow_pivot_drag = !multi_selection_active && response.ctx.input(|i| i.modifiers.alt);
 
     // Project axis endpoints for translate/scale modes
     let axis_screens = {
@@ -779,7 +1473,8 @@ pub fn draw_and_interact(
 
     // Determine colors
     let dragging_axis = match gizmo_state {
-        GizmoState::Dragging { ref axis, .. } => Some(axis.clone()),
+        GizmoState::DraggingSingle { ref axis, .. }
+        | GizmoState::DraggingMulti { ref axis, .. } => Some(axis.clone()),
         _ => None,
     };
     let colors = [
@@ -798,8 +1493,11 @@ pub fn draw_and_interact(
     }
 
     // Draw pivot indicator when offset
-    if pivot_offset.length_squared() > 1e-6 {
-        let node_origin_screen = world_to_screen(nt.position, &vp, rect);
+    if let Some((_, node_transform)) = single_transform
+        .as_ref()
+        .filter(|_| pivot_offset.length_squared() > 1e-6)
+    {
+        let node_origin_screen = world_to_screen(node_transform.position, &vp, rect);
         if let Some(nos) = node_origin_screen {
             painter.circle_stroke(nos, 4.0, Stroke::new(1.5, Color32::from_rgb(255, 200, 50)));
             painter.line_segment(
@@ -815,49 +1513,48 @@ pub fn draw_and_interact(
     // Start dragging
     if response.drag_started_by(egui::PointerButton::Primary) {
         if let Some(ref axis) = hovered_axis {
-            *gizmo_state = GizmoState::Dragging {
-                axis: axis.clone(),
-                node_id,
-                _start_screen_pos: hover_pos.unwrap_or(origin_screen),
-                _start_world_pos: nt.position,
-                _start_rotation: nt.rotation,
-                _start_scale: nt.scale,
-            };
-            consumed = true;
+            if multi_selection_active {
+                if let Some(selection) = selection.as_ref() {
+                    *gizmo_state = GizmoState::DraggingMulti {
+                        axis: axis.clone(),
+                        drag_session: build_drag_session(
+                            selection,
+                            axes,
+                            origin_screen,
+                            Vec3::ZERO,
+                        ),
+                    };
+                    consumed = true;
+                }
+            } else if let Some((node_id, node_transform)) = single_transform.as_ref() {
+                *gizmo_state = GizmoState::DraggingSingle {
+                    axis: axis.clone(),
+                    node_id: *node_id,
+                    _start_screen_pos: hover_pos.unwrap_or(origin_screen),
+                    _start_world_pos: node_transform.position,
+                    _start_rotation: node_transform.rotation,
+                    _start_scale: node_transform.scale,
+                };
+                consumed = true;
+            }
         }
     }
 
     // During drag
     if response.dragged_by(egui::PointerButton::Primary) {
-        if let GizmoState::Dragging {
-            ref axis,
-            node_id: drag_node,
-            ..
-        } = gizmo_state
-        {
-            let drag_node = *drag_node;
-            let axis_idx = axis.euler_index();
-            let axis_dir = axes[axis_idx];
-            let axis_clone = axis.clone();
+        match gizmo_state {
+            GizmoState::DraggingSingle {
+                axis,
+                node_id: drag_node,
+                ..
+            } => {
+                if let Some((_, node_transform)) = single_transform.as_ref() {
+                    let axis_idx = axis.euler_index();
+                    let axis_dir = axes[axis_idx];
+                    let axis_clone = axis.clone();
 
-            if alt_held {
-                // Alt+drag: move pivot
-                handle_pivot_drag(
-                    response,
-                    axis_dir,
-                    gizmo_center,
-                    origin_screen,
-                    camera,
-                    &vp,
-                    rect,
-                    pivot_offset,
-                    nt.rotation,
-                );
-            } else {
-                let ctrl_held = response.ctx.input(|i| i.modifiers.ctrl);
-                match gizmo_mode {
-                    GizmoMode::Translate => {
-                        handle_translate_drag(
+                    if allow_pivot_drag {
+                        handle_pivot_drag(
                             response,
                             axis_dir,
                             gizmo_center,
@@ -865,66 +1562,141 @@ pub fn draw_and_interact(
                             camera,
                             &vp,
                             rect,
-                            scene,
-                            drag_node,
                             pivot_offset,
-                            nt.rotation,
+                            node_transform.rotation,
                         );
-                        if ctrl_held {
-                            snap_position(scene, drag_node, axis_idx, snap_config.translate_snap);
+                    } else {
+                        let ctrl_held = response.ctx.input(|i| i.modifiers.ctrl);
+                        match gizmo_mode {
+                            GizmoMode::Translate => {
+                                handle_translate_drag(
+                                    response,
+                                    axis_dir,
+                                    gizmo_center,
+                                    origin_screen,
+                                    camera,
+                                    &vp,
+                                    rect,
+                                    scene,
+                                    *drag_node,
+                                    pivot_offset,
+                                    node_transform.rotation,
+                                );
+                                if ctrl_held {
+                                    snap_position(
+                                        scene,
+                                        *drag_node,
+                                        axis_idx,
+                                        snap_config.translate_snap,
+                                    );
+                                }
+                            }
+                            GizmoMode::Scale => {
+                                handle_scale_drag(
+                                    response,
+                                    &axis_clone,
+                                    axis_dir,
+                                    gizmo_center,
+                                    origin_screen,
+                                    camera,
+                                    &vp,
+                                    rect,
+                                    scene,
+                                    *drag_node,
+                                    pivot_offset,
+                                    node_transform.rotation,
+                                );
+                                if ctrl_held {
+                                    snap_scale(
+                                        scene,
+                                        *drag_node,
+                                        axis_idx,
+                                        snap_config.scale_snap,
+                                    );
+                                }
+                            }
+                            GizmoMode::Rotate => {
+                                let view_dir = camera.eye() - gizmo_center;
+                                handle_rotate_drag(
+                                    response,
+                                    &axis_clone,
+                                    axis_dir,
+                                    origin_screen,
+                                    scene,
+                                    *drag_node,
+                                    pivot_offset,
+                                    node_transform.rotation,
+                                    gizmo_space,
+                                    view_dir,
+                                );
+                                if ctrl_held {
+                                    snap_rotation(
+                                        scene,
+                                        *drag_node,
+                                        axis_idx,
+                                        snap_config.rotate_snap.to_radians(),
+                                    );
+                                }
+                            }
                         }
                     }
-                    GizmoMode::Scale => {
-                        handle_scale_drag(
-                            response,
-                            &axis_clone,
-                            axis_dir,
-                            gizmo_center,
-                            origin_screen,
-                            camera,
-                            &vp,
-                            rect,
-                            scene,
-                            drag_node,
-                            pivot_offset,
-                            nt.rotation,
-                        );
-                        if ctrl_held {
-                            snap_scale(scene, drag_node, axis_idx, snap_config.scale_snap);
-                        }
-                    }
-                    GizmoMode::Rotate => {
-                        let view_dir = camera.eye() - gizmo_center;
-                        handle_rotate_drag(
-                            response,
-                            &axis_clone,
-                            axis_dir,
-                            origin_screen,
-                            scene,
-                            drag_node,
-                            pivot_offset,
-                            nt.rotation,
-                            gizmo_space,
-                            view_dir,
-                        );
-                        if ctrl_held {
-                            snap_rotation(
-                                scene,
-                                drag_node,
-                                axis_idx,
-                                snap_config.rotate_snap.to_radians(),
-                            );
-                        }
-                    }
+                    consumed = true;
                 }
             }
-            consumed = true;
+            GizmoState::DraggingMulti { axis, drag_session } => {
+                let axis_idx = axis.euler_index();
+                let axis_dir = drag_session.axis_directions[axis_idx];
+                let ctrl_held = response.ctx.input(|i| i.modifiers.ctrl);
+
+                match gizmo_mode {
+                    GizmoMode::Translate => {
+                        handle_multi_translate_drag(
+                            response,
+                            drag_session,
+                            axis_dir,
+                            camera,
+                            &vp,
+                            rect,
+                            scene,
+                            snap_config,
+                            ctrl_held,
+                        );
+                    }
+                    GizmoMode::Rotate => {
+                        let view_dir = camera.eye() - drag_session.start_center_world;
+                        handle_multi_rotate_drag(
+                            response,
+                            drag_session,
+                            axis_dir,
+                            scene,
+                            view_dir,
+                            snap_config,
+                            ctrl_held,
+                        );
+                    }
+                    GizmoMode::Scale => {
+                        handle_multi_scale_drag(
+                            response,
+                            drag_session,
+                            axis,
+                            axis_dir,
+                            &vp,
+                            rect,
+                            scene,
+                            snap_config,
+                            ctrl_held,
+                        );
+                    }
+                }
+                consumed = true;
+            }
+            GizmoState::Idle => {}
         }
     }
 
     // End drag
     if response.drag_stopped_by(egui::PointerButton::Primary)
-        && matches!(gizmo_state, GizmoState::Dragging { .. })
+        && !matches!(gizmo_state, GizmoState::Idle)
     {
         *gizmo_state = GizmoState::Idle;
         consumed = true;
@@ -941,6 +1713,7 @@ fn snap_value(val: f32, snap: f32) -> f32 {
     (val / snap).round() * snap
 }
 
+#[allow(dead_code)]
 fn snap_position(scene: &mut Scene, node_id: NodeId, axis_idx: usize, snap: f32) {
     if let Some(node) = scene.nodes.get_mut(&node_id) {
         let pos = match &mut node.data {
@@ -964,6 +1737,7 @@ fn snap_position(scene: &mut Scene, node_id: NodeId, axis_idx: usize, snap: f32)
     }
 }
 
+#[allow(dead_code)]
 fn snap_rotation(scene: &mut Scene, node_id: NodeId, axis_idx: usize, snap_rad: f32) {
     if let Some(node) = scene.nodes.get_mut(&node_id) {
         let rot = match &mut node.data {
@@ -998,5 +1772,268 @@ fn snap_scale(scene: &mut Scene, node_id: NodeId, axis_idx: usize, snap: f32) {
             1 => scale.y = snap_value(scale.y, snap).max(0.01),
             _ => scale.z = snap_value(scale.z, snap).max(0.01),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::graph::scene::{Scene, SdfPrimitive};
+    use crate::graph::voxel::VoxelGrid;
+    use std::collections::{HashMap, HashSet};
+
+    fn empty_scene() -> Scene {
+        Scene {
+            nodes: HashMap::new(),
+            next_id: 0,
+            name_counters: HashMap::new(),
+            hidden_nodes: HashSet::new(),
+            light_masks: HashMap::new(),
+        }
+    }
+
+    fn assert_vec3_close(actual: Vec3, expected: Vec3) {
+        let delta = actual - expected;
+        assert!(
+            delta.length() < 1e-4,
+            "expected {expected:?}, got {actual:?}, delta={delta:?}"
+        );
+    }
+
+    fn primitive_position(scene: &Scene, node_id: NodeId) -> Vec3 {
+        match &scene.nodes.get(&node_id).unwrap().data {
+            NodeData::Primitive { position, .. } => *position,
+            other => panic!("expected primitive, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn group_translation_moves_all_selected_targets() {
+        let mut scene = empty_scene();
+        let left = scene.create_primitive(SdfPrimitive::Sphere);
+        let right = scene.create_primitive(SdfPrimitive::Sphere);
+
+        if let Some(NodeData::Primitive { position, .. }) =
+            scene.nodes.get_mut(&left).map(|node| &mut node.data)
+        {
+            *position = Vec3::new(-1.0, 0.0, 0.0);
+        }
+        if let Some(NodeData::Primitive { position, .. }) =
+            scene.nodes.get_mut(&right).map(|node| &mut node.data)
+        {
+            *position = Vec3::new(1.0, 0.0, 0.0);
+        }
+
+        let selected_set = HashSet::from([left, right]);
+        let selection = collect_gizmo_selection(&scene, Some(left), &selected_set).unwrap();
+        let drag_session = build_drag_session(
+            &selection,
+            [Vec3::X, Vec3::Y, Vec3::Z],
+            Pos2::ZERO,
+            Vec3::ZERO,
+        );
+
+        apply_world_translation_to_targets(
+            &mut scene,
+            &drag_session.targets,
+            Vec3::new(0.0, 2.0, 0.0),
+        );
+
+        assert_vec3_close(primitive_position(&scene, left), Vec3::new(-1.0, 2.0, 0.0));
+        assert_vec3_close(primitive_position(&scene, right), Vec3::new(1.0, 2.0, 0.0));
+    }
+
+    #[test]
+    fn group_rotation_uses_shared_pivot() {
+        let mut scene = empty_scene();
+        let left = scene.create_primitive(SdfPrimitive::Sphere);
+        let right = scene.create_primitive(SdfPrimitive::Sphere);
+
+        if let Some(NodeData::Primitive { position, .. }) =
+            scene.nodes.get_mut(&left).map(|node| &mut node.data)
+        {
+            *position = Vec3::new(-1.0, 0.0, 0.0);
+        }
+        if let Some(NodeData::Primitive { position, .. }) =
+            scene.nodes.get_mut(&right).map(|node| &mut node.data)
+        {
+            *position = Vec3::new(1.0, 0.0, 0.0);
+        }
+
+        let selected_set = HashSet::from([left, right]);
+        let selection = collect_gizmo_selection(&scene, Some(left), &selected_set).unwrap();
+        let drag_session = build_drag_session(
+            &selection,
+            [Vec3::X, Vec3::Y, Vec3::Z],
+            Pos2::ZERO,
+            Vec3::ZERO,
+        );
+
+        apply_world_rotation_to_targets(
+            &mut scene,
+            &drag_session.targets,
+            Vec3::ZERO,
+            Quat::from_axis_angle(Vec3::Z, std::f32::consts::FRAC_PI_2),
+        );
+
+        assert_vec3_close(primitive_position(&scene, left), Vec3::new(0.0, -1.0, 0.0));
+        assert_vec3_close(primitive_position(&scene, right), Vec3::new(0.0, 1.0, 0.0));
+    }
+
+    #[test]
+    fn child_under_parent_transform_writes_back_local_translation() {
+        let mut scene = empty_scene();
+        let child = scene.create_primitive(SdfPrimitive::Sphere);
+        let parent = scene.create_transform(Some(child));
+
+        if let Some(NodeData::Primitive { position, .. }) =
+            scene.nodes.get_mut(&child).map(|node| &mut node.data)
+        {
+            *position = Vec3::new(1.0, 0.0, 0.0);
+        }
+        if let Some(NodeData::Transform { translation, .. }) =
+            scene.nodes.get_mut(&parent).map(|node| &mut node.data)
+        {
+            *translation = Vec3::new(10.0, 0.0, 0.0);
+        }
+
+        let selected_set = HashSet::from([child]);
+        let selection = collect_gizmo_selection(&scene, Some(child), &selected_set).unwrap();
+        let drag_session = build_drag_session(
+            &selection,
+            [Vec3::X, Vec3::Y, Vec3::Z],
+            Pos2::ZERO,
+            Vec3::ZERO,
+        );
+
+        apply_world_translation_to_targets(
+            &mut scene,
+            &drag_session.targets,
+            Vec3::new(2.0, 0.0, 0.0),
+        );
+
+        assert_vec3_close(primitive_position(&scene, child), Vec3::new(3.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn collect_selection_skips_descendant_when_ancestor_selected() {
+        let mut scene = empty_scene();
+        let child = scene.create_primitive(SdfPrimitive::Sphere);
+        let parent = scene.create_transform(Some(child));
+
+        let selected_set = HashSet::from([child, parent]);
+        let selection = collect_gizmo_selection(&scene, Some(child), &selected_set).unwrap();
+
+        assert_eq!(selection.targets.len(), 1);
+        assert_eq!(selection.targets[0].node_id, parent);
+    }
+
+    #[test]
+    fn child_under_rotated_parent_preserves_world_translation_delta() {
+        let mut scene = empty_scene();
+        let child = scene.create_primitive(SdfPrimitive::Sphere);
+        let parent = scene.create_transform(Some(child));
+
+        if let Some(NodeData::Primitive { position, .. }) =
+            scene.nodes.get_mut(&child).map(|node| &mut node.data)
+        {
+            *position = Vec3::new(1.0, 0.0, 0.0);
+        }
+        if let Some(NodeData::Transform {
+            translation,
+            rotation,
+            ..
+        }) = scene.nodes.get_mut(&parent).map(|node| &mut node.data)
+        {
+            *translation = Vec3::new(10.0, 0.0, 0.0);
+            *rotation = Vec3::new(0.0, 0.0, std::f32::consts::FRAC_PI_2);
+        }
+
+        let selected_set = HashSet::from([child]);
+        let selection = collect_gizmo_selection(&scene, Some(child), &selected_set).unwrap();
+        let start_world_position = selection.targets[0].world_position;
+        let drag_session = build_drag_session(
+            &selection,
+            [Vec3::X, Vec3::Y, Vec3::Z],
+            Pos2::ZERO,
+            Vec3::ZERO,
+        );
+
+        apply_world_translation_to_targets(
+            &mut scene,
+            &drag_session.targets,
+            Vec3::new(2.0, 0.0, 0.0),
+        );
+
+        let moved_selection = collect_gizmo_selection(&scene, Some(child), &selected_set).unwrap();
+        assert_vec3_close(
+            moved_selection.targets[0].world_position,
+            start_world_position + Vec3::new(2.0, 0.0, 0.0),
+        );
+    }
+
+    #[test]
+    fn multi_transform_readout_round_trips_group_transform() {
+        let mut scene = empty_scene();
+        let left = scene.create_primitive(SdfPrimitive::Sphere);
+        let right = scene.create_primitive(SdfPrimitive::Sphere);
+
+        if let Some(NodeData::Primitive { position, .. }) =
+            scene.nodes.get_mut(&left).map(|node| &mut node.data)
+        {
+            *position = Vec3::new(-1.0, 0.0, 0.0);
+        }
+        if let Some(NodeData::Primitive { position, .. }) =
+            scene.nodes.get_mut(&right).map(|node| &mut node.data)
+        {
+            *position = Vec3::new(1.0, 0.0, 0.0);
+        }
+
+        let selected_set = HashSet::from([left, right]);
+        let baseline = collect_gizmo_selection(&scene, Some(left), &selected_set).unwrap();
+
+        apply_multi_transform_from_baseline(
+            &mut scene,
+            &baseline,
+            &GizmoSpace::Local,
+            Vec3::new(0.0, 2.0, 0.0),
+            Vec3::new(0.0, 0.0, std::f32::consts::FRAC_PI_2),
+            Vec3::new(2.0, 1.0, 1.0),
+        );
+
+        let readout =
+            derive_multi_transform_readout(&scene, &baseline, &GizmoSpace::Local, Vec3::ZERO)
+                .unwrap();
+        assert_vec3_close(readout.position_delta, Vec3::new(0.0, 2.0, 0.0));
+        assert_vec3_close(
+            readout.rotation_delta_rad,
+            Vec3::new(0.0, 0.0, std::f32::consts::FRAC_PI_2),
+        );
+        assert_vec3_close(readout.scale_factor, Vec3::new(2.0, 1.0, 1.0));
+        assert!(readout.scale_enabled);
+    }
+
+    #[test]
+    fn sculpt_selection_disables_multi_scale() {
+        let mut scene = empty_scene();
+        let input = scene.create_primitive(SdfPrimitive::Sphere);
+        let sculpt = scene.create_sculpt(
+            input,
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::ONE,
+            VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0)),
+        );
+        let primitive = scene.create_primitive(SdfPrimitive::Box);
+
+        let selected_set = HashSet::from([sculpt, primitive]);
+        let baseline = collect_gizmo_selection(&scene, Some(primitive), &selected_set).unwrap();
+        let readout =
+            derive_multi_transform_readout(&scene, &baseline, &GizmoSpace::World, Vec3::ZERO)
+                .unwrap();
+
+        assert!(!baseline.supports_scale());
+        assert!(!readout.scale_enabled);
+        assert_vec3_close(readout.scale_factor, Vec3::ONE);
     }
 }
