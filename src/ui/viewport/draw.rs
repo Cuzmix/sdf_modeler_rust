@@ -949,7 +949,7 @@ pub fn draw(
                             [[0.0; 4]; 32],
                             [[0.0; 4]; 8],
                         ),
-                        ctrl_held: false, // Ctrl used for sculpt inversion, not multi-select
+                        additive_select_held: false, // sculpt uses Ctrl/Shift for brush behavior
                     });
                     // Capture modifier keys for Ctrl-invert / Shift-smooth
                     let modifiers = ui.input(|i| i.modifiers);
@@ -1004,7 +1004,7 @@ pub fn draw(
                             [[0.0; 4]; 32],
                             [[0.0; 4]; 8],
                         ),
-                        ctrl_held: false,
+                        additive_select_held: false,
                     });
                     output.is_hover_pick = true;
                 }
@@ -1142,11 +1142,11 @@ pub fn draw(
                     [[0.0; 4]; 32],
                     [[0.0; 4]; 8],
                 );
-                let ctrl_held = ui.input(|i| i.modifiers.ctrl);
+                let additive_select_held = ui.input(|i| i.modifiers.shift);
                 output.pending_pick = Some(PendingPick {
                     mouse_pos: mouse_px,
                     camera_uniform: pick_uniform,
-                    ctrl_held,
+                    additive_select_held,
                 });
             }
         }

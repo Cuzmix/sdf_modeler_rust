@@ -279,15 +279,15 @@ impl SdfApp {
             let idx = result.material_id as usize;
             if idx < topo_order.len() {
                 let hit_node_id = topo_order[idx];
-                // Check if Ctrl was held during click for multi-select
-                if pending.ctrl_held {
+                // Shift+click toggles viewport multi-selection.
+                if pending.additive_select_held {
                     self.ui.node_graph_state.toggle_select(hit_node_id);
                 } else {
                     self.ui.node_graph_state.select_single(hit_node_id);
                 }
                 self.gpu.buffer_dirty = true;
             }
-        } else {
+        } else if !pending.additive_select_held {
             // Clicked empty space — deselect
             self.ui.node_graph_state.clear_selection();
             self.gpu.buffer_dirty = true;
