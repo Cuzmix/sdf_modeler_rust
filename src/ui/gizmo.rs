@@ -861,10 +861,12 @@ fn handle_rotate_drag(
     let projected = delta.dot(tangent_dir);
 
     // Flip sign when the ring axis faces away from camera (right-hand rule)
+    // Multi-rotate drag direction is intentionally inverted to match the
+    // single-selection gizmo feel in viewport interaction.
     let sign = if axis_dir.dot(view_dir) >= 0.0 {
-        1.0
-    } else {
         -1.0
+    } else {
+        1.0
     };
     let angle_delta = projected * ROTATE_SENSITIVITY * sign;
 
@@ -1415,7 +1417,14 @@ pub fn draw_and_interact(
                 *gizmo_state = GizmoState::Idle;
                 return false;
             }
-            axes = compute_world_axis_directions(selection.reference_rotation_world, gizmo_space);
+            // Multi-selection rotation should always use world-space axes so the group
+            // rotates consistently regardless of per-object local orientation.
+            let multi_axes_space = if *gizmo_mode == GizmoMode::Rotate {
+                GizmoSpace::World
+            } else {
+                gizmo_space.clone()
+            };
+            axes = compute_world_axis_directions(selection.reference_rotation_world, &multi_axes_space);
             gizmo_center = selection.base_center_world;
         } else if let GizmoState::DraggingMulti { drag_session, .. } = gizmo_state {
             axes = drag_session.axis_directions;
