@@ -4,6 +4,7 @@ use eframe::egui;
 use glam::Vec3;
 
 use crate::app::actions::{Action, ActionSink};
+use crate::app::state::MultiTransformSessionState;
 use crate::app::BakeRequest;
 use crate::graph::scene::{
     CsgOp, MaterialParams, ModifierKind, NodeData, NodeId, Scene, SdfPrimitive,
@@ -11,7 +12,6 @@ use crate::graph::scene::{
 use crate::graph::voxel;
 use crate::material_preset::{self, MaterialLibrary};
 use crate::sculpt::SculptState;
-use crate::app::state::MultiTransformSessionState;
 use crate::ui::gizmo::{self, GizmoSpace};
 
 const SCALE_MIN: f32 = 0.01;

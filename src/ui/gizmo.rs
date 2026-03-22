@@ -98,6 +98,7 @@ pub(crate) enum GizmoState {
         _start_world_pos: Vec3,
         _start_rotation: Vec3,
         _start_scale: Vec3,
+        rotation_drag: ScreenRotationDragState,
     },
     DraggingMulti {
         axis: GizmoAxis,
@@ -114,6 +115,15 @@ pub(crate) struct GizmoDragSession {
     axis_directions: [Vec3; 3],
     targets: Vec<GizmoTarget>,
     accumulated_drag_delta: Vec2,
+    rotation_drag: ScreenRotationDragState,
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct ScreenRotationDragState {
+    previous_cursor_angle: Option<f32>,
+    accumulated_angle: f32,
+    applied_angle: f32,
+    rotation_sign: f32,
 }
 
 // ---------------------------------------------------------------------------
@@ -130,7 +140,7 @@ const RING_SEGMENTS: usize = 48;
 const RING_HIT_THRESHOLD: f32 = 14.0;
 const TRANSLATE_SENSITIVITY: f32 = 0.003;
 const SCALE_SENSITIVITY: f32 = 0.005;
-const ROTATE_SENSITIVITY: f32 = 0.01;
+const ROTATE_MIN_RADIUS_PX: f32 = 12.0;
 
 const COLOR_X: Color32 = Color32::from_rgb(220, 60, 60);
 const COLOR_Y: Color32 = Color32::from_rgb(60, 200, 60);
@@ -223,6 +233,76 @@ fn point_to_segment_dist(point: Pos2, seg_start: Pos2, seg_end: Pos2) -> f32 {
     let t = (ab.dot(ap) / len_sq).clamp(0.0, 1.0);
     let closest = seg_start + ab * t;
     point.distance(closest)
+}
+
+fn pointer_angle_around_origin(origin_screen: Pos2, pointer_screen: Pos2) -> Option<f32> {
+    let from_center = pointer_screen - origin_screen;
+    let min_radius_sq = ROTATE_MIN_RADIUS_PX * ROTATE_MIN_RADIUS_PX;
+    if from_center.length_sq() < min_radius_sq {
+        return None;
+    }
+    Some(from_center.y.atan2(from_center.x))
+}
+
+fn wrap_signed_angle_delta(angle_delta: f32) -> f32 {
+    use std::f32::consts::{PI, TAU};
+
+    let mut wrapped = angle_delta;
+    while wrapped > PI {
+        wrapped -= TAU;
+    }
+    while wrapped < -PI {
+        wrapped += TAU;
+    }
+    wrapped
+}
+
+impl ScreenRotationDragState {
+    fn new(origin_screen: Pos2, pointer_screen: Option<Pos2>, rotation_sign: f32) -> Self {
+        Self {
+            previous_cursor_angle: pointer_screen
+                .and_then(|pointer| pointer_angle_around_origin(origin_screen, pointer)),
+            accumulated_angle: 0.0,
+            applied_angle: 0.0,
+            rotation_sign,
+        }
+    }
+
+    fn update(&mut self, origin_screen: Pos2, pointer_screen: Pos2) -> Option<f32> {
+        let current_angle = pointer_angle_around_origin(origin_screen, pointer_screen)?;
+        let delta_angle = self
+            .previous_cursor_angle
+            .map(|previous| wrap_signed_angle_delta(current_angle - previous))
+            .unwrap_or(0.0);
+        self.previous_cursor_angle = Some(current_angle);
+        self.accumulated_angle += delta_angle;
+        Some(delta_angle)
+    }
+
+    #[cfg(test)]
+    fn accumulated_angle(&self) -> f32 {
+        self.accumulated_angle
+    }
+
+    fn target_angle(&self, snap_increment_radians: Option<f32>) -> f32 {
+        let signed_accumulated = self.accumulated_angle * self.rotation_sign;
+        snap_increment_radians
+            .map(|snap| snap_value(signed_accumulated, snap))
+            .unwrap_or(signed_accumulated)
+    }
+
+    fn consume_applied_delta(&mut self, snap_increment_radians: Option<f32>) -> f32 {
+        let target_angle = self.target_angle(snap_increment_radians);
+        let delta = target_angle - self.applied_angle;
+        self.applied_angle = target_angle;
+        delta
+    }
+
+    fn consume_applied_total(&mut self, snap_increment_radians: Option<f32>) -> f32 {
+        let target_angle = self.target_angle(snap_increment_radians);
+        self.applied_angle = target_angle;
+        target_angle
+    }
 }
 
 fn screen_axis_dir(
@@ -519,6 +599,8 @@ fn build_drag_session(
     selection: &GizmoSelection,
     axis_directions: [Vec3; 3],
     origin_screen: Pos2,
+    start_pointer_screen: Option<Pos2>,
+    rotation_sign: f32,
     pivot_offset: Vec3,
 ) -> GizmoDragSession {
     let targets = selection.targets.to_vec();
@@ -530,6 +612,11 @@ fn build_drag_session(
         axis_directions,
         targets,
         accumulated_drag_delta: Vec2::ZERO,
+        rotation_drag: ScreenRotationDragState::new(
+            origin_screen,
+            start_pointer_screen,
+            rotation_sign,
+        ),
     }
 }
 
@@ -557,6 +644,10 @@ fn compute_world_axis_directions(reference_rotation_world: Quat, space: &GizmoSp
             (reference_rotation_world * Vec3::Z).normalize_or_zero(),
         ],
     }
+}
+
+fn multi_selection_axis_directions() -> [Vec3; 3] {
+    [Vec3::X, Vec3::Y, Vec3::Z]
 }
 
 // ---------------------------------------------------------------------------
@@ -751,6 +842,19 @@ fn draw_rotation_ring(
     }
 }
 
+fn rotation_drag_sign(axis_dir: Vec3, view_dir: Vec3, multi_selection: bool) -> f32 {
+    let facing_sign = if axis_dir.dot(view_dir) >= 0.0 {
+        1.0
+    } else {
+        -1.0
+    };
+    if multi_selection {
+        -facing_sign
+    } else {
+        facing_sign
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Drag handlers
 // ---------------------------------------------------------------------------
@@ -839,36 +943,25 @@ fn handle_scale_drag(
 #[allow(clippy::too_many_arguments)]
 fn handle_rotate_drag(
     response: &egui::Response,
-    axis: &GizmoAxis,
     axis_dir: Vec3,
     origin_screen: Pos2,
+    rotation_drag: &mut ScreenRotationDragState,
+    snap_increment_radians: Option<f32>,
     scene: &mut Scene,
     drag_node: NodeId,
     pivot_offset: &Vec3,
     node_rotation: Vec3,
     gizmo_space: &GizmoSpace,
-    view_dir: Vec3,
 ) {
     let mouse_pos = response.hover_pos().unwrap_or(origin_screen);
-    let radius_vec = mouse_pos - origin_screen;
-    let radius_len = radius_vec.length();
-    if radius_len < 1.0 {
+    if rotation_drag.update(origin_screen, mouse_pos).is_none() {
         return;
     }
-    let radius_norm = radius_vec / radius_len;
-    let tangent_dir = Vec2::new(-radius_norm.y, radius_norm.x);
-    let delta = response.drag_delta();
-    let projected = delta.dot(tangent_dir);
+    let angle_delta = rotation_drag.consume_applied_delta(snap_increment_radians);
 
-    // Flip sign when the ring axis faces away from camera (right-hand rule)
-    // Multi-rotate drag direction is intentionally inverted to match the
-    // single-selection gizmo feel in viewport interaction.
-    let sign = if axis_dir.dot(view_dir) >= 0.0 {
-        -1.0
-    } else {
-        1.0
-    };
-    let angle_delta = projected * ROTATE_SENSITIVITY * sign;
+    if angle_delta.abs() <= f32::EPSILON {
+        return;
+    }
 
     let delta_quat = Quat::from_axis_angle(axis_dir, angle_delta);
 
@@ -896,7 +989,7 @@ fn handle_rotate_drag(
             let offset = *position - pivot_world;
             *position = pivot_world + delta_quat * offset;
         }
-        apply_rotation_delta(rotation, axis, angle_delta, axis_dir, gizmo_space);
+        apply_rotation_delta(rotation, angle_delta, axis_dir, gizmo_space);
     }
 }
 
@@ -938,35 +1031,29 @@ fn handle_multi_rotate_drag(
     drag_session: &mut GizmoDragSession,
     axis_dir: Vec3,
     scene: &mut Scene,
-    view_dir: Vec3,
     snap_config: &SnapConfig,
     ctrl_held: bool,
 ) {
     let mouse_pos = response
         .hover_pos()
         .unwrap_or(drag_session.start_origin_screen);
-    let radius_vec = mouse_pos - drag_session.start_origin_screen;
-    let radius_len = radius_vec.length();
-    if radius_len < 1.0 {
+    if drag_session
+        .rotation_drag
+        .update(drag_session.start_origin_screen, mouse_pos)
+        .is_none()
+    {
         return;
     }
-    let radius_norm = radius_vec / radius_len;
-    let tangent_dir = Vec2::new(-radius_norm.y, radius_norm.x);
-    drag_session.accumulated_drag_delta += response.drag_delta();
-    let delta = drag_session.accumulated_drag_delta;
-    let projected = delta.dot(tangent_dir);
 
-    let sign = if axis_dir.dot(view_dir) >= 0.0 {
-        1.0
-    } else {
-        -1.0
-    };
-    let mut angle_delta = projected * ROTATE_SENSITIVITY * sign;
-    if ctrl_held {
-        angle_delta = snap_value(angle_delta, snap_config.rotate_snap.to_radians());
+    let snap_increment_radians = ctrl_held.then_some(snap_config.rotate_snap.to_radians());
+    let total_angle = drag_session
+        .rotation_drag
+        .consume_applied_total(snap_increment_radians);
+    if total_angle.abs() <= f32::EPSILON {
+        return;
     }
 
-    let delta_quat = Quat::from_axis_angle(axis_dir, angle_delta);
+    let delta_quat = Quat::from_axis_angle(axis_dir, total_angle);
     apply_world_rotation_to_targets(
         scene,
         &drag_session.targets,
@@ -1020,7 +1107,6 @@ fn handle_multi_scale_drag(
 #[allow(dead_code)]
 fn apply_rotation_delta(
     rotation: &mut Vec3,
-    _axis: &GizmoAxis,
     angle_delta: f32,
     axis_dir: Vec3,
     gizmo_space: &GizmoSpace,
@@ -1029,9 +1115,9 @@ fn apply_rotation_delta(
     let delta_quat = Quat::from_axis_angle(axis_dir, angle_delta);
     let current = euler_to_quat(*rotation);
     let new_quat = match gizmo_space {
-        // Local: rotation in object's frame — current * delta
+        // Local: rotation in object's frame - current * delta
         GizmoSpace::Local => current * delta_quat,
-        // World: rotation in world frame — delta * current
+        // World: rotation in world frame - delta * current
         GizmoSpace::World => delta_quat * current,
     };
     *rotation = quat_to_euler_stable(new_quat, prev);
@@ -1136,7 +1222,8 @@ fn apply_world_rotation_to_targets(
     delta_quat: Quat,
 ) {
     for target in targets {
-        let rotated_world_position = pivot_world + delta_quat * (target.world_position - pivot_world);
+        let rotated_world_position =
+            pivot_world + delta_quat * (target.world_position - pivot_world);
         let rotated_world_orientation = delta_quat * target.world_rotation;
         let local_world_rotation =
             target.parent_world_rotation.inverse() * rotated_world_orientation;
@@ -1186,12 +1273,7 @@ fn apply_axis_scale_to_targets(
 }
 
 #[allow(dead_code)]
-fn snap_target_scales(
-    scene: &mut Scene,
-    targets: &[GizmoTarget],
-    axis_index: usize,
-    snap: f32,
-) {
+fn snap_target_scales(scene: &mut Scene, targets: &[GizmoTarget], axis_index: usize, snap: f32) {
     for target in targets {
         if target.local_transform.has_scale {
             snap_scale(scene, target.node_id, axis_index, snap);
@@ -1291,8 +1373,7 @@ pub(crate) fn apply_multi_transform_from_baseline(
             target.world_position - baseline.base_center_world
         };
         let rotated_offset = rotation_delta_world * scaled_offset;
-        let new_world_position =
-            baseline.base_center_world + rotated_offset + position_delta;
+        let new_world_position = baseline.base_center_world + rotated_offset + position_delta;
         let new_local_position = target
             .parent_world_inverse
             .transform_point3(new_world_position);
@@ -1413,18 +1494,14 @@ pub fn draw_and_interact(
 
     if multi_selection_active {
         if let Some(selection) = selection.as_ref() {
-            if *gizmo_mode == GizmoMode::Scale && !selection.supports_scale() && !multi_drag_active {
+            if *gizmo_mode == GizmoMode::Scale && !selection.supports_scale() && !multi_drag_active
+            {
                 *gizmo_state = GizmoState::Idle;
                 return false;
             }
-            // Multi-selection rotation should always use world-space axes so the group
-            // rotates consistently regardless of per-object local orientation.
-            let multi_axes_space = if *gizmo_mode == GizmoMode::Rotate {
-                GizmoSpace::World
-            } else {
-                gizmo_space.clone()
-            };
-            axes = compute_world_axis_directions(selection.reference_rotation_world, &multi_axes_space);
+            // Multi-selection gizmo axes are fixed to world orientation so axis
+            // direction is stable regardless of which target is primary/last-selected.
+            axes = multi_selection_axis_directions();
             gizmo_center = selection.base_center_world;
         } else if let GizmoState::DraggingMulti { drag_session, .. } = gizmo_state {
             axes = drag_session.axis_directions;
@@ -1522,6 +1599,14 @@ pub fn draw_and_interact(
     // Start dragging
     if response.drag_started_by(egui::PointerButton::Primary) {
         if let Some(ref axis) = hovered_axis {
+            let axis_idx = axis.euler_index();
+            let axis_dir = axes[axis_idx];
+            let view_dir = camera.eye() - gizmo_center;
+            let rotation_sign = if *gizmo_mode == GizmoMode::Rotate {
+                rotation_drag_sign(axis_dir, view_dir, multi_selection_active)
+            } else {
+                1.0
+            };
             if multi_selection_active {
                 if let Some(selection) = selection.as_ref() {
                     *gizmo_state = GizmoState::DraggingMulti {
@@ -1530,6 +1615,8 @@ pub fn draw_and_interact(
                             selection,
                             axes,
                             origin_screen,
+                            hover_pos,
+                            rotation_sign,
                             Vec3::ZERO,
                         ),
                     };
@@ -1543,6 +1630,11 @@ pub fn draw_and_interact(
                     _start_world_pos: node_transform.position,
                     _start_rotation: node_transform.rotation,
                     _start_scale: node_transform.scale,
+                    rotation_drag: ScreenRotationDragState::new(
+                        origin_screen,
+                        hover_pos,
+                        rotation_sign,
+                    ),
                 };
                 consumed = true;
             }
@@ -1555,12 +1647,12 @@ pub fn draw_and_interact(
             GizmoState::DraggingSingle {
                 axis,
                 node_id: drag_node,
+                rotation_drag,
                 ..
             } => {
                 if let Some((_, node_transform)) = single_transform.as_ref() {
                     let axis_idx = axis.euler_index();
                     let axis_dir = axes[axis_idx];
-                    let axis_clone = axis.clone();
 
                     if allow_pivot_drag {
                         handle_pivot_drag(
@@ -1603,7 +1695,7 @@ pub fn draw_and_interact(
                             GizmoMode::Scale => {
                                 handle_scale_drag(
                                     response,
-                                    &axis_clone,
+                                    axis,
                                     axis_dir,
                                     gizmo_center,
                                     origin_screen,
@@ -1616,36 +1708,22 @@ pub fn draw_and_interact(
                                     node_transform.rotation,
                                 );
                                 if ctrl_held {
-                                    snap_scale(
-                                        scene,
-                                        *drag_node,
-                                        axis_idx,
-                                        snap_config.scale_snap,
-                                    );
+                                    snap_scale(scene, *drag_node, axis_idx, snap_config.scale_snap);
                                 }
                             }
                             GizmoMode::Rotate => {
-                                let view_dir = camera.eye() - gizmo_center;
                                 handle_rotate_drag(
                                     response,
-                                    &axis_clone,
                                     axis_dir,
                                     origin_screen,
+                                    rotation_drag,
+                                    ctrl_held.then_some(snap_config.rotate_snap.to_radians()),
                                     scene,
                                     *drag_node,
                                     pivot_offset,
                                     node_transform.rotation,
                                     gizmo_space,
-                                    view_dir,
                                 );
-                                if ctrl_held {
-                                    snap_rotation(
-                                        scene,
-                                        *drag_node,
-                                        axis_idx,
-                                        snap_config.rotate_snap.to_radians(),
-                                    );
-                                }
                             }
                         }
                     }
@@ -1672,13 +1750,11 @@ pub fn draw_and_interact(
                         );
                     }
                     GizmoMode::Rotate => {
-                        let view_dir = camera.eye() - drag_session.start_center_world;
                         handle_multi_rotate_drag(
                             response,
                             drag_session,
                             axis_dir,
                             scene,
-                            view_dir,
                             snap_config,
                             ctrl_held,
                         );
@@ -1715,7 +1791,7 @@ pub fn draw_and_interact(
 }
 
 // ---------------------------------------------------------------------------
-// Snap helpers — quantize position/rotation/scale to grid increments
+// Snap helpers - quantize position/rotation/scale to grid increments
 // ---------------------------------------------------------------------------
 
 fn snap_value(val: f32, snap: f32) -> f32 {
@@ -1809,6 +1885,14 @@ mod tests {
         );
     }
 
+    fn assert_f32_close(actual: f32, expected: f32) {
+        let delta = (actual - expected).abs();
+        assert!(
+            delta < 1e-4,
+            "expected {expected}, got {actual}, delta={delta}"
+        );
+    }
+
     fn primitive_position(scene: &Scene, node_id: NodeId) -> Vec3 {
         match &scene.nodes.get(&node_id).unwrap().data {
             NodeData::Primitive { position, .. } => *position,
@@ -1839,6 +1923,8 @@ mod tests {
             &selection,
             [Vec3::X, Vec3::Y, Vec3::Z],
             Pos2::ZERO,
+            None,
+            1.0,
             Vec3::ZERO,
         );
 
@@ -1875,6 +1961,8 @@ mod tests {
             &selection,
             [Vec3::X, Vec3::Y, Vec3::Z],
             Pos2::ZERO,
+            None,
+            1.0,
             Vec3::ZERO,
         );
 
@@ -1912,6 +2000,8 @@ mod tests {
             &selection,
             [Vec3::X, Vec3::Y, Vec3::Z],
             Pos2::ZERO,
+            None,
+            1.0,
             Vec3::ZERO,
         );
 
@@ -1965,6 +2055,8 @@ mod tests {
             &selection,
             [Vec3::X, Vec3::Y, Vec3::Z],
             Pos2::ZERO,
+            None,
+            1.0,
             Vec3::ZERO,
         );
 
@@ -2045,4 +2137,111 @@ mod tests {
         assert!(!readout.scale_enabled);
         assert_vec3_close(readout.scale_factor, Vec3::ONE);
     }
+
+    #[test]
+    fn wrap_signed_angle_delta_crosses_branch_cut_continuously() {
+        let delta = wrap_signed_angle_delta(-1.9 * std::f32::consts::PI);
+        assert_f32_close(delta, 0.1 * std::f32::consts::PI);
+    }
+
+    #[test]
+    fn rotation_drag_sign_flips_only_for_multi_selection() {
+        assert_eq!(rotation_drag_sign(Vec3::Z, Vec3::Z, false), 1.0);
+        assert_eq!(rotation_drag_sign(Vec3::Z, Vec3::Z, true), -1.0);
+        assert_eq!(rotation_drag_sign(Vec3::Z, -Vec3::Z, false), -1.0);
+        assert_eq!(rotation_drag_sign(Vec3::Z, -Vec3::Z, true), 1.0);
+    }
+
+    #[test]
+    fn multi_selection_axes_are_world_aligned() {
+        let axes = multi_selection_axis_directions();
+        assert_vec3_close(axes[0], Vec3::X);
+        assert_vec3_close(axes[1], Vec3::Y);
+        assert_vec3_close(axes[2], Vec3::Z);
+    }
+
+    #[test]
+    fn screen_rotation_drag_tracks_full_turn_without_depth_terms() {
+        let origin = Pos2::ZERO;
+        let radius = 100.0;
+        let mut drag = ScreenRotationDragState::new(origin, Some(Pos2::new(radius, 0.0)), 1.0);
+
+        for angle in [
+            std::f32::consts::FRAC_PI_2,
+            std::f32::consts::PI,
+            -std::f32::consts::FRAC_PI_2,
+            0.0,
+        ] {
+            let pointer = Pos2::new(radius * angle.cos(), radius * angle.sin());
+            let _ = drag.update(origin, pointer);
+        }
+
+        assert_f32_close(drag.accumulated_angle(), std::f32::consts::TAU);
+    }
+
+    #[test]
+    fn snapped_rotation_consumes_incremental_applied_delta() {
+        let origin = Pos2::ZERO;
+        let radius = 100.0;
+        let mut drag = ScreenRotationDragState::new(origin, Some(Pos2::new(radius, 0.0)), 1.0);
+        let snap = 15.0_f32.to_radians();
+
+        let pointer_a = Pos2::new(
+            radius * (10.0_f32.to_radians()).cos(),
+            radius * (10.0_f32.to_radians()).sin(),
+        );
+        let _ = drag.update(origin, pointer_a);
+        let delta_a = drag.consume_applied_delta(Some(snap));
+        assert_f32_close(delta_a, 15.0_f32.to_radians());
+
+        let pointer_b = Pos2::new(
+            radius * (14.0_f32.to_radians()).cos(),
+            radius * (14.0_f32.to_radians()).sin(),
+        );
+        let _ = drag.update(origin, pointer_b);
+        let delta_b = drag.consume_applied_delta(Some(snap));
+        assert_f32_close(delta_b, 0.0);
+
+        let pointer_c = Pos2::new(
+            radius * (28.0_f32.to_radians()).cos(),
+            radius * (28.0_f32.to_radians()).sin(),
+        );
+        let _ = drag.update(origin, pointer_c);
+        let delta_c = drag.consume_applied_delta(Some(snap));
+        assert_f32_close(delta_c, 15.0_f32.to_radians());
+    }
+
+    #[test]
+    fn snapped_rotation_consumes_total_applied_angle_for_baseline_flows() {
+        let origin = Pos2::ZERO;
+        let radius = 100.0;
+        let mut drag = ScreenRotationDragState::new(origin, Some(Pos2::new(radius, 0.0)), 1.0);
+        let snap = 15.0_f32.to_radians();
+
+        let pointer_a = Pos2::new(
+            radius * (10.0_f32.to_radians()).cos(),
+            radius * (10.0_f32.to_radians()).sin(),
+        );
+        let _ = drag.update(origin, pointer_a);
+        let total_a = drag.consume_applied_total(Some(snap));
+        assert_f32_close(total_a, 15.0_f32.to_radians());
+
+        let pointer_b = Pos2::new(
+            radius * (14.0_f32.to_radians()).cos(),
+            radius * (14.0_f32.to_radians()).sin(),
+        );
+        let _ = drag.update(origin, pointer_b);
+        let total_b = drag.consume_applied_total(Some(snap));
+        assert_f32_close(total_b, 15.0_f32.to_radians());
+
+        let pointer_c = Pos2::new(
+            radius * (28.0_f32.to_radians()).cos(),
+            radius * (28.0_f32.to_radians()).sin(),
+        );
+        let _ = drag.update(origin, pointer_c);
+        let total_c = drag.consume_applied_total(Some(snap));
+        assert_f32_close(total_c, 30.0_f32.to_radians());
+    }
 }
+
+

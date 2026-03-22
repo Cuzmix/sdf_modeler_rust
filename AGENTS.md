@@ -61,6 +61,21 @@ Every commit must pass, in this order:
 
 Do not commit if any step fails.
 
+## Known Regression Notes
+### Transform Gizmo Rotation Snap-Back (Multi-Select)
+- Symptom: during multi-object rotate drag, objects appear to rotate then snap back toward the start pose on subsequent frames.
+- Root cause pattern: mixing per-frame incremental drag values with a baseline re-application path.
+- In this codebase/egui setup, `response.drag_delta()` is per-frame; baseline re-apply flows must consume total applied rotation, not incremental-only deltas.
+- Guardrail:
+  - Incremental apply flows should use `ScreenRotationDragState::consume_applied_delta`.
+  - Baseline re-apply flows should use `ScreenRotationDragState::consume_applied_total`.
+- First places to verify when this regresses:
+  - `src/ui/gizmo.rs` (`handle_multi_rotate_drag`, `apply_world_rotation_to_targets`, `ScreenRotationDragState`)
+  - `src/ui/properties.rs` and `src/ui/viewport/draw.rs` (multi-transform baseline/session sync paths)
+- Regression tests to keep passing:
+  - `ui::gizmo::tests::snapped_rotation_consumes_incremental_applied_delta`
+  - `ui::gizmo::tests::snapped_rotation_consumes_total_applied_angle_for_baseline_flows`
+
 ## Git Discipline
 - One logical change per commit.
 - Use descriptive commit messages that explain why.
