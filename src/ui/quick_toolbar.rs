@@ -5,6 +5,7 @@ use crate::graph::scene::SdfPrimitive;
 
 /// Draws a floating Quick Primitives toolbar anchored to the left edge of the viewport.
 /// Each button creates a primitive at world origin and selects it.
+#[allow(dead_code)]
 pub fn draw(ctx: &egui::Context, show: &mut bool, actions: &mut ActionSink) {
     if !*show {
         return;

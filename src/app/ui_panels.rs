@@ -236,7 +236,8 @@ impl SdfApp {
                         }
                         ui.separator();
                         if ui.button("Reset Layout").clicked() {
-                            self.ui.dock_state = crate::ui::dock::create_dock_state();
+                            self.ui.primary_shell.reset_layout();
+                            self.ui.dock_state = crate::ui::dock::create_primary_shell_dock();
                             ui.close_menu();
                         }
                     });

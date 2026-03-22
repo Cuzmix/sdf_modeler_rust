@@ -3,11 +3,11 @@ use glam::Vec3;
 
 use crate::desktop_dialogs::FileDialogSelection;
 use crate::graph::history::{History, RestoreSnapshot, RestoreState};
-use crate::graph::scene::{NodeData, Scene};
-use crate::sculpt::SculptState;
+use crate::graph::scene::{NodeData, NodeId, Scene};
+use crate::sculpt::{BrushMode, SculptState};
 
 use super::actions::{Action, LightingPreset, SculptConvertMode};
-use super::state::SculptConvertDialog;
+use super::state::{DocumentState, InteractionMode, SculptConvertDialog, UiState};
 use super::SdfApp;
 
 /// Maximum storage buffer binding size configured for wgpu (128MB).
@@ -33,6 +33,13 @@ struct SelectionBehaviorApplyResult {
     requires_buffer_dirty: bool,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SculptEntryDecision {
+    MissingSelection,
+    Activate(NodeId),
+    OpenConvert(NodeId),
+}
+
 fn apply_selection_behavior_settings(
     settings: &mut crate::settings::Settings,
     next: crate::settings::SelectionBehaviorSettings,
@@ -48,7 +55,131 @@ fn apply_selection_behavior_settings(
     }
 }
 
+fn resolve_sculpt_entry(scene: &Scene, selected: Option<NodeId>) -> SculptEntryDecision {
+    let Some(selected_id) = selected else {
+        return SculptEntryDecision::MissingSelection;
+    };
+    let Some(node) = scene.nodes.get(&selected_id) else {
+        return SculptEntryDecision::MissingSelection;
+    };
+
+    if matches!(node.data, NodeData::Sculpt { .. }) {
+        return SculptEntryDecision::Activate(selected_id);
+    }
+
+    let parent_map = scene.build_parent_map();
+    if let Some(sculpt_id) = scene.find_sculpt_parent(selected_id, &parent_map) {
+        SculptEntryDecision::Activate(sculpt_id)
+    } else {
+        SculptEntryDecision::OpenConvert(selected_id)
+    }
+}
+
+fn sync_interaction_mode_after_sculpt_exit_state(ui: &mut UiState) {
+    if matches!(ui.primary_shell.interaction_mode, InteractionMode::Sculpt(_)) {
+        ui.primary_shell.interaction_mode = InteractionMode::Select;
+        ui.measurement_mode = false;
+        ui.measurement_points.clear();
+    }
+}
+
+fn apply_select_interaction_state(doc: &mut DocumentState, ui: &mut UiState) {
+    ui.primary_shell.interaction_mode = InteractionMode::Select;
+    ui.measurement_mode = false;
+    ui.measurement_points.clear();
+    doc.active_tool = crate::sculpt::ActiveTool::Select;
+    doc.sculpt_state = SculptState::new_inactive();
+}
+
+fn apply_measure_interaction_state(doc: &mut DocumentState, ui: &mut UiState) {
+    ui.primary_shell.interaction_mode = InteractionMode::Measure;
+    ui.measurement_mode = true;
+    ui.measurement_points.clear();
+    doc.active_tool = crate::sculpt::ActiveTool::Select;
+    doc.sculpt_state = SculptState::new_inactive();
+}
+
+fn activate_sculpt_interaction_state(
+    doc: &mut DocumentState,
+    ui: &mut UiState,
+    sculpt_id: NodeId,
+    brush: BrushMode,
+    extent: f32,
+) {
+    ui.primary_shell.interaction_mode = InteractionMode::Sculpt(brush);
+    ui.measurement_mode = false;
+    ui.measurement_points.clear();
+    doc.active_tool = crate::sculpt::ActiveTool::Sculpt;
+    doc.sculpt_state
+        .activate_preserving_session(sculpt_id, Some(extent));
+    doc.sculpt_state.set_selected_brush(brush);
+    ui.node_graph_state.select_single(sculpt_id);
+}
+
 impl SdfApp {
+    pub(super) fn sync_interaction_mode_after_sculpt_exit(&mut self) {
+        sync_interaction_mode_after_sculpt_exit_state(&mut self.ui);
+    }
+
+    fn apply_select_interaction(&mut self) {
+        apply_select_interaction_state(&mut self.doc, &mut self.ui);
+        self.async_state.last_sculpt_hit = None;
+        self.async_state.lazy_brush_pos = None;
+    }
+
+    fn apply_measure_interaction(&mut self) {
+        apply_measure_interaction_state(&mut self.doc, &mut self.ui);
+        self.async_state.last_sculpt_hit = None;
+        self.async_state.lazy_brush_pos = None;
+    }
+
+    fn activate_sculpt_interaction(&mut self, sculpt_id: NodeId, brush: BrushMode) {
+        let extent = self.scene_avg_extent();
+        activate_sculpt_interaction_state(&mut self.doc, &mut self.ui, sculpt_id, brush, extent);
+        self.ensure_brush_settings_tab();
+    }
+
+    fn current_sculpt_brush_preference(&self) -> BrushMode {
+        match self.ui.primary_shell.interaction_mode {
+            InteractionMode::Sculpt(brush) => brush,
+            _ => self.doc.sculpt_state.selected_brush(),
+        }
+    }
+
+    fn request_sculpt_interaction(&mut self, brush: BrushMode) {
+        let decision = if self.ui.node_graph_state.selected.is_none() {
+            self.doc
+                .sculpt_state
+                .active_node()
+                .filter(|node_id| self.doc.scene.nodes.contains_key(node_id))
+                .map(SculptEntryDecision::Activate)
+                .unwrap_or_else(|| {
+                    resolve_sculpt_entry(&self.doc.scene, self.ui.node_graph_state.selected)
+                })
+        } else {
+            resolve_sculpt_entry(&self.doc.scene, self.ui.node_graph_state.selected)
+        };
+
+        match decision {
+            SculptEntryDecision::Activate(sculpt_id) => {
+                self.activate_sculpt_interaction(sculpt_id, brush);
+            }
+            SculptEntryDecision::OpenConvert(target) => {
+                self.ui.primary_shell.interaction_mode = InteractionMode::Sculpt(brush);
+                self.ui.measurement_mode = false;
+                self.ui.measurement_points.clear();
+                self.ui.sculpt_convert_dialog = Some(SculptConvertDialog::new(target));
+            }
+            SculptEntryDecision::MissingSelection => {
+                self.ui.toasts.push(super::Toast {
+                    message: "Select a node to sculpt".into(),
+                    is_error: true,
+                    created: crate::compat::Instant::now(),
+                    duration: crate::compat::Duration::from_secs(4),
+                });
+            }
+        }
+    }
     /// Process all collected actions. This is the single mutation point — the
     /// equivalent of a Redux reducer. All structural state changes flow through
     /// here, making the data flow explicit and easy to trace.
@@ -62,10 +193,13 @@ impl SdfApp {
                     self.ui.node_graph_state.clear_selection();
                     self.ui.node_graph_state.needs_initial_rebuild = true;
                     self.doc.sculpt_state = SculptState::new_inactive();
+                    self.ui.primary_shell.interaction_mode = InteractionMode::Select;
                     self.ui.isolation_state = None;
                     self.doc.soloed_light = None;
                     self.gpu.current_structure_key = 0;
                     self.gpu.buffer_dirty = true;
+                    self.ui.measurement_mode = false;
+                    self.ui.measurement_points.clear();
                     self.persistence.saved_fingerprint = self.doc.scene.data_fingerprint();
                     self.persistence.scene_dirty = false;
                     self.persistence.current_file_path = None;
@@ -322,6 +456,7 @@ impl SdfApp {
                         }
                         self.ui.node_graph_state.needs_initial_rebuild = true;
                         self.doc.sculpt_state = SculptState::new_inactive();
+                        self.sync_interaction_mode_after_sculpt_exit();
                         self.gpu.buffer_dirty = true;
                     }
                 }
@@ -415,33 +550,17 @@ impl SdfApp {
                 Action::ToggleOrtho => self.doc.camera.toggle_ortho(),
 
                 // ── Tools ────────────────────────────────────────────
-                Action::SetTool(tool) => {
-                    self.doc.active_tool = tool;
-                    match tool {
-                        crate::sculpt::ActiveTool::Select => {
-                            self.doc.sculpt_state = SculptState::new_inactive();
-                            self.async_state.last_sculpt_hit = None;
-                            self.async_state.lazy_brush_pos = None;
-                        }
-                        crate::sculpt::ActiveTool::Sculpt => {
-                            if let Some(sel) = self.ui.node_graph_state.selected {
-                                if self
-                                    .doc
-                                    .scene
-                                    .nodes
-                                    .get(&sel)
-                                    .is_some_and(|n| matches!(n.data, NodeData::Sculpt { .. }))
-                                {
-                                    let extent = self.scene_avg_extent();
-                                    self.doc
-                                        .sculpt_state
-                                        .activate_preserving_session(sel, Some(extent));
-                                    self.ensure_brush_settings_tab();
-                                }
-                            }
-                        }
+                Action::SetInteractionMode(mode) => match mode {
+                    InteractionMode::Select => self.apply_select_interaction(),
+                    InteractionMode::Measure => self.apply_measure_interaction(),
+                    InteractionMode::Sculpt(brush) => self.request_sculpt_interaction(brush),
+                },
+                Action::SetTool(tool) => match tool {
+                    crate::sculpt::ActiveTool::Select => self.apply_select_interaction(),
+                    crate::sculpt::ActiveTool::Sculpt => {
+                        self.request_sculpt_interaction(self.current_sculpt_brush_preference());
                     }
-                }
+                },
                 Action::SetGizmoMode(mode) => {
                     if self.gizmo.mode == mode && self.gizmo.gizmo_visible {
                         self.gizmo.gizmo_visible = false;
@@ -460,47 +579,9 @@ impl SdfApp {
                     self.gizmo.pivot_offset = Vec3::ZERO;
                 }
 
-                // ── Sculpt entry ──────────────────────────────────────
+                // Sculpt entry
                 Action::EnterSculptMode => {
-                    if let Some(sel) = self.ui.node_graph_state.selected {
-                        if let Some(node) = self.doc.scene.nodes.get(&sel) {
-                            if matches!(node.data, NodeData::Sculpt { .. }) {
-                                // Case 1: already a sculpt node — activate immediately
-                                let extent = self.scene_avg_extent();
-                                self.doc.active_tool = crate::sculpt::ActiveTool::Sculpt;
-                                self.doc
-                                    .sculpt_state
-                                    .activate_preserving_session(sel, Some(extent));
-                                self.ensure_brush_settings_tab();
-                            } else {
-                                // Case 2: check for sculpt parent
-                                let parent_map = self.doc.scene.build_parent_map();
-                                if let Some(sculpt_id) =
-                                    self.doc.scene.find_sculpt_parent(sel, &parent_map)
-                                {
-                                    let extent = self.scene_avg_extent();
-                                    self.doc.active_tool = crate::sculpt::ActiveTool::Sculpt;
-                                    self.doc
-                                        .sculpt_state
-                                        .activate_preserving_session(sculpt_id, Some(extent));
-                                    self.ui.node_graph_state.select_single(sculpt_id);
-                                    self.ensure_brush_settings_tab();
-                                } else {
-                                    // Case 3: non-sculpt node — open convert dialog
-                                    self.ui.sculpt_convert_dialog =
-                                        Some(SculptConvertDialog::new(sel));
-                                }
-                            }
-                        }
-                    } else {
-                        // Nothing selected
-                        self.ui.toasts.push(super::Toast {
-                            message: "Select a node to sculpt".into(),
-                            is_error: true,
-                            created: crate::compat::Instant::now(),
-                            duration: crate::compat::Duration::from_secs(4),
-                        });
-                    }
+                    self.request_sculpt_interaction(self.current_sculpt_brush_preference());
                 }
                 Action::ShowSculptConvertDialog { target } => {
                     self.ui.sculpt_convert_dialog = Some(SculptConvertDialog::new(target));
@@ -575,13 +656,8 @@ impl SdfApp {
                                     .get(&sculpt_id)
                                     .is_some_and(|n| matches!(n.data, NodeData::Sculpt { .. }))
                                 {
-                                    let extent = self.scene_avg_extent();
-                                    self.doc.active_tool = crate::sculpt::ActiveTool::Sculpt;
-                                    self.doc
-                                        .sculpt_state
-                                        .activate_preserving_session(sculpt_id, Some(extent));
-                                    self.ui.node_graph_state.select_single(sculpt_id);
-                                    self.ensure_brush_settings_tab();
+                                    let brush = self.current_sculpt_brush_preference();
+                                    self.activate_sculpt_interaction(sculpt_id, brush);
                                 }
                             }
                         }
@@ -612,6 +688,30 @@ impl SdfApp {
                     self.ui.node_graph_state.needs_initial_rebuild = true;
                     self.ui.node_graph_state.pending_center_node = Some(id);
                     self.gpu.buffer_dirty = true;
+                }
+                Action::ShellCreateBooleanPrimitive { op, primitive } => {
+                    if let Some(target_id) = self.ui.node_graph_state.selected {
+                        if let Some((operation_id, operand_id)) = self
+                            .doc
+                            .scene
+                            .create_guided_boolean_primitive(target_id, op, primitive)
+                        {
+                            self.ui.primary_shell.interaction_mode = InteractionMode::Select;
+                            self.ui.measurement_mode = false;
+                            self.ui.node_graph_state.select_single(operand_id);
+                            self.ui.node_graph_state.needs_initial_rebuild = true;
+                            self.ui.node_graph_state.pending_center_node = Some(operation_id);
+                            self.doc.active_tool = crate::sculpt::ActiveTool::Select;
+                            self.gpu.buffer_dirty = true;
+                        }
+                    } else {
+                        self.ui.toasts.push(super::Toast {
+                            message: "Select a base node before adding a guided boolean.".into(),
+                            is_error: true,
+                            created: crate::compat::Instant::now(),
+                            duration: crate::compat::Duration::from_secs(4),
+                        });
+                    }
                 }
                 Action::CreateOperation { op, left, right } => {
                     let id = self.doc.scene.create_operation(op.clone(), left, right);
@@ -794,8 +894,11 @@ impl SdfApp {
                     self.ui.show_distance_readout = !self.ui.show_distance_readout;
                 }
                 Action::ToggleMeasurementTool => {
-                    self.ui.measurement_mode = !self.ui.measurement_mode;
-                    self.ui.measurement_points.clear();
+                    if self.ui.primary_shell.interaction_mode == InteractionMode::Measure {
+                        self.apply_select_interaction();
+                    } else {
+                        self.apply_measure_interaction();
+                    }
                 }
                 Action::CopyProperties => {
                     if let Some(sel) = self.ui.node_graph_state.selected {
@@ -1126,6 +1229,13 @@ impl SdfApp {
                 } else {
                     crate::sculpt::ActiveTool::Select
                 };
+                self.ui.primary_shell.interaction_mode = if self.doc.sculpt_state.is_active() {
+                    InteractionMode::Sculpt(self.doc.sculpt_state.selected_brush())
+                } else {
+                    InteractionMode::Select
+                };
+                self.ui.measurement_mode = false;
+                self.ui.measurement_points.clear();
                 if let Some(render_config) = project.render_config {
                     self.settings.render = render_config;
                     self.gpu.last_environment_fingerprint = 0;
@@ -1326,8 +1436,80 @@ fn find_parent_transform(
 
 #[cfg(test)]
 mod tests {
-    use super::{apply_selection_behavior_settings, SelectionBehaviorApplyResult};
+    use std::collections::HashSet;
+
+    use glam::Vec3;
+
+    use super::{
+        activate_sculpt_interaction_state, apply_measure_interaction_state,
+        apply_select_interaction_state, apply_selection_behavior_settings, resolve_sculpt_entry,
+        sync_interaction_mode_after_sculpt_exit_state, SculptEntryDecision,
+        SelectionBehaviorApplyResult,
+    };
+    use crate::app::state::{DocumentState, MultiTransformSessionState, PrimaryShellState, UiState};
+    use crate::graph::history::History;
+    use crate::graph::scene::{Scene, SdfPrimitive};
+    use crate::graph::voxel::VoxelGrid;
+    use crate::gpu::camera::Camera;
+    use crate::sculpt::{ActiveTool, BrushMode, SculptState};
     use crate::settings::{GroupRotateDirection, Settings};
+    use crate::ui::dock;
+    use crate::ui::node_graph::NodeGraphState;
+    use crate::ui::reference_image::ReferenceImageManager;
+
+    fn sculpt_grid() -> VoxelGrid {
+        VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0))
+    }
+
+    fn test_document_state() -> DocumentState {
+        DocumentState {
+            scene: Scene::new(),
+            camera: Camera::default(),
+            history: History::new(),
+            active_tool: ActiveTool::Select,
+            sculpt_state: SculptState::new_inactive(),
+            clipboard_node: None,
+            soloed_light: None,
+        }
+    }
+
+    fn test_ui_state() -> UiState {
+        UiState {
+            primary_shell: PrimaryShellState::default(),
+            dock_state: dock::create_primary_shell_dock(),
+            node_graph_state: NodeGraphState::new(),
+            light_graph_state: NodeGraphState::new(),
+            show_debug: false,
+            show_help: false,
+            show_export_dialog: false,
+            show_settings: false,
+            renaming_node: None,
+            rename_buf: String::new(),
+            scene_tree_drag: None,
+            scene_tree_search: String::new(),
+            isolation_state: None,
+            toasts: Vec::new(),
+            turntable_active: false,
+            property_clipboard: None,
+            command_palette_open: false,
+            command_palette_query: String::new(),
+            command_palette_selected: 0,
+            sculpt_convert_dialog: None,
+            import_dialog: None,
+            rebinding_action: None,
+            active_light_ids: HashSet::new(),
+            total_light_count: 0,
+            last_light_warning_count: None,
+            show_recovery_dialog: false,
+            recovery_summary: String::new(),
+            reference_images: ReferenceImageManager::default(),
+            sculpt_brush_adjust: None,
+            show_distance_readout: false,
+            measurement_mode: false,
+            measurement_points: Vec::new(),
+            multi_transform_edit: MultiTransformSessionState::default(),
+        }
+    }
 
     #[test]
     fn selection_behavior_action_updates_settings_without_gpu_flags() {
@@ -1362,4 +1544,175 @@ mod tests {
             }
         );
     }
+
+    #[test]
+    fn resolve_sculpt_entry_activates_selected_sculpt_node() {
+        let mut scene = Scene::new();
+        let base = scene.create_primitive(SdfPrimitive::Sphere);
+        let sculpt = scene.create_sculpt(
+            base,
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::new(0.8, 0.8, 0.8),
+            sculpt_grid(),
+        );
+
+        assert_eq!(
+            resolve_sculpt_entry(&scene, Some(sculpt)),
+            SculptEntryDecision::Activate(sculpt)
+        );
+    }
+
+    #[test]
+    fn resolve_sculpt_entry_activates_parent_sculpt_node() {
+        let mut scene = Scene::new();
+        let base = scene.create_primitive(SdfPrimitive::Sphere);
+        let sculpt = scene.create_sculpt(
+            base,
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::new(0.8, 0.8, 0.8),
+            sculpt_grid(),
+        );
+
+        assert_eq!(
+            resolve_sculpt_entry(&scene, Some(base)),
+            SculptEntryDecision::Activate(sculpt)
+        );
+    }
+
+    #[test]
+    fn resolve_sculpt_entry_opens_convert_for_non_sculpt_selection() {
+        let mut scene = Scene::new();
+        let selected = scene.create_primitive(SdfPrimitive::Box);
+
+        assert_eq!(
+            resolve_sculpt_entry(&scene, Some(selected)),
+            SculptEntryDecision::OpenConvert(selected)
+        );
+    }
+
+    #[test]
+    fn resolve_sculpt_entry_requires_selection() {
+        let scene = Scene::new();
+
+        assert_eq!(
+            resolve_sculpt_entry(&scene, None),
+            SculptEntryDecision::MissingSelection
+        );
+    }
+
+    #[test]
+    fn select_interaction_sets_select_tool_and_clears_measurement() {
+        let mut doc = test_document_state();
+        let mut ui = test_ui_state();
+        let base = doc.scene.create_primitive(SdfPrimitive::Sphere);
+        let sculpt_id = doc.scene.create_sculpt(
+            base,
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::splat(0.8),
+            sculpt_grid(),
+        );
+        doc.active_tool = ActiveTool::Sculpt;
+        doc.sculpt_state.activate_preserving_session(sculpt_id, Some(1.0));
+        ui.primary_shell.interaction_mode = super::InteractionMode::Sculpt(BrushMode::Grab);
+        ui.show_distance_readout = true;
+        ui.measurement_mode = true;
+        ui.measurement_points = vec![Vec3::X, Vec3::Y];
+
+        apply_select_interaction_state(&mut doc, &mut ui);
+
+        assert_eq!(ui.primary_shell.interaction_mode, super::InteractionMode::Select);
+        assert_eq!(doc.active_tool, ActiveTool::Select);
+        assert!(!ui.measurement_mode);
+        assert!(ui.measurement_points.is_empty());
+        assert!(doc.sculpt_state.active_node().is_none());
+        assert!(ui.show_distance_readout);
+    }
+
+    #[test]
+    fn measure_interaction_keeps_distance_toggle_independent() {
+        let mut doc = test_document_state();
+        let mut ui = test_ui_state();
+        let base = doc.scene.create_primitive(SdfPrimitive::Sphere);
+        let sculpt_id = doc.scene.create_sculpt(
+            base,
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::splat(0.8),
+            sculpt_grid(),
+        );
+        doc.active_tool = ActiveTool::Sculpt;
+        doc.sculpt_state.activate_preserving_session(sculpt_id, Some(1.0));
+        ui.show_distance_readout = true;
+        ui.measurement_points = vec![Vec3::X];
+
+        apply_measure_interaction_state(&mut doc, &mut ui);
+
+        assert_eq!(ui.primary_shell.interaction_mode, super::InteractionMode::Measure);
+        assert_eq!(doc.active_tool, ActiveTool::Select);
+        assert!(ui.measurement_mode);
+        assert!(ui.measurement_points.is_empty());
+        assert!(doc.sculpt_state.active_node().is_none());
+        assert!(ui.show_distance_readout);
+    }
+
+    #[test]
+    fn activate_sculpt_interaction_sets_brush_and_selection() {
+        let mut doc = test_document_state();
+        let mut ui = test_ui_state();
+        let base = doc.scene.create_primitive(SdfPrimitive::Sphere);
+        let sculpt_id = doc.scene.create_sculpt(
+            base,
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::splat(0.8),
+            sculpt_grid(),
+        );
+        ui.show_distance_readout = true;
+        ui.measurement_mode = true;
+        ui.measurement_points = vec![Vec3::X, Vec3::Y];
+
+        activate_sculpt_interaction_state(&mut doc, &mut ui, sculpt_id, BrushMode::Flatten, 1.0);
+
+        assert_eq!(
+            ui.primary_shell.interaction_mode,
+            super::InteractionMode::Sculpt(BrushMode::Flatten)
+        );
+        assert_eq!(doc.active_tool, ActiveTool::Sculpt);
+        assert_eq!(doc.sculpt_state.active_node(), Some(sculpt_id));
+        assert_eq!(doc.sculpt_state.selected_brush(), BrushMode::Flatten);
+        assert_eq!(ui.node_graph_state.selected, Some(sculpt_id));
+        assert!(!ui.measurement_mode);
+        assert!(ui.measurement_points.is_empty());
+        assert!(ui.show_distance_readout);
+    }
+
+    #[test]
+    fn sync_interaction_mode_after_sculpt_exit_only_resets_sculpt_mode() {
+        let mut ui = test_ui_state();
+        ui.show_distance_readout = true;
+        ui.measurement_mode = true;
+        ui.measurement_points = vec![Vec3::X];
+        ui.primary_shell.interaction_mode = super::InteractionMode::Sculpt(BrushMode::Add);
+
+        sync_interaction_mode_after_sculpt_exit_state(&mut ui);
+
+        assert_eq!(ui.primary_shell.interaction_mode, super::InteractionMode::Select);
+        assert!(!ui.measurement_mode);
+        assert!(ui.measurement_points.is_empty());
+        assert!(ui.show_distance_readout);
+
+        ui.primary_shell.interaction_mode = super::InteractionMode::Measure;
+        ui.measurement_mode = true;
+        ui.measurement_points = vec![Vec3::Y];
+
+        sync_interaction_mode_after_sculpt_exit_state(&mut ui);
+
+        assert_eq!(ui.primary_shell.interaction_mode, super::InteractionMode::Measure);
+        assert!(ui.measurement_mode);
+        assert_eq!(ui.measurement_points, vec![Vec3::Y]);
+    }
 }
+

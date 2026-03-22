@@ -8,7 +8,7 @@ use crate::app::state::{
 };
 use crate::gpu::camera::{Camera, CameraUniform};
 use crate::gpu::picking::PendingPick;
-use crate::graph::scene::{CsgOp, ModifierKind, NodeData, NodeId, Scene, SdfPrimitive};
+use crate::graph::scene::{NodeData, NodeId, Scene};
 use crate::sculpt::{self, ActiveTool, BrushMode, SculptBrushProfile, SculptState};
 use crate::settings::{
     EnvironmentBackgroundMode, GroupRotateDirection, MultiAxisOrientation, MultiPivotMode,
@@ -611,6 +611,7 @@ fn draw_symmetry_plane(
 }
 
 pub struct ViewportOutput {
+    pub viewport_rect: egui::Rect,
     pub pending_pick: Option<PendingPick>,
     /// Modifier keys at time of sculpt drag (Ctrl = invert, Shift = smooth).
     pub sculpt_ctrl_held: bool,
@@ -683,7 +684,9 @@ pub fn draw(
     measurement_mode: &mut bool,
     measurement_points: &mut Vec<glam::Vec3>,
 ) -> ViewportOutput {
+    let rect = ui.available_rect_before_wrap();
     let mut output = ViewportOutput {
+        viewport_rect: rect,
         pending_pick: None,
         sculpt_ctrl_held: false,
         sculpt_shift_held: false,
@@ -693,13 +696,13 @@ pub fn draw(
         is_hover_pick: false,
         gizmo_drag_active: false,
     };
-    let rect = ui.available_rect_before_wrap();
     let response = ui.allocate_rect(rect, egui::Sense::click_and_drag());
+    let touch_active = ui.input(|i| i.any_touches());
     let multi_touch_active = ui.input(|i| i.multi_touch()).is_some();
     let sculpt_active = sculpt_state.is_active();
 
     if sculpt_active
-        && !multi_touch_active
+        && !touch_active
         && response.hovered()
         && !ui.ctx().wants_keyboard_input()
         && ui.input(|i| i.key_pressed(egui::Key::F))
@@ -777,13 +780,16 @@ pub fn draw(
     } else if sculpt_active {
         response.dragged_by(egui::PointerButton::Secondary)
             || response.dragged_by(egui::PointerButton::Middle)
+            || (touch_active && response.dragged_by(egui::PointerButton::Primary))
     } else {
         response.dragged_by(egui::PointerButton::Primary)
             || response.dragged_by(egui::PointerButton::Secondary)
             || response.dragged_by(egui::PointerButton::Middle)
     };
-    let sculpt_brushing =
-        sculpt_active && !sculpt_adjust_active && response.dragged_by(egui::PointerButton::Primary);
+    let sculpt_brushing = sculpt_active
+        && !touch_active
+        && !sculpt_adjust_active
+        && response.dragged_by(egui::PointerButton::Primary);
     let multi_sculpt_reduce = render_config.auto_reduce_steps && sculpt_count >= 2;
     let is_interacting = camera_dragging || sculpt_brushing;
     // Stop turntable on any camera interaction
@@ -1067,29 +1073,7 @@ pub fn draw(
             && response.dragged_by(egui::PointerButton::Primary)
             && !multi_touch_active
         {
-            let drag_origin = ui.input(|i| i.pointer.press_origin());
-            let in_border = drag_origin
-                .map(|origin| in_safety_border(origin, rect, render_config.sculpt_safety_border))
-                .unwrap_or(false);
-
-            // CPU bounding sphere test: project sculpt node bounds to screen,
-            // check if drag origin is inside. Instant, no async pipeline needed.
-            let cursor_on_mesh = if !in_border {
-                drag_origin
-                    .map(|origin| {
-                        cursor_in_sculpt_bounds(origin, sculpt_state, scene, camera, rect)
-                    })
-                    .unwrap_or(false)
-            } else {
-                false
-            };
-
-            // Once a stroke is confirmed via GPU pick, keep sculpting even if
-            // the cursor drifts outside the bounding sphere mid-stroke.
-            let stroke_confirmed = last_sculpt_hit.is_some();
-
-            if !cursor_on_mesh && !stroke_confirmed {
-                // Outside mesh bounds and no active stroke: orbit (same as select mode)
+            if touch_active {
                 let delta = response.drag_delta();
                 let modifiers = ui.input(|i| i.modifiers);
                 if modifiers.ctrl && modifiers.alt {
@@ -1101,57 +1085,93 @@ pub fn draw(
                         camera.clamp_pitch();
                     }
                 }
-            } else if let Some(pos) = ui.input(|i| i.pointer.hover_pos()) {
-                // Over mesh bounds or stroke already confirmed: sculpt
-                if rect.contains(pos) {
-                    let mouse_px = [
-                        (pos.x - rect.min.x) * pixels_per_point,
-                        (pos.y - rect.min.y) * pixels_per_point,
-                    ];
-                    output.pending_pick = Some(PendingPick {
-                        mouse_pos: mouse_px,
-                        camera_uniform: camera.to_uniform(
-                            viewport,
-                            time,
-                            0.0,
-                            false,
-                            scene_bounds,
-                            -1.0,
-                            0.0,
-                            [0.0; 4],
-                            [0.0; 4],
-                            [0.0; 4],
-                            [0.0; 4],
-                            [0.0; 4],
-                            [0.0; 4],
-                            [0.0; 4],
-                            [0.0; 4],
-                            [0.0; 4],
-                            [[0.0; 4]; 32],
-                            [[0.0; 4]; 8],
-                        ),
-                        additive_select_held: false, // sculpt uses Ctrl/Shift for brush behavior
-                    });
-                    // Capture modifier keys for Ctrl-invert / Shift-smooth
+            } else {
+                let drag_origin = ui.input(|i| i.pointer.press_origin());
+                let in_border = drag_origin
+                    .map(|origin| in_safety_border(origin, rect, render_config.sculpt_safety_border))
+                    .unwrap_or(false);
+
+                // CPU bounding sphere test: project sculpt node bounds to screen,
+                // check if drag origin is inside. Instant, no async pipeline needed.
+                let cursor_on_mesh = if !in_border {
+                    drag_origin
+                        .map(|origin| {
+                            cursor_in_sculpt_bounds(origin, sculpt_state, scene, camera, rect)
+                        })
+                        .unwrap_or(false)
+                } else {
+                    false
+                };
+
+                // Once a stroke is confirmed via GPU pick, keep sculpting even if
+                // the cursor drifts outside the bounding sphere mid-stroke.
+                let stroke_confirmed = last_sculpt_hit.is_some();
+
+                if !cursor_on_mesh && !stroke_confirmed {
+                    // Outside mesh bounds and no active stroke: orbit (same as select mode)
+                    let delta = response.drag_delta();
                     let modifiers = ui.input(|i| i.modifiers);
-                    output.sculpt_ctrl_held = modifiers.ctrl;
-                    output.sculpt_shift_held = modifiers.shift;
-                    // Capture pen pressure from touch/stylus events
-                    output.sculpt_pressure = ui.input(|i| {
-                        if let Some(touch) = i.multi_touch() {
-                            if touch.force > 0.0 {
-                                return touch.force;
-                            }
+                    if modifiers.ctrl && modifiers.alt {
+                        let sign = if render_config.invert_roll { -1.0 } else { 1.0 };
+                        camera.roll_by(sign * delta.x, render_config.roll_sensitivity);
+                    } else {
+                        camera.orbit(delta.x, delta.y);
+                        if render_config.clamp_orbit_pitch {
+                            camera.clamp_pitch();
                         }
-                        for event in &i.events {
-                            if let egui::Event::Touch { force: Some(f), .. } = event {
-                                if *f > 0.0 {
-                                    return *f;
+                    }
+                } else if let Some(pos) = ui.input(|i| i.pointer.hover_pos()) {
+                    // Over mesh bounds or stroke already confirmed: sculpt
+                    if rect.contains(pos) {
+                        let mouse_px = [
+                            (pos.x - rect.min.x) * pixels_per_point,
+                            (pos.y - rect.min.y) * pixels_per_point,
+                        ];
+                        output.pending_pick = Some(PendingPick {
+                            mouse_pos: mouse_px,
+                            camera_uniform: camera.to_uniform(
+                                viewport,
+                                time,
+                                0.0,
+                                false,
+                                scene_bounds,
+                                -1.0,
+                                0.0,
+                                [0.0; 4],
+                                [0.0; 4],
+                                [0.0; 4],
+                                [0.0; 4],
+                                [0.0; 4],
+                                [0.0; 4],
+                                [0.0; 4],
+                                [0.0; 4],
+                                [0.0; 4],
+                                [[0.0; 4]; 32],
+                                [[0.0; 4]; 8],
+                            ),
+                            additive_select_held: false, // sculpt uses Ctrl/Shift for brush behavior
+                        });
+                        // Capture modifier keys for Ctrl-invert / Shift-smooth
+                        let modifiers = ui.input(|i| i.modifiers);
+                        output.sculpt_ctrl_held = modifiers.ctrl;
+                        output.sculpt_shift_held = modifiers.shift;
+                        // Capture pen pressure from touch/stylus events
+                        output.sculpt_pressure = ui.input(|i| {
+                            if let Some(touch) = i.multi_touch() {
+                                if touch.force > 0.0 {
+                                    return touch.force;
                                 }
                             }
-                        }
-                        0.0
-                    });
+                            for event in &i.events {
+                                if let egui::Event::Touch { force: Some(f), .. } = event {
+                                    if *f > 0.0 {
+                                        return *f;
+                                    }
+                                }
+                            }
+                            0.0
+                        });
+                    }
                 }
             }
         }
@@ -1664,135 +1684,6 @@ pub fn draw(
                 );
             }
         }
-    }
-
-    // --- Floating toolbar overlay ---
-    let overlay_frame = egui::Frame::window(&ui.ctx().style())
-        .fill(egui::Color32::from_rgba_premultiplied(30, 30, 38, 220));
-
-    let toolbar_id = ui.id().with("viewport_toolbar");
-    egui::Window::new(egui::RichText::new("Tools").size(11.0))
-        .id(toolbar_id)
-        .default_pos(rect.min + egui::vec2(8.0, 28.0))
-        .resizable(true)
-        .collapsible(true)
-        .frame(overlay_frame)
-        .show(ui.ctx(), |ui| {
-            ui.horizontal(|ui| {
-                let select_active = *active_tool == ActiveTool::Select;
-                let sculpt_tool_active = *active_tool == ActiveTool::Sculpt;
-
-                if ui.selectable_label(select_active, "Select").clicked() && !select_active {
-                    actions.push(Action::SetTool(ActiveTool::Select));
-                }
-                if ui.selectable_label(sculpt_tool_active, "Sculpt").clicked()
-                    && !sculpt_tool_active
-                {
-                    actions.push(Action::SetTool(ActiveTool::Sculpt));
-                }
-            });
-
-            ui.horizontal(|ui| {
-                if ui
-                    .selectable_label(*measurement_mode, "Measure")
-                    .on_hover_text("Toggle measurement tool (M)")
-                    .clicked()
-                {
-                    actions.push(Action::ToggleMeasurementTool);
-                }
-                if ui
-                    .selectable_label(*show_distance_readout, "Distance")
-                    .on_hover_text("Toggle cursor distance readout")
-                    .clicked()
-                {
-                    actions.push(Action::ToggleDistanceReadout);
-                }
-                if *measurement_mode && ui.small_button("Clear").clicked() {
-                    measurement_points.clear();
-                }
-            });
-
-            ui.separator();
-            let mode = &render_config.shading_mode;
-            if ui
-                .selectable_label(false, format!("Shading: {}", mode.label()))
-                .on_hover_text("Click to cycle (Z key)")
-                .clicked()
-            {
-                actions.push(Action::CycleShadingMode);
-            }
-        });
-
-    // --- Shapes panel (hidden in sculpt mode) ---
-    if *active_tool != ActiveTool::Sculpt {
-        let shapes_id = ui.id().with("viewport_shapes");
-        let overlay_frame = egui::Frame::window(&ui.ctx().style())
-            .fill(egui::Color32::from_rgba_premultiplied(30, 30, 38, 220));
-
-        egui::Window::new(egui::RichText::new("Shapes").size(11.0))
-            .id(shapes_id)
-            .default_pos(rect.min + egui::vec2(8.0, 130.0))
-            .resizable(true)
-            .collapsible(true)
-            .frame(overlay_frame)
-            .show(ui.ctx(), |ui| {
-                let btn_size = egui::vec2(72.0, 22.0);
-
-                // Primitives — flow layout wraps based on window width
-                ui.horizontal_wrapped(|ui| {
-                    for prim in SdfPrimitive::ALL {
-                        if ui
-                            .add(egui::Button::new(prim.base_name()).min_size(btn_size))
-                            .clicked()
-                        {
-                            actions.push(Action::CreatePrimitive(prim.clone()));
-                        }
-                    }
-                });
-
-                ui.separator();
-
-                // Boolean operations
-                ui.label(egui::RichText::new("Boolean").size(11.0).weak());
-                ui.horizontal_wrapped(|ui| {
-                    for op in CsgOp::ALL {
-                        if ui
-                            .add(egui::Button::new(op.base_name()).min_size(btn_size))
-                            .clicked()
-                        {
-                            let tops = scene.top_level_nodes();
-                            if tops.len() >= 2 {
-                                let left = Some(tops[tops.len() - 2]);
-                                let right = Some(tops[tops.len() - 1]);
-                                actions.push(Action::CreateOperation {
-                                    op: op.clone(),
-                                    left,
-                                    right,
-                                });
-                            }
-                        }
-                    }
-                });
-
-                // Modifiers (needs selection)
-                if let Some(sel_id) = *selected {
-                    ui.separator();
-                    ui.label(egui::RichText::new("Modify").size(11.0).weak());
-                    ui.horizontal_wrapped(|ui| {
-                        for kind in ModifierKind::ALL {
-                            if ui
-                                .add(egui::Button::new(kind.base_name()).min_size(btn_size))
-                                .clicked()
-                            {
-                                actions.push(Action::InsertModifierAbove {
-                                    target: sel_id,
-                                    kind: kind.clone(),
-                                });
-                            }
-                        }
-                    });
-                }
-            });
     }
 
     // --- Orientation Gizmo (top-right corner, interactive) ---

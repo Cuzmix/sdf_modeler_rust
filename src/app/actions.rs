@@ -3,6 +3,7 @@ use crate::sculpt::ActiveTool;
 use crate::settings::SelectionBehaviorSettings;
 use crate::ui::gizmo::GizmoMode;
 
+use super::state::InteractionMode;
 use super::BakeRequest;
 
 /// Industry-standard lighting presets that configure scene Key + Fill lights.
@@ -88,6 +89,7 @@ pub enum Action {
     ToggleOrtho,
 
     // ── Tools ────────────────────────────────────────────────────────
+    SetInteractionMode(InteractionMode),
     SetTool(ActiveTool),
     SetGizmoMode(GizmoMode),
     ToggleGizmoSpace,
@@ -115,6 +117,10 @@ pub enum Action {
 
     // ── Scene mutations (structural) ─────────────────────────────────
     CreatePrimitive(SdfPrimitive),
+    ShellCreateBooleanPrimitive {
+        op: CsgOp,
+        primitive: SdfPrimitive,
+    },
     CreateOperation {
         op: CsgOp,
         left: Option<NodeId>,

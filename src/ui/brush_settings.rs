@@ -23,26 +23,11 @@ pub fn draw(ui: &mut egui::Ui, sculpt_state: &mut SculptState) {
 
 /// Draw all brush controls when sculpting is active.
 fn draw_active_brush_controls(ui: &mut egui::Ui, sculpt_state: &mut SculptState) {
-    // Brush mode
-    let prev_mode = sculpt_state.selected_brush();
-    let mut brush_mode = prev_mode;
-    ui.label("Brush Mode");
-    ui.horizontal_wrapped(|ui| {
-        ui.selectable_value(&mut brush_mode, BrushMode::Add, "Add");
-        ui.selectable_value(&mut brush_mode, BrushMode::Carve, "Carve");
-        ui.selectable_value(&mut brush_mode, BrushMode::Smooth, "Smooth");
-        ui.selectable_value(&mut brush_mode, BrushMode::Flatten, "Flatten");
-        ui.selectable_value(&mut brush_mode, BrushMode::Inflate, "Inflate");
-        ui.selectable_value(&mut brush_mode, BrushMode::Grab, "Grab");
-    });
-    if brush_mode != prev_mode {
-        sculpt_state.set_selected_brush(brush_mode);
-    }
-
+    let brush_mode = sculpt_state.selected_brush();
+    ui.label(format!("Active Brush: {}", brush_mode.label()));
     ui.add_space(6.0);
     ui.separator();
 
-    let brush_mode = sculpt_state.selected_brush();
     let profile = sculpt_state.selected_profile_mut();
 
     // Falloff

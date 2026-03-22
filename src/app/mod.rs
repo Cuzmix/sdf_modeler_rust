@@ -300,6 +300,13 @@ impl SdfApp {
                 } else {
                     ActiveTool::Select
                 };
+                self.ui.primary_shell.interaction_mode = if self.doc.sculpt_state.is_active() {
+                    crate::app::state::InteractionMode::Sculpt(self.doc.sculpt_state.selected_brush())
+                } else {
+                    crate::app::state::InteractionMode::Select
+                };
+                self.ui.measurement_mode = false;
+                self.ui.measurement_points.clear();
                 if let Some(render_config) = project.render_config {
                     self.settings.render = render_config;
                     self.gpu.last_environment_fingerprint = 0;
@@ -428,7 +435,8 @@ impl SdfApp {
                 sculpt_runtime_cache: None,
             },
             ui: UiState {
-                dock_state: dock::create_dock_state(),
+                primary_shell: state::PrimaryShellState::default(),
+                dock_state: dock::create_primary_shell_dock(),
                 node_graph_state: NodeGraphState::new(),
                 light_graph_state: NodeGraphState::new(),
                 show_debug: false,
@@ -448,7 +456,6 @@ impl SdfApp {
                 command_palette_selected: 0,
                 sculpt_convert_dialog: None,
                 import_dialog: None,
-                show_quick_toolbar: false,
                 rebinding_action: None,
                 active_light_ids: std::collections::HashSet::new(),
                 total_light_count: 0,

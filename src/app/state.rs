@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use eframe::egui_wgpu::RenderState;
+use eframe::{egui, egui_wgpu::RenderState};
 use egui_dock::DockState;
 use glam::Vec3;
 
@@ -12,7 +12,7 @@ use crate::gpu::picking::PendingPick;
 use crate::graph::history::History;
 use crate::graph::scene::{MaterialParams, NodeId, Scene};
 use crate::mesh_import::TriMesh;
-use crate::sculpt::{ActiveTool, SculptState};
+use crate::sculpt::{ActiveTool, BrushMode, SculptState};
 use crate::settings::SelectionBehaviorSettings;
 use crate::ui::dock::Tab;
 use crate::ui::gizmo::{GizmoMode, GizmoSelection, GizmoSpace, GizmoState};
@@ -156,6 +156,125 @@ impl Default for MultiTransformSessionState {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PrimaryShellContextTab {
+    Sculpt,
+    Selection,
+    Material,
+    Light,
+    Node,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PrimaryShellDrawerTab {
+    Items,
+    History,
+    Reference,
+    Advanced,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InteractionMode {
+    Select,
+    Measure,
+    Sculpt(BrushMode),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ShellSnapAnchor {
+    Left,
+    Right,
+    Bottom,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ShellWindowState {
+    pub open: bool,
+    pub position: Option<egui::Pos2>,
+    pub size: egui::Vec2,
+    pub snap_anchor: Option<ShellSnapAnchor>,
+}
+
+impl ShellWindowState {
+    pub fn snapped_default(
+        open: bool,
+        size: egui::Vec2,
+        snap_anchor: Option<ShellSnapAnchor>,
+    ) -> Self {
+        Self {
+            open,
+            position: None,
+            size,
+            snap_anchor,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct PrimaryShellState {
+    pub interaction_mode: InteractionMode,
+    pub tool_panel: ShellWindowState,
+    pub inspector_panel: ShellWindowState,
+    pub drawer_panel: ShellWindowState,
+    pub active_context_tab: PrimaryShellContextTab,
+    pub active_drawer_tab: PrimaryShellDrawerTab,
+    pub layout_revision: u64,
+}
+
+impl Default for PrimaryShellState {
+    fn default() -> Self {
+        Self {
+            interaction_mode: InteractionMode::Select,
+            tool_panel: ShellWindowState::snapped_default(
+                true,
+                egui::vec2(320.0, 420.0),
+                Some(ShellSnapAnchor::Left),
+            ),
+            inspector_panel: ShellWindowState::snapped_default(
+                true,
+                egui::vec2(360.0, 480.0),
+                Some(ShellSnapAnchor::Right),
+            ),
+            drawer_panel: ShellWindowState::snapped_default(
+                false,
+                egui::vec2(560.0, 260.0),
+                Some(ShellSnapAnchor::Bottom),
+            ),
+            active_context_tab: PrimaryShellContextTab::Selection,
+            active_drawer_tab: PrimaryShellDrawerTab::Items,
+            layout_revision: 0,
+        }
+    }
+}
+
+impl PrimaryShellState {
+    pub fn toggle_drawer(&mut self, tab: PrimaryShellDrawerTab) {
+        if self.active_drawer_tab == tab {
+            self.drawer_panel.open = !self.drawer_panel.open;
+        } else {
+            self.active_drawer_tab = tab;
+            self.drawer_panel.open = true;
+        }
+        if self.drawer_panel.open {
+            self.drawer_panel.snap_anchor = Some(ShellSnapAnchor::Bottom);
+        }
+    }
+
+    pub fn toggle_tool_panel(&mut self) {
+        self.tool_panel.open = !self.tool_panel.open;
+    }
+
+    pub fn toggle_inspector_panel(&mut self) {
+        self.inspector_panel.open = !self.inspector_panel.open;
+    }
+
+    pub fn reset_layout(&mut self) {
+        let next_revision = self.layout_revision.wrapping_add(1);
+        *self = Self::default();
+        self.layout_revision = next_revision;
+    }
+}
+
 impl MultiTransformSessionState {
     pub fn reset_for_selection(
         &mut self,
@@ -255,6 +374,7 @@ impl ImportDialog {
 }
 
 pub struct UiState {
+    pub primary_shell: PrimaryShellState,
     pub dock_state: DockState<Tab>,
     pub node_graph_state: NodeGraphState,
     pub light_graph_state: NodeGraphState,
@@ -277,8 +397,6 @@ pub struct UiState {
     pub sculpt_convert_dialog: Option<SculptConvertDialog>,
     /// Open "Import Mesh" settings dialog state (None = hidden).
     pub import_dialog: Option<ImportDialog>,
-    /// Quick Primitives floating toolbar (Shift+A).
-    pub show_quick_toolbar: bool,
     /// Keybinding editor: which action is currently waiting for a key press (None = not rebinding).
     pub rebinding_action: Option<crate::keymap::ActionBinding>,
     /// Set of Light NodeIds currently active on GPU (nearest MAX_SCENE_LIGHTS to camera).
@@ -475,5 +593,54 @@ mod tests {
         assert_eq!(state.rotation_delta_deg, Vec3::ZERO);
         assert_eq!(state.scale_factor, Vec3::ONE);
         assert_eq!(state.behavior_key, updated_behavior);
+    }
+
+    #[test]
+    fn primary_shell_defaults_to_viewport_first_layout() {
+        let state = PrimaryShellState::default();
+        assert_eq!(state.interaction_mode, InteractionMode::Select);
+        assert!(state.tool_panel.open);
+        assert!(state.inspector_panel.open);
+        assert!(!state.drawer_panel.open);
+        assert_eq!(state.tool_panel.snap_anchor, Some(ShellSnapAnchor::Left));
+        assert_eq!(state.inspector_panel.snap_anchor, Some(ShellSnapAnchor::Right));
+        assert_eq!(state.drawer_panel.snap_anchor, Some(ShellSnapAnchor::Bottom));
+        assert_eq!(state.active_context_tab, PrimaryShellContextTab::Selection);
+        assert_eq!(state.active_drawer_tab, PrimaryShellDrawerTab::Items);
+    }
+
+    #[test]
+    fn primary_shell_toggle_drawer_opens_and_closes_same_tab() {
+        let mut state = PrimaryShellState::default();
+        state.toggle_drawer(PrimaryShellDrawerTab::History);
+        assert!(state.drawer_panel.open);
+        assert_eq!(state.active_drawer_tab, PrimaryShellDrawerTab::History);
+
+        state.toggle_drawer(PrimaryShellDrawerTab::History);
+        assert!(!state.drawer_panel.open);
+        assert_eq!(state.active_drawer_tab, PrimaryShellDrawerTab::History);
+    }
+
+    #[test]
+    fn primary_shell_switching_drawer_tabs_keeps_drawer_open() {
+        let mut state = PrimaryShellState::default();
+        state.toggle_drawer(PrimaryShellDrawerTab::Items);
+        state.toggle_drawer(PrimaryShellDrawerTab::Advanced);
+        assert!(state.drawer_panel.open);
+        assert_eq!(state.active_drawer_tab, PrimaryShellDrawerTab::Advanced);
+    }
+
+    #[test]
+    fn primary_shell_reset_layout_restores_window_defaults() {
+        let mut state = PrimaryShellState::default();
+        state.tool_panel.open = false;
+        state.drawer_panel.open = true;
+        state.layout_revision = 9;
+
+        state.reset_layout();
+
+        assert!(state.tool_panel.open);
+        assert!(!state.drawer_panel.open);
+        assert_eq!(state.layout_revision, 10);
     }
 }

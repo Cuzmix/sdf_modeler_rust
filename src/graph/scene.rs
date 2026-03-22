@@ -1280,24 +1280,20 @@ impl Scene {
         );
     }
 
-    /// Insert a Modifier above `target_id`.
-    /// Creates a Modifier node with `input = target_id` and rewires all parents.
-    pub fn insert_modifier_above(&mut self, target_id: NodeId, kind: ModifierKind) -> NodeId {
-        let modifier_id = self.create_modifier(kind, Some(target_id));
-
+    fn rewire_parents_to(&mut self, target_id: NodeId, replacement_id: NodeId) {
         let parents: Vec<(NodeId, bool, bool)> = self
             .nodes
             .values()
-            .filter_map(|n| {
-                if n.id == modifier_id {
+            .filter_map(|node| {
+                if node.id == replacement_id {
                     return None;
                 }
-                match &n.data {
+                match &node.data {
                     NodeData::Operation { left, right, .. } => {
                         let is_left = *left == Some(target_id);
                         let is_right = *right == Some(target_id);
                         if is_left || is_right {
-                            Some((n.id, is_left, is_right))
+                            Some((node.id, is_left, is_right))
                         } else {
                             None
                         }
@@ -1307,7 +1303,7 @@ impl Scene {
                     | NodeData::Modifier { input, .. }
                         if *input == Some(target_id) =>
                     {
-                        Some((n.id, true, false))
+                        Some((node.id, true, false))
                     }
                     _ => None,
                 }
@@ -1319,22 +1315,28 @@ impl Scene {
                 match &mut parent.data {
                     NodeData::Operation { left, right, .. } => {
                         if is_left {
-                            *left = Some(modifier_id);
+                            *left = Some(replacement_id);
                         }
                         if is_right {
-                            *right = Some(modifier_id);
+                            *right = Some(replacement_id);
                         }
                     }
                     NodeData::Sculpt { input, .. }
                     | NodeData::Transform { input, .. }
                     | NodeData::Modifier { input, .. } => {
-                        *input = Some(modifier_id);
+                        *input = Some(replacement_id);
                     }
                     _ => {}
                 }
             }
         }
+    }
 
+    /// Insert a Modifier above `target_id`.
+    /// Creates a Modifier node with `input = target_id` and rewires all parents.
+    pub fn insert_modifier_above(&mut self, target_id: NodeId, kind: ModifierKind) -> NodeId {
+        let modifier_id = self.create_modifier(kind, Some(target_id));
+        self.rewire_parents_to(target_id, modifier_id);
         modifier_id
     }
 
@@ -1342,61 +1344,26 @@ impl Scene {
     /// Creates a Transform node with `input = target_id` and rewires all parents.
     pub fn insert_transform_above(&mut self, target_id: NodeId) -> NodeId {
         let transform_id = self.create_transform(Some(target_id));
+        self.rewire_parents_to(target_id, transform_id);
+        transform_id
+    }
 
-        // Rewire all parents that referenced target_id
-        let parents: Vec<(NodeId, bool, bool)> = self
-            .nodes
-            .values()
-            .filter_map(|n| {
-                if n.id == transform_id {
-                    return None;
-                }
-                match &n.data {
-                    NodeData::Operation { left, right, .. } => {
-                        let is_left = *left == Some(target_id);
-                        let is_right = *right == Some(target_id);
-                        if is_left || is_right {
-                            Some((n.id, is_left, is_right))
-                        } else {
-                            None
-                        }
-                    }
-                    NodeData::Sculpt { input, .. } if *input == Some(target_id) => {
-                        Some((n.id, true, false))
-                    }
-                    NodeData::Transform { input, .. } if *input == Some(target_id) => {
-                        Some((n.id, true, false))
-                    }
-                    NodeData::Modifier { input, .. } if *input == Some(target_id) => {
-                        Some((n.id, true, false))
-                    }
-                    _ => None,
-                }
-            })
-            .collect();
-
-        for (parent_id, is_left, is_right) in parents {
-            if let Some(parent) = self.nodes.get_mut(&parent_id) {
-                match &mut parent.data {
-                    NodeData::Operation { left, right, .. } => {
-                        if is_left {
-                            *left = Some(transform_id);
-                        }
-                        if is_right {
-                            *right = Some(transform_id);
-                        }
-                    }
-                    NodeData::Sculpt { input, .. }
-                    | NodeData::Transform { input, .. }
-                    | NodeData::Modifier { input, .. } => {
-                        *input = Some(transform_id);
-                    }
-                    _ => {}
-                }
-            }
+    /// Create a new primitive operand and wrap `target_id` in a boolean operation.
+    /// Returns `(operation_id, operand_id)` when `target_id` exists.
+    pub fn create_guided_boolean_primitive(
+        &mut self,
+        target_id: NodeId,
+        op: CsgOp,
+        primitive: SdfPrimitive,
+    ) -> Option<(NodeId, NodeId)> {
+        if !self.nodes.contains_key(&target_id) {
+            return None;
         }
 
-        transform_id
+        let operand_id = self.create_primitive(primitive);
+        let operation_id = self.create_operation(op, Some(target_id), Some(operand_id));
+        self.rewire_parents_to(target_id, operation_id);
+        Some((operation_id, operand_id))
     }
 
     /// Insert a Sculpt modifier above `target_id`.
@@ -2605,6 +2572,51 @@ mod tests {
             } => {
                 assert_eq!(*l, Some(left));
                 assert_eq!(*r, Some(right));
+            }
+            _ => panic!("expected Operation"),
+        }
+    }
+
+    #[test]
+    fn guided_boolean_primitive_wraps_top_level_target() {
+        let mut scene = empty_scene();
+        let target = scene.create_primitive(SdfPrimitive::Sphere);
+
+        let (operation_id, operand_id) = scene
+            .create_guided_boolean_primitive(target, CsgOp::Union, SdfPrimitive::Box)
+            .expect("target should exist");
+
+        match &scene.nodes[&operation_id].data {
+            NodeData::Operation { left, right, op, .. } => {
+                assert_eq!(*op, CsgOp::Union);
+                assert_eq!(*left, Some(target));
+                assert_eq!(*right, Some(operand_id));
+            }
+            _ => panic!("expected Operation"),
+        }
+
+        assert_eq!(scene.top_level_nodes(), vec![operation_id]);
+    }
+
+    #[test]
+    fn guided_boolean_primitive_rewires_existing_parent_chain() {
+        let mut scene = empty_scene();
+        let target = scene.create_primitive(SdfPrimitive::Sphere);
+        let transform = scene.create_transform(Some(target));
+
+        let (operation_id, operand_id) = scene
+            .create_guided_boolean_primitive(target, CsgOp::Subtract, SdfPrimitive::Cylinder)
+            .expect("target should exist");
+
+        match &scene.nodes[&transform].data {
+            NodeData::Transform { input, .. } => assert_eq!(*input, Some(operation_id)),
+            _ => panic!("expected Transform"),
+        }
+        match &scene.nodes[&operation_id].data {
+            NodeData::Operation { left, right, op, .. } => {
+                assert_eq!(*op, CsgOp::Subtract);
+                assert_eq!(*left, Some(target));
+                assert_eq!(*right, Some(operand_id));
             }
             _ => panic!("expected Operation"),
         }

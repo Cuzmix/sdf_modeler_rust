@@ -108,6 +108,7 @@ impl SdfApp {
                 self.ui.node_graph_state.clear_selection();
                 self.ui.node_graph_state.needs_initial_rebuild = true;
                 self.doc.sculpt_state = SculptState::new_inactive();
+                self.sync_interaction_mode_after_sculpt_exit();
                 self.gpu.buffer_dirty = true;
             }
         }

@@ -12,6 +12,7 @@ pub mod light_graph;
 pub mod light_linking;
 pub mod lights_panel;
 pub mod node_graph;
+pub mod primary_shell;
 pub mod profiler;
 pub mod properties;
 pub mod quick_toolbar;

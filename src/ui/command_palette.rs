@@ -3,7 +3,6 @@ use eframe::egui;
 use crate::app::actions::{Action, ActionSink};
 use crate::graph::scene::{NodeId, Scene};
 use crate::keymap::{ActionBinding, KeymapConfig};
-use crate::sculpt::ActiveTool;
 use crate::ui::gizmo::GizmoMode;
 
 /// A single entry in the command palette.
@@ -115,12 +114,12 @@ fn build_entries() -> Vec<CommandEntry> {
         CommandEntry {
             label: "Tool: Select".into(),
             binding: None,
-            action: Action::SetTool(ActiveTool::Select),
+            action: Action::SetInteractionMode(crate::app::state::InteractionMode::Select),
         },
         CommandEntry {
             label: "Tool: Sculpt".into(),
             binding: None,
-            action: Action::SetTool(ActiveTool::Sculpt),
+            action: Action::EnterSculptMode,
         },
         CommandEntry {
             label: "Gizmo: Translate".into(),

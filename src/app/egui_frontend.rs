@@ -29,7 +29,6 @@ impl SdfApp {
             &self.doc.camera,
         );
         crate::ui::toasts::draw(ctx, &mut self.ui.toasts);
-        crate::ui::quick_toolbar::draw(ctx, &mut self.ui.show_quick_toolbar, action_sink);
 
         crate::ui::sculpt_convert_dialog::draw(
             ctx,
@@ -82,6 +81,7 @@ impl SdfApp {
         let mut sculpt_pressure: f32 = 0.0;
         let mut is_hover_pick = false;
         let mut gizmo_drag_active = false;
+        let mut primary_viewport_rect = None;
         let sculpt_count = self.gpu.sculpt_tex_indices.len();
         let isolation_label: Option<String> =
             self.ui.isolation_state.as_ref().and_then(|isolation| {
@@ -128,6 +128,7 @@ impl SdfApp {
 
         let selection_behavior = self.settings.selection_behavior;
         let mut tab_viewer = SdfTabViewer {
+            primary_shell: &mut self.ui.primary_shell,
             camera: &mut self.doc.camera,
             scene: &mut self.doc.scene,
             node_graph_state: &mut self.ui.node_graph_state,
@@ -163,6 +164,7 @@ impl SdfApp {
                 selection_behavior,
                 measurement_mode: &mut self.ui.measurement_mode,
                 measurement_points: &mut self.ui.measurement_points,
+                viewport_rect: &mut primary_viewport_rect,
             },
             scene_tree: SceneTreeContext {
                 renaming_node: &mut self.ui.renaming_node,
@@ -184,6 +186,39 @@ impl SdfApp {
             .show(ctx, |ui| {
                 egui_dock::DockArea::new(&mut self.ui.dock_state).show_inside(ui, &mut tab_viewer);
             });
+
+        if let Some(viewport_rect) = primary_viewport_rect {
+            crate::ui::primary_shell::draw(
+                ctx,
+                viewport_rect,
+                crate::ui::primary_shell::PrimaryShellContext {
+                    shell: &mut self.ui.primary_shell,
+                    dock_state: Some(&mut self.ui.dock_state),
+                    scene: &mut self.doc.scene,
+                    sculpt_state: &mut self.doc.sculpt_state,
+                    selected: &mut self.ui.node_graph_state.selected,
+                    selected_set: &mut self.ui.node_graph_state.selected_set,
+                    renaming_node: &mut self.ui.renaming_node,
+                    rename_buf: &mut self.ui.rename_buf,
+                    scene_tree_drag: &mut self.ui.scene_tree_drag,
+                    scene_tree_search: &mut self.ui.scene_tree_search,
+                    bake_progress,
+                    actions: action_sink,
+                    history: &self.doc.history,
+                    active_light_ids: &self.ui.active_light_ids,
+                    max_sculpt_resolution: self.settings.max_sculpt_resolution,
+                    soloed_light: self.doc.soloed_light,
+                    material_library: &mut self.material_library,
+                    multi_transform_edit: &mut self.ui.multi_transform_edit,
+                    gizmo_space: &self.gizmo.space,
+                    selection_behavior: &selection_behavior,
+                    reference_images: &mut self.ui.reference_images,
+                    measurement_points: &mut self.ui.measurement_points,
+                    show_distance_readout: &mut self.ui.show_distance_readout,
+                    settings: &mut self.settings,
+                },
+            );
+        }
 
         crate::ui::command_palette::draw(
             ctx,

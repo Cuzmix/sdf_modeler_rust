@@ -537,7 +537,7 @@ impl ActionBinding {
             Self::ToggleIsolation => "Toggle Isolation",
             Self::CycleShadingMode => "Cycle Shading Mode",
             Self::ToggleTurntable => "Toggle Turntable",
-            Self::ShowQuickToolbar => "Quick Primitives",
+            Self::ShowQuickToolbar => "Toggle Tool Panel",
             Self::ToggleReferenceImages => "Toggle Reference Images",
             Self::ToggleMeasurementTool => "Toggle Measurement Tool",
             Self::SculptBrushAdd => "Brush: Add",
@@ -559,13 +559,7 @@ impl ActionBinding {
     pub fn is_sculpt_only(self) -> bool {
         matches!(
             self,
-            Self::SculptBrushAdd
-                | Self::SculptBrushCarve
-                | Self::SculptBrushSmooth
-                | Self::SculptBrushFlatten
-                | Self::SculptBrushInflate
-                | Self::SculptBrushGrab
-                | Self::SculptBrushShrink
+            Self::SculptBrushShrink
                 | Self::SculptBrushGrow
                 | Self::SculptSymmetryX
                 | Self::SculptSymmetryY

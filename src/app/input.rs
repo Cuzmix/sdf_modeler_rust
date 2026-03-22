@@ -1,18 +1,12 @@
 use eframe::egui;
 
 use crate::keymap::ActionBinding;
-use crate::sculpt::{ActiveTool, BrushMode, SculptState};
+use crate::sculpt::{ActiveTool, BrushMode};
 use crate::ui::gizmo::GizmoMode;
 
 use super::actions::{Action, ActionSink};
+use super::state::InteractionMode;
 use super::{ExportStatus, SdfApp};
-
-/// Switch brush mode, resetting grab-specific strength if leaving Grab mode.
-fn set_brush_mode(sculpt_state: &mut SculptState, target: BrushMode) {
-    if sculpt_state.is_active() {
-        sculpt_state.set_selected_brush(target);
-    }
-}
 
 impl SdfApp {
     pub(super) fn delete_selected(&mut self) {
@@ -20,7 +14,8 @@ impl SdfApp {
             self.doc.scene.remove_node(sel);
             self.ui.node_graph_state.clear_selection();
             self.ui.node_graph_state.needs_initial_rebuild = true;
-            self.doc.sculpt_state = SculptState::new_inactive();
+            self.doc.sculpt_state = crate::sculpt::SculptState::new_inactive();
+            self.sync_interaction_mode_after_sculpt_exit();
             self.gpu.buffer_dirty = true;
         }
     }
@@ -160,51 +155,71 @@ impl SdfApp {
             }
             ActionBinding::ToggleGizmoSpace => actions.push(Action::ToggleGizmoSpace),
             ActionBinding::ResetPivot => actions.push(Action::ResetPivot),
-            ActionBinding::EnterSculptMode => actions.push(Action::EnterSculptMode),
+            ActionBinding::EnterSculptMode => actions.push(Action::SetInteractionMode(
+                InteractionMode::Sculpt(self.doc.sculpt_state.selected_brush()),
+            )),
             ActionBinding::ToggleIsolation => actions.push(Action::ToggleIsolation),
             ActionBinding::CycleShadingMode => actions.push(Action::CycleShadingMode),
             ActionBinding::ToggleTurntable => actions.push(Action::ToggleTurntable),
-            ActionBinding::ToggleMeasurementTool => actions.push(Action::ToggleMeasurementTool),
+            ActionBinding::ToggleMeasurementTool => actions.push(Action::SetInteractionMode(
+                if self.ui.primary_shell.interaction_mode == InteractionMode::Measure {
+                    InteractionMode::Select
+                } else {
+                    InteractionMode::Measure
+                },
+            )),
             ActionBinding::ShowExportDialog => actions.push(Action::ShowExportDialog),
 
             // --- Context-sensitive actions ---
             ActionBinding::Undo => actions.push(Action::Undo),
             ActionBinding::Redo => actions.push(Action::Redo),
             ActionBinding::ShowQuickToolbar => {
-                self.ui.show_quick_toolbar = !self.ui.show_quick_toolbar;
+                self.ui.primary_shell.toggle_tool_panel();
             }
             ActionBinding::ToggleReferenceImages => {
                 actions.push(Action::ToggleAllReferenceImages);
             }
             ActionBinding::QuickSculptMode => {
                 // Context already checked in phase 1
-                actions.push(Action::EnterSculptMode);
+                actions.push(Action::SetInteractionMode(InteractionMode::Sculpt(
+                    self.doc.sculpt_state.selected_brush(),
+                )));
             }
             ActionBinding::ExitSculptMode => {
                 // Context already checked in phase 1
-                actions.push(Action::SetTool(ActiveTool::Select));
+                actions.push(Action::SetInteractionMode(InteractionMode::Select));
             }
 
-            // --- Sculpt brush modes (direct state mutation for zero-latency) ---
+            // --- Interaction rail shortcuts ---
             ActionBinding::SculptBrushAdd => {
-                set_brush_mode(&mut self.doc.sculpt_state, BrushMode::Add);
+                actions.push(Action::SetInteractionMode(InteractionMode::Sculpt(
+                    BrushMode::Add,
+                )));
             }
             ActionBinding::SculptBrushCarve => {
-                set_brush_mode(&mut self.doc.sculpt_state, BrushMode::Carve);
+                actions.push(Action::SetInteractionMode(InteractionMode::Sculpt(
+                    BrushMode::Carve,
+                )));
             }
             ActionBinding::SculptBrushSmooth => {
-                set_brush_mode(&mut self.doc.sculpt_state, BrushMode::Smooth);
+                actions.push(Action::SetInteractionMode(InteractionMode::Sculpt(
+                    BrushMode::Smooth,
+                )));
             }
             ActionBinding::SculptBrushFlatten => {
-                set_brush_mode(&mut self.doc.sculpt_state, BrushMode::Flatten);
+                actions.push(Action::SetInteractionMode(InteractionMode::Sculpt(
+                    BrushMode::Flatten,
+                )));
             }
             ActionBinding::SculptBrushInflate => {
-                set_brush_mode(&mut self.doc.sculpt_state, BrushMode::Inflate);
+                actions.push(Action::SetInteractionMode(InteractionMode::Sculpt(
+                    BrushMode::Inflate,
+                )));
             }
             ActionBinding::SculptBrushGrab => {
-                if self.doc.sculpt_state.is_active() {
-                    self.doc.sculpt_state.set_selected_brush(BrushMode::Grab);
-                }
+                actions.push(Action::SetInteractionMode(InteractionMode::Sculpt(
+                    BrushMode::Grab,
+                )));
             }
             ActionBinding::SculptBrushShrink => {
                 if self.doc.sculpt_state.is_active() {

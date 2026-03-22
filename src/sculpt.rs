@@ -45,6 +45,26 @@ pub enum BrushMode {
 }
 
 impl BrushMode {
+    pub const ALL: [Self; 6] = [
+        Self::Add,
+        Self::Carve,
+        Self::Smooth,
+        Self::Flatten,
+        Self::Inflate,
+        Self::Grab,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Add => "Add",
+            Self::Carve => "Carve",
+            Self::Smooth => "Smooth",
+            Self::Flatten => "Flatten",
+            Self::Inflate => "Inflate",
+            Self::Grab => "Grab",
+        }
+    }
+
     pub fn sign(self) -> f32 {
         match self {
             Self::Add => -1.0,  // decrease distance = add material

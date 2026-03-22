@@ -1197,7 +1197,9 @@ pub fn draw(
                 } else {
                     ui.horizontal(|ui| {
                         if ui.button("Exit Sculpt Mode").clicked() {
-                            actions.push(Action::SetTool(crate::sculpt::ActiveTool::Select));
+                            actions.push(Action::SetInteractionMode(
+                                crate::app::state::InteractionMode::Select,
+                            ));
                         }
                         if let Some(input_id) = input {
                             if ui.button("Re-bake").clicked() {

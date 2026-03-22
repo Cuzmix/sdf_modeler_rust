@@ -110,6 +110,10 @@ impl SdfApp {
             self.doc
                 .sculpt_state
                 .activate_preserving_session(sculpt_id, Some(extent));
+            self.ui.primary_shell.interaction_mode =
+                crate::app::state::InteractionMode::Sculpt(self.doc.sculpt_state.selected_brush());
+            self.ui.measurement_mode = false;
+            self.ui.measurement_points.clear();
             self.ensure_brush_settings_tab();
         }
         self.gpu.buffer_dirty = true;
@@ -168,6 +172,10 @@ impl SdfApp {
             self.doc
                 .sculpt_state
                 .activate_preserving_session(new_id, Some(extent));
+            self.ui.primary_shell.interaction_mode =
+                crate::app::state::InteractionMode::Sculpt(self.doc.sculpt_state.selected_brush());
+            self.ui.measurement_mode = false;
+            self.ui.measurement_points.clear();
             self.ensure_brush_settings_tab();
         } else if let Some(sculpt_id) = existing_sculpt {
             if let Some(node) = self.doc.scene.nodes.get_mut(&sculpt_id) {
@@ -192,6 +200,10 @@ impl SdfApp {
             self.doc
                 .sculpt_state
                 .activate_preserving_session(sculpt_id, Some(extent));
+            self.ui.primary_shell.interaction_mode =
+                crate::app::state::InteractionMode::Sculpt(self.doc.sculpt_state.selected_brush());
+            self.ui.measurement_mode = false;
+            self.ui.measurement_points.clear();
             self.ensure_brush_settings_tab();
         }
         self.gpu.buffer_dirty = true;
