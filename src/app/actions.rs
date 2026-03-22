@@ -1,5 +1,6 @@
 use crate::graph::scene::{CsgOp, LightType, ModifierKind, NodeId, SdfPrimitive};
 use crate::sculpt::ActiveTool;
+use crate::settings::SelectionBehaviorSettings;
 use crate::ui::gizmo::GizmoMode;
 
 use super::BakeRequest;
@@ -232,6 +233,7 @@ pub enum Action {
     ApplyLightingPreset(LightingPreset),
 
     // ── Settings / GPU ───────────────────────────────────────────────
+    SetSelectionBehavior(SelectionBehaviorSettings),
     SettingsChanged,
     MarkBufferDirty,
 }

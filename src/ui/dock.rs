@@ -179,6 +179,8 @@ pub struct ViewportContext<'a> {
     pub solo_label: Option<String>,
     /// Show cursor distance readout overlay.
     pub show_distance_readout: &'a mut bool,
+    /// Multi-selection transform behavior profile.
+    pub selection_behavior: crate::settings::SelectionBehaviorSettings,
     /// Two-point measurement tool mode flag.
     pub measurement_mode: &'a mut bool,
     /// Collected measurement points in world space.
@@ -271,6 +273,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.viewport.fps_info,
                     self.actions,
                     &self.settings.snap,
+                    &self.viewport.selection_behavior,
                     self.viewport.isolation_label.as_deref(),
                     self.viewport.turntable_active,
                     self.viewport.last_sculpt_hit,
@@ -323,6 +326,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.material_library,
                     self.multi_transform_edit,
                     self.viewport.gizmo_space,
+                    &self.viewport.selection_behavior,
                 );
                 // Defensive: clear selection if the node was deleted by properties panel
                 if let Some(sel) = self.node_graph_state.selected {

@@ -26,6 +26,28 @@ fn push_platform_unsupported_toast(app: &mut SdfApp, feature: &str) {
     });
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct SelectionBehaviorApplyResult {
+    changed: bool,
+    requires_shader_rebuild: bool,
+    requires_buffer_dirty: bool,
+}
+
+fn apply_selection_behavior_settings(
+    settings: &mut crate::settings::Settings,
+    next: crate::settings::SelectionBehaviorSettings,
+) -> SelectionBehaviorApplyResult {
+    let changed = settings.selection_behavior != next;
+    if changed {
+        settings.selection_behavior = next;
+    }
+    SelectionBehaviorApplyResult {
+        changed,
+        requires_shader_rebuild: false,
+        requires_buffer_dirty: false,
+    }
+}
+
 impl SdfApp {
     /// Process all collected actions. This is the single mutation point — the
     /// equivalent of a Redux reducer. All structural state changes flow through
@@ -986,6 +1008,13 @@ impl SdfApp {
                 }
 
                 // ── Settings / GPU ───────────────────────────────────
+                Action::SetSelectionBehavior(selection_behavior) => {
+                    let result =
+                        apply_selection_behavior_settings(&mut self.settings, selection_behavior);
+                    if result.changed {
+                        self.settings.save();
+                    }
+                }
                 Action::SettingsChanged => {
                     self.settings.save();
                     self.gpu.current_structure_key = 0;
@@ -1293,4 +1322,44 @@ fn find_parent_transform(
         }
         None
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{apply_selection_behavior_settings, SelectionBehaviorApplyResult};
+    use crate::settings::{GroupRotateDirection, Settings};
+
+    #[test]
+    fn selection_behavior_action_updates_settings_without_gpu_flags() {
+        let mut settings = Settings::default();
+        let mut updated = settings.selection_behavior;
+        updated.group_rotate_direction = GroupRotateDirection::Inverted;
+
+        let result = apply_selection_behavior_settings(&mut settings, updated);
+        assert_eq!(
+            result,
+            SelectionBehaviorApplyResult {
+                changed: true,
+                requires_shader_rebuild: false,
+                requires_buffer_dirty: false,
+            }
+        );
+        assert_eq!(settings.selection_behavior, updated);
+    }
+
+    #[test]
+    fn selection_behavior_action_is_noop_when_unchanged() {
+        let mut settings = Settings::default();
+        let unchanged = settings.selection_behavior;
+
+        let result = apply_selection_behavior_settings(&mut settings, unchanged);
+        assert_eq!(
+            result,
+            SelectionBehaviorApplyResult {
+                changed: false,
+                requires_shader_rebuild: false,
+                requires_buffer_dirty: false,
+            }
+        );
+    }
 }

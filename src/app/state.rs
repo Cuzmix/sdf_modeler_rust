@@ -13,6 +13,7 @@ use crate::graph::history::History;
 use crate::graph::scene::{MaterialParams, NodeId, Scene};
 use crate::mesh_import::TriMesh;
 use crate::sculpt::{ActiveTool, SculptState};
+use crate::settings::SelectionBehaviorSettings;
 use crate::ui::dock::Tab;
 use crate::ui::gizmo::{GizmoMode, GizmoSelection, GizmoSpace, GizmoState};
 use crate::ui::node_graph::NodeGraphState;
@@ -135,6 +136,7 @@ pub struct SculptBrushAdjustState {
 #[derive(Clone, Debug)]
 pub struct MultiTransformSessionState {
     pub selection_key: Vec<NodeId>,
+    pub behavior_key: SelectionBehaviorSettings,
     pub baseline_selection: Option<GizmoSelection>,
     pub position_delta: Vec3,
     pub rotation_delta_deg: Vec3,
@@ -145,6 +147,7 @@ impl Default for MultiTransformSessionState {
     fn default() -> Self {
         Self {
             selection_key: Vec::new(),
+            behavior_key: SelectionBehaviorSettings::default(),
             baseline_selection: None,
             position_delta: Vec3::ZERO,
             rotation_delta_deg: Vec3::ZERO,
@@ -154,13 +157,18 @@ impl Default for MultiTransformSessionState {
 }
 
 impl MultiTransformSessionState {
-    pub fn reset_for_selection(&mut self, selection_ids: &[NodeId]) -> bool {
+    pub fn reset_for_selection(
+        &mut self,
+        selection_ids: &[NodeId],
+        selection_behavior: SelectionBehaviorSettings,
+    ) -> bool {
         let mut normalized_selection = selection_ids.to_vec();
         normalized_selection.sort_unstable();
         normalized_selection.dedup();
 
-        if self.selection_key != normalized_selection {
+        if self.selection_key != normalized_selection || self.behavior_key != selection_behavior {
             self.selection_key = normalized_selection;
+            self.behavior_key = selection_behavior;
             self.baseline_selection = None;
             self.position_delta = Vec3::ZERO;
             self.rotation_delta_deg = Vec3::ZERO;
@@ -327,6 +335,7 @@ pub struct PerfState {
 mod tests {
     use super::*;
     use crate::mesh_import::TriMesh;
+    use crate::settings::{GroupRotateDirection, SelectionBehaviorSettings};
 
     /// Create a simple test mesh (two triangles forming a 2x2x0 quad).
     fn test_quad_mesh(num_triangles: usize) -> TriMesh {
@@ -424,17 +433,17 @@ mod tests {
     #[test]
     fn multi_transform_edit_state_resets_when_selection_changes() {
         let mut state = MultiTransformSessionState::default();
-        state.reset_for_selection(&[1, 2]);
+        state.reset_for_selection(&[1, 2], SelectionBehaviorSettings::default());
         state.position_delta = Vec3::new(1.0, 2.0, 3.0);
         state.rotation_delta_deg = Vec3::new(10.0, 20.0, 30.0);
         state.scale_factor = Vec3::splat(2.0);
 
-        state.reset_for_selection(&[1, 2]);
+        state.reset_for_selection(&[1, 2], SelectionBehaviorSettings::default());
         assert_eq!(state.position_delta, Vec3::new(1.0, 2.0, 3.0));
         assert_eq!(state.rotation_delta_deg, Vec3::new(10.0, 20.0, 30.0));
         assert_eq!(state.scale_factor, Vec3::splat(2.0));
 
-        state.reset_for_selection(&[2, 3]);
+        state.reset_for_selection(&[2, 3], SelectionBehaviorSettings::default());
         assert_eq!(state.position_delta, Vec3::ZERO);
         assert_eq!(state.rotation_delta_deg, Vec3::ZERO);
         assert_eq!(state.scale_factor, Vec3::ONE);
@@ -444,11 +453,27 @@ mod tests {
     #[test]
     fn multi_transform_edit_state_ignores_selection_order() {
         let mut state = MultiTransformSessionState::default();
-        state.reset_for_selection(&[1, 2]);
+        state.reset_for_selection(&[1, 2], SelectionBehaviorSettings::default());
         state.position_delta = Vec3::new(1.0, 2.0, 3.0);
 
-        state.reset_for_selection(&[2, 1]);
+        state.reset_for_selection(&[2, 1], SelectionBehaviorSettings::default());
         assert_eq!(state.position_delta, Vec3::new(1.0, 2.0, 3.0));
         assert_eq!(state.selection_key, vec![1, 2]);
+    }
+
+    #[test]
+    fn multi_transform_edit_state_resets_when_behavior_changes() {
+        let mut state = MultiTransformSessionState::default();
+        state.reset_for_selection(&[1, 2], SelectionBehaviorSettings::default());
+        state.position_delta = Vec3::new(1.0, 2.0, 3.0);
+
+        let mut updated_behavior = SelectionBehaviorSettings::default();
+        updated_behavior.group_rotate_direction = GroupRotateDirection::Inverted;
+        state.reset_for_selection(&[1, 2], updated_behavior);
+
+        assert_eq!(state.position_delta, Vec3::ZERO);
+        assert_eq!(state.rotation_delta_deg, Vec3::ZERO);
+        assert_eq!(state.scale_factor, Vec3::ONE);
+        assert_eq!(state.behavior_key, updated_behavior);
     }
 }

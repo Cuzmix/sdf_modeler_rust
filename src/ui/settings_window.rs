@@ -2,7 +2,9 @@ use eframe::egui;
 
 use crate::app::actions::{Action, ActionSink};
 use crate::keymap::{ActionBinding, KeyCombo, KeymapConfig, SerializableKey};
-use crate::settings::Settings;
+use crate::settings::{
+    GroupRotateDirection, MultiAxisOrientation, MultiPivotMode, Settings,
+};
 
 /// Draw the System Settings window. Pushes `Action::SettingsChanged` if a
 /// shader-affecting setting changed.
@@ -81,6 +83,72 @@ pub fn draw(
                             "How fast Ctrl+Alt+drag and touch twist roll the camera");
                         ui.checkbox(&mut settings.render.invert_roll, "Invert Roll")
                             .on_hover_text("Reverse the roll direction for both touch twist and Ctrl+Alt+drag");
+
+                        ui.separator();
+                        ui.label("Selection Behaviour (Multi-select)");
+                        let mut behavior = settings.selection_behavior;
+                        let mut behavior_changed = false;
+
+                        egui::ComboBox::from_id_salt("selection_behavior_axis_orientation")
+                            .selected_text(behavior.multi_axis_orientation.label())
+                            .show_ui(ui, |ui| {
+                                behavior_changed |= ui
+                                    .selectable_value(
+                                        &mut behavior.multi_axis_orientation,
+                                        MultiAxisOrientation::WorldZero,
+                                        MultiAxisOrientation::WorldZero.label(),
+                                    )
+                                    .changed();
+                                behavior_changed |= ui
+                                    .selectable_value(
+                                        &mut behavior.multi_axis_orientation,
+                                        MultiAxisOrientation::ActiveObject,
+                                        MultiAxisOrientation::ActiveObject.label(),
+                                    )
+                                    .changed();
+                            });
+
+                        egui::ComboBox::from_id_salt("selection_behavior_rotate_direction")
+                            .selected_text(behavior.group_rotate_direction.label())
+                            .show_ui(ui, |ui| {
+                                behavior_changed |= ui
+                                    .selectable_value(
+                                        &mut behavior.group_rotate_direction,
+                                        GroupRotateDirection::Standard,
+                                        GroupRotateDirection::Standard.label(),
+                                    )
+                                    .changed();
+                                behavior_changed |= ui
+                                    .selectable_value(
+                                        &mut behavior.group_rotate_direction,
+                                        GroupRotateDirection::Inverted,
+                                        GroupRotateDirection::Inverted.label(),
+                                    )
+                                    .changed();
+                            });
+
+                        egui::ComboBox::from_id_salt("selection_behavior_pivot_mode")
+                            .selected_text(behavior.multi_pivot_mode.label())
+                            .show_ui(ui, |ui| {
+                                behavior_changed |= ui
+                                    .selectable_value(
+                                        &mut behavior.multi_pivot_mode,
+                                        MultiPivotMode::SelectionCenter,
+                                        MultiPivotMode::SelectionCenter.label(),
+                                    )
+                                    .changed();
+                                behavior_changed |= ui
+                                    .selectable_value(
+                                        &mut behavior.multi_pivot_mode,
+                                        MultiPivotMode::ActiveObject,
+                                        MultiPivotMode::ActiveObject.label(),
+                                    )
+                                    .changed();
+                            });
+
+                        if behavior_changed && behavior != settings.selection_behavior {
+                            actions.push(Action::SetSelectionBehavior(behavior));
+                        }
                     });
 
                 // --- Snapping ---

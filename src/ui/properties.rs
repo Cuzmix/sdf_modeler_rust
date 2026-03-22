@@ -12,6 +12,7 @@ use crate::graph::scene::{
 use crate::graph::voxel;
 use crate::material_preset::{self, MaterialLibrary};
 use crate::sculpt::SculptState;
+use crate::settings::SelectionBehaviorSettings;
 use crate::ui::gizmo::{self, GizmoSpace};
 
 const SCALE_MIN: f32 = 0.01;
@@ -418,16 +419,26 @@ fn draw_material_editor(
         });
 }
 
-/// Draw properties panel for multiple selected nodes (batch editing).
-fn draw_multi_properties(
-    ui: &mut egui::Ui,
-    scene: &mut Scene,
+struct MultiPropertiesContext<'a> {
+    scene: &'a mut Scene,
     selected: Option<NodeId>,
-    selected_set: &HashSet<NodeId>,
-    actions: &mut ActionSink,
-    multi_transform_edit: &mut MultiTransformSessionState,
-    gizmo_space: &GizmoSpace,
-) {
+    selected_set: &'a HashSet<NodeId>,
+    actions: &'a mut ActionSink,
+    multi_transform_edit: &'a mut MultiTransformSessionState,
+    gizmo_space: &'a GizmoSpace,
+    selection_behavior: &'a SelectionBehaviorSettings,
+}
+
+/// Draw properties panel for multiple selected nodes (batch editing).
+fn draw_multi_properties(ui: &mut egui::Ui, ctx: &mut MultiPropertiesContext<'_>) {
+    let scene: &mut Scene = ctx.scene;
+    let selected = ctx.selected;
+    let selected_set = ctx.selected_set;
+    let actions: &mut ActionSink = ctx.actions;
+    let multi_transform_edit: &mut MultiTransformSessionState = ctx.multi_transform_edit;
+    let gizmo_space = ctx.gizmo_space;
+    let selection_behavior = ctx.selection_behavior;
+
     let count = selected_set.len();
     ui.heading(format!("{} nodes selected", count));
     ui.separator();
@@ -447,10 +458,10 @@ fn draw_multi_properties(
 
     let mut selection_key: Vec<_> = selected_set.iter().copied().collect();
     selection_key.sort_unstable();
-    multi_transform_edit.reset_for_selection(&selection_key);
+    multi_transform_edit.reset_for_selection(&selection_key, *selection_behavior);
     if multi_transform_edit.baseline_selection.is_none() {
         multi_transform_edit.baseline_selection =
-            gizmo::collect_gizmo_selection(scene, selected, selected_set);
+            gizmo::collect_gizmo_selection(scene, selected, selected_set, selection_behavior);
     }
 
     let all_have_color = ids.iter().all(|id| {
@@ -671,18 +682,20 @@ pub fn draw(
     material_library: &mut MaterialLibrary,
     multi_transform_edit: &mut MultiTransformSessionState,
     gizmo_space: &GizmoSpace,
+    selection_behavior: &SelectionBehaviorSettings,
 ) {
     // Multi-select: show batch properties when more than 1 node is selected
     if selected_set.len() > 1 {
-        draw_multi_properties(
-            ui,
+        let mut multi_ctx = MultiPropertiesContext {
             scene,
             selected,
             selected_set,
             actions,
             multi_transform_edit,
             gizmo_space,
-        );
+            selection_behavior,
+        };
+        draw_multi_properties(ui, &mut multi_ctx);
         return;
     }
 

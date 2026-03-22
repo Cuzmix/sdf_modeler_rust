@@ -10,7 +10,10 @@ use crate::gpu::camera::{Camera, CameraUniform};
 use crate::gpu::picking::PendingPick;
 use crate::graph::scene::{CsgOp, ModifierKind, NodeData, NodeId, Scene, SdfPrimitive};
 use crate::sculpt::{self, ActiveTool, BrushMode, SculptBrushProfile, SculptState};
-use crate::settings::{EnvironmentBackgroundMode, SnapConfig};
+use crate::settings::{
+    EnvironmentBackgroundMode, GroupRotateDirection, MultiAxisOrientation, MultiPivotMode,
+    SelectionBehaviorSettings, SnapConfig,
+};
 use crate::ui::gizmo::{self, GizmoMode, GizmoSpace, GizmoState};
 
 use super::ViewportResources;
@@ -44,17 +47,19 @@ fn sync_multi_transform_session_from_scene(
     selected: Option<NodeId>,
     selected_set: &std::collections::HashSet<NodeId>,
     gizmo_space: &GizmoSpace,
+    selection_behavior: &SelectionBehaviorSettings,
     session: &mut MultiTransformSessionState,
 ) {
     if selected_set.len() <= 1 {
-        session.reset_for_selection(&[]);
+        session.reset_for_selection(&[], *selection_behavior);
         return;
     }
 
     let selection_key = selection_set_key(selected_set);
-    session.reset_for_selection(&selection_key);
+    session.reset_for_selection(&selection_key, *selection_behavior);
     if session.baseline_selection.is_none() {
-        session.baseline_selection = gizmo::collect_gizmo_selection(scene, selected, selected_set);
+        session.baseline_selection =
+            gizmo::collect_gizmo_selection(scene, selected, selected_set, selection_behavior);
     }
 
     let Some(baseline_selection) = session.baseline_selection.as_ref() else {
@@ -85,6 +90,99 @@ fn sync_multi_transform_session_from_scene(
         } else {
             glam::Vec3::ONE
         };
+    }
+}
+
+fn draw_selection_behavior_panel(
+    ui: &mut egui::Ui,
+    selected: Option<NodeId>,
+    selected_set: &std::collections::HashSet<NodeId>,
+    active_tool: &ActiveTool,
+    selection_behavior: &SelectionBehaviorSettings,
+    actions: &mut ActionSink,
+) {
+    let mut selected_count = selected_set.len();
+    if let Some(primary_selected) = selected {
+        if !selected_set.contains(&primary_selected) {
+            selected_count += 1;
+        }
+    }
+    if selected_count <= 1 || *active_tool != ActiveTool::Select {
+        return;
+    }
+
+    let overlay_frame = egui::Frame::window(&ui.ctx().style())
+        .fill(egui::Color32::from_rgba_premultiplied(30, 30, 38, 220));
+    let panel_id = ui.id().with("selection_behavior_panel");
+    let mut edited = *selection_behavior;
+    let mut changed = false;
+
+    egui::Window::new(egui::RichText::new("Selection Behaviour").size(11.0))
+        .id(panel_id)
+        .resizable(false)
+        .collapsible(false)
+        .frame(overlay_frame)
+        .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-8.0, -8.0))
+        .show(ui.ctx(), |ui| {
+            ui.small(format!("{selected_count} selected"));
+
+            ui.horizontal(|ui| {
+                ui.label("Axes");
+                changed |= ui
+                    .selectable_value(
+                        &mut edited.multi_axis_orientation,
+                        MultiAxisOrientation::WorldZero,
+                        MultiAxisOrientation::WorldZero.label(),
+                    )
+                    .changed();
+                changed |= ui
+                    .selectable_value(
+                        &mut edited.multi_axis_orientation,
+                        MultiAxisOrientation::ActiveObject,
+                        MultiAxisOrientation::ActiveObject.label(),
+                    )
+                    .changed();
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("Rotate");
+                changed |= ui
+                    .selectable_value(
+                        &mut edited.group_rotate_direction,
+                        GroupRotateDirection::Standard,
+                        GroupRotateDirection::Standard.label(),
+                    )
+                    .changed();
+                changed |= ui
+                    .selectable_value(
+                        &mut edited.group_rotate_direction,
+                        GroupRotateDirection::Inverted,
+                        GroupRotateDirection::Inverted.label(),
+                    )
+                    .changed();
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("Pivot");
+                changed |= ui
+                    .selectable_value(
+                        &mut edited.multi_pivot_mode,
+                        MultiPivotMode::SelectionCenter,
+                        MultiPivotMode::SelectionCenter.label(),
+                    )
+                    .changed();
+                changed |= ui
+                    .selectable_value(
+                        &mut edited.multi_pivot_mode,
+                        MultiPivotMode::ActiveObject,
+                        MultiPivotMode::ActiveObject.label(),
+                    )
+                    .changed();
+            });
+        });
+
+    if changed && edited != *selection_behavior {
+        actions.push(Action::SetSelectionBehavior(edited));
     }
 }
 
@@ -570,6 +668,7 @@ pub fn draw(
     fps_info: Option<(f64, f64)>, // (fps, frame_ms)
     actions: &mut ActionSink,
     snap_config: &SnapConfig,
+    selection_behavior: &SelectionBehaviorSettings,
     isolation_label: Option<&str>,
     turntable_active: bool,
     last_sculpt_hit: Option<glam::Vec3>,
@@ -937,6 +1036,7 @@ pub fn draw(
         pivot_offset,
         rect,
         snap_config,
+        selection_behavior,
         gizmo_visible,
     );
     output.gizmo_drag_active = !matches!(gizmo_state, GizmoState::Idle);
@@ -945,7 +1045,17 @@ pub fn draw(
         *selected,
         selected_set,
         gizmo_space,
+        selection_behavior,
         multi_transform_session,
+    );
+
+    draw_selection_behavior_panel(
+        ui,
+        *selected,
+        selected_set,
+        active_tool,
+        selection_behavior,
+        actions,
     );
 
     // --- Interaction priority: sculpt > gizmo > pick > orbit ---

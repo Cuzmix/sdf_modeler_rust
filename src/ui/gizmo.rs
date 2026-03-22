@@ -3,7 +3,10 @@ use glam::{Mat4, Quat, Vec3, Vec4};
 
 use crate::gpu::camera::Camera;
 use crate::graph::scene::{NodeData, NodeId, Scene};
-use crate::settings::SnapConfig;
+use crate::settings::{
+    GroupRotateDirection, MultiAxisOrientation, MultiPivotMode, SelectionBehaviorSettings,
+    SnapConfig,
+};
 
 // ---------------------------------------------------------------------------
 // Types
@@ -351,6 +354,8 @@ pub(crate) struct GizmoSelection {
     targets: Vec<GizmoTarget>,
     base_center_world: Vec3,
     reference_rotation_world: Quat,
+    reference_target_id: NodeId,
+    pivot_mode: MultiPivotMode,
 }
 
 #[allow(dead_code)]
@@ -471,6 +476,7 @@ pub(crate) fn collect_gizmo_selection(
     scene: &Scene,
     selected: Option<NodeId>,
     selected_set: &std::collections::HashSet<NodeId>,
+    selection_behavior: &SelectionBehaviorSettings,
 ) -> Option<GizmoSelection> {
     let mut ordered_ids = Vec::new();
     if let Some(primary_selected) = selected {
@@ -514,14 +520,31 @@ pub(crate) fn collect_gizmo_selection(
         return None;
     }
 
-    let mut base_center_world = Vec3::ZERO;
+    let reference_target = selected
+        .and_then(|selected_id| targets.iter().find(|target| target.node_id == selected_id))
+        .unwrap_or(&targets[0]);
+    let reference_target_id = reference_target.node_id;
+
+    let mut selection_center_world = Vec3::ZERO;
     for target in &targets {
-        base_center_world += target.world_position;
+        selection_center_world += target.world_position;
     }
-    base_center_world /= targets.len() as f32;
+    selection_center_world /= targets.len() as f32;
+
+    let base_center_world = match selection_behavior.multi_pivot_mode {
+        MultiPivotMode::SelectionCenter => selection_center_world,
+        MultiPivotMode::ActiveObject => reference_target.world_position,
+    };
+
+    let reference_rotation_world = match selection_behavior.multi_axis_orientation {
+        MultiAxisOrientation::WorldZero => Quat::IDENTITY,
+        MultiAxisOrientation::ActiveObject => reference_target.world_rotation,
+    };
 
     Some(GizmoSelection {
-        reference_rotation_world: targets[0].world_rotation,
+        reference_rotation_world,
+        reference_target_id,
+        pivot_mode: selection_behavior.multi_pivot_mode,
         targets,
         base_center_world,
     })
@@ -557,6 +580,10 @@ fn current_targets_from_baseline(
         .iter()
         .map(|target| build_gizmo_target(scene, target.node_id, &parent_map))
         .collect()
+}
+
+fn find_target_by_id(targets: &[GizmoTarget], target_id: NodeId) -> Option<&GizmoTarget> {
+    targets.iter().find(|target| target.node_id == target_id)
 }
 
 fn rotation_delta_quat_from_euler(
@@ -646,8 +673,16 @@ fn compute_world_axis_directions(reference_rotation_world: Quat, space: &GizmoSp
     }
 }
 
-fn multi_selection_axis_directions() -> [Vec3; 3] {
-    [Vec3::X, Vec3::Y, Vec3::Z]
+fn multi_selection_axis_directions(
+    reference_rotation_world: Quat,
+    selection_behavior: &SelectionBehaviorSettings,
+) -> [Vec3; 3] {
+    match selection_behavior.multi_axis_orientation {
+        MultiAxisOrientation::WorldZero => [Vec3::X, Vec3::Y, Vec3::Z],
+        MultiAxisOrientation::ActiveObject => {
+            compute_world_axis_directions(reference_rotation_world, &GizmoSpace::Local)
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -842,14 +877,22 @@ fn draw_rotation_ring(
     }
 }
 
-fn rotation_drag_sign(axis_dir: Vec3, view_dir: Vec3, multi_selection: bool) -> f32 {
+fn rotation_drag_sign(
+    axis_dir: Vec3,
+    view_dir: Vec3,
+    multi_selection: bool,
+    group_rotate_direction: GroupRotateDirection,
+) -> f32 {
     let facing_sign = if axis_dir.dot(view_dir) >= 0.0 {
         1.0
     } else {
         -1.0
     };
     if multi_selection {
-        -facing_sign
+        match group_rotate_direction {
+            GroupRotateDirection::Standard => facing_sign,
+            GroupRotateDirection::Inverted => -facing_sign,
+        }
     } else {
         facing_sign
     }
@@ -1292,15 +1335,24 @@ pub(crate) fn derive_multi_transform_readout(
         return None;
     }
 
-    let mut current_center_world = Vec3::ZERO;
+    let mut current_selection_center_world = Vec3::ZERO;
     for target in &current_targets {
-        current_center_world += target.world_position;
+        current_selection_center_world += target.world_position;
     }
-    current_center_world /= current_targets.len() as f32;
-    let position_delta = current_center_world - baseline.base_center_world;
+    current_selection_center_world /= current_targets.len() as f32;
 
-    let reference_current = &current_targets[0];
-    let reference_baseline = &baseline.targets[0];
+    let current_pivot_world = match baseline.pivot_mode {
+        MultiPivotMode::SelectionCenter => current_selection_center_world,
+        MultiPivotMode::ActiveObject => find_target_by_id(&current_targets, baseline.reference_target_id)
+            .map(|target| target.world_position)
+            .unwrap_or(current_targets[0].world_position),
+    };
+    let position_delta = current_pivot_world - baseline.base_center_world;
+
+    let reference_current = find_target_by_id(&current_targets, baseline.reference_target_id)
+        .unwrap_or(&current_targets[0]);
+    let reference_baseline = find_target_by_id(&baseline.targets, baseline.reference_target_id)
+        .unwrap_or(&baseline.targets[0]);
     let rotation_delta_world =
         reference_current.world_rotation * reference_baseline.world_rotation.inverse();
     let rotation_delta_rad = rotation_delta_euler_from_world_quat(
@@ -1312,8 +1364,8 @@ pub(crate) fn derive_multi_transform_readout(
 
     let scale_enabled = baseline.supports_scale();
     let scale_factor = if scale_enabled {
-        let current_scale = current_targets[0].local_transform.scale;
-        let baseline_scale = baseline.targets[0].local_transform.scale;
+        let current_scale = reference_current.local_transform.scale;
+        let baseline_scale = reference_baseline.local_transform.scale;
         Vec3::new(
             current_scale.x / baseline_scale.x.max(0.01),
             current_scale.y / baseline_scale.y.max(0.01),
@@ -1451,6 +1503,7 @@ pub fn draw_and_interact(
     pivot_offset: &mut Vec3,
     rect: Rect,
     snap_config: &SnapConfig,
+    selection_behavior: &SelectionBehaviorSettings,
     gizmo_visible: bool,
 ) -> bool {
     if !gizmo_visible {
@@ -1478,7 +1531,7 @@ pub fn draw_and_interact(
     };
 
     let selection = if multi_selection_active {
-        collect_gizmo_selection(scene, selected, selected_set)
+        collect_gizmo_selection(scene, selected, selected_set, selection_behavior)
     } else {
         None
     };
@@ -1499,9 +1552,11 @@ pub fn draw_and_interact(
                 *gizmo_state = GizmoState::Idle;
                 return false;
             }
-            // Multi-selection gizmo axes are fixed to world orientation so axis
-            // direction is stable regardless of which target is primary/last-selected.
-            axes = multi_selection_axis_directions();
+            // Multi-selection gizmo axes follow user-configured selection behavior.
+            axes = multi_selection_axis_directions(
+                selection.reference_rotation_world,
+                selection_behavior,
+            );
             gizmo_center = selection.base_center_world;
         } else if let GizmoState::DraggingMulti { drag_session, .. } = gizmo_state {
             axes = drag_session.axis_directions;
@@ -1603,7 +1658,12 @@ pub fn draw_and_interact(
             let axis_dir = axes[axis_idx];
             let view_dir = camera.eye() - gizmo_center;
             let rotation_sign = if *gizmo_mode == GizmoMode::Rotate {
-                rotation_drag_sign(axis_dir, view_dir, multi_selection_active)
+                rotation_drag_sign(
+                    axis_dir,
+                    view_dir,
+                    multi_selection_active,
+                    selection_behavior.group_rotate_direction,
+                )
             } else {
                 1.0
             };
@@ -1918,7 +1978,13 @@ mod tests {
         }
 
         let selected_set = HashSet::from([left, right]);
-        let selection = collect_gizmo_selection(&scene, Some(left), &selected_set).unwrap();
+        let selection = collect_gizmo_selection(
+            &scene,
+            Some(left),
+            &selected_set,
+            &SelectionBehaviorSettings::default(),
+        )
+        .unwrap();
         let drag_session = build_drag_session(
             &selection,
             [Vec3::X, Vec3::Y, Vec3::Z],
@@ -1956,7 +2022,13 @@ mod tests {
         }
 
         let selected_set = HashSet::from([left, right]);
-        let selection = collect_gizmo_selection(&scene, Some(left), &selected_set).unwrap();
+        let selection = collect_gizmo_selection(
+            &scene,
+            Some(left),
+            &selected_set,
+            &SelectionBehaviorSettings::default(),
+        )
+        .unwrap();
         let drag_session = build_drag_session(
             &selection,
             [Vec3::X, Vec3::Y, Vec3::Z],
@@ -1995,7 +2067,13 @@ mod tests {
         }
 
         let selected_set = HashSet::from([child]);
-        let selection = collect_gizmo_selection(&scene, Some(child), &selected_set).unwrap();
+        let selection = collect_gizmo_selection(
+            &scene,
+            Some(child),
+            &selected_set,
+            &SelectionBehaviorSettings::default(),
+        )
+        .unwrap();
         let drag_session = build_drag_session(
             &selection,
             [Vec3::X, Vec3::Y, Vec3::Z],
@@ -2021,7 +2099,13 @@ mod tests {
         let parent = scene.create_transform(Some(child));
 
         let selected_set = HashSet::from([child, parent]);
-        let selection = collect_gizmo_selection(&scene, Some(child), &selected_set).unwrap();
+        let selection = collect_gizmo_selection(
+            &scene,
+            Some(child),
+            &selected_set,
+            &SelectionBehaviorSettings::default(),
+        )
+        .unwrap();
 
         assert_eq!(selection.targets.len(), 1);
         assert_eq!(selection.targets[0].node_id, parent);
@@ -2049,7 +2133,13 @@ mod tests {
         }
 
         let selected_set = HashSet::from([child]);
-        let selection = collect_gizmo_selection(&scene, Some(child), &selected_set).unwrap();
+        let selection = collect_gizmo_selection(
+            &scene,
+            Some(child),
+            &selected_set,
+            &SelectionBehaviorSettings::default(),
+        )
+        .unwrap();
         let start_world_position = selection.targets[0].world_position;
         let drag_session = build_drag_session(
             &selection,
@@ -2066,7 +2156,13 @@ mod tests {
             Vec3::new(2.0, 0.0, 0.0),
         );
 
-        let moved_selection = collect_gizmo_selection(&scene, Some(child), &selected_set).unwrap();
+        let moved_selection = collect_gizmo_selection(
+            &scene,
+            Some(child),
+            &selected_set,
+            &SelectionBehaviorSettings::default(),
+        )
+        .unwrap();
         assert_vec3_close(
             moved_selection.targets[0].world_position,
             start_world_position + Vec3::new(2.0, 0.0, 0.0),
@@ -2091,7 +2187,13 @@ mod tests {
         }
 
         let selected_set = HashSet::from([left, right]);
-        let baseline = collect_gizmo_selection(&scene, Some(left), &selected_set).unwrap();
+        let baseline = collect_gizmo_selection(
+            &scene,
+            Some(left),
+            &selected_set,
+            &SelectionBehaviorSettings::default(),
+        )
+        .unwrap();
 
         apply_multi_transform_from_baseline(
             &mut scene,
@@ -2128,7 +2230,13 @@ mod tests {
         let primitive = scene.create_primitive(SdfPrimitive::Box);
 
         let selected_set = HashSet::from([sculpt, primitive]);
-        let baseline = collect_gizmo_selection(&scene, Some(primitive), &selected_set).unwrap();
+        let baseline = collect_gizmo_selection(
+            &scene,
+            Some(primitive),
+            &selected_set,
+            &SelectionBehaviorSettings::default(),
+        )
+        .unwrap();
         let readout =
             derive_multi_transform_readout(&scene, &baseline, &GizmoSpace::World, Vec3::ZERO)
                 .unwrap();
@@ -2145,19 +2253,85 @@ mod tests {
     }
 
     #[test]
-    fn rotation_drag_sign_flips_only_for_multi_selection() {
-        assert_eq!(rotation_drag_sign(Vec3::Z, Vec3::Z, false), 1.0);
-        assert_eq!(rotation_drag_sign(Vec3::Z, Vec3::Z, true), -1.0);
-        assert_eq!(rotation_drag_sign(Vec3::Z, -Vec3::Z, false), -1.0);
-        assert_eq!(rotation_drag_sign(Vec3::Z, -Vec3::Z, true), 1.0);
+    fn rotation_drag_sign_respects_group_direction_setting() {
+        assert_eq!(
+            rotation_drag_sign(Vec3::Z, Vec3::Z, false, GroupRotateDirection::Standard),
+            1.0
+        );
+        assert_eq!(
+            rotation_drag_sign(Vec3::Z, Vec3::Z, true, GroupRotateDirection::Standard),
+            1.0
+        );
+        assert_eq!(
+            rotation_drag_sign(Vec3::Z, Vec3::Z, true, GroupRotateDirection::Inverted),
+            -1.0
+        );
+        assert_eq!(
+            rotation_drag_sign(Vec3::Z, -Vec3::Z, true, GroupRotateDirection::Standard),
+            -1.0
+        );
+        assert_eq!(
+            rotation_drag_sign(Vec3::Z, -Vec3::Z, true, GroupRotateDirection::Inverted),
+            1.0
+        );
     }
 
     #[test]
     fn multi_selection_axes_are_world_aligned() {
-        let axes = multi_selection_axis_directions();
+        let behavior = SelectionBehaviorSettings::default();
+        let axes = multi_selection_axis_directions(Quat::IDENTITY, &behavior);
         assert_vec3_close(axes[0], Vec3::X);
         assert_vec3_close(axes[1], Vec3::Y);
         assert_vec3_close(axes[2], Vec3::Z);
+    }
+
+    #[test]
+    fn multi_selection_axes_follow_active_object_when_configured() {
+        let mut scene = empty_scene();
+        let primary = scene.create_primitive(SdfPrimitive::Sphere);
+        let secondary = scene.create_primitive(SdfPrimitive::Box);
+
+        if let Some(NodeData::Primitive { rotation, .. }) =
+            scene.nodes.get_mut(&primary).map(|node| &mut node.data)
+        {
+            *rotation = Vec3::new(0.0, 0.0, std::f32::consts::FRAC_PI_2);
+        }
+
+        let selected_set = HashSet::from([primary, secondary]);
+        let mut behavior = SelectionBehaviorSettings::default();
+        behavior.multi_axis_orientation = MultiAxisOrientation::ActiveObject;
+        let selection =
+            collect_gizmo_selection(&scene, Some(primary), &selected_set, &behavior).unwrap();
+        let axes = multi_selection_axis_directions(selection.reference_rotation_world, &behavior);
+
+        let expected_x = (selection.reference_rotation_world * Vec3::X).normalize_or_zero();
+        assert_vec3_close(axes[0], expected_x);
+        assert!((axes[0] - Vec3::X).length() > 1e-4);
+    }
+
+    #[test]
+    fn active_object_pivot_mode_uses_primary_target_world_position() {
+        let mut scene = empty_scene();
+        let left = scene.create_primitive(SdfPrimitive::Sphere);
+        let right = scene.create_primitive(SdfPrimitive::Sphere);
+
+        if let Some(NodeData::Primitive { position, .. }) =
+            scene.nodes.get_mut(&left).map(|node| &mut node.data)
+        {
+            *position = Vec3::new(-2.0, 0.0, 0.0);
+        }
+        if let Some(NodeData::Primitive { position, .. }) =
+            scene.nodes.get_mut(&right).map(|node| &mut node.data)
+        {
+            *position = Vec3::new(2.0, 0.0, 0.0);
+        }
+
+        let selected_set = HashSet::from([left, right]);
+        let mut behavior = SelectionBehaviorSettings::default();
+        behavior.multi_pivot_mode = MultiPivotMode::ActiveObject;
+        let selection = collect_gizmo_selection(&scene, Some(right), &selected_set, &behavior).unwrap();
+
+        assert_vec3_close(selection.base_center_world, Vec3::new(2.0, 0.0, 0.0));
     }
 
     #[test]

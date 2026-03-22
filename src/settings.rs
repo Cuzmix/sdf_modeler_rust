@@ -154,6 +154,76 @@ impl Default for SnapConfig {
 }
 
 // ---------------------------------------------------------------------------
+// Multi-selection transform behavior
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum MultiAxisOrientation {
+    #[default]
+    WorldZero,
+    ActiveObject,
+}
+
+impl MultiAxisOrientation {
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::WorldZero => "World (Zero)",
+            Self::ActiveObject => "Active Object",
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum GroupRotateDirection {
+    #[default]
+    Standard,
+    Inverted,
+}
+
+impl GroupRotateDirection {
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Standard => "Standard",
+            Self::Inverted => "Inverted",
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum MultiPivotMode {
+    #[default]
+    SelectionCenter,
+    ActiveObject,
+}
+
+impl MultiPivotMode {
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::SelectionCenter => "Selection Center",
+            Self::ActiveObject => "Active Object",
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[serde(default)]
+pub struct SelectionBehaviorSettings {
+    pub multi_axis_orientation: MultiAxisOrientation,
+    pub group_rotate_direction: GroupRotateDirection,
+    pub multi_pivot_mode: MultiPivotMode,
+}
+
+impl Default for SelectionBehaviorSettings {
+    fn default() -> Self {
+        Self {
+            multi_axis_orientation: MultiAxisOrientation::WorldZero,
+            group_rotate_direction: GroupRotateDirection::Standard,
+            multi_pivot_mode: MultiPivotMode::SelectionCenter,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Export presets
 // ---------------------------------------------------------------------------
 
@@ -229,6 +299,8 @@ pub struct Settings {
     pub export_presets: Vec<ExportPreset>,
     #[serde(default)]
     pub keymap: KeymapConfig,
+    #[serde(default)]
+    pub selection_behavior: SelectionBehaviorSettings,
     #[serde(default = "default_true")]
     pub last_clean_exit: bool,
 }
@@ -251,6 +323,7 @@ impl Default for Settings {
             bookmarks: default_bookmarks(),
             export_presets: default_export_presets(),
             keymap: KeymapConfig::default(),
+            selection_behavior: SelectionBehaviorSettings::default(),
             last_clean_exit: true,
         }
     }
@@ -907,7 +980,8 @@ impl RenderConfig {
 mod tests {
     use super::{
         AmbientOcclusionMode, BackgroundMode, EnvironmentBackgroundMode, EnvironmentSource,
-        LocalReflectionMode, RenderConfig, ShadingMode,
+        GroupRotateDirection, LocalReflectionMode, MultiAxisOrientation, MultiPivotMode,
+        RenderConfig, SelectionBehaviorSettings, Settings, ShadingMode,
     };
 
     #[test]
@@ -1094,6 +1168,29 @@ mod tests {
         assert_eq!(
             config.environment_background_blur,
             defaults.environment_background_blur
+        );
+    }
+
+    #[test]
+    fn selection_behavior_defaults_are_expected() {
+        let defaults = SelectionBehaviorSettings::default();
+        assert_eq!(defaults.multi_axis_orientation, MultiAxisOrientation::WorldZero);
+        assert_eq!(defaults.group_rotate_direction, GroupRotateDirection::Standard);
+        assert_eq!(defaults.multi_pivot_mode, MultiPivotMode::SelectionCenter);
+    }
+
+    #[test]
+    fn settings_legacy_deserialize_defaults_selection_behavior() {
+        let mut legacy = serde_json::to_value(Settings::default()).expect("serialize settings");
+        legacy
+            .as_object_mut()
+            .expect("settings object")
+            .remove("selection_behavior");
+
+        let parsed: Settings = serde_json::from_value(legacy).expect("deserialize settings");
+        assert_eq!(
+            parsed.selection_behavior,
+            SelectionBehaviorSettings::default()
         );
     }
 }

@@ -126,6 +126,7 @@ impl SdfApp {
             }
         }
 
+        let selection_behavior = self.settings.selection_behavior;
         let mut tab_viewer = SdfTabViewer {
             camera: &mut self.doc.camera,
             scene: &mut self.doc.scene,
@@ -159,6 +160,7 @@ impl SdfApp {
                 soloed_light: self.doc.soloed_light,
                 solo_label: solo_label.clone(),
                 show_distance_readout: &mut self.ui.show_distance_readout,
+                selection_behavior,
                 measurement_mode: &mut self.ui.measurement_mode,
                 measurement_points: &mut self.ui.measurement_points,
             },
