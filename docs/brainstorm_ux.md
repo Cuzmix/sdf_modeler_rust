@@ -1,6 +1,6 @@
 # Sculpt-First Touch UI
 
-## Rev 2 Direction
+## Rev 3 Direction
 
 Rev 2 keeps the viewport-first shell and tightens the interaction model:
 
@@ -17,7 +17,7 @@ This remains a shell and workflow refactor, not a document-management redesign.
 - Make modeling and sculpting mode switches feel immediate instead of panel-driven.
 - Remove routine dependence on node-graph wiring for common workflows.
 - Preserve expert graph workflows through `egui_dock` without exposing them as the default path.
-- Use bounded floating shell windows for flexibility while protecting touch ergonomics.
+- Use default `egui::Window` behavior for floating shell panels and keep `egui_dock` as the explicit expert docking path.
 
 ## Interaction Model
 
@@ -114,7 +114,14 @@ Launcher entries:
 - `Inspector`
 - `Reset Layout`
 
-The selected launcher entry opens a bounded floating content window near the bottom of the viewport.
+The selected launcher entry opens a floating content window near the bottom of the viewport.
+
+Launcher behavior is dock-aware:
+
+- if `Tool`, `Inspector`, or the bottom utility panel is floating, its launcher entry reflects that state
+- if that panel is docked into `egui_dock`, the same launcher entry still reflects it as active
+- toggling an active launcher entry removes the panel from whichever presentation is currently active, floating or docked
+- switching `Items`, `History`, `Reference`, or `Advanced` while the drawer is docked retargets the docked drawer instead of forcing it back to floating
 
 `Advanced` remains the expert path and continues to expose:
 
@@ -124,36 +131,47 @@ The selected launcher entry opens a bounded floating content window near the bot
 
 ## Floating Shell Windows
 
-Rev 2 allows floating shell windows, but not unrestricted desktop windowing.
+Rev 3 uses plain `egui::Window` behavior for the shell:
 
-Each shell window persists:
+- draggable
+- resizable
+- collapsible
+- closable
+- placement persisted by stable egui window IDs
+
+Shell state persists:
 
 - `open`
-- `position`
-- `size`
-- `snap_anchor`
+- active inspector tab
+- active bottom utility tab
+- `layout_revision`
 
-Supported snap anchors:
+`Reset Layout` must:
 
-- `Left`
-- `Right`
-- `Bottom`
-
-Mandatory safeguards:
-
-- clamp movement to the viewport
-- clamp resize to the viewport
-- edge-snap assistance near left, right, and bottom edges
-- `Reset Layout` to restore known-good defaults
-- one-click handoff into `egui_dock`
+- restore default shell visibility
+- restore default launcher and inspector tabs
+- bump `layout_revision` so egui forgets old floating window placement
+- reset the dock workspace to the primary shell layout
 
 Pushback:
 
 - do not build a second custom docking system
-- do not allow windows to drift off-screen
-- do not let shell flexibility degrade touch reliability
+- do not pretend default egui windows dock to each other
 
-`egui_dock` remains the only real docking system. Floating shell windows may snap to viewport edges or hand themselves off to dock tabs, but they do not dock to each other.
+`egui_dock` remains the only real docking system. Floating shell windows do not dock to each other directly.
+
+All shell panels should be dockable through explicit handoff:
+
+- `Tool Panel`
+- `Inspector Panel`
+- bottom utility `Drawer Panel`
+
+Current handoff behavior:
+
+- clicking `Dock` on a floating shell panel creates a detached `egui_dock` window at the same screen rect
+- that detached window becomes the dock target for other tabs
+- launcher toggles stay tab-scoped, so removing `Tool` only removes the `Tool` tab even if the detached dock window also contains `Inspector`
+- docked shell tabs expose `Undock` and `Reset Layout`
 
 ## Node Graph Positioning
 
@@ -211,7 +229,7 @@ Tablet-visible replacements are required for desktop-only affordances such as:
 - UI should emit semantic actions instead of directly wiring graph edges.
 - Keep low-level graph wiring actions for advanced workflows only.
 - Default startup layout should open directly into the viewport-first shell.
-- The shell should prefer intent-driven commands and bounded windows over permanent dense panel chrome.
+- The shell should prefer intent-driven commands and default egui floating windows over permanent dense panel chrome.
 
 ## Validation
 
@@ -228,7 +246,7 @@ Required manual checks:
 2. A user can switch between `Select`, `Measure`, and sculpt brushes from one panel.
 3. `Distance` can be toggled without changing the active interaction mode.
 4. A user can sculpt, navigate, add a primitive, add a boolean, and insert a modifier without opening the node graph.
-5. Floating `Tool` and `Inspector` panels can be moved and resized without leaving the viewport.
+5. Floating `Tool` and `Inspector` panels behave like standard egui windows.
 6. Touch navigation does not accidentally begin sculpting.
 7. Stylus pressure sculpting still works.
 8. The advanced path still exposes expert graph workflows and docking.

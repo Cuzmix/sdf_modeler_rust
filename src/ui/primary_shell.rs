@@ -7,7 +7,7 @@ use glam::Vec3;
 use crate::app::actions::{Action, ActionSink, WorkspacePreset};
 use crate::app::state::{
     InteractionMode, MultiTransformSessionState, PrimaryShellContextTab, PrimaryShellDrawerTab,
-    PrimaryShellState, ShellSnapAnchor, ShellWindowState,
+    PrimaryShellState, ShellPanelKind,
 };
 use crate::graph::history::History;
 use crate::graph::scene::{CsgOp, ModifierKind, NodeData, NodeId, Scene, SdfPrimitive};
@@ -23,7 +23,10 @@ use crate::ui::{
 
 const SHELL_MARGIN: f32 = 12.0;
 const LAUNCHER_HEIGHT: f32 = 40.0;
-const WINDOW_SNAP_THRESHOLD: f32 = 24.0;
+const DRAWER_GAP_FROM_LAUNCHER: f32 = 8.0;
+const TOOL_DEFAULT_SIZE: egui::Vec2 = egui::vec2(320.0, 420.0);
+const INSPECTOR_DEFAULT_SIZE: egui::Vec2 = egui::vec2(360.0, 480.0);
+const DRAWER_DEFAULT_SIZE: egui::Vec2 = egui::vec2(560.0, 260.0);
 const TOOL_MIN_SIZE: egui::Vec2 = egui::vec2(260.0, 260.0);
 const INSPECTOR_MIN_SIZE: egui::Vec2 = egui::vec2(280.0, 320.0);
 const DRAWER_MIN_SIZE: egui::Vec2 = egui::vec2(360.0, 200.0);
@@ -60,23 +63,31 @@ pub fn draw(ctx: &egui::Context, viewport_rect: egui::Rect, shell: PrimaryShellC
     sync_context_tab(shell.shell, shell.scene, *shell.selected);
 
     let launcher_rect = draw_launcher_strip(ctx, viewport_rect, &mut shell);
-    let window_bounds = shell_window_bounds(viewport_rect, launcher_rect);
 
-    draw_tool_panel_window(ctx, window_bounds, &mut shell);
-    draw_inspector_panel_window(ctx, window_bounds, &mut shell);
-    draw_drawer_window(ctx, window_bounds, &launcher_rect, &mut shell);
+    draw_tool_panel_window(ctx, viewport_rect, &mut shell);
+    draw_inspector_panel_window(ctx, viewport_rect, &mut shell);
+    draw_drawer_window(ctx, viewport_rect, &launcher_rect, &mut shell);
 }
 
 pub fn draw_tool_panel_tab(ui: &mut egui::Ui, shell: &mut PrimaryShellContext<'_>) {
+    draw_docked_shell_tab_header(ui, ShellPanelKind::Tool, shell.actions);
     draw_tool_panel_contents(ui, shell);
 }
 
 pub fn draw_inspector_panel_tab(ui: &mut egui::Ui, shell: &mut PrimaryShellContext<'_>) {
     sync_context_tab(shell.shell, shell.scene, *shell.selected);
+    draw_docked_shell_tab_header(ui, ShellPanelKind::Inspector, shell.actions);
     draw_inspector_panel_contents(ui, shell);
 }
 
-fn shell_frame(ctx: &egui::Context) -> egui::Frame {
+pub fn draw_drawer_panel_tab(ui: &mut egui::Ui, shell: &mut PrimaryShellContext<'_>) {
+    draw_docked_shell_tab_header(ui, ShellPanelKind::Drawer, shell.actions);
+    draw_drawer_tab_controls(ui, shell);
+    ui.separator();
+    draw_drawer_contents(ui, shell);
+}
+
+fn launcher_frame(ctx: &egui::Context) -> egui::Frame {
     egui::Frame::window(&ctx.style())
         .fill(egui::Color32::from_rgba_premultiplied(26, 28, 34, 235))
         .stroke(egui::Stroke::new(
@@ -104,29 +115,45 @@ fn draw_launcher_strip(
         .order(egui::Order::Foreground)
         .fixed_pos(bar_rect.min)
         .show(ctx, |ui| {
-            shell_frame(ctx).show(ui, |ui| {
+            launcher_frame(ctx).show(ui, |ui| {
                 ui.set_width(bar_rect.width());
                 ui.horizontal_wrapped(|ui| {
-                    drawer_tab_button(ui, shell, PrimaryShellDrawerTab::Items, "Items");
-                    drawer_tab_button(ui, shell, PrimaryShellDrawerTab::History, "History");
-                    drawer_tab_button(ui, shell, PrimaryShellDrawerTab::Reference, "Reference");
-                    drawer_tab_button(ui, shell, PrimaryShellDrawerTab::Advanced, "Advanced");
+                    drawer_tab_button(
+                        ui,
+                        shell,
+                        PrimaryShellDrawerTab::Items,
+                        "Items",
+                    );
+                    drawer_tab_button(
+                        ui,
+                        shell,
+                        PrimaryShellDrawerTab::History,
+                        "History",
+                    );
+                    drawer_tab_button(
+                        ui,
+                        shell,
+                        PrimaryShellDrawerTab::Reference,
+                        "Reference",
+                    );
+                    drawer_tab_button(
+                        ui,
+                        shell,
+                        PrimaryShellDrawerTab::Advanced,
+                        "Advanced",
+                    );
                     ui.separator();
-                    if ui
-                        .selectable_label(shell.shell.tool_panel.open, "Tool")
-                        .clicked()
-                    {
-                        shell.shell.toggle_tool_panel();
+                    let tool_active = panel_is_active(shell.shell, ShellPanelKind::Tool);
+                    if ui.selectable_label(tool_active, "Tool").clicked() {
+                        toggle_tool_panel_from_launcher(shell.shell, shell.actions);
                     }
-                    if ui
-                        .selectable_label(shell.shell.inspector_panel.open, "Inspector")
-                        .clicked()
-                    {
-                        shell.shell.toggle_inspector_panel();
+                    let inspector_active = panel_is_active(shell.shell, ShellPanelKind::Inspector);
+                    if ui.selectable_label(inspector_active, "Inspector").clicked() {
+                        toggle_inspector_panel_from_launcher(shell.shell, shell.actions);
                     }
                     ui.separator();
                     if ui.small_button("Reset Layout").clicked() {
-                        shell.shell.reset_layout();
+                        shell.actions.push(Action::ResetPrimaryShellLayout);
                     }
                 });
             });
@@ -137,128 +164,152 @@ fn draw_launcher_strip(
 
 fn draw_tool_panel_window(
     ctx: &egui::Context,
-    bounds: egui::Rect,
+    viewport_rect: egui::Rect,
     shell: &mut PrimaryShellContext<'_>,
 ) {
-    let mut tool_panel = std::mem::replace(
-        &mut shell.shell.tool_panel,
-        ShellWindowState::snapped_default(false, egui::Vec2::ZERO, None),
+    if !shell.shell.tool_panel.is_floating() {
+        return;
+    }
+    let window_id = shell_window_id(
+        "primary_shell_tool_panel",
+        shell.shell.layout_revision,
+        shell.shell.tool_panel.floating_revision,
     );
-    let default_pos = default_panel_position(
-        tool_panel.snap_anchor,
-        tool_panel.size,
-        bounds,
-        egui::pos2(bounds.min.x, bounds.min.y),
-    );
-    let window_id = egui::Id::new(("primary_shell_tool_panel", shell.shell.layout_revision));
     let mut dock_clicked = false;
     let mut reset_clicked = false;
+    let default_rect = shell
+        .shell
+        .tool_panel
+        .last_floating_rect
+        .unwrap_or_else(|| egui::Rect::from_min_size(default_tool_panel_position(viewport_rect), TOOL_DEFAULT_SIZE));
+    let mut open = true;
 
     show_shell_window(
         ctx,
         window_id,
         "Tool Panel",
-        &mut tool_panel,
-        bounds,
-        default_pos,
+        &mut open,
+        default_rect.min,
+        default_rect.size(),
         TOOL_MIN_SIZE,
         |ui| {
-            shell_window_actions(ui, true, &mut dock_clicked, &mut reset_clicked);
+            shell_window_actions(
+                ui,
+                shell.dock_state.is_some(),
+                &mut dock_clicked,
+                &mut reset_clicked,
+            );
             draw_tool_panel_contents(ui, shell);
         },
     );
 
-    if dock_clicked {
-        if let Some(dock_state) = shell.dock_state.as_deref_mut() {
-            toggle_dock_tab(dock_state, Tab::ToolPanel);
-            tool_panel.open = false;
-        }
-    }
+    let current_rect = ctx
+        .memory(|memory| memory.area_rect(window_id))
+        .unwrap_or(default_rect);
+    shell.shell.tool_panel.remember_floating_rect(current_rect);
 
-    shell.shell.tool_panel = tool_panel;
+    if dock_clicked && shell.dock_state.is_some() {
+        shell.actions.push(Action::DockShellPanel {
+            panel: ShellPanelKind::Tool,
+            rect: current_rect,
+        });
+    } else if !open {
+        shell.shell.tool_panel.hide();
+    }
     if reset_clicked {
-        shell.shell.reset_layout();
+        shell.actions.push(Action::ResetPrimaryShellLayout);
     }
 }
 
 fn draw_inspector_panel_window(
     ctx: &egui::Context,
-    bounds: egui::Rect,
+    viewport_rect: egui::Rect,
     shell: &mut PrimaryShellContext<'_>,
 ) {
-    let mut inspector_panel = std::mem::replace(
-        &mut shell.shell.inspector_panel,
-        ShellWindowState::snapped_default(false, egui::Vec2::ZERO, None),
+    if !shell.shell.inspector_panel.is_floating() {
+        return;
+    }
+    let window_id = shell_window_id(
+        "primary_shell_inspector_panel",
+        shell.shell.layout_revision,
+        shell.shell.inspector_panel.floating_revision,
     );
-    let default_pos = default_panel_position(
-        inspector_panel.snap_anchor,
-        inspector_panel.size,
-        bounds,
-        egui::pos2(bounds.max.x - inspector_panel.size.x, bounds.min.y),
-    );
-    let window_id =
-        egui::Id::new(("primary_shell_inspector_panel", shell.shell.layout_revision));
     let mut dock_clicked = false;
     let mut reset_clicked = false;
+    let default_rect = shell.shell.inspector_panel.last_floating_rect.unwrap_or_else(|| {
+        egui::Rect::from_min_size(default_inspector_panel_position(viewport_rect), INSPECTOR_DEFAULT_SIZE)
+    });
+    let mut open = true;
 
     show_shell_window(
         ctx,
         window_id,
         "Inspector",
-        &mut inspector_panel,
-        bounds,
-        default_pos,
+        &mut open,
+        default_rect.min,
+        default_rect.size(),
         INSPECTOR_MIN_SIZE,
         |ui| {
-            shell_window_actions(ui, true, &mut dock_clicked, &mut reset_clicked);
+            shell_window_actions(
+                ui,
+                shell.dock_state.is_some(),
+                &mut dock_clicked,
+                &mut reset_clicked,
+            );
             draw_inspector_panel_contents(ui, shell);
         },
     );
 
-    if dock_clicked {
-        if let Some(dock_state) = shell.dock_state.as_deref_mut() {
-            toggle_dock_tab(dock_state, Tab::InspectorPanel);
-            inspector_panel.open = false;
-        }
-    }
+    let current_rect = ctx
+        .memory(|memory| memory.area_rect(window_id))
+        .unwrap_or(default_rect);
+    shell.shell.inspector_panel.remember_floating_rect(current_rect);
 
-    shell.shell.inspector_panel = inspector_panel;
+    if dock_clicked && shell.dock_state.is_some() {
+        shell.actions.push(Action::DockShellPanel {
+            panel: ShellPanelKind::Inspector,
+            rect: current_rect,
+        });
+    } else if !open {
+        shell.shell.inspector_panel.hide();
+    }
     if reset_clicked {
-        shell.shell.reset_layout();
+        shell.actions.push(Action::ResetPrimaryShellLayout);
     }
 }
 
 fn draw_drawer_window(
     ctx: &egui::Context,
-    bounds: egui::Rect,
+    viewport_rect: egui::Rect,
     launcher_rect: &egui::Rect,
     shell: &mut PrimaryShellContext<'_>,
 ) {
-    let mut drawer_panel = std::mem::replace(
-        &mut shell.shell.drawer_panel,
-        ShellWindowState::snapped_default(false, egui::Vec2::ZERO, None),
+    if !shell.shell.drawer_panel.is_floating() {
+        return;
+    }
+    let window_id = shell_window_id(
+        "primary_shell_drawer_panel",
+        shell.shell.layout_revision,
+        shell.shell.drawer_panel.floating_revision,
     );
-    let default_pos = default_panel_position(
-        drawer_panel.snap_anchor,
-        drawer_panel.size,
-        bounds,
-        egui::pos2(
-            bounds.center().x - drawer_panel.size.x * 0.5,
-            launcher_rect.min.y - drawer_panel.size.y - 8.0,
-        ),
-    );
-    let window_id = egui::Id::new(("primary_shell_drawer_panel", shell.shell.layout_revision));
     let mut dock_clicked = false;
     let mut reset_clicked = false;
-    let dockable = drawer_dock_tab(shell.shell.active_drawer_tab).is_some();
+    let dockable = shell.dock_state.is_some();
+    let default_rect = shell.shell.drawer_panel.last_floating_rect.unwrap_or_else(|| {
+        egui::Rect::from_min_size(
+            default_drawer_panel_position(viewport_rect, launcher_rect),
+            DRAWER_DEFAULT_SIZE,
+        )
+    });
+    let mut open = true;
 
     show_shell_window(
         ctx,
         window_id,
         drawer_window_title(shell.shell.active_drawer_tab),
-        &mut drawer_panel,
-        bounds,
-        default_pos,
+        &mut open,
+        default_rect.min,
+        default_rect.size(),
         DRAWER_MIN_SIZE,
         |ui| {
             shell_window_actions(ui, dockable, &mut dock_clicked, &mut reset_clicked);
@@ -266,19 +317,21 @@ fn draw_drawer_window(
         },
     );
 
-    if dock_clicked {
-        if let (Some(dock_state), Some(tab)) = (
-            shell.dock_state.as_deref_mut(),
-            drawer_dock_tab(shell.shell.active_drawer_tab),
-        ) {
-            toggle_dock_tab(dock_state, tab);
-            drawer_panel.open = false;
-        }
-    }
+    let current_rect = ctx
+        .memory(|memory| memory.area_rect(window_id))
+        .unwrap_or(default_rect);
+    shell.shell.drawer_panel.remember_floating_rect(current_rect);
 
-    shell.shell.drawer_panel = drawer_panel;
+    if dock_clicked && shell.dock_state.is_some() {
+        shell.actions.push(Action::DockShellPanel {
+            panel: ShellPanelKind::Drawer,
+            rect: current_rect,
+        });
+    } else if !open {
+        shell.shell.drawer_panel.hide();
+    }
     if reset_clicked {
-        shell.shell.reset_layout();
+        shell.actions.push(Action::ResetPrimaryShellLayout);
     }
 }
 
@@ -287,37 +340,25 @@ fn show_shell_window(
     ctx: &egui::Context,
     id: egui::Id,
     title: &str,
-    state: &mut ShellWindowState,
-    bounds: egui::Rect,
+    open: &mut bool,
     default_pos: egui::Pos2,
+    default_size: egui::Vec2,
     min_size: egui::Vec2,
     add_contents: impl FnOnce(&mut egui::Ui),
 ) {
-    if !state.open {
+    if !*open {
         return;
     }
 
-    state.size = clamp_window_size(state.size, bounds.size(), min_size);
-    let current_pos = current_panel_position(state, bounds, default_pos);
-
-    if let Some(window) = egui::Window::new(title)
+    egui::Window::new(title)
         .id(id)
-        .open(&mut state.open)
-        .collapsible(false)
+        .open(open)
+        .collapsible(true)
         .resizable(true)
         .default_pos(default_pos)
-        .current_pos(current_pos)
-        .default_size(state.size)
+        .default_size(default_size)
         .min_size(min_size)
-        .constrain_to(bounds)
-        .frame(shell_frame(ctx))
-        .show(ctx, |ui| add_contents(ui))
-    {
-        let rect = window.response.rect;
-        state.size = clamp_window_size(rect.size(), bounds.size(), min_size);
-        state.position = Some(clamp_window_position(rect.min, state.size, bounds));
-        state.snap_anchor = detect_snap_anchor(rect, bounds);
-    }
+        .show(ctx, |ui| add_contents(ui));
 }
 
 fn shell_window_actions(
@@ -334,6 +375,21 @@ fn shell_window_actions(
             }
             if dockable && ui.small_button("Dock").clicked() {
                 *dock_clicked = true;
+            }
+        });
+    });
+    ui.separator();
+}
+
+fn draw_docked_shell_tab_header(ui: &mut egui::Ui, panel: ShellPanelKind, actions: &mut ActionSink) {
+    ui.horizontal(|ui| {
+        ui.small("Docked shell panel");
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if ui.small_button("Reset").clicked() {
+                actions.push(Action::ResetPrimaryShellLayout);
+            }
+            if ui.small_button("Undock").clicked() {
+                actions.push(Action::UndockShellPanel(panel));
             }
         });
     });
@@ -622,6 +678,29 @@ fn context_tab_button(
     }
 }
 
+fn draw_drawer_tab_controls(ui: &mut egui::Ui, shell: &mut PrimaryShellContext<'_>) {
+    ui.horizontal_wrapped(|ui| {
+        context_tab_button_for_drawer(ui, shell, PrimaryShellDrawerTab::Items, "Items");
+        context_tab_button_for_drawer(ui, shell, PrimaryShellDrawerTab::History, "History");
+        context_tab_button_for_drawer(ui, shell, PrimaryShellDrawerTab::Reference, "Reference");
+        context_tab_button_for_drawer(ui, shell, PrimaryShellDrawerTab::Advanced, "Advanced");
+    });
+}
+
+fn context_tab_button_for_drawer(
+    ui: &mut egui::Ui,
+    shell: &mut PrimaryShellContext<'_>,
+    tab: PrimaryShellDrawerTab,
+    label: &str,
+) {
+    if ui
+        .selectable_label(shell.shell.active_drawer_tab == tab, label)
+        .clicked()
+    {
+        shell.shell.active_drawer_tab = tab;
+    }
+}
+
 fn draw_drawer_contents(ui: &mut egui::Ui, shell: &mut PrimaryShellContext<'_>) {
     match shell.shell.active_drawer_tab {
         PrimaryShellDrawerTab::Items => {
@@ -661,24 +740,16 @@ fn draw_advanced_drawer(ui: &mut egui::Ui, shell: &mut PrimaryShellContext<'_>) 
     ui.label(egui::RichText::new("Expert Panels").small().strong());
     ui.horizontal_wrapped(|ui| {
         if ui.button("Node Graph").clicked() {
-            if let Some(dock_state) = shell.dock_state.as_deref_mut() {
-                toggle_dock_tab(dock_state, Tab::NodeGraph);
-            }
+            shell.actions.push(Action::ToggleDockTab(Tab::NodeGraph));
         }
         if ui.button("Properties").clicked() {
-            if let Some(dock_state) = shell.dock_state.as_deref_mut() {
-                toggle_dock_tab(dock_state, Tab::Properties);
-            }
+            shell.actions.push(Action::ToggleDockTab(Tab::Properties));
         }
         if ui.button("Render Settings").clicked() {
-            if let Some(dock_state) = shell.dock_state.as_deref_mut() {
-                toggle_dock_tab(dock_state, Tab::RenderSettings);
-            }
+            shell.actions.push(Action::ToggleDockTab(Tab::RenderSettings));
         }
         if ui.button("Scene Stats").clicked() {
-            if let Some(dock_state) = shell.dock_state.as_deref_mut() {
-                toggle_dock_tab(dock_state, Tab::SceneStats);
-            }
+            shell.actions.push(Action::ToggleDockTab(Tab::SceneStats));
         }
     });
 
@@ -712,9 +783,10 @@ fn drawer_tab_button(
     tab: PrimaryShellDrawerTab,
     label: &str,
 ) {
-    let active = shell.shell.drawer_panel.open && shell.shell.active_drawer_tab == tab;
+    let active =
+        shell.shell.active_drawer_tab == tab && panel_is_active(shell.shell, ShellPanelKind::Drawer);
     if ui.selectable_label(active, label).clicked() {
-        shell.shell.toggle_drawer(tab);
+        toggle_drawer_from_launcher(shell.shell, tab, shell.actions);
     }
 }
 
@@ -727,116 +799,78 @@ fn drawer_window_title(tab: PrimaryShellDrawerTab) -> &'static str {
     }
 }
 
-fn drawer_dock_tab(tab: PrimaryShellDrawerTab) -> Option<Tab> {
-    match tab {
-        PrimaryShellDrawerTab::Items => Some(Tab::SceneTree),
-        PrimaryShellDrawerTab::History => Some(Tab::History),
-        PrimaryShellDrawerTab::Reference => Some(Tab::ReferenceImages),
-        PrimaryShellDrawerTab::Advanced => Some(Tab::NodeGraph),
+fn panel_is_active(shell: &PrimaryShellState, panel: ShellPanelKind) -> bool {
+    let panel_state = shell.panel(panel);
+    panel_state.is_floating() || panel_state.is_docked()
+}
+
+fn toggle_tool_panel_from_launcher(shell: &mut PrimaryShellState, actions: &mut ActionSink) {
+    if shell.tool_panel.is_floating() {
+        shell.tool_panel.hide();
+    } else if shell.tool_panel.is_docked() {
+        actions.push(Action::HideShellPanel(ShellPanelKind::Tool));
+    } else {
+        shell.tool_panel.show_floating(None);
     }
 }
 
-fn shell_window_bounds(viewport_rect: egui::Rect, launcher_rect: egui::Rect) -> egui::Rect {
-    egui::Rect::from_min_max(
-        viewport_rect.min + egui::vec2(SHELL_MARGIN, SHELL_MARGIN),
-        egui::pos2(
-            viewport_rect.max.x - SHELL_MARGIN,
-            launcher_rect.min.y - SHELL_MARGIN,
-        ),
-    )
-}
-
-fn default_panel_position(
-    snap_anchor: Option<ShellSnapAnchor>,
-    size: egui::Vec2,
-    bounds: egui::Rect,
-    fallback: egui::Pos2,
-) -> egui::Pos2 {
-    let clamped_fallback = clamp_window_position(fallback, size, bounds);
-    match snap_anchor {
-        Some(anchor) => snapped_panel_position(anchor, clamped_fallback, size, bounds),
-        None => clamped_fallback,
+fn toggle_inspector_panel_from_launcher(shell: &mut PrimaryShellState, actions: &mut ActionSink) {
+    if shell.inspector_panel.is_floating() {
+        shell.inspector_panel.hide();
+    } else if shell.inspector_panel.is_docked() {
+        actions.push(Action::HideShellPanel(ShellPanelKind::Inspector));
+    } else {
+        shell.inspector_panel.show_floating(None);
     }
 }
 
-fn current_panel_position(
-    state: &ShellWindowState,
-    bounds: egui::Rect,
-    default_pos: egui::Pos2,
-) -> egui::Pos2 {
-    let size = clamp_window_size(state.size, bounds.size(), TOOL_MIN_SIZE.min(INSPECTOR_MIN_SIZE));
-    let base_pos = state.position.unwrap_or(default_pos);
-    let clamped_pos = clamp_window_position(base_pos, size, bounds);
-    match state.snap_anchor {
-        Some(anchor) => snapped_panel_position(anchor, clamped_pos, size, bounds),
-        None => clamped_pos,
+fn toggle_drawer_from_launcher(
+    shell: &mut PrimaryShellState,
+    tab: PrimaryShellDrawerTab,
+    actions: &mut ActionSink,
+) {
+    if shell.active_drawer_tab != tab {
+        shell.active_drawer_tab = tab;
+        if shell.drawer_panel.is_hidden() {
+            shell.drawer_panel.show_floating(None);
+        }
+        return;
+    }
+
+    if shell.drawer_panel.is_floating() {
+        shell.drawer_panel.hide();
+    } else if shell.drawer_panel.is_docked() {
+        actions.push(Action::HideShellPanel(ShellPanelKind::Drawer));
+    } else {
+        shell.drawer_panel.show_floating(None);
     }
 }
 
-fn snapped_panel_position(
-    anchor: ShellSnapAnchor,
-    current_pos: egui::Pos2,
-    size: egui::Vec2,
-    bounds: egui::Rect,
-) -> egui::Pos2 {
-    match anchor {
-        ShellSnapAnchor::Left => egui::pos2(bounds.min.x, current_pos.y),
-        ShellSnapAnchor::Right => egui::pos2(bounds.max.x - size.x, current_pos.y),
-        ShellSnapAnchor::Bottom => egui::pos2(current_pos.x, bounds.max.y - size.y),
-    }
+fn shell_window_id(name: &'static str, layout_revision: u64, floating_revision: u64) -> egui::Id {
+    egui::Id::new((name, layout_revision, floating_revision))
 }
 
-fn clamp_window_position(
-    position: egui::Pos2,
-    size: egui::Vec2,
-    bounds: egui::Rect,
-) -> egui::Pos2 {
-    let max_x = (bounds.max.x - size.x).max(bounds.min.x);
-    let max_y = (bounds.max.y - size.y).max(bounds.min.y);
+fn default_tool_panel_position(viewport_rect: egui::Rect) -> egui::Pos2 {
     egui::pos2(
-        position.x.clamp(bounds.min.x, max_x),
-        position.y.clamp(bounds.min.y, max_y),
+        viewport_rect.min.x + SHELL_MARGIN,
+        viewport_rect.min.y + SHELL_MARGIN,
     )
 }
 
-fn clamp_window_size(size: egui::Vec2, max_size: egui::Vec2, min_size: egui::Vec2) -> egui::Vec2 {
-    egui::vec2(
-        size.x.clamp(min_size.x, max_size.x.max(min_size.x)),
-        size.y.clamp(min_size.y, max_size.y.max(min_size.y)),
+fn default_inspector_panel_position(viewport_rect: egui::Rect) -> egui::Pos2 {
+    egui::pos2(
+        (viewport_rect.max.x - INSPECTOR_DEFAULT_SIZE.x - SHELL_MARGIN)
+            .max(viewport_rect.min.x + SHELL_MARGIN),
+        viewport_rect.min.y + SHELL_MARGIN,
     )
 }
 
-fn detect_snap_anchor(rect: egui::Rect, bounds: egui::Rect) -> Option<ShellSnapAnchor> {
-    let candidates = [
-        (
-            (rect.min.x - bounds.min.x).abs(),
-            ShellSnapAnchor::Left,
-        ),
-        (
-            (bounds.max.x - rect.max.x).abs(),
-            ShellSnapAnchor::Right,
-        ),
-        (
-            (bounds.max.y - rect.max.y).abs(),
-            ShellSnapAnchor::Bottom,
-        ),
-    ];
-    let (distance, anchor) = candidates
-        .into_iter()
-        .min_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal))?;
-    if distance <= WINDOW_SNAP_THRESHOLD {
-        Some(anchor)
-    } else {
-        None
-    }
-}
-
-fn toggle_dock_tab(dock_state: &mut DockState<Tab>, tab: Tab) {
-    if let Some(location) = dock_state.find_tab(&tab) {
-        dock_state.remove_tab(location);
-    } else {
-        dock_state.push_to_focused_leaf(tab);
-    }
+fn default_drawer_panel_position(viewport_rect: egui::Rect, launcher_rect: &egui::Rect) -> egui::Pos2 {
+    egui::pos2(
+        (viewport_rect.center().x - DRAWER_DEFAULT_SIZE.x * 0.5)
+            .max(viewport_rect.min.x + SHELL_MARGIN),
+        launcher_rect.min.y - DRAWER_DEFAULT_SIZE.y - DRAWER_GAP_FROM_LAUNCHER,
+    )
 }
 
 #[cfg(test)]
@@ -844,37 +878,78 @@ mod tests {
     use super::*;
 
     #[test]
-    fn clamp_window_position_keeps_panel_inside_bounds() {
-        let bounds = egui::Rect::from_min_max(egui::pos2(10.0, 20.0), egui::pos2(210.0, 220.0));
-        let position = clamp_window_position(egui::pos2(-40.0, 400.0), egui::vec2(80.0, 60.0), bounds);
-        assert_eq!(position, egui::pos2(10.0, 160.0));
+    fn shell_window_id_changes_with_layout_revision() {
+        let initial_id = shell_window_id("primary_shell_tool_panel", 0, 0);
+        let reset_id = shell_window_id("primary_shell_tool_panel", 1, 0);
+        let undocked_id = shell_window_id("primary_shell_tool_panel", 1, 1);
+
+        assert_ne!(initial_id, reset_id);
+        assert_ne!(reset_id, undocked_id);
     }
 
     #[test]
-    fn detect_snap_anchor_matches_left_edge() {
-        let bounds = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(300.0, 200.0));
-        let rect = egui::Rect::from_min_size(egui::pos2(8.0, 24.0), egui::vec2(120.0, 80.0));
-        assert_eq!(detect_snap_anchor(rect, bounds), Some(ShellSnapAnchor::Left));
+    fn panel_is_active_detects_floating_and_docked_panels() {
+        let mut shell = PrimaryShellState::default();
+        assert!(panel_is_active(&shell, ShellPanelKind::Tool));
+        assert!(!panel_is_active(&shell, ShellPanelKind::Drawer));
+
+        shell.drawer_panel.dock();
+        assert!(panel_is_active(&shell, ShellPanelKind::Drawer));
     }
 
     #[test]
-    fn detect_snap_anchor_matches_right_edge() {
-        let bounds = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(300.0, 200.0));
-        let rect = egui::Rect::from_min_size(egui::pos2(176.0, 24.0), egui::vec2(120.0, 80.0));
-        assert_eq!(detect_snap_anchor(rect, bounds), Some(ShellSnapAnchor::Right));
+    fn launcher_toggle_closes_tool_panel_when_floating() {
+        let mut shell = PrimaryShellState::default();
+        let mut actions = ActionSink::new();
+
+        toggle_tool_panel_from_launcher(&mut shell, &mut actions);
+
+        assert!(shell.tool_panel.is_hidden());
+        assert!(actions.is_empty());
     }
 
     #[test]
-    fn detect_snap_anchor_matches_bottom_edge() {
-        let bounds = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(300.0, 200.0));
-        let rect = egui::Rect::from_min_size(egui::pos2(90.0, 128.0), egui::vec2(120.0, 68.0));
-        assert_eq!(detect_snap_anchor(rect, bounds), Some(ShellSnapAnchor::Bottom));
+    fn launcher_toggle_removes_tool_panel_when_docked() {
+        let mut shell = PrimaryShellState::default();
+        shell.tool_panel.dock();
+        let mut actions = ActionSink::new();
+
+        toggle_tool_panel_from_launcher(&mut shell, &mut actions);
+
+        assert_eq!(actions.len(), 1);
+        assert!(matches!(
+            actions.first(),
+            Some(Action::HideShellPanel(ShellPanelKind::Tool))
+        ));
     }
 
     #[test]
-    fn detect_snap_anchor_returns_none_when_far_from_edges() {
-        let bounds = egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(300.0, 200.0));
-        let rect = egui::Rect::from_min_size(egui::pos2(90.0, 40.0), egui::vec2(120.0, 80.0));
-        assert_eq!(detect_snap_anchor(rect, bounds), None);
+    fn launcher_switches_drawer_tab_without_undocking_existing_drawer() {
+        let mut shell = PrimaryShellState::default();
+        shell.drawer_panel.dock();
+        shell.active_drawer_tab = PrimaryShellDrawerTab::Items;
+        let mut actions = ActionSink::new();
+
+        toggle_drawer_from_launcher(&mut shell, PrimaryShellDrawerTab::Advanced, &mut actions);
+
+        assert_eq!(shell.active_drawer_tab, PrimaryShellDrawerTab::Advanced);
+        assert!(shell.drawer_panel.is_docked());
+        assert!(actions.is_empty());
+    }
+
+    #[test]
+    fn launcher_toggle_removes_docked_drawer_panel_for_active_tab() {
+        let mut shell = PrimaryShellState::default();
+        shell.drawer_panel.dock();
+        shell.active_drawer_tab = PrimaryShellDrawerTab::Reference;
+        let mut actions = ActionSink::new();
+
+        toggle_drawer_from_launcher(&mut shell, PrimaryShellDrawerTab::Reference, &mut actions);
+
+        assert_eq!(actions.len(), 1);
+        assert!(matches!(
+            actions.first(),
+            Some(Action::HideShellPanel(ShellPanelKind::Drawer))
+        ));
     }
 }

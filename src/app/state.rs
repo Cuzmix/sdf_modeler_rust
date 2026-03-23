@@ -2,7 +2,8 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use eframe::{egui, egui_wgpu::RenderState};
+use eframe::egui;
+use eframe::egui_wgpu::RenderState;
 use egui_dock::DockState;
 use glam::Vec3;
 
@@ -181,32 +182,77 @@ pub enum InteractionMode {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ShellSnapAnchor {
-    Left,
-    Right,
-    Bottom,
+pub enum ShellPanelKind {
+    Tool,
+    Inspector,
+    Drawer,
+}
+
+impl ShellPanelKind {
+    pub const ALL: [Self; 3] = [Self::Tool, Self::Inspector, Self::Drawer];
+
+    pub const fn dock_tab(self) -> Tab {
+        match self {
+            Self::Tool => Tab::ToolPanel,
+            Self::Inspector => Tab::InspectorPanel,
+            Self::Drawer => Tab::DrawerPanel,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ShellPanelPresentation {
+    Hidden,
+    Floating,
+    Docked,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ShellWindowState {
-    pub open: bool,
-    pub position: Option<egui::Pos2>,
-    pub size: egui::Vec2,
-    pub snap_anchor: Option<ShellSnapAnchor>,
+    pub presentation: ShellPanelPresentation,
+    pub last_floating_rect: Option<egui::Rect>,
+    pub floating_revision: u64,
 }
 
 impl ShellWindowState {
-    pub fn snapped_default(
-        open: bool,
-        size: egui::Vec2,
-        snap_anchor: Option<ShellSnapAnchor>,
-    ) -> Self {
+    pub const fn new(presentation: ShellPanelPresentation) -> Self {
         Self {
-            open,
-            position: None,
-            size,
-            snap_anchor,
+            presentation,
+            last_floating_rect: None,
+            floating_revision: 0,
         }
+    }
+
+    pub const fn is_hidden(&self) -> bool {
+        matches!(self.presentation, ShellPanelPresentation::Hidden)
+    }
+
+    pub const fn is_floating(&self) -> bool {
+        matches!(self.presentation, ShellPanelPresentation::Floating)
+    }
+
+    pub const fn is_docked(&self) -> bool {
+        matches!(self.presentation, ShellPanelPresentation::Docked)
+    }
+
+    pub fn show_floating(&mut self, forced_rect: Option<egui::Rect>) {
+        if let Some(rect) = forced_rect {
+            self.last_floating_rect = Some(rect);
+            self.floating_revision = self.floating_revision.wrapping_add(1);
+        }
+        self.presentation = ShellPanelPresentation::Floating;
+    }
+
+    pub fn hide(&mut self) {
+        self.presentation = ShellPanelPresentation::Hidden;
+    }
+
+    pub fn dock(&mut self) {
+        self.presentation = ShellPanelPresentation::Docked;
+    }
+
+    pub fn remember_floating_rect(&mut self, rect: egui::Rect) {
+        self.last_floating_rect = Some(rect);
     }
 }
 
@@ -225,21 +271,9 @@ impl Default for PrimaryShellState {
     fn default() -> Self {
         Self {
             interaction_mode: InteractionMode::Select,
-            tool_panel: ShellWindowState::snapped_default(
-                true,
-                egui::vec2(320.0, 420.0),
-                Some(ShellSnapAnchor::Left),
-            ),
-            inspector_panel: ShellWindowState::snapped_default(
-                true,
-                egui::vec2(360.0, 480.0),
-                Some(ShellSnapAnchor::Right),
-            ),
-            drawer_panel: ShellWindowState::snapped_default(
-                false,
-                egui::vec2(560.0, 260.0),
-                Some(ShellSnapAnchor::Bottom),
-            ),
+            tool_panel: ShellWindowState::new(ShellPanelPresentation::Floating),
+            inspector_panel: ShellWindowState::new(ShellPanelPresentation::Floating),
+            drawer_panel: ShellWindowState::new(ShellPanelPresentation::Hidden),
             active_context_tab: PrimaryShellContextTab::Selection,
             active_drawer_tab: PrimaryShellDrawerTab::Items,
             layout_revision: 0,
@@ -248,24 +282,40 @@ impl Default for PrimaryShellState {
 }
 
 impl PrimaryShellState {
-    pub fn toggle_drawer(&mut self, tab: PrimaryShellDrawerTab) {
-        if self.active_drawer_tab == tab {
-            self.drawer_panel.open = !self.drawer_panel.open;
-        } else {
-            self.active_drawer_tab = tab;
-            self.drawer_panel.open = true;
+    pub fn panel(&self, panel: ShellPanelKind) -> &ShellWindowState {
+        match panel {
+            ShellPanelKind::Tool => &self.tool_panel,
+            ShellPanelKind::Inspector => &self.inspector_panel,
+            ShellPanelKind::Drawer => &self.drawer_panel,
         }
-        if self.drawer_panel.open {
-            self.drawer_panel.snap_anchor = Some(ShellSnapAnchor::Bottom);
+    }
+
+    pub fn panel_mut(&mut self, panel: ShellPanelKind) -> &mut ShellWindowState {
+        match panel {
+            ShellPanelKind::Tool => &mut self.tool_panel,
+            ShellPanelKind::Inspector => &mut self.inspector_panel,
+            ShellPanelKind::Drawer => &mut self.drawer_panel,
         }
     }
 
     pub fn toggle_tool_panel(&mut self) {
-        self.tool_panel.open = !self.tool_panel.open;
+        if self.tool_panel.is_floating() {
+            self.tool_panel.hide();
+        } else {
+            self.tool_panel.show_floating(None);
+        }
     }
 
-    pub fn toggle_inspector_panel(&mut self) {
-        self.inspector_panel.open = !self.inspector_panel.open;
+    pub fn reconcile_docked_panels(&mut self, dock_state: &DockState<Tab>) {
+        for panel in ShellPanelKind::ALL {
+            let exists = dock_state.find_tab(&panel.dock_tab()).is_some();
+            let shell_state = self.panel_mut(panel);
+            if exists {
+                shell_state.dock();
+            } else if shell_state.is_docked() {
+                shell_state.hide();
+            }
+        }
     }
 
     pub fn reset_layout(&mut self) {
@@ -599,48 +649,52 @@ mod tests {
     fn primary_shell_defaults_to_viewport_first_layout() {
         let state = PrimaryShellState::default();
         assert_eq!(state.interaction_mode, InteractionMode::Select);
-        assert!(state.tool_panel.open);
-        assert!(state.inspector_panel.open);
-        assert!(!state.drawer_panel.open);
-        assert_eq!(state.tool_panel.snap_anchor, Some(ShellSnapAnchor::Left));
-        assert_eq!(state.inspector_panel.snap_anchor, Some(ShellSnapAnchor::Right));
-        assert_eq!(state.drawer_panel.snap_anchor, Some(ShellSnapAnchor::Bottom));
+        assert!(state.tool_panel.is_floating());
+        assert!(state.inspector_panel.is_floating());
+        assert!(state.drawer_panel.is_hidden());
         assert_eq!(state.active_context_tab, PrimaryShellContextTab::Selection);
         assert_eq!(state.active_drawer_tab, PrimaryShellDrawerTab::Items);
     }
 
     #[test]
-    fn primary_shell_toggle_drawer_opens_and_closes_same_tab() {
+    fn primary_shell_tool_panel_toggle_flips_floating_state() {
         let mut state = PrimaryShellState::default();
-        state.toggle_drawer(PrimaryShellDrawerTab::History);
-        assert!(state.drawer_panel.open);
-        assert_eq!(state.active_drawer_tab, PrimaryShellDrawerTab::History);
 
-        state.toggle_drawer(PrimaryShellDrawerTab::History);
-        assert!(!state.drawer_panel.open);
-        assert_eq!(state.active_drawer_tab, PrimaryShellDrawerTab::History);
-    }
+        state.toggle_tool_panel();
+        assert!(state.tool_panel.is_hidden());
 
-    #[test]
-    fn primary_shell_switching_drawer_tabs_keeps_drawer_open() {
-        let mut state = PrimaryShellState::default();
-        state.toggle_drawer(PrimaryShellDrawerTab::Items);
-        state.toggle_drawer(PrimaryShellDrawerTab::Advanced);
-        assert!(state.drawer_panel.open);
-        assert_eq!(state.active_drawer_tab, PrimaryShellDrawerTab::Advanced);
+        state.toggle_tool_panel();
+        assert!(state.tool_panel.is_floating());
     }
 
     #[test]
     fn primary_shell_reset_layout_restores_window_defaults() {
         let mut state = PrimaryShellState::default();
-        state.tool_panel.open = false;
-        state.drawer_panel.open = true;
+        state.tool_panel.hide();
+        state.inspector_panel.hide();
+        state.drawer_panel.show_floating(None);
+        state.active_context_tab = PrimaryShellContextTab::Node;
+        state.active_drawer_tab = PrimaryShellDrawerTab::Reference;
         state.layout_revision = 9;
 
         state.reset_layout();
 
-        assert!(state.tool_panel.open);
-        assert!(!state.drawer_panel.open);
+        assert!(state.tool_panel.is_floating());
+        assert!(state.inspector_panel.is_floating());
+        assert!(state.drawer_panel.is_hidden());
+        assert_eq!(state.active_context_tab, PrimaryShellContextTab::Selection);
+        assert_eq!(state.active_drawer_tab, PrimaryShellDrawerTab::Items);
         assert_eq!(state.layout_revision, 10);
+    }
+
+    #[test]
+    fn primary_shell_reconcile_hides_missing_docked_tab() {
+        let mut state = PrimaryShellState::default();
+        state.tool_panel.dock();
+        let dock_state = DockState::new(vec![Tab::Viewport]);
+
+        state.reconcile_docked_panels(&dock_state);
+
+        assert!(state.tool_panel.is_hidden());
     }
 }

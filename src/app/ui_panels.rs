@@ -223,21 +223,16 @@ impl SdfApp {
                     ui.separator();
                     ui.menu_button("Panels", |ui| {
                         use crate::ui::dock::Tab;
-                        for tab in Tab::ALL {
+                        for tab in Tab::EXPERT_TABS {
                             let is_open = self.ui.dock_state.find_tab(tab).is_some();
                             if ui.selectable_label(is_open, tab.label()).clicked() {
-                                if let Some(location) = self.ui.dock_state.find_tab(tab) {
-                                    self.ui.dock_state.remove_tab(location);
-                                } else {
-                                    self.ui.dock_state.push_to_focused_leaf(tab.clone());
-                                }
+                                actions.push(Action::ToggleDockTab(tab.clone()));
                                 ui.close_menu();
                             }
                         }
                         ui.separator();
                         if ui.button("Reset Layout").clicked() {
-                            self.ui.primary_shell.reset_layout();
-                            self.ui.dock_state = crate::ui::dock::create_primary_shell_dock();
+                            actions.push(Action::ResetPrimaryShellLayout);
                             ui.close_menu();
                         }
                     });

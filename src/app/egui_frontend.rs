@@ -186,6 +186,9 @@ impl SdfApp {
             .show(ctx, |ui| {
                 egui_dock::DockArea::new(&mut self.ui.dock_state).show_inside(ui, &mut tab_viewer);
             });
+        self.ui
+            .primary_shell
+            .reconcile_docked_panels(&self.ui.dock_state);
 
         if let Some(viewport_rect) = primary_viewport_rect {
             crate::ui::primary_shell::draw(

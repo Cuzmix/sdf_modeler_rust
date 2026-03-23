@@ -5,9 +5,12 @@ use crate::desktop_dialogs::FileDialogSelection;
 use crate::graph::history::{History, RestoreSnapshot, RestoreState};
 use crate::graph::scene::{NodeData, NodeId, Scene};
 use crate::sculpt::{BrushMode, SculptState};
+use crate::ui::dock::Tab;
 
 use super::actions::{Action, LightingPreset, SculptConvertMode};
-use super::state::{DocumentState, InteractionMode, SculptConvertDialog, UiState};
+use super::state::{
+    DocumentState, InteractionMode, SculptConvertDialog, ShellPanelKind, UiState,
+};
 use super::SdfApp;
 
 /// Maximum storage buffer binding size configured for wgpu (128MB).
@@ -116,6 +119,51 @@ fn activate_sculpt_interaction_state(
     ui.node_graph_state.select_single(sculpt_id);
 }
 
+fn hide_shell_panel_state(ui: &mut UiState, panel: ShellPanelKind) {
+    if let Some(location) = ui.dock_state.find_tab(&panel.dock_tab()) {
+        ui.dock_state.remove_tab(location);
+    }
+    ui.primary_shell.panel_mut(panel).hide();
+}
+
+fn dock_shell_panel_state(ui: &mut UiState, panel: ShellPanelKind, rect: egui::Rect) {
+    if let Some(location) = ui.dock_state.find_tab(&panel.dock_tab()) {
+        ui.dock_state.remove_tab(location);
+    }
+
+    ui.primary_shell.panel_mut(panel).remember_floating_rect(rect);
+
+    let surface = ui.dock_state.add_window(vec![panel.dock_tab()]);
+    if let Some(window_state) = ui.dock_state.get_window_state_mut(surface) {
+        window_state.set_position(rect.min);
+        window_state.set_size(rect.size());
+    }
+    ui.primary_shell.panel_mut(panel).dock();
+}
+
+fn undock_shell_panel_state(ui: &mut UiState, panel: ShellPanelKind) {
+    let fallback_rect = ui.primary_shell.panel(panel).last_floating_rect;
+
+    if let Some((surface, node, tab_index)) = ui.dock_state.find_tab(&panel.dock_tab()) {
+        let detached_rect = ui
+            .dock_state
+            .get_window_state_mut(surface)
+            .map(|window_state| window_state.rect())
+            .filter(|rect| *rect != egui::Rect::NOTHING);
+        ui.dock_state.remove_tab((surface, node, tab_index));
+        ui.primary_shell
+            .panel_mut(panel)
+            .show_floating(detached_rect.or(fallback_rect));
+    } else {
+        ui.primary_shell.panel_mut(panel).show_floating(fallback_rect);
+    }
+}
+
+fn reset_primary_shell_layout_state(ui: &mut UiState) {
+    ui.primary_shell.reset_layout();
+    ui.dock_state = crate::ui::dock::create_primary_shell_dock();
+}
+
 impl SdfApp {
     pub(super) fn sync_interaction_mode_after_sculpt_exit(&mut self) {
         sync_interaction_mode_after_sculpt_exit_state(&mut self.ui);
@@ -180,6 +228,15 @@ impl SdfApp {
             }
         }
     }
+
+    fn toggle_dock_tab(&mut self, tab: Tab) {
+        if let Some(location) = self.ui.dock_state.find_tab(&tab) {
+            self.ui.dock_state.remove_tab(location);
+        } else {
+            self.ui.dock_state.push_to_focused_leaf(tab.clone());
+        }
+    }
+
     /// Process all collected actions. This is the single mutation point — the
     /// equivalent of a Redux reducer. All structural state changes flow through
     /// here, making the data flow explicit and easy to trace.
@@ -1031,6 +1088,22 @@ impl SdfApp {
                         WorkspacePreset::Rendering => dock::create_dock_rendering(),
                     };
                 }
+                Action::DockShellPanel { panel, rect } => {
+                    dock_shell_panel_state(&mut self.ui, panel, rect);
+                }
+                Action::UndockShellPanel(panel) => {
+                    undock_shell_panel_state(&mut self.ui, panel);
+                }
+                Action::HideShellPanel(panel) => {
+                    hide_shell_panel_state(&mut self.ui, panel);
+                }
+                Action::ResetPrimaryShellLayout => {
+                    reset_primary_shell_layout_state(&mut self.ui);
+                }
+
+                Action::ToggleDockTab(tab) => {
+                    self.toggle_dock_tab(tab);
+                }
 
                 // ── Light linking ────────────────────────────────────
                 Action::SetLightMask { node_id, mask } => {
@@ -1438,15 +1511,21 @@ fn find_parent_transform(
 mod tests {
     use std::collections::HashSet;
 
+    use eframe::egui;
     use glam::Vec3;
 
     use super::{
         activate_sculpt_interaction_state, apply_measure_interaction_state,
-        apply_select_interaction_state, apply_selection_behavior_settings, resolve_sculpt_entry,
-        sync_interaction_mode_after_sculpt_exit_state, SculptEntryDecision,
+        apply_select_interaction_state, apply_selection_behavior_settings, dock_shell_panel_state,
+        hide_shell_panel_state, reset_primary_shell_layout_state, resolve_sculpt_entry,
+        sync_interaction_mode_after_sculpt_exit_state, undock_shell_panel_state,
+        SculptEntryDecision,
         SelectionBehaviorApplyResult,
     };
-    use crate::app::state::{DocumentState, MultiTransformSessionState, PrimaryShellState, UiState};
+    use crate::app::state::{
+        DocumentState, MultiTransformSessionState, PrimaryShellState, PrimaryShellDrawerTab,
+        ShellPanelKind, UiState,
+    };
     use crate::graph::history::History;
     use crate::graph::scene::{Scene, SdfPrimitive};
     use crate::graph::voxel::VoxelGrid;
@@ -1714,5 +1793,84 @@ mod tests {
         assert!(ui.measurement_mode);
         assert_eq!(ui.measurement_points, vec![Vec3::Y]);
     }
+
+    #[test]
+    fn dock_shell_panel_creates_detached_surface_and_marks_panel_docked() {
+        let mut ui = test_ui_state();
+        let rect = egui::Rect::from_min_size(egui::pos2(32.0, 48.0), egui::vec2(320.0, 240.0));
+
+        dock_shell_panel_state(&mut ui, ShellPanelKind::Tool, rect);
+
+        assert!(ui.primary_shell.tool_panel.is_docked());
+        let (surface, _, _) = ui
+            .dock_state
+            .find_tab(&ShellPanelKind::Tool.dock_tab())
+            .expect("tool panel should be docked");
+        assert!(!surface.is_main());
+        assert_eq!(ui.primary_shell.tool_panel.last_floating_rect, Some(rect));
+    }
+
+    #[test]
+    fn undock_shell_panel_restores_floating_rect_and_removes_only_target_tab() {
+        let mut ui = test_ui_state();
+        let rect = egui::Rect::from_min_size(egui::pos2(16.0, 24.0), egui::vec2(400.0, 280.0));
+
+        dock_shell_panel_state(&mut ui, ShellPanelKind::Tool, rect);
+        let (surface, node, _) = ui
+            .dock_state
+            .find_tab(&ShellPanelKind::Tool.dock_tab())
+            .expect("tool panel should be docked");
+        ui.dock_state[surface][node].append_tab(ShellPanelKind::Inspector.dock_tab());
+
+        undock_shell_panel_state(&mut ui, ShellPanelKind::Tool);
+
+        assert!(ui.primary_shell.tool_panel.is_floating());
+        assert_eq!(ui.primary_shell.tool_panel.last_floating_rect, Some(rect));
+        assert!(ui.dock_state.find_tab(&ShellPanelKind::Tool.dock_tab()).is_none());
+        assert!(ui
+            .dock_state
+            .find_tab(&ShellPanelKind::Inspector.dock_tab())
+            .is_some());
+    }
+
+    #[test]
+    fn hide_shell_panel_removes_only_target_tab_from_shared_detached_window() {
+        let mut ui = test_ui_state();
+        let rect = egui::Rect::from_min_size(egui::pos2(20.0, 30.0), egui::vec2(420.0, 300.0));
+
+        dock_shell_panel_state(&mut ui, ShellPanelKind::Tool, rect);
+        let (surface, node, _) = ui
+            .dock_state
+            .find_tab(&ShellPanelKind::Tool.dock_tab())
+            .expect("tool panel should be docked");
+        ui.dock_state[surface][node].append_tab(ShellPanelKind::Inspector.dock_tab());
+
+        hide_shell_panel_state(&mut ui, ShellPanelKind::Tool);
+
+        assert!(ui.primary_shell.tool_panel.is_hidden());
+        assert!(ui.dock_state.find_tab(&ShellPanelKind::Tool.dock_tab()).is_none());
+        assert!(ui
+            .dock_state
+            .find_tab(&ShellPanelKind::Inspector.dock_tab())
+            .is_some());
+    }
+
+    #[test]
+    fn reset_primary_shell_layout_restores_shell_defaults_and_clears_detached_shell_windows() {
+        let mut ui = test_ui_state();
+        let rect = egui::Rect::from_min_size(egui::pos2(12.0, 18.0), egui::vec2(300.0, 220.0));
+
+        dock_shell_panel_state(&mut ui, ShellPanelKind::Tool, rect);
+        ui.primary_shell.active_drawer_tab = PrimaryShellDrawerTab::Advanced;
+
+        reset_primary_shell_layout_state(&mut ui);
+
+        assert!(ui.primary_shell.tool_panel.is_floating());
+        assert!(ui.primary_shell.inspector_panel.is_floating());
+        assert!(ui.primary_shell.drawer_panel.is_hidden());
+        assert_eq!(ui.primary_shell.active_drawer_tab, PrimaryShellDrawerTab::Items);
+        assert!(ui.dock_state.find_tab(&ShellPanelKind::Tool.dock_tab()).is_none());
+    }
 }
+
 

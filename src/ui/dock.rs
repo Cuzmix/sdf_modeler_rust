@@ -20,6 +20,7 @@ pub enum Tab {
     Viewport,
     ToolPanel,
     InspectorPanel,
+    DrawerPanel,
     NodeGraph,
     LightGraph,
     Properties,
@@ -34,10 +35,7 @@ pub enum Tab {
 }
 
 impl Tab {
-    pub const ALL: &[Tab] = &[
-        Tab::Viewport,
-        Tab::ToolPanel,
-        Tab::InspectorPanel,
+    pub const EXPERT_TABS: &[Tab] = &[
         Tab::NodeGraph,
         Tab::LightGraph,
         Tab::Properties,
@@ -56,6 +54,7 @@ impl Tab {
             Tab::Viewport => "Viewport",
             Tab::ToolPanel => "Tool Panel",
             Tab::InspectorPanel => "Inspector",
+            Tab::DrawerPanel => "Drawer",
             Tab::NodeGraph => "Node Graph",
             Tab::LightGraph => "Light Graph",
             Tab::Properties => "Properties",
@@ -195,7 +194,7 @@ pub struct ViewportContext<'a> {
     pub measurement_mode: &'a mut bool,
     /// Collected measurement points in world space.
     pub measurement_points: &'a mut Vec<Vec3>,
-    /// Output viewport rect for anchored shell overlays.
+    /// Output viewport rect for primary shell placement defaults.
     pub viewport_rect: &'a mut Option<egui::Rect>,
 }
 
@@ -251,6 +250,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
             Tab::Viewport => "Viewport".into(),
             Tab::ToolPanel => "Tool Panel".into(),
             Tab::InspectorPanel => "Inspector".into(),
+            Tab::DrawerPanel => "Drawer".into(),
             Tab::NodeGraph => "Node Graph".into(),
             Tab::LightGraph => "Light Graph".into(),
             Tab::Properties => "Properties".into(),
@@ -381,6 +381,35 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     settings: self.settings,
                 };
                 crate::ui::primary_shell::draw_inspector_panel_tab(ui, &mut shell_context);
+            }
+            Tab::DrawerPanel => {
+                let mut shell_context = crate::ui::primary_shell::PrimaryShellContext {
+                    shell: self.primary_shell,
+                    dock_state: None,
+                    scene: self.scene,
+                    sculpt_state: self.sculpt_state,
+                    selected: &mut self.node_graph_state.selected,
+                    selected_set: &mut self.node_graph_state.selected_set,
+                    renaming_node: self.scene_tree.renaming_node,
+                    rename_buf: self.scene_tree.rename_buf,
+                    scene_tree_drag: self.scene_tree.drag_state,
+                    scene_tree_search: self.scene_tree.search_filter,
+                    bake_progress: self.bake_progress,
+                    actions: self.actions,
+                    history: self.history,
+                    active_light_ids: self.active_light_ids,
+                    max_sculpt_resolution: self.settings.max_sculpt_resolution,
+                    soloed_light: self.viewport.soloed_light,
+                    material_library: self.material_library,
+                    multi_transform_edit: self.multi_transform_edit,
+                    gizmo_space: self.viewport.gizmo_space,
+                    selection_behavior: &self.viewport.selection_behavior,
+                    reference_images: self.reference_images,
+                    measurement_points: self.viewport.measurement_points,
+                    show_distance_readout: self.viewport.show_distance_readout,
+                    settings: self.settings,
+                };
+                crate::ui::primary_shell::draw_drawer_panel_tab(ui, &mut shell_context);
             }
             Tab::NodeGraph => {
                 node_graph::draw(ui, self.scene, self.node_graph_state, self.actions);
