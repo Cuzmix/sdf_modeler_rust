@@ -62,7 +62,7 @@ fn color_presets_row(ui: &mut egui::Ui, color: &mut [f32; 3]) {
     });
 }
 
-fn vec3_editor(
+pub(crate) fn vec3_editor(
     ui: &mut egui::Ui,
     label: &str,
     value: &mut glam::Vec3,
@@ -176,7 +176,7 @@ fn normalize_direction_or_x(direction: Vec3) -> Vec3 {
     }
 }
 
-fn draw_material_editor(
+pub(crate) fn draw_material_editor(
     ui: &mut egui::Ui,
     id_prefix: &str,
     material: &mut MaterialParams,
@@ -657,7 +657,7 @@ fn draw_multi_properties(ui: &mut egui::Ui, ctx: &mut MultiPropertiesContext<'_>
 }
 
 /// Format large voxel counts with K/M suffixes for readability.
-fn format_voxel_count(voxels: u64) -> String {
+pub(crate) fn format_voxel_count(voxels: u64) -> String {
     if voxels >= 1_000_000 {
         format!("{:.1}M", voxels as f64 / 1_000_000.0)
     } else if voxels >= 1_000 {
@@ -803,7 +803,7 @@ pub fn draw(
                     draw_material_editor(ui, "prim", &mut material, material_library);
                 });
 
-            // Add Sculpt Modifier button
+            // Add Sculpt Layer button
             ui.separator();
             if let Some((done, total)) = bake_progress {
                 let frac = done as f32 / total.max(1) as f32;
@@ -812,7 +812,7 @@ pub fn draw(
                 );
             } else {
                 ui.horizontal(|ui| {
-                    if ui.button("Add Sculpt Modifier").clicked() {
+                    if ui.button("Add Sculpt Layer").clicked() {
                         actions.push(Action::RequestBake(BakeRequest {
                             subtree_root: id,
                             resolution: voxel::DEFAULT_RESOLUTION,
@@ -940,7 +940,7 @@ pub fn draw(
                 actions.push(Action::SwapChildren(id));
             }
 
-            // Add Sculpt Modifier / Flatten buttons
+            // Add Sculpt Layer / convert buttons
             ui.separator();
             if let Some((done, total)) = bake_progress {
                 let frac = done as f32 / total.max(1) as f32;
@@ -949,7 +949,7 @@ pub fn draw(
                 );
             } else {
                 ui.horizontal(|ui| {
-                    if ui.button("Add Sculpt Modifier").clicked() {
+                    if ui.button("Add Sculpt Layer").clicked() {
                         let sculpt_color = glam::Vec3::new(0.6, 0.6, 0.6);
                         actions.push(Action::RequestBake(BakeRequest {
                             subtree_root: id,
@@ -960,7 +960,7 @@ pub fn draw(
                         }));
                         return;
                     }
-                    if ui.button("Flatten to Sculpt").clicked() {
+                    if ui.button("Convert to Voxel Object").clicked() {
                         let resolution = voxel::max_subtree_resolution(scene, id);
                         let sculpt_color = glam::Vec3::new(0.6, 0.6, 0.6);
                         actions.push(Action::RequestBake(BakeRequest {
@@ -1229,8 +1229,8 @@ pub fn draw(
                         sculpt_state.deactivate();
                     }
                 });
-                // Flatten: merge this sculpt + its input into a standalone Sculpt
-                if input.is_some() && ui.button("Flatten (merge input + sculpt)").clicked() {
+                // Convert this differential sculpt + input into a standalone voxel object.
+                if input.is_some() && ui.button("Convert to Voxel Object").clicked() {
                     let resolution = voxel::max_subtree_resolution(scene, id);
                     actions.push(Action::RequestBake(BakeRequest {
                         subtree_root: id,
@@ -2050,7 +2050,7 @@ pub fn draw(
 
 /// Draw the Light Linking collapsing section for a geometry node.
 /// Shows per-light checkboxes allowing the user to control which lights affect this object.
-fn draw_light_linking_section(
+pub(crate) fn draw_light_linking_section(
     ui: &mut egui::Ui,
     scene: &Scene,
     node_id: NodeId,

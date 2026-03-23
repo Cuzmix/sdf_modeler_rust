@@ -70,6 +70,8 @@ pub enum Action {
     Select(Option<NodeId>),
     DeleteSelected,
     DeleteNode(NodeId),
+    DeletePresentedObject(NodeId),
+    RemoveWrapperNode(NodeId),
 
     // ── Clipboard ────────────────────────────────────────────────────
     Copy,
@@ -208,6 +210,9 @@ pub enum Action {
     HideShellPanel(ShellPanelKind),
     ResetPrimaryShellLayout,
     ToggleDockTab(Tab),
+    RemoveAttachedSculpt {
+        host: NodeId,
+    },
 
     // ── UI toggles ───────────────────────────────────────────────────
     ToggleDebug,

@@ -159,7 +159,6 @@ impl Default for MultiTransformSessionState {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PrimaryShellContextTab {
-    Sculpt,
     Selection,
     Material,
     Light,
@@ -179,6 +178,23 @@ pub enum InteractionMode {
     Select,
     Measure,
     Sculpt(BrushMode),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TaskDeckMode {
+    SelectCompose,
+    Measure,
+    Sculpt,
+}
+
+impl From<InteractionMode> for TaskDeckMode {
+    fn from(mode: InteractionMode) -> Self {
+        match mode {
+            InteractionMode::Select => Self::SelectCompose,
+            InteractionMode::Measure => Self::Measure,
+            InteractionMode::Sculpt(_) => Self::Sculpt,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -264,6 +280,8 @@ pub struct PrimaryShellState {
     pub drawer_panel: ShellWindowState,
     pub active_context_tab: PrimaryShellContextTab,
     pub active_drawer_tab: PrimaryShellDrawerTab,
+    pub brush_advanced_open: bool,
+    pub modeling_commands_open: bool,
     pub layout_revision: u64,
 }
 
@@ -276,12 +294,18 @@ impl Default for PrimaryShellState {
             drawer_panel: ShellWindowState::new(ShellPanelPresentation::Hidden),
             active_context_tab: PrimaryShellContextTab::Selection,
             active_drawer_tab: PrimaryShellDrawerTab::Items,
+            brush_advanced_open: false,
+            modeling_commands_open: false,
             layout_revision: 0,
         }
     }
 }
 
 impl PrimaryShellState {
+    pub fn task_deck_mode(&self) -> TaskDeckMode {
+        self.interaction_mode.into()
+    }
+
     pub fn panel(&self, panel: ShellPanelKind) -> &ShellWindowState {
         match panel {
             ShellPanelKind::Tool => &self.tool_panel,
@@ -675,6 +699,8 @@ mod tests {
         state.drawer_panel.show_floating(None);
         state.active_context_tab = PrimaryShellContextTab::Node;
         state.active_drawer_tab = PrimaryShellDrawerTab::Reference;
+        state.brush_advanced_open = true;
+        state.modeling_commands_open = true;
         state.layout_revision = 9;
 
         state.reset_layout();
@@ -684,6 +710,8 @@ mod tests {
         assert!(state.drawer_panel.is_hidden());
         assert_eq!(state.active_context_tab, PrimaryShellContextTab::Selection);
         assert_eq!(state.active_drawer_tab, PrimaryShellDrawerTab::Items);
+        assert!(!state.brush_advanced_open);
+        assert!(!state.modeling_commands_open);
         assert_eq!(state.layout_revision, 10);
     }
 
@@ -696,5 +724,17 @@ mod tests {
         state.reconcile_docked_panels(&dock_state);
 
         assert!(state.tool_panel.is_hidden());
+    }
+
+    #[test]
+    fn task_deck_mode_tracks_interaction_mode() {
+        let mut state = PrimaryShellState::default();
+        assert_eq!(state.task_deck_mode(), TaskDeckMode::SelectCompose);
+
+        state.interaction_mode = InteractionMode::Measure;
+        assert_eq!(state.task_deck_mode(), TaskDeckMode::Measure);
+
+        state.interaction_mode = InteractionMode::Sculpt(BrushMode::Grab);
+        assert_eq!(state.task_deck_mode(), TaskDeckMode::Sculpt);
     }
 }

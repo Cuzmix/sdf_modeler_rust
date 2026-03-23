@@ -2,6 +2,9 @@ use eframe::egui::{self, Color32, Pos2, Rect, Stroke, Vec2};
 use glam::{Mat4, Quat, Vec3, Vec4};
 
 use crate::gpu::camera::Camera;
+use crate::graph::presented_object::{
+    current_transform_owner, ensure_presented_transform_owner, resolve_presented_object,
+};
 use crate::graph::scene::{NodeData, NodeId, Scene};
 use crate::settings::{
     GroupRotateDirection, MultiAxisOrientation, MultiPivotMode, SelectionBehaviorSettings,
@@ -471,6 +474,46 @@ fn build_gizmo_target(
     })
 }
 
+fn normalize_presented_selection_target(scene: &Scene, node_id: NodeId) -> NodeId {
+    let Some(object) = resolve_presented_object(scene, node_id) else {
+        return node_id;
+    };
+    if node_id != object.host_id {
+        return node_id;
+    }
+    current_transform_owner(scene, node_id).unwrap_or(node_id)
+}
+
+fn ensure_transform_owner_for_selection(scene: &mut Scene, node_id: NodeId) -> NodeId {
+    let Some(object) = resolve_presented_object(scene, node_id) else {
+        return node_id;
+    };
+    if node_id != object.host_id {
+        return node_id;
+    }
+    ensure_presented_transform_owner(scene, node_id).unwrap_or(node_id)
+}
+
+fn ensure_transform_owners_for_selection_set(
+    scene: &mut Scene,
+    selected: Option<NodeId>,
+    selected_set: &std::collections::HashSet<NodeId>,
+) {
+    if let Some(selected_id) = selected {
+        let _ = ensure_transform_owner_for_selection(scene, selected_id);
+    }
+
+    let mut extra_ids: Vec<_> = selected_set
+        .iter()
+        .copied()
+        .filter(|node_id| Some(*node_id) != selected)
+        .collect();
+    extra_ids.sort_unstable();
+    for node_id in extra_ids {
+        let _ = ensure_transform_owner_for_selection(scene, node_id);
+    }
+}
+
 #[allow(dead_code)]
 pub(crate) fn collect_gizmo_selection(
     scene: &Scene,
@@ -480,7 +523,7 @@ pub(crate) fn collect_gizmo_selection(
 ) -> Option<GizmoSelection> {
     let mut ordered_ids = Vec::new();
     if let Some(primary_selected) = selected {
-        ordered_ids.push(primary_selected);
+        ordered_ids.push(normalize_presented_selection_target(scene, primary_selected));
     }
 
     let mut extra_ids: Vec<_> = selected_set
@@ -489,7 +532,20 @@ pub(crate) fn collect_gizmo_selection(
         .filter(|node_id| Some(*node_id) != selected)
         .collect();
     extra_ids.sort_unstable();
-    ordered_ids.extend(extra_ids);
+    ordered_ids.extend(
+        extra_ids
+            .into_iter()
+            .map(|node_id| normalize_presented_selection_target(scene, node_id)),
+    );
+
+    let mut deduped_ids = Vec::new();
+    let mut seen_ids = std::collections::HashSet::new();
+    for node_id in ordered_ids {
+        if seen_ids.insert(node_id) {
+            deduped_ids.push(node_id);
+        }
+    }
+    let ordered_ids = deduped_ids;
 
     if ordered_ids.is_empty() {
         return None;
@@ -521,6 +577,7 @@ pub(crate) fn collect_gizmo_selection(
     }
 
     let reference_target = selected
+        .map(|selected_id| normalize_presented_selection_target(scene, selected_id))
         .and_then(|selected_id| targets.iter().find(|target| target.node_id == selected_id))
         .unwrap_or(&targets[0]);
     let reference_target_id = reference_target.node_id;
@@ -1538,7 +1595,7 @@ pub fn draw_and_interact(
 
     let single_node_id = match gizmo_state {
         GizmoState::DraggingSingle { node_id, .. } => Some(*node_id),
-        _ => selected,
+        _ => selected.map(|selected_id| normalize_presented_selection_target(scene, selected_id)),
     };
 
     let mut single_transform = None;
@@ -1650,59 +1707,89 @@ pub fn draw_and_interact(
 
     // --- Interaction ---
     let mut consumed = false;
+    let mut started_drag_this_frame = false;
 
     // Start dragging
     if response.drag_started_by(egui::PointerButton::Primary) {
         if let Some(ref axis) = hovered_axis {
             let axis_idx = axis.euler_index();
-            let axis_dir = axes[axis_idx];
-            let view_dir = camera.eye() - gizmo_center;
-            let rotation_sign = if *gizmo_mode == GizmoMode::Rotate {
-                rotation_drag_sign(
-                    axis_dir,
-                    view_dir,
-                    multi_selection_active,
-                    selection_behavior.group_rotate_direction,
-                )
-            } else {
-                1.0
-            };
             if multi_selection_active {
-                if let Some(selection) = selection.as_ref() {
+                ensure_transform_owners_for_selection_set(scene, selected, selected_set);
+                if let Some(selection) =
+                    collect_gizmo_selection(scene, selected, selected_set, selection_behavior)
+                {
+                    let drag_axes = multi_selection_axis_directions(
+                        selection.reference_rotation_world,
+                        selection_behavior,
+                    );
+                    let drag_center = selection.base_center_world;
+                    let drag_origin_screen =
+                        world_to_screen(drag_center, &vp, rect).unwrap_or(origin_screen);
+                    let drag_axis_dir = drag_axes[axis_idx];
+                    let rotation_sign = if *gizmo_mode == GizmoMode::Rotate {
+                        rotation_drag_sign(
+                            drag_axis_dir,
+                            camera.eye() - drag_center,
+                            true,
+                            selection_behavior.group_rotate_direction,
+                        )
+                    } else {
+                        1.0
+                    };
                     *gizmo_state = GizmoState::DraggingMulti {
                         axis: axis.clone(),
                         drag_session: build_drag_session(
-                            selection,
-                            axes,
-                            origin_screen,
+                            &selection,
+                            drag_axes,
+                            drag_origin_screen,
                             hover_pos,
                             rotation_sign,
                             Vec3::ZERO,
                         ),
                     };
                     consumed = true;
+                    started_drag_this_frame = true;
                 }
-            } else if let Some((node_id, node_transform)) = single_transform.as_ref() {
-                *gizmo_state = GizmoState::DraggingSingle {
-                    axis: axis.clone(),
-                    node_id: *node_id,
-                    _start_screen_pos: hover_pos.unwrap_or(origin_screen),
-                    _start_world_pos: node_transform.position,
-                    _start_rotation: node_transform.rotation,
-                    _start_scale: node_transform.scale,
-                    rotation_drag: ScreenRotationDragState::new(
-                        origin_screen,
-                        hover_pos,
-                        rotation_sign,
-                    ),
-                };
-                consumed = true;
+            } else if let Some(selected_id) = selected {
+                let drag_node = ensure_transform_owner_for_selection(scene, selected_id);
+                if let Some(node_transform) = extract_node_transform(scene, drag_node) {
+                    let drag_axes = compute_axis_directions(node_transform.rotation, gizmo_space);
+                    let drag_center =
+                        node_transform.position + rotate_euler(*pivot_offset, node_transform.rotation);
+                    let drag_origin_screen =
+                        world_to_screen(drag_center, &vp, rect).unwrap_or(origin_screen);
+                    let rotation_sign = if *gizmo_mode == GizmoMode::Rotate {
+                        rotation_drag_sign(
+                            drag_axes[axis_idx],
+                            camera.eye() - drag_center,
+                            false,
+                            selection_behavior.group_rotate_direction,
+                        )
+                    } else {
+                        1.0
+                    };
+                    *gizmo_state = GizmoState::DraggingSingle {
+                        axis: axis.clone(),
+                        node_id: drag_node,
+                        _start_screen_pos: hover_pos.unwrap_or(drag_origin_screen),
+                        _start_world_pos: node_transform.position,
+                        _start_rotation: node_transform.rotation,
+                        _start_scale: node_transform.scale,
+                        rotation_drag: ScreenRotationDragState::new(
+                            drag_origin_screen,
+                            hover_pos,
+                            rotation_sign,
+                        ),
+                    };
+                    consumed = true;
+                    started_drag_this_frame = true;
+                }
             }
         }
     }
 
     // During drag
-    if response.dragged_by(egui::PointerButton::Primary) {
+    if response.dragged_by(egui::PointerButton::Primary) && !started_drag_this_frame {
         match gizmo_state {
             GizmoState::DraggingSingle {
                 axis,
@@ -1960,6 +2047,13 @@ mod tests {
         }
     }
 
+    fn world_position(scene: &Scene, node_id: NodeId) -> Vec3 {
+        let parent_map = scene.build_parent_map();
+        build_gizmo_target(scene, node_id, &parent_map)
+            .map(|target| target.world_position)
+            .unwrap_or(Vec3::ZERO)
+    }
+
     #[test]
     fn group_translation_moves_all_selected_targets() {
         let mut scene = empty_scene();
@@ -2166,6 +2260,67 @@ mod tests {
         assert_vec3_close(
             moved_selection.targets[0].world_position,
             start_world_position + Vec3::new(2.0, 0.0, 0.0),
+        );
+    }
+
+    #[test]
+    fn sculpted_host_selection_prefers_outer_object_transform() {
+        let mut scene = empty_scene();
+        let host = scene.create_primitive(SdfPrimitive::Sphere);
+        let (object_transform, _) = scene.insert_sculpt_layer_above(
+            host,
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::splat(0.8),
+            VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0)),
+        );
+
+        let selected_set = HashSet::from([host]);
+        let selection = collect_gizmo_selection(
+            &scene,
+            Some(host),
+            &selected_set,
+            &SelectionBehaviorSettings::default(),
+        )
+        .unwrap();
+
+        assert_eq!(selection.targets.len(), 1);
+        assert_eq!(selection.targets[0].node_id, object_transform);
+    }
+
+    #[test]
+    fn ensuring_legacy_attached_sculpt_owner_inserts_wrapper_above_object_root() {
+        let mut scene = empty_scene();
+        let host = scene.create_primitive(SdfPrimitive::Sphere);
+        let sculpt_id = scene.insert_sculpt_above(
+            host,
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::splat(0.8),
+            VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0)),
+        );
+        let object_world_before = world_position(&scene, host);
+        let sculpt_world_before = world_position(&scene, sculpt_id);
+
+        let transform_id = ensure_transform_owner_for_selection(&mut scene, host);
+        let selected_set = HashSet::from([host]);
+        let selection = collect_gizmo_selection(
+            &scene,
+            Some(host),
+            &selected_set,
+            &SelectionBehaviorSettings::default(),
+        )
+        .unwrap();
+
+        assert_eq!(selection.targets[0].node_id, transform_id);
+        assert_vec3_close(world_position(&scene, host), object_world_before);
+        assert_vec3_close(world_position(&scene, sculpt_id), sculpt_world_before);
+
+        apply_world_translation_to_targets(&mut scene, &selection.targets, Vec3::new(2.0, 0.0, 0.0));
+        assert_vec3_close(world_position(&scene, host), object_world_before + Vec3::new(2.0, 0.0, 0.0));
+        assert_vec3_close(
+            world_position(&scene, sculpt_id),
+            sculpt_world_before + Vec3::new(2.0, 0.0, 0.0),
         );
     }
 

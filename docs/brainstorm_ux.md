@@ -54,9 +54,17 @@ Expected behavior:
 
 Keyboard shortcuts remain accelerators, but they should route through the same semantic interaction actions as the shell UI.
 
-## Tool Panel
+## Task Deck
 
-The primary creation and mode surface is a floating `Tool Panel`.
+The primary action surface is a floating `Task Deck`.
+
+For continuity the user-facing label may still remain `Tool Panel`, but its role is task-oriented rather than generic tooling.
+
+Deck states:
+
+- `Select / Compose`
+- `Measure`
+- `Sculpt`
 
 Top rail:
 
@@ -65,22 +73,32 @@ Top rail:
 - sculpt brushes
 - `Distance` toggle
 
-Below the rail, the panel contains collapsible command sections:
+`Sculpt` deck layout:
+
+- brush rail
+- hot controls for `Radius`, `Strength`, `Falloff`
+- `Brush Advanced` foldout for lower-frequency brush tuning
+- `Modeling Commands` foldout for create/boolean/wrap/scene access
+
+`Select / Compose` keeps the current create/wrap/scene actions in the same surface.
+
+`Measure` keeps measurement actions together and avoids showing sculpt-only tuning.
+
+Below the rail or foldouts, the deck contains collapsible command sections:
 
 - `Create`
 - `Guided Boolean`
 - `Wrap Selection`
 - `Scene`
 
-This replaces the old split between separate floating tool and shape panels and keeps selection and sculpting on one control surface.
+This replaces the old split between choosing a sculpt action in one panel and adjusting it in another.
 
-## Inspector Panel
+## Subject Inspector
 
-The inspector remains adaptive, but brush choice no longer lives there.
+The secondary floating panel becomes a context-only `Subject Inspector`.
 
 Tabs:
 
-- `Sculpt`
 - `Selection`
 - `Material`
 - `Light`
@@ -88,17 +106,16 @@ Tabs:
 
 Default tab behavior:
 
-- sculpt interaction -> `Sculpt`
 - select or measure interaction -> `Selection`
 - light selection -> `Light`
 - material-capable selection -> `Material`
 
 Inspector responsibilities:
 
-- edit parameters for the active sculpt brush
 - edit selection and transform properties
 - show measurement status and clear/reset actions while `Measure` is active
 - expose material, light, and node-specific properties as needed
+- stay context-only during sculpt instead of owning brush tuning
 
 ## Launcher And Drawer
 

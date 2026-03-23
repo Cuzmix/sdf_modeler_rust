@@ -7,9 +7,10 @@ use glam::Vec3;
 use crate::app::actions::{Action, ActionSink, WorkspacePreset};
 use crate::app::state::{
     InteractionMode, MultiTransformSessionState, PrimaryShellContextTab, PrimaryShellDrawerTab,
-    PrimaryShellState, ShellPanelKind,
+    PrimaryShellState, ShellPanelKind, TaskDeckMode,
 };
 use crate::graph::history::History;
+use crate::graph::presented_object::resolve_presented_object;
 use crate::graph::scene::{CsgOp, ModifierKind, NodeData, NodeId, Scene, SdfPrimitive};
 use crate::material_preset::MaterialLibrary;
 use crate::sculpt::{BrushMode, SculptState};
@@ -18,7 +19,8 @@ use crate::ui::dock::Tab;
 use crate::ui::gizmo::GizmoSpace;
 use crate::ui::reference_image::ReferenceImageManager;
 use crate::ui::{
-    brush_settings, history_panel, properties, reference_image, render_settings, scene_tree,
+    brush_settings, history_panel, presented_properties, presented_scene_tree, reference_image,
+    render_settings,
 };
 
 const SHELL_MARGIN: f32 = 12.0;
@@ -397,33 +399,147 @@ fn draw_docked_shell_tab_header(ui: &mut egui::Ui, panel: ShellPanelKind, action
 }
 
 pub fn draw_tool_panel_contents(ui: &mut egui::Ui, shell: &mut PrimaryShellContext<'_>) {
-    ui.label(egui::RichText::new("Interaction").small().strong());
-    ui.horizontal_wrapped(|ui| {
-        interaction_mode_button(ui, shell, InteractionMode::Select, "Select");
-        interaction_mode_button(ui, shell, InteractionMode::Measure, "Measure");
-        for brush in BrushMode::ALL {
-            interaction_mode_button(ui, shell, InteractionMode::Sculpt(brush), brush.label());
+    let deck_mode = shell.shell.task_deck_mode();
+    ui.label(egui::RichText::new(task_deck_heading(deck_mode)).small().strong());
+
+    match deck_mode {
+        TaskDeckMode::SelectCompose => draw_select_compose_deck(ui, shell),
+        TaskDeckMode::Measure => draw_measure_deck(ui, shell),
+        TaskDeckMode::Sculpt => draw_sculpt_deck(ui, shell),
+    }
+}
+
+fn task_deck_heading(mode: TaskDeckMode) -> &'static str {
+    match mode {
+        TaskDeckMode::SelectCompose => "Task Deck: Select / Compose",
+        TaskDeckMode::Measure => "Task Deck: Measure",
+        TaskDeckMode::Sculpt => "Task Deck: Sculpt",
+    }
+}
+
+fn draw_select_compose_deck(ui: &mut egui::Ui, shell: &mut PrimaryShellContext<'_>) {
+    draw_interaction_rail(ui, shell, true);
+    ui.separator();
+    draw_modeling_command_sections(ui, shell);
+}
+
+fn draw_measure_deck(ui: &mut egui::Ui, shell: &mut PrimaryShellContext<'_>) {
+    draw_interaction_rail(ui, shell, false);
+    ui.add_space(4.0);
+    ui.horizontal(|ui| {
+        ui.small(format!("{} point(s) placed", shell.measurement_points.len()));
+        if ui.small_button("Clear Points").clicked() {
+            shell.measurement_points.clear();
         }
-        ui.separator();
-        if ui
-            .selectable_label(*shell.show_distance_readout, "Distance")
-            .clicked()
-        {
-            shell.actions.push(Action::ToggleDistanceReadout);
+        if ui.small_button("Exit Measure").clicked() {
+            shell
+                .actions
+                .push(Action::SetInteractionMode(InteractionMode::Select));
         }
     });
 
-    if shell.shell.interaction_mode == InteractionMode::Measure {
-        ui.add_space(4.0);
-        ui.horizontal(|ui| {
-            ui.small(format!("{} point(s) placed", shell.measurement_points.len()));
-            if ui.small_button("Clear Points").clicked() {
-                shell.measurement_points.clear();
+    ui.separator();
+    let mut modeling_commands_open = shell.shell.modeling_commands_open;
+    draw_collapsible_panel_section(ui, &mut modeling_commands_open, "Modeling Commands", |ui| {
+        draw_modeling_command_sections(ui, shell)
+    });
+    shell.shell.modeling_commands_open = modeling_commands_open;
+}
+
+fn draw_sculpt_deck(ui: &mut egui::Ui, shell: &mut PrimaryShellContext<'_>) {
+    draw_sculpt_mode_toolbar(ui, shell);
+    ui.add_space(4.0);
+    draw_sculpt_brush_rail(ui, shell);
+    ui.add_space(6.0);
+    brush_settings::draw_brush_hot_controls(ui, shell.sculpt_state);
+    ui.add_space(6.0);
+    let mut brush_advanced_open = shell.shell.brush_advanced_open;
+    draw_collapsible_panel_section(ui, &mut brush_advanced_open, "Brush Advanced", |ui| {
+        brush_settings::draw_brush_advanced_controls(ui, shell.sculpt_state)
+    });
+    shell.shell.brush_advanced_open = brush_advanced_open;
+    ui.add_space(6.0);
+    let mut modeling_commands_open = shell.shell.modeling_commands_open;
+    draw_collapsible_panel_section(ui, &mut modeling_commands_open, "Modeling Commands", |ui| {
+        draw_modeling_command_sections(ui, shell)
+    });
+    shell.shell.modeling_commands_open = modeling_commands_open;
+}
+
+fn draw_interaction_rail(
+    ui: &mut egui::Ui,
+    shell: &mut PrimaryShellContext<'_>,
+    show_sculpt_brushes: bool,
+) {
+    ui.horizontal_wrapped(|ui| {
+        interaction_mode_button(ui, shell, InteractionMode::Select, "Select");
+        interaction_mode_button(ui, shell, InteractionMode::Measure, "Measure");
+        if show_sculpt_brushes {
+            for brush in BrushMode::ALL {
+                interaction_mode_button(ui, shell, InteractionMode::Sculpt(brush), brush.label());
             }
-        });
+        }
+        ui.separator();
+        draw_distance_toggle(ui, shell);
+    });
+}
+
+fn draw_sculpt_mode_toolbar(ui: &mut egui::Ui, shell: &mut PrimaryShellContext<'_>) {
+    ui.horizontal_wrapped(|ui| {
+        interaction_mode_button(ui, shell, InteractionMode::Select, "Select");
+        interaction_mode_button(ui, shell, InteractionMode::Measure, "Measure");
+        ui.separator();
+        draw_distance_toggle(ui, shell);
+    });
+}
+
+fn draw_sculpt_brush_rail(ui: &mut egui::Ui, shell: &mut PrimaryShellContext<'_>) {
+    ui.label(egui::RichText::new("Brush").small().strong());
+    ui.horizontal_wrapped(|ui| {
+        for brush in BrushMode::ALL {
+            interaction_mode_button(ui, shell, InteractionMode::Sculpt(brush), brush.label());
+        }
+    });
+}
+
+fn draw_distance_toggle(ui: &mut egui::Ui, shell: &mut PrimaryShellContext<'_>) {
+    if ui
+        .selectable_label(*shell.show_distance_readout, "Distance")
+        .clicked()
+    {
+        shell.actions.push(Action::ToggleDistanceReadout);
+    }
+}
+
+fn draw_collapsible_panel_section(
+    ui: &mut egui::Ui,
+    open: &mut bool,
+    label: &str,
+    add_contents: impl FnOnce(&mut egui::Ui),
+) {
+    let icon = if *open { "▾" } else { "▸" };
+    if ui
+        .selectable_label(*open, format!("{icon} {label}"))
+        .clicked()
+    {
+        *open = !*open;
     }
 
-    ui.separator();
+    if *open {
+        ui.add_space(4.0);
+        add_contents(ui);
+    }
+}
+
+fn draw_modeling_command_sections(ui: &mut egui::Ui, shell: &mut PrimaryShellContext<'_>) {
+    let selected_object = (*shell.selected).and_then(|selected_id| {
+        resolve_presented_object(shell.scene, selected_id)
+    });
+    let selected_target_id = selected_object
+        .map(|object| object.object_root_id)
+        .or(*shell.selected);
+    let selected_label = selected_object
+        .and_then(|object| shell.scene.nodes.get(&object.host_id).map(|node| node.name.clone()));
 
     egui::CollapsingHeader::new("Create")
         .default_open(true)
@@ -444,13 +560,8 @@ pub fn draw_tool_panel_contents(ui: &mut egui::Ui, shell: &mut PrimaryShellConte
     egui::CollapsingHeader::new("Guided Boolean")
         .default_open(true)
         .show(ui, |ui| {
-            if let Some(selected_id) = *shell.selected {
-                let selected_name = shell
-                    .scene
-                    .nodes
-                    .get(&selected_id)
-                    .map(|node| node.name.as_str())
-                    .unwrap_or("Selected node");
+            if selected_target_id.is_some() {
+                let selected_name = selected_label.as_deref().unwrap_or("Selected object");
                 ui.small(format!("Base: {selected_name}"));
                 ui.horizontal_wrapped(|ui| {
                     boolean_menu_button(ui, "Union +", CsgOp::Union, shell.actions);
@@ -465,7 +576,7 @@ pub fn draw_tool_panel_contents(ui: &mut egui::Ui, shell: &mut PrimaryShellConte
     egui::CollapsingHeader::new("Wrap Selection")
         .default_open(true)
         .show(ui, |ui| {
-            if let Some(selected_id) = *shell.selected {
+            if let Some(selected_id) = selected_target_id {
                 if ui.button("Add Transform").clicked() {
                     shell
                         .actions
@@ -532,34 +643,27 @@ fn sync_context_tab(
     scene: &Scene,
     selected: Option<NodeId>,
 ) {
-    let selected_node = selected.and_then(|node_id| scene.nodes.get(&node_id));
+    let selected_host = selected.and_then(|node_id| resolve_presented_object(scene, node_id));
+    let selected_node = selected_host
+        .and_then(|object| scene.nodes.get(&object.host_id));
     let selected_is_light =
         selected_node.is_some_and(|node| matches!(node.data, NodeData::Light { .. }));
     let selected_has_material = selected_node.is_some_and(|node| {
         matches!(node.data, NodeData::Primitive { .. } | NodeData::Sculpt { .. })
     });
 
-    match shell.interaction_mode {
-        InteractionMode::Sculpt(_) => {
-            if shell.active_context_tab == PrimaryShellContextTab::Selection {
-                shell.active_context_tab = PrimaryShellContextTab::Sculpt;
-            }
-        }
-        InteractionMode::Measure => {
-            if shell.active_context_tab == PrimaryShellContextTab::Sculpt {
-                shell.active_context_tab = PrimaryShellContextTab::Selection;
-            }
-        }
-        InteractionMode::Select => {
-            if selected_is_light && shell.active_context_tab == PrimaryShellContextTab::Selection {
-                shell.active_context_tab = PrimaryShellContextTab::Light;
-            } else if selected_has_material
-                && shell.active_context_tab == PrimaryShellContextTab::Selection
-            {
-                shell.active_context_tab = PrimaryShellContextTab::Material;
-            } else if shell.active_context_tab == PrimaryShellContextTab::Sculpt {
-                shell.active_context_tab = PrimaryShellContextTab::Selection;
-            }
+    if shell.interaction_mode == InteractionMode::Measure {
+        shell.active_context_tab = PrimaryShellContextTab::Selection;
+        return;
+    }
+
+    if shell.interaction_mode == InteractionMode::Select {
+        if selected_is_light && shell.active_context_tab == PrimaryShellContextTab::Selection {
+            shell.active_context_tab = PrimaryShellContextTab::Light;
+        } else if selected_has_material
+            && shell.active_context_tab == PrimaryShellContextTab::Selection
+        {
+            shell.active_context_tab = PrimaryShellContextTab::Material;
         }
     }
 
@@ -573,7 +677,6 @@ fn sync_context_tab(
 
 fn draw_inspector_panel_contents(ui: &mut egui::Ui, shell: &mut PrimaryShellContext<'_>) {
     ui.horizontal_wrapped(|ui| {
-        context_tab_button(ui, shell, PrimaryShellContextTab::Sculpt, "Sculpt");
         context_tab_button(ui, shell, PrimaryShellContextTab::Selection, "Selection");
         context_tab_button(ui, shell, PrimaryShellContextTab::Material, "Material");
         context_tab_button(ui, shell, PrimaryShellContextTab::Light, "Light");
@@ -584,9 +687,6 @@ fn draw_inspector_panel_contents(ui: &mut egui::Ui, shell: &mut PrimaryShellCont
     egui::ScrollArea::vertical()
         .auto_shrink([false, false])
         .show(ui, |ui| match shell.shell.active_context_tab {
-            PrimaryShellContextTab::Sculpt => {
-                brush_settings::draw(ui, shell.sculpt_state);
-            }
             PrimaryShellContextTab::Selection => {
                 if shell.shell.interaction_mode == InteractionMode::Measure {
                     draw_measurement_panel(ui, shell);
@@ -646,7 +746,7 @@ fn draw_measurement_panel(ui: &mut egui::Ui, shell: &mut PrimaryShellContext<'_>
 }
 
 fn draw_properties_panel(ui: &mut egui::Ui, shell: &mut PrimaryShellContext<'_>) {
-    properties::draw(
+    presented_properties::draw(
         ui,
         shell.scene,
         *shell.selected,
@@ -704,7 +804,7 @@ fn context_tab_button_for_drawer(
 fn draw_drawer_contents(ui: &mut egui::Ui, shell: &mut PrimaryShellContext<'_>) {
     match shell.shell.active_drawer_tab {
         PrimaryShellDrawerTab::Items => {
-            scene_tree::draw(
+            presented_scene_tree::draw(
                 ui,
                 shell.scene,
                 shell.selected,
@@ -876,6 +976,7 @@ fn default_drawer_panel_position(viewport_rect: egui::Rect, launcher_rect: &egui
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::graph::scene::SdfPrimitive;
 
     #[test]
     fn shell_window_id_changes_with_layout_revision() {
@@ -951,5 +1052,41 @@ mod tests {
             actions.first(),
             Some(Action::HideShellPanel(ShellPanelKind::Drawer))
         ));
+    }
+
+    #[test]
+    fn sync_context_tab_keeps_selection_context_during_sculpt() {
+        let mut shell = PrimaryShellState::default();
+        let mut scene = Scene::new();
+        let base = scene.create_primitive(SdfPrimitive::Sphere);
+        let sculpt_id = scene.create_sculpt(
+            base,
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::splat(0.8),
+            crate::graph::voxel::VoxelGrid::new_displacement(
+                8,
+                Vec3::splat(-1.0),
+                Vec3::splat(1.0),
+            ),
+        );
+        shell.interaction_mode = InteractionMode::Sculpt(BrushMode::Add);
+        shell.active_context_tab = PrimaryShellContextTab::Selection;
+
+        sync_context_tab(&mut shell, &scene, Some(sculpt_id));
+
+        assert_eq!(shell.active_context_tab, PrimaryShellContextTab::Selection);
+    }
+
+    #[test]
+    fn sync_context_tab_forces_selection_in_measure_mode() {
+        let mut shell = PrimaryShellState::default();
+        let scene = Scene::new();
+        shell.interaction_mode = InteractionMode::Measure;
+        shell.active_context_tab = PrimaryShellContextTab::Material;
+
+        sync_context_tab(&mut shell, &scene, None);
+
+        assert_eq!(shell.active_context_tab, PrimaryShellContextTab::Selection);
     }
 }

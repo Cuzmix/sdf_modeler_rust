@@ -4,6 +4,7 @@ use crate::gpu::buffers;
 use crate::gpu::codegen;
 use crate::graph::scene::{NodeData, NodeId};
 use crate::ui::viewport::ViewportResources;
+use crate::graph::presented_object::resolve_host_selection;
 
 use super::SdfApp;
 
@@ -279,11 +280,13 @@ impl SdfApp {
             let idx = result.material_id as usize;
             if idx < topo_order.len() {
                 let hit_node_id = topo_order[idx];
+                let selected_host =
+                    resolve_host_selection(&self.doc.scene, Some(hit_node_id)).unwrap_or(hit_node_id);
                 // Shift+click toggles viewport multi-selection.
                 if pending.additive_select_held {
-                    self.ui.node_graph_state.toggle_select(hit_node_id);
+                    self.ui.node_graph_state.toggle_select(selected_host);
                 } else {
-                    self.ui.node_graph_state.select_single(hit_node_id);
+                    self.ui.node_graph_state.select_single(selected_host);
                 }
                 self.gpu.buffer_dirty = true;
             }

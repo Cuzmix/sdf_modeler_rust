@@ -2,11 +2,28 @@ use eframe::wgpu;
 use glam::{Mat4, Vec3, Vec4};
 
 use crate::gpu::picking::{PendingPick, PickResult};
-use crate::graph::scene::{NodeData, NodeId};
+use crate::graph::presented_object::{resolve_presented_object, PresentedObjectKind};
+use crate::graph::scene::{NodeData, NodeId, Scene};
 use crate::sculpt::{self, ActiveTool, BrushMode, FalloffMode, SculptState};
 use crate::ui::viewport::{BrushDispatch, BrushGpuParams, ViewportResources};
 
 use super::{state::SculptRuntimeCache, PickRayInputs, PickState, SdfApp};
+
+fn resolve_sculpt_target_for_selection(scene: &Scene, selected: Option<NodeId>) -> Option<NodeId> {
+    let selected_id = selected?;
+    if let Some(presented) = resolve_presented_object(scene, selected_id) {
+        if let Some(sculpt_id) = presented.attached_sculpt_id {
+            return Some(sculpt_id);
+        }
+        if matches!(presented.kind, PresentedObjectKind::Voxel) {
+            return Some(presented.host_id);
+        }
+    }
+
+    scene.nodes.get(&selected_id).and_then(|node| {
+        matches!(node.data, NodeData::Sculpt { .. }).then_some(selected_id)
+    })
+}
 
 impl SdfApp {
     // -----------------------------------------------------------------------
@@ -935,27 +952,18 @@ impl SdfApp {
                 }
             }
             ActiveTool::Sculpt => {
-                let sel = self.ui.node_graph_state.selected;
+                let sel = resolve_sculpt_target_for_selection(
+                    &self.doc.scene,
+                    self.ui.node_graph_state.selected,
+                );
                 let active = self.doc.sculpt_state.active_node();
                 if sel != active {
                     // Selection changed - try to activate on new node
                     if let Some(id) = sel {
-                        if self
-                            .doc
-                            .scene
-                            .nodes
-                            .get(&id)
-                            .is_some_and(|n| matches!(n.data, NodeData::Sculpt { .. }))
-                        {
-                            self.finalize_pending_grab_repair();
-                            self.doc
-                                .sculpt_state
-                                .activate_preserving_session(id, Some(self.scene_avg_extent()));
-                        } else {
-                            self.finalize_pending_grab_repair();
-                            self.doc.sculpt_state.deactivate();
-                            self.doc.history.discard_pending_sculpt_stroke();
-                        }
+                        self.finalize_pending_grab_repair();
+                        self.doc
+                            .sculpt_state
+                            .activate_preserving_session(id, Some(self.scene_avg_extent()));
                     } else {
                         self.finalize_pending_grab_repair();
                         self.doc.sculpt_state.deactivate();
@@ -1003,5 +1011,61 @@ impl SdfApp {
         let (z0, z1) = repaired.z_range();
         self.try_incremental_voxel_upload(node_id, z0, z1);
         self.upload_voxel_texture_region(node_id, z0, z1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_sculpt_target_for_selection;
+    use crate::graph::scene::{Scene, SdfPrimitive};
+    use crate::graph::voxel::VoxelGrid;
+    use glam::Vec3;
+
+    fn sculpt_grid() -> VoxelGrid {
+        VoxelGrid::new_displacement(16, Vec3::splat(-1.0), Vec3::splat(1.0))
+    }
+
+    #[test]
+    fn host_selection_resolves_to_attached_sculpt_target() {
+        let mut scene = Scene::new();
+        let host = scene.create_primitive(SdfPrimitive::Sphere);
+        let sculpt_id = scene.insert_sculpt_above(
+            host,
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::splat(0.8),
+            sculpt_grid(),
+        );
+
+        assert_eq!(
+            resolve_sculpt_target_for_selection(&scene, Some(host)),
+            Some(sculpt_id)
+        );
+    }
+
+    #[test]
+    fn attached_sculpt_selection_resolves_to_self() {
+        let mut scene = Scene::new();
+        let host = scene.create_primitive(SdfPrimitive::Sphere);
+        let sculpt_id = scene.create_sculpt(
+            host,
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::splat(0.8),
+            sculpt_grid(),
+        );
+
+        assert_eq!(
+            resolve_sculpt_target_for_selection(&scene, Some(sculpt_id)),
+            Some(sculpt_id)
+        );
+    }
+
+    #[test]
+    fn non_sculpt_selection_has_no_sculpt_target() {
+        let mut scene = Scene::new();
+        let primitive_id = scene.create_primitive(SdfPrimitive::Box);
+
+        assert_eq!(resolve_sculpt_target_for_selection(&scene, Some(primitive_id)), None);
     }
 }

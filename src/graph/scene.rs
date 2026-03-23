@@ -1028,6 +1028,27 @@ impl Scene {
         node
     }
 
+    /// Remove an entire subtree rooted at `root_id`.
+    /// Returns the removed node IDs as a stable, sorted list.
+    pub fn remove_subtree(&mut self, root_id: NodeId) -> Vec<NodeId> {
+        if !self.nodes.contains_key(&root_id) {
+            return Vec::new();
+        }
+
+        let removed_ids = self.collect_subtree_nodes(root_id);
+        self.detach_from_parent(root_id);
+
+        for id in &removed_ids {
+            self.hidden_nodes.remove(id);
+            self.light_masks.remove(id);
+        }
+        for id in &removed_ids {
+            self.nodes.remove(id);
+        }
+
+        removed_ids
+    }
+
     // --- Factories ---
 
     pub fn create_primitive(&mut self, kind: SdfPrimitive) -> NodeId {
@@ -1432,6 +1453,91 @@ impl Scene {
         }
 
         sculpt_id
+    }
+
+    /// Insert a differential sculpt layer above `target_id` and wrap the
+    /// resulting sculpt in an outer transform so object-level transforms move
+    /// the analytical base and sculpt layer together.
+    pub fn insert_sculpt_layer_above(
+        &mut self,
+        target_id: NodeId,
+        position: Vec3,
+        rotation: Vec3,
+        color: Vec3,
+        voxel_grid: VoxelGrid,
+    ) -> (NodeId, NodeId) {
+        let sculpt_id = self.insert_sculpt_above(target_id, position, rotation, color, voxel_grid);
+        let transform_id = self.insert_transform_above(sculpt_id);
+        (transform_id, sculpt_id)
+    }
+
+    /// Remove the first differential sculpt wrapper attached above `host_id`.
+    /// Reconnects the sculpt's parents to its input child and preserves the rest of the object chain.
+    pub fn remove_attached_sculpt(&mut self, host_id: NodeId) -> Option<NodeId> {
+        if !self.nodes.contains_key(&host_id) {
+            return None;
+        }
+
+        let parent_map = self.build_parent_map();
+        let mut current = host_id;
+        let mut sculpt_id = None;
+        let mut sculpt_input_child = None;
+
+        while let Some(&parent_id) = parent_map.get(&current) {
+            let Some(parent) = self.nodes.get(&parent_id) else {
+                break;
+            };
+            match &parent.data {
+                NodeData::Transform {
+                    input: Some(input_id),
+                    ..
+                }
+                | NodeData::Modifier {
+                    input: Some(input_id),
+                    ..
+                } if *input_id == current => {
+                    current = parent_id;
+                }
+                NodeData::Sculpt {
+                    input: Some(input_id),
+                    ..
+                } if *input_id == current => {
+                    sculpt_id = Some(parent_id);
+                    sculpt_input_child = Some(current);
+                    break;
+                }
+                _ => break,
+            }
+        }
+
+        let sculpt_id = sculpt_id?;
+        let sculpt_input_child = sculpt_input_child?;
+        self.rewire_parents_to(sculpt_id, sculpt_input_child);
+        self.remove_node(sculpt_id);
+        Some(sculpt_id)
+    }
+
+    /// Remove a single-input passthrough node and reconnect its parents to the child input.
+    pub fn remove_passthrough_node(&mut self, node_id: NodeId) -> Option<NodeId> {
+        let child_id = match self.nodes.get(&node_id).map(|node| &node.data) {
+            Some(NodeData::Sculpt {
+                input: Some(child_id),
+                ..
+            })
+            | Some(NodeData::Transform {
+                input: Some(child_id),
+                ..
+            })
+            | Some(NodeData::Modifier {
+                input: Some(child_id),
+                ..
+            }) => *child_id,
+            _ => return None,
+        };
+
+        self.rewire_parents_to(node_id, child_id);
+        self.remove_node(node_id);
+        Some(child_id)
     }
 
     // --- Topology mutation ---
@@ -2707,6 +2813,25 @@ mod tests {
         assert!(scene.remove_node(999).is_none());
     }
 
+    #[test]
+    fn remove_subtree_deletes_entire_branch() {
+        let mut scene = empty_scene();
+        let left = scene.create_primitive(SdfPrimitive::Sphere);
+        let right_leaf = scene.create_primitive(SdfPrimitive::Box);
+        let right = scene.insert_transform_above(right_leaf);
+        let root = scene.create_operation(CsgOp::Union, Some(left), Some(right));
+
+        let removed = scene.remove_subtree(right);
+
+        assert_eq!(removed, vec![right_leaf, right]);
+        assert!(scene.nodes.contains_key(&left));
+        assert!(scene.nodes.contains_key(&root));
+        let NodeData::Operation { right: root_right, .. } = &scene.nodes[&root].data else {
+            panic!("expected operation");
+        };
+        assert_eq!(*root_right, None);
+    }
+
     // ── visibility ──────────────────────────────────────────────────
 
     #[test]
@@ -3290,6 +3415,30 @@ mod tests {
     }
 
     #[test]
+    fn insert_sculpt_layer_above_wraps_sculpt_with_outer_transform() {
+        let mut scene = empty_scene();
+        let prim = scene.create_primitive(SdfPrimitive::Sphere);
+        let (transform_id, sculpt_id) = scene.insert_sculpt_layer_above(
+            prim,
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::new(0.5, 0.5, 0.5),
+            VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0)),
+        );
+
+        let NodeData::Transform { input, .. } = &scene.nodes[&transform_id].data else {
+            panic!("expected transform");
+        };
+        assert_eq!(*input, Some(sculpt_id));
+
+        let NodeData::Sculpt { input, .. } = &scene.nodes[&sculpt_id].data else {
+            panic!("expected sculpt");
+        };
+        assert_eq!(*input, Some(prim));
+        assert!(scene.is_descendant(prim, transform_id));
+    }
+
+    #[test]
     fn find_sculpt_parent_finds_differential_sculpt() {
         let mut scene = empty_scene();
         let prim = scene.create_primitive(SdfPrimitive::Sphere);
@@ -3340,6 +3489,30 @@ mod tests {
 
         // Cube is NOT a child of sculpt (it's a sibling in the union)
         assert!(!scene.is_descendant(cube, sculpt_id));
+    }
+
+    #[test]
+    fn remove_attached_sculpt_reconnects_parent_chain() {
+        let mut scene = empty_scene();
+        let primitive_id = scene.create_primitive(SdfPrimitive::Sphere);
+        let inner_transform_id = scene.insert_transform_above(primitive_id);
+        let sculpt_id = scene.insert_sculpt_above(
+            inner_transform_id,
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::new(0.8, 0.2, 0.2),
+            VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0)),
+        );
+        let outer_transform_id = scene.insert_transform_above(sculpt_id);
+
+        let removed = scene.remove_attached_sculpt(primitive_id);
+
+        assert_eq!(removed, Some(sculpt_id));
+        assert!(!scene.nodes.contains_key(&sculpt_id));
+        let NodeData::Transform { input, .. } = &scene.nodes[&outer_transform_id].data else {
+            panic!("expected transform");
+        };
+        assert_eq!(*input, Some(inner_transform_id));
     }
 
     // ── subtree_has_sculpt ──────────────────────────────────────────

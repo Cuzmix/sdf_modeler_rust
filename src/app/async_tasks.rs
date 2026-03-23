@@ -5,6 +5,7 @@ use eframe::egui;
 use glam::Vec3;
 
 use crate::desktop_dialogs::FileDialogSelection;
+use crate::graph::presented_object::resolve_presented_object;
 use crate::graph::scene::{MaterialParams, NodeData};
 use crate::graph::voxel;
 
@@ -97,14 +98,17 @@ impl SdfApp {
                 }
             }
         } else {
-            let sculpt_id = self.doc.scene.insert_sculpt_above(
+            let (_, sculpt_id) = self.doc.scene.insert_sculpt_layer_above(
                 req.subtree_root,
                 center,
                 Vec3::ZERO,
                 req.color,
                 grid,
             );
-            self.ui.node_graph_state.select_single(sculpt_id);
+            let selected_host = resolve_presented_object(&self.doc.scene, req.subtree_root)
+                .map(|presented| presented.host_id)
+                .unwrap_or(req.subtree_root);
+            self.ui.node_graph_state.select_single(selected_host);
             let extent = self.scene_avg_extent();
             self.doc.active_tool = crate::sculpt::ActiveTool::Sculpt;
             self.doc
@@ -114,7 +118,6 @@ impl SdfApp {
                 crate::app::state::InteractionMode::Sculpt(self.doc.sculpt_state.selected_brush());
             self.ui.measurement_mode = false;
             self.ui.measurement_points.clear();
-            self.ensure_brush_settings_tab();
         }
         self.gpu.buffer_dirty = true;
     }
@@ -176,7 +179,6 @@ impl SdfApp {
                 crate::app::state::InteractionMode::Sculpt(self.doc.sculpt_state.selected_brush());
             self.ui.measurement_mode = false;
             self.ui.measurement_points.clear();
-            self.ensure_brush_settings_tab();
         } else if let Some(sculpt_id) = existing_sculpt {
             if let Some(node) = self.doc.scene.nodes.get_mut(&sculpt_id) {
                 if let NodeData::Sculpt {
@@ -190,11 +192,17 @@ impl SdfApp {
                 }
             }
         } else {
-            let sculpt_id =
-                self.doc
-                    .scene
-                    .insert_sculpt_above(subtree_root, center, Vec3::ZERO, color, grid);
-            self.ui.node_graph_state.select_single(sculpt_id);
+            let (_, sculpt_id) = self.doc.scene.insert_sculpt_layer_above(
+                subtree_root,
+                center,
+                Vec3::ZERO,
+                color,
+                grid,
+            );
+            let selected_host = resolve_presented_object(&self.doc.scene, subtree_root)
+                .map(|presented| presented.host_id)
+                .unwrap_or(subtree_root);
+            self.ui.node_graph_state.select_single(selected_host);
             let extent = self.scene_avg_extent();
             self.doc.active_tool = crate::sculpt::ActiveTool::Sculpt;
             self.doc
@@ -204,7 +212,6 @@ impl SdfApp {
                 crate::app::state::InteractionMode::Sculpt(self.doc.sculpt_state.selected_brush());
             self.ui.measurement_mode = false;
             self.ui.measurement_points.clear();
-            self.ensure_brush_settings_tab();
         }
         self.gpu.buffer_dirty = true;
     }

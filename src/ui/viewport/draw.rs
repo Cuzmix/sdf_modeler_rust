@@ -8,6 +8,7 @@ use crate::app::state::{
 };
 use crate::gpu::camera::{Camera, CameraUniform};
 use crate::gpu::picking::PendingPick;
+use crate::graph::presented_object::resolve_presented_object;
 use crate::graph::scene::{NodeData, NodeId, Scene};
 use crate::sculpt::{self, ActiveTool, BrushMode, SculptBrushProfile, SculptState};
 use crate::settings::{
@@ -819,8 +820,11 @@ pub fn draw(
     let render_viewport = [0.0, 0.0, render_w, render_h];
     let selected_idx = (*selected)
         .and_then(|id| {
+            let render_target_id = resolve_presented_object(scene, id)
+                .map(|presented| presented.render_highlight_id())
+                .unwrap_or(id);
             let order = scene.visible_topo_order();
-            order.iter().position(|&nid| nid == id)
+            order.iter().position(|&nid| nid == render_target_id)
         })
         .map(|i| i as f32)
         .unwrap_or(-1.0);
