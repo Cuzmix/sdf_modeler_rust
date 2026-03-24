@@ -197,6 +197,7 @@ impl SdfApp {
                 crate::ui::primary_shell::PrimaryShellContext {
                     shell: &mut self.ui.primary_shell,
                     dock_state: Some(&mut self.ui.dock_state),
+                    camera: &self.doc.camera,
                     scene: &mut self.doc.scene,
                     sculpt_state: &mut self.doc.sculpt_state,
                     selected: &mut self.ui.node_graph_state.selected,
@@ -213,6 +214,7 @@ impl SdfApp {
                     soloed_light: self.doc.soloed_light,
                     material_library: &mut self.material_library,
                     multi_transform_edit: &mut self.ui.multi_transform_edit,
+                    gizmo_mode: &self.gizmo.mode,
                     gizmo_space: &self.gizmo.space,
                     selection_behavior: &selection_behavior,
                     reference_images: &mut self.ui.reference_images,

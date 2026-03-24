@@ -4,13 +4,13 @@ use glam::Vec3;
 use crate::desktop_dialogs::FileDialogSelection;
 use crate::graph::history::{History, RestoreSnapshot, RestoreState};
 use crate::graph::presented_object::{
-    resolve_host_selection, resolve_presented_object, PresentedObjectKind,
+    current_transform_owner, resolve_host_selection, resolve_presented_object, PresentedObjectKind,
 };
-use crate::graph::scene::{NodeData, NodeId, Scene};
+use crate::graph::scene::{NodeData, NodeId, Scene, SdfPrimitive};
 use crate::sculpt::{BrushMode, SculptState};
 use crate::ui::dock::Tab;
 
-use super::actions::{Action, LightingPreset, SculptConvertMode};
+use super::actions::{Action, LightingPreset, OperationInputSlot, SculptConvertMode};
 use super::state::{
     DocumentState, InteractionMode, SculptConvertDialog, ShellPanelKind, UiState,
 };
@@ -102,7 +102,8 @@ fn apply_select_interaction_state(doc: &mut DocumentState, ui: &mut UiState) {
 
 fn apply_measure_interaction_state(doc: &mut DocumentState, ui: &mut UiState) {
     ui.primary_shell.interaction_mode = InteractionMode::Measure;
-    ui.primary_shell.active_context_tab = crate::app::state::PrimaryShellContextTab::Selection;
+    ui.primary_shell.active_inspector_tab = crate::app::state::PrimaryShellInspectorTab::Display;
+    ui.primary_shell.tool_rail_visible = true;
     ui.measurement_mode = true;
     ui.measurement_points.clear();
     doc.active_tool = crate::sculpt::ActiveTool::Select;
@@ -117,9 +118,8 @@ fn activate_sculpt_interaction_state(
     extent: f32,
 ) {
     ui.primary_shell.interaction_mode = InteractionMode::Sculpt(brush);
-    if ui.primary_shell.tool_panel.is_hidden() {
-        ui.primary_shell.tool_panel.show_floating(None);
-    }
+    ui.primary_shell.tool_rail_visible = true;
+    ui.primary_shell.selection_context_strip_visible = true;
     ui.measurement_mode = false;
     ui.measurement_points.clear();
     doc.active_tool = crate::sculpt::ActiveTool::Sculpt;
@@ -197,6 +197,77 @@ fn reset_primary_shell_layout_state(ui: &mut UiState) {
     ui.dock_state = crate::ui::dock::create_primary_shell_dock();
 }
 
+fn offset_duplicated_object_root(scene: &mut Scene, root_id: NodeId) -> NodeId {
+    match scene.nodes.get_mut(&root_id).map(|node| &mut node.data) {
+        Some(NodeData::Transform { translation, .. }) => {
+            translation.x += 1.0;
+            return root_id;
+        }
+        Some(NodeData::Primitive { position, .. }) => {
+            position.x += 1.0;
+            return root_id;
+        }
+        Some(NodeData::Sculpt {
+            input: None,
+            position,
+            ..
+        }) => {
+            position.x += 1.0;
+            return root_id;
+        }
+        _ => {}
+    }
+
+    let transform_id = scene.insert_transform_above(root_id);
+    if let Some(node) = scene.nodes.get_mut(&transform_id) {
+        if let NodeData::Transform { translation, .. } = &mut node.data {
+            translation.x += 1.0;
+        }
+    }
+    transform_id
+}
+
+fn duplicate_presented_object_and_offset(
+    scene: &mut Scene,
+    source_id: NodeId,
+) -> Option<(NodeId, NodeId)> {
+    let source_root = resolve_presented_object(scene, source_id)
+        .map(|object| object.object_root_id)
+        .unwrap_or(source_id);
+    let duplicated_root = scene.duplicate_subtree(source_root)?;
+    let duplicated_root = offset_duplicated_object_root(scene, duplicated_root);
+    let duplicated_object = resolve_presented_object(scene, duplicated_root);
+    let selected_id = duplicated_object
+        .map(|object| object.host_id)
+        .unwrap_or(duplicated_root);
+    let centered_id = duplicated_object
+        .map(|object| object.object_root_id)
+        .unwrap_or(duplicated_root);
+    Some((selected_id, centered_id))
+}
+
+fn replace_operation_input_with_primitive(
+    scene: &mut Scene,
+    operation: NodeId,
+    slot: OperationInputSlot,
+    primitive: SdfPrimitive,
+) -> Option<NodeId> {
+    if !scene
+        .nodes
+        .get(&operation)
+        .is_some_and(|node| matches!(node.data, NodeData::Operation { .. }))
+    {
+        return None;
+    }
+
+    let new_operand_id = scene.create_primitive(primitive);
+    match slot {
+        OperationInputSlot::Left => scene.set_left_child(operation, Some(new_operand_id)),
+        OperationInputSlot::Right => scene.set_right_child(operation, Some(new_operand_id)),
+    }
+    Some(new_operand_id)
+}
+
 impl SdfApp {
     pub(super) fn sync_interaction_mode_after_sculpt_exit(&mut self) {
         sync_interaction_mode_after_sculpt_exit_state(&mut self.ui);
@@ -246,9 +317,8 @@ impl SdfApp {
             }
             SculptEntryDecision::OpenConvert(target) => {
                 self.ui.primary_shell.interaction_mode = InteractionMode::Sculpt(brush);
-                if self.ui.primary_shell.tool_panel.is_hidden() {
-                    self.ui.primary_shell.tool_panel.show_floating(None);
-                }
+                self.ui.primary_shell.tool_rail_visible = true;
+                self.ui.primary_shell.selection_context_strip_visible = true;
                 self.ui.measurement_mode = false;
                 self.ui.measurement_points.clear();
                 self.ui.sculpt_convert_dialog = Some(SculptConvertDialog::new(target));
@@ -556,7 +626,12 @@ impl SdfApp {
                 }
                 Action::RemoveWrapperNode(id) => {
                     let locked = self.doc.scene.nodes.get(&id).is_some_and(|n| n.locked);
-                    if !locked {
+                    let protected_attached_sculpt_owner = resolve_presented_object(&self.doc.scene, id)
+                        .is_some_and(|object| {
+                            object.attached_sculpt_id.is_some()
+                                && current_transform_owner(&self.doc.scene, id) == Some(id)
+                        });
+                    if !locked && !protected_attached_sculpt_owner {
                         let removed_child = self.doc.scene.remove_passthrough_node(id);
                         if removed_child.is_some() {
                             if self.ui.node_graph_state.selected == Some(id) {
@@ -600,6 +675,16 @@ impl SdfApp {
                 }
 
                 // ── Clipboard ────────────────────────────────────────
+                Action::DuplicatePresentedObject(source_id) => {
+                    if let Some((selected_id, centered_id)) =
+                        duplicate_presented_object_and_offset(&mut self.doc.scene, source_id)
+                    {
+                        self.ui.node_graph_state.select_single(selected_id);
+                        self.ui.node_graph_state.needs_initial_rebuild = true;
+                        self.ui.node_graph_state.pending_center_node = Some(centered_id);
+                        self.gpu.buffer_dirty = true;
+                    }
+                }
                 Action::Copy => {
                     self.doc.clipboard_node = self.ui.node_graph_state.selected;
                 }
@@ -861,6 +946,26 @@ impl SdfApp {
                             created: crate::compat::Instant::now(),
                             duration: crate::compat::Duration::from_secs(4),
                         });
+                    }
+                }
+                Action::ReplaceOperationInputWithPrimitive {
+                    operation,
+                    slot,
+                    primitive,
+                } => {
+                    if let Some(new_operand_id) = replace_operation_input_with_primitive(
+                        &mut self.doc.scene,
+                        operation,
+                        slot,
+                        primitive,
+                    ) {
+                        self.ui.primary_shell.interaction_mode = InteractionMode::Select;
+                        self.ui.measurement_mode = false;
+                        self.doc.active_tool = crate::sculpt::ActiveTool::Select;
+                        self.ui.node_graph_state.select_single(new_operand_id);
+                        self.ui.node_graph_state.needs_initial_rebuild = true;
+                        self.ui.node_graph_state.pending_center_node = Some(operation);
+                        self.gpu.buffer_dirty = true;
                     }
                 }
                 Action::CreateOperation { op, left, right } => {
@@ -1609,18 +1714,21 @@ mod tests {
 
     use super::{
         activate_sculpt_interaction_state, apply_measure_interaction_state,
-        apply_select_interaction_state, apply_selection_behavior_settings, dock_shell_panel_state,
-        hide_shell_panel_state, reset_primary_shell_layout_state, resolve_sculpt_entry,
+        apply_select_interaction_state, apply_selection_behavior_settings,
+        dock_shell_panel_state, duplicate_presented_object_and_offset,
+        hide_shell_panel_state, replace_operation_input_with_primitive,
+        reset_primary_shell_layout_state, resolve_sculpt_entry,
         sync_interaction_mode_after_sculpt_exit_state, undock_shell_panel_state,
-        SculptEntryDecision,
-        SelectionBehaviorApplyResult,
+        SculptEntryDecision, SelectionBehaviorApplyResult,
     };
+    use crate::app::actions::OperationInputSlot;
     use crate::app::state::{
-        DocumentState, MultiTransformSessionState, PrimaryShellState, PrimaryShellDrawerTab,
+        DocumentState, MultiTransformSessionState, PrimaryShellState, PrimaryShellUtilityTab,
         ShellPanelKind, UiState,
     };
     use crate::graph::history::History;
-    use crate::graph::scene::{Scene, SdfPrimitive};
+    use crate::graph::presented_object::resolve_presented_object;
+    use crate::graph::scene::{CsgOp, NodeData, Scene, SdfPrimitive};
     use crate::graph::voxel::VoxelGrid;
     use crate::gpu::camera::Camera;
     use crate::sculpt::{ActiveTool, BrushMode, SculptState};
@@ -1863,7 +1971,7 @@ mod tests {
     }
 
     #[test]
-    fn activate_sculpt_interaction_reopens_hidden_task_deck() {
+    fn activate_sculpt_interaction_reopens_hidden_tool_rail() {
         let mut doc = test_document_state();
         let mut ui = test_ui_state();
         let base = doc.scene.create_primitive(SdfPrimitive::Sphere);
@@ -1874,11 +1982,11 @@ mod tests {
             Vec3::splat(0.8),
             sculpt_grid(),
         );
-        ui.primary_shell.tool_panel.hide();
+        ui.primary_shell.tool_rail_visible = false;
 
         activate_sculpt_interaction_state(&mut doc, &mut ui, sculpt_id, BrushMode::Inflate, 1.0);
 
-        assert!(ui.primary_shell.tool_panel.is_floating());
+        assert!(ui.primary_shell.tool_rail_visible);
     }
 
     #[test]
@@ -1992,15 +2100,67 @@ mod tests {
         let rect = egui::Rect::from_min_size(egui::pos2(12.0, 18.0), egui::vec2(300.0, 220.0));
 
         dock_shell_panel_state(&mut ui, ShellPanelKind::Tool, rect);
-        ui.primary_shell.active_drawer_tab = PrimaryShellDrawerTab::Advanced;
+        ui.primary_shell.active_utility_tab = PrimaryShellUtilityTab::Advanced;
 
         reset_primary_shell_layout_state(&mut ui);
 
         assert!(ui.primary_shell.tool_panel.is_floating());
         assert!(ui.primary_shell.inspector_panel.is_floating());
         assert!(ui.primary_shell.drawer_panel.is_hidden());
-        assert_eq!(ui.primary_shell.active_drawer_tab, PrimaryShellDrawerTab::Items);
+        assert_eq!(ui.primary_shell.active_utility_tab, PrimaryShellUtilityTab::History);
         assert!(ui.dock_state.find_tab(&ShellPanelKind::Tool.dock_tab()).is_none());
+    }
+
+    #[test]
+    fn duplicate_presented_object_keeps_attached_sculpt_on_new_host() {
+        let mut scene = Scene::new();
+        let primitive_id = scene.create_primitive(SdfPrimitive::Sphere);
+        let (_object_transform, original_sculpt_id) = scene.insert_sculpt_layer_above(
+            primitive_id,
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::splat(0.8),
+            sculpt_grid(),
+        );
+
+        let (selected_id, centered_id) =
+            duplicate_presented_object_and_offset(&mut scene, primitive_id)
+                .expect("duplicated object should exist");
+
+        let duplicated = resolve_presented_object(&scene, selected_id)
+            .expect("duplicated host should resolve as presented object");
+        assert_eq!(selected_id, duplicated.host_id);
+        assert_eq!(centered_id, duplicated.object_root_id);
+        assert_ne!(duplicated.host_id, primitive_id);
+        assert_ne!(duplicated.attached_sculpt_id, Some(original_sculpt_id));
+        assert!(duplicated.attached_sculpt_id.is_some());
+    }
+
+    #[test]
+    fn replace_operation_input_with_primitive_updates_requested_slot() {
+        let mut scene = Scene::new();
+        let left_id = scene.create_primitive(SdfPrimitive::Sphere);
+        let right_id = scene.create_primitive(SdfPrimitive::Box);
+        let operation_id = scene.create_operation(CsgOp::Union, Some(left_id), Some(right_id));
+
+        let new_left_id = replace_operation_input_with_primitive(
+            &mut scene,
+            operation_id,
+            OperationInputSlot::Left,
+            SdfPrimitive::Cylinder,
+        )
+        .expect("replacement primitive should be created");
+
+        let NodeData::Operation { left, right, .. } = &scene.nodes[&operation_id].data else {
+            panic!("expected operation node");
+        };
+        assert_eq!(*left, Some(new_left_id));
+        assert_eq!(*right, Some(right_id));
+
+        let NodeData::Primitive { kind, .. } = &scene.nodes[&new_left_id].data else {
+            panic!("expected primitive operand");
+        };
+        assert_eq!(*kind, SdfPrimitive::Cylinder);
     }
 }
 

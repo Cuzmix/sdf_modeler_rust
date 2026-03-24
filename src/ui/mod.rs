@@ -1,4 +1,6 @@
 pub mod brush_settings;
+pub mod chips;
+pub mod chrome;
 pub mod command_palette;
 pub mod dock;
 pub mod export_dialog;
@@ -12,6 +14,7 @@ pub mod light_graph;
 pub mod light_linking;
 pub mod lights_panel;
 pub mod node_graph;
+pub mod presented_object_actions;
 pub mod presented_properties;
 pub mod presented_scene_tree;
 pub mod primary_shell;

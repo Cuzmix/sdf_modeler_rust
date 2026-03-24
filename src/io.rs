@@ -7,6 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::desktop_dialogs::FileDialogSelection;
 use crate::gpu::camera::Camera;
+use crate::graph::presented_object::normalize_attached_sculpt_transform_owners;
 use crate::graph::scene::{NodeData, NodeId, Scene, SceneNode};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::native_paths;
@@ -116,6 +117,8 @@ pub fn json_to_project(json: &str) -> Result<ProjectFile, String> {
         migrate_v2_to_v3(&mut project);
         project.version = CURRENT_VERSION;
     }
+
+    normalize_attached_sculpt_transform_owners(&mut project.scene);
 
     Ok(project)
 }
@@ -338,6 +341,8 @@ pub fn load_subtree_preset(scene: &mut Scene, path: &std::path::Path) -> Result<
             scene.light_masks.insert(new_id, preset_node.light_mask);
         }
     }
+
+    normalize_attached_sculpt_transform_owners(scene);
 
     Ok(root_new_id)
 }

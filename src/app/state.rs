@@ -158,16 +158,13 @@ impl Default for MultiTransformSessionState {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PrimaryShellContextTab {
-    Selection,
-    Material,
-    Light,
-    Node,
+pub enum PrimaryShellInspectorTab {
+    Properties,
+    Display,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PrimaryShellDrawerTab {
-    Items,
+pub enum PrimaryShellUtilityTab {
     History,
     Reference,
     Advanced,
@@ -178,23 +175,6 @@ pub enum InteractionMode {
     Select,
     Measure,
     Sculpt(BrushMode),
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TaskDeckMode {
-    SelectCompose,
-    Measure,
-    Sculpt,
-}
-
-impl From<InteractionMode> for TaskDeckMode {
-    fn from(mode: InteractionMode) -> Self {
-        match mode {
-            InteractionMode::Select => Self::SelectCompose,
-            InteractionMode::Measure => Self::Measure,
-            InteractionMode::Sculpt(_) => Self::Sculpt,
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -214,6 +194,20 @@ impl ShellPanelKind {
             Self::Drawer => Tab::DrawerPanel,
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SculptUtilityControl {
+    Radius,
+    Strength,
+    Falloff,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct SculptUtilityDragState {
+    pub control: SculptUtilityControl,
+    pub anchor_pos: [f32; 2],
+    pub initial_value: f32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -278,10 +272,16 @@ pub struct PrimaryShellState {
     pub tool_panel: ShellWindowState,
     pub inspector_panel: ShellWindowState,
     pub drawer_panel: ShellWindowState,
-    pub active_context_tab: PrimaryShellContextTab,
-    pub active_drawer_tab: PrimaryShellDrawerTab,
+    pub active_inspector_tab: PrimaryShellInspectorTab,
+    pub active_utility_tab: PrimaryShellUtilityTab,
     pub brush_advanced_open: bool,
     pub modeling_commands_open: bool,
+    pub tool_rail_visible: bool,
+    pub utility_strip_visible: bool,
+    pub selection_context_strip_visible: bool,
+    pub selection_popup_visible: bool,
+    pub sculpt_utility_strip_visible: bool,
+    pub sculpt_utility_drag: Option<SculptUtilityDragState>,
     pub layout_revision: u64,
 }
 
@@ -292,20 +292,22 @@ impl Default for PrimaryShellState {
             tool_panel: ShellWindowState::new(ShellPanelPresentation::Floating),
             inspector_panel: ShellWindowState::new(ShellPanelPresentation::Floating),
             drawer_panel: ShellWindowState::new(ShellPanelPresentation::Hidden),
-            active_context_tab: PrimaryShellContextTab::Selection,
-            active_drawer_tab: PrimaryShellDrawerTab::Items,
+            active_inspector_tab: PrimaryShellInspectorTab::Properties,
+            active_utility_tab: PrimaryShellUtilityTab::History,
             brush_advanced_open: false,
             modeling_commands_open: false,
+            tool_rail_visible: true,
+            utility_strip_visible: true,
+            selection_context_strip_visible: true,
+            selection_popup_visible: true,
+            sculpt_utility_strip_visible: true,
+            sculpt_utility_drag: None,
             layout_revision: 0,
         }
     }
 }
 
 impl PrimaryShellState {
-    pub fn task_deck_mode(&self) -> TaskDeckMode {
-        self.interaction_mode.into()
-    }
-
     pub fn panel(&self, panel: ShellPanelKind) -> &ShellWindowState {
         match panel {
             ShellPanelKind::Tool => &self.tool_panel,
@@ -322,12 +324,8 @@ impl PrimaryShellState {
         }
     }
 
-    pub fn toggle_tool_panel(&mut self) {
-        if self.tool_panel.is_floating() {
-            self.tool_panel.hide();
-        } else {
-            self.tool_panel.show_floating(None);
-        }
+    pub fn toggle_tool_rail(&mut self) {
+        self.tool_rail_visible = !self.tool_rail_visible;
     }
 
     pub fn reconcile_docked_panels(&mut self, dock_state: &DockState<Tab>) {
@@ -676,19 +674,24 @@ mod tests {
         assert!(state.tool_panel.is_floating());
         assert!(state.inspector_panel.is_floating());
         assert!(state.drawer_panel.is_hidden());
-        assert_eq!(state.active_context_tab, PrimaryShellContextTab::Selection);
-        assert_eq!(state.active_drawer_tab, PrimaryShellDrawerTab::Items);
+        assert_eq!(state.active_inspector_tab, PrimaryShellInspectorTab::Properties);
+        assert_eq!(state.active_utility_tab, PrimaryShellUtilityTab::History);
+        assert!(state.tool_rail_visible);
+        assert!(state.utility_strip_visible);
+        assert!(state.selection_context_strip_visible);
+        assert!(state.selection_popup_visible);
+        assert!(state.sculpt_utility_strip_visible);
     }
 
     #[test]
-    fn primary_shell_tool_panel_toggle_flips_floating_state() {
+    fn primary_shell_tool_rail_toggle_flips_visibility() {
         let mut state = PrimaryShellState::default();
 
-        state.toggle_tool_panel();
-        assert!(state.tool_panel.is_hidden());
+        state.toggle_tool_rail();
+        assert!(!state.tool_rail_visible);
 
-        state.toggle_tool_panel();
-        assert!(state.tool_panel.is_floating());
+        state.toggle_tool_rail();
+        assert!(state.tool_rail_visible);
     }
 
     #[test]
@@ -697,10 +700,20 @@ mod tests {
         state.tool_panel.hide();
         state.inspector_panel.hide();
         state.drawer_panel.show_floating(None);
-        state.active_context_tab = PrimaryShellContextTab::Node;
-        state.active_drawer_tab = PrimaryShellDrawerTab::Reference;
+        state.active_inspector_tab = PrimaryShellInspectorTab::Display;
+        state.active_utility_tab = PrimaryShellUtilityTab::Reference;
         state.brush_advanced_open = true;
         state.modeling_commands_open = true;
+        state.tool_rail_visible = false;
+        state.utility_strip_visible = false;
+        state.selection_context_strip_visible = false;
+        state.selection_popup_visible = false;
+        state.sculpt_utility_strip_visible = false;
+        state.sculpt_utility_drag = Some(SculptUtilityDragState {
+            control: SculptUtilityControl::Radius,
+            anchor_pos: [10.0, 10.0],
+            initial_value: 0.5,
+        });
         state.layout_revision = 9;
 
         state.reset_layout();
@@ -708,10 +721,16 @@ mod tests {
         assert!(state.tool_panel.is_floating());
         assert!(state.inspector_panel.is_floating());
         assert!(state.drawer_panel.is_hidden());
-        assert_eq!(state.active_context_tab, PrimaryShellContextTab::Selection);
-        assert_eq!(state.active_drawer_tab, PrimaryShellDrawerTab::Items);
+        assert_eq!(state.active_inspector_tab, PrimaryShellInspectorTab::Properties);
+        assert_eq!(state.active_utility_tab, PrimaryShellUtilityTab::History);
         assert!(!state.brush_advanced_open);
         assert!(!state.modeling_commands_open);
+        assert!(state.tool_rail_visible);
+        assert!(state.utility_strip_visible);
+        assert!(state.selection_context_strip_visible);
+        assert!(state.selection_popup_visible);
+        assert!(state.sculpt_utility_strip_visible);
+        assert!(state.sculpt_utility_drag.is_none());
         assert_eq!(state.layout_revision, 10);
     }
 
@@ -726,15 +745,4 @@ mod tests {
         assert!(state.tool_panel.is_hidden());
     }
 
-    #[test]
-    fn task_deck_mode_tracks_interaction_mode() {
-        let mut state = PrimaryShellState::default();
-        assert_eq!(state.task_deck_mode(), TaskDeckMode::SelectCompose);
-
-        state.interaction_mode = InteractionMode::Measure;
-        assert_eq!(state.task_deck_mode(), TaskDeckMode::Measure);
-
-        state.interaction_mode = InteractionMode::Sculpt(BrushMode::Grab);
-        assert_eq!(state.task_deck_mode(), TaskDeckMode::Sculpt);
-    }
 }

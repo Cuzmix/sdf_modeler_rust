@@ -52,9 +52,9 @@ impl Tab {
     pub fn label(&self) -> &'static str {
         match self {
             Tab::Viewport => "Viewport",
-            Tab::ToolPanel => "Tool Panel",
+            Tab::ToolPanel => "Scene Panel",
             Tab::InspectorPanel => "Inspector",
-            Tab::DrawerPanel => "Drawer",
+            Tab::DrawerPanel => "Utilities",
             Tab::NodeGraph => "Node Graph",
             Tab::LightGraph => "Light Graph",
             Tab::Properties => "Properties",
@@ -248,9 +248,9 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
     fn title(&mut self, tab: &mut Self::Tab) -> egui::WidgetText {
         match tab {
             Tab::Viewport => "Viewport".into(),
-            Tab::ToolPanel => "Tool Panel".into(),
+            Tab::ToolPanel => "Scene Panel".into(),
             Tab::InspectorPanel => "Inspector".into(),
-            Tab::DrawerPanel => "Drawer".into(),
+            Tab::DrawerPanel => "Utilities".into(),
             Tab::NodeGraph => "Node Graph".into(),
             Tab::LightGraph => "Light Graph".into(),
             Tab::Properties => "Properties".into(),
@@ -328,6 +328,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                 let mut shell_context = crate::ui::primary_shell::PrimaryShellContext {
                     shell: self.primary_shell,
                     dock_state: None,
+                    camera: self.camera,
                     scene: self.scene,
                     sculpt_state: self.sculpt_state,
                     selected: &mut self.node_graph_state.selected,
@@ -344,6 +345,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     soloed_light: self.viewport.soloed_light,
                     material_library: self.material_library,
                     multi_transform_edit: self.multi_transform_edit,
+                    gizmo_mode: self.viewport.gizmo_mode,
                     gizmo_space: self.viewport.gizmo_space,
                     selection_behavior: &self.viewport.selection_behavior,
                     reference_images: self.reference_images,
@@ -357,6 +359,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                 let mut shell_context = crate::ui::primary_shell::PrimaryShellContext {
                     shell: self.primary_shell,
                     dock_state: None,
+                    camera: self.camera,
                     scene: self.scene,
                     sculpt_state: self.sculpt_state,
                     selected: &mut self.node_graph_state.selected,
@@ -373,6 +376,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     soloed_light: self.viewport.soloed_light,
                     material_library: self.material_library,
                     multi_transform_edit: self.multi_transform_edit,
+                    gizmo_mode: self.viewport.gizmo_mode,
                     gizmo_space: self.viewport.gizmo_space,
                     selection_behavior: &self.viewport.selection_behavior,
                     reference_images: self.reference_images,
@@ -386,6 +390,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                 let mut shell_context = crate::ui::primary_shell::PrimaryShellContext {
                     shell: self.primary_shell,
                     dock_state: None,
+                    camera: self.camera,
                     scene: self.scene,
                     sculpt_state: self.sculpt_state,
                     selected: &mut self.node_graph_state.selected,
@@ -402,6 +407,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     soloed_light: self.viewport.soloed_light,
                     material_library: self.material_library,
                     multi_transform_edit: self.multi_transform_edit,
+                    gizmo_mode: self.viewport.gizmo_mode,
                     gizmo_space: self.viewport.gizmo_space,
                     selection_behavior: &self.viewport.selection_behavior,
                     reference_images: self.reference_images,

@@ -3,19 +3,19 @@
 use eframe::egui;
 use glam::Vec3;
 
-use crate::app::actions::{Action, ActionSink};
+use crate::app::actions::{Action, ActionSink, OperationInputSlot};
 use crate::app::state::MultiTransformSessionState;
-use crate::app::BakeRequest;
 use crate::graph::presented_object::{
-    collect_presented_selection, collect_presented_wrapper_chain, PresentedObjectKind,
-    PresentedObjectRef,
+    collect_presented_base_wrapper_chain, collect_presented_selection, object_transform_wrapper,
+    resolve_presented_object, PresentedObjectKind, PresentedObjectRef,
 };
-use crate::graph::scene::{CsgOp, ModifierKind, NodeData, NodeId, Scene, SdfPrimitive};
-use crate::graph::voxel;
+use crate::graph::scene::{CsgOp, NodeData, NodeId, Scene, SdfPrimitive};
 use crate::material_preset::MaterialLibrary;
 use crate::sculpt::SculptState;
 use crate::settings::SelectionBehaviorSettings;
+use crate::ui::{chips, chrome};
 use crate::ui::gizmo::GizmoSpace;
+use crate::ui::presented_object_actions;
 
 use super::properties;
 
@@ -43,33 +43,38 @@ pub fn draw(
     }
 
     let Some(object) = presented_selection.primary else {
-        ui.vertical_centered(|ui| {
-            ui.add_space(40.0);
-            ui.label("No selection");
-            ui.add_space(8.0);
-            ui.weak("Click an object in the viewport or scene tray");
+        chrome::card_frame().show(ui, |ui| {
+            ui.vertical_centered(|ui| {
+                ui.add_space(24.0);
+                ui.label("No selection");
+                ui.add_space(6.0);
+                ui.weak("Click an object in the viewport or scene panel.");
+                ui.add_space(12.0);
+            });
         });
         return;
     };
 
     if matches!(object.kind, PresentedObjectKind::Light) {
         let light_selected_set = HashSet::from([object.host_id]);
-        properties::draw(
-            ui,
-            scene,
-            Some(object.host_id),
-            &light_selected_set,
-            sculpt_state,
-            bake_progress,
-            actions,
-            active_light_ids,
-            max_sculpt_resolution,
-            soloed_light,
-            material_library,
-            multi_transform_edit,
-            gizmo_space,
-            selection_behavior,
-        );
+        show_property_card(ui, "presented_light_host", "Light", true, None, |ui| {
+            properties::draw(
+                ui,
+                scene,
+                Some(object.host_id),
+                &light_selected_set,
+                sculpt_state,
+                bake_progress,
+                actions,
+                active_light_ids,
+                max_sculpt_resolution,
+                soloed_light,
+                material_library,
+                multi_transform_edit,
+                gizmo_space,
+                selection_behavior,
+            );
+        });
         return;
     }
 
@@ -90,33 +95,30 @@ fn draw_multi_selection(
     ui: &mut egui::Ui,
     objects: &[PresentedObjectRef],
     scene: &Scene,
-    actions: &mut ActionSink,
+    _actions: &mut ActionSink,
 ) {
-    ui.heading(format!("{} Objects Selected", objects.len()));
-    ui.separator();
-    ui.weak("Use the viewport gizmo to move, rotate, or scale the selected objects together.");
-    ui.add_space(8.0);
-
-    egui::ScrollArea::vertical().max_height(160.0).show(ui, |ui| {
-        for object in objects {
-            let Some(node) = scene.nodes.get(&object.host_id) else {
-                continue;
-            };
-            let sculpt_badge = if object.attached_sculpt_id.is_some() {
-                " [Sculpt]"
-            } else {
-                ""
-            };
-            ui.label(format!("- {}{}", node.name, sculpt_badge));
-        }
-    });
-
-    ui.separator();
-    if ui.button("Delete Selected Objects").clicked() {
-        for object in objects {
-            actions.push(Action::DeletePresentedObject(object.object_root_id));
-        }
-    }
+    show_property_card(
+        ui,
+        "presented_multi_selection",
+        "Selection",
+        true,
+        Some("Use the viewport gizmo to move, rotate, or scale the selected objects together."),
+        |ui| {
+            egui::ScrollArea::vertical().max_height(180.0).show(ui, |ui| {
+                for object in objects {
+                    let Some(node) = scene.nodes.get(&object.host_id) else {
+                        continue;
+                    };
+                    let sculpt_badge = if object.attached_sculpt_id.is_some() {
+                        " [Sculpt]"
+                    } else {
+                        ""
+                    };
+                    ui.label(format!("- {}{}", node.name, sculpt_badge));
+                }
+            });
+        },
+    );
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -142,18 +144,7 @@ fn draw_presented_object(
     let host_data = host_node.data.clone();
     let is_locked = host_node.locked;
 
-    ui.heading(format!("Object #{}", object.host_id));
-    if is_locked {
-        ui.colored_label(egui::Color32::from_rgb(255, 180, 80), "Locked");
-    }
-    ui.separator();
-
-    ui.horizontal(|ui| {
-        ui.label("Name:");
-        ui.add_enabled(!is_locked, egui::TextEdit::singleline(&mut name));
-    });
-
-    ui.separator();
+    draw_identity_card(ui, &mut name, is_locked, object.host_id);
 
     match host_data {
         NodeData::Primitive {
@@ -227,18 +218,81 @@ fn draw_presented_object(
             );
         }
         _ => {
-            ui.weak("This object type is only editable in the advanced raw-node inspector.");
+            show_property_card(
+                ui,
+                ("presented_unsupported", object.host_id),
+                "Unsupported",
+                true,
+                None,
+                |ui| {
+                    ui.weak("This object type is only editable in the advanced raw-node inspector.");
+                },
+            );
         }
     }
 
-    ui.separator();
-    draw_host_actions(ui, scene, object, bake_progress, actions);
-    ui.separator();
-    draw_object_stack(ui, scene, object, sculpt_state, actions, bake_progress);
+    draw_object_stack(
+        ui,
+        scene,
+        object,
+        sculpt_state,
+        actions,
+        bake_progress,
+        object.attached_sculpt_id.is_some(),
+    );
 
     if let Some(node) = scene.nodes.get_mut(&object.host_id) {
         node.name = name;
     }
+}
+
+fn draw_identity_card(ui: &mut egui::Ui, name: &mut String, is_locked: bool, host_id: NodeId) {
+    show_property_card(
+        ui,
+        ("presented_identity", host_id),
+        "Identity",
+        true,
+        None,
+        |ui| {
+            if is_locked {
+                chips::draw_chip(
+                    ui,
+                    "LOCKED",
+                    egui::Color32::from_rgb(80, 56, 22),
+                    egui::Color32::from_rgb(255, 214, 148),
+                );
+                ui.add_space(6.0);
+            }
+
+            ui.horizontal(|ui| {
+                ui.label("Name:");
+                ui.add_enabled(!is_locked, egui::TextEdit::singleline(name));
+            });
+        },
+    );
+}
+
+fn show_property_card(
+    ui: &mut egui::Ui,
+    id_source: impl std::hash::Hash,
+    title: &str,
+    default_open: bool,
+    subtitle: Option<&str>,
+    add_contents: impl FnOnce(&mut egui::Ui),
+) {
+    chrome::card_frame().show(ui, |ui| {
+        egui::CollapsingHeader::new(title)
+            .default_open(default_open)
+            .id_salt(id_source)
+            .show(ui, |ui| {
+                if let Some(subtitle) = subtitle {
+                    ui.small(subtitle);
+                    ui.add_space(6.0);
+                }
+                add_contents(ui);
+            });
+    });
+    ui.add_space(8.0);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -256,27 +310,27 @@ fn draw_primitive_host(
     material_library: &mut MaterialLibrary,
 ) {
     let has_sculpt_layer = object.attached_sculpt_id.is_some();
-    egui::ComboBox::from_id_salt(("presented_primitive_type", object.host_id))
-        .selected_text(kind.base_name())
-        .show_ui(ui, |ui| {
-            for primitive in SdfPrimitive::ALL {
-                ui.selectable_value(&mut kind, primitive.clone(), primitive.base_name());
-            }
-        });
+    show_property_card(
+        ui,
+        ("presented_primitive_core", object.host_id),
+        "Core",
+        true,
+        Some(if has_sculpt_layer {
+            "Object motion belongs to the outer transform. These controls reshape the analytical base."
+        } else {
+            "Edit the primitive type and its primary shape controls."
+        }),
+        |ui| {
+            egui::ComboBox::from_id_salt(("presented_primitive_type", object.host_id))
+                .selected_text(kind.base_name())
+                .show_ui(ui, |ui| {
+                    for primitive in SdfPrimitive::ALL {
+                        ui.selectable_value(&mut kind, primitive.clone(), primitive.base_name());
+                    }
+                });
+            ui.add_space(6.0);
 
-    ui.separator();
-    egui::CollapsingHeader::new(if has_sculpt_layer {
-        "Base Shape"
-    } else {
-        "Base Transform"
-    })
-        .default_open(true)
-        .show(ui, |ui| {
-            if has_sculpt_layer {
-                ui.small(
-                    "Object movement now belongs to the outer object transform. These controls only change the analytical base shape.",
-                );
-            } else {
+            if !has_sculpt_layer {
                 properties::vec3_editor(ui, "Position", &mut position, 0.05, None, "");
                 let mut rotation_deg = Vec3::new(
                     rotation.x.to_degrees(),
@@ -295,7 +349,7 @@ fn draw_primitive_host(
             if params.is_empty() {
                 ui.weak("This primitive does not expose base size parameters.");
             } else {
-                ui.label("Size");
+                ui.label(if has_sculpt_layer { "Base Shape" } else { "Size" });
                 ui.horizontal(|ui| {
                     for &(label, axis) in params {
                         ui.label(format!("{label}:"));
@@ -308,20 +362,33 @@ fn draw_primitive_host(
                     }
                 });
             }
-        });
+        },
+    );
 
-    egui::CollapsingHeader::new("Material")
-        .default_open(true)
-        .show(ui, |ui| {
+    show_property_card(
+        ui,
+        ("presented_primitive_material", object.host_id),
+        "Material",
+        false,
+        None,
+        |ui| {
             properties::draw_material_editor(
                 ui,
                 "presented_primitive",
                 &mut material,
                 material_library,
             );
-        });
+        },
+    );
 
-    properties::draw_light_linking_section(ui, scene, object.host_id, actions, active_light_ids);
+    show_property_card(
+        ui,
+        ("presented_primitive_lighting", object.host_id),
+        "Lighting",
+        false,
+        None,
+        |ui| properties::draw_light_linking_section(ui, scene, object.host_id, actions, active_light_ids),
+    );
 
     if let Some(node) = scene.nodes.get_mut(&object.host_id) {
         if let NodeData::Primitive {
@@ -356,69 +423,97 @@ fn draw_operation_host(
     actions: &mut ActionSink,
     active_light_ids: &HashSet<NodeId>,
 ) {
-    egui::ComboBox::from_id_salt(("presented_operation_type", object.host_id))
-        .selected_text(op.base_name())
-        .show_ui(ui, |ui| {
-            for operation in CsgOp::ALL {
-                if ui
-                    .selectable_label(op == *operation, operation.base_name())
-                    .clicked()
-                {
-                    op = operation.clone();
-                    smooth_k = op.default_smooth_k();
-                    steps = op.default_steps();
+    show_property_card(
+        ui,
+        ("presented_operation_core", object.host_id),
+        "Operation",
+        true,
+        None,
+        |ui| {
+            egui::ComboBox::from_id_salt(("presented_operation_type", object.host_id))
+                .selected_text(op.base_name())
+                .show_ui(ui, |ui| {
+                    for operation in CsgOp::ALL {
+                        if ui
+                            .selectable_label(op == *operation, operation.base_name())
+                            .clicked()
+                        {
+                            op = operation.clone();
+                            smooth_k = op.default_smooth_k();
+                            steps = op.default_steps();
+                            color_blend = -1.0;
+                        }
+                    }
+                });
+
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                ui.label("Smooth K:");
+                ui.add(egui::Slider::new(&mut smooth_k, 0.0..=2.0));
+            });
+
+            if op.has_steps_param() {
+                ui.horizontal(|ui| {
+                    ui.label("Count:");
+                    ui.add(egui::Slider::new(&mut steps, 2.0..=16.0).step_by(1.0));
+                });
+            }
+
+            if op.has_color_blend_param() {
+                let mut independent = color_blend >= 0.0;
+                ui.checkbox(&mut independent, "Independent Color Blend");
+                if independent {
+                    if color_blend < 0.0 {
+                        color_blend = smooth_k;
+                    }
+                    ui.horizontal(|ui| {
+                        ui.label("Color K:");
+                        ui.add(egui::Slider::new(&mut color_blend, 0.0..=2.0));
+                    });
+                } else {
                     color_blend = -1.0;
                 }
             }
-        });
+        },
+    );
 
-    ui.separator();
-    ui.horizontal(|ui| {
-        ui.label("Smooth K:");
-        ui.add(egui::Slider::new(&mut smooth_k, 0.0..=2.0));
-    });
-
-    if op.has_steps_param() {
-        ui.horizontal(|ui| {
-            ui.label("Count:");
-            ui.add(egui::Slider::new(&mut steps, 2.0..=16.0).step_by(1.0));
-        });
-    }
-
-    if op.has_color_blend_param() {
-        let mut independent = color_blend >= 0.0;
-        ui.checkbox(&mut independent, "Independent Color Blend");
-        if independent {
-            if color_blend < 0.0 {
-                color_blend = smooth_k;
+    show_property_card(
+        ui,
+        ("presented_operation_inputs", object.host_id),
+        "Inputs",
+        true,
+        Some("Treat each operand as an object. Select it, swap it, or replace it inline."),
+        |ui| {
+            draw_operation_input_row(
+                ui,
+                scene,
+                object.host_id,
+                OperationInputSlot::Left,
+                left,
+                actions,
+            );
+            draw_operation_input_row(
+                ui,
+                scene,
+                object.host_id,
+                OperationInputSlot::Right,
+                right,
+                actions,
+            );
+            if left.is_some() && right.is_some() && ui.button("Swap Inputs").clicked() {
+                actions.push(Action::SwapChildren(object.host_id));
             }
-            ui.horizontal(|ui| {
-                ui.label("Color K:");
-                ui.add(egui::Slider::new(&mut color_blend, 0.0..=2.0));
-            });
-        } else {
-            color_blend = -1.0;
-        }
-    }
+        },
+    );
 
-    ui.separator();
-    ui.label(format!(
-        "Left: {}",
-        left.and_then(|id| scene.nodes.get(&id))
-            .map(|node| node.name.clone())
-            .unwrap_or_else(|| "(empty)".to_string())
-    ));
-    ui.label(format!(
-        "Right: {}",
-        right.and_then(|id| scene.nodes.get(&id))
-            .map(|node| node.name.clone())
-            .unwrap_or_else(|| "(empty)".to_string())
-    ));
-    if left.is_some() && right.is_some() && ui.button("Swap Inputs").clicked() {
-        actions.push(Action::SwapChildren(object.host_id));
-    }
-
-    properties::draw_light_linking_section(ui, scene, object.host_id, actions, active_light_ids);
+    show_property_card(
+        ui,
+        ("presented_operation_lighting", object.host_id),
+        "Lighting",
+        false,
+        None,
+        |ui| properties::draw_light_linking_section(ui, scene, object.host_id, actions, active_light_ids),
+    );
 
     if let Some(node) = scene.nodes.get_mut(&object.host_id) {
         if let NodeData::Operation {
@@ -454,12 +549,13 @@ fn draw_voxel_host(
     max_sculpt_resolution: u32,
     material_library: &mut MaterialLibrary,
 ) {
-    ui.label("Type: Voxel Object");
-    ui.separator();
-
-    egui::CollapsingHeader::new("Transform")
-        .default_open(true)
-        .show(ui, |ui| {
+    show_property_card(
+        ui,
+        ("presented_voxel_transform", object.host_id),
+        "Transform",
+        true,
+        Some("Standalone voxel objects keep their own transform and sculpt state."),
+        |ui| {
             properties::vec3_editor(ui, "Position", &mut position, 0.05, None, "");
             let mut rotation_deg = Vec3::new(
                 rotation.x.to_degrees(),
@@ -472,17 +568,16 @@ fn draw_voxel_host(
                 rotation_deg.y.to_radians(),
                 rotation_deg.z.to_radians(),
             );
-        });
+        },
+    );
 
-    egui::CollapsingHeader::new("Material")
-        .default_open(true)
-        .show(ui, |ui| {
-            properties::draw_material_editor(ui, "presented_voxel", &mut material, material_library);
-        });
-
-    egui::CollapsingHeader::new("Sculpting")
-        .default_open(true)
-        .show(ui, |ui| {
+    show_property_card(
+        ui,
+        ("presented_voxel_sculpting", object.host_id),
+        "Sculpt",
+        true,
+        None,
+        |ui| {
             let detail_size = voxel_grid.voxel_pitch();
             ui.horizontal(|ui| {
                 ui.label("Detail Size:");
@@ -548,9 +643,28 @@ fn draw_voxel_host(
                 "Voxel count: {}",
                 properties::format_voxel_count((desired_resolution as u64).pow(3))
             ));
-        });
+        },
+    );
 
-    properties::draw_light_linking_section(ui, scene, object.host_id, actions, active_light_ids);
+    show_property_card(
+        ui,
+        ("presented_voxel_material", object.host_id),
+        "Material",
+        false,
+        None,
+        |ui| {
+            properties::draw_material_editor(ui, "presented_voxel", &mut material, material_library);
+        },
+    );
+
+    show_property_card(
+        ui,
+        ("presented_voxel_lighting", object.host_id),
+        "Lighting",
+        false,
+        None,
+        |ui| properties::draw_light_linking_section(ui, scene, object.host_id, actions, active_light_ids),
+    );
 
     if let Some(node) = scene.nodes.get_mut(&object.host_id) {
         if let NodeData::Sculpt {
@@ -571,63 +685,6 @@ fn draw_voxel_host(
     }
 }
 
-fn draw_host_actions(
-    ui: &mut egui::Ui,
-    scene: &Scene,
-    object: PresentedObjectRef,
-    bake_progress: Option<(u32, u32)>,
-    actions: &mut ActionSink,
-) {
-    ui.label(egui::RichText::new("Object Actions").small().strong());
-    if let Some((done, total)) = bake_progress {
-        let progress = done as f32 / total.max(1) as f32;
-        ui.add(egui::ProgressBar::new(progress).text(format!("Baking... {:.0}%", progress * 100.0)));
-        return;
-    }
-
-    ui.horizontal_wrapped(|ui| {
-        if matches!(object.kind, PresentedObjectKind::Voxel) {
-            if ui.button("Enter Sculpt").clicked() {
-                actions.push(Action::EnterSculptMode);
-            }
-        } else if let Some(sculpt_id) = object.attached_sculpt_id {
-            if ui.button("Enter Sculpt").clicked() {
-                actions.push(Action::EnterSculptMode);
-            }
-            if ui.button("Convert to Voxel Object").clicked() {
-                actions.push(Action::RequestBake(BakeRequest {
-                    subtree_root: object.object_root_id,
-                    resolution: voxel::max_subtree_resolution(scene, object.object_root_id),
-                    color: sculpt_color_for_object(scene, object),
-                    existing_sculpt: Some(sculpt_id),
-                    flatten: true,
-                }));
-            }
-            if ui.button("Remove Sculpt Layer").clicked() {
-                actions.push(Action::RemoveAttachedSculpt {
-                    host: object.host_id,
-                });
-            }
-        } else if object.supports_add_sculpt() && ui.button("Add Sculpt Layer").clicked() {
-            actions.push(Action::RequestBake(BakeRequest {
-                subtree_root: object.object_root_id,
-                resolution: voxel::DEFAULT_RESOLUTION,
-                color: sculpt_color_for_object(scene, object),
-                existing_sculpt: None,
-                flatten: false,
-            }));
-        }
-
-        if ui
-            .button("Delete Object")
-            .on_hover_text("Remove this object and its hidden internal wrapper nodes")
-            .clicked()
-        {
-            actions.push(Action::DeletePresentedObject(object.object_root_id));
-        }
-    });
-}
-
 fn draw_object_stack(
     ui: &mut egui::Ui,
     scene: &mut Scene,
@@ -635,242 +692,388 @@ fn draw_object_stack(
     sculpt_state: &mut SculptState,
     actions: &mut ActionSink,
     bake_progress: Option<(u32, u32)>,
+    default_open: bool,
 ) {
-    let wrappers = collect_presented_wrapper_chain(scene, object);
-    egui::CollapsingHeader::new("Object Stack")
-        .default_open(true)
-        .show(ui, |ui| {
-            if wrappers.is_empty() {
-                ui.weak("No transforms, modifiers, or sculpt attachment on this object.");
+    let object_transform_id = object_transform_wrapper(scene, object.host_id);
+    let base_wrappers = collect_presented_base_wrapper_chain(scene, object);
+    let has_entries =
+        object_transform_id.is_some() || !base_wrappers.is_empty() || object.attached_sculpt_id.is_some();
+
+    show_property_card(
+        ui,
+        ("presented_object_layers", object.host_id),
+        "Object Layers",
+        default_open,
+        Some("Move the object, shape the base, then sculpt on top."),
+        |ui| {
+            ui.horizontal(|ui| {
+                chrome::section_title(ui, "Object Model", None);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    presented_object_actions::draw_host_add_menu_button(
+                        ui,
+                        scene,
+                        object,
+                        actions,
+                        "+ Add",
+                    );
+                });
+            });
+            ui.add_space(6.0);
+
+            if !has_entries {
+                ui.weak("No transforms, modifiers, or sculpt attachment on this object yet.");
+                return;
             }
 
-            for wrapper_id in wrappers {
+            if let Some(wrapper_id) = object_transform_id {
+                draw_transform_wrapper_row(
+                    ui,
+                    scene,
+                    wrapper_id,
+                    "Object Transform".to_string(),
+                    true,
+                    false,
+                    Some(
+                        "Primary transform owner for this sculpted object. Move, rotate, and scale the object here.",
+                    ),
+                    actions,
+                );
+                ui.add_space(6.0);
+            }
+
+            if object.attached_sculpt_id.is_some() && !base_wrappers.is_empty() {
+                chrome::section_title(
+                    ui,
+                    "Base Shape Stack",
+                    Some("These transforms and modifiers reshape the analytical base under the sculpt layer."),
+                );
+                ui.add_space(6.0);
+            }
+
+            for (index, &wrapper_id) in base_wrappers.iter().enumerate() {
                 let Some(wrapper_node) = scene.nodes.get(&wrapper_id) else {
                     continue;
                 };
                 let wrapper_name = wrapper_node.name.clone();
-                let wrapper_locked = wrapper_node.locked;
                 let wrapper_data = wrapper_node.data.clone();
 
                 match wrapper_data {
-                    NodeData::Transform {
-                        mut translation,
-                        mut rotation,
-                        mut scale,
-                        ..
-                    } => {
-                        egui::CollapsingHeader::new(format!("[Xfm] {wrapper_name}"))
-                            .default_open(false)
-                            .id_salt(("presented_transform_wrapper", wrapper_id))
-                            .show(ui, |ui| {
-                                if wrapper_locked {
-                                    ui.colored_label(
-                                        egui::Color32::from_rgb(255, 180, 80),
-                                        "Locked",
-                                    );
-                                }
-                                properties::vec3_editor(
-                                    ui,
-                                    "Translate",
-                                    &mut translation,
-                                    0.05,
-                                    None,
-                                    "",
-                                );
-                                let mut rotation_deg = Vec3::new(
-                                    rotation.x.to_degrees(),
-                                    rotation.y.to_degrees(),
-                                    rotation.z.to_degrees(),
-                                );
-                                properties::vec3_editor(
-                                    ui,
-                                    "Rotate",
-                                    &mut rotation_deg,
-                                    1.0,
-                                    None,
-                                    " deg",
-                                );
-                                rotation = Vec3::new(
-                                    rotation_deg.x.to_radians(),
-                                    rotation_deg.y.to_radians(),
-                                    rotation_deg.z.to_radians(),
-                                );
-                                properties::vec3_editor(ui, "Scale", &mut scale, 0.05, None, "");
-                                if ui
-                                    .add_enabled(!wrapper_locked, egui::Button::new("Remove Transform"))
-                                    .clicked()
-                                {
-                                    actions.push(Action::RemoveWrapperNode(wrapper_id));
-                                }
-                            });
-
-                        if let Some(node) = scene.nodes.get_mut(&wrapper_id) {
-                            if let NodeData::Transform {
-                                translation: node_translation,
-                                rotation: node_rotation,
-                                scale: node_scale,
-                                ..
-                            } = &mut node.data
-                            {
-                                *node_translation = translation;
-                                *node_rotation = rotation;
-                                *node_scale = scale;
-                            }
-                        }
+                    NodeData::Transform { .. } => {
+                        let header = if object.attached_sculpt_id.is_some() {
+                            format!("[Base Xfm] {wrapper_name}")
+                        } else {
+                            format!("[Xfm] {wrapper_name}")
+                        };
+                        draw_transform_wrapper_row(
+                            ui, scene, wrapper_id, header, false, true, None, actions,
+                        );
                     }
-                    NodeData::Modifier {
-                        kind,
-                        mut value,
-                        mut extra,
-                        ..
-                    } => {
-                        egui::CollapsingHeader::new(format!("{} {wrapper_name}", kind.badge()))
-                            .default_open(false)
-                            .id_salt(("presented_modifier_wrapper", wrapper_id))
-                            .show(ui, |ui| {
-                                if wrapper_locked {
-                                    ui.colored_label(
-                                        egui::Color32::from_rgb(255, 180, 80),
-                                        "Locked",
-                                    );
-                                }
-                                ui.small(kind.base_name());
-                                properties::vec3_editor(ui, "Value", &mut value, 0.05, None, "");
-                                properties::vec3_editor(ui, "Extra", &mut extra, 0.05, None, "");
-                                if ui
-                                    .add_enabled(!wrapper_locked, egui::Button::new("Remove Modifier"))
-                                    .clicked()
-                                {
-                                    actions.push(Action::RemoveWrapperNode(wrapper_id));
-                                }
-                            });
-
-                        if let Some(node) = scene.nodes.get_mut(&wrapper_id) {
-                            if let NodeData::Modifier {
-                                value: node_value,
-                                extra: node_extra,
-                                ..
-                            } = &mut node.data
-                            {
-                                *node_value = value;
-                                *node_extra = extra;
-                            }
-                        }
-                    }
-                    NodeData::Sculpt {
-                        mut layer_intensity,
-                        voxel_grid,
-                        desired_resolution,
-                        ..
-                    } => {
-                        egui::CollapsingHeader::new("[Sculpt] Sculpt Layer")
-                            .default_open(true)
-                            .id_salt(("presented_attached_sculpt", wrapper_id))
-                            .show(ui, |ui| {
-                                let is_active = sculpt_state.active_node() == Some(wrapper_id);
-                                ui.small(if is_active {
-                                    "This sculpt layer is currently active."
-                                } else {
-                                    "This sculpt layer is attached to the host object."
-                                });
-                                ui.horizontal(|ui| {
-                                    ui.label("Layer Intensity:");
-                                    ui.add(
-                                        egui::Slider::new(&mut layer_intensity, 0.0..=1.0)
-                                            .fixed_decimals(2),
-                                    );
-                                });
-                                ui.small(format!(
-                                    "Resolution: {}^3 | Detail Size: {:.4}",
-                                    desired_resolution,
-                                    voxel_grid.voxel_pitch()
-                                ));
-                                if let Some((done, total)) = bake_progress {
-                                    let progress = done as f32 / total.max(1) as f32;
-                                    ui.add(
-                                        egui::ProgressBar::new(progress)
-                                            .text(format!("Baking... {:.0}%", progress * 100.0)),
-                                    );
-                                } else {
-                                    ui.horizontal_wrapped(|ui| {
-                                        if ui.button("Enter Sculpt").clicked() {
-                                            actions.push(Action::EnterSculptMode);
-                                        }
-                                        if ui.button("Convert to Voxel Object").clicked() {
-                                            actions.push(Action::RequestBake(BakeRequest {
-                                                subtree_root: object.object_root_id,
-                                                resolution: voxel::max_subtree_resolution(
-                                                    scene,
-                                                    object.object_root_id,
-                                                ),
-                                                color: sculpt_color_for_object(scene, object),
-                                                existing_sculpt: Some(wrapper_id),
-                                                flatten: true,
-                                            }));
-                                        }
-                                        if ui.button("Remove Sculpt Layer").clicked() {
-                                            actions.push(Action::RemoveAttachedSculpt {
-                                                host: object.host_id,
-                                            });
-                                        }
-                                    });
-                                }
-                                ui.separator();
-                                ui.small("Internal sculpt transform and material stay hidden in the default object inspector.");
-                            });
-
-                        if let Some(node) = scene.nodes.get_mut(&wrapper_id) {
-                            if let NodeData::Sculpt {
-                                layer_intensity: node_layer_intensity,
-                                ..
-                            } = &mut node.data
-                            {
-                                *node_layer_intensity = layer_intensity;
-                            }
-                        }
+                    NodeData::Modifier { .. } => {
+                        draw_modifier_wrapper_row(ui, scene, wrapper_id, wrapper_name, actions);
                     }
                     _ => {}
                 }
+
+                if index + 1 != base_wrappers.len() {
+                    ui.add_space(6.0);
+                }
             }
 
-            ui.separator();
-            ui.menu_button("+ Add", |ui| {
-                if ui.button("Transform").clicked() {
-                    actions.push(Action::InsertTransformAbove {
-                        target: object.object_root_id,
+            if let Some(sculpt_id) = object.attached_sculpt_id {
+                if object_transform_id.is_some() || !base_wrappers.is_empty() {
+                    ui.add_space(6.0);
+                }
+                draw_attached_sculpt_row(
+                    ui,
+                    scene,
+                    object,
+                    sculpt_id,
+                    sculpt_state,
+                    actions,
+                    bake_progress,
+                );
+            }
+        },
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn draw_transform_wrapper_row(
+    ui: &mut egui::Ui,
+    scene: &mut Scene,
+    wrapper_id: NodeId,
+    header: String,
+    default_open: bool,
+    allow_remove: bool,
+    description: Option<&str>,
+    actions: &mut ActionSink,
+) {
+    let Some(wrapper_node) = scene.nodes.get(&wrapper_id) else {
+        return;
+    };
+    let wrapper_locked = wrapper_node.locked;
+    let NodeData::Transform {
+        mut translation,
+        mut rotation,
+        mut scale,
+        ..
+    } = wrapper_node.data.clone()
+    else {
+        return;
+    };
+
+    egui::CollapsingHeader::new(header)
+        .default_open(default_open)
+        .id_salt(("presented_transform_wrapper", wrapper_id))
+        .show(ui, |ui| {
+            if wrapper_locked {
+                ui.colored_label(egui::Color32::from_rgb(255, 180, 80), "Locked");
+            }
+            if let Some(text) = description {
+                ui.small(text);
+            }
+            properties::vec3_editor(ui, "Translate", &mut translation, 0.05, None, "");
+            let mut rotation_deg = Vec3::new(
+                rotation.x.to_degrees(),
+                rotation.y.to_degrees(),
+                rotation.z.to_degrees(),
+            );
+            properties::vec3_editor(ui, "Rotate", &mut rotation_deg, 1.0, None, " deg");
+            rotation = Vec3::new(
+                rotation_deg.x.to_radians(),
+                rotation_deg.y.to_radians(),
+                rotation_deg.z.to_radians(),
+            );
+            properties::vec3_editor(ui, "Scale", &mut scale, 0.05, None, "");
+            if allow_remove
+                && ui
+                    .add_enabled(!wrapper_locked, egui::Button::new("Remove Transform"))
+                    .clicked()
+            {
+                actions.push(Action::RemoveWrapperNode(wrapper_id));
+            }
+        });
+
+    if let Some(node) = scene.nodes.get_mut(&wrapper_id) {
+        if let NodeData::Transform {
+            translation: node_translation,
+            rotation: node_rotation,
+            scale: node_scale,
+            ..
+        } = &mut node.data
+        {
+            *node_translation = translation;
+            *node_rotation = rotation;
+            *node_scale = scale;
+        }
+    }
+}
+
+fn draw_operation_input_row(
+    ui: &mut egui::Ui,
+    scene: &Scene,
+    operation: NodeId,
+    slot: OperationInputSlot,
+    child: Option<NodeId>,
+    actions: &mut ActionSink,
+) {
+    let slot_label = match slot {
+        OperationInputSlot::Left => "Left Operand",
+        OperationInputSlot::Right => "Right Operand",
+    };
+    let child_object = child.and_then(|child_id| resolve_presented_object(scene, child_id));
+
+    ui.horizontal_wrapped(|ui| {
+        ui.label(egui::RichText::new(slot_label).small().strong());
+        if let Some(object) = child_object {
+            let object_name = scene
+                .nodes
+                .get(&object.host_id)
+                .map(|node| node.name.as_str())
+                .unwrap_or("Missing Object");
+            ui.label(object_name);
+            if object.attached_sculpt_id.is_some() {
+                chips::draw_chip(
+                    ui,
+                    "SCULPT",
+                    egui::Color32::from_rgb(98, 67, 24),
+                    egui::Color32::from_rgb(255, 220, 140),
+                );
+            }
+            if matches!(object.kind, PresentedObjectKind::Voxel) {
+                chips::draw_chip(
+                    ui,
+                    "VOXEL",
+                    egui::Color32::from_rgb(28, 72, 92),
+                    egui::Color32::from_rgb(180, 232, 255),
+                );
+            }
+            if ui.small_button("Select").clicked() {
+                actions.push(Action::Select(Some(object.host_id)));
+            }
+        } else {
+            ui.weak("(empty)");
+        }
+
+        ui.menu_button("Replace", |ui| {
+            for primitive in SdfPrimitive::ALL {
+                if ui.button(primitive.base_name()).clicked() {
+                    actions.push(Action::ReplaceOperationInputWithPrimitive {
+                        operation,
+                        slot,
+                        primitive: primitive.clone(),
                     });
                     ui.close_menu();
                 }
-                ui.menu_button("Modifier", |ui| {
-                    for modifier in ModifierKind::ALL {
-                        if ui.button(modifier.base_name()).clicked() {
-                            actions.push(Action::InsertModifierAbove {
-                                target: object.object_root_id,
-                                kind: modifier.clone(),
-                            });
-                            ui.close_menu();
-                        }
-                    }
-                });
-                if object.supports_add_sculpt() && ui.button("Sculpt Layer").clicked() {
-                    actions.push(Action::RequestBake(BakeRequest {
-                        subtree_root: object.object_root_id,
-                        resolution: voxel::DEFAULT_RESOLUTION,
-                        color: sculpt_color_for_object(scene, object),
-                        existing_sculpt: None,
-                        flatten: false,
-                    }));
-                    ui.close_menu();
-                }
-            });
+            }
         });
+    });
 }
 
-fn sculpt_color_for_object(scene: &Scene, object: PresentedObjectRef) -> Vec3 {
-    scene
-        .nodes
-        .get(&object.host_id)
-        .and_then(|node| node.data.material())
-        .map(|material| material.base_color)
-        .unwrap_or(Vec3::splat(0.6))
+fn draw_modifier_wrapper_row(
+    ui: &mut egui::Ui,
+    scene: &mut Scene,
+    wrapper_id: NodeId,
+    wrapper_name: String,
+    actions: &mut ActionSink,
+) {
+    let Some(wrapper_node) = scene.nodes.get(&wrapper_id) else {
+        return;
+    };
+    let wrapper_locked = wrapper_node.locked;
+    let NodeData::Modifier {
+        kind,
+        mut value,
+        mut extra,
+        ..
+    } = wrapper_node.data.clone()
+    else {
+        return;
+    };
+
+    egui::CollapsingHeader::new(format!("{} {wrapper_name}", kind.badge()))
+        .default_open(false)
+        .id_salt(("presented_modifier_wrapper", wrapper_id))
+        .show(ui, |ui| {
+            if wrapper_locked {
+                ui.colored_label(egui::Color32::from_rgb(255, 180, 80), "Locked");
+            }
+            ui.small(kind.base_name());
+            properties::vec3_editor(ui, "Value", &mut value, 0.05, None, "");
+            properties::vec3_editor(ui, "Extra", &mut extra, 0.05, None, "");
+            if ui
+                .add_enabled(!wrapper_locked, egui::Button::new("Remove Modifier"))
+                .clicked()
+            {
+                actions.push(Action::RemoveWrapperNode(wrapper_id));
+            }
+        });
+
+    if let Some(node) = scene.nodes.get_mut(&wrapper_id) {
+        if let NodeData::Modifier {
+            value: node_value,
+            extra: node_extra,
+            ..
+        } = &mut node.data
+        {
+            *node_value = value;
+            *node_extra = extra;
+        }
+    }
+}
+
+fn draw_attached_sculpt_row(
+    ui: &mut egui::Ui,
+    scene: &mut Scene,
+    object: PresentedObjectRef,
+    sculpt_id: NodeId,
+    sculpt_state: &mut SculptState,
+    actions: &mut ActionSink,
+    bake_progress: Option<(u32, u32)>,
+) {
+    let Some(sculpt_node) = scene.nodes.get(&sculpt_id) else {
+        return;
+    };
+    let NodeData::Sculpt {
+        mut layer_intensity,
+        voxel_grid,
+        desired_resolution,
+        ..
+    } = sculpt_node.data.clone()
+    else {
+        return;
+    };
+
+    egui::CollapsingHeader::new("Sculpt Layer")
+        .default_open(true)
+        .id_salt(("presented_attached_sculpt", sculpt_id))
+        .show(ui, |ui| {
+            let is_active = sculpt_state.active_node() == Some(sculpt_id);
+            ui.horizontal(|ui| {
+                chips::draw_chip(
+                    ui,
+                    if is_active { "ACTIVE" } else { "ATTACHED" },
+                    if is_active {
+                        egui::Color32::from_rgb(32, 92, 52)
+                    } else {
+                        egui::Color32::from_rgb(98, 67, 24)
+                    },
+                    if is_active {
+                        egui::Color32::from_rgb(198, 255, 208)
+                    } else {
+                        egui::Color32::from_rgb(255, 220, 140)
+                    },
+                );
+                ui.small(if is_active {
+                    "Brushes now affect this layer."
+                } else {
+                    "This sculpt layer stays attached to the object."
+                });
+            });
+            ui.add_space(4.0);
+            ui.horizontal(|ui| {
+                ui.label("Layer Intensity:");
+                ui.add(egui::Slider::new(&mut layer_intensity, 0.0..=1.0).fixed_decimals(2));
+            });
+            ui.small(format!(
+                "Resolution: {}^3 | Detail Size: {:.4}",
+                desired_resolution,
+                voxel_grid.voxel_pitch()
+            ));
+            if let Some((done, total)) = bake_progress {
+                let progress = done as f32 / total.max(1) as f32;
+                ui.add(
+                    egui::ProgressBar::new(progress)
+                        .text(format!("Baking... {:.0}%", progress * 100.0)),
+                );
+            } else {
+                ui.horizontal_wrapped(|ui| {
+                    if ui.button("Enter Sculpt").clicked() {
+                        actions.push(Action::EnterSculptMode);
+                    }
+                    if ui.button("Convert to Voxel Object").clicked() {
+                        presented_object_actions::push_convert_to_voxel_action(
+                            scene, object, sculpt_id, actions,
+                        );
+                    }
+                    if ui.button("Remove Sculpt Layer").clicked() {
+                        actions.push(Action::RemoveAttachedSculpt {
+                            host: object.host_id,
+                        });
+                    }
+                });
+            }
+            ui.separator();
+            ui.small("Internal sculpt transform and material stay hidden in the default object inspector.");
+        });
+
+    if let Some(node) = scene.nodes.get_mut(&sculpt_id) {
+        if let NodeData::Sculpt {
+            layer_intensity: node_layer_intensity,
+            ..
+        } = &mut node.data
+        {
+            *node_layer_intensity = layer_intensity;
+        }
+    }
 }

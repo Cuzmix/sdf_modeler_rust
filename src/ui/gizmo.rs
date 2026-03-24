@@ -608,6 +608,10 @@ pub(crate) fn collect_gizmo_selection(
 }
 
 impl GizmoSelection {
+    pub(crate) fn center_world(&self) -> Vec3 {
+        self.base_center_world
+    }
+
     pub(crate) fn supports_scale(&self) -> bool {
         self.targets
             .iter()

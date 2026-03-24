@@ -44,6 +44,12 @@ pub enum SculptConvertMode {
     BakeActiveNode,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OperationInputSlot {
+    Left,
+    Right,
+}
+
 /// All possible state-mutating intents that UI components can express.
 /// Each variant contains exactly the data needed to execute the action.
 ///
@@ -71,6 +77,7 @@ pub enum Action {
     DeleteSelected,
     DeleteNode(NodeId),
     DeletePresentedObject(NodeId),
+    DuplicatePresentedObject(NodeId),
     RemoveWrapperNode(NodeId),
 
     // ── Clipboard ────────────────────────────────────────────────────
@@ -124,6 +131,11 @@ pub enum Action {
     CreatePrimitive(SdfPrimitive),
     ShellCreateBooleanPrimitive {
         op: CsgOp,
+        primitive: SdfPrimitive,
+    },
+    ReplaceOperationInputWithPrimitive {
+        operation: NodeId,
+        slot: OperationInputSlot,
         primitive: SdfPrimitive,
     },
     CreateOperation {

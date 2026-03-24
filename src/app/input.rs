@@ -5,7 +5,7 @@ use crate::sculpt::{ActiveTool, BrushMode};
 use crate::ui::gizmo::GizmoMode;
 
 use super::actions::{Action, ActionSink};
-use super::state::{InteractionMode, ShellPanelKind};
+use super::state::InteractionMode;
 use super::{ExportStatus, SdfApp};
 
 impl SdfApp {
@@ -174,11 +174,7 @@ impl SdfApp {
             ActionBinding::Undo => actions.push(Action::Undo),
             ActionBinding::Redo => actions.push(Action::Redo),
             ActionBinding::ShowQuickToolbar => {
-                if self.ui.primary_shell.tool_panel.is_docked() {
-                    actions.push(Action::HideShellPanel(ShellPanelKind::Tool));
-                } else {
-                    self.ui.primary_shell.toggle_tool_panel();
-                }
+                self.ui.primary_shell.toggle_tool_rail();
             }
             ActionBinding::ToggleReferenceImages => {
                 actions.push(Action::ToggleAllReferenceImages);

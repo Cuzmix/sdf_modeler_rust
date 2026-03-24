@@ -51,6 +51,17 @@ fn first_transform_wrapper(scene: &Scene, object: PresentedObjectRef) -> Option<
         })
 }
 
+fn attached_sculpt_base_root(scene: &Scene, object: PresentedObjectRef) -> Option<NodeId> {
+    let sculpt_id = object.attached_sculpt_id?;
+    match scene.nodes.get(&sculpt_id).map(|node| &node.data) {
+        Some(NodeData::Sculpt {
+            input: Some(child_id),
+            ..
+        }) => Some(*child_id),
+        _ => Some(object.host_id),
+    }
+}
+
 fn resolve_host_base(scene: &Scene, start_id: NodeId) -> Option<(NodeId, PresentedObjectKind)> {
     let mut current = start_id;
     loop {
@@ -145,6 +156,23 @@ pub fn current_transform_owner(scene: &Scene, start_id: NodeId) -> Option<NodeId
     }
 }
 
+pub fn object_transform_wrapper(scene: &Scene, start_id: NodeId) -> Option<NodeId> {
+    let object = resolve_presented_object(scene, start_id)?;
+    if !matches!(object.kind, PresentedObjectKind::Parametric) || object.attached_sculpt_id.is_none()
+    {
+        return None;
+    }
+    first_transform_wrapper(scene, object)
+}
+
+pub fn presented_wrap_target(scene: &Scene, start_id: NodeId) -> Option<NodeId> {
+    let object = resolve_presented_object(scene, start_id)?;
+    if matches!(object.kind, PresentedObjectKind::Light) {
+        return None;
+    }
+    attached_sculpt_base_root(scene, object).or(Some(object.object_root_id))
+}
+
 pub fn ensure_presented_transform_owner(scene: &mut Scene, start_id: NodeId) -> Option<NodeId> {
     let object = resolve_presented_object(scene, start_id)?;
     if !matches!(object.kind, PresentedObjectKind::Parametric) || object.attached_sculpt_id.is_none()
@@ -157,6 +185,33 @@ pub fn ensure_presented_transform_owner(scene: &mut Scene, start_id: NodeId) -> 
     }
 
     Some(scene.insert_transform_above(object.object_root_id))
+}
+
+pub fn normalize_attached_sculpt_transform_owners(scene: &mut Scene) -> usize {
+    let mut node_ids: Vec<_> = scene.nodes.keys().copied().collect();
+    node_ids.sort_unstable();
+
+    let mut normalized = 0;
+    let mut seen_hosts = HashSet::new();
+    for node_id in node_ids {
+        let Some(object) = resolve_presented_object(scene, node_id) else {
+            continue;
+        };
+        if !seen_hosts.insert(object.host_id) {
+            continue;
+        }
+        if !matches!(object.kind, PresentedObjectKind::Parametric) || object.attached_sculpt_id.is_none()
+        {
+            continue;
+        }
+        if first_transform_wrapper(scene, object).is_some() {
+            continue;
+        }
+        scene.insert_transform_above(object.object_root_id);
+        normalized += 1;
+    }
+
+    normalized
 }
 
 #[allow(dead_code)]
@@ -257,6 +312,38 @@ pub fn collect_presented_wrapper_chain(scene: &Scene, object: PresentedObjectRef
     let mut wrappers = Vec::new();
     let mut current = object.object_root_id;
 
+    while current != object.host_id {
+        wrappers.push(current);
+        let Some(node) = scene.nodes.get(&current) else {
+            break;
+        };
+        current = match &node.data {
+            NodeData::Transform {
+                input: Some(child_id),
+                ..
+            }
+            | NodeData::Modifier {
+                input: Some(child_id),
+                ..
+            }
+            | NodeData::Sculpt {
+                input: Some(child_id),
+                ..
+            } => *child_id,
+            _ => break,
+        };
+    }
+
+    wrappers
+}
+
+pub fn collect_presented_base_wrapper_chain(scene: &Scene, object: PresentedObjectRef) -> Vec<NodeId> {
+    let Some(mut current) = attached_sculpt_base_root(scene, object).or(Some(object.object_root_id))
+    else {
+        return Vec::new();
+    };
+
+    let mut wrappers = Vec::new();
     while current != object.host_id {
         wrappers.push(current);
         let Some(node) = scene.nodes.get(&current) else {
@@ -389,6 +476,52 @@ mod tests {
     }
 
     #[test]
+    fn presented_wrap_target_prefers_base_chain_under_attached_sculpt() {
+        let mut scene = Scene::new();
+        let primitive_id = scene.create_primitive(SdfPrimitive::Sphere);
+        let base_modifier_id = scene.insert_modifier_above(primitive_id, ModifierKind::Noise);
+        let (object_transform_id, sculpt_id) = scene.insert_sculpt_layer_above(
+            base_modifier_id,
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::new(0.8, 0.2, 0.2),
+            sculpt_grid(),
+        );
+
+        let object = resolve_presented_object(&scene, primitive_id).unwrap();
+
+        assert_eq!(presented_wrap_target(&scene, primitive_id), Some(base_modifier_id));
+        assert_eq!(object_transform_wrapper(&scene, primitive_id), Some(object_transform_id));
+        assert_eq!(collect_presented_base_wrapper_chain(&scene, object), vec![base_modifier_id]);
+        assert_eq!(object.attached_sculpt_id, Some(sculpt_id));
+    }
+
+    #[test]
+    fn presented_wrap_target_keeps_operation_host_base_chain_separate_from_object_transform() {
+        let mut scene = Scene::new();
+        let left_id = scene.create_primitive(SdfPrimitive::Sphere);
+        let right_id = scene.create_primitive(SdfPrimitive::Box);
+        let operation_id =
+            scene.create_operation(crate::graph::scene::CsgOp::Union, Some(left_id), Some(right_id));
+        let base_transform_id = scene.insert_transform_above(operation_id);
+        let (object_transform_id, sculpt_id) = scene.insert_sculpt_layer_above(
+            base_transform_id,
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::new(0.2, 0.8, 0.2),
+            sculpt_grid(),
+        );
+
+        let object = resolve_presented_object(&scene, operation_id).unwrap();
+
+        assert_eq!(object.host_id, operation_id);
+        assert_eq!(presented_wrap_target(&scene, operation_id), Some(base_transform_id));
+        assert_eq!(object_transform_wrapper(&scene, operation_id), Some(object_transform_id));
+        assert_eq!(collect_presented_base_wrapper_chain(&scene, object), vec![base_transform_id]);
+        assert_eq!(object.attached_sculpt_id, Some(sculpt_id));
+    }
+
+    #[test]
     fn ensure_presented_transform_owner_wraps_legacy_attached_sculpt_root() {
         let mut scene = Scene::new();
         let primitive_id = scene.create_primitive(SdfPrimitive::Sphere);
@@ -419,5 +552,36 @@ mod tests {
         let _transform_id = scene.insert_transform_above(primitive_id);
 
         assert_eq!(current_transform_owner(&scene, primitive_id), Some(primitive_id));
+    }
+
+    #[test]
+    fn normalize_attached_sculpt_transform_owners_wraps_every_legacy_host_once() {
+        let mut scene = Scene::new();
+        let left = scene.create_primitive(SdfPrimitive::Sphere);
+        let right = scene.create_primitive(SdfPrimitive::Box);
+        let left_sculpt = scene.insert_sculpt_above(
+            left,
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::new(0.8, 0.2, 0.2),
+            sculpt_grid(),
+        );
+        let right_sculpt = scene.insert_sculpt_above(
+            right,
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::new(0.2, 0.8, 0.2),
+            sculpt_grid(),
+        );
+
+        assert_eq!(normalize_attached_sculpt_transform_owners(&mut scene), 2);
+        assert_ne!(current_transform_owner(&scene, left), Some(left));
+        assert_ne!(current_transform_owner(&scene, right), Some(right));
+        assert_eq!(normalize_attached_sculpt_transform_owners(&mut scene), 0);
+        assert_eq!(resolve_presented_object(&scene, left_sculpt).unwrap().attached_sculpt_id, Some(left_sculpt));
+        assert_eq!(
+            resolve_presented_object(&scene, right_sculpt).unwrap().attached_sculpt_id,
+            Some(right_sculpt)
+        );
     }
 }
