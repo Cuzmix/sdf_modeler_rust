@@ -1,119 +1,63 @@
 use std::path::Path;
 
-use eframe::egui;
 use glam::Vec3;
 
 use crate::app::actions::{Action, ActionSink};
+use crate::app::reference_images::{RefPlane, ReferenceImageEntry, ReferenceImageStore};
 use crate::gpu::camera::Camera;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum RefPlane {
-    Front,
-    Back,
-    Left,
-    Right,
-    Top,
-    Bottom,
-}
-
-impl RefPlane {
-    pub const ALL: [Self; 6] = [
-        Self::Front,
-        Self::Back,
-        Self::Left,
-        Self::Right,
-        Self::Top,
-        Self::Bottom,
-    ];
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Front => "Front",
-            Self::Back => "Back",
-            Self::Left => "Left",
-            Self::Right => "Right",
-            Self::Top => "Top",
-            Self::Bottom => "Bottom",
-        }
-    }
-}
-
-pub struct ReferenceImage {
-    pub texture: egui::TextureHandle,
-    pub path: String,
-    pub plane: RefPlane,
-    pub offset: Vec3,
-    pub scale: f32,
-    pub opacity: f32,
-    pub locked: bool,
-    pub visible: bool,
-    pub size_px: egui::Vec2,
-}
-
-impl ReferenceImage {
-    pub fn texture_id(&self) -> egui::TextureId {
-        self.texture.id()
-    }
+pub struct LoadedReferenceImage {
+    pub width: u32,
+    pub height: u32,
+    pub color_image: egui::ColorImage,
 }
 
 #[derive(Default)]
-pub struct ReferenceImageManager {
-    pub images: Vec<ReferenceImage>,
+pub struct EguiReferenceImageCache {
+    textures: Vec<egui::TextureHandle>,
 }
 
-impl ReferenceImageManager {
-    pub fn add_from_path(&mut self, ctx: &egui::Context, path: &Path) -> Result<(), String> {
-        let dynamic_image = image::open(path)
-            .map_err(|e| format!("Failed to open image '{}': {}", path.display(), e))?;
-        let rgba = dynamic_image.to_rgba8();
-        let (width, height) = rgba.dimensions();
-        if width == 0 || height == 0 {
-            return Err("Image has invalid dimensions".to_string());
-        }
-        let pixels = rgba.into_raw();
-        let color_image =
-            egui::ColorImage::from_rgba_unmultiplied([width as usize, height as usize], &pixels);
+impl EguiReferenceImageCache {
+    pub fn push_loaded(&mut self, ctx: &egui::Context, path: &Path, loaded: LoadedReferenceImage) {
         let texture_name = format!("reference:{}", path.display());
-        let texture = ctx.load_texture(texture_name, color_image, egui::TextureOptions::LINEAR);
-        self.images.push(ReferenceImage {
-            texture,
-            path: path.to_string_lossy().into_owned(),
-            plane: RefPlane::Front,
-            offset: Vec3::ZERO,
-            scale: 2.0,
-            opacity: 0.6,
-            locked: false,
-            visible: true,
-            size_px: egui::vec2(width as f32, height as f32),
-        });
-        Ok(())
+        let texture = ctx.load_texture(
+            texture_name,
+            loaded.color_image,
+            egui::TextureOptions::LINEAR,
+        );
+        self.textures.push(texture);
     }
 
     pub fn remove(&mut self, index: usize) {
-        if index < self.images.len() {
-            self.images.remove(index);
+        if index < self.textures.len() {
+            let _ = self.textures.remove(index);
         }
     }
 
-    pub fn toggle_visibility(&mut self, index: usize) {
-        if let Some(image) = self.images.get_mut(index) {
-            image.visible = !image.visible;
-        }
-    }
-
-    pub fn toggle_all_visibility(&mut self) {
-        let any_visible = self.images.iter().any(|image| image.visible);
-        for image in &mut self.images {
-            image.visible = !any_visible;
-        }
+    pub fn texture_id(&self, index: usize) -> Option<egui::TextureId> {
+        self.textures.get(index).map(|texture| texture.id())
     }
 }
 
-pub fn draw_controls(
-    ui: &mut egui::Ui,
-    manager: &mut ReferenceImageManager,
-    actions: &mut ActionSink,
-) {
+pub fn load_reference_image(path: &Path) -> Result<LoadedReferenceImage, String> {
+    let dynamic_image = image::open(path)
+        .map_err(|e| format!("Failed to open image '{}': {}", path.display(), e))?;
+    let rgba = dynamic_image.to_rgba8();
+    let (width, height) = rgba.dimensions();
+    if width == 0 || height == 0 {
+        return Err("Image has invalid dimensions".to_string());
+    }
+    let pixels = rgba.into_raw();
+    let color_image =
+        egui::ColorImage::from_rgba_unmultiplied([width as usize, height as usize], &pixels);
+    Ok(LoadedReferenceImage {
+        width,
+        height,
+        color_image,
+    })
+}
+
+pub fn draw_controls(ui: &mut egui::Ui, store: &mut ReferenceImageStore, actions: &mut ActionSink) {
     ui.separator();
     ui.heading("Reference Images");
 
@@ -126,13 +70,13 @@ pub fn draw_controls(
         }
     });
 
-    if manager.images.is_empty() {
+    if store.images.is_empty() {
         ui.weak("No reference images loaded.");
         return;
     }
 
     let mut remove_index: Option<usize> = None;
-    for (index, image) in manager.images.iter_mut().enumerate() {
+    for (index, image) in store.images.iter_mut().enumerate() {
         ui.separator();
 
         let file_name = Path::new(&image.path)
@@ -189,9 +133,9 @@ pub fn draw_controls(
     }
 }
 
-fn quad_world_corners(image: &ReferenceImage) -> [Vec3; 4] {
-    let aspect = if image.size_px.y > 0.0 {
-        image.size_px.x / image.size_px.y
+fn quad_world_corners(image: &ReferenceImageEntry) -> [Vec3; 4] {
+    let aspect = if image.size_px[1] > 0.0 {
+        image.size_px[0] / image.size_px[1]
     } else {
         1.0
     };
@@ -225,26 +169,29 @@ pub fn draw_overlay(
     painter: &egui::Painter,
     camera: &Camera,
     rect: egui::Rect,
-    manager: &ReferenceImageManager,
+    store: &ReferenceImageStore,
+    cache: &EguiReferenceImageCache,
 ) {
-    if manager.images.is_empty() {
+    if store.images.is_empty() {
         return;
     }
     let aspect = (rect.width() / rect.height().max(1.0)).max(1e-5);
     let view_proj = camera.projection_matrix(aspect) * camera.view_matrix();
 
-    for image in &manager.images {
+    for (index, image) in store.images.iter().enumerate() {
         if !image.visible {
             continue;
         }
+        let Some(texture_id) = cache.texture_id(index) else {
+            continue;
+        };
+
         let tint = egui::Color32::from_white_alpha((image.opacity.clamp(0.0, 1.0) * 255.0) as u8);
-        let mut mesh = egui::Mesh::with_texture(image.texture_id());
+        let mut mesh = egui::Mesh::with_texture(texture_id);
         let corners = quad_world_corners(image);
         let tess = 20usize;
         let inv_tess = 1.0 / tess as f32;
 
-        // Use grid tessellation to avoid affine UV warping artifacts at oblique angles.
-        // egui meshes interpolate UVs in screen space; subdividing approximates perspective-correct mapping.
         for y in 0..tess {
             let v0 = y as f32 * inv_tess;
             let v1 = (y + 1) as f32 * inv_tess;

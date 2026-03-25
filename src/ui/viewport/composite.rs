@@ -1,5 +1,4 @@
 use bytemuck::{Pod, Zeroable};
-use eframe::wgpu;
 
 use super::ViewportResources;
 

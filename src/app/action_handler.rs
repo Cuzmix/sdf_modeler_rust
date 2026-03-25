@@ -1,4 +1,3 @@
-use eframe::egui;
 use glam::Vec3;
 
 use crate::desktop_dialogs::FileDialogSelection;
@@ -8,12 +7,9 @@ use crate::graph::presented_object::{
 };
 use crate::graph::scene::{NodeData, NodeId, Scene, SdfPrimitive};
 use crate::sculpt::{BrushMode, SculptState};
-use crate::ui::dock::Tab;
 
 use super::actions::{Action, LightingPreset, OperationInputSlot, SculptConvertMode};
-use super::state::{
-    DocumentState, InteractionMode, SculptConvertDialog, ShellPanelKind, UiState,
-};
+use super::state::{DocumentState, ExpertPanelKind, InteractionMode, SculptConvertDialog, UiState};
 use super::SdfApp;
 
 /// Maximum storage buffer binding size configured for wgpu (128MB).
@@ -85,7 +81,10 @@ fn resolve_sculpt_entry(scene: &Scene, selected: Option<NodeId>) -> SculptEntryD
 }
 
 fn sync_interaction_mode_after_sculpt_exit_state(ui: &mut UiState) {
-    if matches!(ui.primary_shell.interaction_mode, InteractionMode::Sculpt(_)) {
+    if matches!(
+        ui.primary_shell.interaction_mode,
+        InteractionMode::Sculpt(_)
+    ) {
         ui.primary_shell.interaction_mode = InteractionMode::Select;
         ui.measurement_mode = false;
         ui.measurement_points.clear();
@@ -137,64 +136,19 @@ fn clear_removed_selection_state(
     }
 
     if ui
-        .node_graph_state
+        .selection
         .selected
         .is_some_and(|selected_id| removed_ids.contains(&selected_id))
     {
-        ui.node_graph_state.selected = None;
+        ui.selection.selected = None;
     }
-    ui.node_graph_state
+    ui.selection
         .selected_set
         .retain(|selected_id| !removed_ids.contains(selected_id));
 
-    if ui.node_graph_state.selected.is_none() {
-        ui.node_graph_state.selected = ui.node_graph_state.selected_set.iter().copied().min();
+    if ui.selection.selected.is_none() {
+        ui.selection.selected = ui.selection.selected_set.iter().copied().min();
     }
-}
-
-fn hide_shell_panel_state(ui: &mut UiState, panel: ShellPanelKind) {
-    if let Some(location) = ui.dock_state.find_tab(&panel.dock_tab()) {
-        ui.dock_state.remove_tab(location);
-    }
-    ui.primary_shell.panel_mut(panel).hide();
-}
-
-fn dock_shell_panel_state(ui: &mut UiState, panel: ShellPanelKind, rect: egui::Rect) {
-    if let Some(location) = ui.dock_state.find_tab(&panel.dock_tab()) {
-        ui.dock_state.remove_tab(location);
-    }
-
-    ui.primary_shell.panel_mut(panel).remember_floating_rect(rect);
-
-    let surface = ui.dock_state.add_window(vec![panel.dock_tab()]);
-    if let Some(window_state) = ui.dock_state.get_window_state_mut(surface) {
-        window_state.set_position(rect.min);
-        window_state.set_size(rect.size());
-    }
-    ui.primary_shell.panel_mut(panel).dock();
-}
-
-fn undock_shell_panel_state(ui: &mut UiState, panel: ShellPanelKind) {
-    let fallback_rect = ui.primary_shell.panel(panel).last_floating_rect;
-
-    if let Some((surface, node, tab_index)) = ui.dock_state.find_tab(&panel.dock_tab()) {
-        let detached_rect = ui
-            .dock_state
-            .get_window_state_mut(surface)
-            .map(|window_state| window_state.rect())
-            .filter(|rect| *rect != egui::Rect::NOTHING);
-        ui.dock_state.remove_tab((surface, node, tab_index));
-        ui.primary_shell
-            .panel_mut(panel)
-            .show_floating(detached_rect.or(fallback_rect));
-    } else {
-        ui.primary_shell.panel_mut(panel).show_floating(fallback_rect);
-    }
-}
-
-fn reset_primary_shell_layout_state(ui: &mut UiState) {
-    ui.primary_shell.reset_layout();
-    ui.dock_state = crate::ui::dock::create_primary_shell_dock();
 }
 
 fn offset_duplicated_object_root(scene: &mut Scene, root_id: NodeId) -> NodeId {
@@ -298,17 +252,17 @@ impl SdfApp {
     }
 
     fn request_sculpt_interaction(&mut self, brush: BrushMode) {
-        let decision = if self.ui.node_graph_state.selected.is_none() {
+        let decision = if self.ui.selection.selected.is_none() {
             self.doc
                 .sculpt_state
                 .active_node()
                 .filter(|node_id| self.doc.scene.nodes.contains_key(node_id))
                 .map(SculptEntryDecision::Activate)
                 .unwrap_or_else(|| {
-                    resolve_sculpt_entry(&self.doc.scene, self.ui.node_graph_state.selected)
+                    resolve_sculpt_entry(&self.doc.scene, self.ui.selection.selected)
                 })
         } else {
-            resolve_sculpt_entry(&self.doc.scene, self.ui.node_graph_state.selected)
+            resolve_sculpt_entry(&self.doc.scene, self.ui.selection.selected)
         };
 
         match decision {
@@ -334,26 +288,23 @@ impl SdfApp {
         }
     }
 
-    fn toggle_dock_tab(&mut self, tab: Tab) {
-        if let Some(location) = self.ui.dock_state.find_tab(&tab) {
-            self.ui.dock_state.remove_tab(location);
-        } else {
-            self.ui.dock_state.push_to_focused_leaf(tab.clone());
-        }
+    fn toggle_expert_panel(&mut self, panel: ExpertPanelKind) {
+        self.egui
+            .toggle_expert_panel(&mut self.ui.expert_panels, panel);
     }
 
     /// Process all collected actions. This is the single mutation point — the
     /// equivalent of a Redux reducer. All structural state changes flow through
     /// here, making the data flow explicit and easy to trace.
-    pub(super) fn process_actions(&mut self, actions: Vec<Action>, ctx: &egui::Context) {
+    pub(super) fn process_actions(&mut self, actions: Vec<Action>) {
         for action in actions {
             match action {
                 // ── Scene ────────────────────────────────────────────
                 Action::NewScene => {
                     self.doc.scene = Scene::new();
                     self.doc.history = History::new();
-                    self.ui.node_graph_state.clear_selection();
-                    self.ui.node_graph_state.needs_initial_rebuild = true;
+                    self.ui.selection.clear_selection();
+                    self.ui.scene_graph_view.needs_initial_rebuild = true;
                     self.doc.sculpt_state = SculptState::new_inactive();
                     self.ui.primary_shell.interaction_mode = InteractionMode::Select;
                     self.ui.isolation_state = None;
@@ -495,8 +446,8 @@ impl SdfApp {
                             FileDialogSelection::Selected(path) => {
                                 match crate::io::load_subtree_preset(&mut self.doc.scene, &path) {
                                     Ok(root_id) => {
-                                        self.ui.node_graph_state.select_single(root_id);
-                                        self.ui.node_graph_state.needs_initial_rebuild = true;
+                                        self.ui.selection.select_single(root_id);
+                                        self.ui.scene_graph_view.needs_initial_rebuild = true;
                                         self.gpu.buffer_dirty = true;
                                         self.ui.toasts.push(super::Toast {
                                             message: format!("Loaded preset: {}", path.display()),
@@ -533,72 +484,31 @@ impl SdfApp {
                     }
                 }
                 Action::AddReferenceImage => {
-                    #[cfg(not(target_arch = "wasm32"))]
-                    {
-                        match crate::desktop_dialogs::reference_image_dialog() {
-                            FileDialogSelection::Selected(path) => {
-                                match self.ui.reference_images.add_from_path(ctx, &path) {
-                                    Ok(()) => {
-                                        self.ui.toasts.push(super::Toast {
-                                            message: format!(
-                                                "Loaded reference image: {}",
-                                                path.display()
-                                            ),
-                                            is_error: false,
-                                            created: crate::compat::Instant::now(),
-                                            duration: crate::compat::Duration::from_secs(4),
-                                        });
-                                    }
-                                    Err(e) => {
-                                        log::error!("Failed to load reference image: {}", e);
-                                        self.ui.toasts.push(super::Toast {
-                                            message: format!("Failed to load image: {}", e),
-                                            is_error: true,
-                                            created: crate::compat::Instant::now(),
-                                            duration: crate::compat::Duration::from_secs(5),
-                                        });
-                                    }
-                                }
-                            }
-                            FileDialogSelection::Unsupported => {
-                                push_platform_unsupported_toast(self, "Picking reference images");
-                            }
-                            FileDialogSelection::Cancelled => {}
-                        }
-                    }
-                    #[cfg(target_arch = "wasm32")]
-                    {
-                        self.ui.toasts.push(super::Toast {
-                            message: "Reference images are not supported in web builds".into(),
-                            is_error: true,
-                            created: crate::compat::Instant::now(),
-                            duration: crate::compat::Duration::from_secs(4),
-                        });
-                    }
+                    // Frontend adapters own file picking and texture upload for reference images.
                 }
                 Action::RemoveReferenceImage(index) => {
-                    self.ui.reference_images.remove(index);
+                    let _ = index;
                 }
                 Action::ToggleReferenceImageVisibility(index) => {
-                    self.ui.reference_images.toggle_visibility(index);
+                    let _ = index;
                 }
                 Action::ToggleAllReferenceImages => {
-                    self.ui.reference_images.toggle_all_visibility();
+                    // Frontend adapters own reference-image presentation state.
                 }
                 Action::Select(id) => {
                     if let Some(node_id) = id {
                         let selected_host = resolve_host_selection(&self.doc.scene, Some(node_id))
                             .unwrap_or(node_id);
-                        self.ui.node_graph_state.select_single(selected_host);
+                        self.ui.selection.select_single(selected_host);
                     } else {
-                        self.ui.node_graph_state.clear_selection();
+                        self.ui.selection.clear_selection();
                     }
                     self.gpu.buffer_dirty = true;
                 }
                 Action::DeleteSelected => {
                     let locked = self
                         .ui
-                        .node_graph_state
+                        .selection
                         .selected
                         .and_then(|id| self.doc.scene.nodes.get(&id))
                         .is_some_and(|n| n.locked);
@@ -610,15 +520,15 @@ impl SdfApp {
                     let locked = self.doc.scene.nodes.get(&id).is_some_and(|n| n.locked);
                     if !locked {
                         self.doc.scene.remove_node(id);
-                        if self.ui.node_graph_state.selected == Some(id) {
-                            self.ui.node_graph_state.clear_selection();
+                        if self.ui.selection.selected == Some(id) {
+                            self.ui.selection.clear_selection();
                         } else {
-                            self.ui.node_graph_state.selected_set.remove(&id);
+                            self.ui.selection.selected_set.remove(&id);
                         }
                         if self.doc.soloed_light == Some(id) {
                             self.doc.soloed_light = None;
                         }
-                        self.ui.node_graph_state.needs_initial_rebuild = true;
+                        self.ui.scene_graph_view.needs_initial_rebuild = true;
                         self.doc.sculpt_state = SculptState::new_inactive();
                         self.sync_interaction_mode_after_sculpt_exit();
                         self.gpu.buffer_dirty = true;
@@ -626,31 +536,27 @@ impl SdfApp {
                 }
                 Action::RemoveWrapperNode(id) => {
                     let locked = self.doc.scene.nodes.get(&id).is_some_and(|n| n.locked);
-                    let protected_attached_sculpt_owner = resolve_presented_object(&self.doc.scene, id)
-                        .is_some_and(|object| {
+                    let protected_attached_sculpt_owner =
+                        resolve_presented_object(&self.doc.scene, id).is_some_and(|object| {
                             object.attached_sculpt_id.is_some()
                                 && current_transform_owner(&self.doc.scene, id) == Some(id)
                         });
                     if !locked && !protected_attached_sculpt_owner {
                         let removed_child = self.doc.scene.remove_passthrough_node(id);
                         if removed_child.is_some() {
-                            if self.ui.node_graph_state.selected == Some(id) {
-                                self.ui.node_graph_state.clear_selection();
+                            if self.ui.selection.selected == Some(id) {
+                                self.ui.selection.clear_selection();
                             } else {
-                                self.ui.node_graph_state.selected_set.remove(&id);
+                                self.ui.selection.selected_set.remove(&id);
                             }
-                            self.ui.node_graph_state.needs_initial_rebuild = true;
+                            self.ui.scene_graph_view.needs_initial_rebuild = true;
                             self.gpu.buffer_dirty = true;
                         }
                     }
                 }
                 Action::DeletePresentedObject(root_id) => {
-                    let removed_ids: std::collections::HashSet<_> = self
-                        .doc
-                        .scene
-                        .remove_subtree(root_id)
-                        .into_iter()
-                        .collect();
+                    let removed_ids: std::collections::HashSet<_> =
+                        self.doc.scene.remove_subtree(root_id).into_iter().collect();
                     if !removed_ids.is_empty() {
                         clear_removed_selection_state(&mut self.ui, &removed_ids);
                         if self
@@ -669,7 +575,7 @@ impl SdfApp {
                         {
                             self.doc.soloed_light = None;
                         }
-                        self.ui.node_graph_state.needs_initial_rebuild = true;
+                        self.ui.scene_graph_view.needs_initial_rebuild = true;
                         self.gpu.buffer_dirty = true;
                     }
                 }
@@ -679,14 +585,14 @@ impl SdfApp {
                     if let Some((selected_id, centered_id)) =
                         duplicate_presented_object_and_offset(&mut self.doc.scene, source_id)
                     {
-                        self.ui.node_graph_state.select_single(selected_id);
-                        self.ui.node_graph_state.needs_initial_rebuild = true;
-                        self.ui.node_graph_state.pending_center_node = Some(centered_id);
+                        self.ui.selection.select_single(selected_id);
+                        self.ui.scene_graph_view.needs_initial_rebuild = true;
+                        self.ui.scene_graph_view.pending_center_node = Some(centered_id);
                         self.gpu.buffer_dirty = true;
                     }
                 }
                 Action::Copy => {
-                    self.doc.clipboard_node = self.ui.node_graph_state.selected;
+                    self.doc.clipboard_node = self.ui.selection.selected;
                 }
                 Action::Paste => {
                     if let Some(src) = self.doc.clipboard_node {
@@ -694,7 +600,7 @@ impl SdfApp {
                     }
                 }
                 Action::Duplicate => {
-                    if let Some(sel) = self.ui.node_graph_state.selected {
+                    if let Some(sel) = self.ui.selection.selected {
                         self.duplicate_and_offset(sel);
                     }
                 }
@@ -704,7 +610,7 @@ impl SdfApp {
                     if let Some(restored) = self
                         .doc
                         .history
-                        .undo(&self.doc.scene, self.ui.node_graph_state.selected)
+                        .undo(&self.doc.scene, self.ui.selection.selected)
                     {
                         self.apply_history_restore(restored);
                     }
@@ -713,7 +619,7 @@ impl SdfApp {
                     if let Some(restored) = self
                         .doc
                         .history
-                        .redo(&self.doc.scene, self.ui.node_graph_state.selected)
+                        .redo(&self.doc.scene, self.ui.selection.selected)
                     {
                         self.apply_history_restore(restored);
                     }
@@ -721,13 +627,15 @@ impl SdfApp {
 
                 // ── Camera ───────────────────────────────────────────
                 Action::FocusSelected => {
-                    if let Some(sel) = self.ui.node_graph_state.selected {
+                    if let Some(sel) = self.ui.selection.selected {
                         let focus_root = resolve_presented_object(&self.doc.scene, sel)
                             .map(|presented| presented.object_root_id)
                             .unwrap_or(sel);
                         let parent_map = self.doc.scene.build_parent_map();
-                        let (center, radius) =
-                            self.doc.scene.compute_subtree_sphere(focus_root, &parent_map);
+                        let (center, radius) = self
+                            .doc
+                            .scene
+                            .compute_subtree_sphere(focus_root, &parent_map);
                         self.doc
                             .camera
                             .focus_on(Vec3::new(center[0], center[1], center[2]), radius.max(0.5));
@@ -868,7 +776,7 @@ impl SdfApp {
                         };
 
                         if flatten {
-                            self.start_async_bake(req, ctx);
+                            self.start_async_bake(req);
                         } else {
                             self.apply_instant_displacement_bake(req);
                             // Activate sculpt on the newly created sculpt node
@@ -887,7 +795,7 @@ impl SdfApp {
                                 }
                             }
                         }
-                        self.ui.node_graph_state.needs_initial_rebuild = true;
+                        self.ui.scene_graph_view.needs_initial_rebuild = true;
                         self.gpu.buffer_dirty = true;
                     }
                 }
@@ -910,22 +818,17 @@ impl SdfApp {
                 }
                 Action::CreatePrimitive(prim) => {
                     let id = self.doc.scene.create_primitive(prim);
-                    self.ui.node_graph_state.select_single(id);
-                    self.ui.node_graph_state.needs_initial_rebuild = true;
-                    self.ui.node_graph_state.pending_center_node = Some(id);
+                    self.ui.selection.select_single(id);
+                    self.ui.scene_graph_view.needs_initial_rebuild = true;
+                    self.ui.scene_graph_view.pending_center_node = Some(id);
                     self.gpu.buffer_dirty = true;
                 }
                 Action::ShellCreateBooleanPrimitive { op, primitive } => {
-                    if let Some(target_id) = self
-                        .ui
-                        .node_graph_state
-                        .selected
-                        .and_then(|selected_id| {
-                            resolve_presented_object(&self.doc.scene, selected_id)
-                                .map(|presented| presented.object_root_id)
-                                .or(Some(selected_id))
-                        })
-                    {
+                    if let Some(target_id) = self.ui.selection.selected.and_then(|selected_id| {
+                        resolve_presented_object(&self.doc.scene, selected_id)
+                            .map(|presented| presented.object_root_id)
+                            .or(Some(selected_id))
+                    }) {
                         if let Some((operation_id, operand_id)) = self
                             .doc
                             .scene
@@ -933,9 +836,9 @@ impl SdfApp {
                         {
                             self.ui.primary_shell.interaction_mode = InteractionMode::Select;
                             self.ui.measurement_mode = false;
-                            self.ui.node_graph_state.select_single(operand_id);
-                            self.ui.node_graph_state.needs_initial_rebuild = true;
-                            self.ui.node_graph_state.pending_center_node = Some(operation_id);
+                            self.ui.selection.select_single(operand_id);
+                            self.ui.scene_graph_view.needs_initial_rebuild = true;
+                            self.ui.scene_graph_view.pending_center_node = Some(operation_id);
                             self.doc.active_tool = crate::sculpt::ActiveTool::Select;
                             self.gpu.buffer_dirty = true;
                         }
@@ -962,59 +865,59 @@ impl SdfApp {
                         self.ui.primary_shell.interaction_mode = InteractionMode::Select;
                         self.ui.measurement_mode = false;
                         self.doc.active_tool = crate::sculpt::ActiveTool::Select;
-                        self.ui.node_graph_state.select_single(new_operand_id);
-                        self.ui.node_graph_state.needs_initial_rebuild = true;
-                        self.ui.node_graph_state.pending_center_node = Some(operation);
+                        self.ui.selection.select_single(new_operand_id);
+                        self.ui.scene_graph_view.needs_initial_rebuild = true;
+                        self.ui.scene_graph_view.pending_center_node = Some(operation);
                         self.gpu.buffer_dirty = true;
                     }
                 }
                 Action::CreateOperation { op, left, right } => {
                     let id = self.doc.scene.create_operation(op.clone(), left, right);
-                    self.ui.node_graph_state.select_single(id);
-                    self.ui.node_graph_state.needs_initial_rebuild = true;
-                    self.ui.node_graph_state.pending_center_node = Some(id);
+                    self.ui.selection.select_single(id);
+                    self.ui.scene_graph_view.needs_initial_rebuild = true;
+                    self.ui.scene_graph_view.pending_center_node = Some(id);
                     self.gpu.buffer_dirty = true;
                 }
                 Action::CreateTransform { input } => {
                     let id = self.doc.scene.create_transform(input);
-                    self.ui.node_graph_state.select_single(id);
-                    self.ui.node_graph_state.needs_initial_rebuild = true;
-                    self.ui.node_graph_state.pending_center_node = Some(id);
+                    self.ui.selection.select_single(id);
+                    self.ui.scene_graph_view.needs_initial_rebuild = true;
+                    self.ui.scene_graph_view.pending_center_node = Some(id);
                     self.gpu.buffer_dirty = true;
                 }
                 Action::CreateReroute { input } => {
                     let id = self.doc.scene.create_reroute(input);
-                    self.ui.node_graph_state.select_single(id);
-                    self.ui.node_graph_state.needs_initial_rebuild = true;
-                    self.ui.node_graph_state.pending_center_node = Some(id);
+                    self.ui.selection.select_single(id);
+                    self.ui.scene_graph_view.needs_initial_rebuild = true;
+                    self.ui.scene_graph_view.pending_center_node = Some(id);
                     self.gpu.buffer_dirty = true;
                 }
                 Action::CreateModifier { kind, input } => {
                     let id = self.doc.scene.create_modifier(kind, input);
-                    self.ui.node_graph_state.select_single(id);
-                    self.ui.node_graph_state.needs_initial_rebuild = true;
-                    self.ui.node_graph_state.pending_center_node = Some(id);
+                    self.ui.selection.select_single(id);
+                    self.ui.scene_graph_view.needs_initial_rebuild = true;
+                    self.ui.scene_graph_view.pending_center_node = Some(id);
                     self.gpu.buffer_dirty = true;
                 }
                 Action::CreateLight(light_type) => {
                     let (_light_id, transform_id) = self.doc.scene.create_light(light_type);
-                    self.ui.node_graph_state.select_single(transform_id);
-                    self.ui.node_graph_state.needs_initial_rebuild = true;
-                    self.ui.node_graph_state.pending_center_node = Some(transform_id);
+                    self.ui.selection.select_single(transform_id);
+                    self.ui.scene_graph_view.needs_initial_rebuild = true;
+                    self.ui.scene_graph_view.pending_center_node = Some(transform_id);
                     self.gpu.buffer_dirty = true;
                 }
                 Action::InsertModifierAbove { target, kind } => {
                     let new_id = self.doc.scene.insert_modifier_above(target, kind);
-                    self.ui.node_graph_state.select_single(new_id);
-                    self.ui.node_graph_state.needs_initial_rebuild = true;
-                    self.ui.node_graph_state.pending_center_node = Some(new_id);
+                    self.ui.selection.select_single(new_id);
+                    self.ui.scene_graph_view.needs_initial_rebuild = true;
+                    self.ui.scene_graph_view.pending_center_node = Some(new_id);
                     self.gpu.buffer_dirty = true;
                 }
                 Action::InsertTransformAbove { target } => {
                     let new_id = self.doc.scene.insert_transform_above(target);
-                    self.ui.node_graph_state.select_single(new_id);
-                    self.ui.node_graph_state.needs_initial_rebuild = true;
-                    self.ui.node_graph_state.pending_center_node = Some(new_id);
+                    self.ui.selection.select_single(new_id);
+                    self.ui.scene_graph_view.needs_initial_rebuild = true;
+                    self.ui.scene_graph_view.pending_center_node = Some(new_id);
                     self.gpu.buffer_dirty = true;
                 }
                 Action::ToggleVisibility(id) => {
@@ -1035,7 +938,7 @@ impl SdfApp {
                     new_parent,
                 } => {
                     self.doc.scene.reparent(dragged, new_parent);
-                    self.ui.node_graph_state.needs_initial_rebuild = true;
+                    self.ui.scene_graph_view.needs_initial_rebuild = true;
                     self.gpu.buffer_dirty = true;
                 }
                 Action::RenameNode { id, name } => {
@@ -1047,17 +950,17 @@ impl SdfApp {
                 // ── Graph connections ─────────────────────────────────
                 Action::SetLeftChild { parent, child } => {
                     self.doc.scene.set_left_child(parent, child);
-                    self.ui.node_graph_state.needs_initial_rebuild = true;
+                    self.ui.scene_graph_view.needs_initial_rebuild = true;
                     self.gpu.buffer_dirty = true;
                 }
                 Action::SetRightChild { parent, child } => {
                     self.doc.scene.set_right_child(parent, child);
-                    self.ui.node_graph_state.needs_initial_rebuild = true;
+                    self.ui.scene_graph_view.needs_initial_rebuild = true;
                     self.gpu.buffer_dirty = true;
                 }
                 Action::SetSculptInput { parent, child } => {
                     self.doc.scene.set_sculpt_input(parent, child);
-                    self.ui.node_graph_state.needs_initial_rebuild = true;
+                    self.ui.scene_graph_view.needs_initial_rebuild = true;
                     self.gpu.buffer_dirty = true;
                 }
 
@@ -1069,7 +972,7 @@ impl SdfApp {
                     } else if !self.validate_sculpt_resolution(req.resolution) {
                         // Resolution too high — toast already shown by validate fn
                     } else if req.flatten {
-                        self.start_async_bake(req, ctx);
+                        self.start_async_bake(req);
                     } else {
                         self.apply_instant_displacement_bake(req);
                     }
@@ -1093,7 +996,7 @@ impl SdfApp {
                             self.ui.import_dialog = None;
                         } else {
                             // start_import_voxelize takes dialog via .take()
-                            self.start_import_voxelize(resolution, ctx);
+                            self.start_import_voxelize(resolution);
                         }
                     }
                 }
@@ -1108,7 +1011,7 @@ impl SdfApp {
                         if let Some(iso) = self.ui.isolation_state.take() {
                             self.doc.scene.hidden_nodes = iso.pre_hidden;
                         }
-                    } else if let Some(sel) = self.ui.node_graph_state.selected {
+                    } else if let Some(sel) = self.ui.selection.selected {
                         let isolated_root = resolve_presented_object(&self.doc.scene, sel)
                             .map(|presented| presented.object_root_id)
                             .unwrap_or(sel);
@@ -1162,7 +1065,7 @@ impl SdfApp {
                     }
                 }
                 Action::CopyProperties => {
-                    if let Some(sel) = self.ui.node_graph_state.selected {
+                    if let Some(sel) = self.ui.selection.selected {
                         if let Some(node) = self.doc.scene.nodes.get(&sel) {
                             let clip = node
                                 .data
@@ -1183,7 +1086,7 @@ impl SdfApp {
                 }
                 Action::PasteProperties => {
                     if let Some(ref clip) = self.ui.property_clipboard.clone() {
-                        if let Some(sel) = self.ui.node_graph_state.selected {
+                        if let Some(sel) = self.ui.selection.selected {
                             if let Some(node) = self.doc.scene.nodes.get_mut(&sel) {
                                 let applied = if let Some(material) = node.data.material_mut() {
                                     *material = clip.material.clone();
@@ -1284,29 +1187,27 @@ impl SdfApp {
 
                 // ── Workspace ────────────────────────────────────────
                 Action::SetWorkspace(preset) => {
-                    use crate::app::actions::WorkspacePreset;
-                    use crate::ui::dock;
-                    self.ui.dock_state = match preset {
-                        WorkspacePreset::Modeling => dock::create_dock_state(),
-                        WorkspacePreset::Sculpting => dock::create_dock_sculpting(),
-                        WorkspacePreset::Rendering => dock::create_dock_rendering(),
-                    };
+                    self.egui.set_workspace(preset, &mut self.ui.expert_panels);
                 }
                 Action::DockShellPanel { panel, rect } => {
-                    dock_shell_panel_state(&mut self.ui, panel, rect);
+                    self.egui
+                        .dock_shell_panel(&mut self.ui.primary_shell, panel, rect);
                 }
                 Action::UndockShellPanel(panel) => {
-                    undock_shell_panel_state(&mut self.ui, panel);
+                    self.egui
+                        .undock_shell_panel(&mut self.ui.primary_shell, panel);
                 }
                 Action::HideShellPanel(panel) => {
-                    hide_shell_panel_state(&mut self.ui, panel);
+                    self.egui
+                        .hide_shell_panel(&mut self.ui.primary_shell, panel);
                 }
                 Action::ResetPrimaryShellLayout => {
-                    reset_primary_shell_layout_state(&mut self.ui);
+                    self.egui
+                        .reset_primary_shell_layout(&mut self.ui.primary_shell);
                 }
 
-                Action::ToggleDockTab(tab) => {
-                    self.toggle_dock_tab(tab);
+                Action::ToggleExpertPanel(panel) => {
+                    self.toggle_expert_panel(panel);
                 }
                 Action::RemoveAttachedSculpt { host } => {
                     if let Some(removed_sculpt_id) = self.doc.scene.remove_attached_sculpt(host) {
@@ -1314,12 +1215,12 @@ impl SdfApp {
                             self.doc.sculpt_state = SculptState::new_inactive();
                             self.sync_interaction_mode_after_sculpt_exit();
                         }
-                        if self.ui.node_graph_state.selected == Some(removed_sculpt_id) {
-                            self.ui.node_graph_state.select_single(host);
+                        if self.ui.selection.selected == Some(removed_sculpt_id) {
+                            self.ui.selection.select_single(host);
                         } else {
-                            self.ui.node_graph_state.selected_set.remove(&removed_sculpt_id);
+                            self.ui.selection.selected_set.remove(&removed_sculpt_id);
                         }
-                        self.ui.node_graph_state.needs_initial_rebuild = true;
+                        self.ui.scene_graph_view.needs_initial_rebuild = true;
                         self.gpu.buffer_dirty = true;
                     }
                 }
@@ -1443,11 +1344,11 @@ impl SdfApp {
         }
 
         if let Some(id) = restore.selected {
-            self.ui.node_graph_state.select_single(id);
+            self.ui.selection.select_single(id);
         } else {
-            self.ui.node_graph_state.clear_selection();
+            self.ui.selection.clear_selection();
         }
-        self.ui.node_graph_state.needs_initial_rebuild = true;
+        self.ui.scene_graph_view.needs_initial_rebuild = true;
         self.ui.isolation_state = None;
         self.async_state.last_sculpt_hit = None;
         self.async_state.lazy_brush_pos = None;
@@ -1486,7 +1387,7 @@ impl SdfApp {
     }
 
     /// Load a project file and update all relevant state.
-    pub(super) fn load_project_from_path(&mut self, path: &std::path::Path) -> bool {
+    pub(crate) fn load_project_from_path(&mut self, path: &std::path::Path) -> bool {
         match crate::io::load_project(&path.to_path_buf()) {
             Ok(project) => {
                 self.doc.scene = project.scene;
@@ -1513,8 +1414,8 @@ impl SdfApp {
                     self.settings.save();
                 }
                 self.doc.history = History::new();
-                self.ui.node_graph_state.clear_selection();
-                self.ui.node_graph_state.needs_initial_rebuild = true;
+                self.ui.selection.clear_selection();
+                self.ui.scene_graph_view.needs_initial_rebuild = true;
                 self.gpu.current_structure_key = 0;
                 self.gpu.buffer_dirty = true;
                 self.persistence.saved_fingerprint = self.doc.scene.data_fingerprint();
@@ -1549,8 +1450,8 @@ impl SdfApp {
                     _ => {}
                 }
             }
-            self.ui.node_graph_state.select_single(new_id);
-            self.ui.node_graph_state.needs_initial_rebuild = true;
+            self.ui.selection.select_single(new_id);
+            self.ui.scene_graph_view.needs_initial_rebuild = true;
             self.gpu.buffer_dirty = true;
         }
     }
@@ -1709,34 +1610,30 @@ fn find_parent_transform(
 mod tests {
     use std::collections::HashSet;
 
-    use eframe::egui;
     use glam::Vec3;
 
     use super::{
         activate_sculpt_interaction_state, apply_measure_interaction_state,
         apply_select_interaction_state, apply_selection_behavior_settings,
-        dock_shell_panel_state, duplicate_presented_object_and_offset,
-        hide_shell_panel_state, replace_operation_input_with_primitive,
-        reset_primary_shell_layout_state, resolve_sculpt_entry,
-        sync_interaction_mode_after_sculpt_exit_state, undock_shell_panel_state,
-        SculptEntryDecision, SelectionBehaviorApplyResult,
+        duplicate_presented_object_and_offset, replace_operation_input_with_primitive,
+        resolve_sculpt_entry, sync_interaction_mode_after_sculpt_exit_state, SculptEntryDecision,
+        SelectionBehaviorApplyResult,
     };
     use crate::app::actions::OperationInputSlot;
+    use crate::app::egui_state::{dock_tab_for_shell_panel, EguiFrontendState};
+    use crate::app::reference_images::ReferenceImageStore;
     use crate::app::state::{
-        DocumentState, MultiTransformSessionState, PrimaryShellState, PrimaryShellUtilityTab,
-        ShellPanelKind, UiState,
+        DocumentState, ExpertPanelKind, MultiTransformSessionState, PrimaryShellState,
+        PrimaryShellUtilityTab, SceneGraphViewState, SceneSelectionState, ShellPanelKind, UiState,
     };
+    use crate::app::ui_geometry::FloatingPanelBounds;
+    use crate::gpu::camera::Camera;
     use crate::graph::history::History;
     use crate::graph::presented_object::resolve_presented_object;
     use crate::graph::scene::{CsgOp, NodeData, Scene, SdfPrimitive};
     use crate::graph::voxel::VoxelGrid;
-    use crate::gpu::camera::Camera;
     use crate::sculpt::{ActiveTool, BrushMode, SculptState};
     use crate::settings::{GroupRotateDirection, Settings};
-    use crate::ui::dock::{self, Tab};
-    use crate::ui::node_graph::NodeGraphState;
-    use crate::ui::reference_image::ReferenceImageManager;
-
     fn sculpt_grid() -> VoxelGrid {
         VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0))
     }
@@ -1756,9 +1653,9 @@ mod tests {
     fn test_ui_state() -> UiState {
         UiState {
             primary_shell: PrimaryShellState::default(),
-            dock_state: dock::create_primary_shell_dock(),
-            node_graph_state: NodeGraphState::new(),
-            light_graph_state: NodeGraphState::new(),
+            expert_panels: crate::app::state::ExpertPanelRegistry::default(),
+            selection: SceneSelectionState::default(),
+            scene_graph_view: SceneGraphViewState::default(),
             show_debug: false,
             show_help: false,
             show_export_dialog: false,
@@ -1782,13 +1679,17 @@ mod tests {
             last_light_warning_count: None,
             show_recovery_dialog: false,
             recovery_summary: String::new(),
-            reference_images: ReferenceImageManager::default(),
+            reference_images: ReferenceImageStore::default(),
             sculpt_brush_adjust: None,
             show_distance_readout: false,
             measurement_mode: false,
             measurement_points: Vec::new(),
             multi_transform_edit: MultiTransformSessionState::default(),
         }
+    }
+
+    fn test_egui_state() -> EguiFrontendState {
+        EguiFrontendState::default()
     }
 
     #[test]
@@ -1895,7 +1796,8 @@ mod tests {
             sculpt_grid(),
         );
         doc.active_tool = ActiveTool::Sculpt;
-        doc.sculpt_state.activate_preserving_session(sculpt_id, Some(1.0));
+        doc.sculpt_state
+            .activate_preserving_session(sculpt_id, Some(1.0));
         ui.primary_shell.interaction_mode = super::InteractionMode::Sculpt(BrushMode::Grab);
         ui.show_distance_readout = true;
         ui.measurement_mode = true;
@@ -1903,7 +1805,10 @@ mod tests {
 
         apply_select_interaction_state(&mut doc, &mut ui);
 
-        assert_eq!(ui.primary_shell.interaction_mode, super::InteractionMode::Select);
+        assert_eq!(
+            ui.primary_shell.interaction_mode,
+            super::InteractionMode::Select
+        );
         assert_eq!(doc.active_tool, ActiveTool::Select);
         assert!(!ui.measurement_mode);
         assert!(ui.measurement_points.is_empty());
@@ -1924,13 +1829,17 @@ mod tests {
             sculpt_grid(),
         );
         doc.active_tool = ActiveTool::Sculpt;
-        doc.sculpt_state.activate_preserving_session(sculpt_id, Some(1.0));
+        doc.sculpt_state
+            .activate_preserving_session(sculpt_id, Some(1.0));
         ui.show_distance_readout = true;
         ui.measurement_points = vec![Vec3::X];
 
         apply_measure_interaction_state(&mut doc, &mut ui);
 
-        assert_eq!(ui.primary_shell.interaction_mode, super::InteractionMode::Measure);
+        assert_eq!(
+            ui.primary_shell.interaction_mode,
+            super::InteractionMode::Measure
+        );
         assert_eq!(doc.active_tool, ActiveTool::Select);
         assert!(ui.measurement_mode);
         assert!(ui.measurement_points.is_empty());
@@ -1953,7 +1862,7 @@ mod tests {
         ui.show_distance_readout = true;
         ui.measurement_mode = true;
         ui.measurement_points = vec![Vec3::X, Vec3::Y];
-        ui.node_graph_state.select_single(base);
+        ui.selection.select_single(base);
 
         activate_sculpt_interaction_state(&mut doc, &mut ui, sculpt_id, BrushMode::Flatten, 1.0);
 
@@ -1964,7 +1873,7 @@ mod tests {
         assert_eq!(doc.active_tool, ActiveTool::Sculpt);
         assert_eq!(doc.sculpt_state.active_node(), Some(sculpt_id));
         assert_eq!(doc.sculpt_state.selected_brush(), BrushMode::Flatten);
-        assert_eq!(ui.node_graph_state.selected, Some(base));
+        assert_eq!(ui.selection.selected, Some(base));
         assert!(!ui.measurement_mode);
         assert!(ui.measurement_points.is_empty());
         assert!(ui.show_distance_readout);
@@ -1993,6 +1902,7 @@ mod tests {
     fn activate_sculpt_interaction_does_not_auto_open_brush_settings_dock() {
         let mut doc = test_document_state();
         let mut ui = test_ui_state();
+        let egui = test_egui_state();
         let base = doc.scene.create_primitive(SdfPrimitive::Sphere);
         let sculpt_id = doc.scene.create_sculpt(
             base,
@@ -2004,7 +1914,7 @@ mod tests {
 
         activate_sculpt_interaction_state(&mut doc, &mut ui, sculpt_id, BrushMode::Add, 1.0);
 
-        assert!(ui.dock_state.find_tab(&Tab::BrushSettings).is_none());
+        assert!(!egui.is_expert_panel_open(ExpertPanelKind::BrushSettings));
     }
 
     #[test]
@@ -2017,7 +1927,10 @@ mod tests {
 
         sync_interaction_mode_after_sculpt_exit_state(&mut ui);
 
-        assert_eq!(ui.primary_shell.interaction_mode, super::InteractionMode::Select);
+        assert_eq!(
+            ui.primary_shell.interaction_mode,
+            super::InteractionMode::Select
+        );
         assert!(!ui.measurement_mode);
         assert!(ui.measurement_points.is_empty());
         assert!(ui.show_distance_readout);
@@ -2028,7 +1941,10 @@ mod tests {
 
         sync_interaction_mode_after_sculpt_exit_state(&mut ui);
 
-        assert_eq!(ui.primary_shell.interaction_mode, super::InteractionMode::Measure);
+        assert_eq!(
+            ui.primary_shell.interaction_mode,
+            super::InteractionMode::Measure
+        );
         assert!(ui.measurement_mode);
         assert_eq!(ui.measurement_points, vec![Vec3::Y]);
     }
@@ -2036,14 +1952,15 @@ mod tests {
     #[test]
     fn dock_shell_panel_creates_detached_surface_and_marks_panel_docked() {
         let mut ui = test_ui_state();
-        let rect = egui::Rect::from_min_size(egui::pos2(32.0, 48.0), egui::vec2(320.0, 240.0));
+        let mut egui = test_egui_state();
+        let rect = FloatingPanelBounds::from_min_size(32.0, 48.0, 320.0, 240.0);
 
-        dock_shell_panel_state(&mut ui, ShellPanelKind::Tool, rect);
+        egui.dock_shell_panel(&mut ui.primary_shell, ShellPanelKind::Tool, rect);
 
         assert!(ui.primary_shell.tool_panel.is_docked());
-        let (surface, _, _) = ui
+        let (surface, _, _) = egui
             .dock_state
-            .find_tab(&ShellPanelKind::Tool.dock_tab())
+            .find_tab(&dock_tab_for_shell_panel(ShellPanelKind::Tool))
             .expect("tool panel should be docked");
         assert!(!surface.is_main());
         assert_eq!(ui.primary_shell.tool_panel.last_floating_rect, Some(rect));
@@ -2052,63 +1969,80 @@ mod tests {
     #[test]
     fn undock_shell_panel_restores_floating_rect_and_removes_only_target_tab() {
         let mut ui = test_ui_state();
-        let rect = egui::Rect::from_min_size(egui::pos2(16.0, 24.0), egui::vec2(400.0, 280.0));
+        let mut egui = test_egui_state();
+        let rect = FloatingPanelBounds::from_min_size(16.0, 24.0, 400.0, 280.0);
 
-        dock_shell_panel_state(&mut ui, ShellPanelKind::Tool, rect);
-        let (surface, node, _) = ui
+        egui.dock_shell_panel(&mut ui.primary_shell, ShellPanelKind::Tool, rect);
+        let (surface, node, _) = egui
             .dock_state
-            .find_tab(&ShellPanelKind::Tool.dock_tab())
+            .find_tab(&dock_tab_for_shell_panel(ShellPanelKind::Tool))
             .expect("tool panel should be docked");
-        ui.dock_state[surface][node].append_tab(ShellPanelKind::Inspector.dock_tab());
+        egui.dock_state[surface][node]
+            .append_tab(dock_tab_for_shell_panel(ShellPanelKind::Inspector));
 
-        undock_shell_panel_state(&mut ui, ShellPanelKind::Tool);
+        egui.undock_shell_panel(&mut ui.primary_shell, ShellPanelKind::Tool);
 
         assert!(ui.primary_shell.tool_panel.is_floating());
         assert_eq!(ui.primary_shell.tool_panel.last_floating_rect, Some(rect));
-        assert!(ui.dock_state.find_tab(&ShellPanelKind::Tool.dock_tab()).is_none());
-        assert!(ui
+        assert!(egui
             .dock_state
-            .find_tab(&ShellPanelKind::Inspector.dock_tab())
+            .find_tab(&dock_tab_for_shell_panel(ShellPanelKind::Tool))
+            .is_none());
+        assert!(egui
+            .dock_state
+            .find_tab(&dock_tab_for_shell_panel(ShellPanelKind::Inspector))
             .is_some());
     }
 
     #[test]
     fn hide_shell_panel_removes_only_target_tab_from_shared_detached_window() {
         let mut ui = test_ui_state();
-        let rect = egui::Rect::from_min_size(egui::pos2(20.0, 30.0), egui::vec2(420.0, 300.0));
+        let mut egui = test_egui_state();
+        let rect = FloatingPanelBounds::from_min_size(20.0, 30.0, 420.0, 300.0);
 
-        dock_shell_panel_state(&mut ui, ShellPanelKind::Tool, rect);
-        let (surface, node, _) = ui
+        egui.dock_shell_panel(&mut ui.primary_shell, ShellPanelKind::Tool, rect);
+        let (surface, node, _) = egui
             .dock_state
-            .find_tab(&ShellPanelKind::Tool.dock_tab())
+            .find_tab(&dock_tab_for_shell_panel(ShellPanelKind::Tool))
             .expect("tool panel should be docked");
-        ui.dock_state[surface][node].append_tab(ShellPanelKind::Inspector.dock_tab());
+        egui.dock_state[surface][node]
+            .append_tab(dock_tab_for_shell_panel(ShellPanelKind::Inspector));
 
-        hide_shell_panel_state(&mut ui, ShellPanelKind::Tool);
+        egui.hide_shell_panel(&mut ui.primary_shell, ShellPanelKind::Tool);
 
         assert!(ui.primary_shell.tool_panel.is_hidden());
-        assert!(ui.dock_state.find_tab(&ShellPanelKind::Tool.dock_tab()).is_none());
-        assert!(ui
+        assert!(egui
             .dock_state
-            .find_tab(&ShellPanelKind::Inspector.dock_tab())
+            .find_tab(&dock_tab_for_shell_panel(ShellPanelKind::Tool))
+            .is_none());
+        assert!(egui
+            .dock_state
+            .find_tab(&dock_tab_for_shell_panel(ShellPanelKind::Inspector))
             .is_some());
     }
 
     #[test]
     fn reset_primary_shell_layout_restores_shell_defaults_and_clears_detached_shell_windows() {
         let mut ui = test_ui_state();
-        let rect = egui::Rect::from_min_size(egui::pos2(12.0, 18.0), egui::vec2(300.0, 220.0));
+        let mut egui = test_egui_state();
+        let rect = FloatingPanelBounds::from_min_size(12.0, 18.0, 300.0, 220.0);
 
-        dock_shell_panel_state(&mut ui, ShellPanelKind::Tool, rect);
+        egui.dock_shell_panel(&mut ui.primary_shell, ShellPanelKind::Tool, rect);
         ui.primary_shell.active_utility_tab = PrimaryShellUtilityTab::Advanced;
 
-        reset_primary_shell_layout_state(&mut ui);
+        egui.reset_primary_shell_layout(&mut ui.primary_shell);
 
         assert!(ui.primary_shell.tool_panel.is_floating());
         assert!(ui.primary_shell.inspector_panel.is_floating());
         assert!(ui.primary_shell.drawer_panel.is_hidden());
-        assert_eq!(ui.primary_shell.active_utility_tab, PrimaryShellUtilityTab::History);
-        assert!(ui.dock_state.find_tab(&ShellPanelKind::Tool.dock_tab()).is_none());
+        assert_eq!(
+            ui.primary_shell.active_utility_tab,
+            PrimaryShellUtilityTab::History
+        );
+        assert!(egui
+            .dock_state
+            .find_tab(&dock_tab_for_shell_panel(ShellPanelKind::Tool))
+            .is_none());
     }
 
     #[test]
@@ -2163,5 +2097,3 @@ mod tests {
         assert_eq!(*kind, SdfPrimitive::Cylinder);
     }
 }
-
-

@@ -2693,7 +2693,9 @@ mod tests {
             .expect("target should exist");
 
         match &scene.nodes[&operation_id].data {
-            NodeData::Operation { left, right, op, .. } => {
+            NodeData::Operation {
+                left, right, op, ..
+            } => {
                 assert_eq!(*op, CsgOp::Union);
                 assert_eq!(*left, Some(target));
                 assert_eq!(*right, Some(operand_id));
@@ -2719,7 +2721,9 @@ mod tests {
             _ => panic!("expected Transform"),
         }
         match &scene.nodes[&operation_id].data {
-            NodeData::Operation { left, right, op, .. } => {
+            NodeData::Operation {
+                left, right, op, ..
+            } => {
                 assert_eq!(*op, CsgOp::Subtract);
                 assert_eq!(*left, Some(target));
                 assert_eq!(*right, Some(operand_id));
@@ -2826,7 +2830,10 @@ mod tests {
         assert_eq!(removed, vec![right_leaf, right]);
         assert!(scene.nodes.contains_key(&left));
         assert!(scene.nodes.contains_key(&root));
-        let NodeData::Operation { right: root_right, .. } = &scene.nodes[&root].data else {
+        let NodeData::Operation {
+            right: root_right, ..
+        } = &scene.nodes[&root].data
+        else {
             panic!("expected operation");
         };
         assert_eq!(*root_right, None);

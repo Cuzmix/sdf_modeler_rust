@@ -1,6 +1,5 @@
 use std::path::{Path, PathBuf};
 
-use eframe::wgpu;
 use glam::Vec3;
 use half::f16;
 

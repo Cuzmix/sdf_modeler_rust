@@ -1,8 +1,5 @@
-use eframe::egui;
-use eframe::egui_wgpu;
-use eframe::wgpu;
-
 use crate::app::actions::{Action, ActionSink};
+use crate::app::runtime::ViewportResourceHandle;
 use crate::app::state::{
     MultiTransformSessionState, SculptBrushAdjustMode, SculptBrushAdjustState,
 };
@@ -16,8 +13,6 @@ use crate::settings::{
     SelectionBehaviorSettings, SnapConfig,
 };
 use crate::ui::gizmo::{self, GizmoMode, GizmoSpace, GizmoState};
-
-use super::ViewportResources;
 
 // ---------------------------------------------------------------------------
 // Safety border helper
@@ -327,19 +322,19 @@ fn cursor_in_sculpt_bounds(
                 let analytical = voxel::evaluate_sdf_tree(scene, child_id, world_pos);
                 analytical + displacement
             } else {
-                displacement // No input child — treat as total SDF
+                displacement // No input child Ã¢â‚¬â€ treat as total SDF
             }
         } else {
-            displacement // Total SDF grid — value is already the distance
+            displacement // Total SDF grid Ã¢â‚¬â€ value is already the distance
         };
 
         if sdf <= threshold {
-            return true; // Near surface → sculpt
+            return true; // Near surface Ã¢â€ â€™ sculpt
         }
         // Sphere-trace: jump by SDF distance (clamped to min step for safety)
         t += min_step.max(sdf.abs() * 0.9);
     }
-    false // Ray passed through empty voxels → orbit
+    false // Ray passed through empty voxels Ã¢â€ â€™ orbit
 }
 
 // ---------------------------------------------------------------------------
@@ -370,7 +365,10 @@ impl egui_wgpu::CallbackTrait for ViewportCallback {
         _encoder: &mut wgpu::CommandEncoder,
         callback_resources: &mut egui_wgpu::CallbackResources,
     ) -> Vec<wgpu::CommandBuffer> {
-        let resources = callback_resources.get_mut::<ViewportResources>().unwrap();
+        let resource_handle = callback_resources
+            .get::<ViewportResourceHandle>()
+            .expect("viewport resources should be registered");
+        let mut resources = resource_handle.write();
 
         let display_w = self.display_viewport[2] as u32;
         let display_h = self.display_viewport[3] as u32;
@@ -477,7 +475,10 @@ impl egui_wgpu::CallbackTrait for ViewportCallback {
         render_pass: &mut wgpu::RenderPass<'static>,
         callback_resources: &egui_wgpu::CallbackResources,
     ) {
-        let resources = callback_resources.get::<ViewportResources>().unwrap();
+        let resource_handle = callback_resources
+            .get::<ViewportResourceHandle>()
+            .expect("viewport resources should be registered");
+        let resources = resource_handle.read();
         if let Some(ref blit_bg) = resources.blit_bind_group {
             render_pass.set_pipeline(&resources.blit_pipeline);
             render_pass.set_bind_group(0, blit_bg, &[]);
@@ -507,7 +508,7 @@ fn active_sculpt_detail_size(scene: &Scene, sculpt_state: &SculptState) -> Optio
 }
 
 /// Compute the effective brush mode given modifier key state.
-/// Shift → Smooth (overrides everything), Ctrl → invert (Add↔Carve, Inflate→Carve).
+/// Shift Ã¢â€ â€™ Smooth (overrides everything), Ctrl Ã¢â€ â€™ invert (AddÃ¢â€ â€Carve, InflateÃ¢â€ â€™Carve).
 /// Draw a semi-transparent symmetry plane overlay at the mirror axis with axis label.
 /// `scene_bounds` is used to adaptively size the plane to the scene.
 fn draw_symmetry_plane(
@@ -680,7 +681,8 @@ pub fn draw(
     active_light_ids: &std::collections::HashSet<crate::graph::scene::NodeId>,
     soloed_light: Option<NodeId>,
     solo_label: Option<&str>,
-    reference_images: &crate::ui::reference_image::ReferenceImageManager,
+    reference_images: &crate::app::reference_images::ReferenceImageStore,
+    reference_image_cache: &crate::ui::reference_image::EguiReferenceImageCache,
     show_distance_readout: &mut bool,
     measurement_mode: &mut bool,
     measurement_points: &mut Vec<glam::Vec3>,
@@ -1002,7 +1004,13 @@ pub fn draw(
     }
 
     // --- Reference image overlay ---
-    crate::ui::reference_image::draw_overlay(ui.painter(), camera, rect, reference_images);
+    crate::ui::reference_image::draw_overlay(
+        ui.painter(),
+        camera,
+        rect,
+        reference_images,
+        reference_image_cache,
+    );
 
     // --- Light gizmo overlay ---
     let light_gizmo_result = if render_config.show_light_gizmos {
@@ -1072,7 +1080,7 @@ pub fn draw(
 
     if sculpt_active {
         // Sculpt mode: same navigation as select mode, plus sculpt when over mesh.
-        // CPU-side bounding sphere test gives instant orbit-vs-sculpt — zero GPU latency.
+        // CPU-side bounding sphere test gives instant orbit-vs-sculpt Ã¢â‚¬â€ zero GPU latency.
         if !gizmo_consumed
             && response.dragged_by(egui::PointerButton::Primary)
             && !multi_touch_active
@@ -1092,7 +1100,9 @@ pub fn draw(
             } else {
                 let drag_origin = ui.input(|i| i.pointer.press_origin());
                 let in_border = drag_origin
-                    .map(|origin| in_safety_border(origin, rect, render_config.sculpt_safety_border))
+                    .map(|origin| {
+                        in_safety_border(origin, rect, render_config.sculpt_safety_border)
+                    })
                     .unwrap_or(false);
 
                 // CPU bounding sphere test: project sculpt node bounds to screen,
@@ -1224,10 +1234,10 @@ pub fn draw(
             let modifiers = ui.input(|i| i.modifiers);
             if modifiers.ctrl {
                 let delta = response.drag_delta();
-                // Horizontal → radius (scale by distance for consistent feel)
+                // Horizontal Ã¢â€ â€™ radius (scale by distance for consistent feel)
                 let radius_sensitivity = 0.005 * camera.distance;
                 output.brush_radius_delta = delta.x * radius_sensitivity;
-                // Vertical → strength (inverted: drag up = stronger)
+                // Vertical Ã¢â€ â€™ strength (inverted: drag up = stronger)
                 let strength_sensitivity = 0.002;
                 output.brush_strength_delta = -delta.y * strength_sensitivity;
             }
@@ -1265,7 +1275,7 @@ pub fn draw(
             }
         }
 
-        // Double-click in safety border → frame all
+        // Double-click in safety border Ã¢â€ â€™ frame all
         if response.double_clicked() {
             if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
                 if in_safety_border(pos, rect, render_config.sculpt_safety_border) {

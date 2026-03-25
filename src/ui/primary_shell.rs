@@ -1,13 +1,15 @@
 use std::collections::HashSet;
 
-use eframe::egui;
 use egui_dock::DockState;
 
 use crate::app::actions::{Action, ActionSink, WorkspacePreset};
+use crate::app::reference_images::ReferenceImageStore;
 use crate::app::state::{
-    InteractionMode, MultiTransformSessionState, PrimaryShellInspectorTab, PrimaryShellState,
-    PrimaryShellUtilityTab, SculptUtilityControl, SculptUtilityDragState, ShellPanelKind,
+    ExpertPanelRegistry, InteractionMode, MultiTransformSessionState, PrimaryShellInspectorTab,
+    PrimaryShellState, PrimaryShellUtilityTab, SculptUtilityControl, SculptUtilityDragState,
+    ShellPanelKind,
 };
+use crate::app::ui_geometry::FloatingPanelBounds;
 use crate::gpu::camera::Camera;
 use crate::graph::history::History;
 use crate::graph::presented_object::{
@@ -20,7 +22,6 @@ use crate::sculpt::{BrushMode, FalloffMode, SculptBrushProfile, SculptState};
 use crate::settings::{SelectionBehaviorSettings, Settings};
 use crate::ui::dock::Tab;
 use crate::ui::gizmo::{self, GizmoMode, GizmoSpace};
-use crate::ui::reference_image::ReferenceImageManager;
 use crate::ui::{
     brush_settings, chips, chrome, history_panel, presented_object_actions, presented_properties,
     presented_scene_tree, reference_image,
@@ -67,10 +68,11 @@ pub struct PrimaryShellContext<'a> {
     pub soloed_light: Option<NodeId>,
     pub material_library: &'a mut MaterialLibrary,
     pub multi_transform_edit: &'a mut MultiTransformSessionState,
+    pub expert_panels: &'a ExpertPanelRegistry,
     pub gizmo_mode: &'a GizmoMode,
     pub gizmo_space: &'a GizmoSpace,
     pub selection_behavior: &'a SelectionBehaviorSettings,
-    pub reference_images: &'a mut ReferenceImageManager,
+    pub reference_images: &'a mut ReferenceImageStore,
     pub measurement_points: &'a mut Vec<glam::Vec3>,
     pub show_distance_readout: &'a mut bool,
     pub settings: &'a mut Settings,
@@ -108,6 +110,17 @@ pub fn draw(ctx: &egui::Context, viewport_rect: egui::Rect, shell: PrimaryShellC
     }
 }
 
+fn bounds_to_rect(bounds: FloatingPanelBounds) -> egui::Rect {
+    egui::Rect::from_min_size(
+        egui::pos2(bounds.x, bounds.y),
+        egui::vec2(bounds.width, bounds.height),
+    )
+}
+
+fn rect_to_bounds(rect: egui::Rect) -> FloatingPanelBounds {
+    FloatingPanelBounds::from_min_size(rect.min.x, rect.min.y, rect.width(), rect.height())
+}
+
 pub fn draw_tool_panel_tab(ui: &mut egui::Ui, shell: &mut PrimaryShellContext<'_>) {
     draw_scene_panel_docked_header(ui, shell.actions);
     draw_scene_panel_contents(ui, shell);
@@ -120,7 +133,12 @@ pub fn draw_inspector_panel_tab(ui: &mut egui::Ui, shell: &mut PrimaryShellConte
 }
 
 pub fn draw_drawer_panel_tab(ui: &mut egui::Ui, shell: &mut PrimaryShellContext<'_>) {
-    draw_docked_shell_tab_header(ui, ShellPanelKind::Drawer, "Docked utilities", shell.actions);
+    draw_docked_shell_tab_header(
+        ui,
+        ShellPanelKind::Drawer,
+        "Docked utilities",
+        shell.actions,
+    );
     draw_utility_tab_controls(ui, shell);
     ui.separator();
     draw_utility_panel_contents(ui, shell);
@@ -144,6 +162,7 @@ fn draw_scene_panel_window(
         .shell
         .tool_panel
         .last_floating_rect
+        .map(bounds_to_rect)
         .unwrap_or_else(|| default_scene_panel_rect(viewport_rect));
     let mut open = true;
     let mut dock_clicked = false;
@@ -174,7 +193,10 @@ fn draw_scene_panel_window(
     let current_rect = ctx
         .memory(|memory| memory.area_rect(window_id))
         .unwrap_or(default_rect);
-    shell.shell.tool_panel.remember_floating_rect(current_rect);
+    shell
+        .shell
+        .tool_panel
+        .remember_floating_rect(rect_to_bounds(current_rect));
 
     if hide_clicked {
         open = false;
@@ -183,7 +205,7 @@ fn draw_scene_panel_window(
     if dock_clicked && shell.dock_state.is_some() {
         shell.actions.push(Action::DockShellPanel {
             panel: ShellPanelKind::Tool,
-            rect: current_rect,
+            rect: rect_to_bounds(current_rect),
         });
     } else if !open {
         shell.shell.tool_panel.hide();
@@ -211,6 +233,7 @@ fn draw_subject_inspector_window(
         .shell
         .inspector_panel
         .last_floating_rect
+        .map(bounds_to_rect)
         .unwrap_or_else(|| default_inspector_panel_rect(viewport_rect));
     let mut open = true;
     let mut dock_clicked = false;
@@ -240,7 +263,10 @@ fn draw_subject_inspector_window(
     let current_rect = ctx
         .memory(|memory| memory.area_rect(window_id))
         .unwrap_or(default_rect);
-    shell.shell.inspector_panel.remember_floating_rect(current_rect);
+    shell
+        .shell
+        .inspector_panel
+        .remember_floating_rect(rect_to_bounds(current_rect));
 
     if hide_clicked {
         open = false;
@@ -249,7 +275,7 @@ fn draw_subject_inspector_window(
     if dock_clicked && shell.dock_state.is_some() {
         shell.actions.push(Action::DockShellPanel {
             panel: ShellPanelKind::Inspector,
-            rect: current_rect,
+            rect: rect_to_bounds(current_rect),
         });
     } else if !open {
         shell.shell.inspector_panel.hide();
@@ -277,8 +303,12 @@ fn draw_utility_panel_window(
         .shell
         .drawer_panel
         .last_floating_rect
+        .map(bounds_to_rect)
         .unwrap_or_else(|| {
-            egui::Rect::from_min_size(default_utility_panel_position(viewport_rect), UTILITY_DEFAULT_SIZE)
+            egui::Rect::from_min_size(
+                default_utility_panel_position(viewport_rect),
+                UTILITY_DEFAULT_SIZE,
+            )
         });
     let mut open = true;
     let mut dock_clicked = false;
@@ -309,12 +339,15 @@ fn draw_utility_panel_window(
     let current_rect = ctx
         .memory(|memory| memory.area_rect(window_id))
         .unwrap_or(default_rect);
-    shell.shell.drawer_panel.remember_floating_rect(current_rect);
+    shell
+        .shell
+        .drawer_panel
+        .remember_floating_rect(rect_to_bounds(current_rect));
 
     if dock_clicked && shell.dock_state.is_some() {
         shell.actions.push(Action::DockShellPanel {
             panel: ShellPanelKind::Drawer,
-            rect: current_rect,
+            rect: rect_to_bounds(current_rect),
         });
     } else if !open {
         shell.shell.drawer_panel.hide();
@@ -345,7 +378,12 @@ fn draw_subject_inspector_contents(ui: &mut egui::Ui, shell: &mut PrimaryShellCo
     ui.add_space(8.0);
 
     ui.horizontal(|ui| {
-        inspector_tab_button(ui, shell, PrimaryShellInspectorTab::Properties, "Properties");
+        inspector_tab_button(
+            ui,
+            shell,
+            PrimaryShellInspectorTab::Properties,
+            "Properties",
+        );
         inspector_tab_button(ui, shell, PrimaryShellInspectorTab::Display, "Display");
     });
     ui.add_space(8.0);
@@ -363,7 +401,10 @@ fn draw_subject_summary_band(ui: &mut egui::Ui, shell: &mut PrimaryShellContext<
         collect_presented_selection(shell.scene, *shell.selected, shell.selected_set);
 
     chrome::card_frame().show(ui, |ui| {
-        match (presented_selection.primary, presented_selection.ordered.len()) {
+        match (
+            presented_selection.primary,
+            presented_selection.ordered.len(),
+        ) {
             (Some(object), 1) => {
                 let host_node = shell.scene.nodes.get(&object.host_id);
                 let object_name = host_node.map(|node| node.name.as_str()).unwrap_or("Object");
@@ -422,7 +463,9 @@ fn draw_subject_summary_band(ui: &mut egui::Ui, shell: &mut PrimaryShellContext<
                 } else {
                     ui.horizontal_wrapped(|ui| {
                         if chrome::action_button(ui, "Duplicate", false).clicked() {
-                            shell.actions.push(Action::DuplicatePresentedObject(object.host_id));
+                            shell
+                                .actions
+                                .push(Action::DuplicatePresentedObject(object.host_id));
                         }
                         if matches!(object.kind, PresentedObjectKind::Voxel) {
                             if chrome::action_button(ui, "Enter Sculpt", false).clicked() {
@@ -532,7 +575,10 @@ fn draw_display_panel(ui: &mut egui::Ui, shell: &mut PrimaryShellContext<'_>) {
             ui.checkbox(&mut shell.settings.render.show_light_gizmos, "Light Gizmos");
 
             let mut distance_readout = *shell.show_distance_readout;
-            if ui.checkbox(&mut distance_readout, "Distance Readout").changed() {
+            if ui
+                .checkbox(&mut distance_readout, "Distance Readout")
+                .changed()
+            {
                 shell.actions.push(Action::ToggleDistanceReadout);
             }
         },
@@ -552,8 +598,11 @@ fn draw_display_panel(ui: &mut egui::Ui, shell: &mut PrimaryShellContext<'_>) {
                 ui.selectable_value(&mut shell.settings.render.cross_section_axis, 2, "Z");
             });
             ui.add(
-                egui::Slider::new(&mut shell.settings.render.cross_section_position, -5.0..=5.0)
-                    .text("Plane Offset"),
+                egui::Slider::new(
+                    &mut shell.settings.render.cross_section_position,
+                    -5.0..=5.0,
+                )
+                .text("Plane Offset"),
             );
         },
     );
@@ -570,7 +619,9 @@ fn draw_display_panel(ui: &mut egui::Ui, shell: &mut PrimaryShellContext<'_>) {
         },
     );
 
-    if shell.shell.interaction_mode == InteractionMode::Measure || !shell.measurement_points.is_empty() {
+    if shell.shell.interaction_mode == InteractionMode::Measure
+        || !shell.measurement_points.is_empty()
+    {
         show_inspector_card(
             ui,
             "inspector_display_measurement",
@@ -657,13 +708,10 @@ fn draw_advanced_utilities(ui: &mut egui::Ui, shell: &mut PrimaryShellContext<'_
 
     ui.label(egui::RichText::new("Expert Panels").small().strong());
     ui.horizontal_wrapped(|ui| {
-        for tab in Tab::EXPERT_TABS {
-            let is_open = shell
-                .dock_state
-                .as_ref()
-                .is_some_and(|dock_state| dock_state.find_tab(tab).is_some());
-            if ui.selectable_label(is_open, tab.label()).clicked() {
-                shell.actions.push(Action::ToggleDockTab(tab.clone()));
+        for panel in crate::app::state::ExpertPanelKind::ALL {
+            let is_open = shell.expert_panels.is_open(panel);
+            if ui.selectable_label(is_open, panel.label()).clicked() {
+                shell.actions.push(Action::ToggleExpertPanel(panel));
             }
         }
     });
@@ -694,7 +742,10 @@ fn draw_selection_context_strip(
     viewport_rect: egui::Rect,
     shell: &mut PrimaryShellContext<'_>,
 ) {
-    let strip_size = egui::vec2(480.0_f32.min(viewport_rect.width() - 160.0).max(260.0), TOP_STRIP_HEIGHT);
+    let strip_size = egui::vec2(
+        480.0_f32.min(viewport_rect.width() - 160.0).max(260.0),
+        TOP_STRIP_HEIGHT,
+    );
     let strip_pos = egui::pos2(
         viewport_rect.center().x - strip_size.x * 0.5,
         viewport_rect.min.y + SHELL_MARGIN,
@@ -771,8 +822,17 @@ fn draw_selection_context_contents(ui: &mut egui::Ui, shell: &mut PrimaryShellCo
     }
 }
 
-fn draw_tool_rail(ctx: &egui::Context, viewport_rect: egui::Rect, shell: &mut PrimaryShellContext<'_>) {
-    let rail_size = egui::vec2(TOOL_RAIL_WIDTH.min(viewport_rect.width() - 120.0).max(540.0), TOOL_RAIL_HEIGHT);
+fn draw_tool_rail(
+    ctx: &egui::Context,
+    viewport_rect: egui::Rect,
+    shell: &mut PrimaryShellContext<'_>,
+) {
+    let rail_size = egui::vec2(
+        TOOL_RAIL_WIDTH
+            .min(viewport_rect.width() - 120.0)
+            .max(540.0),
+        TOOL_RAIL_HEIGHT,
+    );
     let rail_pos = egui::pos2(
         viewport_rect.center().x - rail_size.x * 0.5,
         viewport_rect.max.y - rail_size.y - SHELL_MARGIN,
@@ -793,7 +853,12 @@ fn draw_tool_rail(ctx: &egui::Context, viewport_rect: egui::Rect, shell: &mut Pr
                     gizmo_mode_button(ui, shell, GizmoMode::Scale);
                     ui.separator();
                     for brush in BrushMode::ALL {
-                        interaction_mode_button(ui, shell, InteractionMode::Sculpt(brush), brush.label());
+                        interaction_mode_button(
+                            ui,
+                            shell,
+                            InteractionMode::Sculpt(brush),
+                            brush.label(),
+                        );
                     }
                     ui.separator();
                     draw_distance_toggle(ui, shell);
@@ -805,8 +870,15 @@ fn draw_tool_rail(ctx: &egui::Context, viewport_rect: egui::Rect, shell: &mut Pr
         });
 }
 
-fn draw_utility_strip(ctx: &egui::Context, viewport_rect: egui::Rect, shell: &mut PrimaryShellContext<'_>) {
-    let strip_size = egui::vec2(UTILITY_STRIP_WIDTH.min(viewport_rect.width() - 120.0), UTILITY_STRIP_HEIGHT);
+fn draw_utility_strip(
+    ctx: &egui::Context,
+    viewport_rect: egui::Rect,
+    shell: &mut PrimaryShellContext<'_>,
+) {
+    let strip_size = egui::vec2(
+        UTILITY_STRIP_WIDTH.min(viewport_rect.width() - 120.0),
+        UTILITY_STRIP_HEIGHT,
+    );
     let strip_pos = egui::pos2(
         viewport_rect.min.x + SHELL_MARGIN,
         viewport_rect.max.y - strip_size.y - SHELL_MARGIN,
@@ -828,15 +900,21 @@ fn draw_utility_strip(ctx: &egui::Context, viewport_rect: egui::Rect, shell: &mu
                     ui.separator();
                     ui.menu_button("Workspace", |ui| {
                         if ui.button("Modeling").clicked() {
-                            shell.actions.push(Action::SetWorkspace(WorkspacePreset::Modeling));
+                            shell
+                                .actions
+                                .push(Action::SetWorkspace(WorkspacePreset::Modeling));
                             ui.close_menu();
                         }
                         if ui.button("Sculpting").clicked() {
-                            shell.actions.push(Action::SetWorkspace(WorkspacePreset::Sculpting));
+                            shell
+                                .actions
+                                .push(Action::SetWorkspace(WorkspacePreset::Sculpting));
                             ui.close_menu();
                         }
                         if ui.button("Rendering").clicked() {
-                            shell.actions.push(Action::SetWorkspace(WorkspacePreset::Rendering));
+                            shell
+                                .actions
+                                .push(Action::SetWorkspace(WorkspacePreset::Rendering));
                             ui.close_menu();
                         }
                     });
@@ -848,7 +926,11 @@ fn draw_utility_strip(ctx: &egui::Context, viewport_rect: egui::Rect, shell: &mu
         });
 }
 
-fn draw_selection_popup(ctx: &egui::Context, viewport_rect: egui::Rect, shell: &mut PrimaryShellContext<'_>) {
+fn draw_selection_popup(
+    ctx: &egui::Context,
+    viewport_rect: egui::Rect,
+    shell: &mut PrimaryShellContext<'_>,
+) {
     let Some(object) = selected_object(shell.scene, *shell.selected) else {
         return;
     };
@@ -866,7 +948,9 @@ fn draw_selection_popup(ctx: &egui::Context, viewport_rect: egui::Rect, shell: &
             chrome_frame(ctx).show(ui, |ui| {
                 ui.vertical(|ui| {
                     if ui.button("Duplicate").clicked() {
-                        shell.actions.push(Action::DuplicatePresentedObject(object.host_id));
+                        shell
+                            .actions
+                            .push(Action::DuplicatePresentedObject(object.host_id));
                     }
                     ui.separator();
                     draw_boolean_popup_action(ui, shell, "Union", CsgOp::Union);
@@ -934,13 +1018,35 @@ fn draw_sculpt_utility_strip(
         .show(ctx, |ui| {
             chrome_frame(ctx).show(ui, |ui| {
                 ui.vertical(|ui| {
-                    draw_sculpt_drag_control(ui, shell, SculptUtilityControl::Radius, "R", radius_value_label(shell.sculpt_state));
+                    draw_sculpt_drag_control(
+                        ui,
+                        shell,
+                        SculptUtilityControl::Radius,
+                        "R",
+                        radius_value_label(shell.sculpt_state),
+                    );
                     ui.add_space(SCULPT_STRIP_GAP);
-                    draw_sculpt_drag_control(ui, shell, SculptUtilityControl::Strength, "S", strength_value_label(shell.sculpt_state));
+                    draw_sculpt_drag_control(
+                        ui,
+                        shell,
+                        SculptUtilityControl::Strength,
+                        "S",
+                        strength_value_label(shell.sculpt_state),
+                    );
                     ui.add_space(SCULPT_STRIP_GAP);
-                    draw_sculpt_drag_control(ui, shell, SculptUtilityControl::Falloff, "F", falloff_value_label(shell.sculpt_state));
+                    draw_sculpt_drag_control(
+                        ui,
+                        shell,
+                        SculptUtilityControl::Falloff,
+                        "F",
+                        falloff_value_label(shell.sculpt_state),
+                    );
                     ui.add_space(SCULPT_STRIP_GAP);
-                    let advanced_label = if shell.shell.brush_advanced_open { "Hide" } else { "More" };
+                    let advanced_label = if shell.shell.brush_advanced_open {
+                        "Hide"
+                    } else {
+                        "More"
+                    };
                     if ui.button(advanced_label).clicked() {
                         shell.shell.brush_advanced_open = !shell.shell.brush_advanced_open;
                     }
@@ -990,7 +1096,8 @@ fn draw_sculpt_drag_control(
     short_label: &str,
     value_label: String,
 ) {
-    let (rect, response) = ui.allocate_exact_size(SCULPT_STRIP_BUTTON_SIZE, egui::Sense::click_and_drag());
+    let (rect, response) =
+        ui.allocate_exact_size(SCULPT_STRIP_BUTTON_SIZE, egui::Sense::click_and_drag());
     let fill = if response.dragged()
         || shell
             .shell
@@ -1068,7 +1175,8 @@ fn apply_sculpt_drag(
 
     match drag.control {
         SculptUtilityControl::Radius => {
-            profile.radius = (drag.initial_value + delta_x * SCULPT_DRAG_SENSITIVITY).clamp(0.05, 2.0);
+            profile.radius =
+                (drag.initial_value + delta_x * SCULPT_DRAG_SENSITIVITY).clamp(0.05, 2.0);
         }
         SculptUtilityControl::Strength => {
             let (min_strength, max_strength) = SculptBrushProfile::strength_limits(brush);
@@ -1077,7 +1185,8 @@ fn apply_sculpt_drag(
         }
         SculptUtilityControl::Falloff => {
             let initial_index = drag.initial_value.round() as i32;
-            let next_index = (initial_index + (delta_x / FALLOFF_DRAG_STEP).round() as i32).clamp(0, 3);
+            let next_index =
+                (initial_index + (delta_x / FALLOFF_DRAG_STEP).round() as i32).clamp(0, 3);
             profile.falloff_mode = match next_index {
                 0 => FalloffMode::Smooth,
                 1 => FalloffMode::Linear,
@@ -1153,7 +1262,9 @@ fn interaction_mode_button(
 fn gizmo_mode_button(ui: &mut egui::Ui, shell: &mut PrimaryShellContext<'_>, mode: GizmoMode) {
     let active = *shell.gizmo_mode == mode;
     if ui.selectable_label(active, mode.label()).clicked() && !active {
-        shell.actions.push(Action::SetInteractionMode(InteractionMode::Select));
+        shell
+            .actions
+            .push(Action::SetInteractionMode(InteractionMode::Select));
         shell.actions.push(Action::SetGizmoMode(mode));
     }
 }
@@ -1186,7 +1297,8 @@ fn utility_strip_button(
     tab: PrimaryShellUtilityTab,
     label: &str,
 ) {
-    let active = shell.shell.active_utility_tab == tab && panel_is_active(shell.shell, ShellPanelKind::Drawer);
+    let active = shell.shell.active_utility_tab == tab
+        && panel_is_active(shell.shell, ShellPanelKind::Drawer);
     if ui.selectable_label(active, label).clicked() {
         toggle_utility_panel_from_strip(shell.shell, tab, shell.actions);
     }
@@ -1300,7 +1412,7 @@ fn sculpt_strip_x(shell: &PrimaryShellContext<'_>, viewport_rect: egui::Rect) ->
             .shell
             .tool_panel
             .last_floating_rect
-            .map(|rect| rect.max.x + 8.0)
+            .map(|rect| rect.right() + 8.0)
             .unwrap_or(viewport_rect.min.x + SHELL_MARGIN)
     } else {
         viewport_rect.min.x + SHELL_MARGIN
@@ -1332,7 +1444,8 @@ fn shell_window_id(name: &'static str, layout_revision: u64, floating_revision: 
 
 fn default_scene_panel_rect(viewport_rect: egui::Rect) -> egui::Rect {
     let top = viewport_rect.min.y + SHELL_MARGIN + TOP_STRIP_HEIGHT + 6.0;
-    let bottom = viewport_rect.max.y - TOOL_RAIL_HEIGHT - UTILITY_STRIP_HEIGHT - (SHELL_MARGIN * 2.0) - 12.0;
+    let bottom =
+        viewport_rect.max.y - TOOL_RAIL_HEIGHT - UTILITY_STRIP_HEIGHT - (SHELL_MARGIN * 2.0) - 12.0;
     let height = (bottom - top).max(SCENE_MIN_SIZE.y);
     egui::Rect::from_min_size(
         egui::pos2(viewport_rect.min.x + SHELL_MARGIN, top),
@@ -1657,6 +1770,9 @@ mod tests {
 
         sync_inspector_tab(&mut shell);
 
-        assert_eq!(shell.active_inspector_tab, PrimaryShellInspectorTab::Display);
+        assert_eq!(
+            shell.active_inspector_tab,
+            PrimaryShellInspectorTab::Display
+        );
     }
 }

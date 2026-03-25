@@ -1,6 +1,7 @@
 mod app;
 mod compat;
 mod desktop_dialogs;
+mod egui_keymap;
 mod export;
 pub mod expression;
 mod gpu;
@@ -10,18 +11,57 @@ pub mod keymap;
 mod material_preset;
 mod mesh_import;
 mod native_paths;
+#[cfg(not(target_arch = "wasm32"))]
+mod native_wgpu;
 mod sculpt;
 mod settings;
 mod ui;
 
-// ── Native entry point ──────────────────────────────────────────────────────
+#[cfg(all(not(target_arch = "wasm32"), not(target_os = "android")))]
+pub fn run_native() -> Result<(), String> {
+    let _ = env_logger::builder().is_test(false).try_init();
 
-#[cfg(not(target_arch = "wasm32"))]
-fn build_native_options(settings: &settings::Settings) -> eframe::NativeOptions {
-    use eframe::egui;
-    use eframe::wgpu;
-    use std::sync::Arc;
+    let settings = settings::Settings::load();
+    app::slint_frontend::run_slint_host(settings)
+}
 
+#[cfg(all(not(target_arch = "wasm32"), not(target_os = "android")))]
+pub fn run_slint_native() -> Result<(), String> {
+    run_native()
+}
+
+#[cfg(any(target_arch = "wasm32", target_os = "android"))]
+struct EframeHostAdapter {
+    app: app::SdfApp,
+}
+
+#[cfg(any(target_arch = "wasm32", target_os = "android"))]
+impl EframeHostAdapter {
+    fn new(cc: &eframe::CreationContext<'_>, settings: settings::Settings) -> Self {
+        let render_state = cc
+            .wgpu_render_state
+            .clone()
+            .expect("WGPU render state required");
+        Self {
+            app: app::SdfApp::new_from_egui(&render_state, &cc.egui_ctx, settings),
+        }
+    }
+}
+
+#[cfg(any(target_arch = "wasm32", target_os = "android"))]
+impl eframe::App for EframeHostAdapter {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.app.run_egui_frame(ctx);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn on_exit(&mut self) {
+        self.app.mark_clean_exit();
+    }
+}
+
+#[cfg(target_os = "android")]
+fn build_android_options(settings: &settings::Settings) -> eframe::NativeOptions {
     let present_mode = if settings.vsync_enabled {
         wgpu::PresentMode::AutoVsync
     } else {
@@ -35,50 +75,11 @@ fn build_native_options(settings: &settings::Settings) -> eframe::NativeOptions 
         renderer: eframe::Renderer::Wgpu,
         wgpu_options: eframe::egui_wgpu::WgpuConfiguration {
             present_mode,
-            device_descriptor: Arc::new(|adapter| {
-                let base_limits = if adapter.get_info().backend == wgpu::Backend::Gl {
-                    wgpu::Limits::downlevel_webgl2_defaults()
-                } else {
-                    wgpu::Limits::default()
-                };
-                wgpu::DeviceDescriptor {
-                    label: Some("SDF Modeler device"),
-                    required_features: wgpu::Features::FLOAT32_FILTERABLE,
-                    required_limits: wgpu::Limits {
-                        max_texture_dimension_2d: 8192,
-                        max_storage_buffers_per_shader_stage: 4,
-                        max_storage_buffer_binding_size: 1 << 27, // 128MB
-                        max_storage_textures_per_shader_stage: 4,
-                        ..base_limits
-                    },
-                    memory_hints: wgpu::MemoryHints::default(),
-                }
-            }),
+            device_descriptor: std::sync::Arc::new(native_wgpu::native_device_descriptor),
             ..Default::default()
         },
         ..Default::default()
     }
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn run_native_with_options(
-    native_options: eframe::NativeOptions,
-    settings: settings::Settings,
-) -> eframe::Result<()> {
-    eframe::run_native(
-        "SDF Modeler",
-        native_options,
-        Box::new(move |cc| Ok(Box::new(app::SdfApp::new(cc, settings)))),
-    )
-}
-
-#[cfg(all(not(target_arch = "wasm32"), not(target_os = "android")))]
-pub fn run_native() -> eframe::Result<()> {
-    let _ = env_logger::builder().is_test(false).try_init();
-
-    let settings = settings::Settings::load();
-    let options = build_native_options(&settings);
-    run_native_with_options(options, settings)
 }
 
 #[cfg(target_os = "android")]
@@ -89,17 +90,19 @@ fn android_main(app: winit::platform::android::activity::AndroidApp) {
     let _ = env_logger::builder().is_test(false).try_init();
 
     let settings = settings::Settings::load();
-    let mut options = build_native_options(&settings);
+    let mut options = build_android_options(&settings);
     options.event_loop_builder = Some(Box::new(move |event_loop_builder| {
         event_loop_builder.with_android_app(app);
     }));
 
-    if let Err(error) = run_native_with_options(options, settings) {
+    if let Err(error) = eframe::run_native(
+        "SDF Modeler",
+        options,
+        Box::new(move |cc| Ok(Box::new(EframeHostAdapter::new(cc, settings.clone())))),
+    ) {
         log::error!("Android startup failed: {}", error);
     }
 }
-
-// ── WASM entry point ────────────────────────────────────────────────────────
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -124,7 +127,6 @@ impl WebHandle {
 
     #[wasm_bindgen]
     pub async fn start(&self, canvas_id: &str) -> Result<(), JsValue> {
-        use eframe::wgpu;
         use std::sync::Arc;
         use wasm_bindgen::JsCast;
 
@@ -141,19 +143,17 @@ impl WebHandle {
 
         let web_options = eframe::WebOptions {
             wgpu_options: eframe::egui_wgpu::WgpuConfiguration {
-                device_descriptor: Arc::new(|_adapter| {
-                    wgpu::DeviceDescriptor {
-                        label: Some("SDF Modeler device (web)"),
-                        required_features: wgpu::Features::FLOAT32_FILTERABLE,
-                        required_limits: wgpu::Limits {
-                            max_texture_dimension_2d: 4096,
-                            max_storage_buffers_per_shader_stage: 4,
-                            max_storage_buffer_binding_size: 1 << 25, // 32MB
-                            max_storage_textures_per_shader_stage: 0,
-                            ..wgpu::Limits::downlevel_defaults()
-                        },
-                        memory_hints: wgpu::MemoryHints::default(),
-                    }
+                device_descriptor: Arc::new(|_adapter| wgpu::DeviceDescriptor {
+                    label: Some("SDF Modeler device (web)"),
+                    required_features: wgpu::Features::FLOAT32_FILTERABLE,
+                    required_limits: wgpu::Limits {
+                        max_texture_dimension_2d: 4096,
+                        max_storage_buffers_per_shader_stage: 4,
+                        max_storage_buffer_binding_size: 1 << 25,
+                        max_storage_textures_per_shader_stage: 0,
+                        ..wgpu::Limits::downlevel_defaults()
+                    },
+                    memory_hints: wgpu::MemoryHints::default(),
                 }),
                 ..Default::default()
             },
@@ -164,7 +164,7 @@ impl WebHandle {
             .start(
                 canvas,
                 web_options,
-                Box::new(move |cc| Ok(Box::new(app::SdfApp::new(cc, settings)))),
+                Box::new(move |cc| Ok(Box::new(EframeHostAdapter::new(cc, settings)))),
             )
             .await
     }

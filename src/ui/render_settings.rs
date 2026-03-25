@@ -1,7 +1,5 @@
 use std::path::Path;
 
-use eframe::egui;
-
 use crate::app::actions::{Action, ActionSink, LightingPreset};
 use crate::desktop_dialogs::FileDialogSelection;
 use crate::settings::{
@@ -642,10 +640,10 @@ pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink
 
     if settings.render != before {
         if settings.render.needs_shader_rebuild(&before) {
-            // Shader-affecting settings changed — full rebuild
+            // Shader-affecting settings changed Ã¢â‚¬â€ full rebuild
             actions.push(Action::SettingsChanged);
         } else {
-            // Light-only changes — save settings, no shader rebuild needed
+            // Light-only changes Ã¢â‚¬â€ save settings, no shader rebuild needed
             // (light values are in the uniform buffer, uploaded every frame)
             settings.save();
         }

@@ -1,11 +1,8 @@
-use eframe::egui;
-
 use crate::app::state::GpuSyncState;
 use crate::app::FrameTimings;
 use crate::gpu::camera::Camera;
 use crate::graph::scene::Scene;
 use crate::settings::Settings;
-use crate::ui::viewport::ViewportResources;
 
 const TIMING_HISTORY_LEN: usize = 120;
 
@@ -149,14 +146,12 @@ pub fn draw(
             egui::CollapsingHeader::new("Render State")
                 .default_open(true)
                 .show(ui, |ui| {
-                    let renderer = gpu.render_state.renderer.read();
-                    if let Some(res) = renderer.callback_resources.get::<ViewportResources>() {
-                        ui.label(format!(
-                            "Render size: {}x{}",
-                            res.render_width, res.render_height
-                        ));
-                        ui.label(format!("Composite active: {}", res.use_composite));
-                    }
+                    let resources = gpu.viewport_resources.read();
+                    ui.label(format!(
+                        "Render size: {}x{}",
+                        resources.render_width, resources.render_height
+                    ));
+                    ui.label(format!("Composite active: {}", resources.use_composite));
                 });
 
             // --- Camera ---

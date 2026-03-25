@@ -1,4 +1,4 @@
-use eframe::egui::{self, Color32, Pos2, Rect, Stroke, Vec2};
+use egui::{self, Color32, Pos2, Rect, Stroke, Vec2};
 use glam::{Mat4, Quat, Vec3, Vec4};
 
 use crate::gpu::camera::Camera;
@@ -523,7 +523,10 @@ pub(crate) fn collect_gizmo_selection(
 ) -> Option<GizmoSelection> {
     let mut ordered_ids = Vec::new();
     if let Some(primary_selected) = selected {
-        ordered_ids.push(normalize_presented_selection_target(scene, primary_selected));
+        ordered_ids.push(normalize_presented_selection_target(
+            scene,
+            primary_selected,
+        ));
     }
 
     let mut extra_ids: Vec<_> = selected_set
@@ -1404,9 +1407,11 @@ pub(crate) fn derive_multi_transform_readout(
 
     let current_pivot_world = match baseline.pivot_mode {
         MultiPivotMode::SelectionCenter => current_selection_center_world,
-        MultiPivotMode::ActiveObject => find_target_by_id(&current_targets, baseline.reference_target_id)
-            .map(|target| target.world_position)
-            .unwrap_or(current_targets[0].world_position),
+        MultiPivotMode::ActiveObject => {
+            find_target_by_id(&current_targets, baseline.reference_target_id)
+                .map(|target| target.world_position)
+                .unwrap_or(current_targets[0].world_position)
+        }
     };
     let position_delta = current_pivot_world - baseline.base_center_world;
 
@@ -1758,8 +1763,8 @@ pub fn draw_and_interact(
                 let drag_node = ensure_transform_owner_for_selection(scene, selected_id);
                 if let Some(node_transform) = extract_node_transform(scene, drag_node) {
                     let drag_axes = compute_axis_directions(node_transform.rotation, gizmo_space);
-                    let drag_center =
-                        node_transform.position + rotate_euler(*pivot_offset, node_transform.rotation);
+                    let drag_center = node_transform.position
+                        + rotate_euler(*pivot_offset, node_transform.rotation);
                     let drag_origin_screen =
                         world_to_screen(drag_center, &vp, rect).unwrap_or(origin_screen);
                     let rotation_sign = if *gizmo_mode == GizmoMode::Rotate {
@@ -2320,8 +2325,15 @@ mod tests {
         assert_vec3_close(world_position(&scene, host), object_world_before);
         assert_vec3_close(world_position(&scene, sculpt_id), sculpt_world_before);
 
-        apply_world_translation_to_targets(&mut scene, &selection.targets, Vec3::new(2.0, 0.0, 0.0));
-        assert_vec3_close(world_position(&scene, host), object_world_before + Vec3::new(2.0, 0.0, 0.0));
+        apply_world_translation_to_targets(
+            &mut scene,
+            &selection.targets,
+            Vec3::new(2.0, 0.0, 0.0),
+        );
+        assert_vec3_close(
+            world_position(&scene, host),
+            object_world_before + Vec3::new(2.0, 0.0, 0.0),
+        );
         assert_vec3_close(
             world_position(&scene, sculpt_id),
             sculpt_world_before + Vec3::new(2.0, 0.0, 0.0),
@@ -2488,7 +2500,8 @@ mod tests {
         let selected_set = HashSet::from([left, right]);
         let mut behavior = SelectionBehaviorSettings::default();
         behavior.multi_pivot_mode = MultiPivotMode::ActiveObject;
-        let selection = collect_gizmo_selection(&scene, Some(right), &selected_set, &behavior).unwrap();
+        let selection =
+            collect_gizmo_selection(&scene, Some(right), &selected_set, &behavior).unwrap();
 
         assert_vec3_close(selection.base_center_world, Vec3::new(2.0, 0.0, 0.0));
     }
@@ -2576,5 +2589,3 @@ mod tests {
         assert_f32_close(total_c, 30.0_f32.to_radians());
     }
 }
-
-

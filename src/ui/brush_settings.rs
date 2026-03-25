@@ -1,5 +1,3 @@
-use eframe::egui;
-
 use crate::sculpt::{BrushMode, BrushShape, FalloffMode, SculptState};
 
 /// Draw the expert dockable brush settings panel.
@@ -9,7 +7,10 @@ pub fn draw(ui: &mut egui::Ui, sculpt_state: &mut SculptState) {
         return;
     }
 
-    ui.label(format!("Active Brush: {}", sculpt_state.selected_brush().label()));
+    ui.label(format!(
+        "Active Brush: {}",
+        sculpt_state.selected_brush().label()
+    ));
     ui.add_space(6.0);
     ui.separator();
     draw_brush_hot_controls(ui, sculpt_state);
@@ -29,10 +30,7 @@ pub fn draw_brush_hot_controls(ui: &mut egui::Ui, sculpt_state: &mut SculptState
 
     ui.horizontal(|ui| {
         ui.small("Radius");
-        ui.add(
-            egui::Slider::new(&mut profile.radius, 0.05..=2.0)
-                .show_value(false),
-        );
+        ui.add(egui::Slider::new(&mut profile.radius, 0.05..=2.0).show_value(false));
         ui.monospace(format!("{:.2}", profile.radius));
     });
 
@@ -41,8 +39,7 @@ pub fn draw_brush_hot_controls(ui: &mut egui::Ui, sculpt_state: &mut SculptState
     ui.horizontal(|ui| {
         ui.small("Strength");
         ui.add(
-            egui::Slider::new(&mut profile.strength, min_strength..=max_strength)
-                .show_value(false),
+            egui::Slider::new(&mut profile.strength, min_strength..=max_strength).show_value(false),
         );
         ui.monospace(format!("{:.2}", profile.strength));
     });

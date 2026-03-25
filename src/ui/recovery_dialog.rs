@@ -1,5 +1,3 @@
-use eframe::egui;
-
 pub enum RecoveryDialogAction {
     Recover,
     Discard,

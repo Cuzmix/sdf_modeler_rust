@@ -1,10 +1,7 @@
-use eframe::egui;
-
 use crate::app::actions::{Action, ActionSink};
-use crate::keymap::{ActionBinding, KeyCombo, KeymapConfig, SerializableKey};
-use crate::settings::{
-    GroupRotateDirection, MultiAxisOrientation, MultiPivotMode, Settings,
-};
+use crate::egui_keymap::key_from_egui;
+use crate::keymap::{ActionBinding, KeyCombo, KeymapConfig};
+use crate::settings::{GroupRotateDirection, MultiAxisOrientation, MultiPivotMode, Settings};
 
 /// Draw the System Settings window. Pushes `Action::SettingsChanged` if a
 /// shader-affecting setting changed.
@@ -77,7 +74,7 @@ pub fn draw(
                         ui.checkbox(&mut settings.render.show_light_gizmos, "Show Light Gizmos")
                             .on_hover_text("Display billboard icons and wireframe gizmos for light nodes");
                         ui.checkbox(&mut settings.render.clamp_orbit_pitch, "Clamp Orbit Pitch")
-                            .on_hover_text("Limit vertical orbit to ±89°. When off, allows full 360° gimbal rotation.");
+                            .on_hover_text("Limit vertical orbit to Ã‚Â±89Ã‚Â°. When off, allows full 360Ã‚Â° gimbal rotation.");
                         ui.separator();
                         labeled_slider(ui, "Roll Sensitivity", &mut settings.render.roll_sensitivity, 0.001..=0.02, false,
                             "How fast Ctrl+Alt+drag and touch twist roll the camera");
@@ -158,7 +155,7 @@ pub fn draw(
                         ui.label("Hold Ctrl while dragging a gizmo to snap.");
                         labeled_slider(ui, "Translate", &mut settings.snap.translate_snap, 0.05..=2.0, false,
                             "Snap increment for position (world units)");
-                        labeled_slider(ui, "Rotate (°)", &mut settings.snap.rotate_snap, 1.0..=90.0, false,
+                        labeled_slider(ui, "Rotate (Ã‚Â°)", &mut settings.snap.rotate_snap, 1.0..=90.0, false,
                             "Snap increment for rotation (degrees)");
                         labeled_slider(ui, "Scale", &mut settings.snap.scale_snap, 0.01..=1.0, false,
                             "Snap increment for scale");
@@ -223,7 +220,7 @@ pub fn draw(
                             ui.colored_label(
                                 egui::Color32::from_rgb(255, 100, 100),
                                 format!(
-                                    "Exceeds GPU buffer limit ({} MB > {} MB) — will be rejected at bake time.",
+                                    "Exceeds GPU buffer limit ({} MB > {} MB) Ã¢â‚¬â€ will be rejected at bake time.",
                                     voxel_bytes / (1024 * 1024),
                                     gpu_limit_bytes / (1024 * 1024),
                                 ),
@@ -390,7 +387,7 @@ fn draw_binding_row(
     } else {
         let shortcut_text = keymap
             .format_shortcut(action)
-            .unwrap_or_else(|| "—".to_string());
+            .unwrap_or_else(|| "Ã¢â‚¬â€".to_string());
         ui.monospace(&shortcut_text);
     }
 
@@ -437,7 +434,7 @@ fn capture_rebind_key(
             }
 
             // Try to convert to our SerializableKey
-            if let Some(ser_key) = SerializableKey::from_egui(*key) {
+            if let Some(ser_key) = key_from_egui(*key) {
                 let new_combo = KeyCombo {
                     key: ser_key,
                     ctrl: modifiers.ctrl,

@@ -1,11 +1,4 @@
-use eframe::egui;
-
-pub fn draw_chip(
-    ui: &mut egui::Ui,
-    label: &str,
-    fill: egui::Color32,
-    text_color: egui::Color32,
-) {
+pub fn draw_chip(ui: &mut egui::Ui, label: &str, fill: egui::Color32, text_color: egui::Color32) {
     egui::Frame::none()
         .fill(fill)
         .rounding(egui::Rounding::same(6.0))

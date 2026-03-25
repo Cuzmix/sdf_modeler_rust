@@ -1174,8 +1174,14 @@ mod tests {
     #[test]
     fn selection_behavior_defaults_are_expected() {
         let defaults = SelectionBehaviorSettings::default();
-        assert_eq!(defaults.multi_axis_orientation, MultiAxisOrientation::WorldZero);
-        assert_eq!(defaults.group_rotate_direction, GroupRotateDirection::Standard);
+        assert_eq!(
+            defaults.multi_axis_orientation,
+            MultiAxisOrientation::WorldZero
+        );
+        assert_eq!(
+            defaults.group_rotate_direction,
+            GroupRotateDirection::Standard
+        );
         assert_eq!(defaults.multi_pivot_mode, MultiPivotMode::SelectionCenter);
     }
 

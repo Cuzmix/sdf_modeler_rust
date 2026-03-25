@@ -1,5 +1,3 @@
-use eframe::egui;
-
 use crate::app::Toast;
 
 /// Draw active toast notifications (bottom-right, auto-dismissing with fade-out).

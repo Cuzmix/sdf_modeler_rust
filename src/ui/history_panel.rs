@@ -1,5 +1,3 @@
-use eframe::egui;
-
 use crate::app::actions::{Action, ActionSink};
 use crate::graph::history::History;
 

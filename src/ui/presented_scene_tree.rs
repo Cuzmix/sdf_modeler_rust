@@ -1,7 +1,5 @@
 use std::collections::HashSet;
 
-use eframe::egui;
-
 use crate::app::actions::{Action, ActionSink};
 use crate::graph::presented_object::{
     presented_children, presented_top_level_objects, resolve_presented_object, PresentedObjectKind,
@@ -238,7 +236,8 @@ fn draw_object_row(
             ui.add_space(indent);
         }
 
-        let is_selected = selected_set.contains(&object.host_id) || *selected == Some(object.host_id);
+        let is_selected =
+            selected_set.contains(&object.host_id) || *selected == Some(object.host_id);
         let dimmed = scene.is_hidden(object.object_root_id);
 
         if *renaming == Some(object.host_id) {
@@ -252,7 +251,9 @@ fn draw_object_row(
                     }
                     draw_visibility_toggle(ui, scene, object, actions);
                     let response = ui.text_edit_singleline(rename_buf);
-                    if response.lost_focus() || ui.input(|input| input.key_pressed(egui::Key::Enter)) {
+                    if response.lost_focus()
+                        || ui.input(|input| input.key_pressed(egui::Key::Enter))
+                    {
                         if let Some(node) = scene.nodes.get_mut(&object.host_id) {
                             node.name = rename_buf.clone();
                         }
@@ -294,7 +295,14 @@ fn draw_object_row(
                     begin_rename(scene, object.host_id, renaming, rename_buf);
                 }
 
-                object_context_menu(&label_response, scene, object, renaming, rename_buf, actions);
+                object_context_menu(
+                    &label_response,
+                    scene,
+                    object,
+                    renaming,
+                    rename_buf,
+                    actions,
+                );
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     draw_light_solo_button(ui, object, actions, soloed_light);
@@ -327,8 +335,10 @@ fn draw_visibility_toggle(
 }
 
 fn object_is_expanded(ui: &egui::Ui, host_id: NodeId) -> bool {
-    ui.ctx()
-        .data_mut(|data| data.get_persisted::<bool>(object_expanded_id(host_id)).unwrap_or(true))
+    ui.ctx().data_mut(|data| {
+        data.get_persisted::<bool>(object_expanded_id(host_id))
+            .unwrap_or(true)
+    })
 }
 
 fn set_object_expanded(ui: &egui::Ui, host_id: NodeId, expanded: bool) {
@@ -390,7 +400,11 @@ fn object_label(scene: &Scene, object: PresentedObjectRef) -> String {
     format!("{badge} {}", node.name)
 }
 
-fn object_label_color(scene: &Scene, object: PresentedObjectRef, is_selected: bool) -> egui::Color32 {
+fn object_label_color(
+    scene: &Scene,
+    object: PresentedObjectRef,
+    is_selected: bool,
+) -> egui::Color32 {
     if scene.is_hidden(object.object_root_id) {
         COLOR_HIDDEN
     } else if is_selected {

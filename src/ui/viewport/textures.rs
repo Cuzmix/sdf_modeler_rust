@@ -1,5 +1,3 @@
-use eframe::wgpu;
-
 use super::ViewportResources;
 
 impl ViewportResources {
@@ -57,7 +55,7 @@ impl ViewportResources {
     }
 
     /// Rebuild voxel texture3D resources for the given number of sculpt nodes.
-    /// Creates 1x1x1 placeholder textures — actual data uploaded later.
+    /// Creates 1x1x1 placeholder textures Ã¢â‚¬â€ actual data uploaded later.
     pub(super) fn rebuild_voxel_textures(&mut self, device: &wgpu::Device, count: usize) {
         let mut textures = Vec::with_capacity(count);
         let mut views = Vec::with_capacity(count);

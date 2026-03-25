@@ -1,5 +1,3 @@
-use eframe::egui;
-
 const SURFACE_FILL: egui::Color32 = egui::Color32::from_rgba_premultiplied(24, 26, 31, 238);
 const SURFACE_STROKE: egui::Color32 = egui::Color32::from_rgba_premultiplied(88, 94, 110, 185);
 const ACTION_FILL: egui::Color32 = egui::Color32::from_rgba_premultiplied(44, 48, 58, 220);
@@ -7,7 +5,8 @@ const ACTION_FILL_ACTIVE: egui::Color32 = egui::Color32::from_rgba_premultiplied
 const ACTION_STROKE: egui::Color32 = egui::Color32::from_rgba_premultiplied(104, 112, 132, 205);
 const ACTION_TEXT: egui::Color32 = egui::Color32::from_rgb(224, 230, 242);
 const TREE_ROW_FILL: egui::Color32 = egui::Color32::from_rgba_premultiplied(34, 38, 46, 196);
-const TREE_ROW_FILL_SELECTED: egui::Color32 = egui::Color32::from_rgba_premultiplied(46, 72, 104, 232);
+const TREE_ROW_FILL_SELECTED: egui::Color32 =
+    egui::Color32::from_rgba_premultiplied(46, 72, 104, 232);
 const TREE_ROW_FILL_DIMMED: egui::Color32 = egui::Color32::from_rgba_premultiplied(28, 30, 36, 176);
 const TREE_ROW_STROKE: egui::Color32 = egui::Color32::from_rgba_premultiplied(76, 82, 96, 176);
 const TREE_ROW_STROKE_SELECTED: egui::Color32 = egui::Color32::from_rgb(118, 164, 224);

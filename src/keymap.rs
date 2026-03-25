@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::fmt;
 
-use eframe::egui;
 use serde::{Deserialize, Serialize};
 
 // ---------------------------------------------------------------------------
@@ -11,6 +10,13 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct KeyCombo {
     pub key: SerializableKey,
+    pub ctrl: bool,
+    pub shift: bool,
+    pub alt: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct KeyboardModifiers {
     pub ctrl: bool,
     pub shift: bool,
     pub alt: bool,
@@ -62,22 +68,8 @@ impl KeyCombo {
         }
     }
 
-    pub fn matches_egui(&self, modifiers: &egui::Modifiers) -> bool {
+    pub fn matches_modifiers(&self, modifiers: KeyboardModifiers) -> bool {
         self.ctrl == modifiers.ctrl && self.shift == modifiers.shift && self.alt == modifiers.alt
-    }
-
-    pub fn egui_key(&self) -> egui::Key {
-        self.key.to_egui()
-    }
-
-    pub fn egui_modifiers(&self) -> egui::Modifiers {
-        egui::Modifiers {
-            alt: self.alt,
-            ctrl: self.ctrl,
-            shift: self.shift,
-            mac_cmd: false,
-            command: self.ctrl,
-        }
     }
 }
 
@@ -169,142 +161,6 @@ pub enum SerializableKey {
 }
 
 impl SerializableKey {
-    /// Try to convert an egui::Key back to a SerializableKey. Returns None for unsupported keys.
-    pub fn from_egui(key: egui::Key) -> Option<Self> {
-        match key {
-            egui::Key::A => Some(Self::A),
-            egui::Key::B => Some(Self::B),
-            egui::Key::C => Some(Self::C),
-            egui::Key::D => Some(Self::D),
-            egui::Key::E => Some(Self::E),
-            egui::Key::F => Some(Self::F),
-            egui::Key::G => Some(Self::G),
-            egui::Key::H => Some(Self::H),
-            egui::Key::I => Some(Self::I),
-            egui::Key::J => Some(Self::J),
-            egui::Key::K => Some(Self::K),
-            egui::Key::L => Some(Self::L),
-            egui::Key::M => Some(Self::M),
-            egui::Key::N => Some(Self::N),
-            egui::Key::O => Some(Self::O),
-            egui::Key::P => Some(Self::P),
-            egui::Key::Q => Some(Self::Q),
-            egui::Key::R => Some(Self::R),
-            egui::Key::S => Some(Self::S),
-            egui::Key::T => Some(Self::T),
-            egui::Key::U => Some(Self::U),
-            egui::Key::V => Some(Self::V),
-            egui::Key::W => Some(Self::W),
-            egui::Key::X => Some(Self::X),
-            egui::Key::Y => Some(Self::Y),
-            egui::Key::Z => Some(Self::Z),
-            egui::Key::Num0 => Some(Self::Num0),
-            egui::Key::Num1 => Some(Self::Num1),
-            egui::Key::Num2 => Some(Self::Num2),
-            egui::Key::Num3 => Some(Self::Num3),
-            egui::Key::Num4 => Some(Self::Num4),
-            egui::Key::Num5 => Some(Self::Num5),
-            egui::Key::Num6 => Some(Self::Num6),
-            egui::Key::Num7 => Some(Self::Num7),
-            egui::Key::Num8 => Some(Self::Num8),
-            egui::Key::Num9 => Some(Self::Num9),
-            egui::Key::F1 => Some(Self::F1),
-            egui::Key::F2 => Some(Self::F2),
-            egui::Key::F3 => Some(Self::F3),
-            egui::Key::F4 => Some(Self::F4),
-            egui::Key::F5 => Some(Self::F5),
-            egui::Key::F6 => Some(Self::F6),
-            egui::Key::F7 => Some(Self::F7),
-            egui::Key::F8 => Some(Self::F8),
-            egui::Key::F9 => Some(Self::F9),
-            egui::Key::F10 => Some(Self::F10),
-            egui::Key::F11 => Some(Self::F11),
-            egui::Key::F12 => Some(Self::F12),
-            egui::Key::Space => Some(Self::Space),
-            egui::Key::Enter => Some(Self::Enter),
-            egui::Key::Escape => Some(Self::Escape),
-            egui::Key::Tab => Some(Self::Tab),
-            egui::Key::Delete => Some(Self::Delete),
-            egui::Key::Home => Some(Self::Home),
-            egui::Key::End => Some(Self::End),
-            egui::Key::ArrowUp => Some(Self::ArrowUp),
-            egui::Key::ArrowDown => Some(Self::ArrowDown),
-            egui::Key::ArrowLeft => Some(Self::ArrowLeft),
-            egui::Key::ArrowRight => Some(Self::ArrowRight),
-            egui::Key::OpenBracket => Some(Self::OpenBracket),
-            egui::Key::CloseBracket => Some(Self::CloseBracket),
-            egui::Key::Slash => Some(Self::Slash),
-            _ => None,
-        }
-    }
-
-    pub fn to_egui(self) -> egui::Key {
-        match self {
-            Self::A => egui::Key::A,
-            Self::B => egui::Key::B,
-            Self::C => egui::Key::C,
-            Self::D => egui::Key::D,
-            Self::E => egui::Key::E,
-            Self::F => egui::Key::F,
-            Self::G => egui::Key::G,
-            Self::H => egui::Key::H,
-            Self::I => egui::Key::I,
-            Self::J => egui::Key::J,
-            Self::K => egui::Key::K,
-            Self::L => egui::Key::L,
-            Self::M => egui::Key::M,
-            Self::N => egui::Key::N,
-            Self::O => egui::Key::O,
-            Self::P => egui::Key::P,
-            Self::Q => egui::Key::Q,
-            Self::R => egui::Key::R,
-            Self::S => egui::Key::S,
-            Self::T => egui::Key::T,
-            Self::U => egui::Key::U,
-            Self::V => egui::Key::V,
-            Self::W => egui::Key::W,
-            Self::X => egui::Key::X,
-            Self::Y => egui::Key::Y,
-            Self::Z => egui::Key::Z,
-            Self::Num0 => egui::Key::Num0,
-            Self::Num1 => egui::Key::Num1,
-            Self::Num2 => egui::Key::Num2,
-            Self::Num3 => egui::Key::Num3,
-            Self::Num4 => egui::Key::Num4,
-            Self::Num5 => egui::Key::Num5,
-            Self::Num6 => egui::Key::Num6,
-            Self::Num7 => egui::Key::Num7,
-            Self::Num8 => egui::Key::Num8,
-            Self::Num9 => egui::Key::Num9,
-            Self::F1 => egui::Key::F1,
-            Self::F2 => egui::Key::F2,
-            Self::F3 => egui::Key::F3,
-            Self::F4 => egui::Key::F4,
-            Self::F5 => egui::Key::F5,
-            Self::F6 => egui::Key::F6,
-            Self::F7 => egui::Key::F7,
-            Self::F8 => egui::Key::F8,
-            Self::F9 => egui::Key::F9,
-            Self::F10 => egui::Key::F10,
-            Self::F11 => egui::Key::F11,
-            Self::F12 => egui::Key::F12,
-            Self::Space => egui::Key::Space,
-            Self::Enter => egui::Key::Enter,
-            Self::Escape => egui::Key::Escape,
-            Self::Tab => egui::Key::Tab,
-            Self::Delete => egui::Key::Delete,
-            Self::Home => egui::Key::Home,
-            Self::End => egui::Key::End,
-            Self::ArrowUp => egui::Key::ArrowUp,
-            Self::ArrowDown => egui::Key::ArrowDown,
-            Self::ArrowLeft => egui::Key::ArrowLeft,
-            Self::ArrowRight => egui::Key::ArrowRight,
-            Self::OpenBracket => egui::Key::OpenBracket,
-            Self::CloseBracket => egui::Key::CloseBracket,
-            Self::Slash => egui::Key::Slash,
-        }
-    }
-
     pub fn label(self) -> &'static str {
         match self {
             Self::A => "A",

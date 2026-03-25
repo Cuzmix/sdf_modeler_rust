@@ -1,4 +1,3 @@
-use eframe::egui;
 use std::collections::HashSet;
 
 use crate::app::actions::{Action, ActionSink};

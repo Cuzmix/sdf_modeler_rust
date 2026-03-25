@@ -1,5 +1,3 @@
-use eframe::egui;
-
 use crate::keymap::{ActionBinding, KeymapConfig};
 
 /// Draw the keyboard shortcuts help window.
@@ -9,7 +7,7 @@ pub fn draw(ctx: &egui::Context, open: &mut bool, keymap: &KeymapConfig) {
         return;
     }
 
-    // Helper: look up a shortcut string from the keymap, falling back to "—" if unbound.
+    // Helper: look up a shortcut string from the keymap, falling back to "Ã¢â‚¬â€" if unbound.
     let sk = |binding: ActionBinding| -> String {
         keymap
             .format_shortcut(binding)

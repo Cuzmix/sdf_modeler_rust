@@ -1,13 +1,14 @@
 use std::sync::atomic::{AtomicBool, AtomicU32};
 use std::sync::Arc;
 
-use eframe::egui;
 use glam::Vec3;
 
 use crate::desktop_dialogs::FileDialogSelection;
+use crate::gpu::camera::CameraUniform;
 use crate::graph::presented_object::resolve_presented_object;
 use crate::graph::scene::{MaterialParams, NodeData};
 use crate::graph::voxel;
+use crate::ui::viewport::ViewportResources;
 
 use super::{BakeRequest, SdfApp};
 #[cfg(not(target_arch = "wasm32"))]
@@ -23,15 +24,164 @@ fn push_platform_unsupported_toast(app: &mut SdfApp, feature: &str) {
 }
 
 impl SdfApp {
+    fn build_viewport_uniform(
+        &self,
+        resources: &ViewportResources,
+        width: u32,
+        height: u32,
+    ) -> CameraUniform {
+        use crate::settings::{BackgroundMode, EnvironmentBackgroundMode};
+
+        let scene_bounds = self.doc.scene.compute_bounds();
+        let viewport = [0.0, 0.0, width as f32, height as f32];
+        let (scene_light_count, scene_light_list, scene_ambient) =
+            crate::gpu::buffers::collect_scene_lights(
+                &self.doc.scene,
+                self.doc.camera.eye(),
+                self.doc.soloed_light,
+                self.last_time as f32,
+            );
+        let volumetric_count = scene_light_list
+            .iter()
+            .filter(|light| light.volumetric[0] > 0.5)
+            .count() as f32;
+        let scene_light_info = [
+            scene_light_count as f32,
+            volumetric_count,
+            self.settings.render.volumetric_steps as f32,
+            0.0,
+        ];
+
+        let mut scene_lights_flat = [[0.0_f32; 4]; 32];
+        let mut scene_light_vol = [[0.0_f32; 4]; 8];
+        for (index, light) in scene_light_list.iter().enumerate() {
+            scene_lights_flat[index * 4] = light.position_type;
+            scene_lights_flat[index * 4 + 1] = light.direction_intensity;
+            scene_lights_flat[index * 4 + 2] = light.color_range;
+            scene_lights_flat[index * 4 + 3] = light.params;
+            scene_light_vol[index] = light.volumetric;
+        }
+
+        let ambient_luminance = scene_ambient
+            .color
+            .dot(glam::Vec3::new(0.2126, 0.7152, 0.0722));
+        let effective_ambient = if ambient_luminance > 0.0 {
+            ambient_luminance
+        } else {
+            self.settings.render.ambient
+        };
+        let ambient_info = [
+            effective_ambient,
+            self.settings.render.environment_specular_intensity(),
+            resources
+                .environment
+                .prefiltered_mip_count
+                .saturating_sub(1) as f32,
+            self.settings.render.ao_mode.gpu_value(),
+        ];
+        let background_info = [
+            match self.settings.render.environment_background_mode {
+                EnvironmentBackgroundMode::Procedural => 0.0,
+                EnvironmentBackgroundMode::Environment => 1.0,
+            },
+            self.settings
+                .render
+                .environment_background_blur
+                .clamp(0.0, 1.0),
+            match self.settings.render.background_mode {
+                BackgroundMode::SkyGradient => 0.0,
+                BackgroundMode::SolidColor => 1.0,
+            },
+            0.0,
+        ];
+        let environment_flags = (if self.settings.render.specular_aa_enabled {
+            1_u32
+        } else {
+            0_u32
+        }) | self.settings.render.local_reflection_mode.flag_bit();
+        let environment_info = [
+            self.settings
+                .render
+                .environment_rotation_degrees
+                .to_radians(),
+            self.settings.render.environment_exposure.exp2(),
+            if resources.environment.has_hdri_background_texture() {
+                1.0
+            } else {
+                0.0
+            },
+            environment_flags as f32,
+        ];
+
+        self.doc.camera.to_uniform(
+            viewport,
+            0.0,
+            0.0,
+            false,
+            scene_bounds,
+            -1.0,
+            0.0,
+            [0.0; 4],
+            [0.0; 4],
+            ambient_info,
+            background_info,
+            [
+                self.settings.render.sky_horizon[0],
+                self.settings.render.sky_horizon[1],
+                self.settings.render.sky_horizon[2],
+                0.0,
+            ],
+            [
+                self.settings.render.sky_zenith[0],
+                self.settings.render.sky_zenith[1],
+                self.settings.render.sky_zenith[2],
+                0.0,
+            ],
+            [
+                self.settings.render.bg_solid_color[0],
+                self.settings.render.bg_solid_color[1],
+                self.settings.render.bg_solid_color[2],
+                0.0,
+            ],
+            environment_info,
+            scene_light_info,
+            scene_lights_flat,
+            scene_light_vol,
+        )
+    }
+
+    pub(super) fn viewport_frame_image(
+        &self,
+        width: u32,
+        height: u32,
+        generation: u64,
+    ) -> super::frontend_models::ViewportFrameImage {
+        let resources = self.gpu.viewport_resources.read();
+        let uniform = self.build_viewport_uniform(&resources, width, height);
+        let rgba8 = resources.screenshot(
+            &self.gpu.render_context.device,
+            &self.gpu.render_context.queue,
+            &uniform,
+            width,
+            height,
+        );
+
+        super::frontend_models::ViewportFrameImage {
+            width,
+            height,
+            rgba8,
+            generation,
+        }
+    }
     // ── Bake ─────────────────────────────────────────────────────────────
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub(super) fn start_async_bake(&mut self, req: BakeRequest, ctx: &egui::Context) {
+    pub(super) fn start_async_bake(&mut self, req: BakeRequest) {
         let scene_clone = self.doc.scene.clone();
         let progress = Arc::new(AtomicU32::new(0));
         let progress_clone = Arc::clone(&progress);
         let (tx, rx) = std::sync::mpsc::channel();
-        let ctx_clone = ctx.clone();
+        let wake = self.wake.clone();
         let resolution = req.resolution;
         let subtree_root = req.subtree_root;
 
@@ -43,7 +193,7 @@ impl SdfApp {
                 progress_clone,
             );
             let _ = tx.send(result);
-            ctx_clone.request_repaint();
+            wake.wake();
         });
 
         self.async_state.bake_status = BakeStatus::InProgress {
@@ -58,7 +208,7 @@ impl SdfApp {
     }
 
     #[cfg(target_arch = "wasm32")]
-    pub(super) fn start_async_bake(&mut self, req: BakeRequest, _ctx: &egui::Context) {
+    pub(super) fn start_async_bake(&mut self, req: BakeRequest) {
         let progress = Arc::new(AtomicU32::new(0));
         let (grid, center) = voxel::bake_subtree_with_progress(
             &self.doc.scene,
@@ -108,7 +258,7 @@ impl SdfApp {
             let selected_host = resolve_presented_object(&self.doc.scene, req.subtree_root)
                 .map(|presented| presented.host_id)
                 .unwrap_or(req.subtree_root);
-            self.ui.node_graph_state.select_single(selected_host);
+            self.ui.selection.select_single(selected_host);
             let extent = self.scene_avg_extent();
             self.doc.active_tool = crate::sculpt::ActiveTool::Sculpt;
             self.doc
@@ -168,8 +318,8 @@ impl SdfApp {
                 .doc
                 .scene
                 .flatten_subtree(subtree_root, grid, center, color);
-            self.ui.node_graph_state.select_single(new_id);
-            self.ui.node_graph_state.needs_initial_rebuild = true;
+            self.ui.selection.select_single(new_id);
+            self.ui.scene_graph_view.needs_initial_rebuild = true;
             let extent = self.scene_avg_extent();
             self.doc.active_tool = crate::sculpt::ActiveTool::Sculpt;
             self.doc
@@ -202,7 +352,7 @@ impl SdfApp {
             let selected_host = resolve_presented_object(&self.doc.scene, subtree_root)
                 .map(|presented| presented.host_id)
                 .unwrap_or(subtree_root);
-            self.ui.node_graph_state.select_single(selected_host);
+            self.ui.selection.select_single(selected_host);
             let extent = self.scene_avg_extent();
             self.doc.active_tool = crate::sculpt::ActiveTool::Sculpt;
             self.doc
@@ -220,9 +370,6 @@ impl SdfApp {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub(super) fn take_screenshot(&mut self) {
-        use crate::settings::{BackgroundMode, EnvironmentBackgroundMode};
-        use crate::ui::viewport::ViewportResources;
-
         let path = match crate::desktop_dialogs::screenshot_dialog() {
             FileDialogSelection::Selected(path) => path,
             FileDialogSelection::Unsupported => {
@@ -234,138 +381,15 @@ impl SdfApp {
             }
         };
 
-        let renderer = self.gpu.render_state.renderer.read();
-        let resources = renderer
-            .callback_resources
-            .get::<ViewportResources>()
-            .unwrap();
+        let frame = self.viewport_frame_image(1920, 1080, 0);
 
-        let width = 1920u32;
-        let height = 1080u32;
-        let scene_bounds = self.doc.scene.compute_bounds();
-        let viewport = [0.0, 0.0, width as f32, height as f32];
-        let (scene_light_count, scene_light_list, scene_ambient) =
-            crate::gpu::buffers::collect_scene_lights(
-                &self.doc.scene,
-                self.doc.camera.eye(),
-                self.doc.soloed_light,
-                self.last_time as f32,
-            );
-        let volumetric_count = scene_light_list
-            .iter()
-            .filter(|l| l.volumetric[0] > 0.5)
-            .count() as f32;
-        let volumetric_steps = self.settings.render.volumetric_steps as f32;
-        let scene_light_info = [
-            scene_light_count as f32,
-            volumetric_count,
-            volumetric_steps,
-            0.0,
-        ];
-        let mut scene_lights_flat = [[0.0_f32; 4]; 32];
-        let mut scene_light_vol = [[0.0_f32; 4]; 8];
-        for (i, light) in scene_light_list.iter().enumerate() {
-            scene_lights_flat[i * 4] = light.position_type;
-            scene_lights_flat[i * 4 + 1] = light.direction_intensity;
-            scene_lights_flat[i * 4 + 2] = light.color_range;
-            scene_lights_flat[i * 4 + 3] = light.params;
-            scene_light_vol[i] = light.volumetric;
-        }
-        let ambient_luminance = scene_ambient
-            .color
-            .dot(glam::Vec3::new(0.2126, 0.7152, 0.0722));
-        let effective_ambient = if ambient_luminance > 0.0 {
-            ambient_luminance
-        } else {
-            self.settings.render.ambient
-        };
-        let ambient_info = [
-            effective_ambient,
-            self.settings.render.environment_specular_intensity(),
-            resources
-                .environment
-                .prefiltered_mip_count
-                .saturating_sub(1) as f32,
-            self.settings.render.ao_mode.gpu_value(),
-        ];
-        let background_info = [
-            match self.settings.render.environment_background_mode {
-                EnvironmentBackgroundMode::Procedural => 0.0,
-                EnvironmentBackgroundMode::Environment => 1.0,
-            },
-            self.settings
-                .render
-                .environment_background_blur
-                .clamp(0.0, 1.0),
-            match self.settings.render.background_mode {
-                BackgroundMode::SkyGradient => 0.0,
-                BackgroundMode::SolidColor => 1.0,
-            },
-            0.0,
-        ];
-        let environment_flags = (if self.settings.render.specular_aa_enabled {
-            1_u32
-        } else {
-            0_u32
-        }) | self.settings.render.local_reflection_mode.flag_bit();
-        let environment_info = [
-            self.settings
-                .render
-                .environment_rotation_degrees
-                .to_radians(),
-            self.settings.render.environment_exposure.exp2(),
-            if resources.environment.has_hdri_background_texture() {
-                1.0
-            } else {
-                0.0
-            },
-            environment_flags as f32,
-        ];
-        let uniform = self.doc.camera.to_uniform(
-            viewport,
-            0.0,
-            0.0,
-            false,
-            scene_bounds,
-            -1.0,
-            0.0,
-            [0.0; 4],
-            [0.0; 4],
-            ambient_info,
-            background_info,
-            [
-                self.settings.render.sky_horizon[0],
-                self.settings.render.sky_horizon[1],
-                self.settings.render.sky_horizon[2],
-                0.0,
-            ],
-            [
-                self.settings.render.sky_zenith[0],
-                self.settings.render.sky_zenith[1],
-                self.settings.render.sky_zenith[2],
-                0.0,
-            ],
-            [
-                self.settings.render.bg_solid_color[0],
-                self.settings.render.bg_solid_color[1],
-                self.settings.render.bg_solid_color[2],
-                0.0,
-            ],
-            environment_info,
-            scene_light_info,
-            scene_lights_flat,
-            scene_light_vol,
-        );
-
-        let pixels = resources.screenshot(
-            &self.gpu.render_state.device,
-            &self.gpu.render_state.queue,
-            &uniform,
-            width,
-            height,
-        );
-
-        if let Err(e) = image::save_buffer(&path, &pixels, width, height, image::ColorType::Rgba8) {
+        if let Err(e) = image::save_buffer(
+            &path,
+            &frame.rgba8,
+            frame.width,
+            frame.height,
+            image::ColorType::Rgba8,
+        ) {
             log::error!("Failed to save screenshot: {}", e);
         } else {
             log::info!("Screenshot saved to {:?}", path);
@@ -380,7 +404,7 @@ impl SdfApp {
     // ── Export ────────────────────────────────────────────────────────────
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub(super) fn start_export(&mut self, ctx: &egui::Context) {
+    pub(super) fn start_export(&mut self) {
         let path = match crate::desktop_dialogs::mesh_export_dialog() {
             FileDialogSelection::Selected(path) => path,
             FileDialogSelection::Unsupported => {
@@ -405,7 +429,7 @@ impl SdfApp {
         let cancelled = Arc::new(AtomicBool::new(false));
         let cancelled_clone = Arc::clone(&cancelled);
         let (tx, rx) = std::sync::mpsc::channel();
-        let ctx_clone = ctx.clone();
+        let wake = self.wake.clone();
 
         std::thread::spawn(move || {
             let mesh = crate::export::marching_cubes(
@@ -418,7 +442,7 @@ impl SdfApp {
                 &cancelled_clone,
             );
             let _ = tx.send(mesh);
-            ctx_clone.request_repaint();
+            wake.wake();
         });
 
         let total = (resolution + 1) + resolution;
@@ -433,7 +457,7 @@ impl SdfApp {
     }
 
     #[cfg(target_arch = "wasm32")]
-    pub(super) fn start_export(&mut self, _ctx: &egui::Context) {
+    pub(super) fn start_export(&mut self) {
         let bounds = self.doc.scene.compute_bounds();
         let padding = 0.5;
         let bounds_min = Vec3::from(bounds.0) - Vec3::splat(padding);
@@ -596,7 +620,7 @@ impl SdfApp {
     /// Start the voxelization thread with the user-chosen resolution.
     /// Called after the user confirms the import dialog.
     #[cfg(not(target_arch = "wasm32"))]
-    pub(super) fn start_import_voxelize(&mut self, resolution: u32, ctx: &egui::Context) {
+    pub(super) fn start_import_voxelize(&mut self, resolution: u32) {
         let Some(dialog) = self.ui.import_dialog.take() else {
             return;
         };
@@ -608,7 +632,7 @@ impl SdfApp {
         let cancelled = Arc::new(AtomicBool::new(false));
         let cancelled_clone = Arc::clone(&cancelled);
         let (tx, rx) = std::sync::mpsc::channel();
-        let ctx_clone = ctx.clone();
+        let wake = self.wake.clone();
 
         std::thread::spawn(move || {
             let result = crate::mesh_import::mesh_to_sdf(&mesh, resolution, &progress_clone);
@@ -616,7 +640,7 @@ impl SdfApp {
                 return;
             }
             let _ = tx.send(result);
-            ctx_clone.request_repaint();
+            wake.wake();
         });
 
         self.async_state.import_status = ImportStatus::InProgress {
@@ -629,7 +653,7 @@ impl SdfApp {
     }
 
     #[cfg(target_arch = "wasm32")]
-    pub(super) fn start_import_voxelize(&mut self, _resolution: u32, _ctx: &egui::Context) {
+    pub(super) fn start_import_voxelize(&mut self, _resolution: u32) {
         log::warn!("Mesh import is not supported on web");
     }
 
@@ -678,8 +702,8 @@ impl SdfApp {
                     desired_resolution,
                 },
             );
-            self.ui.node_graph_state.select_single(sculpt_id);
-            self.ui.node_graph_state.needs_initial_rebuild = true;
+            self.ui.selection.select_single(sculpt_id);
+            self.ui.scene_graph_view.needs_initial_rebuild = true;
             self.doc
                 .sculpt_state
                 .activate_preserving_session(sculpt_id, Some(self.scene_avg_extent()));

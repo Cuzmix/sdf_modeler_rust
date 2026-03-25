@@ -1,5 +1,3 @@
-use eframe::egui;
-
 use crate::app::actions::{Action, ActionSink, SculptConvertMode};
 use crate::app::state::SculptConvertDialog;
 
@@ -96,14 +94,14 @@ pub fn draw(
                 ui.colored_label(
                     egui::Color32::from_rgb(255, 100, 100),
                     format!(
-                        "Warning: {:.0} MB RAM — may cause slowdowns or crashes",
+                        "Warning: {:.0} MB RAM Ã¢â‚¬â€ may cause slowdowns or crashes",
                         mem_mb
                     ),
                 );
             } else if state.resolution > 128 {
                 ui.colored_label(
                     egui::Color32::YELLOW,
-                    "High resolution — sculpting may be slower",
+                    "High resolution Ã¢â‚¬â€ sculpting may be slower",
                 );
             }
 
@@ -111,7 +109,7 @@ pub fn draw(
                 ui.add_space(4.0);
                 ui.colored_label(
                     egui::Color32::from_rgb(255, 180, 80),
-                    "Flatten is destructive — the original nodes will be replaced.",
+                    "Flatten is destructive Ã¢â‚¬â€ the original nodes will be replaced.",
                 );
             }
 

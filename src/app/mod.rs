@@ -1,14 +1,26 @@
+#![allow(dead_code)]
+
 mod action_handler;
 pub(crate) mod actions;
 mod async_tasks;
 mod backend_frame;
 mod egui_frontend;
+mod egui_runtime;
+mod egui_state;
 mod frontend_bridge;
+mod frontend_models;
 mod gpu_sync;
 mod input;
+pub(crate) mod reference_images;
+pub(crate) mod runtime;
 mod sculpt_detail;
 mod sculpting;
+#[cfg(all(not(target_arch = "wasm32"), not(target_os = "android")))]
+mod slint_bridge;
+#[cfg(all(not(target_arch = "wasm32"), not(target_os = "android")))]
+pub(crate) mod slint_frontend;
 pub(crate) mod state;
+pub(crate) mod ui_geometry;
 mod ui_panels;
 
 use crate::compat::{Duration, Instant};
@@ -16,8 +28,6 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU32};
 use std::sync::Arc;
 
-use eframe::egui;
-use eframe::wgpu;
 use glam::Vec3;
 
 use crate::gpu::buffers;
@@ -26,11 +36,11 @@ use crate::graph::scene::NodeId;
 use crate::graph::voxel;
 use crate::sculpt::{ActiveTool, SculptState};
 use crate::settings::Settings;
-use crate::ui::dock::{self};
 use crate::ui::gizmo::{GizmoMode, GizmoSpace, GizmoState};
-use crate::ui::node_graph::NodeGraphState;
 use crate::ui::viewport::ViewportResources;
 
+use egui_state::EguiFrontendState;
+use runtime::{AppRenderContext, ViewportResourceHandle, WakeHandle};
 use state::{
     AsyncState, DocumentState, GizmoContext, GpuSyncState, PerfState, PersistenceState, UiState,
 };
@@ -223,10 +233,14 @@ pub struct SdfApp {
     pub(super) async_state: AsyncState,
     /// UI-only state: layout, dialogs, toasts.
     pub(super) ui: UiState,
+    /// egui-owned editor state, dock layout, and texture caches.
+    pub(in crate::app) egui: EguiFrontendState,
     /// File persistence state.
     pub(super) persistence: PersistenceState,
     /// Performance / profiling state.
     pub(super) perf: PerfState,
+    /// Frontend-provided wake handle for async/background work.
+    pub(super) wake: WakeHandle,
     /// Application settings (render quality, export, etc.).
     pub(super) settings: Settings,
     /// Material preset library (built-in + user-saved).
@@ -301,7 +315,9 @@ impl SdfApp {
                     ActiveTool::Select
                 };
                 self.ui.primary_shell.interaction_mode = if self.doc.sculpt_state.is_active() {
-                    crate::app::state::InteractionMode::Sculpt(self.doc.sculpt_state.selected_brush())
+                    crate::app::state::InteractionMode::Sculpt(
+                        self.doc.sculpt_state.selected_brush(),
+                    )
                 } else {
                     crate::app::state::InteractionMode::Select
                 };
@@ -312,8 +328,8 @@ impl SdfApp {
                     self.gpu.last_environment_fingerprint = 0;
                 }
                 self.doc.history = crate::graph::history::History::new();
-                self.ui.node_graph_state.clear_selection();
-                self.ui.node_graph_state.needs_initial_rebuild = true;
+                self.ui.selection.clear_selection();
+                self.ui.scene_graph_view.needs_initial_rebuild = true;
                 self.gpu.current_structure_key = 0;
                 self.gpu.buffer_dirty = true;
                 self.persistence.current_file_path = None;
@@ -334,12 +350,30 @@ impl SdfApp {
         }
     }
 
-    pub fn new(cc: &eframe::CreationContext<'_>, settings: Settings) -> Self {
-        let render_state = cc
-            .wgpu_render_state
-            .clone()
-            .expect("WGPU render state required");
+    pub fn new_from_egui(
+        render_state: &egui_wgpu::RenderState,
+        ctx: &egui::Context,
+        settings: Settings,
+    ) -> Self {
+        let render_context = egui_runtime::app_render_context_from_egui(render_state);
+        let wake = egui_runtime::wake_handle_from_egui(ctx);
+        let app = Self::new_from_runtime(render_context, wake, settings);
 
+        {
+            let mut renderer = render_state.renderer.write();
+            renderer
+                .callback_resources
+                .insert(app.gpu.viewport_resources.clone());
+        }
+
+        app
+    }
+
+    pub fn new_from_runtime(
+        render_context: AppRenderContext,
+        wake: WakeHandle,
+        settings: Settings,
+    ) -> Self {
         #[cfg(not(target_arch = "wasm32"))]
         let recovery_meta = crate::io::read_recovery_meta();
         #[cfg(not(target_arch = "wasm32"))]
@@ -357,30 +391,27 @@ impl SdfApp {
         let structure_key = scene.structure_key();
 
         let resources = ViewportResources::new(
-            &render_state.device,
-            &render_state.adapter,
-            render_state.target_format,
+            &render_context.device,
+            &render_context.adapter,
+            render_context.target_format,
             &shader_src,
             &pick_shader_src,
         );
+        let viewport_resources = ViewportResourceHandle::new(resources);
 
         // Upload initial scene buffer
         let (voxel_data, voxel_offsets) = buffers::build_voxel_buffer(&scene);
         let empty_selection = std::collections::HashSet::new();
         let node_data = buffers::build_node_buffer(&scene, &empty_selection, &voxel_offsets);
         {
-            let mut renderer = render_state.renderer.write();
-            renderer.callback_resources.insert(resources);
-        }
-        {
-            let mut renderer = render_state.renderer.write();
-            let res = renderer
-                .callback_resources
-                .get_mut::<ViewportResources>()
-                .unwrap();
-            res.rebuild_environment(&render_state.device, &render_state.queue, &settings.render);
-            res.update_scene_buffer(&render_state.device, &render_state.queue, &node_data);
-            res.update_voxel_buffer(&render_state.device, &render_state.queue, &voxel_data);
+            let mut res = viewport_resources.write();
+            res.rebuild_environment(
+                &render_context.device,
+                &render_context.queue,
+                &settings.render,
+            );
+            res.update_scene_buffer(&render_context.device, &render_context.queue, &node_data);
+            res.update_voxel_buffer(&render_context.device, &render_context.queue, &voxel_data);
         }
 
         let mut settings = settings;
@@ -410,7 +441,8 @@ impl SdfApp {
                 gizmo_visible: true,
             },
             gpu: GpuSyncState {
-                render_state,
+                render_context,
+                viewport_resources,
                 current_structure_key: structure_key,
                 buffer_dirty: false, // initial upload already done above
                 last_data_fingerprint: 0,
@@ -436,9 +468,9 @@ impl SdfApp {
             },
             ui: UiState {
                 primary_shell: state::PrimaryShellState::default(),
-                dock_state: dock::create_primary_shell_dock(),
-                node_graph_state: NodeGraphState::new(),
-                light_graph_state: NodeGraphState::new(),
+                expert_panels: state::ExpertPanelRegistry::default(),
+                selection: state::SceneSelectionState::default(),
+                scene_graph_view: state::SceneGraphViewState::default(),
                 show_debug: false,
                 show_help: false,
                 show_export_dialog: false,
@@ -462,13 +494,14 @@ impl SdfApp {
                 last_light_warning_count: None,
                 show_recovery_dialog,
                 recovery_summary,
-                reference_images: crate::ui::reference_image::ReferenceImageManager::default(),
+                reference_images: crate::app::reference_images::ReferenceImageStore::default(),
                 sculpt_brush_adjust: None,
                 show_distance_readout: false,
                 measurement_mode: false,
                 measurement_points: Vec::new(),
                 multi_transform_edit: crate::app::state::MultiTransformSessionState::default(),
             },
+            egui: EguiFrontendState::default(),
             persistence: PersistenceState {
                 current_file_path: None,
                 scene_dirty: false,
@@ -480,22 +513,39 @@ impl SdfApp {
                 resolution_upgrade_pending: false,
                 composite_full_update_needed: false,
             },
+            wake,
             settings,
             material_library: crate::material_preset::MaterialLibrary::load(),
             initial_vsync,
             last_time: 0.0,
         }
     }
-}
 
-impl eframe::App for SdfApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    pub fn open_startup_expert_panel(&mut self, panel: state::ExpertPanelKind) {
+        self.egui.set_workspace(
+            actions::WorkspacePreset::Modeling,
+            &mut self.ui.expert_panels,
+        );
+        self.egui
+            .open_expert_panel(&mut self.ui.expert_panels, panel);
+    }
+
+    pub fn run_egui_frame(&mut self, ctx: &egui::Context) {
         let frame_start = Instant::now();
         let frame_input = frontend_bridge::capture_frame_input(ctx);
         let camera_animating = self.run_backend_pre_ui(&frame_input);
 
         let mut action_sink = actions::ActionSink::new();
-        self.collect_keyboard_actions(ctx, &mut action_sink);
+        let triggered_inputs = frontend_bridge::collect_triggered_inputs(
+            ctx,
+            &self.settings.keymap,
+            frontend_bridge::KeyboardActionContext {
+                is_sculpt: self.doc.sculpt_state.is_active(),
+                active_tool: self.doc.active_tool,
+                export_idle: matches!(self.async_state.export_status, ExportStatus::Idle),
+            },
+        );
+        self.collect_keyboard_actions(triggered_inputs, &mut action_sink);
 
         if self.ui.show_recovery_dialog {
             #[cfg(not(target_arch = "wasm32"))]
@@ -527,8 +577,9 @@ impl eframe::App for SdfApp {
         }
 
         let ui_feedback = self.draw_egui_frontend(ctx, frame_input.now_seconds, &mut action_sink);
+        self.process_egui_only_actions(ctx, &mut action_sink);
 
-        self.process_actions(action_sink, ctx);
+        self.process_actions(action_sink);
 
         let frame_commands = self.run_backend_post_ui(&frame_input, camera_animating, ui_feedback);
         frontend_bridge::apply_frame_commands(ctx, &frame_commands);
@@ -537,7 +588,7 @@ impl eframe::App for SdfApp {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn on_exit(&mut self) {
+    pub fn mark_clean_exit(&mut self) {
         self.settings.last_clean_exit = true;
         self.settings.save();
     }

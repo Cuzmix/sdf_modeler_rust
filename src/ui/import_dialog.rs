@@ -1,5 +1,3 @@
-use eframe::egui;
-
 use crate::app::actions::{Action, ActionSink};
 use crate::app::state::ImportDialog;
 
@@ -125,14 +123,14 @@ pub fn draw(
                 ui.colored_label(
                     egui::Color32::from_rgb(255, 100, 100),
                     format!(
-                        "Warning: {:.0} MB RAM — may cause slowdowns or crashes",
+                        "Warning: {:.0} MB RAM Ã¢â‚¬â€ may cause slowdowns or crashes",
                         mem_mb
                     ),
                 );
             } else if state.resolution > 128 {
                 ui.colored_label(
                     egui::Color32::YELLOW,
-                    "High resolution — voxelization will be slower",
+                    "High resolution Ã¢â‚¬â€ voxelization will be slower",
                 );
             }
 
@@ -152,7 +150,7 @@ pub fn draw(
     if do_import {
         let resolution = state.resolution;
         actions.push(Action::CommitImport { resolution });
-        // Don't clear dialog here — start_import_voxelize takes it via .take()
+        // Don't clear dialog here Ã¢â‚¬â€ start_import_voxelize takes it via .take()
     } else if do_cancel {
         *dialog = None;
     }

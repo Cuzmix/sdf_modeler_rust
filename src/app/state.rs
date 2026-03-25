@@ -2,11 +2,9 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use eframe::egui;
-use eframe::egui_wgpu::RenderState;
-use egui_dock::DockState;
 use glam::Vec3;
 
+use crate::app::reference_images::ReferenceImageStore;
 use crate::compat::Instant;
 use crate::gpu::camera::Camera;
 use crate::gpu::picking::PendingPick;
@@ -15,11 +13,10 @@ use crate::graph::scene::{MaterialParams, NodeId, Scene};
 use crate::mesh_import::TriMesh;
 use crate::sculpt::{ActiveTool, BrushMode, SculptState};
 use crate::settings::SelectionBehaviorSettings;
-use crate::ui::dock::Tab;
 use crate::ui::gizmo::{GizmoMode, GizmoSelection, GizmoSpace, GizmoState};
-use crate::ui::node_graph::NodeGraphState;
-use crate::ui::reference_image::ReferenceImageManager;
 
+use super::runtime::{AppRenderContext, ViewportResourceHandle};
+use super::ui_geometry::FloatingPanelBounds;
 use super::{BakeStatus, ExportStatus, FrameTimings, ImportStatus, PickState, Toast};
 
 // ---------------------------------------------------------------------------
@@ -55,7 +52,8 @@ pub struct GizmoContext {
 // ---------------------------------------------------------------------------
 
 pub struct GpuSyncState {
-    pub render_state: RenderState,
+    pub render_context: AppRenderContext,
+    pub viewport_resources: ViewportResourceHandle,
     pub current_structure_key: u64,
     pub buffer_dirty: bool,
     pub last_data_fingerprint: u64,
@@ -170,6 +168,76 @@ pub enum PrimaryShellUtilityTab {
     Advanced,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ExpertPanelKind {
+    NodeGraph,
+    LightGraph,
+    Properties,
+    ReferenceImages,
+    SceneTree,
+    RenderSettings,
+    History,
+    BrushSettings,
+    Lights,
+    LightLinking,
+    SceneStats,
+}
+
+impl ExpertPanelKind {
+    pub const ALL: [Self; 11] = [
+        Self::NodeGraph,
+        Self::LightGraph,
+        Self::Properties,
+        Self::ReferenceImages,
+        Self::SceneTree,
+        Self::RenderSettings,
+        Self::History,
+        Self::BrushSettings,
+        Self::Lights,
+        Self::LightLinking,
+        Self::SceneStats,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::NodeGraph => "Node Graph",
+            Self::LightGraph => "Light Graph",
+            Self::Properties => "Properties",
+            Self::ReferenceImages => "Reference Images",
+            Self::SceneTree => "Scene Tree",
+            Self::RenderSettings => "Render Settings",
+            Self::History => "History",
+            Self::BrushSettings => "Brush Settings",
+            Self::Lights => "Lights",
+            Self::LightLinking => "Light Linking",
+            Self::SceneStats => "Scene Stats",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ExpertPanelRegistry {
+    open: HashSet<ExpertPanelKind>,
+}
+
+impl ExpertPanelRegistry {
+    pub fn is_open(&self, panel: ExpertPanelKind) -> bool {
+        self.open.contains(&panel)
+    }
+
+    pub fn set_open(&mut self, panel: ExpertPanelKind, open: bool) {
+        if open {
+            self.open.insert(panel);
+        } else {
+            self.open.remove(&panel);
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.open.clear();
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InteractionMode {
     Select,
@@ -186,14 +254,6 @@ pub enum ShellPanelKind {
 
 impl ShellPanelKind {
     pub const ALL: [Self; 3] = [Self::Tool, Self::Inspector, Self::Drawer];
-
-    pub const fn dock_tab(self) -> Tab {
-        match self {
-            Self::Tool => Tab::ToolPanel,
-            Self::Inspector => Tab::InspectorPanel,
-            Self::Drawer => Tab::DrawerPanel,
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -220,7 +280,7 @@ pub enum ShellPanelPresentation {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ShellWindowState {
     pub presentation: ShellPanelPresentation,
-    pub last_floating_rect: Option<egui::Rect>,
+    pub last_floating_rect: Option<FloatingPanelBounds>,
     pub floating_revision: u64,
 }
 
@@ -245,7 +305,7 @@ impl ShellWindowState {
         matches!(self.presentation, ShellPanelPresentation::Docked)
     }
 
-    pub fn show_floating(&mut self, forced_rect: Option<egui::Rect>) {
+    pub fn show_floating(&mut self, forced_rect: Option<FloatingPanelBounds>) {
         if let Some(rect) = forced_rect {
             self.last_floating_rect = Some(rect);
             self.floating_revision = self.floating_revision.wrapping_add(1);
@@ -261,7 +321,7 @@ impl ShellWindowState {
         self.presentation = ShellPanelPresentation::Docked;
     }
 
-    pub fn remember_floating_rect(&mut self, rect: egui::Rect) {
+    pub fn remember_floating_rect(&mut self, rect: FloatingPanelBounds) {
         self.last_floating_rect = Some(rect);
     }
 }
@@ -326,18 +386,6 @@ impl PrimaryShellState {
 
     pub fn toggle_tool_rail(&mut self) {
         self.tool_rail_visible = !self.tool_rail_visible;
-    }
-
-    pub fn reconcile_docked_panels(&mut self, dock_state: &DockState<Tab>) {
-        for panel in ShellPanelKind::ALL {
-            let exists = dock_state.find_tab(&panel.dock_tab()).is_some();
-            let shell_state = self.panel_mut(panel);
-            if exists {
-                shell_state.dock();
-            } else if shell_state.is_docked() {
-                shell_state.hide();
-            }
-        }
     }
 
     pub fn reset_layout(&mut self) {
@@ -445,11 +493,66 @@ impl ImportDialog {
     }
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SceneSelectionState {
+    pub selected: Option<NodeId>,
+    pub selected_set: HashSet<NodeId>,
+}
+
+impl SceneSelectionState {
+    pub fn select_single(&mut self, id: NodeId) {
+        self.selected = Some(id);
+        self.selected_set.clear();
+        self.selected_set.insert(id);
+    }
+
+    pub fn toggle_select(&mut self, id: NodeId) {
+        if self.selected_set.remove(&id) {
+            if self.selected == Some(id) {
+                self.selected = self.selected_set.iter().copied().min();
+            }
+        } else {
+            self.selected_set.insert(id);
+            self.selected = Some(id);
+        }
+    }
+
+    pub fn clear_selection(&mut self) {
+        self.selected = None;
+        self.selected_set.clear();
+    }
+
+    #[cfg(test)]
+    pub fn is_selected(&self, id: NodeId) -> bool {
+        self.selected_set.contains(&id)
+    }
+
+    #[cfg(test)]
+    pub fn selected_count(&self) -> usize {
+        self.selected_set.len()
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SceneGraphViewState {
+    pub needs_initial_rebuild: bool,
+    pub pending_center_node: Option<NodeId>,
+}
+
+impl Default for SceneGraphViewState {
+    fn default() -> Self {
+        Self {
+            needs_initial_rebuild: true,
+            pending_center_node: None,
+        }
+    }
+}
+
 pub struct UiState {
     pub primary_shell: PrimaryShellState,
-    pub dock_state: DockState<Tab>,
-    pub node_graph_state: NodeGraphState,
-    pub light_graph_state: NodeGraphState,
+    pub expert_panels: ExpertPanelRegistry,
+    pub selection: SceneSelectionState,
+    pub scene_graph_view: SceneGraphViewState,
     pub show_debug: bool,
     pub show_help: bool,
     pub show_export_dialog: bool,
@@ -483,7 +586,7 @@ pub struct UiState {
     /// Recovery modal context built from autosave.meta.
     pub recovery_summary: String,
     /// Reference images used as modeling guides in the viewport.
-    pub reference_images: ReferenceImageManager,
+    pub reference_images: ReferenceImageStore,
     /// Active Blender-style modal brush adjustment (`F` / `Shift+F`).
     pub sculpt_brush_adjust: Option<SculptBrushAdjustState>,
     /// Show a cursor-relative SDF distance readout in the viewport.
@@ -524,8 +627,11 @@ pub struct PerfState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::egui_state::reconcile_docked_panels;
     use crate::mesh_import::TriMesh;
     use crate::settings::{GroupRotateDirection, SelectionBehaviorSettings};
+    use crate::ui::dock::Tab;
+    use egui_dock::DockState;
 
     /// Create a simple test mesh (two triangles forming a 2x2x0 quad).
     fn test_quad_mesh(num_triangles: usize) -> TriMesh {
@@ -674,7 +780,10 @@ mod tests {
         assert!(state.tool_panel.is_floating());
         assert!(state.inspector_panel.is_floating());
         assert!(state.drawer_panel.is_hidden());
-        assert_eq!(state.active_inspector_tab, PrimaryShellInspectorTab::Properties);
+        assert_eq!(
+            state.active_inspector_tab,
+            PrimaryShellInspectorTab::Properties
+        );
         assert_eq!(state.active_utility_tab, PrimaryShellUtilityTab::History);
         assert!(state.tool_rail_visible);
         assert!(state.utility_strip_visible);
@@ -721,7 +830,10 @@ mod tests {
         assert!(state.tool_panel.is_floating());
         assert!(state.inspector_panel.is_floating());
         assert!(state.drawer_panel.is_hidden());
-        assert_eq!(state.active_inspector_tab, PrimaryShellInspectorTab::Properties);
+        assert_eq!(
+            state.active_inspector_tab,
+            PrimaryShellInspectorTab::Properties
+        );
         assert_eq!(state.active_utility_tab, PrimaryShellUtilityTab::History);
         assert!(!state.brush_advanced_open);
         assert!(!state.modeling_commands_open);
@@ -740,9 +852,50 @@ mod tests {
         state.tool_panel.dock();
         let dock_state = DockState::new(vec![Tab::Viewport]);
 
-        state.reconcile_docked_panels(&dock_state);
+        reconcile_docked_panels(&mut state, &dock_state);
 
         assert!(state.tool_panel.is_hidden());
     }
 
+    #[test]
+    fn scene_selection_select_single_sets_primary_and_set() {
+        let mut state = SceneSelectionState::default();
+
+        state.select_single(5);
+
+        assert_eq!(state.selected, Some(5));
+        assert_eq!(state.selected_count(), 1);
+        assert!(state.is_selected(5));
+    }
+
+    #[test]
+    fn scene_selection_toggle_select_removes_primary_to_lowest_remaining() {
+        let mut state = SceneSelectionState::default();
+        state.select_single(2);
+        state.toggle_select(4);
+        state.toggle_select(2);
+
+        assert_eq!(state.selected, Some(4));
+        assert_eq!(state.selected_count(), 1);
+        assert!(state.is_selected(4));
+    }
+
+    #[test]
+    fn scene_selection_clear_selection_empties_primary_and_set() {
+        let mut state = SceneSelectionState::default();
+        state.select_single(3);
+
+        state.clear_selection();
+
+        assert_eq!(state.selected, None);
+        assert_eq!(state.selected_count(), 0);
+    }
+
+    #[test]
+    fn scene_graph_view_defaults_to_initial_rebuild() {
+        let state = SceneGraphViewState::default();
+
+        assert!(state.needs_initial_rebuild);
+        assert!(state.pending_center_node.is_none());
+    }
 }

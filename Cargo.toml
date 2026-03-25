@@ -2,6 +2,7 @@
 name = "sdf_modeler"
 version = "0.1.0"
 edition = "2021"
+default-run = "sdf_modeler"
 
 # Fast debug builds: opt-level=2 gives ~90% of release perf with debug symbols + fast compile
 [profile.dev]
@@ -15,10 +16,12 @@ debug = true  # include debug symbols for profiling (flamegraph, samply)
 name = "sdf_modeler_lib"
 crate-type = ["rlib", "cdylib"]
 
+[features]
+default = []
+
 [dependencies]
-eframe = { version = "0.29", default-features = false, features = [
-    "accesskit", "default_fonts", "wgpu", "wayland", "x11", "android-native-activity",
-] }
+egui = "0.29"
+egui-wgpu = "0.29"
 egui_dock = "0.14"
 egui_node_graph2 = "0.7"
 glam = { version = "0.29", features = ["serde"] }
@@ -27,12 +30,21 @@ half = { version = "2", features = ["bytemuck"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 log = "0.4"
+wgpu = "22.1"
 
 [dev-dependencies]
 naga = { version = "22.1", features = ["wgsl-in"] }
 
 [target.'cfg(all(not(target_arch = "wasm32"), not(target_os = "android")))'.dependencies]
 rfd = "0.15"
+slint = { version = "1.15.1", default-features = false, features = [
+    "std",
+    "backend-winit",
+    "renderer-software",
+    "software-renderer-systemfonts",
+    "compat-1-2",
+] }
+pollster = "0.4"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 env_logger = "0.11"
@@ -41,9 +53,19 @@ image = "0.25"
 jiff = "0.2"
 
 [target.'cfg(target_os = "android")'.dependencies]
+eframe = { version = "0.29", default-features = false, features = [
+    "accesskit",
+    "default_fonts",
+    "wgpu",
+    "android-native-activity",
+] }
 winit = { version = "0.30.12", default-features = false, features = ["android-native-activity"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+eframe = { version = "0.29", default-features = false, features = [
+    "default_fonts",
+    "wgpu",
+] }
 web-time = "1"
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
@@ -88,3 +110,7 @@ value = "sdf_modeler_lib"
 [[package.metadata.android.application.activity.intent_filter]]
 actions = ["android.intent.action.MAIN"]
 categories = ["android.intent.category.LAUNCHER"]
+
+[[bin]]
+name = "slint_host"
+path = "src/bin/slint_host.rs"

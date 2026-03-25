@@ -1,5 +1,3 @@
-use eframe::wgpu;
-
 use crate::gpu::buffers::SdfNodeGpu;
 use crate::gpu::camera::CameraUniform;
 use crate::gpu::picking::{PendingPick, PickResult};
@@ -141,7 +139,7 @@ impl ViewportResources {
 
         queue.submit(std::iter::once(encoder.finish()));
 
-        // Request async map Ã¢â‚¬â€ caller polls with device.poll(Poll)
+        // Request async map ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â caller polls with device.poll(Poll)
         let buffer_slice = self.pick_staging_buffer.slice(..);
         let (tx, rx) = std::sync::mpsc::channel();
         buffer_slice.map_async(wgpu::MapMode::Read, move |result| {

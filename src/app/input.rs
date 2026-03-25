@@ -1,19 +1,23 @@
-use eframe::egui;
-
 use crate::keymap::ActionBinding;
-use crate::sculpt::{ActiveTool, BrushMode};
+use crate::sculpt::BrushMode;
 use crate::ui::gizmo::GizmoMode;
 
 use super::actions::{Action, ActionSink};
 use super::state::InteractionMode;
-use super::{ExportStatus, SdfApp};
+use super::SdfApp;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum TriggeredInput {
+    Binding(ActionBinding),
+    SaveBookmark(usize),
+}
 
 impl SdfApp {
     pub(super) fn delete_selected(&mut self) {
-        if let Some(sel) = self.ui.node_graph_state.selected {
+        if let Some(sel) = self.ui.selection.selected {
             self.doc.scene.remove_node(sel);
-            self.ui.node_graph_state.clear_selection();
-            self.ui.node_graph_state.needs_initial_rebuild = true;
+            self.ui.selection.clear_selection();
+            self.ui.scene_graph_view.needs_initial_rebuild = true;
             self.doc.sculpt_state = crate::sculpt::SculptState::new_inactive();
             self.sync_interaction_mode_after_sculpt_exit();
             self.gpu.buffer_dirty = true;
@@ -21,99 +25,16 @@ impl SdfApp {
     }
 
     /// Collect keyboard-triggered actions into the action sink.
-    /// Iterates over the configurable keymap instead of hardcoded if-chains.
+    /// Frontend bridges decode toolkit input into `TriggeredInput` values first.
     pub(super) fn collect_keyboard_actions(
         &mut self,
-        ctx: &egui::Context,
+        triggered_inputs: Vec<TriggeredInput>,
         actions: &mut ActionSink,
     ) {
-        let is_sculpt = self.doc.sculpt_state.is_active();
-
-        // Phase 1: detect which bindings were pressed (immutable self access).
-        // We collect into a Vec so that the dispatch phase can mutate self freely.
-        let mut triggered: Vec<ActionBinding> = Vec::new();
-
-        for (&binding, combo) in self.settings.keymap.bindings() {
-            // --- Context filtering ---
-
-            // Sculpt-only bindings require active sculpt mode
-            if binding.is_sculpt_only() && !is_sculpt {
-                continue;
-            }
-            // CycleShadingMode (Z) conflicts with SculptSymmetryZ in sculpt mode
-            if is_sculpt && matches!(binding, ActionBinding::CycleShadingMode) {
-                continue;
-            }
-            // In sculpt mode, F is repurposed for Blender-style brush radius modal editing.
-            if is_sculpt && matches!(binding, ActionBinding::FocusSelected) {
-                continue;
-            }
-            // Turntable toggle should not fire when a text field is focused
-            if matches!(binding, ActionBinding::ToggleTurntable) && ctx.wants_keyboard_input() {
-                continue;
-            }
-            // Export requires idle status
-            if matches!(binding, ActionBinding::ShowExportDialog)
-                && !matches!(self.async_state.export_status, ExportStatus::Idle)
-            {
-                continue;
-            }
-            // Quick sculpt only from select tool
-            if matches!(binding, ActionBinding::QuickSculptMode)
-                && self.doc.active_tool != ActiveTool::Select
-            {
-                continue;
-            }
-            // Exit sculpt only when in sculpt tool
-            if matches!(binding, ActionBinding::ExitSculptMode)
-                && self.doc.active_tool != ActiveTool::Sculpt
-            {
-                continue;
-            }
-
-            // --- Key press detection ---
-
-            let pressed = match binding {
-                // Clipboard and command palette use consume_key to prevent egui interference
-                ActionBinding::Copy
-                | ActionBinding::Paste
-                | ActionBinding::Duplicate
-                | ActionBinding::ToggleCommandPalette => {
-                    ctx.input_mut(|i| i.consume_key(combo.egui_modifiers(), combo.egui_key()))
-                }
-                _ => ctx
-                    .input(|i| i.key_pressed(combo.egui_key()) && combo.matches_egui(&i.modifiers)),
-            };
-
-            if pressed {
-                triggered.push(binding);
-            }
-        }
-
-        // Phase 2: dispatch triggered bindings (mutable self access)
-        for binding in triggered {
-            self.dispatch_binding(binding, actions);
-        }
-
-        // Camera bookmarks (Ctrl+1-9) — not in the keymap, kept inline
-        if !is_sculpt {
-            for (idx, key) in [
-                egui::Key::Num1,
-                egui::Key::Num2,
-                egui::Key::Num3,
-                egui::Key::Num4,
-                egui::Key::Num5,
-                egui::Key::Num6,
-                egui::Key::Num7,
-                egui::Key::Num8,
-                egui::Key::Num9,
-            ]
-            .iter()
-            .enumerate()
-            {
-                if ctx.input(|i| i.modifiers.ctrl && !i.modifiers.shift && i.key_pressed(*key)) {
-                    actions.push(Action::SaveBookmark(idx));
-                }
+        for triggered_input in triggered_inputs {
+            match triggered_input {
+                TriggeredInput::Binding(binding) => self.dispatch_binding(binding, actions),
+                TriggeredInput::SaveBookmark(index) => actions.push(Action::SaveBookmark(index)),
             }
         }
     }
@@ -180,13 +101,11 @@ impl SdfApp {
                 actions.push(Action::ToggleAllReferenceImages);
             }
             ActionBinding::QuickSculptMode => {
-                // Context already checked in phase 1
                 actions.push(Action::SetInteractionMode(InteractionMode::Sculpt(
                     self.doc.sculpt_state.selected_brush(),
                 )));
             }
             ActionBinding::ExitSculptMode => {
-                // Context already checked in phase 1
                 actions.push(Action::SetInteractionMode(InteractionMode::Select));
             }
 

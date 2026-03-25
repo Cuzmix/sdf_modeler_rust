@@ -1,12 +1,10 @@
-use eframe::egui;
-
 use crate::graph::scene::{CsgOp, LightType, ModifierKind, NodeId, SdfPrimitive};
 use crate::sculpt::ActiveTool;
 use crate::settings::SelectionBehaviorSettings;
-use crate::ui::dock::Tab;
 use crate::ui::gizmo::GizmoMode;
 
-use super::state::{InteractionMode, ShellPanelKind};
+use super::state::{ExpertPanelKind, InteractionMode, ShellPanelKind};
+use super::ui_geometry::FloatingPanelBounds;
 use super::BakeRequest;
 
 /// Industry-standard lighting presets that configure scene Key + Fill lights.
@@ -216,12 +214,12 @@ pub enum Action {
     SetWorkspace(WorkspacePreset),
     DockShellPanel {
         panel: ShellPanelKind,
-        rect: egui::Rect,
+        rect: FloatingPanelBounds,
     },
     UndockShellPanel(ShellPanelKind),
     HideShellPanel(ShellPanelKind),
     ResetPrimaryShellLayout,
-    ToggleDockTab(Tab),
+    ToggleExpertPanel(ExpertPanelKind),
     RemoveAttachedSculpt {
         host: NodeId,
     },

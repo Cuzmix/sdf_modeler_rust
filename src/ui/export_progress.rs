@@ -1,7 +1,5 @@
 use std::sync::atomic::Ordering;
 
-use eframe::egui;
-
 use crate::app::{ExportStatus, ImportStatus};
 
 /// Draw a dimmed overlay behind modals.

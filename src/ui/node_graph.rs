@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use eframe::egui::{self, Color32};
+use egui::{self, Color32};
 use egui_node_graph2::*;
 
 use crate::app::actions::{Action, ActionSink};
@@ -1707,6 +1707,7 @@ impl NodeGraphState {
     }
 
     /// Toggle a node in/out of the selection set (Ctrl+click).
+    #[allow(dead_code)]
     pub fn toggle_select(&mut self, id: SceneNodeId) {
         if self.selected_set.remove(&id) {
             // Was selected - deselected. Update primary if needed.

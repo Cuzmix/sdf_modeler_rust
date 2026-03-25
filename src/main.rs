@@ -1,5 +1,5 @@
 #[cfg(not(target_os = "android"))]
-fn main() -> eframe::Result<()> {
+fn main() -> Result<(), String> {
     sdf_modeler_lib::run_native()
 }
 

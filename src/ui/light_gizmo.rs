@@ -1,4 +1,4 @@
-use eframe::egui::{self, Color32, Pos2, Rect, Stroke};
+use egui::{self, Color32, Pos2, Rect, Stroke};
 use glam::Vec3;
 use std::collections::HashMap;
 
@@ -143,7 +143,7 @@ fn collect_lights(scene: &Scene, parent_map: &HashMap<NodeId, NodeId>) -> Vec<Li
     lights
 }
 
-/// Inverse Euler XYZ rotation (applies -Z, -Y, -X — matches gizmo drag convention).
+/// Inverse Euler XYZ rotation (applies -Z, -Y, -X â€” matches gizmo drag convention).
 fn inverse_rotate_euler(p: Vec3, r: Vec3) -> Vec3 {
     let mut q = p;
     let (sz, cz) = (-r.z).sin_cos();
@@ -614,7 +614,7 @@ fn draw_array_wireframe(
 // Public API
 // ---------------------------------------------------------------------------
 
-/// Result of light gizmo interaction — the transform_id of a clicked light billboard.
+/// Result of light gizmo interaction â€” the transform_id of a clicked light billboard.
 pub struct LightGizmoResult {
     pub clicked_transform_id: Option<NodeId>,
 }
@@ -813,7 +813,7 @@ pub fn draw_and_interact(
                     );
                 }
                 LightType::Ambient => {
-                    // Ambient has no spatial extent — no wireframe gizmo needed.
+                    // Ambient has no spatial extent â€” no wireframe gizmo needed.
                     // Just show a highlight ring around the billboard icon.
                     painter.circle_stroke(
                         screen_pos,

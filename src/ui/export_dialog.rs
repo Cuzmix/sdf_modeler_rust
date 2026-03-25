@@ -1,11 +1,9 @@
-use eframe::egui;
-
 use crate::app::ExportStatus;
 use crate::settings::Settings;
 
 /// Result of drawing the export dialog this frame.
 pub enum ExportDialogResult {
-    /// No action — dialog still open or not visible.
+    /// No action Ã¢â‚¬â€ dialog still open or not visible.
     None,
     /// User clicked Export.
     Export,
@@ -87,7 +85,7 @@ pub fn draw(
             });
             settings.export_resolution = (res_i32 as u32).clamp(16, max_res);
 
-            // Marching cubes estimate: surface-crossing cells ≈ 6*N^2 (sphere-like),
+            // Marching cubes estimate: surface-crossing cells Ã¢â€°Ë† 6*N^2 (sphere-like),
             // each generates ~2 triangles and ~3 unique vertices on average.
             let res = settings.export_resolution as u64;
             let voxels = res.pow(3);
@@ -110,14 +108,14 @@ pub fn draw(
                 ui.colored_label(
                     egui::Color32::from_rgb(255, 100, 100),
                     format!(
-                        "Warning: {:.0} MB — export may take very long or run out of memory",
+                        "Warning: {:.0} MB Ã¢â‚¬â€ export may take very long or run out of memory",
                         mem_mb
                     ),
                 );
             } else if settings.export_resolution > 256 {
                 ui.colored_label(
                     egui::Color32::YELLOW,
-                    "High resolution — export may take longer",
+                    "High resolution Ã¢â‚¬â€ export may take longer",
                 );
             }
             ui.add_space(4.0);

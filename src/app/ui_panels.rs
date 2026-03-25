@@ -1,7 +1,5 @@
 use std::sync::atomic::Ordering;
 
-use eframe::egui;
-
 use crate::sculpt::{BrushMode, SculptState};
 
 use super::actions::{Action, ActionSink};
@@ -10,7 +8,7 @@ use super::{BakeStatus, ExportStatus, ImportStatus, SdfApp};
 impl SdfApp {
     /// Draw the menu bar and push any triggered actions into the action sink.
     /// The menu bar reads state to show enabled/disabled items, and emits
-    /// actions for anything the user clicks — no direct state mutation.
+    /// actions for anything the user clicks Ã¢â‚¬â€ no direct state mutation.
     pub(super) fn show_menu_bar(&mut self, ctx: &egui::Context, actions: &mut ActionSink) {
         let mut action_open_recent: Option<String> = None;
 
@@ -107,7 +105,7 @@ impl SdfApp {
                         ui.close_menu();
                     }
                     ui.separator();
-                    let has_sel = self.ui.node_graph_state.selected.is_some();
+                    let has_sel = self.ui.selection.selected.is_some();
                     if ui
                         .add_enabled(has_sel, egui::Button::new("Copy").shortcut_text("Ctrl+C"))
                         .clicked()
@@ -148,7 +146,7 @@ impl SdfApp {
 
                 // --- View ---
                 ui.menu_button("View", |ui| {
-                    let has_sel = self.ui.node_graph_state.selected.is_some();
+                    let has_sel = self.ui.selection.selected.is_some();
                     if ui
                         .add_enabled(
                             has_sel,
@@ -222,11 +220,10 @@ impl SdfApp {
                     });
                     ui.separator();
                     ui.menu_button("Panels", |ui| {
-                        use crate::ui::dock::Tab;
-                        for tab in Tab::EXPERT_TABS {
-                            let is_open = self.ui.dock_state.find_tab(tab).is_some();
-                            if ui.selectable_label(is_open, tab.label()).clicked() {
-                                actions.push(Action::ToggleDockTab(tab.clone()));
+                        for panel in crate::app::state::ExpertPanelKind::ALL {
+                            let is_open = self.ui.expert_panels.is_open(panel);
+                            if ui.selectable_label(is_open, panel.label()).clicked() {
+                                actions.push(Action::ToggleExpertPanel(panel));
                                 ui.close_menu();
                             }
                         }
@@ -351,7 +348,7 @@ impl SdfApp {
                     ui.separator();
 
                     // Selection info
-                    if let Some(sel) = self.ui.node_graph_state.selected {
+                    if let Some(sel) = self.ui.selection.selected {
                         if let Some(node) = self.doc.scene.nodes.get(&sel) {
                             ui.weak(&node.name);
                         }

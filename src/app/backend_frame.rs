@@ -44,7 +44,7 @@ impl SdfApp {
 
         self.doc
             .history
-            .begin_frame(&self.doc.scene, self.ui.node_graph_state.selected);
+            .begin_frame(&self.doc.scene, self.ui.selection.selected);
 
         self.sync_sculpt_state();
         self.poll_async_bake();
@@ -67,14 +67,9 @@ impl SdfApp {
         }
 
         // Reset pivot when selection changes.
-        let mut current_selection_ids: Vec<_> = self
-            .ui
-            .node_graph_state
-            .selected_set
-            .iter()
-            .copied()
-            .collect();
-        if let Some(primary_selected) = self.ui.node_graph_state.selected {
+        let mut current_selection_ids: Vec<_> =
+            self.ui.selection.selected_set.iter().copied().collect();
+        if let Some(primary_selected) = self.ui.selection.selected {
             if !current_selection_ids.contains(&primary_selected) {
                 current_selection_ids.push(primary_selected);
             }
@@ -103,10 +98,10 @@ impl SdfApp {
         let mut commands = FrameCommands::default();
 
         // Defensive cleanup: clear stale selection after deletion.
-        if let Some(selected_node) = self.ui.node_graph_state.selected {
+        if let Some(selected_node) = self.ui.selection.selected {
             if !self.doc.scene.nodes.contains_key(&selected_node) {
-                self.ui.node_graph_state.clear_selection();
-                self.ui.node_graph_state.needs_initial_rebuild = true;
+                self.ui.selection.clear_selection();
+                self.ui.scene_graph_view.needs_initial_rebuild = true;
                 self.doc.sculpt_state = SculptState::new_inactive();
                 self.sync_interaction_mode_after_sculpt_exit();
                 self.gpu.buffer_dirty = true;
@@ -221,7 +216,7 @@ impl SdfApp {
             || ui_feedback.gizmo_drag_active;
         self.doc.history.end_frame(
             &self.doc.scene,
-            self.ui.node_graph_state.selected,
+            self.ui.selection.selected,
             is_anything_dragged,
         );
 

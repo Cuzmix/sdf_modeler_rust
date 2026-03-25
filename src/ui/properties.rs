@@ -1,6 +1,5 @@
 use std::collections::HashSet;
 
-use eframe::egui;
 use glam::Vec3;
 
 use crate::app::actions::{Action, ActionSink};
@@ -560,7 +559,7 @@ fn draw_multi_properties(ui: &mut egui::Ui, ctx: &mut MultiPropertiesContext<'_>
         egui::CollapsingHeader::new("Material")
             .default_open(true)
             .show(ui, |ui| {
-                // Color — use first selected node's color as starting value
+                // Color Ã¢â‚¬â€ use first selected node's color as starting value
                 let first_color = ids
                     .iter()
                     .find_map(|id| scene.nodes.get(id).and_then(|n| get_node_color(&n.data)))
@@ -581,7 +580,7 @@ fn draw_multi_properties(ui: &mut egui::Ui, ctx: &mut MultiPropertiesContext<'_>
                     }
                 }
 
-                // Roughness — use first node's value
+                // Roughness Ã¢â‚¬â€ use first node's value
                 let first_roughness = ids
                     .iter()
                     .find_map(|id| {
@@ -604,7 +603,7 @@ fn draw_multi_properties(ui: &mut egui::Ui, ctx: &mut MultiPropertiesContext<'_>
                     }
                 }
 
-                // Metallic — use first node's value
+                // Metallic Ã¢â‚¬â€ use first node's value
                 let first_metallic = ids
                     .iter()
                     .find_map(|id| scene.nodes.get(id).and_then(|n| get_node_metallic(&n.data)))
@@ -622,7 +621,7 @@ fn draw_multi_properties(ui: &mut egui::Ui, ctx: &mut MultiPropertiesContext<'_>
                     }
                 }
 
-                // Reflectance F0 — use first node's value
+                // Reflectance F0 Ã¢â‚¬â€ use first node's value
                 let first_reflectance_f0 = ids
                     .iter()
                     .find_map(|id| {
@@ -1173,14 +1172,14 @@ pub fn draw(
                         ui.colored_label(
                             egui::Color32::from_rgb(255, 100, 100),
                             format!(
-                                "Warning: {:.0} MB RAM — may cause slowdowns or crashes",
+                                "Warning: {:.0} MB RAM Ã¢â‚¬â€ may cause slowdowns or crashes",
                                 mem_mb
                             ),
                         );
                     } else if desired_resolution > 128 {
                         ui.colored_label(
                             egui::Color32::YELLOW,
-                            "High resolution — sculpting may be slower",
+                            "High resolution Ã¢â‚¬â€ sculpting may be slower",
                         );
                     }
                 });
@@ -1689,7 +1688,7 @@ pub fn draw(
                 }
             }
 
-            // Proximity modulation (Point and Spot only — position-dependent)
+            // Proximity modulation (Point and Spot only Ã¢â‚¬â€ position-dependent)
             if matches!(
                 light_type,
                 crate::graph::scene::LightType::Point | crate::graph::scene::LightType::Spot
@@ -1720,7 +1719,7 @@ pub fn draw(
                 }
             }
 
-            // Cookie shape (Point and Spot only — Directional/Ambient don't benefit)
+            // Cookie shape (Point and Spot only Ã¢â‚¬â€ Directional/Ambient don't benefit)
             if matches!(
                 light_type,
                 crate::graph::scene::LightType::Point | crate::graph::scene::LightType::Spot

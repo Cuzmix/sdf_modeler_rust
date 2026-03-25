@@ -1,11 +1,10 @@
-use eframe::wgpu;
 use glam::{Mat4, Vec3, Vec4};
 
 use crate::gpu::picking::{PendingPick, PickResult};
 use crate::graph::presented_object::{resolve_presented_object, PresentedObjectKind};
 use crate::graph::scene::{NodeData, NodeId, Scene};
 use crate::sculpt::{self, ActiveTool, BrushMode, FalloffMode, SculptState};
-use crate::ui::viewport::{BrushDispatch, BrushGpuParams, ViewportResources};
+use crate::ui::viewport::{BrushDispatch, BrushGpuParams};
 
 use super::{state::SculptRuntimeCache, PickRayInputs, PickState, SdfApp};
 
@@ -20,9 +19,10 @@ fn resolve_sculpt_target_for_selection(scene: &Scene, selected: Option<NodeId>) 
         }
     }
 
-    scene.nodes.get(&selected_id).and_then(|node| {
-        matches!(node.data, NodeData::Sculpt { .. }).then_some(selected_id)
-    })
+    scene
+        .nodes
+        .get(&selected_id)
+        .and_then(|node| matches!(node.data, NodeData::Sculpt { .. }).then_some(selected_id))
 }
 
 impl SdfApp {
@@ -334,14 +334,11 @@ impl SdfApp {
         }
 
         // Non-blocking GPU poll to advance async map
-        self.gpu.render_state.device.poll(wgpu::Maintain::Poll);
+        self.gpu.render_context.device.poll(wgpu::Maintain::Poll);
 
         // Try to read the result
         let (ready, pending_ray_inputs, submitted_at) = {
-            let renderer = self.gpu.render_state.renderer.read();
-            let Some(res) = renderer.callback_resources.get::<ViewportResources>() else {
-                return;
-            };
+            let res = self.gpu.viewport_resources.read();
             let PickState::Pending {
                 ref receiver,
                 ray_inputs,
@@ -443,7 +440,7 @@ impl SdfApp {
                 self.doc.history.begin_sculpt_stroke(
                     &self.doc.scene,
                     active_id,
-                    self.ui.node_graph_state.selected,
+                    self.ui.selection.selected,
                     Self::sculpt_stroke_label(
                         &selected_brush,
                         self.async_state.sculpt_ctrl_held,
@@ -491,7 +488,7 @@ impl SdfApp {
                         self.doc
                             .sculpt_state
                             .activate_preserving_session(hit_node_id, None);
-                        self.ui.node_graph_state.select_single(hit_node_id);
+                        self.ui.selection.select_single(hit_node_id);
                         self.async_state.last_sculpt_hit = None;
                         self.async_state.lazy_brush_pos = None;
                         self.clear_sculpt_runtime_cache();
@@ -505,7 +502,7 @@ impl SdfApp {
                             self.doc
                                 .sculpt_state
                                 .activate_preserving_session(sculpt_id, None);
-                            self.ui.node_graph_state.select_single(sculpt_id);
+                            self.ui.selection.select_single(sculpt_id);
                             self.async_state.last_sculpt_hit = None;
                             self.async_state.lazy_brush_pos = None;
                             self.clear_sculpt_runtime_cache();
@@ -808,15 +805,13 @@ impl SdfApp {
         let dispatch_count = gpu_dispatches.len() as u32;
         let mut submit_count = 0;
         if !gpu_dispatches.is_empty() {
-            let mut renderer = self.gpu.render_state.renderer.write();
-            if let Some(vr) = renderer.callback_resources.get_mut::<ViewportResources>() {
-                if vr.dispatch_brush_batch(
-                    &self.gpu.render_state.device,
-                    &self.gpu.render_state.queue,
-                    &gpu_dispatches,
-                ) {
-                    submit_count = 1;
-                }
+            let mut viewport_resources = self.gpu.viewport_resources.write();
+            if viewport_resources.dispatch_brush_batch(
+                &self.gpu.render_context.device,
+                &self.gpu.render_context.queue,
+                &gpu_dispatches,
+            ) {
+                submit_count = 1;
             }
         }
 
@@ -891,16 +886,12 @@ impl SdfApp {
         let Some(pending) = self.async_state.pending_pick.take() else {
             return;
         };
-        let renderer = self.gpu.render_state.renderer.read();
-        let Some(res) = renderer.callback_resources.get::<ViewportResources>() else {
-            return;
-        };
-        let rx = res.submit_pick(
-            &self.gpu.render_state.device,
-            &self.gpu.render_state.queue,
+        let viewport_resources = self.gpu.viewport_resources.read();
+        let rx = viewport_resources.submit_pick(
+            &self.gpu.render_context.device,
+            &self.gpu.render_context.queue,
             &pending,
         );
-        drop(renderer);
 
         self.async_state.pick_state = PickState::Pending {
             receiver: rx,
@@ -954,7 +945,7 @@ impl SdfApp {
             ActiveTool::Sculpt => {
                 let sel = resolve_sculpt_target_for_selection(
                     &self.doc.scene,
-                    self.ui.node_graph_state.selected,
+                    self.ui.selection.selected,
                 );
                 let active = self.doc.sculpt_state.active_node();
                 if sel != active {
@@ -984,11 +975,9 @@ impl SdfApp {
         if matches!(self.async_state.pick_state, PickState::Pending { .. }) {
             // Wait for the pending map_async to complete before unmapping -
             // wgpu 22 panics if you unmap a buffer that's still in "mapping" state.
-            self.gpu.render_state.device.poll(wgpu::Maintain::Wait);
-            let renderer = self.gpu.render_state.renderer.read();
-            if let Some(res) = renderer.callback_resources.get::<ViewportResources>() {
-                res.cancel_pending_pick();
-            }
+            self.gpu.render_context.device.poll(wgpu::Maintain::Wait);
+            let viewport_resources = self.gpu.viewport_resources.read();
+            viewport_resources.cancel_pending_pick();
         }
         self.async_state.pick_state = PickState::Idle;
     }
@@ -1066,6 +1055,9 @@ mod tests {
         let mut scene = Scene::new();
         let primitive_id = scene.create_primitive(SdfPrimitive::Box);
 
-        assert_eq!(resolve_sculpt_target_for_selection(&scene, Some(primitive_id)), None);
+        assert_eq!(
+            resolve_sculpt_target_for_selection(&scene, Some(primitive_id)),
+            None
+        );
     }
 }

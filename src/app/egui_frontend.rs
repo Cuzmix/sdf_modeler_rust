@@ -1,15 +1,113 @@
 use std::sync::atomic::Ordering;
 
-use eframe::egui;
-
 use crate::compat::Instant;
+use crate::desktop_dialogs::FileDialogSelection;
 use crate::ui::dock::{SceneTreeContext, SdfTabViewer, ViewportContext};
 
-use super::actions::ActionSink;
+use super::actions::{Action, ActionSink};
 use super::backend_frame::UiFrameFeedback;
+use super::egui_state::reconcile_docked_panels;
 use super::{BakeStatus, SdfApp, Toast};
 
 impl SdfApp {
+    pub(super) fn process_egui_only_actions(
+        &mut self,
+        ctx: &egui::Context,
+        actions: &mut ActionSink,
+    ) {
+        let mut deferred_actions = Vec::with_capacity(actions.len());
+
+        for action in actions.drain(..) {
+            match action {
+                Action::AddReferenceImage => {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        match crate::desktop_dialogs::reference_image_dialog() {
+                            FileDialogSelection::Selected(path) => {
+                                match crate::ui::reference_image::load_reference_image(&path) {
+                                    Ok(loaded_image) => {
+                                        let add_result = self.ui.reference_images.add_loaded(
+                                            &path,
+                                            loaded_image.width,
+                                            loaded_image.height,
+                                        );
+                                        if let Err(error) = add_result {
+                                            log::error!(
+                                                "Failed to register reference image: {}",
+                                                error
+                                            );
+                                            self.ui.toasts.push(Toast {
+                                                message: format!("Failed to load image: {}", error),
+                                                is_error: true,
+                                                created: crate::compat::Instant::now(),
+                                                duration: crate::compat::Duration::from_secs(5),
+                                            });
+                                            continue;
+                                        }
+                                        self.egui.reference_image_cache.push_loaded(
+                                            ctx,
+                                            &path,
+                                            loaded_image,
+                                        );
+                                        self.ui.toasts.push(Toast {
+                                            message: format!(
+                                                "Loaded reference image: {}",
+                                                path.display()
+                                            ),
+                                            is_error: false,
+                                            created: crate::compat::Instant::now(),
+                                            duration: crate::compat::Duration::from_secs(4),
+                                        });
+                                    }
+                                    Err(error) => {
+                                        log::error!("Failed to load reference image: {}", error);
+                                        self.ui.toasts.push(Toast {
+                                            message: format!("Failed to load image: {}", error),
+                                            is_error: true,
+                                            created: crate::compat::Instant::now(),
+                                            duration: crate::compat::Duration::from_secs(5),
+                                        });
+                                    }
+                                }
+                            }
+                            FileDialogSelection::Unsupported => {
+                                self.ui.toasts.push(Toast {
+                                    message: "Picking reference images is not supported on this platform yet".into(),
+                                    is_error: true,
+                                    created: crate::compat::Instant::now(),
+                                    duration: crate::compat::Duration::from_secs(4),
+                                });
+                            }
+                            FileDialogSelection::Cancelled => {}
+                        }
+                    }
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        self.ui.toasts.push(Toast {
+                            message: "Reference images are not supported in web builds".into(),
+                            is_error: true,
+                            created: crate::compat::Instant::now(),
+                            duration: crate::compat::Duration::from_secs(4),
+                        });
+                    }
+                }
+                Action::RemoveReferenceImage(index) => {
+                    self.ui.reference_images.remove(index);
+                    self.egui.reference_image_cache.remove(index);
+                }
+                Action::ToggleReferenceImageVisibility(index) => {
+                    self.ui.reference_images.toggle_visibility(index);
+                }
+                Action::ToggleAllReferenceImages => {
+                    self.ui.reference_images.toggle_all_visibility();
+                }
+                other => deferred_actions.push(other),
+            }
+        }
+
+        *actions = deferred_actions;
+    }
+
     pub(super) fn draw_egui_frontend(
         &mut self,
         ctx: &egui::Context,
@@ -51,7 +149,7 @@ impl SdfApp {
             &self.async_state.export_status,
         ) {
             self.settings.save();
-            self.start_export(ctx);
+            self.start_export();
         }
 
         crate::ui::export_progress::draw_export(ctx, &self.async_state.export_status);
@@ -100,6 +198,8 @@ impl SdfApp {
         } else {
             None
         };
+        self.egui
+            .prepare_scene_graph(&self.ui.selection, &mut self.ui.scene_graph_view);
 
         {
             let (active_light_ids, total_light_count) =
@@ -131,8 +231,8 @@ impl SdfApp {
             primary_shell: &mut self.ui.primary_shell,
             camera: &mut self.doc.camera,
             scene: &mut self.doc.scene,
-            node_graph_state: &mut self.ui.node_graph_state,
-            light_graph_state: &mut self.ui.light_graph_state,
+            node_graph_state: &mut self.egui.node_graph_state,
+            light_graph_state: &mut self.egui.light_graph_state,
             active_tool: &self.doc.active_tool,
             sculpt_state: &mut self.doc.sculpt_state,
             settings: &mut self.settings,
@@ -177,18 +277,23 @@ impl SdfApp {
             active_light_ids: &self.ui.active_light_ids,
             material_library: &mut self.material_library,
             reference_images: &mut self.ui.reference_images,
+            reference_image_cache: &self.egui.reference_image_cache,
             multi_transform_edit: &mut self.ui.multi_transform_edit,
             timings: &self.perf.timings,
+            expert_panels: &self.ui.expert_panels,
         };
 
         egui::CentralPanel::default()
             .frame(egui::Frame::none())
             .show(ctx, |ui| {
-                egui_dock::DockArea::new(&mut self.ui.dock_state).show_inside(ui, &mut tab_viewer);
+                egui_dock::DockArea::new(&mut self.egui.dock_state)
+                    .show_inside(ui, &mut tab_viewer);
             });
-        self.ui
-            .primary_shell
-            .reconcile_docked_panels(&self.ui.dock_state);
+        self.egui
+            .commit_scene_graph(&mut self.ui.selection, &mut self.ui.scene_graph_view);
+        reconcile_docked_panels(&mut self.ui.primary_shell, &self.egui.dock_state);
+        self.egui
+            .sync_expert_panel_registry(&mut self.ui.expert_panels);
 
         if let Some(viewport_rect) = primary_viewport_rect {
             crate::ui::primary_shell::draw(
@@ -196,12 +301,12 @@ impl SdfApp {
                 viewport_rect,
                 crate::ui::primary_shell::PrimaryShellContext {
                     shell: &mut self.ui.primary_shell,
-                    dock_state: Some(&mut self.ui.dock_state),
+                    dock_state: Some(&mut self.egui.dock_state),
                     camera: &self.doc.camera,
                     scene: &mut self.doc.scene,
                     sculpt_state: &mut self.doc.sculpt_state,
-                    selected: &mut self.ui.node_graph_state.selected,
-                    selected_set: &mut self.ui.node_graph_state.selected_set,
+                    selected: &mut self.ui.selection.selected,
+                    selected_set: &mut self.ui.selection.selected_set,
                     renaming_node: &mut self.ui.renaming_node,
                     rename_buf: &mut self.ui.rename_buf,
                     scene_tree_drag: &mut self.ui.scene_tree_drag,
@@ -214,6 +319,7 @@ impl SdfApp {
                     soloed_light: self.doc.soloed_light,
                     material_library: &mut self.material_library,
                     multi_transform_edit: &mut self.ui.multi_transform_edit,
+                    expert_panels: &self.ui.expert_panels,
                     gizmo_mode: &self.gizmo.mode,
                     gizmo_space: &self.gizmo.space,
                     selection_behavior: &selection_behavior,

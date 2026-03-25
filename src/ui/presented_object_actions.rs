@@ -1,9 +1,10 @@
-use eframe::egui;
 use glam::Vec3;
 
 use crate::app::actions::{Action, ActionSink};
 use crate::app::BakeRequest;
-use crate::graph::presented_object::{presented_wrap_target, PresentedObjectKind, PresentedObjectRef};
+use crate::graph::presented_object::{
+    presented_wrap_target, PresentedObjectKind, PresentedObjectRef,
+};
 use crate::graph::scene::{CsgOp, ModifierKind, NodeId, Scene, SdfPrimitive};
 use crate::graph::voxel;
 
@@ -14,7 +15,9 @@ pub fn draw_host_add_menu_button(
     actions: &mut ActionSink,
     label: &str,
 ) {
-    ui.menu_button(label, |ui| draw_host_add_menu_contents(ui, scene, object, actions));
+    ui.menu_button(label, |ui| {
+        draw_host_add_menu_contents(ui, scene, object, actions)
+    });
 }
 
 pub fn draw_host_add_menu_contents(
@@ -54,7 +57,9 @@ pub fn draw_object_create_menu_button(
     actions: &mut ActionSink,
     label: &str,
 ) {
-    ui.menu_button(label, |ui| draw_object_create_menu_contents(ui, scene, selected_object, actions));
+    ui.menu_button(label, |ui| {
+        draw_object_create_menu_contents(ui, scene, selected_object, actions)
+    });
 }
 
 pub fn draw_object_create_menu_contents(

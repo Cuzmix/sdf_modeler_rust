@@ -1,7 +1,6 @@
 use std::num::NonZeroU64;
 
 use bytemuck::{Pod, Zeroable};
-use eframe::wgpu;
 
 use crate::settings::{BackgroundMode, EnvironmentSource, RenderConfig};
 

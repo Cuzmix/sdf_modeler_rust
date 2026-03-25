@@ -1,6 +1,5 @@
-﻿use std::collections::HashSet;
+use std::collections::HashSet;
 
-use eframe::egui;
 use glam::Vec3;
 
 use crate::app::actions::{Action, ActionSink, OperationInputSlot};
@@ -13,9 +12,9 @@ use crate::graph::scene::{CsgOp, NodeData, NodeId, Scene, SdfPrimitive};
 use crate::material_preset::MaterialLibrary;
 use crate::sculpt::SculptState;
 use crate::settings::SelectionBehaviorSettings;
-use crate::ui::{chips, chrome};
 use crate::ui::gizmo::GizmoSpace;
 use crate::ui::presented_object_actions;
+use crate::ui::{chips, chrome};
 
 use super::properties;
 
@@ -104,19 +103,21 @@ fn draw_multi_selection(
         true,
         Some("Use the viewport gizmo to move, rotate, or scale the selected objects together."),
         |ui| {
-            egui::ScrollArea::vertical().max_height(180.0).show(ui, |ui| {
-                for object in objects {
-                    let Some(node) = scene.nodes.get(&object.host_id) else {
-                        continue;
-                    };
-                    let sculpt_badge = if object.attached_sculpt_id.is_some() {
-                        " [Sculpt]"
-                    } else {
-                        ""
-                    };
-                    ui.label(format!("- {}{}", node.name, sculpt_badge));
-                }
-            });
+            egui::ScrollArea::vertical()
+                .max_height(180.0)
+                .show(ui, |ui| {
+                    for object in objects {
+                        let Some(node) = scene.nodes.get(&object.host_id) else {
+                            continue;
+                        };
+                        let sculpt_badge = if object.attached_sculpt_id.is_some() {
+                            " [Sculpt]"
+                        } else {
+                            ""
+                        };
+                        ui.label(format!("- {}{}", node.name, sculpt_badge));
+                    }
+                });
         },
     );
 }
@@ -225,7 +226,9 @@ fn draw_presented_object(
                 true,
                 None,
                 |ui| {
-                    ui.weak("This object type is only editable in the advanced raw-node inspector.");
+                    ui.weak(
+                        "This object type is only editable in the advanced raw-node inspector.",
+                    );
                 },
             );
         }
@@ -349,7 +352,11 @@ fn draw_primitive_host(
             if params.is_empty() {
                 ui.weak("This primitive does not expose base size parameters.");
             } else {
-                ui.label(if has_sculpt_layer { "Base Shape" } else { "Size" });
+                ui.label(if has_sculpt_layer {
+                    "Base Shape"
+                } else {
+                    "Size"
+                });
                 ui.horizontal(|ui| {
                     for &(label, axis) in params {
                         ui.label(format!("{label}:"));
@@ -387,7 +394,15 @@ fn draw_primitive_host(
         "Lighting",
         false,
         None,
-        |ui| properties::draw_light_linking_section(ui, scene, object.host_id, actions, active_light_ids),
+        |ui| {
+            properties::draw_light_linking_section(
+                ui,
+                scene,
+                object.host_id,
+                actions,
+                active_light_ids,
+            )
+        },
     );
 
     if let Some(node) = scene.nodes.get_mut(&object.host_id) {
@@ -512,7 +527,15 @@ fn draw_operation_host(
         "Lighting",
         false,
         None,
-        |ui| properties::draw_light_linking_section(ui, scene, object.host_id, actions, active_light_ids),
+        |ui| {
+            properties::draw_light_linking_section(
+                ui,
+                scene,
+                object.host_id,
+                actions,
+                active_light_ids,
+            )
+        },
     );
 
     if let Some(node) = scene.nodes.get_mut(&object.host_id) {
@@ -653,7 +676,12 @@ fn draw_voxel_host(
         false,
         None,
         |ui| {
-            properties::draw_material_editor(ui, "presented_voxel", &mut material, material_library);
+            properties::draw_material_editor(
+                ui,
+                "presented_voxel",
+                &mut material,
+                material_library,
+            );
         },
     );
 
@@ -663,7 +691,15 @@ fn draw_voxel_host(
         "Lighting",
         false,
         None,
-        |ui| properties::draw_light_linking_section(ui, scene, object.host_id, actions, active_light_ids),
+        |ui| {
+            properties::draw_light_linking_section(
+                ui,
+                scene,
+                object.host_id,
+                actions,
+                active_light_ids,
+            )
+        },
     );
 
     if let Some(node) = scene.nodes.get_mut(&object.host_id) {
@@ -696,8 +732,9 @@ fn draw_object_stack(
 ) {
     let object_transform_id = object_transform_wrapper(scene, object.host_id);
     let base_wrappers = collect_presented_base_wrapper_chain(scene, object);
-    let has_entries =
-        object_transform_id.is_some() || !base_wrappers.is_empty() || object.attached_sculpt_id.is_some();
+    let has_entries = object_transform_id.is_some()
+        || !base_wrappers.is_empty()
+        || object.attached_sculpt_id.is_some();
 
     show_property_card(
         ui,
@@ -710,11 +747,7 @@ fn draw_object_stack(
                 chrome::section_title(ui, "Object Model", None);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     presented_object_actions::draw_host_add_menu_button(
-                        ui,
-                        scene,
-                        object,
-                        actions,
-                        "+ Add",
+                        ui, scene, object, actions, "+ Add",
                     );
                 });
             });

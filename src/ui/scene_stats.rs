@@ -1,5 +1,3 @@
-use eframe::egui;
-
 use crate::app::FrameTimings;
 use crate::graph::scene::Scene;
 

@@ -1,7 +1,5 @@
 use std::collections::HashSet;
 
-use eframe::egui;
-
 use crate::app::actions::{Action, ActionSink};
 use crate::graph::scene::{NodeData, NodeId, Scene, SceneNode};
 

@@ -1,7 +1,5 @@
 use std::num::NonZeroU64;
 
-use eframe::wgpu;
-
 use super::{ViewportResources, BLIT_SHADER_SRC};
 
 impl ViewportResources {

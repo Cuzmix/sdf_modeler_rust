@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 pub mod brush_settings;
 pub mod chips;
 pub mod chrome;

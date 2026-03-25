@@ -1,8 +1,10 @@
-use eframe::egui;
 use egui_dock::{DockState, Node, NodeIndex, Split, TabViewer};
 use glam::Vec3;
 
 use crate::app::actions::ActionSink;
+use crate::app::reference_images::ReferenceImageStore;
+use crate::app::state::ExpertPanelRegistry;
+use crate::app::ui_geometry::FloatingPanelBounds;
 use crate::gpu::camera::Camera;
 use crate::gpu::picking::PendingPick;
 use crate::graph::history::History;
@@ -34,41 +36,7 @@ pub enum Tab {
     SceneStats,
 }
 
-impl Tab {
-    pub const EXPERT_TABS: &[Tab] = &[
-        Tab::NodeGraph,
-        Tab::LightGraph,
-        Tab::Properties,
-        Tab::ReferenceImages,
-        Tab::SceneTree,
-        Tab::RenderSettings,
-        Tab::History,
-        Tab::BrushSettings,
-        Tab::Lights,
-        Tab::LightLinking,
-        Tab::SceneStats,
-    ];
-
-    pub fn label(&self) -> &'static str {
-        match self {
-            Tab::Viewport => "Viewport",
-            Tab::ToolPanel => "Scene Panel",
-            Tab::InspectorPanel => "Inspector",
-            Tab::DrawerPanel => "Utilities",
-            Tab::NodeGraph => "Node Graph",
-            Tab::LightGraph => "Light Graph",
-            Tab::Properties => "Properties",
-            Tab::ReferenceImages => "Reference Images",
-            Tab::SceneTree => "Scene Tree",
-            Tab::RenderSettings => "Render Settings",
-            Tab::History => "History",
-            Tab::BrushSettings => "Brush Settings",
-            Tab::Lights => "Lights",
-            Tab::LightLinking => "Light Linking",
-            Tab::SceneStats => "Scene Stats",
-        }
-    }
-}
+impl Tab {}
 
 pub fn create_dock_state() -> DockState<Tab> {
     let mut state = DockState::new(vec![Tab::Viewport]);
@@ -105,6 +73,14 @@ pub fn create_dock_state() -> DockState<Tab> {
 
 pub fn create_primary_shell_dock() -> DockState<Tab> {
     DockState::new(vec![Tab::Viewport])
+}
+
+pub fn add_window_with_rect(dock_state: &mut DockState<Tab>, tab: Tab, rect: FloatingPanelBounds) {
+    let surface = dock_state.add_window(vec![tab]);
+    if let Some(window_state) = dock_state.get_window_state_mut(surface) {
+        window_state.set_position(egui::pos2(rect.x, rect.y));
+        window_state.set_size(egui::vec2(rect.width, rect.height));
+    }
 }
 
 /// Sculpting layout: large viewport, brush settings + properties on right.
@@ -148,7 +124,7 @@ pub fn create_dock_rendering() -> DockState<Tab> {
 }
 
 // ---------------------------------------------------------------------------
-// Context bundles — group related refs so SdfTabViewer stays manageable.
+// Context bundles Ã¢â‚¬â€ group related refs so SdfTabViewer stays manageable.
 // ---------------------------------------------------------------------------
 
 /// Refs needed only by the viewport tab.
@@ -226,7 +202,7 @@ pub struct SdfTabViewer<'a> {
     pub viewport: ViewportContext<'a>,
     /// Scene tree-specific refs (rename, drag & drop).
     pub scene_tree: SceneTreeContext<'a>,
-    /// Action sink — structural mutations flow through here.
+    /// Action sink Ã¢â‚¬â€ structural mutations flow through here.
     pub actions: &'a mut ActionSink,
     /// History reference for the history panel tab.
     pub history: &'a History,
@@ -234,12 +210,16 @@ pub struct SdfTabViewer<'a> {
     pub active_light_ids: &'a std::collections::HashSet<NodeId>,
     /// Material preset library (built-in + user-saved).
     pub material_library: &'a mut crate::material_preset::MaterialLibrary,
-    /// Reference image manager used by viewport/properties panels.
-    pub reference_images: &'a mut crate::ui::reference_image::ReferenceImageManager,
+    /// Reference image data used by viewport/properties panels.
+    pub reference_images: &'a mut ReferenceImageStore,
+    /// egui texture cache for reference-image overlay drawing.
+    pub reference_image_cache: &'a crate::ui::reference_image::EguiReferenceImageCache,
     /// Batch transform UI state for multi-selection property editing.
     pub multi_transform_edit: &'a mut crate::app::state::MultiTransformSessionState,
     /// Frame timing data for scene stats panel.
     pub timings: &'a crate::app::FrameTimings,
+    /// Shared open/closed state for expert panels.
+    pub expert_panels: &'a ExpertPanelRegistry,
 }
 
 impl<'a> TabViewer for SdfTabViewer<'a> {
@@ -299,6 +279,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     self.viewport.soloed_light,
                     self.viewport.solo_label.as_deref(),
                     &*self.reference_images,
+                    self.reference_image_cache,
                     self.viewport.show_distance_readout,
                     self.viewport.measurement_mode,
                     self.viewport.measurement_points,
@@ -345,6 +326,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     soloed_light: self.viewport.soloed_light,
                     material_library: self.material_library,
                     multi_transform_edit: self.multi_transform_edit,
+                    expert_panels: self.expert_panels,
                     gizmo_mode: self.viewport.gizmo_mode,
                     gizmo_space: self.viewport.gizmo_space,
                     selection_behavior: &self.viewport.selection_behavior,
@@ -376,6 +358,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     soloed_light: self.viewport.soloed_light,
                     material_library: self.material_library,
                     multi_transform_edit: self.multi_transform_edit,
+                    expert_panels: self.expert_panels,
                     gizmo_mode: self.viewport.gizmo_mode,
                     gizmo_space: self.viewport.gizmo_space,
                     selection_behavior: &self.viewport.selection_behavior,
@@ -407,6 +390,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     soloed_light: self.viewport.soloed_light,
                     material_library: self.material_library,
                     multi_transform_edit: self.multi_transform_edit,
+                    expert_panels: self.expert_panels,
                     gizmo_mode: self.viewport.gizmo_mode,
                     gizmo_space: self.viewport.gizmo_space,
                     selection_behavior: &self.viewport.selection_behavior,
