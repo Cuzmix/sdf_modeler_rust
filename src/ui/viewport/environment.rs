@@ -488,14 +488,14 @@ impl EnvironmentResources {
         });
         let pixels = map.rgba16f_pixels();
         queue.write_texture(
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 texture: &texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
             bytemuck::cast_slice(&pixels),
-            wgpu::ImageDataLayout {
+            wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(map.width * 4 * std::mem::size_of::<f16>() as u32),
                 rows_per_image: Some(map.height),
@@ -552,14 +552,14 @@ impl EnvironmentResources {
                 ];
                 let pixels = vec![pixel; (width * height * depth_or_array_layers) as usize];
                 queue.write_texture(
-                    wgpu::ImageCopyTexture {
+                    wgpu::TexelCopyTextureInfo {
                         texture,
                         mip_level: 0,
                         origin: wgpu::Origin3d::ZERO,
                         aspect: wgpu::TextureAspect::All,
                     },
                     bytemuck::cast_slice(&pixels),
-                    wgpu::ImageDataLayout {
+                    wgpu::TexelCopyBufferLayout {
                         offset: 0,
                         bytes_per_row: Some(width * 4 * std::mem::size_of::<f16>() as u32),
                         rows_per_image: Some(height),
@@ -580,14 +580,14 @@ impl EnvironmentResources {
                 ];
                 let pixels = vec![pixel; (width * height * depth_or_array_layers) as usize];
                 queue.write_texture(
-                    wgpu::ImageCopyTexture {
+                    wgpu::TexelCopyTextureInfo {
                         texture,
                         mip_level: 0,
                         origin: wgpu::Origin3d::ZERO,
                         aspect: wgpu::TextureAspect::All,
                     },
                     bytemuck::cast_slice(&pixels),
-                    wgpu::ImageDataLayout {
+                    wgpu::TexelCopyBufferLayout {
                         offset: 0,
                         bytes_per_row: Some(width * 4),
                         rows_per_image: Some(height),
@@ -616,14 +616,14 @@ impl EnvironmentResources {
                 let pixel = [f16::from_f32(color[0]), f16::from_f32(color[1])];
                 let pixels = vec![pixel; (width * height) as usize];
                 queue.write_texture(
-                    wgpu::ImageCopyTexture {
+                    wgpu::TexelCopyTextureInfo {
                         texture,
                         mip_level: 0,
                         origin: wgpu::Origin3d::ZERO,
                         aspect: wgpu::TextureAspect::All,
                     },
                     bytemuck::cast_slice(&pixels),
-                    wgpu::ImageDataLayout {
+                    wgpu::TexelCopyBufferLayout {
                         offset: 0,
                         bytes_per_row: Some(width * 2 * std::mem::size_of::<f16>() as u32),
                         rows_per_image: Some(height),
@@ -642,14 +642,14 @@ impl EnvironmentResources {
                 ];
                 let pixels = vec![pixel; (width * height) as usize];
                 queue.write_texture(
-                    wgpu::ImageCopyTexture {
+                    wgpu::TexelCopyTextureInfo {
                         texture,
                         mip_level: 0,
                         origin: wgpu::Origin3d::ZERO,
                         aspect: wgpu::TextureAspect::All,
                     },
                     bytemuck::cast_slice(&pixels),
-                    wgpu::ImageDataLayout {
+                    wgpu::TexelCopyBufferLayout {
                         offset: 0,
                         bytes_per_row: Some(width * 2),
                         rows_per_image: Some(height),
@@ -1092,3 +1092,4 @@ mod tests {
         assert_eq!(resolutions.brdf_lut_resolution, 256);
     }
 }
+

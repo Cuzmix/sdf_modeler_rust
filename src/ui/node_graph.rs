@@ -7,6 +7,7 @@ use crate::app::actions::{Action, ActionSink};
 use crate::graph::scene::{
     CsgOp, LightType, ModifierKind, NodeData, NodeId as SceneNodeId, Scene, SdfPrimitive,
 };
+use crate::ui::egui_compat::{margin_symmetric, outside_stroke};
 
 // ---------------------------------------------------------------------------
 // Badge / port colors (matching old theme)
@@ -2479,9 +2480,9 @@ fn draw_toolbar(
     actions: &mut ActionSink,
     filter_mode: GraphFilterMode,
 ) {
-    egui::Frame::none()
+    egui::Frame::new()
         .fill(Color32::from_rgb(30, 30, 35))
-        .inner_margin(egui::Margin::symmetric(6.0, 4.0))
+        .inner_margin(margin_symmetric(6.0, 4.0))
         .show(ui, |ui| {
             ui.horizontal(|ui| {
                 let selected_visible = state
@@ -2500,7 +2501,7 @@ fn draw_toolbar(
                                         ui.ctx(),
                                     ));
                                     actions.push(Action::CreatePrimitive(kind.clone()));
-                                    ui.close_menu();
+                                    ui.close();
                                 }
                             }
                         });
@@ -2520,7 +2521,7 @@ fn draw_toolbar(
                                         actions,
                                         |id| state.id_map.scene_to_graph.contains_key(&id),
                                     );
-                                    ui.close_menu();
+                                    ui.close();
                                 }
                             }
                         });
@@ -2538,7 +2539,7 @@ fn draw_toolbar(
                                     ));
                                     actions.push(Action::CreateTransform { input: None });
                                 }
-                                ui.close_menu();
+                                ui.close();
                             }
                         });
 
@@ -2551,7 +2552,7 @@ fn draw_toolbar(
                                     ui.ctx(),
                                 ));
                                 actions.push(Action::CreateReroute { input: None });
-                                ui.close_menu();
+                                ui.close();
                             }
                         });
 
@@ -2572,7 +2573,7 @@ fn draw_toolbar(
                                         graph_rect,
                                         ui.ctx(),
                                     );
-                                    ui.close_menu();
+                                    ui.close();
                                 }
                             }
                             ui.separator();
@@ -2591,7 +2592,7 @@ fn draw_toolbar(
                                         graph_rect,
                                         ui.ctx(),
                                     );
-                                    ui.close_menu();
+                                    ui.close();
                                 }
                             }
                             ui.separator();
@@ -2610,7 +2611,7 @@ fn draw_toolbar(
                                         graph_rect,
                                         ui.ctx(),
                                     );
-                                    ui.close_menu();
+                                    ui.close();
                                 }
                             }
                         });
@@ -2630,7 +2631,7 @@ fn draw_toolbar(
                                         ui.ctx(),
                                     ));
                                     actions.push(Action::CreateLight(light_type.clone()));
-                                    ui.close_menu();
+                                    ui.close();
                                 }
                             }
                         });
@@ -2806,6 +2807,7 @@ fn draw_minimap(
                 minimap_rect,
                 4.0,
                 egui::Stroke::new(1.0, Color32::from_rgb(60, 60, 65)),
+                outside_stroke(),
             );
 
             let inner_origin = minimap_rect.min + egui::Vec2::new(4.0, 4.0);
@@ -2834,6 +2836,7 @@ fn draw_minimap(
                 vp_rect,
                 MINIMAP_VIEWPORT_ROUNDING,
                 egui::Stroke::new(1.0, MINIMAP_VIEWPORT_STROKE),
+                outside_stroke(),
             );
 
             // Draw nodes
@@ -2849,7 +2852,12 @@ fn draw_minimap(
 
                 painter.rect_filled(node_rect, 2.0, color);
                 if is_selected {
-                    painter.rect_stroke(node_rect, 2.0, egui::Stroke::new(1.5, Color32::WHITE));
+                    painter.rect_stroke(
+                        node_rect,
+                        2.0,
+                        egui::Stroke::new(1.5, Color32::WHITE),
+                        outside_stroke(),
+                    );
                 }
             }
 
@@ -3021,3 +3029,4 @@ fn scalar_drag(
     });
     changed
 }
+

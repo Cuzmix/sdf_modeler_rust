@@ -1998,7 +1998,7 @@ pub fn draw(
                                     target: id,
                                     kind: kind.clone(),
                                 });
-                                ui.close_menu();
+                                ui.close();
                             }
                         }
                         ui.separator();
@@ -2014,7 +2014,7 @@ pub fn draw(
                                     target: id,
                                     kind: kind.clone(),
                                 });
-                                ui.close_menu();
+                                ui.close();
                             }
                         }
                         ui.separator();
@@ -2030,7 +2030,7 @@ pub fn draw(
                                     target: id,
                                     kind: kind.clone(),
                                 });
-                                ui.close_menu();
+                                ui.close();
                             }
                         }
                     });
@@ -2126,3 +2126,4 @@ pub(crate) fn draw_light_linking_section(
             });
         });
 }
+

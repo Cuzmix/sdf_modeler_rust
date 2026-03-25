@@ -39,6 +39,7 @@ impl EguiReferenceImageCache {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub fn load_reference_image(path: &Path) -> Result<LoadedReferenceImage, String> {
     let dynamic_image = image::open(path)
         .map_err(|e| format!("Failed to open image '{}': {}", path.display(), e))?;

@@ -13,12 +13,12 @@ impl SdfApp {
         let mut action_open_recent: Option<String> = None;
 
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
-            egui::menu::bar(ui, |ui| {
+            egui::MenuBar::new().ui(ui, |ui| {
                 // --- File ---
                 ui.menu_button("File", |ui| {
                     if ui.button("New Scene").clicked() {
                         actions.push(Action::NewScene);
-                        ui.close_menu();
+                        ui.close();
                     }
                     ui.separator();
                     if ui
@@ -26,7 +26,7 @@ impl SdfApp {
                         .clicked()
                     {
                         actions.push(Action::OpenProject);
-                        ui.close_menu();
+                        ui.close();
                     }
                     let save_label = if self.persistence.current_file_path.is_some() {
                         "Save"
@@ -38,7 +38,7 @@ impl SdfApp {
                         .clicked()
                     {
                         actions.push(Action::SaveProject);
-                        ui.close_menu();
+                        ui.close();
                     }
                     ui.separator();
 
@@ -53,7 +53,7 @@ impl SdfApp {
                                     .unwrap_or_else(|| file_path.clone());
                                 if ui.button(&name).on_hover_text(file_path).clicked() {
                                     action_open_recent = Some(file_path.clone());
-                                    ui.close_menu();
+                                    ui.close();
                                 }
                             }
                         });
@@ -65,7 +65,7 @@ impl SdfApp {
                         .clicked()
                     {
                         actions.push(Action::TakeScreenshot);
-                        ui.close_menu();
+                        ui.close();
                     }
                     let import_idle = matches!(self.async_state.import_status, ImportStatus::Idle);
                     if ui
@@ -73,7 +73,7 @@ impl SdfApp {
                         .clicked()
                     {
                         actions.push(Action::ImportMesh);
-                        ui.close_menu();
+                        ui.close();
                     }
                     let export_idle = matches!(self.async_state.export_status, ExportStatus::Idle);
                     if ui
@@ -84,7 +84,7 @@ impl SdfApp {
                         .clicked()
                     {
                         actions.push(Action::ShowExportDialog);
-                        ui.close_menu();
+                        ui.close();
                     }
                 });
 
@@ -95,14 +95,14 @@ impl SdfApp {
                         .clicked()
                     {
                         actions.push(Action::Undo);
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui
                         .add(egui::Button::new("Redo").shortcut_text("Ctrl+Y"))
                         .clicked()
                     {
                         actions.push(Action::Redo);
-                        ui.close_menu();
+                        ui.close();
                     }
                     ui.separator();
                     let has_sel = self.ui.selection.selected.is_some();
@@ -111,7 +111,7 @@ impl SdfApp {
                         .clicked()
                     {
                         actions.push(Action::Copy);
-                        ui.close_menu();
+                        ui.close();
                     }
                     let has_clip = self
                         .doc
@@ -122,7 +122,7 @@ impl SdfApp {
                         .clicked()
                     {
                         actions.push(Action::Paste);
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui
                         .add_enabled(
@@ -132,7 +132,7 @@ impl SdfApp {
                         .clicked()
                     {
                         actions.push(Action::Duplicate);
-                        ui.close_menu();
+                        ui.close();
                     }
                     ui.separator();
                     if ui
@@ -140,7 +140,7 @@ impl SdfApp {
                         .clicked()
                     {
                         actions.push(Action::DeleteSelected);
-                        ui.close_menu();
+                        ui.close();
                     }
                 });
 
@@ -155,7 +155,7 @@ impl SdfApp {
                         .clicked()
                     {
                         actions.push(Action::FocusSelected);
-                        ui.close_menu();
+                        ui.close();
                     }
                     ui.separator();
                     let profiler_label = if self.ui.show_debug {
@@ -168,7 +168,7 @@ impl SdfApp {
                         .clicked()
                     {
                         actions.push(Action::ToggleDebug);
-                        ui.close_menu();
+                        ui.close();
                     }
                     ui.separator();
                     ui.label("Camera Presets");
@@ -177,21 +177,21 @@ impl SdfApp {
                         .clicked()
                     {
                         actions.push(Action::CameraFront);
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui
                         .add(egui::Button::new("Top").shortcut_text("F6"))
                         .clicked()
                     {
                         actions.push(Action::CameraTop);
-                        ui.close_menu();
+                        ui.close();
                     }
                     if ui
                         .add(egui::Button::new("Right").shortcut_text("F7"))
                         .clicked()
                     {
                         actions.push(Action::CameraRight);
-                        ui.close_menu();
+                        ui.close();
                     }
                     ui.separator();
                     ui.menu_button("Bookmarks", |ui| {
@@ -212,7 +212,7 @@ impl SdfApp {
                                 .clicked()
                             {
                                 actions.push(Action::RestoreBookmark(i));
-                                ui.close_menu();
+                                ui.close();
                             }
                         }
                         ui.separator();
@@ -224,13 +224,13 @@ impl SdfApp {
                             let is_open = self.ui.expert_panels.is_open(panel);
                             if ui.selectable_label(is_open, panel.label()).clicked() {
                                 actions.push(Action::ToggleExpertPanel(panel));
-                                ui.close_menu();
+                                ui.close();
                             }
                         }
                         ui.separator();
                         if ui.button("Reset Layout").clicked() {
                             actions.push(Action::ResetPrimaryShellLayout);
-                            ui.close_menu();
+                            ui.close();
                         }
                     });
                     ui.menu_button("Workspace", |ui| {
@@ -241,7 +241,7 @@ impl SdfApp {
                             .clicked()
                         {
                             actions.push(Action::SetWorkspace(WorkspacePreset::Modeling));
-                            ui.close_menu();
+                            ui.close();
                         }
                         if ui
                             .button("Sculpting")
@@ -249,7 +249,7 @@ impl SdfApp {
                             .clicked()
                         {
                             actions.push(Action::SetWorkspace(WorkspacePreset::Sculpting));
-                            ui.close_menu();
+                            ui.close();
                         }
                         if ui
                             .button("Rendering")
@@ -257,7 +257,7 @@ impl SdfApp {
                             .clicked()
                         {
                             actions.push(Action::SetWorkspace(WorkspacePreset::Rendering));
-                            ui.close_menu();
+                            ui.close();
                         }
                     });
                 });
@@ -274,7 +274,7 @@ impl SdfApp {
                         .clicked()
                     {
                         actions.push(Action::ToggleHelp);
-                        ui.close_menu();
+                        ui.close();
                     }
                 });
 
@@ -368,3 +368,4 @@ impl SdfApp {
             });
     }
 }
+

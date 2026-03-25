@@ -227,7 +227,7 @@ pub fn draw(
     }
 
     // Dim background
-    let screen_rect = ctx.screen_rect();
+    let screen_rect = ctx.content_rect();
     let painter = ctx.layer_painter(egui::LayerId::new(
         egui::Order::Foreground,
         egui::Id::new("command_palette_bg"),
@@ -413,3 +413,4 @@ pub fn draw(
         }
     }
 }
+

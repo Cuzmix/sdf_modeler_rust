@@ -143,18 +143,23 @@ impl WebHandle {
 
         let web_options = eframe::WebOptions {
             wgpu_options: eframe::egui_wgpu::WgpuConfiguration {
-                device_descriptor: Arc::new(|_adapter| wgpu::DeviceDescriptor {
-                    label: Some("SDF Modeler device (web)"),
-                    required_features: wgpu::Features::FLOAT32_FILTERABLE,
-                    required_limits: wgpu::Limits {
-                        max_texture_dimension_2d: 4096,
-                        max_storage_buffers_per_shader_stage: 4,
-                        max_storage_buffer_binding_size: 1 << 25,
-                        max_storage_textures_per_shader_stage: 0,
-                        ..wgpu::Limits::downlevel_defaults()
+                wgpu_setup: eframe::egui_wgpu::WgpuSetup::CreateNew(
+                    eframe::egui_wgpu::WgpuSetupCreateNew {
+                        device_descriptor: Arc::new(|_adapter| wgpu::DeviceDescriptor {
+                            label: Some("SDF Modeler device (web)"),
+                            required_features: wgpu::Features::FLOAT32_FILTERABLE,
+                            required_limits: wgpu::Limits {
+                                max_texture_dimension_2d: 4096,
+                                max_storage_buffers_per_shader_stage: 4,
+                                max_storage_buffer_binding_size: 1 << 25,
+                                max_storage_textures_per_shader_stage: 0,
+                                ..wgpu::Limits::downlevel_defaults()
+                            },
+                            ..Default::default()
+                        }),
+                        ..Default::default()
                     },
-                    memory_hints: wgpu::MemoryHints::default(),
-                }),
+                ),
                 ..Default::default()
             },
             ..Default::default()

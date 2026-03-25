@@ -548,11 +548,39 @@ impl Default for SceneGraphViewState {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ViewportPrimaryDragMode {
+    #[default]
+    None,
+    Orbit,
+    Sculpt,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ViewportInteractionState {
+    pub last_pointer_pos_physical: Option<[f32; 2]>,
+    pub primary_press_origin_physical: Option<[f32; 2]>,
+    pub primary_drag_distance: f32,
+    pub primary_drag_mode: ViewportPrimaryDragMode,
+}
+
+impl Default for ViewportInteractionState {
+    fn default() -> Self {
+        Self {
+            last_pointer_pos_physical: None,
+            primary_press_origin_physical: None,
+            primary_drag_distance: 0.0,
+            primary_drag_mode: ViewportPrimaryDragMode::None,
+        }
+    }
+}
+
 pub struct UiState {
     pub primary_shell: PrimaryShellState,
     pub expert_panels: ExpertPanelRegistry,
     pub selection: SceneSelectionState,
     pub scene_graph_view: SceneGraphViewState,
+    pub viewport_interaction: ViewportInteractionState,
     pub show_debug: bool,
     pub show_help: bool,
     pub show_export_dialog: bool,

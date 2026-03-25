@@ -4,9 +4,9 @@ pub(super) fn app_render_context_from_egui(
     render_state: &egui_wgpu::RenderState,
 ) -> AppRenderContext {
     AppRenderContext::new(
-        render_state.device.clone(),
-        render_state.queue.clone(),
-        render_state.adapter.clone(),
+        render_state.device.clone().into(),
+        render_state.queue.clone().into(),
+        render_state.adapter.clone().into(),
         render_state.target_format,
     )
 }

@@ -426,15 +426,15 @@ fn object_context_menu(
         let hidden = scene.is_hidden(object.object_root_id);
         if ui.button(if hidden { "Show" } else { "Hide" }).clicked() {
             actions.push(Action::ToggleVisibility(object.object_root_id));
-            ui.close_menu();
+            ui.close();
         }
         if ui.button("Rename").clicked() {
             begin_rename(scene, object.host_id, renaming, rename_buf);
-            ui.close_menu();
+            ui.close();
         }
         if ui.button("Duplicate").clicked() {
             actions.push(Action::DuplicatePresentedObject(object.host_id));
-            ui.close_menu();
+            ui.close();
         }
         if !matches!(object.kind, PresentedObjectKind::Light) {
             ui.menu_button("Add", |ui| {
@@ -446,18 +446,18 @@ fn object_context_menu(
                 presented_object_actions::push_convert_to_voxel_action(
                     scene, object, sculpt_id, actions,
                 );
-                ui.close_menu();
+                ui.close();
             }
         }
         if object.can_remove_attached_sculpt() && ui.button("Remove Sculpt Layer").clicked() {
             actions.push(Action::RemoveAttachedSculpt {
                 host: object.host_id,
             });
-            ui.close_menu();
+            ui.close();
         }
         if ui.button("Delete").clicked() {
             actions.push(Action::DeletePresentedObject(object.object_root_id));
-            ui.close_menu();
+            ui.close();
         }
     });
 }
@@ -518,3 +518,4 @@ fn draw_light_solo_button(
         actions.push(Action::SoloLight(Some(object.host_id)));
     }
 }
+

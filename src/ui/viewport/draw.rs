@@ -1,7 +1,13 @@
 use crate::app::actions::{Action, ActionSink};
+use crate::app::backend_frame::ViewportUiFeedback;
 use crate::app::runtime::ViewportResourceHandle;
 use crate::app::state::{
     MultiTransformSessionState, SculptBrushAdjustMode, SculptBrushAdjustState,
+    ViewportInteractionState,
+};
+use crate::app::viewport_interaction::{
+    run_viewport_interaction_core, PointerButtonSnapshot, ViewportInputSnapshot,
+    ViewportInteractionContext,
 };
 use crate::gpu::camera::{Camera, CameraUniform};
 use crate::gpu::picking::PendingPick;
@@ -436,6 +442,7 @@ impl egui_wgpu::CallbackTrait for ViewportCallback {
                 label: Some("Offscreen SDF Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view,
+                    depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
@@ -650,6 +657,101 @@ fn apply_modal_brush_adjustment(
     }
 }
 
+fn capture_egui_viewport_input(
+    ui: &egui::Ui,
+    response: &egui::Response,
+    rect: egui::Rect,
+    pixels_per_point: f32,
+    now_seconds: f64,
+    interaction_state: &ViewportInteractionState,
+) -> ViewportInputSnapshot {
+    let pointer_position_logical = ui.input(|input| {
+        input
+            .pointer
+            .interact_pos()
+            .or_else(|| input.pointer.hover_pos())
+    });
+    let pointer_inside = pointer_position_logical.is_some_and(|pos| rect.contains(pos));
+    let pointer_position_physical = pointer_position_logical.map(|pos| {
+        [
+            (pos.x - rect.min.x) * pixels_per_point,
+            (pos.y - rect.min.y) * pixels_per_point,
+        ]
+    });
+    let pointer_delta_logical = ui.input(|input| input.pointer.delta());
+    let primary_pressed = pointer_inside
+        && ui.input(|input| input.pointer.button_pressed(egui::PointerButton::Primary));
+    let primary_released =
+        ui.input(|input| input.pointer.button_released(egui::PointerButton::Primary))
+            && (pointer_inside || interaction_state.primary_press_origin_physical.is_some());
+    let primary_down = ui.input(|input| input.pointer.button_down(egui::PointerButton::Primary))
+        && (pointer_inside || interaction_state.primary_press_origin_physical.is_some());
+    let secondary_down = response.dragged_by(egui::PointerButton::Secondary)
+        || (pointer_inside && ui.input(|input| input.pointer.secondary_down()));
+    let middle_down = response.dragged_by(egui::PointerButton::Middle)
+        || (pointer_inside && ui.input(|input| input.pointer.middle_down()));
+
+    ViewportInputSnapshot {
+        viewport_size_physical: [
+            (rect.width().max(1.0) * pixels_per_point) as u32,
+            (rect.height().max(1.0) * pixels_per_point) as u32,
+        ],
+        pixels_per_point,
+        now_seconds,
+        pointer_inside,
+        pointer_position_physical,
+        pointer_delta_physical: [
+            pointer_delta_logical.x * pixels_per_point,
+            pointer_delta_logical.y * pixels_per_point,
+        ],
+        wheel_delta_logical: ui.input(|input| {
+            [input.smooth_scroll_delta.x, input.smooth_scroll_delta.y]
+        }),
+        primary: PointerButtonSnapshot {
+            down: primary_down,
+            pressed: primary_pressed,
+            released: primary_released,
+        },
+        secondary: PointerButtonSnapshot {
+            down: secondary_down,
+            pressed: pointer_inside
+                && ui.input(|input| input.pointer.button_pressed(egui::PointerButton::Secondary)),
+            released: ui.input(|input| input.pointer.button_released(egui::PointerButton::Secondary)),
+        },
+        middle: PointerButtonSnapshot {
+            down: middle_down,
+            pressed: pointer_inside
+                && ui.input(|input| input.pointer.button_pressed(egui::PointerButton::Middle)),
+            released: ui.input(|input| input.pointer.button_released(egui::PointerButton::Middle)),
+        },
+        modifiers: ui.input(|input| crate::keymap::KeyboardModifiers {
+            ctrl: input.modifiers.ctrl,
+            shift: input.modifiers.shift,
+            alt: input.modifiers.alt,
+        }),
+        pressure: egui_pointer_pressure(ui),
+        double_clicked: response.double_clicked(),
+    }
+}
+
+fn egui_pointer_pressure(ui: &egui::Ui) -> f32 {
+    ui.input(|input| {
+        if let Some(touch) = input.multi_touch() {
+            if touch.force > 0.0 {
+                return touch.force;
+            }
+        }
+        for event in &input.events {
+            if let egui::Event::Touch { force: Some(force), .. } = event {
+                if *force > 0.0 {
+                    return *force;
+                }
+            }
+        }
+        0.0
+    })
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn draw(
     ui: &mut egui::Ui,
@@ -658,6 +760,7 @@ pub fn draw(
     selected: &mut Option<NodeId>,
     selected_set: &std::collections::HashSet<NodeId>,
     multi_transform_session: &mut MultiTransformSessionState,
+    viewport_interaction: &mut ViewportInteractionState,
     gizmo_state: &mut GizmoState,
     gizmo_mode: &GizmoMode,
     gizmo_space: &GizmoSpace,
@@ -1076,323 +1179,107 @@ pub fn draw(
         actions,
     );
 
-    // --- Interaction priority: sculpt > gizmo > pick > orbit ---
-
-    if sculpt_active {
-        // Sculpt mode: same navigation as select mode, plus sculpt when over mesh.
-        // CPU-side bounding sphere test gives instant orbit-vs-sculpt Ã¢â‚¬â€ zero GPU latency.
-        if !gizmo_consumed
-            && response.dragged_by(egui::PointerButton::Primary)
-            && !multi_touch_active
-        {
-            if touch_active {
-                let delta = response.drag_delta();
-                let modifiers = ui.input(|i| i.modifiers);
-                if modifiers.ctrl && modifiers.alt {
-                    let sign = if render_config.invert_roll { -1.0 } else { 1.0 };
-                    camera.roll_by(sign * delta.x, render_config.roll_sensitivity);
-                } else {
-                    camera.orbit(delta.x, delta.y);
-                    if render_config.clamp_orbit_pitch {
-                        camera.clamp_pitch();
-                    }
+    let mut measurement_click_consumed = false;
+    if !sculpt_active && !gizmo_consumed && response.clicked() && *measurement_mode {
+        if let Some(pos) = response.interact_pointer_pos() {
+            let (ray_origin, ray_dir) = cursor_world_ray(camera, rect, pos);
+            if let Some(hit) = raycast_scene_surface(scene, ray_origin, ray_dir) {
+                if measurement_points.len() >= 2 {
+                    measurement_points.clear();
                 }
-            } else {
-                let drag_origin = ui.input(|i| i.pointer.press_origin());
-                let in_border = drag_origin
-                    .map(|origin| {
-                        in_safety_border(origin, rect, render_config.sculpt_safety_border)
-                    })
-                    .unwrap_or(false);
-
-                // CPU bounding sphere test: project sculpt node bounds to screen,
-                // check if drag origin is inside. Instant, no async pipeline needed.
-                let cursor_on_mesh = if !in_border {
-                    drag_origin
-                        .map(|origin| {
-                            cursor_in_sculpt_bounds(origin, sculpt_state, scene, camera, rect)
-                        })
-                        .unwrap_or(false)
-                } else {
-                    false
-                };
-
-                // Once a stroke is confirmed via GPU pick, keep sculpting even if
-                // the cursor drifts outside the bounding sphere mid-stroke.
-                let stroke_confirmed = last_sculpt_hit.is_some();
-
-                if !cursor_on_mesh && !stroke_confirmed {
-                    // Outside mesh bounds and no active stroke: orbit (same as select mode)
-                    let delta = response.drag_delta();
-                    let modifiers = ui.input(|i| i.modifiers);
-                    if modifiers.ctrl && modifiers.alt {
-                        let sign = if render_config.invert_roll { -1.0 } else { 1.0 };
-                        camera.roll_by(sign * delta.x, render_config.roll_sensitivity);
-                    } else {
-                        camera.orbit(delta.x, delta.y);
-                        if render_config.clamp_orbit_pitch {
-                            camera.clamp_pitch();
-                        }
-                    }
-                } else if let Some(pos) = ui.input(|i| i.pointer.hover_pos()) {
-                    // Over mesh bounds or stroke already confirmed: sculpt
-                    if rect.contains(pos) {
-                        let mouse_px = [
-                            (pos.x - rect.min.x) * pixels_per_point,
-                            (pos.y - rect.min.y) * pixels_per_point,
-                        ];
-                        output.pending_pick = Some(PendingPick {
-                            mouse_pos: mouse_px,
-                            camera_uniform: camera.to_uniform(
-                                viewport,
-                                time,
-                                0.0,
-                                false,
-                                scene_bounds,
-                                -1.0,
-                                0.0,
-                                [0.0; 4],
-                                [0.0; 4],
-                                [0.0; 4],
-                                [0.0; 4],
-                                [0.0; 4],
-                                [0.0; 4],
-                                [0.0; 4],
-                                [0.0; 4],
-                                [0.0; 4],
-                                [[0.0; 4]; 32],
-                                [[0.0; 4]; 8],
-                            ),
-                            additive_select_held: false, // sculpt uses Ctrl/Shift for brush behavior
-                        });
-                        // Capture modifier keys for Ctrl-invert / Shift-smooth
-                        let modifiers = ui.input(|i| i.modifiers);
-                        output.sculpt_ctrl_held = modifiers.ctrl;
-                        output.sculpt_shift_held = modifiers.shift;
-                        // Capture pen pressure from touch/stylus events
-                        output.sculpt_pressure = ui.input(|i| {
-                            if let Some(touch) = i.multi_touch() {
-                                if touch.force > 0.0 {
-                                    return touch.force;
-                                }
-                            }
-                            for event in &i.events {
-                                if let egui::Event::Touch { force: Some(f), .. } = event {
-                                    if *f > 0.0 {
-                                        return *f;
-                                    }
-                                }
-                            }
-                            0.0
-                        });
-                    }
-                }
+                measurement_points.push(hit);
+                measurement_click_consumed = true;
             }
         }
-        // Hover pick: when NOT dragging, submit pick for 3D brush preview position
-        else if !gizmo_consumed && response.hovered() && output.pending_pick.is_none() {
-            if let Some(pos) = ui.input(|i| i.pointer.hover_pos()) {
-                if rect.contains(pos) {
-                    let mouse_px = [
-                        (pos.x - rect.min.x) * pixels_per_point,
-                        (pos.y - rect.min.y) * pixels_per_point,
-                    ];
-                    output.pending_pick = Some(PendingPick {
-                        mouse_pos: mouse_px,
-                        camera_uniform: camera.to_uniform(
-                            viewport,
-                            time,
-                            0.0,
-                            false,
-                            scene_bounds,
-                            -1.0,
-                            0.0,
-                            [0.0; 4],
-                            [0.0; 4],
-                            [0.0; 4],
-                            [0.0; 4],
-                            [0.0; 4],
-                            [0.0; 4],
-                            [0.0; 4],
-                            [0.0; 4],
-                            [0.0; 4],
-                            [[0.0; 4]; 32],
-                            [[0.0; 4]; 8],
-                        ),
-                        additive_select_held: false,
-                    });
-                    output.is_hover_pick = true;
-                }
-            }
-        }
+    }
 
-        // Ctrl+right-drag: horizontal = resize brush, vertical = adjust strength
-        if response.dragged_by(egui::PointerButton::Secondary)
-            && !multi_touch_active
-            && !sculpt_adjust_active
-        {
+    let light_gizmo_click_consumed =
+        !sculpt_active && !gizmo_consumed && response.clicked() && !measurement_click_consumed;
+    if light_gizmo_click_consumed {
+        if let Some(transform_id) = light_gizmo_result.clicked_transform_id {
+            actions.push(Action::Select(Some(transform_id)));
+        }
+    }
+
+    let mut interaction_feedback = ViewportUiFeedback::default();
+    if !gizmo_consumed && !sculpt_adjust_active && !touch_active && !multi_touch_active {
+        let viewport_input = capture_egui_viewport_input(
+            ui,
+            &response,
+            rect,
+            pixels_per_point,
+            time as f64,
+            viewport_interaction,
+        );
+        interaction_feedback = run_viewport_interaction_core(
+            ViewportInteractionContext {
+                state: viewport_interaction,
+                camera,
+                scene,
+                sculpt_state,
+                last_sculpt_hit,
+                render_config,
+                allow_selection_pick: !(measurement_click_consumed
+                    || light_gizmo_click_consumed
+                        && light_gizmo_result.clicked_transform_id.is_some()),
+            },
+            &viewport_input,
+            actions,
+        );
+    } else if ui.input(|input| input.pointer.button_released(egui::PointerButton::Primary)) {
+        viewport_interaction.primary_drag_mode =
+            crate::app::state::ViewportPrimaryDragMode::None;
+        viewport_interaction.primary_drag_distance = 0.0;
+        viewport_interaction.primary_press_origin_physical = None;
+    }
+
+    output.pending_pick = interaction_feedback.pending_pick;
+    output.sculpt_ctrl_held = interaction_feedback.sculpt_ctrl_held;
+    output.sculpt_shift_held = interaction_feedback.sculpt_shift_held;
+    output.sculpt_pressure = interaction_feedback.sculpt_pressure;
+    output.brush_radius_delta = interaction_feedback.brush_radius_delta;
+    output.brush_strength_delta = interaction_feedback.brush_strength_delta;
+    output.is_hover_pick = interaction_feedback.is_hover_pick;
+
+    if sculpt_state.is_active() {
+        if let Some(hover_pos) = response.hover_pos() {
             let modifiers = ui.input(|i| i.modifiers);
-            if modifiers.ctrl {
-                let delta = response.drag_delta();
-                // Horizontal Ã¢â€ â€™ radius (scale by distance for consistent feel)
-                let radius_sensitivity = 0.005 * camera.distance;
-                output.brush_radius_delta = delta.x * radius_sensitivity;
-                // Vertical Ã¢â€ â€™ strength (inverted: drag up = stronger)
-                let strength_sensitivity = 0.002;
-                output.brush_strength_delta = -delta.y * strength_sensitivity;
-            }
-        }
+            let effective_mode = sculpt_state.effective_brush_mode(modifiers.ctrl, modifiers.shift);
+            let mode_color = brush_cursor_color(&effective_mode);
 
-        // Minimal 2D crosshair cursor (3D shader ring is the primary brush preview)
-        if sculpt_state.is_active() {
-            if let Some(hover_pos) = response.hover_pos() {
-                let modifiers = ui.input(|i| i.modifiers);
-                let effective_mode =
-                    sculpt_state.effective_brush_mode(modifiers.ctrl, modifiers.shift);
-                let mode_color = brush_cursor_color(&effective_mode);
-
-                // Strong center cue + outer ring to make falloff direction clearer.
-                ui.painter()
-                    .circle_stroke(hover_pos, 8.0, egui::Stroke::new(1.0, mode_color));
-                ui.painter()
-                    .circle_filled(hover_pos, 3.0, egui::Color32::from_white_alpha(220));
-                let cross = 6.0;
-                let stroke = egui::Stroke::new(1.0, mode_color);
-                ui.painter().line_segment(
-                    [
-                        hover_pos - egui::vec2(cross, 0.0),
-                        hover_pos + egui::vec2(cross, 0.0),
-                    ],
-                    stroke,
-                );
-                ui.painter().line_segment(
-                    [
-                        hover_pos - egui::vec2(0.0, cross),
-                        hover_pos + egui::vec2(0.0, cross),
-                    ],
-                    stroke,
-                );
-            }
-        }
-
-        // Double-click in safety border Ã¢â€ â€™ frame all
-        if response.double_clicked() {
-            if let Some(pos) = ui.input(|i| i.pointer.interact_pos()) {
-                if in_safety_border(pos, rect, render_config.sculpt_safety_border) {
-                    actions.push(crate::app::actions::Action::FrameAll);
-                }
-            }
-        }
-
-        // Visual safety border indicator (subtle inner rect)
-        if render_config.sculpt_safety_border > 0.0 {
-            let border_px = rect.width().min(rect.height()) * render_config.sculpt_safety_border;
-            let inner_rect = rect.shrink(border_px);
-            ui.painter().rect_stroke(
-                inner_rect,
-                0.0,
-                egui::Stroke::new(1.0, egui::Color32::from_white_alpha(20)),
+            ui.painter()
+                .circle_stroke(hover_pos, 8.0, egui::Stroke::new(1.0, mode_color));
+            ui.painter()
+                .circle_filled(hover_pos, 3.0, egui::Color32::from_white_alpha(220));
+            let cross = 6.0;
+            let stroke = egui::Stroke::new(1.0, mode_color);
+            ui.painter().line_segment(
+                [
+                    hover_pos - egui::vec2(cross, 0.0),
+                    hover_pos + egui::vec2(cross, 0.0),
+                ],
+                stroke,
+            );
+            ui.painter().line_segment(
+                [
+                    hover_pos - egui::vec2(0.0, cross),
+                    hover_pos + egui::vec2(0.0, cross),
+                ],
+                stroke,
             );
         }
-
-        // Right-click still orbits in sculpt mode, secondary drag pans
-        if response.dragged_by(egui::PointerButton::Secondary) && !sculpt_adjust_active {
-            let delta = response.drag_delta();
-            let modifiers = ui.input(|i| i.modifiers);
-            if !modifiers.ctrl {
-                camera.pan(delta.x, delta.y);
-            }
-        }
-        if response.dragged_by(egui::PointerButton::Middle) {
-            let delta = response.drag_delta();
-            let modifiers = ui.input(|i| i.modifiers);
-            if modifiers.ctrl && modifiers.alt {
-                let sign = if render_config.invert_roll { -1.0 } else { 1.0 };
-                camera.roll_by(sign * delta.x, render_config.roll_sensitivity);
-            } else {
-                camera.orbit(delta.x, delta.y);
-                if render_config.clamp_orbit_pitch {
-                    camera.clamp_pitch();
-                }
-            }
-        }
-    } else if !gizmo_consumed {
-        // Normal mode: click to pick
-        if response.clicked() {
-            if *measurement_mode {
-                if let Some(pos) = response.interact_pointer_pos() {
-                    let (ray_origin, ray_dir) = cursor_world_ray(camera, rect, pos);
-                    if let Some(hit) = raycast_scene_surface(scene, ray_origin, ray_dir) {
-                        if measurement_points.len() >= 2 {
-                            measurement_points.clear();
-                        }
-                        measurement_points.push(hit);
-                    }
-                }
-            } else if let Some(transform_id) = light_gizmo_result.clicked_transform_id {
-                // Light billboard click takes priority over GPU pick
-                actions.push(Action::Select(Some(transform_id)));
-            } else if let Some(pos) = response.interact_pointer_pos() {
-                let mouse_px = [
-                    (pos.x - rect.min.x) * pixels_per_point,
-                    (pos.y - rect.min.y) * pixels_per_point,
-                ];
-                let pick_uniform = camera.to_uniform(
-                    viewport,
-                    time,
-                    0.0,
-                    false,
-                    scene_bounds,
-                    -1.0,
-                    0.0,
-                    [0.0; 4],
-                    [0.0; 4],
-                    [0.0; 4],
-                    [0.0; 4],
-                    [0.0; 4],
-                    [0.0; 4],
-                    [0.0; 4],
-                    [0.0; 4],
-                    [0.0; 4],
-                    [[0.0; 4]; 32],
-                    [[0.0; 4]; 8],
-                );
-                let additive_select_held = ui.input(|i| i.modifiers.shift);
-                output.pending_pick = Some(PendingPick {
-                    mouse_pos: mouse_px,
-                    camera_uniform: pick_uniform,
-                    additive_select_held,
-                });
-            }
-        }
-
-        if response.dragged_by(egui::PointerButton::Primary) && !multi_touch_active {
-            let delta = response.drag_delta();
-            let modifiers = ui.input(|i| i.modifiers);
-            if modifiers.ctrl && modifiers.alt {
-                let sign = if render_config.invert_roll { -1.0 } else { 1.0 };
-                camera.roll_by(sign * delta.x, render_config.roll_sensitivity);
-            } else {
-                camera.orbit(delta.x, delta.y);
-                if render_config.clamp_orbit_pitch {
-                    camera.clamp_pitch();
-                }
-            }
-        }
-
-        if response.dragged_by(egui::PointerButton::Secondary) {
-            let delta = response.drag_delta();
-            camera.pan(delta.x, delta.y);
-        }
     }
 
-    if response.hovered() {
-        let scroll = ui.input(|i| i.smooth_scroll_delta.y);
-        if scroll != 0.0 {
-            camera.zoom(scroll);
-        }
+    if sculpt_active && render_config.sculpt_safety_border > 0.0 {
+        let border_px = rect.width().min(rect.height()) * render_config.sculpt_safety_border;
+        let inner_rect = rect.shrink(border_px);
+        ui.painter().rect_stroke(
+            inner_rect,
+            0.0,
+            egui::Stroke::new(1.0, egui::Color32::from_white_alpha(20)),
+            egui::StrokeKind::Outside,
+        );
     }
-
     // --- Multi-touch: pinch-to-zoom + two-finger pan ---
     if let Some(touch) = ui.input(|i| i.multi_touch()) {
         if touch.zoom_delta != 1.0 {
@@ -2031,3 +1918,4 @@ fn draw_bounding_box(
         }
     }
 }
+

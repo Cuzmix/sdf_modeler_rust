@@ -21,6 +21,7 @@ use crate::material_preset::MaterialLibrary;
 use crate::sculpt::{BrushMode, FalloffMode, SculptBrushProfile, SculptState};
 use crate::settings::{SelectionBehaviorSettings, Settings};
 use crate::ui::dock::Tab;
+use crate::ui::egui_compat::{corner_radius, outside_stroke};
 use crate::ui::gizmo::{self, GizmoMode, GizmoSpace};
 use crate::ui::{
     brush_settings, chips, chrome, history_panel, presented_object_actions, presented_properties,
@@ -903,19 +904,19 @@ fn draw_utility_strip(
                             shell
                                 .actions
                                 .push(Action::SetWorkspace(WorkspacePreset::Modeling));
-                            ui.close_menu();
+                            ui.close();
                         }
                         if ui.button("Sculpting").clicked() {
                             shell
                                 .actions
                                 .push(Action::SetWorkspace(WorkspacePreset::Sculpting));
-                            ui.close_menu();
+                            ui.close();
                         }
                         if ui.button("Rendering").clicked() {
                             shell
                                 .actions
                                 .push(Action::SetWorkspace(WorkspacePreset::Rendering));
-                            ui.close_menu();
+                            ui.close();
                         }
                     });
                     if ui.small_button("Reset").clicked() {
@@ -996,7 +997,7 @@ fn draw_boolean_popup_action(
                     op: op.clone(),
                     primitive: primitive.clone(),
                 });
-                ui.close_menu();
+                ui.close();
             }
         }
     });
@@ -1113,9 +1114,10 @@ fn draw_sculpt_drag_control(
     };
     ui.painter().rect(
         rect,
-        egui::Rounding::same(8.0),
+        corner_radius(8.0),
         fill,
         egui::Stroke::new(1.0, egui::Color32::from_rgb(86, 90, 104)),
+        outside_stroke(),
     );
     ui.painter().text(
         rect.center_top() + egui::vec2(0.0, 10.0),
@@ -1502,7 +1504,7 @@ fn show_chrome_window(
         .default_pos(default_pos)
         .default_size(default_size)
         .min_size(min_size)
-        .frame(egui::Frame::none())
+        .frame(egui::Frame::new())
         .show(ctx, |ui| {
             chrome::surface_frame(ctx).show(ui, |ui| add_contents(ui));
         });
@@ -1776,3 +1778,4 @@ mod tests {
         );
     }
 }
+

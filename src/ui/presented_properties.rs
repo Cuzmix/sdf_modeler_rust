@@ -956,7 +956,7 @@ fn draw_operation_input_row(
                         slot,
                         primitive: primitive.clone(),
                     });
-                    ui.close_menu();
+                    ui.close();
                 }
             }
         });
@@ -1110,3 +1110,4 @@ fn draw_attached_sculpt_row(
         }
     }
 }
+

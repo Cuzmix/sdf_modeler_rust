@@ -5,6 +5,7 @@ pub mod chips;
 pub mod chrome;
 pub mod command_palette;
 pub mod dock;
+pub mod egui_compat;
 pub mod export_dialog;
 pub mod export_progress;
 pub mod gizmo;

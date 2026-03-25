@@ -3,7 +3,7 @@
 mod action_handler;
 pub(crate) mod actions;
 mod async_tasks;
-mod backend_frame;
+pub(crate) mod backend_frame;
 mod egui_frontend;
 mod egui_runtime;
 mod egui_state;
@@ -22,6 +22,7 @@ pub(crate) mod slint_frontend;
 pub(crate) mod state;
 pub(crate) mod ui_geometry;
 mod ui_panels;
+pub(crate) mod viewport_interaction;
 
 use crate::compat::{Duration, Instant};
 use std::collections::HashMap;
@@ -471,6 +472,7 @@ impl SdfApp {
                 expert_panels: state::ExpertPanelRegistry::default(),
                 selection: state::SceneSelectionState::default(),
                 scene_graph_view: state::SceneGraphViewState::default(),
+                viewport_interaction: state::ViewportInteractionState::default(),
                 show_debug: false,
                 show_help: false,
                 show_export_dialog: false,

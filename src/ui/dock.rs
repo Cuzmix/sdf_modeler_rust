@@ -129,6 +129,7 @@ pub fn create_dock_rendering() -> DockState<Tab> {
 
 /// Refs needed only by the viewport tab.
 pub struct ViewportContext<'a> {
+    pub viewport_interaction: &'a mut crate::app::state::ViewportInteractionState,
     pub gizmo_state: &'a mut GizmoState,
     pub gizmo_mode: &'a GizmoMode,
     pub gizmo_space: &'a GizmoSpace,
@@ -255,6 +256,7 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
                     &mut self.node_graph_state.selected,
                     &self.node_graph_state.selected_set,
                     self.multi_transform_edit,
+                    self.viewport.viewport_interaction,
                     self.viewport.gizmo_state,
                     self.viewport.gizmo_mode,
                     self.viewport.gizmo_space,

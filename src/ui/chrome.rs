@@ -1,3 +1,5 @@
+use crate::ui::egui_compat::{corner_radius, margin_same, margin_symmetric, shadow};
+
 const SURFACE_FILL: egui::Color32 = egui::Color32::from_rgba_premultiplied(24, 26, 31, 238);
 const SURFACE_STROKE: egui::Color32 = egui::Color32::from_rgba_premultiplied(88, 94, 110, 185);
 const ACTION_FILL: egui::Color32 = egui::Color32::from_rgba_premultiplied(44, 48, 58, 220);
@@ -22,14 +24,15 @@ pub fn surface_frame(ctx: &egui::Context) -> egui::Frame {
     egui::Frame::window(&ctx.style())
         .fill(SURFACE_FILL)
         .stroke(egui::Stroke::new(1.0, SURFACE_STROKE))
-        .rounding(egui::Rounding::same(SURFACE_CORNER_RADIUS))
-        .inner_margin(egui::Margin::same(10.0))
-        .shadow(egui::epaint::Shadow {
-            offset: egui::vec2(0.0, 10.0),
-            blur: 28.0,
-            spread: 1.0,
-            color: egui::Color32::from_black_alpha(72),
-        })
+        .corner_radius(corner_radius(SURFACE_CORNER_RADIUS))
+        .inner_margin(margin_same(10.0))
+        .shadow(shadow(
+            0.0,
+            10.0,
+            28.0,
+            1.0,
+            egui::Color32::from_black_alpha(72),
+        ))
 }
 
 pub fn action_button(ui: &mut egui::Ui, label: &str, active: bool) -> egui::Response {
@@ -47,7 +50,7 @@ pub fn action_button(ui: &mut egui::Ui, label: &str, active: bool) -> egui::Resp
         )
         .fill(fill)
         .stroke(egui::Stroke::new(1.0, ACTION_STROKE))
-        .rounding(egui::Rounding::same(ACTION_CORNER_RADIUS))
+        .corner_radius(corner_radius(ACTION_CORNER_RADIUS))
         .min_size(egui::vec2(24.0, 22.0)),
     )
 }
@@ -67,7 +70,7 @@ pub fn tab_pill(ui: &mut egui::Ui, label: &str, active: bool) -> egui::Response 
         )
         .fill(fill)
         .stroke(egui::Stroke::new(1.0, ACTION_STROKE))
-        .rounding(egui::Rounding::same(ACTION_CORNER_RADIUS))
+        .corner_radius(corner_radius(ACTION_CORNER_RADIUS))
         .min_size(egui::vec2(76.0, 24.0)),
     )
 }
@@ -94,11 +97,11 @@ pub fn with_action_button_style<R>(
 }
 
 pub fn card_frame() -> egui::Frame {
-    egui::Frame::none()
+    egui::Frame::new()
         .fill(CARD_FILL)
         .stroke(egui::Stroke::new(1.0, CARD_STROKE))
-        .rounding(egui::Rounding::same(CARD_CORNER_RADIUS))
-        .inner_margin(egui::Margin::same(10.0))
+        .corner_radius(corner_radius(CARD_CORNER_RADIUS))
+        .inner_margin(margin_same(10.0))
 }
 
 pub fn section_title(ui: &mut egui::Ui, title: &str, subtitle: Option<&str>) {
@@ -122,9 +125,9 @@ pub fn tree_row_frame(selected: bool, dimmed: bool) -> egui::Frame {
         TREE_ROW_STROKE
     };
 
-    egui::Frame::none()
+    egui::Frame::new()
         .fill(fill)
         .stroke(egui::Stroke::new(1.0, stroke))
-        .rounding(egui::Rounding::same(TREE_ROW_CORNER_RADIUS))
-        .inner_margin(egui::Margin::symmetric(8.0, 6.0))
+        .corner_radius(corner_radius(TREE_ROW_CORNER_RADIUS))
+        .inner_margin(margin_symmetric(8.0, 6.0))
 }

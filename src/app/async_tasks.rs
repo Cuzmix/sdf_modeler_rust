@@ -173,6 +173,22 @@ impl SdfApp {
             generation,
         }
     }
+
+    pub(super) fn render_viewport_texture(
+        &self,
+        target_view: &wgpu::TextureView,
+        width: u32,
+        height: u32,
+    ) {
+        let resources = self.gpu.viewport_resources.read();
+        let uniform = self.build_viewport_uniform(&resources, width, height);
+        resources.render_to_view(
+            &self.gpu.render_context.device,
+            &self.gpu.render_context.queue,
+            &uniform,
+            target_view,
+        );
+    }
     // ── Bake ─────────────────────────────────────────────────────────────
 
     #[cfg(not(target_arch = "wasm32"))]

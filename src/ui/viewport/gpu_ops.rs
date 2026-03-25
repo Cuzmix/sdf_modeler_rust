@@ -5,6 +5,22 @@ use crate::gpu::picking::{PendingPick, PickResult};
 use super::{BrushDispatch, ViewportResources, INITIAL_VOXEL_CAPACITY};
 
 impl ViewportResources {
+    pub fn render_to_view(
+        &self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        uniform: &CameraUniform,
+        view: &wgpu::TextureView,
+    ) {
+        queue.write_buffer(&self.camera_buffer, 0, bytemuck::bytes_of(uniform));
+
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Viewport Render Encoder"),
+        });
+        self.encode_render_pass(&mut encoder, view);
+        queue.submit(std::iter::once(encoder.finish()));
+    }
+
     pub fn update_scene_buffer(
         &mut self,
         device: &wgpu::Device,
@@ -80,7 +96,10 @@ impl ViewportResources {
         pending: &PendingPick,
     ) -> Option<PickResult> {
         let rx = self.submit_pick(device, queue, pending);
-        device.poll(wgpu::Maintain::Wait);
+        let _ = device.poll(wgpu::PollType::Wait {
+            submission_index: None,
+            timeout: None,
+        });
         Self::read_pick_from_receiver(&self.pick_staging_buffer, rx)
     }
 
@@ -289,41 +308,19 @@ impl ViewportResources {
             label: Some("Screenshot Encoder"),
         });
 
-        // Render pass
-        {
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Screenshot Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
-            pass.set_pipeline(&self.pipeline);
-            pass.set_bind_group(0, &self.camera_bind_group, &[]);
-            pass.set_bind_group(1, &self.scene_bind_group, &[]);
-            pass.set_bind_group(2, &self.voxel_tex_bind_group, &[]);
-            pass.set_bind_group(3, &self.environment.bind_group, &[]);
-            pass.draw(0..3, 0..1);
-        }
+        self.encode_render_pass(&mut encoder, &view);
 
         // Copy texture to staging buffer
         encoder.copy_texture_to_buffer(
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 texture: &texture,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            wgpu::ImageCopyBuffer {
+            wgpu::TexelCopyBufferInfo {
                 buffer: &staging,
-                layout: wgpu::ImageDataLayout {
+                layout: wgpu::TexelCopyBufferLayout {
                     offset: 0,
                     bytes_per_row: Some(padded_row),
                     rows_per_image: Some(height),
@@ -344,7 +341,10 @@ impl ViewportResources {
         buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
             let _ = tx.send(result);
         });
-        device.poll(wgpu::Maintain::Wait);
+        let _ = device.poll(wgpu::PollType::Wait {
+            submission_index: None,
+            timeout: None,
+        });
         let _ = rx.recv();
 
         let data = buffer_slice.get_mapped_range();
@@ -359,4 +359,34 @@ impl ViewportResources {
 
         pixels
     }
+
+    fn encode_render_pass(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        view: &wgpu::TextureView,
+    ) {
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Viewport Render Pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+        pass.set_pipeline(&self.pipeline);
+        pass.set_bind_group(0, &self.camera_bind_group, &[]);
+        pass.set_bind_group(1, &self.scene_bind_group, &[]);
+        pass.set_bind_group(2, &self.voxel_tex_bind_group, &[]);
+        pass.set_bind_group(3, &self.environment.bind_group, &[]);
+        pass.draw(0..3, 0..1);
+    }
 }
+
+

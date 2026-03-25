@@ -16,6 +16,8 @@ pub(crate) fn native_device_descriptor(adapter: &wgpu::Adapter) -> wgpu::DeviceD
             max_storage_textures_per_shader_stage: 4,
             ..base_limits
         },
+        experimental_features: wgpu::ExperimentalFeatures::disabled(),
         memory_hints: wgpu::MemoryHints::default(),
+        trace: wgpu::Trace::Off,
     }
 }

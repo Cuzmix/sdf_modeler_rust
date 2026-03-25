@@ -4,7 +4,7 @@ use crate::app::{ExportStatus, ImportStatus};
 
 /// Draw a dimmed overlay behind modals.
 fn draw_overlay(ctx: &egui::Context) {
-    let screen_rect = ctx.screen_rect();
+    let screen_rect = ctx.content_rect();
     egui::Area::new(egui::Id::new("progress_modal_overlay"))
         .fixed_pos(screen_rect.min)
         .show(ctx, |ui| {
@@ -152,3 +152,4 @@ pub fn draw_import(ctx: &egui::Context, import_status: &ImportStatus) -> bool {
     ctx.request_repaint();
     true
 }
+

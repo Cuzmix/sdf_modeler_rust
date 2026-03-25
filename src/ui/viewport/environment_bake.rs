@@ -244,6 +244,7 @@ impl EnvironmentBakeGpu {
                 label: Some("Environment Bake Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &target_view,
+                    depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
@@ -323,13 +324,13 @@ impl EnvironmentBakeGpu {
             layout: Some(layout),
             vertex: wgpu::VertexState {
                 module: shader,
-                entry_point: "vs_environment_bake",
+                entry_point: Some("vs_environment_bake"),
                 buffers: &[],
                 compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: shader,
-                entry_point: fragment_entry_point,
+                entry_point: Some(fragment_entry_point),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: target_format,
                     blend: None,
@@ -357,13 +358,13 @@ impl EnvironmentBakeGpu {
             layout: Some(layout),
             vertex: wgpu::VertexState {
                 module: shader,
-                entry_point: "vs_environment_bake",
+                entry_point: Some("vs_environment_bake"),
                 buffers: &[],
                 compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: shader,
-                entry_point: "fs_brdf_lut",
+                entry_point: Some("fs_brdf_lut"),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: target_format,
                     blend: None,
@@ -409,6 +410,7 @@ impl EnvironmentBakeGpu {
             label: Some("Environment Cube Face View"),
             format: None,
             dimension: Some(wgpu::TextureViewDimension::D2),
+            usage: None,
             aspect: wgpu::TextureAspect::All,
             base_mip_level: mip_level,
             mip_level_count: Some(1),
@@ -561,3 +563,5 @@ mod tests {
         assert_eq!(pass_count, 79);
     }
 }
+
+

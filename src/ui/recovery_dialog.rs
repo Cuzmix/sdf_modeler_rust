@@ -1,3 +1,5 @@
+use crate::ui::egui_compat::{margin_symmetric, shadow};
+
 pub enum RecoveryDialogAction {
     Recover,
     Discard,
@@ -45,13 +47,14 @@ pub fn draw(
         .frame(
             egui::Frame::window(&ctx.style())
                 .fill(visuals.window_fill.gamma_multiply(1.1))
-                .inner_margin(egui::Margin::symmetric(18.0, 14.0))
-                .shadow(egui::epaint::Shadow {
-                    offset: egui::vec2(0.0, 10.0),
-                    blur: 28.0,
-                    spread: 2.0,
-                    color: egui::Color32::from_black_alpha(96),
-                }),
+                .inner_margin(margin_symmetric(18.0, 14.0))
+                .shadow(shadow(
+                    0.0,
+                    10.0,
+                    28.0,
+                    2.0,
+                    egui::Color32::from_black_alpha(96),
+                )),
         )
         .show(ctx, |ui| {
             ui.set_min_width(460.0);

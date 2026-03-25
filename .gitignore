@@ -3,6 +3,7 @@
 *.log
 /target_build_validation/
 /target_validation_build/
+/.tools/
 /.android-sdk/
 /.android-user/
 *.apk

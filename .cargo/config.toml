@@ -1,0 +1,7 @@
+[env]
+LIBCLANG_PATH = { value = ".tools/llvm/bin", relative = true }
+LLVM_HOME = { value = ".tools/llvm", relative = true }
+FORCE_SKIA_BUILD = "1"
+GIT_CONFIG_GLOBAL = { value = ".cargo/skia.gitconfig", relative = true }
+SKIA_NINJA_COMMAND = { value = ".tools/ninja/ninja.exe", relative = true }
+SKIA_SOURCE_DIR = { value = ".tools/skia", relative = true }

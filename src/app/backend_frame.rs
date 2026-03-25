@@ -12,14 +12,19 @@ pub(super) struct FrameInputSnapshot {
     pub is_dragging_ui: bool,
 }
 
-pub(super) struct UiFrameFeedback {
+#[derive(Default)]
+pub(crate) struct ViewportUiFeedback {
     pub pending_pick: Option<PendingPick>,
     pub sculpt_ctrl_held: bool,
     pub sculpt_shift_held: bool,
     pub sculpt_pressure: f32,
+    pub brush_radius_delta: f32,
+    pub brush_strength_delta: f32,
     pub is_hover_pick: bool,
     pub gizmo_drag_active: bool,
 }
+
+pub(super) type UiFrameFeedback = ViewportUiFeedback;
 
 #[derive(Debug, Default)]
 pub(super) struct FrameCommands {

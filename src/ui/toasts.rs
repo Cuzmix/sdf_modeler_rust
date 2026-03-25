@@ -1,3 +1,5 @@
+use crate::ui::egui_compat::{corner_radius, margin_symmetric};
+
 use crate::app::Toast;
 
 /// Draw active toast notifications (bottom-right, auto-dismissing with fade-out).
@@ -31,10 +33,10 @@ pub fn draw(ctx: &egui::Context, toasts: &mut Vec<Toast>) {
                     )
                 };
 
-                egui::Frame::none()
+                egui::Frame::new()
                     .fill(bg)
-                    .rounding(6.0)
-                    .inner_margin(egui::Margin::symmetric(12.0, 8.0))
+                    .corner_radius(corner_radius(6.0))
+                    .inner_margin(margin_symmetric(12.0, 8.0))
                     .show(ui, |ui| {
                         ui.label(egui::RichText::new(&toast.message).color(text_color));
                     });

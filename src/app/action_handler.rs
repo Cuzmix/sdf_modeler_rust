@@ -1387,6 +1387,7 @@ impl SdfApp {
     }
 
     /// Load a project file and update all relevant state.
+    #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn load_project_from_path(&mut self, path: &std::path::Path) -> bool {
         match crate::io::load_project(&path.to_path_buf()) {
             Ok(project) => {
@@ -1429,6 +1430,11 @@ impl SdfApp {
                 false
             }
         }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub(crate) fn load_project_from_path(&mut self, _path: &std::path::Path) -> bool {
+        false
     }
 
     /// Duplicate a subtree and offset the clone's position.
@@ -1656,6 +1662,7 @@ mod tests {
             expert_panels: crate::app::state::ExpertPanelRegistry::default(),
             selection: SceneSelectionState::default(),
             scene_graph_view: SceneGraphViewState::default(),
+            viewport_interaction: crate::app::state::ViewportInteractionState::default(),
             show_debug: false,
             show_help: false,
             show_export_dialog: false,

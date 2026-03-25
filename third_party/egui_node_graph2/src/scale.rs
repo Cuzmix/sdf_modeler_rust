@@ -1,5 +1,5 @@
 use egui::epaint::Shadow;
-use egui::{style::WidgetVisuals, Margin, Rounding, Stroke, Style, Vec2};
+use egui::{style::WidgetVisuals, CornerRadius, Margin, Stroke, Style, Vec2};
 
 // Copied from https://github.com/gzp-crey/shine
 
@@ -25,19 +25,19 @@ impl Scale for Vec2 {
 
 impl Scale for Margin {
     fn scale(&mut self, amount: f32) {
-        self.left *= amount;
-        self.right *= amount;
-        self.top *= amount;
-        self.bottom *= amount;
+        self.left = ((self.left as f32) * amount).round() as i8;
+        self.right = ((self.right as f32) * amount).round() as i8;
+        self.top = ((self.top as f32) * amount).round() as i8;
+        self.bottom = ((self.bottom as f32) * amount).round() as i8;
     }
 }
 
-impl Scale for Rounding {
+impl Scale for CornerRadius {
     fn scale(&mut self, amount: f32) {
-        self.ne *= amount;
-        self.nw *= amount;
-        self.se *= amount;
-        self.sw *= amount;
+        self.ne = ((self.ne as f32) * amount).round().clamp(0.0, 255.0) as u8;
+        self.nw = ((self.nw as f32) * amount).round().clamp(0.0, 255.0) as u8;
+        self.se = ((self.se as f32) * amount).round().clamp(0.0, 255.0) as u8;
+        self.sw = ((self.sw as f32) * amount).round().clamp(0.0, 255.0) as u8;
     }
 }
 
@@ -49,7 +49,9 @@ impl Scale for Stroke {
 
 impl Scale for Shadow {
     fn scale(&mut self, amount: f32) {
-        self.spread *= amount.clamp(0.4, 1.);
+        self.spread = ((self.spread as f32) * amount.clamp(0.4, 1.))
+            .round()
+            .clamp(0.0, 255.0) as u8;
     }
 }
 
@@ -57,7 +59,7 @@ impl Scale for WidgetVisuals {
     fn scale(&mut self, amount: f32) {
         self.bg_stroke.scale(amount);
         self.fg_stroke.scale(amount);
-        self.rounding.scale(amount);
+        self.corner_radius.scale(amount);
         self.expansion *= amount.clamp(0.4, 1.);
     }
 }
@@ -102,7 +104,7 @@ impl Scale for Style {
         self.visuals.resize_corner_size *= amount;
         self.visuals.text_cursor.stroke.width *= amount;
         self.visuals.clip_rect_margin *= amount;
-        self.visuals.window_rounding.scale(amount);
+        self.visuals.window_corner_radius.scale(amount);
         self.visuals.window_shadow.scale(amount);
         self.visuals.popup_shadow.scale(amount);
     }

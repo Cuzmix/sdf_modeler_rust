@@ -239,6 +239,7 @@ impl SdfApp {
             time: now_seconds as f32,
             bake_progress,
             viewport: ViewportContext {
+                viewport_interaction: &mut self.ui.viewport_interaction,
                 gizmo_state: &mut self.gizmo.state,
                 gizmo_mode: &self.gizmo.mode,
                 gizmo_space: &self.gizmo.space,
@@ -284,7 +285,7 @@ impl SdfApp {
         };
 
         egui::CentralPanel::default()
-            .frame(egui::Frame::none())
+            .frame(egui::Frame::new())
             .show(ctx, |ui| {
                 egui_dock::DockArea::new(&mut self.egui.dock_state)
                     .show_inside(ui, &mut tab_viewer);
@@ -348,8 +349,11 @@ impl SdfApp {
             sculpt_ctrl_held,
             sculpt_shift_held,
             sculpt_pressure,
+            brush_radius_delta: 0.0,
+            brush_strength_delta: 0.0,
             is_hover_pick,
             gizmo_drag_active,
         }
     }
 }
+

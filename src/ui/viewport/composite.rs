@@ -255,7 +255,7 @@ impl ViewportResources {
             label: Some("Comp Compute Pipeline"),
             layout: Some(&compute_layout),
             module: &compute_shader,
-            entry_point: "cs_composite",
+            entry_point: Some("cs_composite"),
             compilation_options: Default::default(),
             cache: None,
         });
@@ -305,13 +305,13 @@ impl ViewportResources {
             layout: Some(&render_layout),
             vertex: wgpu::VertexState {
                 module: &render_shader,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 buffers: &[],
                 compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &render_shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: self.target_format,
                     blend: None,
@@ -406,3 +406,4 @@ impl ViewportResources {
         queue.submit(std::iter::once(encoder.finish()));
     }
 }
+

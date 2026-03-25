@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use crate::app::actions::{Action, ActionSink};
 use crate::graph::scene::{NodeData, NodeId, Scene, SceneNode};
+use crate::ui::egui_compat::outside_stroke;
 
 const COLOR_SELECTED: egui::Color32 = egui::Color32::from_rgb(255, 200, 60);
 const COLOR_NORMAL: egui::Color32 = egui::Color32::from_rgb(200, 200, 210);
@@ -126,7 +127,7 @@ pub fn draw(
             egui::Color32::from_gray(60)
         };
         ui.painter()
-            .rect_stroke(rect, 2.0, egui::Stroke::new(1.5, color));
+            .rect_stroke(rect, 2.0, egui::Stroke::new(1.5, color), outside_stroke());
         ui.painter().text(
             rect.center(),
             egui::Align2::CENTER_CENTER,
@@ -198,23 +199,23 @@ fn node_context_menu(
         let hidden = scene.is_hidden(id);
         if ui.button(if hidden { "Show" } else { "Hide" }).clicked() {
             actions.push(Action::ToggleVisibility(id));
-            ui.close_menu();
+            ui.close();
         }
         let locked = scene.nodes.get(&id).is_some_and(|n| n.locked);
         if ui.button(if locked { "Unlock" } else { "Lock" }).clicked() {
             actions.push(Action::ToggleLock(id));
-            ui.close_menu();
+            ui.close();
         }
         if ui.button("Rename").clicked() {
             if let Some(node) = scene.nodes.get(&id) {
                 *rename_buf = node.name.clone();
                 *renaming = Some(id);
             }
-            ui.close_menu();
+            ui.close();
         }
         if ui.button("Save as Preset...").clicked() {
             actions.push(Action::SaveNodePreset(id));
-            ui.close_menu();
+            ui.close();
         }
         let delete_enabled = !locked;
         if ui
@@ -225,7 +226,7 @@ fn node_context_menu(
             if *renaming == Some(id) {
                 *renaming = None;
             }
-            ui.close_menu();
+            ui.close();
         }
     });
 }
@@ -250,6 +251,7 @@ fn handle_drag_drop(
                 response.rect,
                 2.0,
                 egui::Stroke::new(2.0, COLOR_DROP_TARGET),
+                outside_stroke(),
             );
 
             // Handle drop on release
@@ -619,3 +621,4 @@ fn draw_flat_node(
         );
     });
 }
+

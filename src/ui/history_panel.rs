@@ -1,5 +1,6 @@
 use crate::app::actions::{Action, ActionSink};
 use crate::graph::history::History;
+use crate::ui::egui_compat::{corner_radius, margin_symmetric};
 
 #[derive(Clone, Copy)]
 enum TimelinePhase {
@@ -89,14 +90,12 @@ fn draw_timeline_row(ui: &mut egui::Ui, label: &str, phase: TimelinePhase) {
         ),
     };
 
-    egui::Frame {
-        inner_margin: egui::Margin::symmetric(8.0, 6.0),
-        fill,
-        stroke,
-        rounding: egui::Rounding::same(4.0),
-        ..Default::default()
-    }
-    .show(ui, |ui| {
+    egui::Frame::new()
+        .inner_margin(margin_symmetric(8.0, 6.0))
+        .fill(fill)
+        .stroke(stroke)
+        .corner_radius(corner_radius(4.0))
+        .show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
             ui.colored_label(stroke.color, icon);
@@ -109,5 +108,5 @@ fn draw_timeline_row(ui: &mut egui::Ui, label: &str, phase: TimelinePhase) {
                 ui.label(text);
             }
         });
-    });
+        });
 }

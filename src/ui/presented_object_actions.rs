@@ -29,7 +29,7 @@ pub fn draw_host_add_menu_contents(
     if let Some(target_id) = presented_wrap_target(scene, object.host_id) {
         if ui.button("Add Transform").clicked() {
             actions.push(Action::InsertTransformAbove { target: target_id });
-            ui.close_menu();
+            ui.close();
         }
         ui.menu_button("Add Modifier", |ui| {
             for modifier in ModifierKind::ALL {
@@ -38,7 +38,7 @@ pub fn draw_host_add_menu_contents(
                         target: target_id,
                         kind: modifier.clone(),
                     });
-                    ui.close_menu();
+                    ui.close();
                 }
             }
         });
@@ -46,7 +46,7 @@ pub fn draw_host_add_menu_contents(
 
     if object.supports_add_sculpt() && ui.button("Add Sculpt Layer").clicked() {
         push_add_sculpt_layer_action(scene, object, actions);
-        ui.close_menu();
+        ui.close();
     }
 }
 
@@ -84,7 +84,7 @@ pub fn draw_object_create_actions(
                 if ui.button(primitive.base_name()).clicked() {
                     actions.push(Action::CreatePrimitive(primitive.clone()));
                     if close_after_action {
-                        ui.close_menu();
+                        ui.close();
                     }
                 }
             }
@@ -94,7 +94,7 @@ pub fn draw_object_create_actions(
             if ui.button("Duplicate Selected").clicked() {
                 actions.push(Action::DuplicatePresentedObject(object.host_id));
                 if close_after_action {
-                    ui.close_menu();
+                    ui.close();
                 }
             }
 
@@ -108,7 +108,7 @@ pub fn draw_object_create_actions(
                                         op: op.clone(),
                                         primitive: primitive.clone(),
                                     });
-                                    ui.close_menu();
+                                    ui.close();
                                 }
                             }
                         });
@@ -118,19 +118,19 @@ pub fn draw_object_create_actions(
                 if object.supports_add_sculpt() && ui.button("Add Sculpt Layer").clicked() {
                     push_add_sculpt_layer_action(scene, object, actions);
                     if close_after_action {
-                        ui.close_menu();
+                        ui.close();
                     }
                 } else if let Some(sculpt_id) = object.attached_sculpt_id {
                     if ui.button("Enter Sculpt").clicked() {
                         actions.push(Action::EnterSculptMode);
                         if close_after_action {
-                            ui.close_menu();
+                            ui.close();
                         }
                     }
                     if ui.button("Convert to Voxel Object").clicked() {
                         push_convert_to_voxel_action(scene, object, sculpt_id, actions);
                         if close_after_action {
-                            ui.close_menu();
+                            ui.close();
                         }
                     }
                 }
@@ -176,3 +176,4 @@ pub fn sculpt_color_for_object(scene: &Scene, object: PresentedObjectRef) -> Vec
         .map(|material| material.base_color)
         .unwrap_or(Vec3::splat(0.6))
 }
+

@@ -130,14 +130,14 @@ impl ViewportResources {
         }
         // Upload data
         queue.write_texture(
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 texture: &self.voxel_textures[tex_idx],
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
             bytemuck::cast_slice(data),
-            wgpu::ImageDataLayout {
+            wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(resolution * 4), // R32Float = 4 bytes per texel
                 rows_per_image: Some(resolution),
@@ -169,14 +169,14 @@ impl ViewportResources {
         let sub_data = &data[start_index..end_index];
         let depth = z1 - z0 + 1;
         queue.write_texture(
-            wgpu::ImageCopyTexture {
+            wgpu::TexelCopyTextureInfo {
                 texture: &self.voxel_textures[tex_idx],
                 mip_level: 0,
                 origin: wgpu::Origin3d { x: 0, y: 0, z: z0 },
                 aspect: wgpu::TextureAspect::All,
             },
             bytemuck::cast_slice(sub_data),
-            wgpu::ImageDataLayout {
+            wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(resolution * 4),
                 rows_per_image: Some(resolution),
@@ -189,3 +189,4 @@ impl ViewportResources {
         );
     }
 }
+
