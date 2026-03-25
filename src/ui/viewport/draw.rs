@@ -681,9 +681,9 @@ fn capture_egui_viewport_input(
     let pointer_delta_logical = ui.input(|input| input.pointer.delta());
     let primary_pressed = pointer_inside
         && ui.input(|input| input.pointer.button_pressed(egui::PointerButton::Primary));
-    let primary_released =
-        ui.input(|input| input.pointer.button_released(egui::PointerButton::Primary))
-            && (pointer_inside || interaction_state.primary_press_origin_physical.is_some());
+    let primary_released = ui
+        .input(|input| input.pointer.button_released(egui::PointerButton::Primary))
+        && (pointer_inside || interaction_state.primary_press_origin_physical.is_some());
     let primary_down = ui.input(|input| input.pointer.button_down(egui::PointerButton::Primary))
         && (pointer_inside || interaction_state.primary_press_origin_physical.is_some());
     let secondary_down = response.dragged_by(egui::PointerButton::Secondary)
@@ -704,9 +704,8 @@ fn capture_egui_viewport_input(
             pointer_delta_logical.x * pixels_per_point,
             pointer_delta_logical.y * pixels_per_point,
         ],
-        wheel_delta_logical: ui.input(|input| {
-            [input.smooth_scroll_delta.x, input.smooth_scroll_delta.y]
-        }),
+        wheel_delta_logical: ui
+            .input(|input| [input.smooth_scroll_delta.x, input.smooth_scroll_delta.y]),
         primary: PointerButtonSnapshot {
             down: primary_down,
             pressed: primary_pressed,
@@ -716,7 +715,11 @@ fn capture_egui_viewport_input(
             down: secondary_down,
             pressed: pointer_inside
                 && ui.input(|input| input.pointer.button_pressed(egui::PointerButton::Secondary)),
-            released: ui.input(|input| input.pointer.button_released(egui::PointerButton::Secondary)),
+            released: ui.input(|input| {
+                input
+                    .pointer
+                    .button_released(egui::PointerButton::Secondary)
+            }),
         },
         middle: PointerButtonSnapshot {
             down: middle_down,
@@ -742,7 +745,10 @@ fn egui_pointer_pressure(ui: &egui::Ui) -> f32 {
             }
         }
         for event in &input.events {
-            if let egui::Event::Touch { force: Some(force), .. } = event {
+            if let egui::Event::Touch {
+                force: Some(force), ..
+            } = event
+            {
                 if *force > 0.0 {
                     return *force;
                 }
@@ -1227,8 +1233,7 @@ pub fn draw(
             actions,
         );
     } else if ui.input(|input| input.pointer.button_released(egui::PointerButton::Primary)) {
-        viewport_interaction.primary_drag_mode =
-            crate::app::state::ViewportPrimaryDragMode::None;
+        viewport_interaction.primary_drag_mode = crate::app::state::ViewportPrimaryDragMode::None;
         viewport_interaction.primary_drag_distance = 0.0;
         viewport_interaction.primary_press_origin_physical = None;
     }
@@ -1918,4 +1923,3 @@ fn draw_bounding_box(
         }
     }
 }
-

@@ -975,14 +975,10 @@ impl SdfApp {
         if matches!(self.async_state.pick_state, PickState::Pending { .. }) {
             // Wait for the pending map_async to complete before unmapping -
             // wgpu 22 panics if you unmap a buffer that's still in "mapping" state.
-            let _ = self
-                .gpu
-                .render_context
-                .device
-                .poll(wgpu::PollType::Wait {
-                    submission_index: None,
-                    timeout: None,
-                });
+            let _ = self.gpu.render_context.device.poll(wgpu::PollType::Wait {
+                submission_index: None,
+                timeout: None,
+            });
             let viewport_resources = self.gpu.viewport_resources.read();
             viewport_resources.cancel_pending_pick();
         }
@@ -1068,4 +1064,3 @@ mod tests {
         );
     }
 }
-

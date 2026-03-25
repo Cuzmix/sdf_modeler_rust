@@ -621,4 +621,3 @@ fn draw_flat_node(
         );
     });
 }
-

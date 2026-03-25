@@ -96,17 +96,17 @@ fn draw_timeline_row(ui: &mut egui::Ui, label: &str, phase: TimelinePhase) {
         .stroke(stroke)
         .corner_radius(corner_radius(4.0))
         .show(ui, |ui| {
-        ui.set_width(ui.available_width());
-        ui.horizontal(|ui| {
-            ui.colored_label(stroke.color, icon);
-            ui.add_space(6.0);
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                ui.colored_label(stroke.color, icon);
+                ui.add_space(6.0);
 
-            let text = egui::RichText::new(label).color(text_color);
-            if strong {
-                ui.label(text.strong());
-            } else {
-                ui.label(text);
-            }
-        });
+                let text = egui::RichText::new(label).color(text_color);
+                if strong {
+                    ui.label(text.strong());
+                } else {
+                    ui.label(text);
+                }
+            });
         });
 }

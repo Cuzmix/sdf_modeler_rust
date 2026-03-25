@@ -2126,4 +2126,3 @@ pub(crate) fn draw_light_linking_section(
             });
         });
 }
-

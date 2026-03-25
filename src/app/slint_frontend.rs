@@ -232,12 +232,13 @@ impl SlintHostState {
         let viewport_feedback = self
             .app
             .run_viewport_interaction(&self.viewport_input.take_snapshot(frame_now), &mut actions);
+        let camera_changed = viewport_feedback.camera_changed;
         apply_brush_adjust_feedback(&mut self.app, &viewport_feedback);
         let had_interaction_actions = !actions.is_empty();
         self.app.process_actions(actions);
-        let commands = self
-            .app
-            .run_backend_post_ui(&frame_input, camera_animating, viewport_feedback);
+        let commands =
+            self.app
+                .run_backend_post_ui(&frame_input, camera_animating, viewport_feedback);
 
         if let Some(ref title) = commands.window_title {
             self.last_window_title = title.clone();
@@ -266,6 +267,7 @@ impl SlintHostState {
         self.viewport_dirty |= viewport_size_changed
             || had_actions
             || had_interaction_actions
+            || camera_changed
             || commands.request_repaint
             || snapshot_changed
             || woke;
@@ -343,11 +345,7 @@ impl SlintHostState {
         self.viewport_dirty = true;
     }
 
-    fn needs_continuous_ticks(
-        &self,
-        camera_animating: bool,
-        commands: &FrameCommands,
-    ) -> bool {
+    fn needs_continuous_ticks(&self, camera_animating: bool, commands: &FrameCommands) -> bool {
         camera_animating
             || commands.request_repaint
             || self.viewport_input.needs_continuous_ticks()
@@ -355,9 +353,18 @@ impl SlintHostState {
             || self.app.async_state.sculpt_dragging
             || self.app.async_state.pending_pick.is_some()
             || matches!(self.app.async_state.pick_state, PickState::Pending { .. })
-            || matches!(self.app.async_state.bake_status, BakeStatus::InProgress { .. })
-            || matches!(self.app.async_state.export_status, ExportStatus::InProgress { .. })
-            || matches!(self.app.async_state.import_status, ImportStatus::InProgress { .. })
+            || matches!(
+                self.app.async_state.bake_status,
+                BakeStatus::InProgress { .. }
+            )
+            || matches!(
+                self.app.async_state.export_status,
+                ExportStatus::InProgress { .. }
+            )
+            || matches!(
+                self.app.async_state.import_status,
+                ImportStatus::InProgress { .. }
+            )
     }
 }
 
@@ -614,7 +621,12 @@ fn drive_host_tick(
     active_timer: &Rc<Timer>,
 ) {
     let outcome = host.borrow_mut().tick(window);
-    sync_continuous_timer(window.as_weak(), host, active_timer, outcome.needs_continuous_ticks);
+    sync_continuous_timer(
+        window.as_weak(),
+        host,
+        active_timer,
+        outcome.needs_continuous_ticks,
+    );
     if outcome.request_redraw {
         window.window().request_redraw();
     }

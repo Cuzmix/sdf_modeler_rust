@@ -22,6 +22,7 @@ pub(crate) struct ViewportUiFeedback {
     pub brush_strength_delta: f32,
     pub is_hover_pick: bool,
     pub gizmo_drag_active: bool,
+    pub camera_changed: bool,
 }
 
 pub(super) type UiFrameFeedback = ViewportUiFeedback;

@@ -353,7 +353,7 @@ impl SdfApp {
             brush_strength_delta: 0.0,
             is_hover_pick,
             gizmo_drag_active,
+            camera_changed: false,
         }
     }
 }
-

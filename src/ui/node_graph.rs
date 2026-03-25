@@ -3029,4 +3029,3 @@ fn scalar_drag(
     });
     changed
 }
-

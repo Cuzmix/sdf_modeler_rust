@@ -111,11 +111,14 @@ pub(crate) fn run_viewport_interaction_core(
         input.pointer_delta_physical[0] / input.pixels_per_point.max(1.0),
         input.pointer_delta_physical[1] / input.pixels_per_point.max(1.0),
     ];
+    let pointer_dragged = pointer_delta_logical[0] != 0.0 || pointer_delta_logical[1] != 0.0;
 
     if input.primary.pressed {
         state.primary_press_origin_physical = pointer_pos;
         state.primary_drag_distance = 0.0;
-        state.primary_drag_mode = if sculpt_active {
+        state.primary_drag_mode = if input.modifiers.alt {
+            ViewportPrimaryDragMode::Orbit
+        } else if sculpt_active {
             let stroke_confirmed = last_sculpt_hit.is_some();
             match pointer_pos {
                 Some(pos)
@@ -142,27 +145,32 @@ pub(crate) fn run_viewport_interaction_core(
     }
 
     if input.primary.down {
-        state.primary_drag_distance += glam::Vec2::from_array(input.pointer_delta_physical).length();
+        state.primary_drag_distance +=
+            glam::Vec2::from_array(input.pointer_delta_physical).length();
     }
 
     if input.pointer_inside && input.wheel_delta_logical[1] != 0.0 {
         camera.zoom(input.wheel_delta_logical[1]);
+        feedback.camera_changed = true;
     }
 
-    if input.middle.down
-        && (pointer_delta_logical[0] != 0.0 || pointer_delta_logical[1] != 0.0)
-    {
-        apply_orbit_drag(camera, render_config, pointer_delta_logical, input.modifiers);
+    if input.middle.down && pointer_dragged {
+        apply_orbit_drag(
+            camera,
+            render_config,
+            pointer_delta_logical,
+            input.modifiers,
+        );
+        feedback.camera_changed = true;
     }
 
-    if input.secondary.down
-        && (pointer_delta_logical[0] != 0.0 || pointer_delta_logical[1] != 0.0)
-    {
+    if input.secondary.down && pointer_dragged {
         if sculpt_active && input.modifiers.ctrl {
             feedback.brush_radius_delta = pointer_delta_logical[0] * 0.005 * camera.distance;
             feedback.brush_strength_delta = -pointer_delta_logical[1] * 0.002;
         } else {
             camera.pan(pointer_delta_logical[0], pointer_delta_logical[1]);
+            feedback.camera_changed = true;
         }
     }
 
@@ -181,9 +189,15 @@ pub(crate) fn run_viewport_interaction_core(
 
         if input.primary.down
             && matches!(state.primary_drag_mode, ViewportPrimaryDragMode::Orbit)
-            && (pointer_delta_logical[0] != 0.0 || pointer_delta_logical[1] != 0.0)
+            && pointer_dragged
         {
-            apply_orbit_drag(camera, render_config, pointer_delta_logical, input.modifiers);
+            apply_orbit_drag(
+                camera,
+                render_config,
+                pointer_delta_logical,
+                input.modifiers,
+            );
+            feedback.camera_changed = true;
         } else if input.primary.down
             && matches!(state.primary_drag_mode, ViewportPrimaryDragMode::Sculpt)
             && input.pointer_inside
@@ -219,10 +233,14 @@ pub(crate) fn run_viewport_interaction_core(
             }
         }
     } else {
-        if input.primary.down
-            && (pointer_delta_logical[0] != 0.0 || pointer_delta_logical[1] != 0.0)
-        {
-            apply_orbit_drag(camera, render_config, pointer_delta_logical, input.modifiers);
+        if input.primary.down && pointer_dragged {
+            apply_orbit_drag(
+                camera,
+                render_config,
+                pointer_delta_logical,
+                input.modifiers,
+            );
+            feedback.camera_changed = true;
         }
 
         if allow_selection_pick
@@ -414,4 +432,172 @@ pub(crate) fn cursor_in_sculpt_bounds(
     }
 
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn base_input() -> ViewportInputSnapshot {
+        ViewportInputSnapshot {
+            viewport_size_physical: [1280, 720],
+            pixels_per_point: 1.0,
+            now_seconds: 1.0,
+            pointer_inside: true,
+            pointer_position_physical: Some([640.0, 360.0]),
+            ..ViewportInputSnapshot::default()
+        }
+    }
+
+    #[test]
+    fn wheel_zoom_marks_camera_changed() {
+        let scene = Scene::new();
+        let sculpt_state = SculptState::new_inactive();
+        let render_config = RenderConfig::default();
+        let mut state = ViewportInteractionState::default();
+        let mut camera = Camera::default();
+        let mut actions = Vec::new();
+        let before_distance = camera.distance;
+
+        let feedback = run_viewport_interaction_core(
+            ViewportInteractionContext {
+                state: &mut state,
+                camera: &mut camera,
+                scene: &scene,
+                sculpt_state: &sculpt_state,
+                last_sculpt_hit: None,
+                render_config: &render_config,
+                allow_selection_pick: true,
+            },
+            &ViewportInputSnapshot {
+                wheel_delta_logical: [0.0, 1.0],
+                ..base_input()
+            },
+            &mut actions,
+        );
+
+        assert!(feedback.camera_changed);
+        assert_ne!(camera.distance, before_distance);
+        assert!(actions.is_empty());
+    }
+
+    #[test]
+    fn primary_drag_orbits_camera_and_marks_change() {
+        let scene = Scene::new();
+        let sculpt_state = SculptState::new_inactive();
+        let render_config = RenderConfig::default();
+        let mut state = ViewportInteractionState::default();
+        let mut camera = Camera::default();
+        let mut actions = Vec::new();
+        let before_yaw = camera.yaw;
+        let before_pitch = camera.pitch;
+
+        let feedback = run_viewport_interaction_core(
+            ViewportInteractionContext {
+                state: &mut state,
+                camera: &mut camera,
+                scene: &scene,
+                sculpt_state: &sculpt_state,
+                last_sculpt_hit: None,
+                render_config: &render_config,
+                allow_selection_pick: true,
+            },
+            &ViewportInputSnapshot {
+                pointer_delta_physical: [24.0, -12.0],
+                primary: PointerButtonSnapshot {
+                    down: true,
+                    pressed: true,
+                    released: false,
+                },
+                ..base_input()
+            },
+            &mut actions,
+        );
+
+        assert!(feedback.camera_changed);
+        assert_eq!(state.primary_drag_mode, ViewportPrimaryDragMode::Orbit);
+        assert!(feedback.pending_pick.is_none());
+        assert!(camera.yaw != before_yaw || camera.pitch != before_pitch);
+    }
+
+    #[test]
+    fn sculpt_primary_drag_prefers_sculpt_without_alt() {
+        let scene = Scene::new();
+        let sculpt_state = SculptState::new_active(0);
+        let render_config = RenderConfig::default();
+        let mut state = ViewportInteractionState::default();
+        let mut camera = Camera::default();
+        let mut actions = Vec::new();
+
+        let feedback = run_viewport_interaction_core(
+            ViewportInteractionContext {
+                state: &mut state,
+                camera: &mut camera,
+                scene: &scene,
+                sculpt_state: &sculpt_state,
+                last_sculpt_hit: Some(Vec3::ZERO),
+                render_config: &render_config,
+                allow_selection_pick: true,
+            },
+            &ViewportInputSnapshot {
+                pointer_delta_physical: [18.0, 10.0],
+                primary: PointerButtonSnapshot {
+                    down: true,
+                    pressed: true,
+                    released: false,
+                },
+                pressure: 0.75,
+                ..base_input()
+            },
+            &mut actions,
+        );
+
+        assert_eq!(state.primary_drag_mode, ViewportPrimaryDragMode::Sculpt);
+        assert!(!feedback.camera_changed);
+        assert!(feedback.pending_pick.is_some());
+        assert!((feedback.sculpt_pressure - 0.75).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn alt_primary_drag_forces_orbit_in_sculpt_mode() {
+        let scene = Scene::new();
+        let sculpt_state = SculptState::new_active(0);
+        let render_config = RenderConfig::default();
+        let mut state = ViewportInteractionState::default();
+        let mut camera = Camera::default();
+        let mut actions = Vec::new();
+        let before_yaw = camera.yaw;
+        let before_pitch = camera.pitch;
+
+        let feedback = run_viewport_interaction_core(
+            ViewportInteractionContext {
+                state: &mut state,
+                camera: &mut camera,
+                scene: &scene,
+                sculpt_state: &sculpt_state,
+                last_sculpt_hit: Some(Vec3::ZERO),
+                render_config: &render_config,
+                allow_selection_pick: true,
+            },
+            &ViewportInputSnapshot {
+                pointer_delta_physical: [18.0, 10.0],
+                primary: PointerButtonSnapshot {
+                    down: true,
+                    pressed: true,
+                    released: false,
+                },
+                modifiers: KeyboardModifiers {
+                    alt: true,
+                    ..KeyboardModifiers::default()
+                },
+                ..base_input()
+            },
+            &mut actions,
+        );
+
+        assert_eq!(state.primary_drag_mode, ViewportPrimaryDragMode::Orbit);
+        assert!(feedback.camera_changed);
+        assert!(feedback.pending_pick.is_none());
+        assert!(camera.yaw != before_yaw || camera.pitch != before_pitch);
+    }
 }

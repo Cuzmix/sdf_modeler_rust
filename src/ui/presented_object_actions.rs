@@ -176,4 +176,3 @@ pub fn sculpt_color_for_object(scene: &Scene, object: PresentedObjectRef) -> Vec
         .map(|material| material.base_color)
         .unwrap_or(Vec3::splat(0.6))
 }
-

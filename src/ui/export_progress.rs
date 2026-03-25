@@ -152,4 +152,3 @@ pub fn draw_import(ctx: &egui::Context, import_status: &ImportStatus) -> bool {
     ctx.request_repaint();
     true
 }
-

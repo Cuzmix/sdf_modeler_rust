@@ -518,4 +518,3 @@ fn draw_light_solo_button(
         actions.push(Action::SoloLight(Some(object.host_id)));
     }
 }
-

@@ -1110,4 +1110,3 @@ fn draw_attached_sculpt_row(
         }
     }
 }
-

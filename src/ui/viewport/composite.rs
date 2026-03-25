@@ -406,4 +406,3 @@ impl ViewportResources {
         queue.submit(std::iter::once(encoder.finish()));
     }
 }
-

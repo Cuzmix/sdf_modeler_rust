@@ -360,11 +360,7 @@ impl ViewportResources {
         pixels
     }
 
-    fn encode_render_pass(
-        &self,
-        encoder: &mut wgpu::CommandEncoder,
-        view: &wgpu::TextureView,
-    ) {
+    fn encode_render_pass(&self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Viewport Render Pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -388,5 +384,3 @@ impl ViewportResources {
         pass.draw(0..3, 0..1);
     }
 }
-
-

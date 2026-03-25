@@ -563,5 +563,3 @@ mod tests {
         assert_eq!(pass_count, 79);
     }
 }
-
-

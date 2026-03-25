@@ -1092,4 +1092,3 @@ mod tests {
         assert_eq!(resolutions.brdf_lut_resolution, 256);
     }
 }
-
