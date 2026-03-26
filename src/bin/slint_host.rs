@@ -1,3 +1,5 @@
+#![cfg_attr(all(target_os = "windows", not(debug_assertions)), windows_subsystem = "windows")]
+
 #[cfg(all(not(target_arch = "wasm32"), not(target_os = "android")))]
 fn main() {
     if let Err(error) = sdf_modeler_lib::run_slint_native() {

@@ -18,6 +18,19 @@ slint::include_modules!();
 use host_state::{NativeWgpuContext, SlintHostState};
 
 pub(crate) fn run_slint_host(settings: Settings) -> Result<(), String> {
+    run_slint_host_internal(settings)
+}
+
+#[cfg(target_os = "android")]
+pub(crate) fn run_slint_host_android(
+    app: slint::android::AndroidApp,
+    settings: Settings,
+) -> Result<(), String> {
+    slint::android::init(app).map_err(|error| error.to_string())?;
+    run_slint_host_internal(settings)
+}
+
+fn run_slint_host_internal(settings: Settings) -> Result<(), String> {
     let native_wgpu = create_render_context()?;
     slint::BackendSelector::new()
         .require_wgpu_27(slint::wgpu_27::WGPUConfiguration::Manual {
@@ -60,10 +73,7 @@ pub(crate) fn run_slint_host(settings: Settings) -> Result<(), String> {
 }
 
 fn create_render_context() -> Result<NativeWgpuContext, String> {
-    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-        backends: wgpu::Backends::DX12,
-        ..Default::default()
-    });
+    let instance = wgpu::Instance::new(&crate::native_wgpu::native_instance_descriptor());
     let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
         power_preference: wgpu::PowerPreference::HighPerformance,
         compatible_surface: None,

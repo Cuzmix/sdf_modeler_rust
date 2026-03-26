@@ -12,17 +12,21 @@ mod material_preset;
 mod mesh_import;
 mod native_paths;
 mod native_wgpu;
+mod platform;
 mod sculpt;
 mod settings;
 mod viewport;
 
 pub fn run_native() -> Result<(), String> {
-    let _ = env_logger::builder().is_test(false).try_init();
-
-    let settings = settings::Settings::load();
-    app::slint_frontend::run_slint_host(settings)
+    platform::run_desktop()
 }
 
 pub fn run_slint_native() -> Result<(), String> {
     run_native()
+}
+
+#[cfg(target_os = "android")]
+#[unsafe(no_mangle)]
+pub fn android_main(app: slint::android::AndroidApp) {
+    platform::run_android(app);
 }

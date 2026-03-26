@@ -1,14 +1,15 @@
 # Slint Frontend Structure
 
-This document describes the native desktop frontend after the `egui` to Slint migration.
+This document describes the current Slint host after the `egui` to Slint migration.
 
 ## Overview
 
-The native app now has one UI host:
+The app now has one active Slint UI host with desktop support and Android bootstrap groundwork:
 
 - Slint for windowing, widgets, and declarative layout
 - shared `wgpu` 27 resources for the viewport renderer
 - toolkit-neutral frame logic in `src/app/backend_frame.rs`
+- a small platform bootstrap layer in `src/platform.rs`
 
 The frontend is intentionally split into four layers:
 
@@ -25,7 +26,7 @@ The frontend is intentionally split into four layers:
 
 ### `src/app/slint_frontend/mod.rs`
 
-Desktop bootstrap for the Slint app:
+Shared Slint host bootstrap:
 
 - creates the shared native `wgpu` 27 device and queue
 - selects the Slint backend with `BackendSelector::require_wgpu_27(...)`
@@ -33,6 +34,7 @@ Desktop bootstrap for the Slint app:
 - installs callbacks
 - installs the rendering notifier
 - drives the redraw/tick loop
+- exposes the desktop entrypoint and the Android host entrypoint
 
 This file should stay orchestration-only.
 

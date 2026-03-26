@@ -1,103 +1,67 @@
-# Android APK Build
+# Android Build Prep
 
-This repo now has the minimum Android packaging hooks needed for `cargo-apk2`:
+This repo is no longer using the old `eframe` Android path. The current Android prep is based on the Slint NativeActivity flow.
 
-- `cdylib` output from the library target
-- `eframe` Android NativeActivity feature enabled
-- a `#[no_mangle] fn android_main(app: AndroidApp)` entrypoint
-- `cargo-apk2` manifest metadata in [`Cargo.toml`](../Cargo.toml)
+For the broader cross-target picture, see [platform_targets.md](./platform_targets.md).
 
-## Required local tooling
+## What Exists Now
 
-Install and configure these before building:
+The crate is prepared for Android at the bootstrap level:
+
+- `Cargo.toml` enables `cdylib` output for the library target
+- `slint` enables `backend-android-activity-06`
+- `src/lib.rs` exports `android_main`
+- `src/platform.rs` owns the Android startup handoff
+- `src/app/slint_frontend/mod.rs` can initialize the Slint host from `android_main`
+
+The desktop-only file dialog layer remains intentionally disabled on Android.
+
+## Required Local Tooling
+
+Before Android validation/builds can succeed locally, the machine needs:
+
+- Rust Android target:
 
 ```powershell
 rustup target add aarch64-linux-android
-cargo install cargo-apk2
 ```
 
-Set environment variables so `cargo-apk2` can find the Android toolchain:
+- Android SDK and NDK installed locally
+- environment variables that let Cargo/Skia find the Android toolchain, especially:
 
 ```powershell
+$env:ANDROID_NDK="C:\Android\Sdk\ndk\<version>"
 $env:ANDROID_SDK_ROOT="C:\Android\Sdk"
-$env:ANDROID_NDK_HOME="C:\Android\Sdk\ndk\<ndk-version>"
-$env:JAVA_HOME="C:\Program Files\Android\Android Studio\jbr"
 ```
 
-For the current repo config, make sure the SDK has an API 35 platform installed. The
-default Android target in [`Cargo.toml`](../Cargo.toml) is pinned to API 35 because the
-NDK version used in local testing only supports up to API 35.
+Depending on the build flow you use later, `ANDROID_HOME`, `JAVA_HOME`, and related Android Studio tooling may also be required.
 
-## Build
+## Current Validation Result
 
-Debug APK:
+The repo now gets past source-level Android setup, but local validation is still blocked by machine configuration:
 
 ```powershell
-cargo apk2 build --lib
+cargo check --lib --target aarch64-linux-android
 ```
 
-Repo helper script:
+Current blocker on this machine:
 
-```powershell
-.\scripts\build_android_debug.ps1
-```
+- `ANDROID_NDK` is not configured, so Skia's Android build step aborts before the target check can complete
 
-Build and install to a connected device:
+## Product Gaps Still To Solve
 
-```powershell
-.\scripts\build_android_debug.ps1 -Install
-```
+Even after the NDK is configured, Android is not yet a finished product target.
 
-Release APK:
+Still needed:
 
-```powershell
-cargo apk2 build --lib --release
-```
+- Android-native open/save/import/export flows
+- Android-native destinations for screenshots and mesh exports
+- reference-image and HDRI picking on device
+- touch-first overlay controls and safe-area-aware layout
+- a real install/package/test path on hardware or emulator
 
-The generated APK is written under the target output directory used by `cargo-apk2`.
+## Recommended Next Android Slice
 
-## Windows path caveat
-
-On Windows, `cargo-apk2` can fail if the Android SDK path or APK target directory contains
-spaces. If that happens:
-
-1. Use an SDK path without spaces.
-2. Use a `--target-dir` path without spaces.
-3. Keep using `--lib`, since this app packages the Android `cdylib`, not the desktop bin.
-
-Example debug build:
-
-```powershell
-$env:ANDROID_HOME="C:\Users\<you>\android-sdk-sdfmodeler"
-$env:ANDROID_SDK_ROOT=$env:ANDROID_HOME
-$env:ANDROID_NDK_HOME="$env:ANDROID_HOME\ndk\27.2.12479018"
-$env:ANDROID_USER_HOME="C:\Users\<you>\.android-sdfmodeler"
-cargo apk2 build --lib --target-dir "C:\Users\<you>\target-sdfmodeler-android"
-```
-
-## Current Android behavior
-
-This first pass makes the crate Android-buildable, but it does not yet provide Android-native file pickers or export destinations.
-
-Current Android limitations:
-
-- project open/save dialogs are disabled
-- node preset import/export dialogs are disabled
-- reference image picker is disabled
-- mesh import/export dialogs are disabled
-- screenshot save dialog is disabled
-- settings/keybinding import/export dialogs are disabled
-
-What does work:
-
-- settings, autosave metadata, and material presets now write to an app-private storage location instead of next to the executable
-- the Android shell can launch through `NativeActivity`
-
-## Next Android-specific work
-
-If you want full device usability instead of just APK packaging, the next slices should be:
-
-1. Add Android share/open/save flows or SAF document pickers.
-2. Add an Android-native destination for screenshots and mesh exports.
-3. Review touch-first layout and viewport navigation on a tablet.
-4. Run `cargo check` for `aarch64-linux-android` and a real `cargo apk2 build` on a machine with the SDK/NDK installed.
+1. Configure SDK/NDK locally and rerun `cargo check --lib --target aarch64-linux-android`.
+2. Add Android-native host services for document and media flows.
+3. Continue the tablet-first Slint shell work so the UI is usable on touch devices.

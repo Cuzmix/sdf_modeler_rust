@@ -1,4 +1,40 @@
 #[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn native_instance_descriptor() -> wgpu::InstanceDescriptor {
+    wgpu::InstanceDescriptor {
+        backends: platform_backends(),
+        ..Default::default()
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn platform_backends() -> wgpu::Backends {
+    #[cfg(target_os = "windows")]
+    {
+        wgpu::Backends::DX12
+    }
+
+    #[cfg(target_os = "android")]
+    {
+        wgpu::Backends::VULKAN
+    }
+
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    {
+        wgpu::Backends::METAL
+    }
+
+    #[cfg(not(any(
+        target_os = "windows",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "ios"
+    )))]
+    {
+        wgpu::Backends::PRIMARY
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn native_device_descriptor(adapter: &wgpu::Adapter) -> wgpu::DeviceDescriptor<'static> {
     let base_limits = if adapter.get_info().backend == wgpu::Backend::Gl {
         wgpu::Limits::downlevel_webgl2_defaults()
