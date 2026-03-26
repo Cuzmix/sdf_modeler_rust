@@ -1,73 +1,21 @@
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::time::Instant;
+use std::sync::atomic::Ordering;
 
 use slint::ComponentHandle;
 
-use crate::app::actions::{Action, ActionSink};
 use crate::app::backend_frame::{FrameCommands, ViewportUiFeedback};
-use crate::app::frontend_models::{build_shell_snapshot, ShellSnapshot, ShellSnapshotInputs};
-use crate::app::slint_bridge::{capture_frame_input, SlintViewportInputState};
-use crate::app::{BakeStatus, ExportStatus, ImportStatus, PickState, SdfApp};
-use crate::gizmo::{build_viewport_gizmo_overlay, GizmoInputSnapshot, ViewportGizmoOverlay};
+use crate::app::frontend_models::{build_shell_snapshot, ShellSnapshotInputs};
+use crate::app::slint_bridge::capture_frame_input;
+use crate::app::{BakeStatus, ExportStatus, ImportStatus, PickState};
+use crate::gizmo::{build_viewport_gizmo_overlay, GizmoInputSnapshot};
 
-use super::bindings::{apply_gizmo_overlay, apply_runtime_ui_state, apply_shell_snapshot};
-use super::SlintHostWindow;
-
-pub(super) struct NativeWgpuContext {
-    pub(super) instance: wgpu::Instance,
-    pub(super) render_context: crate::app::runtime::AppRenderContext,
-}
-
-pub(super) struct SlintViewportTexture {
-    view: wgpu::TextureView,
-    size: (u32, u32),
-}
-
-pub(super) struct TickOutcome {
-    pub(super) request_redraw: bool,
-    pub(super) needs_continuous_ticks: bool,
-}
-
-pub(super) struct SlintHostState {
-    pub(super) app: SdfApp,
-    frame_started_at: Instant,
-    pub(super) queued_actions: ActionSink,
-    pub(super) wake_flag: Arc<AtomicBool>,
-    viewport_size: (u32, u32),
-    pub(super) viewport_input: SlintViewportInputState,
-    viewport_texture: Option<SlintViewportTexture>,
-    pub(super) viewport_dirty: bool,
-    pub(super) continuous_tick_active: bool,
-    pub(super) last_snapshot: Option<ShellSnapshot>,
-    last_gizmo_overlay: Option<ViewportGizmoOverlay>,
-    last_window_title: String,
-}
+use super::{SlintHostState, TickOutcome};
+use crate::app::slint_frontend::bindings::{
+    apply_gizmo_overlay, apply_runtime_ui_state, apply_shell_snapshot,
+};
+use crate::app::slint_frontend::SlintHostWindow;
 
 impl SlintHostState {
-    pub(super) fn new(app: SdfApp, wake_flag: Arc<AtomicBool>) -> Self {
-        Self {
-            app,
-            frame_started_at: Instant::now(),
-            queued_actions: Vec::new(),
-            wake_flag,
-            viewport_size: (960, 540),
-            viewport_input: SlintViewportInputState::default(),
-            viewport_texture: None,
-            viewport_dirty: true,
-            continuous_tick_active: false,
-            last_snapshot: None,
-            last_gizmo_overlay: None,
-            last_window_title: "SDF Modeler".to_string(),
-        }
-    }
-
-    pub(super) fn queue_action(&mut self, action: Action) {
-        self.queued_actions.push(action);
-        self.viewport_dirty = true;
-    }
-
-    pub(super) fn tick(&mut self, window: &SlintHostWindow) -> TickOutcome {
+    pub(in crate::app::slint_frontend) fn tick(&mut self, window: &SlintHostWindow) -> TickOutcome {
         self.viewport_input.set_viewport_geometry(
             window.get_viewport_width(),
             window.get_viewport_height(),
@@ -173,73 +121,6 @@ impl SlintHostState {
         }
     }
 
-    pub(super) fn render_viewport_if_needed(&mut self) {
-        if !self.viewport_dirty {
-            return;
-        }
-        let Some(texture) = self.viewport_texture.as_ref() else {
-            return;
-        };
-        self.app.render_viewport_texture(
-            &texture.view,
-            self.viewport_size.0.max(1),
-            self.viewport_size.1.max(1),
-        );
-        self.viewport_dirty = false;
-    }
-
-    pub(super) fn release_viewport_texture(&mut self) {
-        self.viewport_texture = None;
-        self.viewport_dirty = true;
-    }
-
-    fn ensure_viewport_texture(&mut self, window: &SlintHostWindow) {
-        let width = self.viewport_size.0.max(1);
-        let height = self.viewport_size.1.max(1);
-        if self
-            .viewport_texture
-            .as_ref()
-            .is_some_and(|texture| texture.size == (width, height))
-        {
-            return;
-        }
-
-        let texture = self
-            .app
-            .gpu
-            .render_context
-            .device
-            .create_texture(&wgpu::TextureDescriptor {
-                label: Some("Slint Viewport Texture"),
-                size: wgpu::Extent3d {
-                    width,
-                    height,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: self.app.gpu.render_context.target_format,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                    | wgpu::TextureUsages::TEXTURE_BINDING,
-                view_formats: &[],
-            });
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let image = match slint::Image::try_from(texture.clone()) {
-            Ok(image) => image,
-            Err(error) => {
-                log::error!("Failed to import viewport texture into Slint: {error}");
-                return;
-            }
-        };
-        window.set_viewport_image(image.clone());
-        self.viewport_texture = Some(SlintViewportTexture {
-            view,
-            size: (width, height),
-        });
-        self.viewport_dirty = true;
-    }
-
     fn needs_continuous_ticks(&self, camera_animating: bool, commands: &FrameCommands) -> bool {
         camera_animating
             || commands.request_repaint
@@ -263,7 +144,7 @@ impl SlintHostState {
     }
 }
 
-fn apply_brush_adjust_feedback(app: &mut SdfApp, feedback: &ViewportUiFeedback) {
+fn apply_brush_adjust_feedback(app: &mut crate::app::SdfApp, feedback: &ViewportUiFeedback) {
     if (feedback.brush_radius_delta != 0.0 || feedback.brush_strength_delta != 0.0)
         && app.doc.sculpt_state.is_active()
     {

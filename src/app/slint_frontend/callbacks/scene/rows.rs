@@ -1,5 +1,7 @@
 use super::super::super::host_state::SlintHostState;
-use super::super::{mutate_host_and_tick, scene_row_at, CallbackContext};
+use super::super::context::CallbackContext;
+use super::super::mutation::mutate_host_and_tick;
+use super::super::scene_lookup::scene_row_at;
 use crate::app::actions::Action;
 use crate::app::slint_frontend::{SceneRowAction, SlintHostWindow};
 

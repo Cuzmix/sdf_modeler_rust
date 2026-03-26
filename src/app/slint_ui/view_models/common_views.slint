@@ -1,0 +1,27 @@
+export struct SceneRowView {
+    label: string,
+    selected: bool,
+    hidden: bool,
+    locked: bool,
+}
+
+export struct HistoryRowView {
+    label: string,
+    is_undo: bool,
+}
+
+export struct ReferenceRowView {
+    label: string,
+    plane_label: string,
+    visible: bool,
+    locked: bool,
+    opacity: float,
+    scale: float,
+}
+
+export struct ViewportPathView {
+    commands: string,
+    stroke: color,
+    fill: color,
+    stroke_width: float,
+}

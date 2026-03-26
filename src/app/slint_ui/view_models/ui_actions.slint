@@ -1,0 +1,113 @@
+export enum TopBarAction {
+    new-scene,
+    open-project,
+    save-project,
+    import-mesh,
+    export-mesh,
+    take-screenshot,
+    add-reference-image,
+    toggle-all-reference-images,
+    frame-all,
+    focus-selected,
+    undo,
+    redo,
+    camera-front,
+    camera-top,
+    camera-right,
+    toggle-ortho,
+    toggle-measurement,
+    toggle-turntable,
+    set-gizmo-translate,
+    set-gizmo-rotate,
+    set-gizmo-scale,
+    toggle-gizmo-space,
+}
+
+export enum SceneToolbarAction {
+    create-sphere,
+    create-box,
+    create-light,
+    duplicate-selected,
+    delete-selected,
+}
+
+export enum SceneRowAction {
+    select-row,
+    toggle-row-selection,
+    toggle-row-visibility,
+    toggle-row-lock,
+    duplicate-row,
+    delete-row,
+}
+
+export enum SceneTextAction {
+    rename-selected,
+    filter-scene,
+}
+
+export enum TransformEditKind {
+    position,
+    rotation,
+    scale,
+}
+
+export enum MaterialEditKind {
+    color,
+    roughness,
+    metallic,
+}
+
+export enum OperationEditKind {
+    smooth-k,
+    steps,
+    color-blend,
+}
+
+export enum SculptEditKind {
+    resolution,
+    layer-intensity,
+    brush-radius,
+    brush-strength,
+}
+
+export enum LightEditKind {
+    color,
+    intensity,
+    range,
+    cast-shadows,
+    volumetric,
+    volumetric-density,
+}
+
+export enum InspectorEditMode {
+    nudge,
+    set,
+    toggle,
+}
+
+export enum RenderSettingsAction {
+    set-show-grid,
+    set-show-node-labels,
+    set-show-bounding-box,
+    set-show-light-gizmos,
+    set-shadows-enabled,
+    set-ao-enabled,
+    nudge-export-resolution,
+    set-export-resolution,
+    set-adaptive-export,
+}
+
+export enum ReferenceImageAction {
+    toggle-reference-visibility,
+    toggle-reference-lock,
+    cycle-reference-plane,
+    set-reference-opacity,
+    set-reference-scale,
+    remove-reference-image,
+}
+
+export enum ImportDialogAction {
+    nudge-import-resolution,
+    confirm-import,
+    cancel-import,
+}

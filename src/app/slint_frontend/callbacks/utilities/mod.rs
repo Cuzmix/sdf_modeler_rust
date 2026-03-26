@@ -1,4 +1,4 @@
-use super::CallbackContext;
+use super::context::CallbackContext;
 use crate::app::slint_frontend::SlintHostWindow;
 
 mod import_dialog;

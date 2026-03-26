@@ -1,269 +1,40 @@
-export struct SceneRowView {
-    label: string,
-    selected: bool,
-    hidden: bool,
-    locked: bool,
-}
+export {
+    SceneRowView,
+    HistoryRowView,
+    ReferenceRowView,
+    ViewportPathView,
+} from "view_models/common_views.slint";
 
-export struct HistoryRowView {
-    label: string,
-    is_undo: bool,
-}
+export {
+    ViewportModifiers,
+    ViewportPointerPhase,
+    ViewportPointerButton,
+    ViewportPointerAction,
+    ViewportScrollAction,
+    ViewportDoubleClickAction,
+} from "view_models/viewport_actions.slint";
 
-export struct ReferenceRowView {
-    label: string,
-    plane_label: string,
-    visible: bool,
-    locked: bool,
-    opacity: float,
-    scale: float,
-}
+export {
+    TopBarState,
+    ScenePanelState,
+    InspectorPanelState,
+    RenderSettingsState,
+    ImportDialogState,
+    UtilityPanelState,
+} from "view_models/panel_states.slint";
 
-export struct ViewportPathView {
-    commands: string,
-    stroke: color,
-    fill: color,
-    stroke_width: float,
-}
-
-export struct ViewportModifiers {
-    ctrl: bool,
-    shift: bool,
-    alt: bool,
-}
-
-export enum ViewportPointerPhase {
-    down,
-    up,
-    move,
-    cancel,
-}
-
-export enum ViewportPointerButton {
-    other,
-    primary,
-    secondary,
-    middle,
-}
-
-export struct ViewportPointerAction {
-    phase: ViewportPointerPhase,
-    button: ViewportPointerButton,
-    x: float,
-    y: float,
-    modifiers: ViewportModifiers,
-    is_touch: bool,
-}
-
-export struct ViewportScrollAction {
-    delta_x: float,
-    delta_y: float,
-    modifiers: ViewportModifiers,
-}
-
-export struct ViewportDoubleClickAction {
-    x: float,
-    y: float,
-}
-
-export struct TopBarState {
-    viewport_status: string,
-    toast_text: string,
-    task_status: string,
-    gizmo_translate_active: bool,
-    gizmo_rotate_active: bool,
-    gizmo_scale_active: bool,
-    gizmo_local_space: bool,
-    camera_is_ortho: bool,
-    measurement_mode_active: bool,
-    turntable_active: bool,
-}
-
-export struct ScenePanelState {
-    selection_summary: string,
-    selected_name: string,
-    scene_filter: string,
-    scene_rows: [SceneRowView],
-    history_rows: [HistoryRowView],
-}
-
-export struct InspectorPanelState {
-    title: string,
-    chips: string,
-    display: string,
-    property_summary: string,
-    has_transform: bool,
-    transform_pos_x: float,
-    transform_pos_y: float,
-    transform_pos_z: float,
-    transform_rot_x: float,
-    transform_rot_y: float,
-    transform_rot_z: float,
-    selected_scale_x: float,
-    selected_scale_y: float,
-    selected_scale_z: float,
-    can_scale: bool,
-    has_material: bool,
-    material_color_r: float,
-    material_color_g: float,
-    material_color_b: float,
-    material_roughness: float,
-    material_metallic: float,
-    has_operation: bool,
-    operation_label: string,
-    operation_smooth_k: float,
-    operation_steps: float,
-    operation_color_blend: float,
-    has_sculpt: bool,
-    sculpt_resolution: int,
-    sculpt_layer_intensity: float,
-    sculpt_brush_radius: float,
-    sculpt_brush_strength: float,
-    has_light: bool,
-    light_label: string,
-    light_color_r: float,
-    light_color_g: float,
-    light_color_b: float,
-    light_intensity: float,
-    light_range: float,
-    light_cast_shadows: bool,
-    light_volumetric: bool,
-    light_volumetric_density: float,
-}
-
-export struct RenderSettingsState {
-    show_grid: bool,
-    show_node_labels: bool,
-    show_bounding_box: bool,
-    show_light_gizmos: bool,
-    shadows_enabled: bool,
-    ao_enabled: bool,
-    export_resolution: int,
-    adaptive_export: bool,
-}
-
-export struct ImportDialogState {
-    visible: bool,
-    summary: string,
-    resolution: int,
-}
-
-export struct UtilityPanelState {
-    reference_rows: [ReferenceRowView],
-    render_settings: RenderSettingsState,
-    import_dialog: ImportDialogState,
-}
-
-export enum TopBarAction {
-    new-scene,
-    open-project,
-    save-project,
-    import-mesh,
-    export-mesh,
-    take-screenshot,
-    add-reference-image,
-    toggle-all-reference-images,
-    frame-all,
-    focus-selected,
-    undo,
-    redo,
-    camera-front,
-    camera-top,
-    camera-right,
-    toggle-ortho,
-    toggle-measurement,
-    toggle-turntable,
-    set-gizmo-translate,
-    set-gizmo-rotate,
-    set-gizmo-scale,
-    toggle-gizmo-space,
-}
-
-export enum SceneToolbarAction {
-    create-sphere,
-    create-box,
-    create-light,
-    duplicate-selected,
-    delete-selected,
-}
-
-export enum SceneRowAction {
-    select-row,
-    toggle-row-selection,
-    toggle-row-visibility,
-    toggle-row-lock,
-    duplicate-row,
-    delete-row,
-}
-
-export enum SceneTextAction {
-    rename-selected,
-    filter-scene,
-}
-
-export enum TransformEditKind {
-    position,
-    rotation,
-    scale,
-}
-
-export enum MaterialEditKind {
-    color,
-    roughness,
-    metallic,
-}
-
-export enum OperationEditKind {
-    smooth-k,
-    steps,
-    color-blend,
-}
-
-export enum SculptEditKind {
-    resolution,
-    layer-intensity,
-    brush-radius,
-    brush-strength,
-}
-
-export enum LightEditKind {
-    color,
-    intensity,
-    range,
-    cast-shadows,
-    volumetric,
-    volumetric-density,
-}
-
-export enum InspectorEditMode {
-    nudge,
-    set,
-    toggle,
-}
-
-export enum RenderSettingsAction {
-    set-show-grid,
-    set-show-node-labels,
-    set-show-bounding-box,
-    set-show-light-gizmos,
-    set-shadows-enabled,
-    set-ao-enabled,
-    nudge-export-resolution,
-    set-export-resolution,
-    set-adaptive-export,
-}
-
-export enum ReferenceImageAction {
-    toggle-reference-visibility,
-    toggle-reference-lock,
-    cycle-reference-plane,
-    set-reference-opacity,
-    set-reference-scale,
-    remove-reference-image,
-}
-
-export enum ImportDialogAction {
-    nudge-import-resolution,
-    confirm-import,
-    cancel-import,
-}
+export {
+    TopBarAction,
+    SceneToolbarAction,
+    SceneRowAction,
+    SceneTextAction,
+    TransformEditKind,
+    MaterialEditKind,
+    OperationEditKind,
+    SculptEditKind,
+    LightEditKind,
+    InspectorEditMode,
+    RenderSettingsAction,
+    ReferenceImageAction,
+    ImportDialogAction,
+} from "view_models/ui_actions.slint";

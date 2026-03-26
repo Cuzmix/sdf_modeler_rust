@@ -1,5 +1,6 @@
 use super::super::super::host_state::SlintHostState;
-use super::super::{mutate_host_and_tick, CallbackContext};
+use super::super::context::CallbackContext;
+use super::super::mutation::mutate_host_and_tick;
 use crate::app::actions::Action;
 use crate::app::slint_frontend::{ImportDialogAction, SlintHostWindow};
 
