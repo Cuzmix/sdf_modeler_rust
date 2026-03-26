@@ -161,26 +161,38 @@ export enum SceneTextAction {
     filter-scene,
 }
 
-export enum InspectorEditKind {
+export enum TransformEditKind {
     position,
     rotation,
     scale,
-    material-color,
-    material-roughness,
-    material-metallic,
-    operation-smooth-k,
-    operation-steps,
-    operation-color-blend,
-    sculpt-resolution,
-    sculpt-layer-intensity,
+}
+
+export enum MaterialEditKind {
+    color,
+    roughness,
+    metallic,
+}
+
+export enum OperationEditKind {
+    smooth-k,
+    steps,
+    color-blend,
+}
+
+export enum SculptEditKind {
+    resolution,
+    layer-intensity,
     brush-radius,
     brush-strength,
-    light-color,
-    light-intensity,
-    light-range,
-    light-cast-shadows,
-    light-volumetric,
-    light-volumetric-density,
+}
+
+export enum LightEditKind {
+    color,
+    intensity,
+    range,
+    cast-shadows,
+    volumetric,
+    volumetric-density,
 }
 
 export enum InspectorEditMode {

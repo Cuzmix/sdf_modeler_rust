@@ -1,5 +1,5 @@
 import { HorizontalBox, VerticalBox } from "std-widgets.slint";
-import { ImportDialogAction, InspectorEditKind, InspectorEditMode, InspectorPanelState, ReferenceImageAction, RenderSettingsAction, ScenePanelState, SceneRowAction, SceneTextAction, SceneToolbarAction, TopBarAction, TopBarState, UtilityPanelState, ViewportPathView } from "view_models.slint";
+import { ImportDialogAction, InspectorEditMode, InspectorPanelState, LightEditKind, MaterialEditKind, OperationEditKind, ReferenceImageAction, RenderSettingsAction, ScenePanelState, SceneRowAction, SceneTextAction, SceneToolbarAction, SculptEditKind, TopBarAction, TopBarState, TransformEditKind, UtilityPanelState, ViewportPathView } from "view_models.slint";
 import { AppTheme } from "theme.slint";
 import { RightSidebar } from "right_sidebar.slint";
 import { ScenePanel } from "scene_panel.slint";
@@ -26,7 +26,11 @@ export component SlintHostWindow inherits Window {
     callback scene_toolbar_action(action: SceneToolbarAction);
     callback scene_row_action(action: SceneRowAction, index: int);
     callback scene_text_action(action: SceneTextAction, text: string);
-    callback inspector_edit(kind: InspectorEditKind, mode: InspectorEditMode, axis: int, value: float);
+    callback transform_edit(kind: TransformEditKind, mode: InspectorEditMode, axis: int, value: float);
+    callback material_edit(kind: MaterialEditKind, mode: InspectorEditMode, axis: int, value: float);
+    callback operation_edit(kind: OperationEditKind, mode: InspectorEditMode, value: float);
+    callback sculpt_edit(kind: SculptEditKind, mode: InspectorEditMode, value: float);
+    callback light_edit(kind: LightEditKind, mode: InspectorEditMode, axis: int, value: float);
     callback reference_image_action(action: ReferenceImageAction, index: int, value: float);
     callback render_settings_action(action: RenderSettingsAction, value: float);
     callback import_dialog_action(action: ImportDialogAction, value: float);
@@ -69,7 +73,11 @@ export component SlintHostWindow inherits Window {
             RightSidebar {
                 inspector_state: root.inspector_panel_state;
                 utility_state: root.utility_panel_state;
-                edit_inspector(kind, mode, axis, value) => { root.inspector_edit(kind, mode, axis, value); }
+                transform_edit(kind, mode, axis, value) => { root.transform_edit(kind, mode, axis, value); }
+                material_edit(kind, mode, axis, value) => { root.material_edit(kind, mode, axis, value); }
+                operation_edit(kind, mode, value) => { root.operation_edit(kind, mode, value); }
+                sculpt_edit(kind, mode, value) => { root.sculpt_edit(kind, mode, value); }
+                light_edit(kind, mode, axis, value) => { root.light_edit(kind, mode, axis, value); }
                 reference_image_action(action, index, value) => { root.reference_image_action(action, index, value); }
                 render_settings_action(action, value) => { root.render_settings_action(action, value); }
                 import_dialog_action(action, value) => { root.import_dialog_action(action, value); }

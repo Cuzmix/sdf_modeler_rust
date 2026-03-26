@@ -1,28 +1,79 @@
 use super::{axis_value, mutate_host_and_tick, CallbackContext};
-use crate::app::slint_frontend::{InspectorEditKind, InspectorEditMode, SlintHostWindow};
+use crate::app::slint_frontend::{
+    InspectorEditMode, LightEditKind, MaterialEditKind, OperationEditKind, SculptEditKind,
+    SlintHostWindow, TransformEditKind,
+};
 
 use super::super::host_state::SlintHostState;
 
 pub(super) fn install(window: &SlintHostWindow, context: &CallbackContext) {
+    install_transform_callbacks(window, context);
+    install_material_callbacks(window, context);
+    install_operation_callbacks(window, context);
+    install_sculpt_callbacks(window, context);
+    install_light_callbacks(window, context);
+}
+
+fn install_transform_callbacks(window: &SlintHostWindow, context: &CallbackContext) {
     let callback_context = context.clone();
-    window.on_inspector_edit(move |kind, mode, axis, value| {
+    window.on_transform_edit(move |kind, mode, axis, value| {
         let edit_context = callback_context.clone();
         mutate_host_and_tick(&callback_context, move |host_state| {
-            handle_inspector_edit(host_state, &edit_context, kind, mode, axis, value);
+            handle_transform_edit(host_state, &edit_context, kind, mode, axis, value);
         });
     });
 }
 
-fn handle_inspector_edit(
+fn install_material_callbacks(window: &SlintHostWindow, context: &CallbackContext) {
+    let callback_context = context.clone();
+    window.on_material_edit(move |kind, mode, axis, value| {
+        let edit_context = callback_context.clone();
+        mutate_host_and_tick(&callback_context, move |host_state| {
+            handle_material_edit(host_state, &edit_context, kind, mode, axis, value);
+        });
+    });
+}
+
+fn install_operation_callbacks(window: &SlintHostWindow, context: &CallbackContext) {
+    let callback_context = context.clone();
+    window.on_operation_edit(move |kind, mode, value| {
+        let edit_context = callback_context.clone();
+        mutate_host_and_tick(&callback_context, move |host_state| {
+            handle_operation_edit(host_state, &edit_context, kind, mode, value);
+        });
+    });
+}
+
+fn install_sculpt_callbacks(window: &SlintHostWindow, context: &CallbackContext) {
+    let callback_context = context.clone();
+    window.on_sculpt_edit(move |kind, mode, value| {
+        let edit_context = callback_context.clone();
+        mutate_host_and_tick(&callback_context, move |host_state| {
+            handle_sculpt_edit(host_state, &edit_context, kind, mode, value);
+        });
+    });
+}
+
+fn install_light_callbacks(window: &SlintHostWindow, context: &CallbackContext) {
+    let callback_context = context.clone();
+    window.on_light_edit(move |kind, mode, axis, value| {
+        let edit_context = callback_context.clone();
+        mutate_host_and_tick(&callback_context, move |host_state| {
+            handle_light_edit(host_state, &edit_context, kind, mode, axis, value);
+        });
+    });
+}
+
+fn handle_transform_edit(
     host_state: &mut SlintHostState,
     context: &CallbackContext,
-    kind: InspectorEditKind,
+    kind: TransformEditKind,
     mode: InspectorEditMode,
     axis: i32,
     value: f32,
 ) {
     match kind {
-        InspectorEditKind::Position => {
+        TransformEditKind::Position => {
             apply_vector_edit(
                 host_state,
                 context,
@@ -42,7 +93,7 @@ fn handle_inspector_edit(
                 },
             );
         }
-        InspectorEditKind::Rotation => {
+        TransformEditKind::Rotation => {
             apply_vector_edit(
                 host_state,
                 context,
@@ -62,7 +113,7 @@ fn handle_inspector_edit(
                 },
             );
         }
-        InspectorEditKind::Scale => {
+        TransformEditKind::Scale => {
             apply_vector_edit(
                 host_state,
                 context,
@@ -82,7 +133,19 @@ fn handle_inspector_edit(
                 },
             );
         }
-        InspectorEditKind::MaterialColor => {
+    }
+}
+
+fn handle_material_edit(
+    host_state: &mut SlintHostState,
+    context: &CallbackContext,
+    kind: MaterialEditKind,
+    mode: InspectorEditMode,
+    axis: i32,
+    value: f32,
+) {
+    match kind {
+        MaterialEditKind::Color => {
             apply_vector_edit(
                 host_state,
                 context,
@@ -102,7 +165,7 @@ fn handle_inspector_edit(
                 },
             );
         }
-        InspectorEditKind::MaterialRoughness => {
+        MaterialEditKind::Roughness => {
             apply_scalar_edit(
                 host_state,
                 context,
@@ -114,7 +177,7 @@ fn handle_inspector_edit(
                 },
             );
         }
-        InspectorEditKind::MaterialMetallic => {
+        MaterialEditKind::Metallic => {
             apply_scalar_edit(
                 host_state,
                 context,
@@ -126,7 +189,18 @@ fn handle_inspector_edit(
                 },
             );
         }
-        InspectorEditKind::OperationSmoothK => {
+    }
+}
+
+fn handle_operation_edit(
+    host_state: &mut SlintHostState,
+    context: &CallbackContext,
+    kind: OperationEditKind,
+    mode: InspectorEditMode,
+    value: f32,
+) {
+    match kind {
+        OperationEditKind::SmoothK => {
             apply_scalar_edit(
                 host_state,
                 context,
@@ -138,7 +212,7 @@ fn handle_inspector_edit(
                 },
             );
         }
-        InspectorEditKind::OperationSteps => {
+        OperationEditKind::Steps => {
             apply_scalar_edit(
                 host_state,
                 context,
@@ -150,7 +224,7 @@ fn handle_inspector_edit(
                 },
             );
         }
-        InspectorEditKind::OperationColorBlend => {
+        OperationEditKind::ColorBlend => {
             apply_scalar_edit(
                 host_state,
                 context,
@@ -162,14 +236,25 @@ fn handle_inspector_edit(
                 },
             );
         }
-        InspectorEditKind::SculptResolution => {
+    }
+}
+
+fn handle_sculpt_edit(
+    host_state: &mut SlintHostState,
+    context: &CallbackContext,
+    kind: SculptEditKind,
+    mode: InspectorEditMode,
+    value: f32,
+) {
+    match kind {
+        SculptEditKind::Resolution => {
             let next = apply_scalar_value(context, mode, value, |window| {
                 window.get_inspector_panel_state().sculpt_resolution as f32
             })
             .max(8.0) as u32;
             host_state.app.set_selected_sculpt_resolution(next);
         }
-        InspectorEditKind::SculptLayerIntensity => {
+        SculptEditKind::LayerIntensity => {
             apply_scalar_edit(
                 host_state,
                 context,
@@ -181,7 +266,7 @@ fn handle_inspector_edit(
                 },
             );
         }
-        InspectorEditKind::BrushRadius => {
+        SculptEditKind::BrushRadius => {
             apply_scalar_edit(
                 host_state,
                 context,
@@ -193,7 +278,7 @@ fn handle_inspector_edit(
                 },
             );
         }
-        InspectorEditKind::BrushStrength => {
+        SculptEditKind::BrushStrength => {
             apply_scalar_edit(
                 host_state,
                 context,
@@ -205,7 +290,19 @@ fn handle_inspector_edit(
                 },
             );
         }
-        InspectorEditKind::LightColor => {
+    }
+}
+
+fn handle_light_edit(
+    host_state: &mut SlintHostState,
+    context: &CallbackContext,
+    kind: LightEditKind,
+    mode: InspectorEditMode,
+    axis: i32,
+    value: f32,
+) {
+    match kind {
+        LightEditKind::Color => {
             apply_vector_edit(
                 host_state,
                 context,
@@ -225,7 +322,7 @@ fn handle_inspector_edit(
                 },
             );
         }
-        InspectorEditKind::LightIntensity => {
+        LightEditKind::Intensity => {
             apply_scalar_edit(
                 host_state,
                 context,
@@ -237,7 +334,7 @@ fn handle_inspector_edit(
                 },
             );
         }
-        InspectorEditKind::LightRange => {
+        LightEditKind::Range => {
             apply_scalar_edit(
                 host_state,
                 context,
@@ -249,13 +346,13 @@ fn handle_inspector_edit(
                 },
             );
         }
-        InspectorEditKind::LightCastShadows => {
+        LightEditKind::CastShadows => {
             host_state.app.set_selected_light_cast_shadows(value >= 0.5);
         }
-        InspectorEditKind::LightVolumetric => {
+        LightEditKind::Volumetric => {
             host_state.app.set_selected_light_volumetric(value >= 0.5);
         }
-        InspectorEditKind::LightVolumetricDensity => {
+        LightEditKind::VolumetricDensity => {
             apply_scalar_edit(
                 host_state,
                 context,
