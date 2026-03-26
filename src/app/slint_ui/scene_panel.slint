@@ -1,5 +1,5 @@
 import { Button, HorizontalBox, LineEdit, ScrollView, VerticalBox } from "std-widgets.slint";
-import { HistoryRowView, SceneAction, SceneRowView } from "view_models.slint";
+import { SceneAction, ScenePanelState, SceneRowView } from "view_models.slint";
 import { AppTheme } from "theme.slint";
 
 component SceneRowItem inherits Rectangle {
@@ -24,11 +24,7 @@ component SceneRowItem inherits Rectangle {
 }
 
 export component ScenePanel inherits Rectangle {
-    in property <string> selection_summary;
-    in property <string> selected_name;
-    in-out property <string> scene_filter;
-    in property <[SceneRowView]> scene_rows;
-    in property <[HistoryRowView]> history_rows;
+    in property <ScenePanelState> state;
 
     callback perform_action(action: SceneAction, index: int, text: string);
 
@@ -43,7 +39,7 @@ export component ScenePanel inherits Rectangle {
             spacing: AppTheme.section_spacing;
 
             Text { text: "Scene"; }
-            Text { text: root.selection_summary; }
+            Text { text: root.state.selection_summary; }
 
             HorizontalBox {
                 spacing: AppTheme.section_spacing;
@@ -59,18 +55,18 @@ export component ScenePanel inherits Rectangle {
             }
 
             LineEdit {
-                text: root.selected_name;
+                text: root.state.selected_name;
                 placeholder-text: "Rename selection";
                 accepted => { root.perform_action(SceneAction.rename-selected, -1, self.text); }
             }
 
             LineEdit {
-                text: root.scene_filter;
+                text: root.state.scene_filter;
                 placeholder-text: "Filter scene";
                 edited(value) => { root.perform_action(SceneAction.filter-scene, -1, value); }
             }
 
-            for row[index] in root.scene_rows : SceneRowItem {
+            for row[index] in root.state.scene_rows : SceneRowItem {
                 scene_row: row;
                 row_index: index;
                 perform_action(action, index, text) => { root.perform_action(action, index, text); }
@@ -78,7 +74,7 @@ export component ScenePanel inherits Rectangle {
 
             Text { text: "History"; }
 
-            for history in root.history_rows : Text {
+            for history in root.state.history_rows : Text {
                 text: (history.is_undo ? "Undo: " : "Redo: ") + history.label;
             }
         }

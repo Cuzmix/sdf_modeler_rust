@@ -1,5 +1,5 @@
 import { HorizontalBox, VerticalBox } from "std-widgets.slint";
-import { HistoryRowView, InspectorEditKind, InspectorEditMode, ReferenceRowView, SceneAction, SceneRowView, TopBarAction, UtilityAction, ViewportPathView } from "view_models.slint";
+import { InspectorEditKind, InspectorEditMode, InspectorPanelState, SceneAction, ScenePanelState, TopBarAction, TopBarState, UtilityAction, UtilityPanelState, ViewportPathView } from "view_models.slint";
 import { AppTheme } from "theme.slint";
 import { RightSidebar } from "right_sidebar.slint";
 import { ScenePanel } from "scene_panel.slint";
@@ -14,74 +14,10 @@ export component SlintHostWindow inherits Window {
     in property <float> viewport_gizmo_viewbox_width;
     in property <float> viewport_gizmo_viewbox_height;
     in property <[ViewportPathView]> viewport_gizmo_paths;
-    in property <[SceneRowView]> scene_rows;
-    in property <string> selected_name;
-    in property <string> inspector_title;
-    in property <string> inspector_chips;
-    in property <string> inspector_display;
-    in property <string> inspector_property_summary;
-    in property <bool> has_transform;
-    in property <float> transform_pos_x;
-    in property <float> transform_pos_y;
-    in property <float> transform_pos_z;
-    in property <float> transform_rot_x;
-    in property <float> transform_rot_y;
-    in property <float> transform_rot_z;
-    in property <float> selected_scale_x;
-    in property <float> selected_scale_y;
-    in property <float> selected_scale_z;
-    in property <bool> can_scale;
-    in property <bool> has_material;
-    in property <float> material_color_r;
-    in property <float> material_color_g;
-    in property <float> material_color_b;
-    in property <float> material_roughness;
-    in property <float> material_metallic;
-    in property <bool> has_operation;
-    in property <string> operation_label;
-    in property <float> operation_smooth_k;
-    in property <float> operation_steps;
-    in property <float> operation_color_blend;
-    in property <bool> has_sculpt;
-    in property <int> sculpt_resolution;
-    in property <float> sculpt_layer_intensity;
-    in property <float> sculpt_brush_radius;
-    in property <float> sculpt_brush_strength;
-    in property <bool> has_light;
-    in property <string> light_label;
-    in property <float> light_color_r;
-    in property <float> light_color_g;
-    in property <float> light_color_b;
-    in property <float> light_intensity;
-    in property <float> light_range;
-    in property <bool> light_cast_shadows;
-    in property <bool> light_volumetric;
-    in property <float> light_volumetric_density;
-    in property <[HistoryRowView]> history_rows;
-    in property <[ReferenceRowView]> reference_rows;
-    in property <bool> render_show_grid;
-    in property <bool> render_show_node_labels;
-    in property <bool> render_show_bounding_box;
-    in property <bool> render_show_light_gizmos;
-    in property <bool> render_shadows_enabled;
-    in property <bool> render_ao_enabled;
-    in property <int> export_resolution;
-    in property <bool> adaptive_export;
-    in property <string> viewport_status;
-    in property <string> toast_text;
-    in property <string> selection_summary;
-    in property <string> task_status;
-    in-out property <string> scene_filter;
-    in property <bool> gizmo_translate_active;
-    in property <bool> gizmo_rotate_active;
-    in property <bool> gizmo_scale_active;
-    in property <bool> gizmo_local_space;
-    in property <bool> camera_is_ortho;
-    in property <bool> measurement_mode_active;
-    in property <bool> turntable_active;
-    in property <bool> show_import_dialog;
-    in property <string> import_summary;
-    in property <int> import_resolution;
+    in property <TopBarState> top_bar_state;
+    in property <ScenePanelState> scene_panel_state;
+    in property <InspectorPanelState> inspector_panel_state;
+    in property <UtilityPanelState> utility_panel_state;
 
     out property <float> viewport_width: viewport_panel.viewport_width;
     out property <float> viewport_height: viewport_panel.viewport_height;
@@ -101,16 +37,7 @@ export component SlintHostWindow inherits Window {
         spacing: AppTheme.frame_spacing;
 
         TopBar {
-            viewport_status: root.viewport_status;
-            toast_text: root.toast_text;
-            task_status: root.task_status;
-            gizmo_translate_active: root.gizmo_translate_active;
-            gizmo_rotate_active: root.gizmo_rotate_active;
-            gizmo_scale_active: root.gizmo_scale_active;
-            gizmo_local_space: root.gizmo_local_space;
-            camera_is_ortho: root.camera_is_ortho;
-            measurement_mode_active: root.measurement_mode_active;
-            turntable_active: root.turntable_active;
+            state: root.top_bar_state;
             perform_action(action) => { root.top_bar_action(action); }
         }
 
@@ -119,11 +46,7 @@ export component SlintHostWindow inherits Window {
             vertical-stretch: 1;
 
             ScenePanel {
-                selection_summary: root.selection_summary;
-                selected_name: root.selected_name;
-                scene_filter: root.scene_filter;
-                scene_rows: root.scene_rows;
-                history_rows: root.history_rows;
+                state: root.scene_panel_state;
                 perform_action(action, index, text) => { root.scene_action(action, index, text); }
             }
 
@@ -138,59 +61,8 @@ export component SlintHostWindow inherits Window {
             }
 
             RightSidebar {
-                inspector_title: root.inspector_title;
-                inspector_chips: root.inspector_chips;
-                inspector_display: root.inspector_display;
-                inspector_property_summary: root.inspector_property_summary;
-                has_transform: root.has_transform;
-                transform_pos_x: root.transform_pos_x;
-                transform_pos_y: root.transform_pos_y;
-                transform_pos_z: root.transform_pos_z;
-                transform_rot_x: root.transform_rot_x;
-                transform_rot_y: root.transform_rot_y;
-                transform_rot_z: root.transform_rot_z;
-                selected_scale_x: root.selected_scale_x;
-                selected_scale_y: root.selected_scale_y;
-                selected_scale_z: root.selected_scale_z;
-                can_scale: root.can_scale;
-                has_material: root.has_material;
-                material_color_r: root.material_color_r;
-                material_color_g: root.material_color_g;
-                material_color_b: root.material_color_b;
-                material_roughness: root.material_roughness;
-                material_metallic: root.material_metallic;
-                has_operation: root.has_operation;
-                operation_label: root.operation_label;
-                operation_smooth_k: root.operation_smooth_k;
-                operation_steps: root.operation_steps;
-                operation_color_blend: root.operation_color_blend;
-                has_sculpt: root.has_sculpt;
-                sculpt_resolution: root.sculpt_resolution;
-                sculpt_layer_intensity: root.sculpt_layer_intensity;
-                sculpt_brush_radius: root.sculpt_brush_radius;
-                sculpt_brush_strength: root.sculpt_brush_strength;
-                has_light: root.has_light;
-                light_label: root.light_label;
-                light_color_r: root.light_color_r;
-                light_color_g: root.light_color_g;
-                light_color_b: root.light_color_b;
-                light_intensity: root.light_intensity;
-                light_range: root.light_range;
-                light_cast_shadows: root.light_cast_shadows;
-                light_volumetric: root.light_volumetric;
-                light_volumetric_density: root.light_volumetric_density;
-                reference_rows: root.reference_rows;
-                render_show_grid: root.render_show_grid;
-                render_show_node_labels: root.render_show_node_labels;
-                render_show_bounding_box: root.render_show_bounding_box;
-                render_show_light_gizmos: root.render_show_light_gizmos;
-                render_shadows_enabled: root.render_shadows_enabled;
-                render_ao_enabled: root.render_ao_enabled;
-                export_resolution: root.export_resolution;
-                adaptive_export: root.adaptive_export;
-                show_import_dialog: root.show_import_dialog;
-                import_summary: root.import_summary;
-                import_resolution: root.import_resolution;
+                inspector_state: root.inspector_panel_state;
+                utility_state: root.utility_panel_state;
                 edit_inspector(kind, mode, axis, value) => { root.inspector_edit(kind, mode, axis, value); }
                 perform_utility_action(action, index, value) => { root.utility_action(action, index, value); }
             }

@@ -1,18 +1,9 @@
 import { Button, HorizontalBox } from "std-widgets.slint";
 import { AppTheme } from "theme.slint";
-import { TopBarAction } from "view_models.slint";
+import { TopBarAction, TopBarState } from "view_models.slint";
 
 export component TopBar inherits HorizontalBox {
-    in property <string> viewport_status;
-    in property <string> toast_text;
-    in property <string> task_status;
-    in property <bool> gizmo_translate_active;
-    in property <bool> gizmo_rotate_active;
-    in property <bool> gizmo_scale_active;
-    in property <bool> gizmo_local_space;
-    in property <bool> camera_is_ortho;
-    in property <bool> measurement_mode_active;
-    in property <bool> turntable_active;
+    in property <TopBarState> state;
 
     callback perform_action(action: TopBarAction);
 
@@ -30,18 +21,18 @@ export component TopBar inherits HorizontalBox {
     Button { text: "Focus"; clicked => { root.perform_action(TopBarAction.focus-selected); } }
     Button { text: "Undo"; clicked => { root.perform_action(TopBarAction.undo); } }
     Button { text: "Redo"; clicked => { root.perform_action(TopBarAction.redo); } }
-    Button { text: root.gizmo_translate_active ? "Move*" : "Move"; clicked => { root.perform_action(TopBarAction.set-gizmo-translate); } }
-    Button { text: root.gizmo_rotate_active ? "Rotate*" : "Rotate"; clicked => { root.perform_action(TopBarAction.set-gizmo-rotate); } }
-    Button { text: root.gizmo_scale_active ? "Scale*" : "Scale"; clicked => { root.perform_action(TopBarAction.set-gizmo-scale); } }
-    Button { text: root.gizmo_local_space ? "Local" : "World"; clicked => { root.perform_action(TopBarAction.toggle-gizmo-space); } }
-    Button { text: root.camera_is_ortho ? "Ortho" : "Persp"; clicked => { root.perform_action(TopBarAction.toggle-ortho); } }
-    Button { text: root.measurement_mode_active ? "Measure*" : "Measure"; clicked => { root.perform_action(TopBarAction.toggle-measurement); } }
-    Button { text: root.turntable_active ? "Turntable*" : "Turntable"; clicked => { root.perform_action(TopBarAction.toggle-turntable); } }
+    Button { text: root.state.gizmo_translate_active ? "Move*" : "Move"; clicked => { root.perform_action(TopBarAction.set-gizmo-translate); } }
+    Button { text: root.state.gizmo_rotate_active ? "Rotate*" : "Rotate"; clicked => { root.perform_action(TopBarAction.set-gizmo-rotate); } }
+    Button { text: root.state.gizmo_scale_active ? "Scale*" : "Scale"; clicked => { root.perform_action(TopBarAction.set-gizmo-scale); } }
+    Button { text: root.state.gizmo_local_space ? "Local" : "World"; clicked => { root.perform_action(TopBarAction.toggle-gizmo-space); } }
+    Button { text: root.state.camera_is_ortho ? "Ortho" : "Persp"; clicked => { root.perform_action(TopBarAction.toggle-ortho); } }
+    Button { text: root.state.measurement_mode_active ? "Measure*" : "Measure"; clicked => { root.perform_action(TopBarAction.toggle-measurement); } }
+    Button { text: root.state.turntable_active ? "Turntable*" : "Turntable"; clicked => { root.perform_action(TopBarAction.toggle-turntable); } }
     Button { text: "Front"; clicked => { root.perform_action(TopBarAction.camera-front); } }
     Button { text: "Top"; clicked => { root.perform_action(TopBarAction.camera-top); } }
     Button { text: "Right"; clicked => { root.perform_action(TopBarAction.camera-right); } }
 
-    Text { text: root.viewport_status; }
-    Text { text: root.toast_text; }
-    Text { text: root.task_status; }
+    Text { text: root.state.viewport_status; }
+    Text { text: root.state.toast_text; }
+    Text { text: root.state.task_status; }
 }

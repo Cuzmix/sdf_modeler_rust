@@ -1,22 +1,20 @@
 import { Button, HorizontalBox, VerticalBox } from "std-widgets.slint";
 import { NudgeRow } from "nudge_row.slint";
 import { AppTheme } from "theme.slint";
-import { UtilityAction } from "view_models.slint";
+import { ImportDialogState, UtilityAction } from "view_models.slint";
 
 export component ImportDialogPanel inherits VerticalBox {
-    in property <bool> show_import_dialog;
-    in property <string> import_summary;
-    in property <int> import_resolution;
+    in property <ImportDialogState> state;
 
     callback perform_action(action: UtilityAction, index: int, value: float);
 
     spacing: AppTheme.section_spacing;
 
-    if root.show_import_dialog : VerticalBox {
+    if root.state.visible : VerticalBox {
         spacing: AppTheme.section_spacing;
         Text { text: "Import Mesh"; }
-        Text { text: root.import_summary; wrap: word-wrap; }
-        NudgeRow { minus_label: "Imp-"; value_label: "Resolution " + root.import_resolution; plus_label: "Imp+"; step_down => { root.perform_action(UtilityAction.nudge-import-resolution, -1, -8); } step_up => { root.perform_action(UtilityAction.nudge-import-resolution, -1, 8); } }
+        Text { text: root.state.summary; wrap: word-wrap; }
+        NudgeRow { minus_label: "Imp-"; value_label: "Resolution " + root.state.resolution; plus_label: "Imp+"; step_down => { root.perform_action(UtilityAction.nudge-import-resolution, -1, -8); } step_up => { root.perform_action(UtilityAction.nudge-import-resolution, -1, 8); } }
         HorizontalBox {
             spacing: AppTheme.section_spacing;
             Button { text: "Commit"; clicked => { root.perform_action(UtilityAction.confirm-import, -1, 0); } }

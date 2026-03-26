@@ -1,5 +1,5 @@
 import { ScrollView, VerticalBox } from "std-widgets.slint";
-import { InspectorEditKind, InspectorEditMode, ReferenceRowView, UtilityAction } from "view_models.slint";
+import { InspectorEditKind, InspectorEditMode, InspectorPanelState, UtilityAction, UtilityPanelState } from "view_models.slint";
 import { AppTheme } from "theme.slint";
 import { ImportDialogPanel } from "import_dialog_panel.slint";
 import { InspectorPanel } from "inspector_panel.slint";
@@ -7,59 +7,8 @@ import { ReferenceImagesPanel } from "reference_images_panel.slint";
 import { RenderSettingsPanel } from "render_settings_panel.slint";
 
 export component RightSidebar inherits Rectangle {
-    in property <string> inspector_title;
-    in property <string> inspector_chips;
-    in property <string> inspector_display;
-    in property <string> inspector_property_summary;
-    in property <bool> has_transform;
-    in property <float> transform_pos_x;
-    in property <float> transform_pos_y;
-    in property <float> transform_pos_z;
-    in property <float> transform_rot_x;
-    in property <float> transform_rot_y;
-    in property <float> transform_rot_z;
-    in property <float> selected_scale_x;
-    in property <float> selected_scale_y;
-    in property <float> selected_scale_z;
-    in property <bool> can_scale;
-    in property <bool> has_material;
-    in property <float> material_color_r;
-    in property <float> material_color_g;
-    in property <float> material_color_b;
-    in property <float> material_roughness;
-    in property <float> material_metallic;
-    in property <bool> has_operation;
-    in property <string> operation_label;
-    in property <float> operation_smooth_k;
-    in property <float> operation_steps;
-    in property <float> operation_color_blend;
-    in property <bool> has_sculpt;
-    in property <int> sculpt_resolution;
-    in property <float> sculpt_layer_intensity;
-    in property <float> sculpt_brush_radius;
-    in property <float> sculpt_brush_strength;
-    in property <bool> has_light;
-    in property <string> light_label;
-    in property <float> light_color_r;
-    in property <float> light_color_g;
-    in property <float> light_color_b;
-    in property <float> light_intensity;
-    in property <float> light_range;
-    in property <bool> light_cast_shadows;
-    in property <bool> light_volumetric;
-    in property <float> light_volumetric_density;
-    in property <[ReferenceRowView]> reference_rows;
-    in property <bool> render_show_grid;
-    in property <bool> render_show_node_labels;
-    in property <bool> render_show_bounding_box;
-    in property <bool> render_show_light_gizmos;
-    in property <bool> render_shadows_enabled;
-    in property <bool> render_ao_enabled;
-    in property <int> export_resolution;
-    in property <bool> adaptive_export;
-    in property <bool> show_import_dialog;
-    in property <string> import_summary;
-    in property <int> import_resolution;
+    in property <InspectorPanelState> inspector_state;
+    in property <UtilityPanelState> utility_state;
 
     callback edit_inspector(kind: InspectorEditKind, mode: InspectorEditMode, axis: int, value: float);
     callback perform_utility_action(action: UtilityAction, index: int, value: float);
@@ -75,71 +24,22 @@ export component RightSidebar inherits Rectangle {
             spacing: AppTheme.section_spacing;
 
             InspectorPanel {
-                inspector_title: root.inspector_title;
-                inspector_chips: root.inspector_chips;
-                inspector_display: root.inspector_display;
-                inspector_property_summary: root.inspector_property_summary;
-                has_transform: root.has_transform;
-                transform_pos_x: root.transform_pos_x;
-                transform_pos_y: root.transform_pos_y;
-                transform_pos_z: root.transform_pos_z;
-                transform_rot_x: root.transform_rot_x;
-                transform_rot_y: root.transform_rot_y;
-                transform_rot_z: root.transform_rot_z;
-                selected_scale_x: root.selected_scale_x;
-                selected_scale_y: root.selected_scale_y;
-                selected_scale_z: root.selected_scale_z;
-                can_scale: root.can_scale;
-                has_material: root.has_material;
-                material_color_r: root.material_color_r;
-                material_color_g: root.material_color_g;
-                material_color_b: root.material_color_b;
-                material_roughness: root.material_roughness;
-                material_metallic: root.material_metallic;
-                has_operation: root.has_operation;
-                operation_label: root.operation_label;
-                operation_smooth_k: root.operation_smooth_k;
-                operation_steps: root.operation_steps;
-                operation_color_blend: root.operation_color_blend;
-                has_sculpt: root.has_sculpt;
-                sculpt_resolution: root.sculpt_resolution;
-                sculpt_layer_intensity: root.sculpt_layer_intensity;
-                sculpt_brush_radius: root.sculpt_brush_radius;
-                sculpt_brush_strength: root.sculpt_brush_strength;
-                has_light: root.has_light;
-                light_label: root.light_label;
-                light_color_r: root.light_color_r;
-                light_color_g: root.light_color_g;
-                light_color_b: root.light_color_b;
-                light_intensity: root.light_intensity;
-                light_range: root.light_range;
-                light_cast_shadows: root.light_cast_shadows;
-                light_volumetric: root.light_volumetric;
-                light_volumetric_density: root.light_volumetric_density;
+                state: root.inspector_state;
                 edit_inspector(kind, mode, axis, value) => { root.edit_inspector(kind, mode, axis, value); }
             }
 
             ReferenceImagesPanel {
-                reference_rows: root.reference_rows;
+                reference_rows: root.utility_state.reference_rows;
                 perform_action(action, index, value) => { root.perform_utility_action(action, index, value); }
             }
 
             RenderSettingsPanel {
-                render_show_grid: root.render_show_grid;
-                render_show_node_labels: root.render_show_node_labels;
-                render_show_bounding_box: root.render_show_bounding_box;
-                render_show_light_gizmos: root.render_show_light_gizmos;
-                render_shadows_enabled: root.render_shadows_enabled;
-                render_ao_enabled: root.render_ao_enabled;
-                export_resolution: root.export_resolution;
-                adaptive_export: root.adaptive_export;
+                state: root.utility_state.render_settings;
                 perform_action(action, index, value) => { root.perform_utility_action(action, index, value); }
             }
 
             ImportDialogPanel {
-                show_import_dialog: root.show_import_dialog;
-                import_summary: root.import_summary;
-                import_resolution: root.import_resolution;
+                state: root.utility_state.import_dialog;
                 perform_action(action, index, value) => { root.perform_utility_action(action, index, value); }
             }
         }

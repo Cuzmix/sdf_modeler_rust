@@ -30,10 +30,11 @@ fn handle_inspector_edit(
                 mode,
                 value,
                 |window| {
+                    let state = window.get_inspector_panel_state();
                     [
-                        window.get_transform_pos_x(),
-                        window.get_transform_pos_y(),
-                        window.get_transform_pos_z(),
+                        state.transform_pos_x,
+                        state.transform_pos_y,
+                        state.transform_pos_z,
                     ]
                 },
                 |app, component, next| {
@@ -49,10 +50,11 @@ fn handle_inspector_edit(
                 mode,
                 value,
                 |window| {
+                    let state = window.get_inspector_panel_state();
                     [
-                        window.get_transform_rot_x(),
-                        window.get_transform_rot_y(),
-                        window.get_transform_rot_z(),
+                        state.transform_rot_x,
+                        state.transform_rot_y,
+                        state.transform_rot_z,
                     ]
                 },
                 |app, component, next| {
@@ -68,10 +70,11 @@ fn handle_inspector_edit(
                 mode,
                 value,
                 |window| {
+                    let state = window.get_inspector_panel_state();
                     [
-                        window.get_selected_scale_x(),
-                        window.get_selected_scale_y(),
-                        window.get_selected_scale_z(),
+                        state.selected_scale_x,
+                        state.selected_scale_y,
+                        state.selected_scale_z,
                     ]
                 },
                 |app, component, next| {
@@ -87,10 +90,11 @@ fn handle_inspector_edit(
                 mode,
                 value,
                 |window| {
+                    let state = window.get_inspector_panel_state();
                     [
-                        window.get_material_color_r(),
-                        window.get_material_color_g(),
-                        window.get_material_color_b(),
+                        state.material_color_r,
+                        state.material_color_g,
+                        state.material_color_b,
                     ]
                 },
                 |app, component, next| {
@@ -104,7 +108,7 @@ fn handle_inspector_edit(
                 context,
                 mode,
                 value,
-                |window| window.get_material_roughness(),
+                |window| window.get_inspector_panel_state().material_roughness,
                 |app, next| {
                     app.set_selected_material_roughness(next);
                 },
@@ -116,7 +120,7 @@ fn handle_inspector_edit(
                 context,
                 mode,
                 value,
-                |window| window.get_material_metallic(),
+                |window| window.get_inspector_panel_state().material_metallic,
                 |app, next| {
                     app.set_selected_material_metallic(next);
                 },
@@ -128,7 +132,7 @@ fn handle_inspector_edit(
                 context,
                 mode,
                 value,
-                |window| window.get_operation_smooth_k(),
+                |window| window.get_inspector_panel_state().operation_smooth_k,
                 |app, next| {
                     app.set_selected_operation_smooth_k(next);
                 },
@@ -140,7 +144,7 @@ fn handle_inspector_edit(
                 context,
                 mode,
                 value,
-                |window| window.get_operation_steps(),
+                |window| window.get_inspector_panel_state().operation_steps,
                 |app, next| {
                     app.set_selected_operation_steps(next);
                 },
@@ -152,7 +156,7 @@ fn handle_inspector_edit(
                 context,
                 mode,
                 value,
-                |window| window.get_operation_color_blend(),
+                |window| window.get_inspector_panel_state().operation_color_blend,
                 |app, next| {
                     app.set_selected_operation_color_blend(next);
                 },
@@ -160,7 +164,7 @@ fn handle_inspector_edit(
         }
         InspectorEditKind::SculptResolution => {
             let next = apply_scalar_value(context, mode, value, |window| {
-                window.get_sculpt_resolution() as f32
+                window.get_inspector_panel_state().sculpt_resolution as f32
             })
             .max(8.0) as u32;
             host_state.app.set_selected_sculpt_resolution(next);
@@ -171,7 +175,7 @@ fn handle_inspector_edit(
                 context,
                 mode,
                 value,
-                |window| window.get_sculpt_layer_intensity(),
+                |window| window.get_inspector_panel_state().sculpt_layer_intensity,
                 |app, next| {
                     app.set_selected_sculpt_layer_intensity(next);
                 },
@@ -183,7 +187,7 @@ fn handle_inspector_edit(
                 context,
                 mode,
                 value,
-                |window| window.get_sculpt_brush_radius(),
+                |window| window.get_inspector_panel_state().sculpt_brush_radius,
                 |app, next| {
                     app.set_selected_brush_radius(next);
                 },
@@ -195,7 +199,7 @@ fn handle_inspector_edit(
                 context,
                 mode,
                 value,
-                |window| window.get_sculpt_brush_strength(),
+                |window| window.get_inspector_panel_state().sculpt_brush_strength,
                 |app, next| {
                     app.set_selected_brush_strength(next);
                 },
@@ -209,10 +213,11 @@ fn handle_inspector_edit(
                 mode,
                 value,
                 |window| {
+                    let state = window.get_inspector_panel_state();
                     [
-                        window.get_light_color_r(),
-                        window.get_light_color_g(),
-                        window.get_light_color_b(),
+                        state.light_color_r,
+                        state.light_color_g,
+                        state.light_color_b,
                     ]
                 },
                 |app, component, next| {
@@ -226,7 +231,7 @@ fn handle_inspector_edit(
                 context,
                 mode,
                 value,
-                |window| window.get_light_intensity(),
+                |window| window.get_inspector_panel_state().light_intensity,
                 |app, next| {
                     app.set_selected_light_intensity(next);
                 },
@@ -238,7 +243,7 @@ fn handle_inspector_edit(
                 context,
                 mode,
                 value,
-                |window| window.get_light_range(),
+                |window| window.get_inspector_panel_state().light_range,
                 |app, next| {
                     app.set_selected_light_range(next);
                 },
@@ -256,7 +261,7 @@ fn handle_inspector_edit(
                 context,
                 mode,
                 value,
-                |window| window.get_light_volumetric_density(),
+                |window| window.get_inspector_panel_state().light_volumetric_density,
                 |app, next| {
                     app.set_selected_light_volumetric_density(next);
                 },
