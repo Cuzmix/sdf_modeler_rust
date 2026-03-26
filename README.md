@@ -1,113 +1,117 @@
 # SDF Modeler
 
-A real-time Signed Distance Function (SDF) 3D modeling application built in Rust. Render SDF scenes on the GPU via raymarching, sculpt geometry with voxel grids, and export meshes via marching cubes.
+A real-time Signed Distance Function (SDF) 3D modeling application built in Rust. It renders SDF scenes on the GPU via raymarching, supports voxel sculpting, and exports meshes via marching cubes.
 
 ## Features
 
-- **SDF Modeling** — Combine primitives (sphere, box, cylinder, torus, etc.) with CSG operations (union, subtract, intersect) and modifiers (round, shell, elongate, twist, bend, etc.)
-- **GPU Raymarching** — Real-time rendering with enhanced sphere tracing, PBR lighting, soft shadows, ambient occlusion, subsurface scattering, fog, and bloom
-- **Sculpting** — Convert any SDF subtree to a voxel grid and sculpt with Add, Subtract, Smooth, Flatten, Pinch, and Grab brushes
-- **Mesh Export** — Marching cubes extraction to OBJ, STL, PLY, glTF (.glb), and USD ASCII (.usda)
-- **Scene Graph** — Binary tree with undo/redo, drag-drop reparenting, node isolation, and light linking
-- **Dockable UI** — Configurable workspace with viewport, scene tree, properties, node graph, lights panel, render settings, and more
+- **SDF Modeling** - Combine primitives with CSG operations and modifiers
+- **GPU Raymarching** - Real-time rendering with lighting, shadows, AO, and post-processing
+- **Voxel Sculpting** - Convert SDF subtrees into voxel layers and sculpt them interactively
+- **Mesh Export** - Export OBJ, STL, PLY, glTF (`.glb`), and USD ASCII (`.usda`)
+- **Scene Graph** - Presented-object hierarchy with undo/redo, isolation, and light linking
+- **Native Slint UI** - Slint desktop shell with scene panel, viewport, inspector, render settings, import/export flows, and reference images
 
 ## Tech Stack
 
 | Component | Library |
 |-----------|---------|
 | Language | Rust 2021 edition |
-| GPU | wgpu 22.1.0 (via eframe 0.29) — WGSL shaders |
-| UI | egui + egui_dock + egui_node_graph2 |
+| GPU | wgpu 27.0.1 |
+| UI | Slint 1.15.1 |
 | Math | glam 0.29 |
-| Serialization | serde + serde_json, bytemuck (GPU) |
-| Parallelism | rayon (native) |
-| File Dialogs | rfd (native) |
+| Serialization | serde + serde_json + bytemuck |
+| Parallelism | rayon |
+| File dialogs | rfd |
 
 ## Quick Start
 
 ### Prerequisites
 
 - Rust stable toolchain (edition 2021)
-- GPU drivers with Vulkan, Metal, or DX12 support
+- GPU drivers with DX12-capable hardware on Windows
 
-### Build and Run
+### Build And Run
 
 ```bash
-# Development build (opt-level=2 for near-release performance)
+# Development build
 cargo run
 
-# Release build with debug symbols (for profiling)
+# Release build with debug symbols
 cargo run --release
 ```
 
-### Verification
+### Validation
 
 ```bash
-cargo check                       # Type checking
-cargo clippy -- -D warnings       # Lint (warnings are errors)
-cargo test                        # Run all tests
-cargo build                       # Full compilation
+cargo check
+cargo clippy -- -D warnings
+cargo test
+cargo build
 ```
 
 ## Architecture
 
-The application is organized into four layers:
+The application is organized into five layers:
 
+```text
+┌──────────────────────────────────────────────┐
+│ Slint UI (`src/app/slint_ui/`)              │
+├──────────────────────────────────────────────┤
+│ Slint Host (`src/app/slint_frontend/`)      │
+├──────────────────────────────────────────────┤
+│ App Core (`src/app/`)                       │
+├──────────────────────────────────────────────┤
+│ Scene Graph (`src/graph/`)                  │
+├──────────────────────────────────────────────┤
+│ GPU + Viewport (`src/gpu/`, `src/viewport/`)│
+└──────────────────────────────────────────────┘
 ```
-┌─────────────────────────────────────┐
-│  UI Layer (src/ui/)                 │  egui panels, viewport, gizmos
-├─────────────────────────────────────┤
-│  App Core (src/app/)               │  Update loop, actions, state
-├─────────────────────────────────────┤
-│  Scene Graph (src/graph/)          │  Nodes, voxels, history
-├─────────────────────────────────────┤
-│  GPU Pipeline (src/gpu/)           │  Codegen, buffers, camera, picking
-└─────────────────────────────────────┘
-```
-
-**Data flow:** User input → Actions → `process_actions()` → Scene mutation → GPU sync → Shader codegen → Raymarching → Screen
 
 Key patterns:
-- **Redux-style actions** — UI pushes `Action` variants into an `ActionSink`; `process_actions()` is the single mutation point
-- **Two-speed GPU sync** — Topology changes (`structure_key`) trigger shader rebuild; property changes (`data_fingerprint`) only upload buffers
-- **Runtime WGSL codegen** — Scene tree is compiled to WGSL at runtime via post-order traversal
-- **Clone-based undo** — Full scene snapshots (50 levels), simple and correct
 
-For comprehensive technical documentation, see [docs/architecture.md](docs/architecture.md).
+- **Redux-style structural actions** - UI emits `Action` values and `process_actions()` remains the structural mutation gate
+- **Toolkit-neutral frame lifecycle** - `src/app/backend_frame.rs` stays free of Slint widget types
+- **Presenter layer** - `src/app/frontend_models.rs` builds the shell snapshot consumed by the Slint host
+- **Two-speed GPU sync** - topology changes trigger shader rebuilds, property changes reuse pipelines and upload new data
+- **Runtime WGSL codegen** - the scene tree is compiled to WGSL at runtime
+
+For current technical documentation, see:
+
+- [docs/architecture.md](docs/architecture.md)
+- [docs/ui_backend_boundary.md](docs/ui_backend_boundary.md)
+- [docs/slint_frontend.md](docs/slint_frontend.md)
 
 ## Project Structure
 
-```
+```text
 src/
-├── app/          # Update loop, state, actions, action handler
-├── gpu/          # Buffers, camera, codegen, picking, shader templates
-├── graph/        # Scene graph, voxel grid, undo/redo history
-├── ui/           # Panels, viewport, gizmos, dialogs
-│   └── viewport/ # 3D viewport rendering pipeline
-├── shaders/      # WGSL shader files (13 files)
-├── settings.rs   # Persistent render/app settings
-├── export.rs     # Marching cubes + mesh format writers
-├── sculpt.rs     # Brush tools and sculpt state
-├── io.rs         # Project file save/load (JSON)
-└── lib.rs        # Module declarations, entry points
+├── app/                 # Shared app state, backend frame flow, Slint host and UI
+├── gpu/                 # Buffers, camera, codegen, picking
+├── graph/               # Scene graph, presented objects, voxel history
+├── viewport/            # Viewport rendering and overlays
+├── gizmo/               # Viewport gizmo interaction and overlay math
+├── shaders/             # WGSL shader files
+├── settings.rs          # Persistent render/app settings
+├── export.rs            # Marching cubes and mesh format writers
+├── sculpt.rs            # Brush tools and sculpt state
+├── io.rs                # Project file save/load
+├── native_wgpu.rs       # Native WGPU setup helpers
+└── lib.rs               # Native entry point
 ```
 
-57 Rust source files, 13 WGSL shaders, 380+ tests, zero `unsafe` blocks.
-
-## Build Profiles
-
-| Profile | Config | Use Case |
-|---------|--------|----------|
-| `dev` | `opt-level = 2` | Fast iteration with near-release performance |
-| `release` | `debug = true` | Full optimization with symbols for profiling |
+The desktop app is Slint-native and no longer depends on `egui` or `eframe`.
 
 ## Contributing
 
-- Follow the coding standards in [CLAUDE.md](CLAUDE.md)
+- Follow the coding standards in [CLAUDE.md](CLAUDE.md) and [AGENTS.md](AGENTS.md)
 - One logical change per commit with descriptive messages
-- All commits must pass: `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, `cargo build`
-- No placeholder implementations or TODO stubs — every function must be complete
-- Performance is the #1 priority — never degrade runtime efficiency
+- All commits must pass:
+  - `cargo check`
+  - `cargo clippy -- -D warnings`
+  - `cargo test`
+  - `cargo build`
+- Do not leave placeholders or partial implementations
+- Performance and sculpt responsiveness are non-negotiable
 
 ## License
 

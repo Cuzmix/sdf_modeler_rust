@@ -6,6 +6,7 @@ Operational guide for coding agents working in this repository.
 Read these before large or architectural changes:
 - `CLAUDE.md` (full project policy and workflow)
 - `docs/architecture.md` (engine architecture)
+- `docs/slint_frontend.md` (Slint host structure and component map)
 - `docs/ui_backend_boundary.md` (UI/backend separation boundary)
 - `docs/sculpt_responsiveness_findings.md` (sculpt responsiveness guardrails)
 
@@ -31,9 +32,10 @@ If this file conflicts with `CLAUDE.md`, follow `CLAUDE.md`.
 
 ## UI/Backend Boundary (Mandatory)
 - Keep toolkit-agnostic frame logic in `src/app/backend_frame.rs`.
-- Keep egui drawing in `src/app/egui_frontend.rs`.
-- Keep egui input/command mapping in `src/app/frontend_bridge.rs`.
-- Keep `src/app/mod.rs` orchestration-only.
+- Keep toolkit-neutral app construction, shared state, and reducers in `src/app/mod.rs`, `src/app/state.rs`, and `src/app/action_handler.rs`.
+- Keep Slint input decoding in `src/app/slint_bridge.rs`.
+- Keep Slint host runtime, bindings, and callback wiring in `src/app/slint_frontend/`.
+- Keep declarative Slint components and typed UI contracts in `src/app/slint_ui/`.
 - Keep `process_actions()` as the structural mutation gate; UI should emit `Action` values.
 
 ## Sculpt Responsiveness Non-Regression (Mandatory)
@@ -65,16 +67,16 @@ Do not commit if any step fails.
 ### Transform Gizmo Rotation Snap-Back (Multi-Select)
 - Symptom: during multi-object rotate drag, objects appear to rotate then snap back toward the start pose on subsequent frames.
 - Root cause pattern: mixing per-frame incremental drag values with a baseline re-application path.
-- In this codebase/egui setup, `response.drag_delta()` is per-frame; baseline re-apply flows must consume total applied rotation, not incremental-only deltas.
+- In this codebase/Slint viewport setup, pointer drag deltas are per-frame; baseline re-apply flows must consume total applied rotation, not incremental-only deltas.
 - Guardrail:
   - Incremental apply flows should use `ScreenRotationDragState::consume_applied_delta`.
   - Baseline re-apply flows should use `ScreenRotationDragState::consume_applied_total`.
 - First places to verify when this regresses:
-  - `src/ui/gizmo.rs` (`handle_multi_rotate_drag`, `apply_world_rotation_to_targets`, `ScreenRotationDragState`)
-  - `src/ui/properties.rs` and `src/ui/viewport/draw.rs` (multi-transform baseline/session sync paths)
+  - `src/gizmo/viewport.rs` (`handle_multi_rotate_drag`, `apply_world_rotation_to_targets`, `ScreenRotationDragState`)
+  - `src/viewport/draw.rs` and `src/app/state.rs` (multi-transform baseline/session sync paths)
 - Regression tests to keep passing:
-  - `ui::gizmo::tests::snapped_rotation_consumes_incremental_applied_delta`
-  - `ui::gizmo::tests::snapped_rotation_consumes_total_applied_angle_for_baseline_flows`
+  - `gizmo::viewport::tests::snapped_rotation_consumes_incremental_applied_delta`
+  - `gizmo::viewport::tests::snapped_rotation_consumes_total_applied_angle_for_baseline_flows`
 
 ## Git Discipline
 - One logical change per commit.

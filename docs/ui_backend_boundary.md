@@ -1,61 +1,109 @@
 # UI/Backend Boundary Contract
 
-This document defines the required separation between application core logic and UI toolkit code.
+This document defines the current boundary between shared app logic and the Slint frontend.
 
 ## Goals
 
-- Keep core frame logic independent from `egui`, so migration to Slint/Iced is incremental.
-- Preserve behavior and performance while swapping UI adapters.
-- Keep ownership and mutation flow explicit.
+- Keep frame logic independent from any one widget toolkit.
+- Keep structural mutations explicit and reviewable.
+- Keep the Slint layer declarative and free of engine logic.
+- Preserve performance while the UI continues to evolve.
 
-## Current Boundary
+## Current Native Boundary
+
+### Shared App/Core Layer
 
 - `src/app/backend_frame.rs`
-  - Owns toolkit-agnostic frame lifecycle (`run_backend_pre_ui`, `run_backend_post_ui`).
-  - Defines boundary DTOs: `FrameInputSnapshot`, `UiFrameFeedback`, `FrameCommands`.
-  - Must not import `eframe::egui` or toolkit-specific UI types.
+  Owns the toolkit-neutral frame lifecycle:
+  - `run_backend_pre_ui(...)`
+  - `run_backend_post_ui(...)`
+  - `FrameInputSnapshot`
+  - `UiFrameFeedback`
+  - `FrameCommands`
 
-- `src/app/egui_frontend.rs`
-  - Owns egui-only drawing and egui-specific feedback capture.
+- `src/app/actions.rs`
+  Defines structural `Action` values.
 
-- `src/app/frontend_bridge.rs`
-  - Converts `egui::Context` to `FrameInputSnapshot`.
-  - Applies `FrameCommands` back into egui viewport/repaint commands.
+- `src/app/action_handler.rs`
+  Owns `process_actions()`, the structural mutation gate.
 
-- `src/app/mod.rs`
-  - Must remain orchestration-only.
-  - Frame flow: capture input -> backend pre-ui -> frontend draw -> process actions -> backend post-ui -> apply commands.
+- `src/app/controllers.rs`
+  Owns non-structural edit controllers used by the frontend.
+
+- `src/app/frontend_models.rs`
+  Builds `ShellSnapshot` and related presenter models from shared app state.
+
+- `src/app/viewport_interaction.rs`
+  Owns toolkit-neutral viewport interaction logic.
+
+These modules must not depend on Slint widget types.
+
+### Slint Bridge Layer
+
+- `src/app/slint_bridge.rs`
+  Converts Slint events into:
+  - `FrameInputSnapshot`
+  - `ViewportInputSnapshot`
+  - coarse UI events such as undo/redo/frame-all
+
+This file is the input boundary between Slint and shared frame logic.
+
+### Slint Runtime Host Layer
+
+- `src/app/slint_frontend/mod.rs`
+  Bootstraps the native Slint host and shared WGPU backend.
+
+- `src/app/slint_frontend/host_state/`
+  Owns tick flow, viewport texture lifetime, and host runtime state.
+
+- `src/app/slint_frontend/bindings/`
+  Applies presenter models to grouped Slint state structs.
+
+- `src/app/slint_frontend/callbacks/`
+  Converts Slint domain callbacks into `Action` values or shared controller calls.
+
+These modules may depend on Slint runtime APIs, but should not become a second reducer.
+
+### Declarative Slint UI Layer
+
+- `src/app/slint_ui/*.slint`
+  Owns layout, visual composition, and domain-level callback emission.
+
+- `src/app/slint_ui/view_models/`
+  Owns the Slint-side state structs and action enums used by the UI.
+
+The `.slint` files should stay declarative. They should not embed business rules or mutate shared state directly.
 
 ## Mutation Rules
 
-- Structural scene changes must go through `Action` + `process_actions()`.
-- Frontend adapters should emit `Action` values via `ActionSink` for structural edits.
-- Data-level live edits may stay direct where required for latency, but do not introduce toolkit types into backend modules.
+- Structural scene changes must go through `Action` plus `process_actions()`.
+- Frontend adapters should emit `Action` values for structural edits.
+- High-frequency value edits may use shared controllers when latency matters, but they must stay toolkit-neutral.
+- Do not move Slint types into `backend_frame.rs`, reducers, scene graph modules, or GPU modules.
 
-## Adding Another UI Toolkit
+## Frontend Design Rules
 
-- Add toolkit-specific adapter modules parallel to egui (for example `slint_frontend.rs`, `slint_bridge.rs`).
-- Reuse `backend_frame.rs` unchanged where possible.
-- Keep boundary DTOs generic and toolkit-neutral.
-- Update `CLAUDE.md` and `docs/architecture.md` if the contract changes.
+- Use grouped Slint panel state instead of large flat property bags.
+- Use domain-level callbacks instead of one callback per widget.
+- Split bindings, callbacks, and host-state code by responsibility; avoid monolithic frontend files.
+- Keep viewport event transport separate from low-frequency UI commands.
 
 ## Review Checklist
 
-1. `backend_frame.rs` has no toolkit imports.
-2. Toolkit calls stay in frontend adapter/bridge modules.
-3. `mod.rs` remains orchestration-only.
-4. `process_actions()` remains the structural mutation gate.
-5. Validation passes in order: `cargo check`, `cargo clippy -- -D warnings`, `cargo test`, `cargo build`.
-6. Manual visual verification is done for visual/behavioral changes.
+1. `src/app/backend_frame.rs` remains toolkit-neutral.
+2. `process_actions()` remains the structural mutation gate.
+3. `src/app/slint_bridge.rs` is only input decoding, not business logic.
+4. `src/app/slint_frontend/` is runtime/binding/callback wiring, not scene mutation policy.
+5. `.slint` files stay declarative and emit domain intents only.
+6. Validation passes in order:
+   - `cargo check`
+   - `cargo clippy -- -D warnings`
+   - `cargo test`
+   - `cargo build`
+7. Manual visual verification is completed for visual or behavioral changes.
 
-ok next the i want fix and enhance the voxel sculpting , I noticed i see alot of artifacts i belive to be raymarching artifacts, to help reduce the noise i have to tone down the step muliplier
+## Related Docs
 
-not sure why this helps the visual aspect
-
-i have a couple of questions is there a better way t
-
-ok next the i want fix and enhance the voxel sculpting , I noticed i see alot of artifacts i belive to be raymarching artifacts, to help reduce the noise i have to tone down the step muliplier
-
-not sure why this helps the visual aspect
-
-i have a couple of questions is there a better way t
+- `docs/architecture.md`
+- `docs/slint_frontend.md`
+- `docs/sculpt_responsiveness_findings.md`
