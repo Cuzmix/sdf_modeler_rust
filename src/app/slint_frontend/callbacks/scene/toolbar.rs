@@ -27,5 +27,37 @@ fn handle_scene_toolbar_action(host_state: &mut SlintHostState, action: SceneToo
         }
         SceneToolbarAction::DuplicateSelected => host_state.queue_action(Action::Duplicate),
         SceneToolbarAction::DeleteSelected => host_state.queue_action(Action::DeleteSelected),
+        SceneToolbarAction::StartRenameSelected => {
+            let Some(selected_id) = host_state.app.ui.selection.selected else {
+                return;
+            };
+            let Some(object) = crate::graph::presented_object::resolve_presented_object(
+                &host_state.app.doc.scene,
+                selected_id,
+            ) else {
+                return;
+            };
+            let Some(node) = host_state.app.doc.scene.nodes.get(&object.host_id) else {
+                return;
+            };
+            host_state
+                .app
+                .ui
+                .scene_panel
+                .begin_rename(object.host_id, node.name.clone());
+        }
+        SceneToolbarAction::OpenNodeWorkspace => {
+            host_state.queue_action(Action::ToggleExpertPanel(
+                crate::app::state::ExpertPanelKind::NodeGraph,
+            ));
+        }
+        SceneToolbarAction::OpenLightWorkspace => {
+            host_state.queue_action(Action::ToggleExpertPanel(
+                crate::app::state::ExpertPanelKind::LightGraph,
+            ));
+        }
+        SceneToolbarAction::CancelRowDrag => {
+            host_state.app.ui.scene_panel.clear_drag();
+        }
     }
 }

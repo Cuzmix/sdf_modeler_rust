@@ -32,9 +32,9 @@ fn handle_light_edit(
                 |window| {
                     let state = window.get_inspector_panel_state();
                     [
-                        state.light_color_r,
-                        state.light_color_g,
-                        state.light_color_b,
+                        state.light.color_r.value,
+                        state.light.color_g.value,
+                        state.light.color_b.value,
                     ]
                 },
                 |app, component, next| {
@@ -48,7 +48,7 @@ fn handle_light_edit(
                 context,
                 mode,
                 value,
-                |window| window.get_inspector_panel_state().light_intensity,
+                |window| window.get_inspector_panel_state().light.intensity.value,
                 |app, next| {
                     app.set_selected_light_intensity(next);
                 },
@@ -60,7 +60,7 @@ fn handle_light_edit(
                 context,
                 mode,
                 value,
-                |window| window.get_inspector_panel_state().light_range,
+                |window| window.get_inspector_panel_state().light.range.value,
                 |app, next| {
                     app.set_selected_light_range(next);
                 },
@@ -78,7 +78,13 @@ fn handle_light_edit(
                 context,
                 mode,
                 value,
-                |window| window.get_inspector_panel_state().light_volumetric_density,
+                |window| {
+                    window
+                        .get_inspector_panel_state()
+                        .light
+                        .volumetric_density
+                        .value
+                },
                 |app, next| {
                     app.set_selected_light_volumetric_density(next);
                 },

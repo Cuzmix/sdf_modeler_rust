@@ -169,6 +169,43 @@ pub enum PrimaryShellUtilityTab {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum WorkspaceRoute {
+    NodeGraph,
+    LightGraph,
+}
+
+impl WorkspaceRoute {
+    pub const ALL: [Self; 2] = [Self::NodeGraph, Self::LightGraph];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::NodeGraph => "Node Graph",
+            Self::LightGraph => "Light Graph",
+        }
+    }
+
+    pub fn expert_panel_kind(self) -> ExpertPanelKind {
+        match self {
+            Self::NodeGraph => ExpertPanelKind::NodeGraph,
+            Self::LightGraph => ExpertPanelKind::LightGraph,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WorkspaceUiState {
+    pub route: WorkspaceRoute,
+}
+
+impl Default for WorkspaceUiState {
+    fn default() -> Self {
+        Self {
+            route: WorkspaceRoute::NodeGraph,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ExpertPanelKind {
     NodeGraph,
     LightGraph,
@@ -419,6 +456,50 @@ impl MultiTransformSessionState {
     }
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ScenePanelUiState {
+    pub expanded_nodes: HashSet<NodeId>,
+    pub filter_query: String,
+    pub renaming_node: Option<NodeId>,
+    pub rename_buffer: String,
+    pub drag_source: Option<NodeId>,
+    pub drop_target: Option<NodeId>,
+}
+
+impl ScenePanelUiState {
+    pub fn is_expanded(&self, id: NodeId, depth: usize) -> bool {
+        depth == 0 || self.expanded_nodes.contains(&id)
+    }
+
+    pub fn set_expanded(&mut self, id: NodeId, expanded: bool) {
+        if expanded {
+            self.expanded_nodes.insert(id);
+        } else {
+            self.expanded_nodes.remove(&id);
+        }
+    }
+
+    pub fn begin_rename(&mut self, id: NodeId, current_name: impl Into<String>) {
+        self.renaming_node = Some(id);
+        self.rename_buffer = current_name.into();
+    }
+
+    pub fn cancel_rename(&mut self) {
+        self.renaming_node = None;
+        self.rename_buffer.clear();
+    }
+
+    pub fn begin_drag(&mut self, id: NodeId) {
+        self.drag_source = Some(id);
+        self.drop_target = None;
+    }
+
+    pub fn clear_drag(&mut self) {
+        self.drag_source = None;
+        self.drop_target = None;
+    }
+}
+
 /// State for the "Convert to Sculpt" dialog shown by Ctrl+R.
 pub struct SculptConvertDialog {
     pub target: NodeId,
@@ -577,7 +658,9 @@ impl Default for ViewportInteractionState {
 
 pub struct UiState {
     pub primary_shell: PrimaryShellState,
+    pub workspace: WorkspaceUiState,
     pub expert_panels: ExpertPanelRegistry,
+    pub scene_panel: ScenePanelUiState,
     pub selection: SceneSelectionState,
     pub scene_graph_view: SceneGraphViewState,
     pub viewport_interaction: ViewportInteractionState,
@@ -585,10 +668,6 @@ pub struct UiState {
     pub show_help: bool,
     pub show_export_dialog: bool,
     pub show_settings: bool,
-    pub renaming_node: Option<NodeId>,
-    pub rename_buf: String,
-    pub scene_tree_drag: Option<NodeId>,
-    pub scene_tree_search: String,
     pub isolation_state: Option<IsolationState>,
     pub toasts: Vec<Toast>,
     pub turntable_active: bool,

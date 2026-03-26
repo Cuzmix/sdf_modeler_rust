@@ -1,0 +1,21 @@
+import { Button, VerticalBox } from "std-widgets.slint";
+import { AppTheme } from "theme.slint";
+import { HistoryAction, HistoryRowView } from "view_models.slint";
+
+export component HistoryPanel inherits VerticalBox {
+    in property <string> history_summary;
+    in property <[HistoryRowView]> history_rows;
+
+    callback perform_history_action(action: HistoryAction, index: int);
+
+    spacing: AppTheme.section_spacing;
+
+    Text { text: "History"; }
+    Text { text: root.history_summary; }
+
+    for history[index] in root.history_rows : Button {
+        text: history.is_current ? history.label : history.direction_label + ": " + history.label;
+        enabled: history.jump_enabled;
+        clicked => { root.perform_history_action(HistoryAction.jump-to-entry, index); }
+    }
+}

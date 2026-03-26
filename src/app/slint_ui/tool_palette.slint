@@ -1,0 +1,72 @@
+import { AppTheme } from "theme.slint";
+import { ToolPaletteAction, ToolPaletteButtonView, ToolPaletteState } from "view_models.slint";
+
+component ToolPaletteButton inherits Rectangle {
+    in property <ToolPaletteButtonView> tool;
+
+    callback activated;
+
+    min-width: 70px;
+    height: 42px;
+    border-radius: AppTheme.overlay_button_radius;
+    border-width: 1px;
+    border-color: tool.active ? AppTheme.overlay_button_active_border : AppTheme.overlay_button_border;
+    background: tool.active ? AppTheme.overlay_button_active_background : AppTheme.overlay_button_background;
+
+    Text {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        text: tool.label;
+        color: AppTheme.overlay_button_text;
+        font-size: 14px;
+    }
+
+    TouchArea {
+        width: parent.width;
+        height: parent.height;
+        clicked => { root.activated(); }
+    }
+}
+
+export component ToolPalette inherits Rectangle {
+    in property <ToolPaletteState> state;
+
+    callback perform_action(action: ToolPaletteAction);
+
+    visible: state.visible;
+    border-radius: AppTheme.overlay_panel_radius;
+    border-width: 1px;
+    border-color: AppTheme.overlay_panel_border;
+    background: AppTheme.overlay_panel_background;
+    width: content.preferred-width + AppTheme.overlay_panel_padding * 2;
+    height: content.preferred-height + AppTheme.overlay_panel_padding * 2;
+
+    content := HorizontalLayout {
+        x: AppTheme.overlay_panel_padding;
+        y: AppTheme.overlay_panel_padding;
+        spacing: AppTheme.overlay_tool_spacing;
+
+        ToolPaletteButton {
+            tool: root.state.select_tool;
+            activated => { root.perform_action(ToolPaletteAction.select); }
+        }
+
+        Rectangle {
+            width: 1px;
+            height: 28px;
+            y: (parent.height - self.height) / 2;
+            background: AppTheme.overlay_divider;
+        }
+
+        for tool in root.state.brush_tools : ToolPaletteButton {
+            tool: tool;
+            activated => {
+                root.perform_action(tool.action);
+            }
+        }
+    }
+}

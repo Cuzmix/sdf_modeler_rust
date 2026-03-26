@@ -9,14 +9,14 @@ export component TopBar inherits HorizontalBox {
 
     spacing: AppTheme.frame_spacing;
 
-    Button { text: "New"; clicked => { root.perform_action(TopBarAction.new-scene); } }
-    Button { text: "Open"; clicked => { root.perform_action(TopBarAction.open-project); } }
-    Button { text: "Save"; clicked => { root.perform_action(TopBarAction.save-project); } }
-    Button { text: "Import"; clicked => { root.perform_action(TopBarAction.import-mesh); } }
-    Button { text: "Export"; clicked => { root.perform_action(TopBarAction.export-mesh); } }
-    Button { text: "Shot"; clicked => { root.perform_action(TopBarAction.take-screenshot); } }
-    Button { text: "Add Ref"; clicked => { root.perform_action(TopBarAction.add-reference-image); } }
-    Button { text: "Toggle Refs"; clicked => { root.perform_action(TopBarAction.toggle-all-reference-images); } }
+    Button { text: "New"; enabled: root.state.file_actions_enabled; clicked => { root.perform_action(TopBarAction.new-scene); } }
+    Button { text: "Open"; enabled: root.state.file_actions_enabled; clicked => { root.perform_action(TopBarAction.open-project); } }
+    Button { text: "Save"; enabled: root.state.file_actions_enabled; clicked => { root.perform_action(TopBarAction.save-project); } }
+    Button { text: "Import"; enabled: root.state.file_actions_enabled; clicked => { root.perform_action(TopBarAction.import-mesh); } }
+    Button { text: "Export"; enabled: root.state.file_actions_enabled; clicked => { root.perform_action(TopBarAction.export-mesh); } }
+    Button { text: "Shot"; enabled: root.state.file_actions_enabled; clicked => { root.perform_action(TopBarAction.take-screenshot); } }
+    Button { text: "Add Ref"; enabled: root.state.file_actions_enabled; clicked => { root.perform_action(TopBarAction.add-reference-image); } }
+    Button { text: "Toggle Refs"; enabled: root.state.file_actions_enabled; clicked => { root.perform_action(TopBarAction.toggle-all-reference-images); } }
     Button { text: "Frame"; clicked => { root.perform_action(TopBarAction.frame-all); } }
     Button { text: "Focus"; clicked => { root.perform_action(TopBarAction.focus-selected); } }
     Button { text: "Undo"; clicked => { root.perform_action(TopBarAction.undo); } }

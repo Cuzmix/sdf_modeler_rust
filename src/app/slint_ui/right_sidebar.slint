@@ -1,6 +1,7 @@
 import { ScrollView, VerticalBox } from "std-widgets.slint";
-import { ImportDialogAction, InspectorEditMode, InspectorPanelState, LightEditKind, MaterialEditKind, OperationEditKind, ReferenceImageAction, RenderSettingsAction, SculptEditKind, TransformEditKind, UtilityPanelState } from "view_models.slint";
 import { AppTheme } from "theme.slint";
+import { HistoryAction, ImportDialogAction, InspectorEditMode, InspectorPanelState, LightEditKind, MaterialEditKind, OperationEditKind, ReferenceImageAction, RenderSettingsAction, SculptEditKind, TransformEditKind, UtilityPanelState } from "view_models.slint";
+import { HistoryPanel } from "history_panel.slint";
 import { ImportDialogPanel } from "import_dialog_panel.slint";
 import { InspectorPanel } from "inspector_panel.slint";
 import { ReferenceImagesPanel } from "reference_images_panel.slint";
@@ -15,11 +16,12 @@ export component RightSidebar inherits Rectangle {
     callback operation_edit(kind: OperationEditKind, mode: InspectorEditMode, value: float);
     callback sculpt_edit(kind: SculptEditKind, mode: InspectorEditMode, value: float);
     callback light_edit(kind: LightEditKind, mode: InspectorEditMode, axis: int, value: float);
+    callback history_action(action: HistoryAction, index: int);
     callback reference_image_action(action: ReferenceImageAction, index: int, value: float);
     callback render_settings_action(action: RenderSettingsAction, value: float);
     callback import_dialog_action(action: ImportDialogAction, value: float);
 
-    width: 360px;
+    width: 380px;
     background: AppTheme.panel_background;
 
     ScrollView {
@@ -38,7 +40,14 @@ export component RightSidebar inherits Rectangle {
                 light_edit(kind, mode, axis, value) => { root.light_edit(kind, mode, axis, value); }
             }
 
+            HistoryPanel {
+                history_summary: root.utility_state.history_summary;
+                history_rows: root.utility_state.history_rows;
+                perform_history_action(action, index) => { root.history_action(action, index); }
+            }
+
             ReferenceImagesPanel {
+                summary: root.utility_state.reference_summary;
                 reference_rows: root.utility_state.reference_rows;
                 perform_reference_action(action, index, value) => { root.reference_image_action(action, index, value); }
             }

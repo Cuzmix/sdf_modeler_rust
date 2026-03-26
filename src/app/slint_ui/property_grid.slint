@@ -1,0 +1,58 @@
+import { CheckBox, Slider, VerticalBox } from "std-widgets.slint";
+import { AppTheme } from "theme.slint";
+import { PropertyBoolFieldView, PropertyScalarFieldView } from "view_models.slint";
+
+export component ScalarFieldRow inherits VerticalBox {
+    in property <string> label;
+    in property <PropertyScalarFieldView> field;
+
+    callback value_changed(value: float);
+
+    spacing: 2px;
+
+    Text {
+        text: label + ": " + field.display_text + (field.mixed ? " (mixed)" : "");
+        color: field.enabled ? #ffffff : #9a9a9a;
+        wrap: word-wrap;
+    }
+
+    Slider {
+        minimum: field.minimum;
+        maximum: field.maximum;
+        step: field.step;
+        value: field.value;
+        enabled: field.enabled;
+        changed(value) => { root.value_changed(value); }
+    }
+}
+
+export component BoolFieldRow inherits VerticalBox {
+    in property <string> label;
+    in property <PropertyBoolFieldView> field;
+
+    callback value_toggled(value: bool);
+
+    spacing: 2px;
+
+    CheckBox {
+        text: label + (field.mixed ? " (mixed)" : "");
+        checked: field.value;
+        enabled: field.enabled;
+        toggled => { root.value_toggled(self.checked); }
+    }
+
+    Text {
+        text: field.display_text;
+        color: field.enabled ? #ffffff : #9a9a9a;
+    }
+}
+
+export component SectionTitle inherits VerticalBox {
+    in property <string> title;
+    in property <string> subtitle;
+
+    spacing: AppTheme.section_spacing;
+
+    Text { text: title; }
+    if subtitle != "" : Text { text: subtitle; wrap: word-wrap; }
+}

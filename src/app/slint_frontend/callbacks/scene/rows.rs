@@ -15,42 +15,63 @@ pub(super) fn install(window: &SlintHostWindow, context: &CallbackContext) {
 }
 
 fn handle_scene_row_action(host_state: &mut SlintHostState, action: SceneRowAction, index: i32) {
+    let Some(row) = scene_row_at(host_state.last_snapshot.as_ref(), index).cloned() else {
+        return;
+    };
+
     match action {
         SceneRowAction::SelectRow => {
-            let Some(row) = scene_row_at(host_state.last_snapshot.as_ref(), index) else {
-                return;
-            };
             host_state.queue_action(Action::Select(Some(row.host_id)));
         }
         SceneRowAction::ToggleRowSelection => {
-            let Some(row) = scene_row_at(host_state.last_snapshot.as_ref(), index) else {
-                return;
-            };
             host_state.queue_action(Action::ToggleSelection(row.host_id));
         }
+        SceneRowAction::ToggleRowExpanded => {
+            host_state
+                .app
+                .ui
+                .scene_panel
+                .set_expanded(row.host_id, !row.expanded);
+        }
         SceneRowAction::ToggleRowVisibility => {
-            let Some(row) = scene_row_at(host_state.last_snapshot.as_ref(), index) else {
-                return;
-            };
             host_state.queue_action(Action::ToggleVisibility(row.object_root_id));
         }
         SceneRowAction::ToggleRowLock => {
-            let Some(row) = scene_row_at(host_state.last_snapshot.as_ref(), index) else {
-                return;
-            };
             host_state.queue_action(Action::ToggleLock(row.host_id));
         }
+        SceneRowAction::BeginRowRename => {
+            host_state
+                .app
+                .ui
+                .scene_panel
+                .begin_rename(row.host_id, row.label);
+        }
         SceneRowAction::DuplicateRow => {
-            let Some(row) = scene_row_at(host_state.last_snapshot.as_ref(), index) else {
-                return;
-            };
             host_state.queue_action(Action::DuplicatePresentedObject(row.object_root_id));
         }
         SceneRowAction::DeleteRow => {
-            let Some(row) = scene_row_at(host_state.last_snapshot.as_ref(), index) else {
+            host_state.queue_action(Action::DeletePresentedObject(row.object_root_id));
+        }
+        SceneRowAction::BeginRowDrag => {
+            host_state.app.ui.scene_panel.begin_drag(row.object_root_id);
+        }
+        SceneRowAction::DropOnRow => {
+            let Some(dragged) = host_state.app.ui.scene_panel.drag_source else {
                 return;
             };
-            host_state.queue_action(Action::DeletePresentedObject(row.object_root_id));
+            if host_state
+                .app
+                .doc
+                .scene
+                .is_valid_drop_target(row.object_root_id, dragged)
+            {
+                host_state.app.ui.scene_panel.drop_target = Some(row.object_root_id);
+                host_state.queue_action(Action::ReparentNode {
+                    dragged,
+                    new_parent: row.object_root_id,
+                });
+            }
+            host_state.app.ui.scene_panel.clear_drag();
         }
     }
 }

@@ -2,91 +2,90 @@ use crate::graph::presented_object::{
     current_transform_owner, resolve_presented_object, PresentedObjectKind,
 };
 use crate::graph::scene::{NodeData, NodeId};
+use crate::settings::{EnvironmentBackgroundMode, EnvironmentSource};
 
 use super::SdfApp;
 
 impl SdfApp {
-    pub(super) fn rename_selected_object(&mut self, name: String) {
-        let trimmed = name.trim();
-        if trimmed.is_empty() {
-            return;
-        }
-        let Some(selected_id) = self.ui.selection.selected else {
-            return;
-        };
-        let Some(node) = self.doc.scene.nodes.get_mut(&selected_id) else {
-            return;
-        };
-        node.name = trimmed.to_string();
-        self.gpu.buffer_dirty = true;
-    }
-
     pub(super) fn set_selected_position_component(&mut self, axis: usize, value: f32) {
-        let Some(target_id) = self.selected_transform_target() else {
-            return;
-        };
-        let Some(node) = self.doc.scene.nodes.get_mut(&target_id) else {
-            return;
-        };
-        match &mut node.data {
-            NodeData::Primitive { position, .. } | NodeData::Sculpt { position, .. } => {
-                set_vec3_component(position, axis, value);
+        let mut changed = false;
+        for target_id in self.selected_transform_targets() {
+            let Some(node) = self.doc.scene.nodes.get_mut(&target_id) else {
+                continue;
+            };
+            match &mut node.data {
+                NodeData::Primitive { position, .. } | NodeData::Sculpt { position, .. } => {
+                    set_vec3_component(position, axis, value);
+                    changed = true;
+                }
+                NodeData::Transform { translation, .. } => {
+                    set_vec3_component(translation, axis, value);
+                    changed = true;
+                }
+                _ => {}
             }
-            NodeData::Transform { translation, .. } => {
-                set_vec3_component(translation, axis, value);
-            }
-            _ => return,
         }
-        self.gpu.buffer_dirty = true;
+        if changed {
+            self.gpu.buffer_dirty = true;
+        }
     }
 
     pub(super) fn set_selected_rotation_deg_component(&mut self, axis: usize, degrees: f32) {
-        let Some(target_id) = self.selected_transform_target() else {
-            return;
-        };
-        let Some(node) = self.doc.scene.nodes.get_mut(&target_id) else {
-            return;
-        };
         let radians = degrees.to_radians();
-        match &mut node.data {
-            NodeData::Primitive { rotation, .. }
-            | NodeData::Sculpt { rotation, .. }
-            | NodeData::Transform { rotation, .. } => {
-                set_vec3_component(rotation, axis, radians);
+        let mut changed = false;
+        for target_id in self.selected_transform_targets() {
+            let Some(node) = self.doc.scene.nodes.get_mut(&target_id) else {
+                continue;
+            };
+            match &mut node.data {
+                NodeData::Primitive { rotation, .. }
+                | NodeData::Sculpt { rotation, .. }
+                | NodeData::Transform { rotation, .. } => {
+                    set_vec3_component(rotation, axis, radians);
+                    changed = true;
+                }
+                _ => {}
             }
-            _ => return,
         }
-        self.gpu.buffer_dirty = true;
+        if changed {
+            self.gpu.buffer_dirty = true;
+        }
     }
 
     pub(super) fn set_selected_scale_component(&mut self, axis: usize, value: f32) {
-        let Some(target_id) = self.selected_transform_target() else {
-            return;
-        };
-        let Some(node) = self.doc.scene.nodes.get_mut(&target_id) else {
-            return;
-        };
-        match &mut node.data {
-            NodeData::Primitive { scale, .. } | NodeData::Transform { scale, .. } => {
-                set_vec3_component(scale, axis, value.max(0.001));
+        let mut changed = false;
+        for target_id in self.selected_transform_targets() {
+            let Some(node) = self.doc.scene.nodes.get_mut(&target_id) else {
+                continue;
+            };
+            match &mut node.data {
+                NodeData::Primitive { scale, .. } | NodeData::Transform { scale, .. } => {
+                    set_vec3_component(scale, axis, value.max(0.001));
+                    changed = true;
+                }
+                _ => {}
             }
-            _ => return,
         }
-        self.gpu.buffer_dirty = true;
+        if changed {
+            self.gpu.buffer_dirty = true;
+        }
     }
 
     pub(super) fn set_selected_material_color_component(&mut self, axis: usize, value: f32) {
-        let Some(selected_id) = self.ui.selection.selected else {
-            return;
-        };
-        let Some(node) = self.doc.scene.nodes.get_mut(&selected_id) else {
-            return;
-        };
-        let Some(material) = node.data.material_mut() else {
-            return;
-        };
-        set_vec3_component(&mut material.base_color, axis, value.clamp(0.0, 1.0));
-        self.gpu.buffer_dirty = true;
+        let mut changed = false;
+        for target_id in self.selected_material_target_ids() {
+            let Some(node) = self.doc.scene.nodes.get_mut(&target_id) else {
+                continue;
+            };
+            let Some(material) = node.data.material_mut() else {
+                continue;
+            };
+            set_vec3_component(&mut material.base_color, axis, value.clamp(0.0, 1.0));
+            changed = true;
+        }
+        if changed {
+            self.gpu.buffer_dirty = true;
+        }
     }
 
     pub(super) fn set_selected_material_roughness(&mut self, value: f32) {
@@ -220,6 +219,58 @@ impl SdfApp {
         self.commit_render_settings_edit();
     }
 
+    pub(super) fn set_environment_source(&mut self, value: EnvironmentSource) {
+        self.settings.render.environment_source = value;
+        self.commit_render_settings_edit();
+    }
+
+    pub(super) fn pick_environment_hdri(&mut self) {
+        match crate::desktop_dialogs::environment_hdri_dialog() {
+            crate::desktop_dialogs::FileDialogSelection::Selected(path) => {
+                self.settings.render.hdri_path = Some(path.to_string_lossy().to_string());
+                self.settings.render.environment_source = EnvironmentSource::Hdri;
+                if self.settings.render.environment_bake_resolution == 0 {
+                    self.settings.render.environment_bake_resolution = 512;
+                }
+                self.commit_render_settings_edit();
+            }
+            crate::desktop_dialogs::FileDialogSelection::Cancelled => {}
+            crate::desktop_dialogs::FileDialogSelection::Unsupported => {
+                self.ui.toasts.push(crate::app::Toast {
+                    message: "HDRI picking is not supported on this platform yet".to_string(),
+                    is_error: true,
+                    created: crate::compat::Instant::now(),
+                    duration: crate::compat::Duration::from_secs(4),
+                });
+            }
+        }
+    }
+
+    pub(super) fn set_environment_rotation_degrees(&mut self, value: f32) {
+        self.settings.render.environment_rotation_degrees = value;
+        self.commit_render_settings_edit();
+    }
+
+    pub(super) fn set_environment_exposure(&mut self, value: f32) {
+        self.settings.render.environment_exposure = value.clamp(-8.0, 8.0);
+        self.commit_render_settings_edit();
+    }
+
+    pub(super) fn set_environment_bake_resolution(&mut self, value: u32) {
+        self.settings.render.environment_bake_resolution = value.min(4096);
+        self.commit_render_settings_edit();
+    }
+
+    pub(super) fn set_environment_background_mode(&mut self, value: EnvironmentBackgroundMode) {
+        self.settings.render.environment_background_mode = value;
+        self.commit_render_settings_edit();
+    }
+
+    pub(super) fn set_environment_background_blur(&mut self, value: f32) {
+        self.settings.render.environment_background_blur = value.clamp(0.0, 1.0);
+        self.commit_render_settings_edit();
+    }
+
     pub(super) fn set_export_resolution(&mut self, value: u32) {
         let max_res = self.settings.max_export_resolution.max(16);
         self.settings.export_resolution = value.clamp(16, max_res);
@@ -231,25 +282,118 @@ impl SdfApp {
         self.settings.save();
     }
 
-    fn selected_transform_target(&self) -> Option<NodeId> {
-        let selected_id = self.ui.selection.selected?;
-        let object = resolve_presented_object(&self.doc.scene, selected_id)?;
-        match object.kind {
-            PresentedObjectKind::Parametric => {
-                current_transform_owner(&self.doc.scene, object.host_id)
+    pub(super) fn toggle_reference_image_lock(&mut self, index: usize) {
+        let Some(reference) = self.ui.reference_images.images.get_mut(index) else {
+            return;
+        };
+        reference.locked = !reference.locked;
+    }
+
+    pub(super) fn cycle_reference_image_plane(&mut self, index: usize) {
+        let Some(reference) = self.ui.reference_images.images.get_mut(index) else {
+            return;
+        };
+        reference.plane = match reference.plane {
+            crate::app::reference_images::RefPlane::Front => {
+                crate::app::reference_images::RefPlane::Back
             }
-            PresentedObjectKind::Voxel => Some(object.host_id),
-            PresentedObjectKind::Light => match self
-                .doc
-                .scene
-                .nodes
-                .get(&object.object_root_id)
-                .map(|node| &node.data)
-            {
-                Some(NodeData::Transform { .. }) => Some(object.object_root_id),
-                _ => Some(object.host_id),
-            },
+            crate::app::reference_images::RefPlane::Back => {
+                crate::app::reference_images::RefPlane::Left
+            }
+            crate::app::reference_images::RefPlane::Left => {
+                crate::app::reference_images::RefPlane::Right
+            }
+            crate::app::reference_images::RefPlane::Right => {
+                crate::app::reference_images::RefPlane::Top
+            }
+            crate::app::reference_images::RefPlane::Top => {
+                crate::app::reference_images::RefPlane::Bottom
+            }
+            crate::app::reference_images::RefPlane::Bottom => {
+                crate::app::reference_images::RefPlane::Front
+            }
+        };
+    }
+
+    pub(super) fn set_reference_image_opacity(&mut self, index: usize, value: f32) {
+        let Some(reference) = self.ui.reference_images.images.get_mut(index) else {
+            return;
+        };
+        reference.opacity = value.clamp(0.0, 1.0);
+    }
+
+    pub(super) fn set_reference_image_scale(&mut self, index: usize, value: f32) {
+        let Some(reference) = self.ui.reference_images.images.get_mut(index) else {
+            return;
+        };
+        reference.scale = value.clamp(0.05, 20.0);
+    }
+
+    fn selected_transform_targets(&self) -> Vec<NodeId> {
+        let mut targets = self
+            .ordered_selected_ids()
+            .into_iter()
+            .filter_map(|selected_id| {
+                let object = resolve_presented_object(&self.doc.scene, selected_id)?;
+                match object.kind {
+                    PresentedObjectKind::Parametric => {
+                        current_transform_owner(&self.doc.scene, object.host_id)
+                    }
+                    PresentedObjectKind::Voxel => Some(object.host_id),
+                    PresentedObjectKind::Light => match self
+                        .doc
+                        .scene
+                        .nodes
+                        .get(&object.object_root_id)
+                        .map(|node| &node.data)
+                    {
+                        Some(NodeData::Transform { .. }) => Some(object.object_root_id),
+                        _ => Some(object.host_id),
+                    },
+                }
+            })
+            .collect::<Vec<_>>();
+        targets.sort_unstable();
+        targets.dedup();
+        targets
+    }
+
+    fn selected_material_target_ids(&self) -> Vec<NodeId> {
+        let mut ids = self
+            .ordered_selected_ids()
+            .into_iter()
+            .filter(|id| {
+                self.doc
+                    .scene
+                    .nodes
+                    .get(id)
+                    .and_then(|node| node.data.material())
+                    .is_some()
+            })
+            .collect::<Vec<_>>();
+        ids.sort_unstable();
+        ids.dedup();
+        ids
+    }
+
+    fn ordered_selected_ids(&self) -> Vec<NodeId> {
+        let mut ids = self
+            .ui
+            .selection
+            .selected_set
+            .iter()
+            .copied()
+            .collect::<Vec<_>>();
+        if ids.is_empty() {
+            if let Some(selected_id) = self.ui.selection.selected {
+                ids.push(selected_id);
+            }
+        } else if let Some(selected_id) = self.ui.selection.selected {
+            ids.push(selected_id);
         }
+        ids.sort_unstable();
+        ids.dedup();
+        ids
     }
 
     fn edit_selected_material<F>(&mut self, edit: F)

@@ -1,22 +1,56 @@
 export struct SceneRowView {
     label: string,
+    kind_label: string,
+    depth: int,
+    has_children: bool,
+    expanded: bool,
     selected: bool,
     hidden: bool,
     locked: bool,
+    renaming: bool,
+    rename_value: string,
+    dragging: bool,
+    drop_allowed: bool,
+    drop_target: bool,
 }
 
 export struct HistoryRowView {
     label: string,
-    is_undo: bool,
+    direction_label: string,
+    is_current: bool,
+    jump_enabled: bool,
+}
+
+export struct PropertyScalarFieldView {
+    value: float,
+    display_text: string,
+    enabled: bool,
+    mixed: bool,
+    minimum: float,
+    maximum: float,
+    step: float,
+}
+
+export struct PropertyBoolFieldView {
+    value: bool,
+    display_text: string,
+    enabled: bool,
+    mixed: bool,
 }
 
 export struct ReferenceRowView {
     label: string,
     plane_label: string,
+    status_label: string,
     visible: bool,
     locked: bool,
     opacity: float,
     scale: float,
+}
+
+export struct WorkspaceSummaryRowView {
+    label: string,
+    value: string,
 }
 
 export struct ViewportPathView {

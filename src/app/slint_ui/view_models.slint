@@ -1,7 +1,10 @@
 export {
     SceneRowView,
     HistoryRowView,
+    PropertyScalarFieldView,
+    PropertyBoolFieldView,
     ReferenceRowView,
+    WorkspaceSummaryRowView,
     ViewportPathView,
 } from "view_models/common_views.slint";
 
@@ -16,15 +19,19 @@ export {
 
 export {
     TopBarState,
+    ToolPaletteButtonView,
+    ToolPaletteState,
     ScenePanelState,
     InspectorPanelState,
     RenderSettingsState,
     ImportDialogState,
     UtilityPanelState,
+    WorkspacePanelState,
 } from "view_models/panel_states.slint";
 
 export {
     TopBarAction,
+    ToolPaletteAction,
     SceneToolbarAction,
     SceneRowAction,
     SceneTextAction,
@@ -37,4 +44,6 @@ export {
     RenderSettingsAction,
     ReferenceImageAction,
     ImportDialogAction,
+    HistoryAction,
+    WorkspaceAction,
 } from "view_models/ui_actions.slint";

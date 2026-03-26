@@ -9,7 +9,9 @@ use crate::graph::scene::{NodeData, NodeId, Scene, SdfPrimitive};
 use crate::sculpt::{BrushMode, SculptState};
 
 use super::actions::{Action, LightingPreset, OperationInputSlot, SculptConvertMode};
-use super::state::{DocumentState, ExpertPanelKind, InteractionMode, SculptConvertDialog, UiState};
+use super::state::{
+    DocumentState, ExpertPanelKind, InteractionMode, SculptConvertDialog, UiState, WorkspaceRoute,
+};
 use super::SdfApp;
 
 /// Maximum storage buffer binding size configured for wgpu (128MB).
@@ -289,8 +291,41 @@ impl SdfApp {
     }
 
     fn toggle_expert_panel(&mut self, panel: ExpertPanelKind) {
-        let next_open = !self.ui.expert_panels.is_open(panel);
-        self.ui.expert_panels.set_open(panel, next_open);
+        match panel {
+            ExpertPanelKind::NodeGraph | ExpertPanelKind::LightGraph => {
+                let route = match panel {
+                    ExpertPanelKind::NodeGraph => WorkspaceRoute::NodeGraph,
+                    ExpertPanelKind::LightGraph => WorkspaceRoute::LightGraph,
+                    _ => unreachable!(),
+                };
+                let panel_already_open = self.ui.expert_panels.is_open(panel)
+                    && !self.ui.primary_shell.drawer_panel.is_hidden();
+                if panel_already_open && self.ui.workspace.route == route {
+                    self.ui.primary_shell.drawer_panel.hide();
+                    self.ui
+                        .expert_panels
+                        .set_open(ExpertPanelKind::NodeGraph, false);
+                    self.ui
+                        .expert_panels
+                        .set_open(ExpertPanelKind::LightGraph, false);
+                } else {
+                    self.ui.workspace.route = route;
+                    self.ui.primary_shell.drawer_panel.dock();
+                    self.ui.expert_panels.set_open(
+                        ExpertPanelKind::NodeGraph,
+                        matches!(route, WorkspaceRoute::NodeGraph),
+                    );
+                    self.ui.expert_panels.set_open(
+                        ExpertPanelKind::LightGraph,
+                        matches!(route, WorkspaceRoute::LightGraph),
+                    );
+                }
+            }
+            _ => {
+                let next_open = !self.ui.expert_panels.is_open(panel);
+                self.ui.expert_panels.set_open(panel, next_open);
+            }
+        }
     }
 
     /// Process all collected actions. This is the single mutation point — the
@@ -1283,6 +1318,14 @@ impl SdfApp {
                 }
                 Action::HideShellPanel(panel) => {
                     self.ui.primary_shell.panel_mut(panel).hide();
+                    if matches!(panel, crate::app::state::ShellPanelKind::Drawer) {
+                        self.ui
+                            .expert_panels
+                            .set_open(ExpertPanelKind::NodeGraph, false);
+                        self.ui
+                            .expert_panels
+                            .set_open(ExpertPanelKind::LightGraph, false);
+                    }
                 }
                 Action::ResetPrimaryShellLayout => {
                     self.ui.primary_shell.reset_layout();
@@ -1711,7 +1754,7 @@ mod tests {
     use crate::app::reference_images::ReferenceImageStore;
     use crate::app::state::{
         DocumentState, ExpertPanelKind, MultiTransformSessionState, PrimaryShellState,
-        SceneGraphViewState, SceneSelectionState, UiState,
+        SceneGraphViewState, ScenePanelUiState, SceneSelectionState, UiState, WorkspaceUiState,
     };
     use crate::gpu::camera::Camera;
     use crate::graph::history::History;
@@ -1739,7 +1782,9 @@ mod tests {
     fn test_ui_state() -> UiState {
         UiState {
             primary_shell: PrimaryShellState::default(),
+            workspace: WorkspaceUiState::default(),
             expert_panels: crate::app::state::ExpertPanelRegistry::default(),
+            scene_panel: ScenePanelUiState::default(),
             selection: SceneSelectionState::default(),
             scene_graph_view: SceneGraphViewState::default(),
             viewport_interaction: crate::app::state::ViewportInteractionState::default(),
@@ -1747,10 +1792,6 @@ mod tests {
             show_help: false,
             show_export_dialog: false,
             show_settings: false,
-            renaming_node: None,
-            rename_buf: String::new(),
-            scene_tree_drag: None,
-            scene_tree_search: String::new(),
             isolation_state: None,
             toasts: Vec::new(),
             turntable_active: false,

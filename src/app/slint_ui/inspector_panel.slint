@@ -1,6 +1,6 @@
-import { CheckBox, Slider, SpinBox, VerticalBox } from "std-widgets.slint";
-import { NudgeRow } from "nudge_row.slint";
+import { VerticalBox } from "std-widgets.slint";
 import { AppTheme } from "theme.slint";
+import { BoolFieldRow, ScalarFieldRow, SectionTitle } from "property_grid.slint";
 import { InspectorEditMode, InspectorPanelState, LightEditKind, MaterialEditKind, OperationEditKind, SculptEditKind, TransformEditKind } from "view_models.slint";
 
 export component InspectorPanel inherits VerticalBox {
@@ -16,75 +16,67 @@ export component InspectorPanel inherits VerticalBox {
 
     Text { text: root.state.title; }
     Text { text: root.state.chips; wrap: word-wrap; }
+    if root.state.multi_selection_summary != "" : Text { text: root.state.multi_selection_summary; wrap: word-wrap; }
     Text { text: root.state.property_summary; wrap: word-wrap; }
     Text { text: root.state.display; wrap: word-wrap; }
 
-    if root.state.has_transform : VerticalBox {
+    if root.state.transform.visible : VerticalBox {
         spacing: AppTheme.section_spacing;
-        Text { text: "Transform"; }
-        NudgeRow { minus_label: "PX-"; value_label: "X " + root.state.transform_pos_x; plus_label: "PX+"; step_down => { root.transform_edit(TransformEditKind.position, InspectorEditMode.nudge, 0, -0.1); } step_up => { root.transform_edit(TransformEditKind.position, InspectorEditMode.nudge, 0, 0.1); } }
-        NudgeRow { minus_label: "PY-"; value_label: "Y " + root.state.transform_pos_y; plus_label: "PY+"; step_down => { root.transform_edit(TransformEditKind.position, InspectorEditMode.nudge, 1, -0.1); } step_up => { root.transform_edit(TransformEditKind.position, InspectorEditMode.nudge, 1, 0.1); } }
-        NudgeRow { minus_label: "PZ-"; value_label: "Z " + root.state.transform_pos_z; plus_label: "PZ+"; step_down => { root.transform_edit(TransformEditKind.position, InspectorEditMode.nudge, 2, -0.1); } step_up => { root.transform_edit(TransformEditKind.position, InspectorEditMode.nudge, 2, 0.1); } }
-        NudgeRow { minus_label: "RX-"; value_label: "RX " + root.state.transform_rot_x; plus_label: "RX+"; step_down => { root.transform_edit(TransformEditKind.rotation, InspectorEditMode.nudge, 0, -5); } step_up => { root.transform_edit(TransformEditKind.rotation, InspectorEditMode.nudge, 0, 5); } }
-        NudgeRow { minus_label: "RY-"; value_label: "RY " + root.state.transform_rot_y; plus_label: "RY+"; step_down => { root.transform_edit(TransformEditKind.rotation, InspectorEditMode.nudge, 1, -5); } step_up => { root.transform_edit(TransformEditKind.rotation, InspectorEditMode.nudge, 1, 5); } }
-        NudgeRow { minus_label: "RZ-"; value_label: "RZ " + root.state.transform_rot_z; plus_label: "RZ+"; step_down => { root.transform_edit(TransformEditKind.rotation, InspectorEditMode.nudge, 2, -5); } step_up => { root.transform_edit(TransformEditKind.rotation, InspectorEditMode.nudge, 2, 5); } }
-
-        if root.state.can_scale : VerticalBox {
+        SectionTitle {
+            title: "Transform";
+            subtitle: root.state.transform.multi_editing ? "Multi-editing active selection." : "";
+        }
+        ScalarFieldRow { label: "Position X"; field: root.state.transform.pos_x; value_changed(value) => { root.transform_edit(TransformEditKind.position, InspectorEditMode.set, 0, value); } }
+        ScalarFieldRow { label: "Position Y"; field: root.state.transform.pos_y; value_changed(value) => { root.transform_edit(TransformEditKind.position, InspectorEditMode.set, 1, value); } }
+        ScalarFieldRow { label: "Position Z"; field: root.state.transform.pos_z; value_changed(value) => { root.transform_edit(TransformEditKind.position, InspectorEditMode.set, 2, value); } }
+        ScalarFieldRow { label: "Rotation X"; field: root.state.transform.rot_x; value_changed(value) => { root.transform_edit(TransformEditKind.rotation, InspectorEditMode.set, 0, value); } }
+        ScalarFieldRow { label: "Rotation Y"; field: root.state.transform.rot_y; value_changed(value) => { root.transform_edit(TransformEditKind.rotation, InspectorEditMode.set, 1, value); } }
+        ScalarFieldRow { label: "Rotation Z"; field: root.state.transform.rot_z; value_changed(value) => { root.transform_edit(TransformEditKind.rotation, InspectorEditMode.set, 2, value); } }
+        if root.state.transform.can_scale : VerticalBox {
             spacing: AppTheme.section_spacing;
-            NudgeRow { minus_label: "SX-"; value_label: "SX " + root.state.selected_scale_x; plus_label: "SX+"; step_down => { root.transform_edit(TransformEditKind.scale, InspectorEditMode.nudge, 0, -0.1); } step_up => { root.transform_edit(TransformEditKind.scale, InspectorEditMode.nudge, 0, 0.1); } }
-            NudgeRow { minus_label: "SY-"; value_label: "SY " + root.state.selected_scale_y; plus_label: "SY+"; step_down => { root.transform_edit(TransformEditKind.scale, InspectorEditMode.nudge, 1, -0.1); } step_up => { root.transform_edit(TransformEditKind.scale, InspectorEditMode.nudge, 1, 0.1); } }
-            NudgeRow { minus_label: "SZ-"; value_label: "SZ " + root.state.selected_scale_z; plus_label: "SZ+"; step_down => { root.transform_edit(TransformEditKind.scale, InspectorEditMode.nudge, 2, -0.1); } step_up => { root.transform_edit(TransformEditKind.scale, InspectorEditMode.nudge, 2, 0.1); } }
+            ScalarFieldRow { label: "Scale X"; field: root.state.transform.scale_x; value_changed(value) => { root.transform_edit(TransformEditKind.scale, InspectorEditMode.set, 0, value); } }
+            ScalarFieldRow { label: "Scale Y"; field: root.state.transform.scale_y; value_changed(value) => { root.transform_edit(TransformEditKind.scale, InspectorEditMode.set, 1, value); } }
+            ScalarFieldRow { label: "Scale Z"; field: root.state.transform.scale_z; value_changed(value) => { root.transform_edit(TransformEditKind.scale, InspectorEditMode.set, 2, value); } }
         }
     }
 
-    if root.state.has_material : VerticalBox {
+    if root.state.material.visible : VerticalBox {
         spacing: AppTheme.section_spacing;
-        Text { text: "Material"; }
-        NudgeRow { minus_label: "R-"; value_label: "R " + root.state.material_color_r; plus_label: "R+"; step_down => { root.material_edit(MaterialEditKind.color, InspectorEditMode.nudge, 0, -0.05); } step_up => { root.material_edit(MaterialEditKind.color, InspectorEditMode.nudge, 0, 0.05); } }
-        NudgeRow { minus_label: "G-"; value_label: "G " + root.state.material_color_g; plus_label: "G+"; step_down => { root.material_edit(MaterialEditKind.color, InspectorEditMode.nudge, 1, -0.05); } step_up => { root.material_edit(MaterialEditKind.color, InspectorEditMode.nudge, 1, 0.05); } }
-        NudgeRow { minus_label: "B-"; value_label: "B " + root.state.material_color_b; plus_label: "B+"; step_down => { root.material_edit(MaterialEditKind.color, InspectorEditMode.nudge, 2, -0.05); } step_up => { root.material_edit(MaterialEditKind.color, InspectorEditMode.nudge, 2, 0.05); } }
-        NudgeRow { minus_label: "Rgh-"; value_label: "Roughness " + root.state.material_roughness; plus_label: "Rgh+"; step_down => { root.material_edit(MaterialEditKind.roughness, InspectorEditMode.nudge, -1, -0.05); } step_up => { root.material_edit(MaterialEditKind.roughness, InspectorEditMode.nudge, -1, 0.05); } }
-        Slider { minimum: 0; maximum: 1; step: 0.01; value: root.state.material_roughness; changed(value) => { root.material_edit(MaterialEditKind.roughness, InspectorEditMode.set, -1, value); } }
-        NudgeRow { minus_label: "Met-"; value_label: "Metallic " + root.state.material_metallic; plus_label: "Met+"; step_down => { root.material_edit(MaterialEditKind.metallic, InspectorEditMode.nudge, -1, -0.05); } step_up => { root.material_edit(MaterialEditKind.metallic, InspectorEditMode.nudge, -1, 0.05); } }
-        Slider { minimum: 0; maximum: 1; step: 0.01; value: root.state.material_metallic; changed(value) => { root.material_edit(MaterialEditKind.metallic, InspectorEditMode.set, -1, value); } }
+        SectionTitle { title: "Material"; subtitle: ""; }
+        ScalarFieldRow { label: "Color R"; field: root.state.material.color_r; value_changed(value) => { root.material_edit(MaterialEditKind.color, InspectorEditMode.set, 0, value); } }
+        ScalarFieldRow { label: "Color G"; field: root.state.material.color_g; value_changed(value) => { root.material_edit(MaterialEditKind.color, InspectorEditMode.set, 1, value); } }
+        ScalarFieldRow { label: "Color B"; field: root.state.material.color_b; value_changed(value) => { root.material_edit(MaterialEditKind.color, InspectorEditMode.set, 2, value); } }
+        ScalarFieldRow { label: "Roughness"; field: root.state.material.roughness; value_changed(value) => { root.material_edit(MaterialEditKind.roughness, InspectorEditMode.set, -1, value); } }
+        ScalarFieldRow { label: "Metallic"; field: root.state.material.metallic; value_changed(value) => { root.material_edit(MaterialEditKind.metallic, InspectorEditMode.set, -1, value); } }
     }
 
-    if root.state.has_operation : VerticalBox {
+    if root.state.operation.visible : VerticalBox {
         spacing: AppTheme.section_spacing;
-        Text { text: root.state.operation_label; }
-        NudgeRow { minus_label: "K-"; value_label: "Smooth " + root.state.operation_smooth_k; plus_label: "K+"; step_down => { root.operation_edit(OperationEditKind.smooth-k, InspectorEditMode.nudge, -0.05); } step_up => { root.operation_edit(OperationEditKind.smooth-k, InspectorEditMode.nudge, 0.05); } }
-        NudgeRow { minus_label: "Steps-"; value_label: "Steps " + root.state.operation_steps; plus_label: "Steps+"; step_down => { root.operation_edit(OperationEditKind.steps, InspectorEditMode.nudge, -1); } step_up => { root.operation_edit(OperationEditKind.steps, InspectorEditMode.nudge, 1); } }
-        Slider { minimum: 0; maximum: 32; step: 1; value: root.state.operation_steps; changed(value) => { root.operation_edit(OperationEditKind.steps, InspectorEditMode.set, value); } }
-        NudgeRow { minus_label: "Blend-"; value_label: "Blend " + root.state.operation_color_blend; plus_label: "Blend+"; step_down => { root.operation_edit(OperationEditKind.color-blend, InspectorEditMode.nudge, -0.05); } step_up => { root.operation_edit(OperationEditKind.color-blend, InspectorEditMode.nudge, 0.05); } }
-        Slider { minimum: -1; maximum: 1; step: 0.01; value: root.state.operation_color_blend; changed(value) => { root.operation_edit(OperationEditKind.color-blend, InspectorEditMode.set, value); } }
+        SectionTitle { title: root.state.operation.label; subtitle: ""; }
+        ScalarFieldRow { label: "Smooth K"; field: root.state.operation.smooth_k; value_changed(value) => { root.operation_edit(OperationEditKind.smooth-k, InspectorEditMode.set, value); } }
+        ScalarFieldRow { label: "Steps"; field: root.state.operation.steps; value_changed(value) => { root.operation_edit(OperationEditKind.steps, InspectorEditMode.set, value); } }
+        ScalarFieldRow { label: "Color Blend"; field: root.state.operation.color_blend; value_changed(value) => { root.operation_edit(OperationEditKind.color-blend, InspectorEditMode.set, value); } }
     }
 
-    if root.state.has_sculpt : VerticalBox {
+    if root.state.sculpt.visible : VerticalBox {
         spacing: AppTheme.section_spacing;
-        Text { text: "Sculpt"; }
-        NudgeRow { minus_label: "Res-"; value_label: "Resolution " + root.state.sculpt_resolution; plus_label: "Res+"; step_down => { root.sculpt_edit(SculptEditKind.resolution, InspectorEditMode.nudge, -8); } step_up => { root.sculpt_edit(SculptEditKind.resolution, InspectorEditMode.nudge, 8); } }
-        SpinBox { minimum: 8; maximum: 512; step-size: 8; value: root.state.sculpt_resolution; edited => { root.sculpt_edit(SculptEditKind.resolution, InspectorEditMode.set, self.value); } }
-        NudgeRow { minus_label: "Layer-"; value_label: "Layer " + root.state.sculpt_layer_intensity; plus_label: "Layer+"; step_down => { root.sculpt_edit(SculptEditKind.layer-intensity, InspectorEditMode.nudge, -0.1); } step_up => { root.sculpt_edit(SculptEditKind.layer-intensity, InspectorEditMode.nudge, 0.1); } }
-        Slider { minimum: 0; maximum: 4; step: 0.01; value: root.state.sculpt_layer_intensity; changed(value) => { root.sculpt_edit(SculptEditKind.layer-intensity, InspectorEditMode.set, value); } }
-        NudgeRow { minus_label: "Brush-"; value_label: "Radius " + root.state.sculpt_brush_radius; plus_label: "Brush+"; step_down => { root.sculpt_edit(SculptEditKind.brush-radius, InspectorEditMode.nudge, -0.05); } step_up => { root.sculpt_edit(SculptEditKind.brush-radius, InspectorEditMode.nudge, 0.05); } }
-        Slider { minimum: 0.05; maximum: 2.0; step: 0.01; value: root.state.sculpt_brush_radius; changed(value) => { root.sculpt_edit(SculptEditKind.brush-radius, InspectorEditMode.set, value); } }
-        NudgeRow { minus_label: "Strength-"; value_label: "Strength " + root.state.sculpt_brush_strength; plus_label: "Strength+"; step_down => { root.sculpt_edit(SculptEditKind.brush-strength, InspectorEditMode.nudge, -0.05); } step_up => { root.sculpt_edit(SculptEditKind.brush-strength, InspectorEditMode.nudge, 0.05); } }
-        Slider { minimum: -2; maximum: 2; step: 0.01; value: root.state.sculpt_brush_strength; changed(value) => { root.sculpt_edit(SculptEditKind.brush-strength, InspectorEditMode.set, value); } }
+        SectionTitle { title: "Sculpt"; subtitle: ""; }
+        ScalarFieldRow { label: "Resolution"; field: root.state.sculpt.resolution; value_changed(value) => { root.sculpt_edit(SculptEditKind.resolution, InspectorEditMode.set, value); } }
+        ScalarFieldRow { label: "Layer Intensity"; field: root.state.sculpt.layer_intensity; value_changed(value) => { root.sculpt_edit(SculptEditKind.layer-intensity, InspectorEditMode.set, value); } }
+        ScalarFieldRow { label: "Brush Radius"; field: root.state.sculpt.brush_radius; value_changed(value) => { root.sculpt_edit(SculptEditKind.brush-radius, InspectorEditMode.set, value); } }
+        ScalarFieldRow { label: "Brush Strength"; field: root.state.sculpt.brush_strength; value_changed(value) => { root.sculpt_edit(SculptEditKind.brush-strength, InspectorEditMode.set, value); } }
     }
 
-    if root.state.has_light : VerticalBox {
+    if root.state.light.visible : VerticalBox {
         spacing: AppTheme.section_spacing;
-        Text { text: root.state.light_label; }
-        NudgeRow { minus_label: "LR-"; value_label: "R " + root.state.light_color_r; plus_label: "LR+"; step_down => { root.light_edit(LightEditKind.color, InspectorEditMode.nudge, 0, -0.1); } step_up => { root.light_edit(LightEditKind.color, InspectorEditMode.nudge, 0, 0.1); } }
-        NudgeRow { minus_label: "LG-"; value_label: "G " + root.state.light_color_g; plus_label: "LG+"; step_down => { root.light_edit(LightEditKind.color, InspectorEditMode.nudge, 1, -0.1); } step_up => { root.light_edit(LightEditKind.color, InspectorEditMode.nudge, 1, 0.1); } }
-        NudgeRow { minus_label: "LB-"; value_label: "B " + root.state.light_color_b; plus_label: "LB+"; step_down => { root.light_edit(LightEditKind.color, InspectorEditMode.nudge, 2, -0.1); } step_up => { root.light_edit(LightEditKind.color, InspectorEditMode.nudge, 2, 0.1); } }
-        NudgeRow { minus_label: "Int-"; value_label: "Intensity " + root.state.light_intensity; plus_label: "Int+"; step_down => { root.light_edit(LightEditKind.intensity, InspectorEditMode.nudge, -1, -0.25); } step_up => { root.light_edit(LightEditKind.intensity, InspectorEditMode.nudge, -1, 0.25); } }
-        Slider { minimum: 0; maximum: 20; step: 0.05; value: root.state.light_intensity; changed(value) => { root.light_edit(LightEditKind.intensity, InspectorEditMode.set, -1, value); } }
-        NudgeRow { minus_label: "Range-"; value_label: "Range " + root.state.light_range; plus_label: "Range+"; step_down => { root.light_edit(LightEditKind.range, InspectorEditMode.nudge, -1, -0.25); } step_up => { root.light_edit(LightEditKind.range, InspectorEditMode.nudge, -1, 0.25); } }
-        Slider { minimum: 0.01; maximum: 50; step: 0.05; value: root.state.light_range; changed(value) => { root.light_edit(LightEditKind.range, InspectorEditMode.set, -1, value); } }
-        CheckBox { text: "Cast shadows"; checked: root.state.light_cast_shadows; toggled => { root.light_edit(LightEditKind.cast-shadows, InspectorEditMode.set, -1, self.checked ? 1.0 : 0.0); } }
-        CheckBox { text: "Volumetric"; checked: root.state.light_volumetric; toggled => { root.light_edit(LightEditKind.volumetric, InspectorEditMode.set, -1, self.checked ? 1.0 : 0.0); } }
-        NudgeRow { minus_label: "Vol-"; value_label: "Density " + root.state.light_volumetric_density; plus_label: "Vol+"; step_down => { root.light_edit(LightEditKind.volumetric-density, InspectorEditMode.nudge, -1, -0.05); } step_up => { root.light_edit(LightEditKind.volumetric-density, InspectorEditMode.nudge, -1, 0.05); } }
-        Slider { minimum: 0; maximum: 1; step: 0.01; value: root.state.light_volumetric_density; changed(value) => { root.light_edit(LightEditKind.volumetric-density, InspectorEditMode.set, -1, value); } }
+        SectionTitle { title: root.state.light.label; subtitle: ""; }
+        ScalarFieldRow { label: "Color R"; field: root.state.light.color_r; value_changed(value) => { root.light_edit(LightEditKind.color, InspectorEditMode.set, 0, value); } }
+        ScalarFieldRow { label: "Color G"; field: root.state.light.color_g; value_changed(value) => { root.light_edit(LightEditKind.color, InspectorEditMode.set, 1, value); } }
+        ScalarFieldRow { label: "Color B"; field: root.state.light.color_b; value_changed(value) => { root.light_edit(LightEditKind.color, InspectorEditMode.set, 2, value); } }
+        ScalarFieldRow { label: "Intensity"; field: root.state.light.intensity; value_changed(value) => { root.light_edit(LightEditKind.intensity, InspectorEditMode.set, -1, value); } }
+        ScalarFieldRow { label: "Range"; field: root.state.light.range; value_changed(value) => { root.light_edit(LightEditKind.range, InspectorEditMode.set, -1, value); } }
+        BoolFieldRow { label: "Cast Shadows"; field: root.state.light.cast_shadows; value_toggled(value) => { root.light_edit(LightEditKind.cast-shadows, InspectorEditMode.set, -1, value ? 1.0 : 0.0); } }
+        BoolFieldRow { label: "Volumetric"; field: root.state.light.volumetric; value_toggled(value) => { root.light_edit(LightEditKind.volumetric, InspectorEditMode.set, -1, value ? 1.0 : 0.0); } }
+        ScalarFieldRow { label: "Volumetric Density"; field: root.state.light.volumetric_density; value_changed(value) => { root.light_edit(LightEditKind.volumetric-density, InspectorEditMode.set, -1, value); } }
     }
 }

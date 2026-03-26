@@ -23,7 +23,7 @@ fn handle_sculpt_edit(
     match kind {
         SculptEditKind::Resolution => {
             let next = apply_scalar_value(context, mode, value, |window| {
-                window.get_inspector_panel_state().sculpt_resolution as f32
+                window.get_inspector_panel_state().sculpt.resolution.value
             })
             .max(8.0) as u32;
             host_state.app.set_selected_sculpt_resolution(next);
@@ -34,7 +34,13 @@ fn handle_sculpt_edit(
                 context,
                 mode,
                 value,
-                |window| window.get_inspector_panel_state().sculpt_layer_intensity,
+                |window| {
+                    window
+                        .get_inspector_panel_state()
+                        .sculpt
+                        .layer_intensity
+                        .value
+                },
                 |app, next| {
                     app.set_selected_sculpt_layer_intensity(next);
                 },
@@ -46,7 +52,7 @@ fn handle_sculpt_edit(
                 context,
                 mode,
                 value,
-                |window| window.get_inspector_panel_state().sculpt_brush_radius,
+                |window| window.get_inspector_panel_state().sculpt.brush_radius.value,
                 |app, next| {
                     app.set_selected_brush_radius(next);
                 },
@@ -58,7 +64,13 @@ fn handle_sculpt_edit(
                 context,
                 mode,
                 value,
-                |window| window.get_inspector_panel_state().sculpt_brush_strength,
+                |window| {
+                    window
+                        .get_inspector_panel_state()
+                        .sculpt
+                        .brush_strength
+                        .value
+                },
                 |app, next| {
                     app.set_selected_brush_strength(next);
                 },

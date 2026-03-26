@@ -1,4 +1,13 @@
-import { HistoryRowView, ReferenceRowView, SceneRowView } from "common_views.slint";
+import {
+    HistoryRowView,
+    PropertyBoolFieldView,
+    PropertyScalarFieldView,
+    ReferenceRowView,
+    SceneRowView,
+    WorkspaceSummaryRowView,
+} from "common_views.slint";
+
+import { ToolPaletteAction } from "ui_actions.slint";
 
 export struct TopBarState {
     viewport_status: string,
@@ -11,14 +20,79 @@ export struct TopBarState {
     camera_is_ortho: bool,
     measurement_mode_active: bool,
     turntable_active: bool,
+    file_actions_enabled: bool,
+}
+
+export struct ToolPaletteButtonView {
+    label: string,
+    active: bool,
+    action: ToolPaletteAction,
+}
+
+export struct ToolPaletteState {
+    visible: bool,
+    select_tool: ToolPaletteButtonView,
+    brush_tools: [ToolPaletteButtonView],
 }
 
 export struct ScenePanelState {
     selection_summary: string,
-    selected_name: string,
     scene_filter: string,
+    drag_summary: string,
     scene_rows: [SceneRowView],
-    history_rows: [HistoryRowView],
+}
+
+export struct TransformSectionState {
+    visible: bool,
+    can_scale: bool,
+    multi_editing: bool,
+    pos_x: PropertyScalarFieldView,
+    pos_y: PropertyScalarFieldView,
+    pos_z: PropertyScalarFieldView,
+    rot_x: PropertyScalarFieldView,
+    rot_y: PropertyScalarFieldView,
+    rot_z: PropertyScalarFieldView,
+    scale_x: PropertyScalarFieldView,
+    scale_y: PropertyScalarFieldView,
+    scale_z: PropertyScalarFieldView,
+}
+
+export struct MaterialSectionState {
+    visible: bool,
+    color_r: PropertyScalarFieldView,
+    color_g: PropertyScalarFieldView,
+    color_b: PropertyScalarFieldView,
+    roughness: PropertyScalarFieldView,
+    metallic: PropertyScalarFieldView,
+}
+
+export struct OperationSectionState {
+    visible: bool,
+    label: string,
+    smooth_k: PropertyScalarFieldView,
+    steps: PropertyScalarFieldView,
+    color_blend: PropertyScalarFieldView,
+}
+
+export struct SculptSectionState {
+    visible: bool,
+    resolution: PropertyScalarFieldView,
+    layer_intensity: PropertyScalarFieldView,
+    brush_radius: PropertyScalarFieldView,
+    brush_strength: PropertyScalarFieldView,
+}
+
+export struct LightSectionState {
+    visible: bool,
+    label: string,
+    color_r: PropertyScalarFieldView,
+    color_g: PropertyScalarFieldView,
+    color_b: PropertyScalarFieldView,
+    intensity: PropertyScalarFieldView,
+    range: PropertyScalarFieldView,
+    cast_shadows: PropertyBoolFieldView,
+    volumetric: PropertyBoolFieldView,
+    volumetric_density: PropertyScalarFieldView,
 }
 
 export struct InspectorPanelState {
@@ -26,43 +100,12 @@ export struct InspectorPanelState {
     chips: string,
     display: string,
     property_summary: string,
-    has_transform: bool,
-    transform_pos_x: float,
-    transform_pos_y: float,
-    transform_pos_z: float,
-    transform_rot_x: float,
-    transform_rot_y: float,
-    transform_rot_z: float,
-    selected_scale_x: float,
-    selected_scale_y: float,
-    selected_scale_z: float,
-    can_scale: bool,
-    has_material: bool,
-    material_color_r: float,
-    material_color_g: float,
-    material_color_b: float,
-    material_roughness: float,
-    material_metallic: float,
-    has_operation: bool,
-    operation_label: string,
-    operation_smooth_k: float,
-    operation_steps: float,
-    operation_color_blend: float,
-    has_sculpt: bool,
-    sculpt_resolution: int,
-    sculpt_layer_intensity: float,
-    sculpt_brush_radius: float,
-    sculpt_brush_strength: float,
-    has_light: bool,
-    light_label: string,
-    light_color_r: float,
-    light_color_g: float,
-    light_color_b: float,
-    light_intensity: float,
-    light_range: float,
-    light_cast_shadows: bool,
-    light_volumetric: bool,
-    light_volumetric_density: float,
+    multi_selection_summary: string,
+    transform: TransformSectionState,
+    material: MaterialSectionState,
+    operation: OperationSectionState,
+    sculpt: SculptSectionState,
+    light: LightSectionState,
 }
 
 export struct RenderSettingsState {
@@ -74,16 +117,39 @@ export struct RenderSettingsState {
     ao_enabled: bool,
     export_resolution: int,
     adaptive_export: bool,
+    environment_is_hdri: bool,
+    hdri_path_display: string,
+    environment_rotation_degrees: float,
+    environment_exposure: float,
+    environment_bake_resolution: int,
+    background_is_procedural: bool,
+    environment_background_blur: float,
 }
 
 export struct ImportDialogState {
     visible: bool,
     summary: string,
     resolution: int,
+    confirm_enabled: bool,
 }
 
 export struct UtilityPanelState {
+    history_summary: string,
+    history_rows: [HistoryRowView],
+    reference_summary: string,
     reference_rows: [ReferenceRowView],
     render_settings: RenderSettingsState,
     import_dialog: ImportDialogState,
+}
+
+export struct WorkspacePanelState {
+    visible: bool,
+    route_label: string,
+    selection_summary: string,
+    detail_text: string,
+    node_graph_active: bool,
+    light_graph_active: bool,
+    context_rows: [WorkspaceSummaryRowView],
+    input_rows: [WorkspaceSummaryRowView],
+    output_rows: [WorkspaceSummaryRowView],
 }

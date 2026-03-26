@@ -32,9 +32,9 @@ fn handle_material_edit(
                 |window| {
                     let state = window.get_inspector_panel_state();
                     [
-                        state.material_color_r,
-                        state.material_color_g,
-                        state.material_color_b,
+                        state.material.color_r.value,
+                        state.material.color_g.value,
+                        state.material.color_b.value,
                     ]
                 },
                 |app, component, next| {
@@ -48,7 +48,7 @@ fn handle_material_edit(
                 context,
                 mode,
                 value,
-                |window| window.get_inspector_panel_state().material_roughness,
+                |window| window.get_inspector_panel_state().material.roughness.value,
                 |app, next| {
                     app.set_selected_material_roughness(next);
                 },
@@ -60,7 +60,7 @@ fn handle_material_edit(
                 context,
                 mode,
                 value,
-                |window| window.get_inspector_panel_state().material_metallic,
+                |window| window.get_inspector_panel_state().material.metallic.value,
                 |app, next| {
                     app.set_selected_material_metallic(next);
                 },

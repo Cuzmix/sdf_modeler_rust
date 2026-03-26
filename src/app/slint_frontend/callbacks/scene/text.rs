@@ -1,6 +1,7 @@
 use super::super::super::host_state::SlintHostState;
 use super::super::context::CallbackContext;
 use super::super::mutation::mutate_host_and_tick;
+use crate::app::actions::Action;
 use crate::app::slint_frontend::{SceneTextAction, SlintHostWindow};
 
 pub(super) fn install(window: &SlintHostWindow, context: &CallbackContext) {
@@ -18,9 +19,27 @@ fn handle_scene_text_action(
     text: String,
 ) {
     match action {
-        SceneTextAction::RenameSelected => host_state.app.rename_selected_object(text),
+        SceneTextAction::RenameSelected => {
+            let Some(target_id) = host_state.app.ui.scene_panel.renaming_node else {
+                return;
+            };
+            let trimmed = text.trim();
+            if !trimmed.is_empty() {
+                host_state.queue_action(Action::RenameNode {
+                    id: target_id,
+                    name: trimmed.to_string(),
+                });
+            }
+            host_state.app.ui.scene_panel.cancel_rename();
+        }
+        SceneTextAction::UpdateRenameBuffer => {
+            host_state.app.ui.scene_panel.rename_buffer = text;
+        }
+        SceneTextAction::CancelRename => {
+            host_state.app.ui.scene_panel.cancel_rename();
+        }
         SceneTextAction::FilterScene => {
-            host_state.app.ui.scene_tree_search = text;
+            host_state.app.ui.scene_panel.filter_query = text;
         }
     }
 }

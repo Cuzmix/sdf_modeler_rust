@@ -1,5 +1,4 @@
-import { CheckBox, SpinBox, VerticalBox } from "std-widgets.slint";
-import { NudgeRow } from "nudge_row.slint";
+import { Button, CheckBox, HorizontalBox, Slider, SpinBox, VerticalBox } from "std-widgets.slint";
 import { AppTheme } from "theme.slint";
 import { RenderSettingsAction, RenderSettingsState } from "view_models.slint";
 
@@ -11,13 +10,40 @@ export component RenderSettingsPanel inherits VerticalBox {
     spacing: AppTheme.section_spacing;
 
     Text { text: "Render"; }
+
+    Text { text: "Display"; }
     CheckBox { text: "Show grid"; checked: root.state.show_grid; toggled => { root.perform_render_action(RenderSettingsAction.set-show-grid, self.checked ? 1.0 : 0.0); } }
     CheckBox { text: "Node labels"; checked: root.state.show_node_labels; toggled => { root.perform_render_action(RenderSettingsAction.set-show-node-labels, self.checked ? 1.0 : 0.0); } }
     CheckBox { text: "Bounding box"; checked: root.state.show_bounding_box; toggled => { root.perform_render_action(RenderSettingsAction.set-show-bounding-box, self.checked ? 1.0 : 0.0); } }
     CheckBox { text: "Light gizmos"; checked: root.state.show_light_gizmos; toggled => { root.perform_render_action(RenderSettingsAction.set-show-light-gizmos, self.checked ? 1.0 : 0.0); } }
+
+    Text { text: "Lighting"; }
     CheckBox { text: "Shadows"; checked: root.state.shadows_enabled; toggled => { root.perform_render_action(RenderSettingsAction.set-shadows-enabled, self.checked ? 1.0 : 0.0); } }
     CheckBox { text: "Ambient occlusion"; checked: root.state.ao_enabled; toggled => { root.perform_render_action(RenderSettingsAction.set-ao-enabled, self.checked ? 1.0 : 0.0); } }
-    NudgeRow { minus_label: "Exp-"; value_label: "Export Res " + root.state.export_resolution; plus_label: "Exp+"; step_down => { root.perform_render_action(RenderSettingsAction.nudge-export-resolution, -16); } step_up => { root.perform_render_action(RenderSettingsAction.nudge-export-resolution, 16); } }
+
+    Text { text: "Export"; }
     SpinBox { minimum: 16; maximum: 2048; step-size: 16; value: root.state.export_resolution; edited => { root.perform_render_action(RenderSettingsAction.set-export-resolution, self.value); } }
     CheckBox { text: "Adaptive export"; checked: root.state.adaptive_export; toggled => { root.perform_render_action(RenderSettingsAction.set-adaptive-export, self.checked ? 1.0 : 0.0); } }
+
+    Text { text: "Environment"; }
+    HorizontalBox {
+        spacing: AppTheme.section_spacing;
+        Button { text: root.state.environment_is_hdri ? "Procedural" : "Procedural*"; clicked => { root.perform_render_action(RenderSettingsAction.set-environment-source-procedural, 0.0); } }
+        Button { text: root.state.environment_is_hdri ? "HDRI*" : "HDRI"; clicked => { root.perform_render_action(RenderSettingsAction.set-environment-source-hdri, 0.0); } }
+        Button { text: "Pick HDRI"; clicked => { root.perform_render_action(RenderSettingsAction.pick-environment-hdri, 0.0); } }
+    }
+    Text { text: root.state.hdri_path_display; wrap: word-wrap; }
+    Text { text: "Rotation " + root.state.environment_rotation_degrees; }
+    Slider { minimum: -180; maximum: 180; step: 1; value: root.state.environment_rotation_degrees; changed(value) => { root.perform_render_action(RenderSettingsAction.set-environment-rotation, value); } }
+    Text { text: "Exposure " + root.state.environment_exposure; }
+    Slider { minimum: -8; maximum: 8; step: 0.05; value: root.state.environment_exposure; changed(value) => { root.perform_render_action(RenderSettingsAction.set-environment-exposure, value); } }
+    Text { text: "Bake Resolution"; }
+    SpinBox { minimum: 0; maximum: 4096; step-size: 16; value: root.state.environment_bake_resolution; edited => { root.perform_render_action(RenderSettingsAction.set-environment-bake-resolution, self.value); } }
+    HorizontalBox {
+        spacing: AppTheme.section_spacing;
+        Button { text: root.state.background_is_procedural ? "Environment" : "Environment*"; clicked => { root.perform_render_action(RenderSettingsAction.set-environment-background-environment, 0.0); } }
+        Button { text: root.state.background_is_procedural ? "Procedural*" : "Procedural"; clicked => { root.perform_render_action(RenderSettingsAction.set-environment-background-procedural, 0.0); } }
+    }
+    Text { text: "Background Blur " + root.state.environment_background_blur; }
+    Slider { minimum: 0; maximum: 1; step: 0.01; value: root.state.environment_background_blur; changed(value) => { root.perform_render_action(RenderSettingsAction.set-environment-background-blur, value); } }
 }

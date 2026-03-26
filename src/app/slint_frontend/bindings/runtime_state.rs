@@ -23,10 +23,20 @@ pub(super) fn apply_runtime_ui_state(window: &SlintHostWindow, app: &SdfApp) {
     top_bar_state.camera_is_ortho = app.doc.camera.orthographic;
     top_bar_state.measurement_mode_active = app.ui.measurement_mode;
     top_bar_state.turntable_active = app.ui.turntable_active;
+    top_bar_state.file_actions_enabled =
+        !matches!(app.async_state.bake_status, BakeStatus::InProgress { .. })
+            && !matches!(
+                app.async_state.export_status,
+                ExportStatus::InProgress { .. }
+            )
+            && !matches!(
+                app.async_state.import_status,
+                ImportStatus::InProgress { .. }
+            );
     window.set_top_bar_state(top_bar_state);
 
     let mut scene_panel_state = window.get_scene_panel_state();
-    scene_panel_state.scene_filter = app.ui.scene_tree_search.clone().into();
+    scene_panel_state.scene_filter = app.ui.scene_panel.filter_query.clone().into();
     window.set_scene_panel_state(scene_panel_state);
 
     let mut utility_panel_state = window.get_utility_panel_state();
@@ -40,12 +50,14 @@ fn build_import_dialog_state(app: &SdfApp) -> ImportDialogState {
             visible: true,
             summary: format_import_summary(dialog).into(),
             resolution: dialog.resolution as i32,
+            confirm_enabled: true,
         }
     } else {
         ImportDialogState {
             visible: false,
             summary: "".into(),
             resolution: 0,
+            confirm_enabled: false,
         }
     }
 }

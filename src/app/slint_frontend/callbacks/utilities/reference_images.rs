@@ -2,7 +2,6 @@ use super::super::super::host_state::SlintHostState;
 use super::super::context::CallbackContext;
 use super::super::mutation::mutate_host_and_tick;
 use crate::app::actions::Action;
-use crate::app::reference_images::{RefPlane, ReferenceImageEntry};
 use crate::app::slint_frontend::{ReferenceImageAction, SlintHostWindow};
 
 pub(super) fn install(window: &SlintHostWindow, context: &CallbackContext) {
@@ -28,28 +27,32 @@ fn handle_reference_image_action(
             host_state.queue_action(Action::ToggleReferenceImageVisibility(index as usize));
         }
         ReferenceImageAction::ToggleReferenceLock => {
-            let Some(reference) = reference_at(host_state, index) else {
+            if index < 0 {
                 return;
-            };
-            reference.locked = !reference.locked;
+            }
+            host_state.app.toggle_reference_image_lock(index as usize);
         }
         ReferenceImageAction::CycleReferencePlane => {
-            let Some(reference) = reference_at(host_state, index) else {
+            if index < 0 {
                 return;
-            };
-            reference.plane = next_reference_plane(reference.plane);
+            }
+            host_state.app.cycle_reference_image_plane(index as usize);
         }
         ReferenceImageAction::SetReferenceOpacity => {
-            let Some(reference) = reference_at(host_state, index) else {
+            if index < 0 {
                 return;
-            };
-            reference.opacity = value.clamp(0.0, 1.0);
+            }
+            host_state
+                .app
+                .set_reference_image_opacity(index as usize, value);
         }
         ReferenceImageAction::SetReferenceScale => {
-            let Some(reference) = reference_at(host_state, index) else {
+            if index < 0 {
                 return;
-            };
-            reference.scale = value.clamp(0.05, 20.0);
+            }
+            host_state
+                .app
+                .set_reference_image_scale(index as usize, value);
         }
         ReferenceImageAction::RemoveReferenceImage => {
             if index < 0 {
@@ -57,28 +60,5 @@ fn handle_reference_image_action(
             }
             host_state.queue_action(Action::RemoveReferenceImage(index as usize));
         }
-    }
-}
-
-fn reference_at(host_state: &mut SlintHostState, index: i32) -> Option<&mut ReferenceImageEntry> {
-    if index < 0 {
-        return None;
-    }
-    host_state
-        .app
-        .ui
-        .reference_images
-        .images
-        .get_mut(index as usize)
-}
-
-fn next_reference_plane(plane: RefPlane) -> RefPlane {
-    match plane {
-        RefPlane::Front => RefPlane::Back,
-        RefPlane::Back => RefPlane::Left,
-        RefPlane::Left => RefPlane::Right,
-        RefPlane::Right => RefPlane::Top,
-        RefPlane::Top => RefPlane::Bottom,
-        RefPlane::Bottom => RefPlane::Front,
     }
 }

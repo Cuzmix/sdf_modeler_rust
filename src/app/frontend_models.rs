@@ -2,27 +2,38 @@ use std::path::Path;
 
 use crate::app::reference_images::ReferenceImageStore;
 use crate::app::state::{
-    ExpertPanelKind, ExpertPanelRegistry, InteractionMode, SceneSelectionState,
+    ExpertPanelKind, ExpertPanelRegistry, InteractionMode, PrimaryShellState, ScenePanelUiState,
+    SceneSelectionState, WorkspaceRoute, WorkspaceUiState,
 };
 use crate::gizmo::{GizmoMode, GizmoSpace};
 use crate::graph::history::History;
 use crate::graph::presented_object::{
-    collect_presented_selection, current_transform_owner, presented_children,
-    presented_top_level_objects, resolve_presented_object, PresentedObjectKind, PresentedObjectRef,
+    collect_presented_base_wrapper_chain, collect_presented_selection, current_transform_owner,
+    presented_children, presented_top_level_objects, resolve_presented_object, PresentedObjectKind,
+    PresentedObjectRef,
 };
 use crate::graph::scene::{NodeData, NodeId, Scene};
+use crate::sculpt::BrushMode;
 use crate::sculpt::SculptState;
-use crate::settings::Settings;
+use crate::settings::{EnvironmentBackgroundMode, EnvironmentSource, Settings};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ScenePanelRow {
     pub host_id: NodeId,
     pub object_root_id: NodeId,
     pub label: String,
+    pub kind_label: String,
     pub depth: usize,
+    pub has_children: bool,
+    pub expanded: bool,
     pub selected: bool,
     pub hidden: bool,
     pub locked: bool,
+    pub renaming: bool,
+    pub rename_value: String,
+    pub dragging: bool,
+    pub drop_allowed: bool,
+    pub drop_target: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -30,48 +41,70 @@ pub struct ScenePanelModel {
     pub rows: Vec<ScenePanelRow>,
     pub selection_count: usize,
     pub selected_host: Option<NodeId>,
+    pub filter_query: String,
+    pub drag_active: bool,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct InspectorScalarFieldModel {
+    pub value: f32,
+    pub display_text: String,
+    pub enabled: bool,
+    pub mixed: bool,
+    pub minimum: f32,
+    pub maximum: f32,
+    pub step: f32,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct InspectorBoolFieldModel {
+    pub value: bool,
+    pub display_text: String,
+    pub enabled: bool,
+    pub mixed: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct InspectorTransformModel {
-    pub position: [f32; 3],
-    pub rotation_deg: [f32; 3],
-    pub scale: [f32; 3],
+    pub position: [InspectorScalarFieldModel; 3],
+    pub rotation_deg: [InspectorScalarFieldModel; 3],
+    pub scale: [InspectorScalarFieldModel; 3],
     pub can_scale: bool,
+    pub multi_editing: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct InspectorMaterialModel {
-    pub base_color: [f32; 3],
-    pub roughness: f32,
-    pub metallic: f32,
+    pub base_color: [InspectorScalarFieldModel; 3],
+    pub roughness: InspectorScalarFieldModel,
+    pub metallic: InspectorScalarFieldModel,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct InspectorOperationModel {
     pub op_label: String,
-    pub smooth_k: f32,
-    pub steps: f32,
-    pub color_blend: f32,
+    pub smooth_k: InspectorScalarFieldModel,
+    pub steps: InspectorScalarFieldModel,
+    pub color_blend: InspectorScalarFieldModel,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct InspectorSculptModel {
-    pub desired_resolution: u32,
-    pub layer_intensity: f32,
-    pub brush_radius: f32,
-    pub brush_strength: f32,
+    pub desired_resolution: InspectorScalarFieldModel,
+    pub layer_intensity: InspectorScalarFieldModel,
+    pub brush_radius: InspectorScalarFieldModel,
+    pub brush_strength: InspectorScalarFieldModel,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct InspectorLightModel {
     pub light_type_label: String,
-    pub color: [f32; 3],
-    pub intensity: f32,
-    pub range: f32,
-    pub cast_shadows: bool,
-    pub volumetric: bool,
-    pub volumetric_density: f32,
+    pub color: [InspectorScalarFieldModel; 3],
+    pub intensity: InspectorScalarFieldModel,
+    pub range: InspectorScalarFieldModel,
+    pub cast_shadows: InspectorBoolFieldModel,
+    pub volumetric: InspectorBoolFieldModel,
+    pub volumetric_density: InspectorScalarFieldModel,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -82,6 +115,7 @@ pub struct InspectorModel {
     pub chips: Vec<String>,
     pub property_lines: Vec<String>,
     pub display_lines: Vec<String>,
+    pub multi_selection_summary: Option<String>,
     pub transform: Option<InspectorTransformModel>,
     pub material: Option<InspectorMaterialModel>,
     pub operation: Option<InspectorOperationModel>,
@@ -92,13 +126,17 @@ pub struct InspectorModel {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HistoryEntry {
     pub label: String,
-    pub is_undo: bool,
+    pub direction_label: String,
+    pub is_current: bool,
+    pub jump_steps: usize,
+    pub jump_enabled: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ReferenceImageRow {
     pub label: String,
     pub plane_label: String,
+    pub status_label: String,
     pub visible: bool,
     pub locked: bool,
     pub opacity: f32,
@@ -112,7 +150,7 @@ pub struct ExpertPanelEntry {
     pub open: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct RenderSettingsModel {
     pub show_grid: bool,
     pub show_node_labels: bool,
@@ -122,16 +160,43 @@ pub struct RenderSettingsModel {
     pub ao_enabled: bool,
     pub export_resolution: u32,
     pub adaptive_export: bool,
+    pub environment_is_hdri: bool,
+    pub hdri_path_display: String,
+    pub environment_rotation_degrees: f32,
+    pub environment_exposure: f32,
+    pub environment_bake_resolution: u32,
+    pub background_is_procedural: bool,
+    pub environment_background_blur: f32,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct UtilityModel {
-    pub history_lines: Vec<String>,
-    pub reference_lines: Vec<String>,
+    pub history_summary: String,
+    pub reference_summary: String,
     pub history_rows: Vec<HistoryEntry>,
     pub reference_rows: Vec<ReferenceImageRow>,
     pub expert_panels: Vec<ExpertPanelEntry>,
     pub render_settings: RenderSettingsModel,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ToolPaletteEntry {
+    pub kind: ToolPaletteKind,
+    pub label: String,
+    pub active: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ToolPaletteKind {
+    Select,
+    Brush(BrushMode),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ToolPaletteModel {
+    pub visible: bool,
+    pub select_tool: ToolPaletteEntry,
+    pub brush_tools: Vec<ToolPaletteEntry>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -149,18 +214,40 @@ pub struct ViewportFrameImage {
     pub generation: u64,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WorkspaceSummaryEntry {
+    pub label: String,
+    pub value: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WorkspacePanelModel {
+    pub visible: bool,
+    pub route: WorkspaceRoute,
+    pub route_label: String,
+    pub selection_summary: String,
+    pub detail_text: String,
+    pub context_rows: Vec<WorkspaceSummaryEntry>,
+    pub input_rows: Vec<WorkspaceSummaryEntry>,
+    pub output_rows: Vec<WorkspaceSummaryEntry>,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct ShellSnapshot {
+    pub tool_palette: ToolPaletteModel,
     pub scene_panel: ScenePanelModel,
     pub inspector: InspectorModel,
     pub utility: UtilityModel,
     pub viewport_status: ViewportStatusModel,
+    pub workspace: WorkspacePanelModel,
 }
 
 pub struct ShellSnapshotInputs<'a> {
     pub scene: &'a Scene,
     pub selection: &'a SceneSelectionState,
-    pub scene_filter_query: &'a str,
+    pub scene_panel_ui: &'a ScenePanelUiState,
+    pub primary_shell: &'a PrimaryShellState,
+    pub workspace: &'a WorkspaceUiState,
     pub history: &'a History,
     pub reference_images: &'a ReferenceImageStore,
     pub expert_panels: &'a ExpertPanelRegistry,
@@ -173,11 +260,8 @@ pub struct ShellSnapshotInputs<'a> {
 
 pub fn build_shell_snapshot(inputs: ShellSnapshotInputs<'_>) -> ShellSnapshot {
     ShellSnapshot {
-        scene_panel: build_scene_panel_model(
-            inputs.scene,
-            inputs.selection,
-            inputs.scene_filter_query,
-        ),
+        tool_palette: build_tool_palette_model(inputs.primary_shell),
+        scene_panel: build_scene_panel_model(inputs.scene, inputs.selection, inputs.scene_panel_ui),
         inspector: build_inspector_model(
             inputs.scene,
             inputs.selection,
@@ -198,28 +282,67 @@ pub fn build_shell_snapshot(inputs: ShellSnapshotInputs<'_>) -> ShellSnapshot {
             transform_label: inputs.gizmo_mode.label().to_string(),
             space_label: inputs.gizmo_space.label().to_string(),
         },
+        workspace: build_workspace_panel_model(
+            inputs.scene,
+            inputs.selection,
+            inputs.workspace,
+            inputs.primary_shell,
+        ),
+    }
+}
+
+pub fn build_tool_palette_model(primary_shell: &PrimaryShellState) -> ToolPaletteModel {
+    let active_brush = match primary_shell.interaction_mode {
+        InteractionMode::Sculpt(brush) => Some(brush),
+        _ => None,
+    };
+
+    ToolPaletteModel {
+        visible: primary_shell.tool_rail_visible,
+        select_tool: ToolPaletteEntry {
+            kind: ToolPaletteKind::Select,
+            label: "Select".to_string(),
+            active: matches!(primary_shell.interaction_mode, InteractionMode::Select),
+        },
+        brush_tools: BrushMode::ALL
+            .into_iter()
+            .map(|brush| ToolPaletteEntry {
+                kind: ToolPaletteKind::Brush(brush),
+                label: brush.label().to_string(),
+                active: active_brush == Some(brush),
+            })
+            .collect(),
     }
 }
 
 pub fn build_scene_panel_model(
     scene: &Scene,
     selection: &SceneSelectionState,
-    filter_query: &str,
+    scene_panel_ui: &ScenePanelUiState,
 ) -> ScenePanelModel {
     let mut rows = Vec::new();
-    let roots = presented_top_level_objects(scene);
     let selected_host = selection
         .selected
         .and_then(|selected_id| resolve_presented_object(scene, selected_id))
         .map(|object| object.host_id);
-    let normalized_filter = filter_query.trim().to_ascii_lowercase();
-    for root in roots {
-        collect_scene_rows(scene, root, selection, 0, &normalized_filter, &mut rows);
+    let normalized_filter = scene_panel_ui.filter_query.trim().to_ascii_lowercase();
+    for root in presented_top_level_objects(scene) {
+        collect_scene_rows(
+            scene,
+            root,
+            selection,
+            scene_panel_ui,
+            0,
+            &normalized_filter,
+            &mut rows,
+        );
     }
     ScenePanelModel {
         rows,
         selection_count: selection.selected_set.len(),
         selected_host,
+        filter_query: scene_panel_ui.filter_query.clone(),
+        drag_active: scene_panel_ui.drag_source.is_some(),
     }
 }
 
@@ -245,34 +368,22 @@ pub fn build_inspector_model(
             chips: Vec::new(),
             property_lines: vec!["Click an object in the scene list or viewport.".to_string()],
             display_lines: display_lines(settings, interaction_mode, gizmo_mode, gizmo_space),
+            multi_selection_summary: None,
             transform: None,
             material: None,
             operation: None,
             sculpt: None,
             light: None,
         },
-        (_, count) if count > 1 => InspectorModel {
-            title: format!("{count} objects selected"),
-            name: String::new(),
-            kind_label: "MULTI".to_string(),
-            chips: vec!["MULTI".to_string()],
-            property_lines: presented_selection
-                .ordered
-                .into_iter()
-                .filter_map(|object| {
-                    scene
-                        .nodes
-                        .get(&object.host_id)
-                        .map(|node| format!("• {}", node.name))
-                })
-                .collect(),
-            display_lines: display_lines(settings, interaction_mode, gizmo_mode, gizmo_space),
-            transform: None,
-            material: None,
-            operation: None,
-            sculpt: None,
-            light: None,
-        },
+        (_, count) if count > 1 => build_multi_selection_inspector(
+            scene,
+            &presented_selection.ordered,
+            settings,
+            sculpt_state,
+            interaction_mode,
+            gizmo_mode,
+            gizmo_space,
+        ),
         (Some(object), _) => build_single_object_inspector(
             scene,
             object,
@@ -294,80 +405,86 @@ pub fn build_utility_model(
     let undo_labels = history.undo_labels();
     let redo_labels = history.redo_labels();
 
-    let mut history_lines = vec![
-        format!("Undo depth: {}", history.undo_count()),
-        format!("Redo depth: {}", history.redo_count()),
-    ];
-    if let Some(last_undo) = undo_labels.last() {
-        history_lines.insert(1, format!("Latest undo: {last_undo}"));
-    }
-    if let Some(next_redo) = redo_labels.first() {
-        history_lines.push(format!("Next redo: {next_redo}"));
-    }
-
     let mut history_rows = Vec::new();
-    history_rows.extend(undo_labels.iter().rev().map(|label| HistoryEntry {
-        label: label.clone(),
-        is_undo: true,
-    }));
-    history_rows.extend(redo_labels.iter().map(|label| HistoryEntry {
-        label: label.clone(),
-        is_undo: false,
-    }));
+    history_rows.extend(
+        undo_labels
+            .iter()
+            .rev()
+            .enumerate()
+            .map(|(index, label)| HistoryEntry {
+                label: label.clone(),
+                direction_label: "Undo".to_string(),
+                is_current: false,
+                jump_steps: index + 1,
+                jump_enabled: true,
+            }),
+    );
+    history_rows.push(HistoryEntry {
+        label: "Current state".to_string(),
+        direction_label: String::new(),
+        is_current: true,
+        jump_steps: 0,
+        jump_enabled: false,
+    });
+    history_rows.extend(
+        redo_labels
+            .iter()
+            .enumerate()
+            .map(|(index, label)| HistoryEntry {
+                label: label.clone(),
+                direction_label: "Redo".to_string(),
+                is_current: false,
+                jump_steps: index + 1,
+                jump_enabled: true,
+            }),
+    );
 
     let visible_count = reference_images
         .images
         .iter()
         .filter(|image| image.visible)
         .count();
-    let mut reference_lines = vec![
-        format!("Images: {}", reference_images.images.len()),
-        format!("Visible: {visible_count}"),
-    ];
-    reference_lines.extend(reference_images.images.iter().take(3).map(|image| {
-        let name = Path::new(&image.path)
-            .file_name()
-            .map(|name| name.to_string_lossy().to_string())
-            .unwrap_or_else(|| image.path.clone());
-        format!(
-            "{} • {} • {}",
-            name,
-            image.plane.label(),
-            if image.visible { "Visible" } else { "Hidden" }
-        )
-    }));
-
-    let reference_rows = reference_images
-        .images
-        .iter()
-        .map(|image| ReferenceImageRow {
-            label: Path::new(&image.path)
-                .file_name()
-                .map(|name| name.to_string_lossy().to_string())
-                .unwrap_or_else(|| image.path.clone()),
-            plane_label: image.plane.label().to_string(),
-            visible: image.visible,
-            locked: image.locked,
-            opacity: image.opacity,
-            scale: image.scale,
-        })
-        .collect();
-
-    let expert_panels = ExpertPanelKind::ALL
-        .into_iter()
-        .map(|kind| ExpertPanelEntry {
-            kind,
-            label: kind.label().to_string(),
-            open: expert_panels.is_open(kind),
-        })
-        .collect();
 
     UtilityModel {
-        history_lines,
-        reference_lines,
+        history_summary: format!(
+            "{} undo | {} redo",
+            history.undo_count(),
+            history.redo_count()
+        ),
+        reference_summary: format!(
+            "{} images | {} visible",
+            reference_images.images.len(),
+            visible_count
+        ),
         history_rows,
-        reference_rows,
-        expert_panels,
+        reference_rows: reference_images
+            .images
+            .iter()
+            .map(|image| ReferenceImageRow {
+                label: Path::new(&image.path)
+                    .file_name()
+                    .map(|name| name.to_string_lossy().to_string())
+                    .unwrap_or_else(|| image.path.clone()),
+                plane_label: image.plane.label().to_string(),
+                status_label: format!(
+                    "{} | {}",
+                    if image.visible { "Visible" } else { "Hidden" },
+                    if image.locked { "Locked" } else { "Unlocked" }
+                ),
+                visible: image.visible,
+                locked: image.locked,
+                opacity: image.opacity,
+                scale: image.scale,
+            })
+            .collect(),
+        expert_panels: ExpertPanelKind::ALL
+            .into_iter()
+            .map(|kind| ExpertPanelEntry {
+                kind,
+                label: kind.label().to_string(),
+                open: expert_panels.is_open(kind),
+            })
+            .collect(),
         render_settings: RenderSettingsModel {
             show_grid: settings.render.show_grid,
             show_node_labels: settings.render.show_node_labels,
@@ -377,46 +494,265 @@ pub fn build_utility_model(
             ao_enabled: settings.render.ao_enabled,
             export_resolution: settings.export_resolution,
             adaptive_export: settings.adaptive_export,
+            environment_is_hdri: matches!(
+                settings.render.environment_source,
+                EnvironmentSource::Hdri
+            ),
+            hdri_path_display: settings
+                .render
+                .hdri_path
+                .clone()
+                .unwrap_or_else(|| "No HDRI selected".to_string()),
+            environment_rotation_degrees: settings.render.environment_rotation_degrees,
+            environment_exposure: settings.render.environment_exposure,
+            environment_bake_resolution: settings.render.environment_bake_resolution,
+            background_is_procedural: matches!(
+                settings.render.environment_background_mode,
+                EnvironmentBackgroundMode::Procedural
+            ),
+            environment_background_blur: settings.render.environment_background_blur,
         },
     }
+}
+
+pub fn build_workspace_panel_model(
+    scene: &Scene,
+    selection: &SceneSelectionState,
+    workspace: &WorkspaceUiState,
+    primary_shell: &PrimaryShellState,
+) -> WorkspacePanelModel {
+    let mut context_rows = vec![WorkspaceSummaryEntry {
+        label: "Route".to_string(),
+        value: workspace.route.label().to_string(),
+    }];
+    let mut input_rows = Vec::new();
+    let mut output_rows = Vec::new();
+    let detail_text = match workspace.route {
+        WorkspaceRoute::NodeGraph => {
+            build_node_workspace_rows(
+                scene,
+                selection.selected,
+                &mut context_rows,
+                &mut input_rows,
+                &mut output_rows,
+            );
+            "Graph scaffold for selected object structure. Routing and context are live; node editing comes next.".to_string()
+        }
+        WorkspaceRoute::LightGraph => {
+            build_light_workspace_rows(
+                scene,
+                selection.selected,
+                &mut context_rows,
+                &mut input_rows,
+                &mut output_rows,
+            );
+            "Lighting workspace scaffold. Scene light context is live; graph canvas and wiring are a follow-on slice.".to_string()
+        }
+    };
+
+    WorkspacePanelModel {
+        visible: !primary_shell.drawer_panel.is_hidden(),
+        route: workspace.route,
+        route_label: workspace.route.label().to_string(),
+        selection_summary: selection
+            .selected
+            .and_then(|selected_id| resolve_presented_object(scene, selected_id))
+            .and_then(|object| scene.nodes.get(&object.host_id))
+            .map(|node| format!("Selected: {}", node.name))
+            .unwrap_or_else(|| "No selection".to_string()),
+        detail_text,
+        context_rows,
+        input_rows,
+        output_rows,
+    }
+}
+
+struct ScenePanelBuildContext<'a> {
+    selection: &'a SceneSelectionState,
+    scene_panel_ui: &'a ScenePanelUiState,
+    filter_query: &'a str,
 }
 
 fn collect_scene_rows(
     scene: &Scene,
     object: PresentedObjectRef,
     selection: &SceneSelectionState,
+    scene_panel_ui: &ScenePanelUiState,
     depth: usize,
     filter_query: &str,
     rows: &mut Vec<ScenePanelRow>,
 ) -> bool {
+    let wrapper_chain = collect_presented_base_wrapper_chain(scene, object);
+    let context = ScenePanelBuildContext {
+        selection,
+        scene_panel_ui,
+        filter_query,
+    };
+    collect_scene_rows_for_object(scene, object, &wrapper_chain, &context, depth, rows)
+}
+
+fn collect_scene_rows_for_object(
+    scene: &Scene,
+    object: PresentedObjectRef,
+    wrapper_chain: &[NodeId],
+    context: &ScenePanelBuildContext<'_>,
+    depth: usize,
+    rows: &mut Vec<ScenePanelRow>,
+) -> bool {
+    if let Some((&wrapper_id, remaining_wrappers)) = wrapper_chain.split_first() {
+        let Some(node) = scene.nodes.get(&wrapper_id) else {
+            return false;
+        };
+
+        let mut child_rows = Vec::new();
+        let descendant_matched = collect_scene_rows_for_object(
+            scene,
+            object,
+            remaining_wrappers,
+            context,
+            depth + 1,
+            &mut child_rows,
+        );
+        let matches_self = node_matches_filter(node, node_kind_label(node), context.filter_query);
+        if !context.filter_query.is_empty() && !matches_self && !descendant_matched {
+            return false;
+        }
+
+        let expanded = wrapper_row_expanded(
+            context.scene_panel_ui,
+            wrapper_id,
+            depth,
+            context.filter_query,
+            descendant_matched,
+        );
+        rows.push(ScenePanelRow {
+            host_id: wrapper_id,
+            object_root_id: wrapper_id,
+            label: node.name.clone(),
+            kind_label: node_kind_label(node),
+            depth,
+            has_children: true,
+            expanded,
+            selected: context.selection.selected == Some(wrapper_id)
+                || context.selection.selected_set.contains(&wrapper_id),
+            hidden: scene.is_hidden(wrapper_id),
+            locked: node.locked,
+            renaming: context.scene_panel_ui.renaming_node == Some(wrapper_id),
+            rename_value: if context.scene_panel_ui.renaming_node == Some(wrapper_id) {
+                context.scene_panel_ui.rename_buffer.clone()
+            } else {
+                node.name.clone()
+            },
+            dragging: context.scene_panel_ui.drag_source == Some(wrapper_id),
+            drop_allowed: context
+                .scene_panel_ui
+                .drag_source
+                .is_some_and(|dragged| scene.is_valid_drop_target(wrapper_id, dragged)),
+            drop_target: context.scene_panel_ui.drop_target == Some(wrapper_id),
+        });
+        if expanded {
+            rows.extend(child_rows);
+        }
+        return true;
+    }
+
     let Some(node) = scene.nodes.get(&object.host_id) else {
         return false;
     };
-    let row = ScenePanelRow {
+
+    let children = presented_children(scene, object);
+    let has_children = !children.is_empty();
+    let matches_self = node_matches_filter(
+        node,
+        object_kind_chip(object).to_string(),
+        context.filter_query,
+    );
+    let manual_expanded = context.scene_panel_ui.is_expanded(object.host_id, depth);
+
+    let mut child_rows = Vec::new();
+    let mut descendant_matched = false;
+    for child in children {
+        descendant_matched |=
+            collect_scene_rows_for_object(scene, child, &[], context, depth + 1, &mut child_rows);
+    }
+
+    if !context.filter_query.is_empty() && !matches_self && !descendant_matched {
+        return false;
+    }
+
+    let expanded = has_children
+        && if context.filter_query.is_empty() {
+            manual_expanded
+        } else {
+            descendant_matched || manual_expanded
+        };
+
+    rows.push(ScenePanelRow {
         host_id: object.host_id,
         object_root_id: object.object_root_id,
-        label: format!("{} {}", object_prefix(object), node.name),
+        label: node.name.clone(),
+        kind_label: object_kind_chip(object).to_string(),
         depth,
-        selected: selection.selected_set.contains(&object.host_id)
-            || selection.selected == Some(object.host_id),
+        has_children,
+        expanded,
+        selected: context.selection.selected_set.contains(&object.host_id)
+            || context.selection.selected == Some(object.host_id),
         hidden: scene.is_hidden(object.object_root_id),
         locked: node.locked,
-    };
+        renaming: context.scene_panel_ui.renaming_node == Some(object.host_id),
+        rename_value: if context.scene_panel_ui.renaming_node == Some(object.host_id) {
+            context.scene_panel_ui.rename_buffer.clone()
+        } else {
+            node.name.clone()
+        },
+        dragging: context.scene_panel_ui.drag_source == Some(object.object_root_id),
+        drop_allowed: context
+            .scene_panel_ui
+            .drag_source
+            .is_some_and(|dragged| scene.is_valid_drop_target(object.object_root_id, dragged)),
+        drop_target: context.scene_panel_ui.drop_target == Some(object.object_root_id),
+    });
 
-    let matches_self = filter_query.is_empty()
-        || row.label.to_ascii_lowercase().contains(filter_query)
-        || node.name.to_ascii_lowercase().contains(filter_query);
-    let insert_index = rows.len();
-    let mut descendant_matched = false;
-    for child in presented_children(scene, object) {
-        descendant_matched |=
-            collect_scene_rows(scene, child, selection, depth + 1, filter_query, rows);
+    if expanded {
+        rows.extend(child_rows);
     }
-    if matches_self || descendant_matched {
-        rows.insert(insert_index, row);
-        true
+
+    true
+}
+
+fn wrapper_row_expanded(
+    scene_panel_ui: &ScenePanelUiState,
+    wrapper_id: NodeId,
+    depth: usize,
+    filter_query: &str,
+    descendant_matched: bool,
+) -> bool {
+    let manual_expanded = scene_panel_ui.is_expanded(wrapper_id, depth);
+    if filter_query.is_empty() {
+        manual_expanded
     } else {
-        false
+        descendant_matched || manual_expanded
+    }
+}
+
+fn node_matches_filter(
+    node: &crate::graph::scene::SceneNode,
+    kind_label: String,
+    filter_query: &str,
+) -> bool {
+    filter_query.is_empty()
+        || node.name.to_ascii_lowercase().contains(filter_query)
+        || kind_label.to_ascii_lowercase().contains(filter_query)
+}
+
+fn node_kind_label(node: &crate::graph::scene::SceneNode) -> String {
+    match &node.data {
+        NodeData::Primitive { kind, .. } => kind.base_name().to_ascii_uppercase(),
+        NodeData::Transform { .. } => "TRANSFORM".to_string(),
+        NodeData::Modifier { kind, .. } => kind.base_name().to_ascii_uppercase(),
+        NodeData::Operation { op, .. } => op.base_name().to_ascii_uppercase(),
+        NodeData::Sculpt { .. } => "SCULPT".to_string(),
+        NodeData::Light { light_type, .. } => light_type.label().to_ascii_uppercase(),
     }
 }
 
@@ -437,6 +773,7 @@ fn build_single_object_inspector(
             chips: Vec::new(),
             property_lines: vec!["The selected object is no longer present.".to_string()],
             display_lines: display_lines(settings, interaction_mode, gizmo_mode, gizmo_space),
+            multi_selection_summary: None,
             transform: None,
             material: None,
             operation: None,
@@ -455,17 +792,6 @@ fn build_single_object_inspector(
     if node.locked {
         chips.push("LOCKED".to_string());
     }
-
-    let transform = build_transform_model(scene, object);
-    let material = node.data.material().map(|material| InspectorMaterialModel {
-        base_color: [
-            material.base_color.x,
-            material.base_color.y,
-            material.base_color.z,
-        ],
-        roughness: material.roughness,
-        metallic: material.metallic,
-    });
 
     let mut property_lines = match &node.data {
         NodeData::Primitive {
@@ -532,34 +858,19 @@ fn build_single_object_inspector(
             format!("Color: {:.2}, {:.2}, {:.2}", color.x, color.y, color.z),
             format!("Intensity: {:.2}", intensity),
             format!("Range: {:.2}", range),
-            format!("Shadows: {}", if *cast_shadows { "On" } else { "Off" }),
-            format!("Volumetric: {}", if *volumetric { "On" } else { "Off" }),
+            format!("Shadows: {}", on_off(*cast_shadows)),
+            format!("Volumetric: {}", on_off(*volumetric)),
             format!("Volumetric density: {:.2}", volumetric_density),
         ],
         NodeData::Transform { .. } | NodeData::Modifier { .. } => {
             vec!["This object is represented through its host wrapper stack.".to_string()]
         }
     };
-
     if object.attached_sculpt_id.is_some()
         && !matches!(node.data, NodeData::Sculpt { input: None, .. })
     {
         property_lines.push("Attached sculpt layer is active on this object.".to_string());
     }
-
-    let sculpt = match &node.data {
-        NodeData::Sculpt {
-            desired_resolution,
-            layer_intensity,
-            ..
-        } => Some(InspectorSculptModel {
-            desired_resolution: *desired_resolution,
-            layer_intensity: *layer_intensity,
-            brush_radius: sculpt_state.selected_profile().radius,
-            brush_strength: sculpt_state.selected_profile().strength,
-        }),
-        _ => None,
-    };
 
     let operation = match &node.data {
         NodeData::Operation {
@@ -570,9 +881,29 @@ fn build_single_object_inspector(
             ..
         } => Some(InspectorOperationModel {
             op_label: op.base_name().to_string(),
-            smooth_k: *smooth_k,
-            steps: *steps,
-            color_blend: *color_blend,
+            smooth_k: float_field(*smooth_k, 0.0, 4.0, 0.01, 3),
+            steps: int_field(*steps, 0.0, 32.0, 1.0),
+            color_blend: float_field(*color_blend, -1.0, 1.0, 0.01, 2),
+        }),
+        _ => None,
+    };
+
+    let sculpt = match &node.data {
+        NodeData::Sculpt {
+            desired_resolution,
+            layer_intensity,
+            ..
+        } => Some(InspectorSculptModel {
+            desired_resolution: int_field(*desired_resolution as f32, 8.0, 512.0, 8.0),
+            layer_intensity: float_field(*layer_intensity, 0.0, 4.0, 0.01, 2),
+            brush_radius: float_field(sculpt_state.selected_profile().radius, 0.05, 2.0, 0.01, 2),
+            brush_strength: float_field(
+                sculpt_state.selected_profile().strength,
+                -2.0,
+                2.0,
+                0.01,
+                2,
+            ),
         }),
         _ => None,
     };
@@ -589,12 +920,16 @@ fn build_single_object_inspector(
             ..
         } => Some(InspectorLightModel {
             light_type_label: light_type.label().to_string(),
-            color: [color.x, color.y, color.z],
-            intensity: *intensity,
-            range: *range,
-            cast_shadows: *cast_shadows,
-            volumetric: *volumetric,
-            volumetric_density: *volumetric_density,
+            color: [
+                float_field(color.x, 0.0, 10.0, 0.01, 2),
+                float_field(color.y, 0.0, 10.0, 0.01, 2),
+                float_field(color.z, 0.0, 10.0, 0.01, 2),
+            ],
+            intensity: float_field(*intensity, 0.0, 20.0, 0.05, 2),
+            range: float_field(*range, 0.01, 50.0, 0.05, 2),
+            cast_shadows: bool_field(*cast_shadows),
+            volumetric: bool_field(*volumetric),
+            volumetric_density: float_field(*volumetric_density, 0.0, 1.0, 0.01, 2),
         }),
         _ => None,
     };
@@ -606,65 +941,179 @@ fn build_single_object_inspector(
         chips,
         property_lines,
         display_lines: display_lines(settings, interaction_mode, gizmo_mode, gizmo_space),
-        transform,
-        material,
+        multi_selection_summary: None,
+        transform: build_transform_model(scene, &[object]),
+        material: build_material_model(scene, &[object]),
         operation,
         sculpt,
         light,
     }
 }
 
+fn build_multi_selection_inspector(
+    scene: &Scene,
+    objects: &[PresentedObjectRef],
+    settings: &Settings,
+    sculpt_state: &SculptState,
+    interaction_mode: InteractionMode,
+    gizmo_mode: &GizmoMode,
+    gizmo_space: &GizmoSpace,
+) -> InspectorModel {
+    InspectorModel {
+        title: format!("{} objects selected", objects.len()),
+        name: String::new(),
+        kind_label: "MULTI".to_string(),
+        chips: vec!["MULTI".to_string()],
+        property_lines: objects
+            .iter()
+            .filter_map(|object| scene.nodes.get(&object.host_id))
+            .map(|node| format!("• {}", node.name))
+            .collect(),
+        display_lines: display_lines(settings, interaction_mode, gizmo_mode, gizmo_space),
+        multi_selection_summary: Some(format!("{} selected", objects.len())),
+        transform: build_transform_model(scene, objects).map(|mut model| {
+            model.multi_editing = true;
+            model
+        }),
+        material: build_material_model(scene, objects),
+        operation: None,
+        sculpt: Some(InspectorSculptModel {
+            desired_resolution: disabled_field("Single selection".to_string(), 8.0, 512.0, 8.0),
+            layer_intensity: disabled_field("Single selection".to_string(), 0.0, 4.0, 0.01),
+            brush_radius: float_field(sculpt_state.selected_profile().radius, 0.05, 2.0, 0.01, 2),
+            brush_strength: float_field(
+                sculpt_state.selected_profile().strength,
+                -2.0,
+                2.0,
+                0.01,
+                2,
+            ),
+        }),
+        light: None,
+    }
+}
+
 fn build_transform_model(
     scene: &Scene,
-    object: PresentedObjectRef,
+    objects: &[PresentedObjectRef],
 ) -> Option<InspectorTransformModel> {
-    let target_id = editable_transform_target(scene, object)?;
-    let node = scene.nodes.get(&target_id)?;
-    match &node.data {
-        NodeData::Primitive {
-            position,
-            rotation,
-            scale,
-            ..
-        } => Some(InspectorTransformModel {
-            position: [position.x, position.y, position.z],
-            rotation_deg: [
-                rotation.x.to_degrees(),
-                rotation.y.to_degrees(),
-                rotation.z.to_degrees(),
-            ],
-            scale: [scale.x, scale.y, scale.z],
-            can_scale: true,
-        }),
-        NodeData::Sculpt {
-            position, rotation, ..
-        } => Some(InspectorTransformModel {
-            position: [position.x, position.y, position.z],
-            rotation_deg: [
-                rotation.x.to_degrees(),
-                rotation.y.to_degrees(),
-                rotation.z.to_degrees(),
-            ],
-            scale: [1.0, 1.0, 1.0],
-            can_scale: false,
-        }),
-        NodeData::Transform {
-            translation,
-            rotation,
-            scale,
-            ..
-        } => Some(InspectorTransformModel {
-            position: [translation.x, translation.y, translation.z],
-            rotation_deg: [
-                rotation.x.to_degrees(),
-                rotation.y.to_degrees(),
-                rotation.z.to_degrees(),
-            ],
-            scale: [scale.x, scale.y, scale.z],
-            can_scale: true,
-        }),
-        _ => None,
+    let targets = objects
+        .iter()
+        .filter_map(|object| editable_transform_target(scene, *object))
+        .collect::<Vec<_>>();
+    if targets.len() != objects.len() || targets.is_empty() {
+        return None;
     }
+
+    let mut positions = [Vec::new(), Vec::new(), Vec::new()];
+    let mut rotations = [Vec::new(), Vec::new(), Vec::new()];
+    let mut scales = [Vec::new(), Vec::new(), Vec::new()];
+    let mut can_scale = true;
+
+    for target_id in targets {
+        let node = scene.nodes.get(&target_id)?;
+        match &node.data {
+            NodeData::Primitive {
+                position,
+                rotation,
+                scale,
+                ..
+            } => {
+                positions[0].push(position.x);
+                positions[1].push(position.y);
+                positions[2].push(position.z);
+                rotations[0].push(rotation.x.to_degrees());
+                rotations[1].push(rotation.y.to_degrees());
+                rotations[2].push(rotation.z.to_degrees());
+                scales[0].push(scale.x);
+                scales[1].push(scale.y);
+                scales[2].push(scale.z);
+            }
+            NodeData::Sculpt {
+                position, rotation, ..
+            } => {
+                positions[0].push(position.x);
+                positions[1].push(position.y);
+                positions[2].push(position.z);
+                rotations[0].push(rotation.x.to_degrees());
+                rotations[1].push(rotation.y.to_degrees());
+                rotations[2].push(rotation.z.to_degrees());
+                can_scale = false;
+            }
+            NodeData::Transform {
+                translation,
+                rotation,
+                scale,
+                ..
+            } => {
+                positions[0].push(translation.x);
+                positions[1].push(translation.y);
+                positions[2].push(translation.z);
+                rotations[0].push(rotation.x.to_degrees());
+                rotations[1].push(rotation.y.to_degrees());
+                rotations[2].push(rotation.z.to_degrees());
+                scales[0].push(scale.x);
+                scales[1].push(scale.y);
+                scales[2].push(scale.z);
+            }
+            _ => return None,
+        }
+    }
+
+    Some(InspectorTransformModel {
+        position: [
+            float_field_from_values(&positions[0], -20.0, 20.0, 0.01, 3),
+            float_field_from_values(&positions[1], -20.0, 20.0, 0.01, 3),
+            float_field_from_values(&positions[2], -20.0, 20.0, 0.01, 3),
+        ],
+        rotation_deg: [
+            float_field_from_values(&rotations[0], -180.0, 180.0, 1.0, 1),
+            float_field_from_values(&rotations[1], -180.0, 180.0, 1.0, 1),
+            float_field_from_values(&rotations[2], -180.0, 180.0, 1.0, 1),
+        ],
+        scale: [
+            float_field_from_values(&scales[0], 0.01, 10.0, 0.01, 3),
+            float_field_from_values(&scales[1], 0.01, 10.0, 0.01, 3),
+            float_field_from_values(&scales[2], 0.01, 10.0, 0.01, 3),
+        ],
+        can_scale,
+        multi_editing: objects.len() > 1,
+    })
+}
+
+fn build_material_model(
+    scene: &Scene,
+    objects: &[PresentedObjectRef],
+) -> Option<InspectorMaterialModel> {
+    let mut red = Vec::new();
+    let mut green = Vec::new();
+    let mut blue = Vec::new();
+    let mut roughness = Vec::new();
+    let mut metallic = Vec::new();
+
+    for object in objects {
+        let node = scene.nodes.get(&object.host_id)?;
+        let material = node.data.material()?;
+        red.push(material.base_color.x);
+        green.push(material.base_color.y);
+        blue.push(material.base_color.z);
+        roughness.push(material.roughness);
+        metallic.push(material.metallic);
+    }
+
+    if red.is_empty() {
+        return None;
+    }
+
+    Some(InspectorMaterialModel {
+        base_color: [
+            float_field_from_values(&red, 0.0, 1.0, 0.01, 2),
+            float_field_from_values(&green, 0.0, 1.0, 0.01, 2),
+            float_field_from_values(&blue, 0.0, 1.0, 0.01, 2),
+        ],
+        roughness: float_field_from_values(&roughness, 0.0, 1.0, 0.01, 2),
+        metallic: float_field_from_values(&metallic, 0.0, 1.0, 0.01, 2),
+    })
 }
 
 fn editable_transform_target(scene: &Scene, object: PresentedObjectRef) -> Option<NodeId> {
@@ -679,6 +1128,238 @@ fn editable_transform_target(scene: &Scene, object: PresentedObjectRef) -> Optio
             Some(NodeData::Transform { .. }) => Some(object.object_root_id),
             _ => Some(object.host_id),
         },
+    }
+}
+
+fn build_node_workspace_rows(
+    scene: &Scene,
+    selected: Option<NodeId>,
+    context_rows: &mut Vec<WorkspaceSummaryEntry>,
+    input_rows: &mut Vec<WorkspaceSummaryEntry>,
+    output_rows: &mut Vec<WorkspaceSummaryEntry>,
+) {
+    let Some(selected_id) = selected else {
+        context_rows.push(WorkspaceSummaryEntry {
+            label: "Selection".to_string(),
+            value: "Choose an object to inspect graph context".to_string(),
+        });
+        return;
+    };
+    let Some(object) = resolve_presented_object(scene, selected_id) else {
+        return;
+    };
+    let Some(node) = scene.nodes.get(&object.object_root_id) else {
+        return;
+    };
+
+    context_rows.push(WorkspaceSummaryEntry {
+        label: "Selected host".to_string(),
+        value: scene
+            .nodes
+            .get(&object.host_id)
+            .map(|node| node.name.clone())
+            .unwrap_or_else(|| "Missing".to_string()),
+    });
+    context_rows.push(WorkspaceSummaryEntry {
+        label: "Object root".to_string(),
+        value: node.name.clone(),
+    });
+    context_rows.push(WorkspaceSummaryEntry {
+        label: "Kind".to_string(),
+        value: object_kind_chip(object).to_string(),
+    });
+
+    match &node.data {
+        NodeData::Primitive { .. } | NodeData::Light { .. } => {
+            input_rows.push(WorkspaceSummaryEntry {
+                label: "Inputs".to_string(),
+                value: "Leaf object".to_string(),
+            })
+        }
+        NodeData::Operation { left, right, .. } => {
+            input_rows.push(WorkspaceSummaryEntry {
+                label: "Left".to_string(),
+                value: child_name(scene, *left),
+            });
+            input_rows.push(WorkspaceSummaryEntry {
+                label: "Right".to_string(),
+                value: child_name(scene, *right),
+            });
+        }
+        NodeData::Transform { input, .. }
+        | NodeData::Modifier { input, .. }
+        | NodeData::Sculpt { input, .. } => input_rows.push(WorkspaceSummaryEntry {
+            label: "Input".to_string(),
+            value: child_name(scene, *input),
+        }),
+    }
+
+    let parents = parent_names(scene, object.object_root_id);
+    if parents.is_empty() {
+        output_rows.push(WorkspaceSummaryEntry {
+            label: "Outputs".to_string(),
+            value: "Top-level object".to_string(),
+        });
+    } else {
+        for (index, parent) in parents.into_iter().enumerate() {
+            output_rows.push(WorkspaceSummaryEntry {
+                label: format!("Parent {}", index + 1),
+                value: parent,
+            });
+        }
+    }
+}
+
+fn build_light_workspace_rows(
+    scene: &Scene,
+    selected: Option<NodeId>,
+    context_rows: &mut Vec<WorkspaceSummaryEntry>,
+    input_rows: &mut Vec<WorkspaceSummaryEntry>,
+    output_rows: &mut Vec<WorkspaceSummaryEntry>,
+) {
+    context_rows.push(WorkspaceSummaryEntry {
+        label: "Scene lights".to_string(),
+        value: scene
+            .nodes
+            .values()
+            .filter(|node| matches!(node.data, NodeData::Light { .. }))
+            .count()
+            .to_string(),
+    });
+
+    match selected.and_then(|selected_id| resolve_presented_object(scene, selected_id)) {
+        Some(object) if matches!(object.kind, PresentedObjectKind::Light) => {
+            context_rows.push(WorkspaceSummaryEntry {
+                label: "Selected light".to_string(),
+                value: scene
+                    .nodes
+                    .get(&object.host_id)
+                    .map(|node| node.name.clone())
+                    .unwrap_or_else(|| "Missing".to_string()),
+            });
+        }
+        _ => {
+            context_rows.push(WorkspaceSummaryEntry {
+                label: "Selection".to_string(),
+                value: "Select a light to inspect routing context".to_string(),
+            });
+        }
+    }
+
+    input_rows.push(WorkspaceSummaryEntry {
+        label: "Light source".to_string(),
+        value: "Direct scene light".to_string(),
+    });
+    output_rows.push(WorkspaceSummaryEntry {
+        label: "Affected geometry".to_string(),
+        value: scene
+            .nodes
+            .values()
+            .filter(|node| node.data.material().is_some())
+            .count()
+            .to_string(),
+    });
+}
+
+fn parent_names(scene: &Scene, child_id: NodeId) -> Vec<String> {
+    scene
+        .nodes
+        .values()
+        .filter(|node| node.data.children().any(|candidate| candidate == child_id))
+        .map(|node| node.name.clone())
+        .collect()
+}
+
+fn child_name(scene: &Scene, child: Option<NodeId>) -> String {
+    child
+        .and_then(|child_id| scene.nodes.get(&child_id))
+        .map(|node| node.name.clone())
+        .unwrap_or_else(|| "(empty)".to_string())
+}
+
+fn float_field(
+    value: f32,
+    minimum: f32,
+    maximum: f32,
+    step: f32,
+    precision: usize,
+) -> InspectorScalarFieldModel {
+    InspectorScalarFieldModel {
+        value,
+        display_text: format!("{value:.precision$}"),
+        enabled: true,
+        mixed: false,
+        minimum,
+        maximum,
+        step,
+    }
+}
+
+fn int_field(value: f32, minimum: f32, maximum: f32, step: f32) -> InspectorScalarFieldModel {
+    InspectorScalarFieldModel {
+        value,
+        display_text: format!("{value:.0}"),
+        enabled: true,
+        mixed: false,
+        minimum,
+        maximum,
+        step,
+    }
+}
+
+fn disabled_field(
+    display_text: String,
+    minimum: f32,
+    maximum: f32,
+    step: f32,
+) -> InspectorScalarFieldModel {
+    InspectorScalarFieldModel {
+        value: minimum,
+        display_text,
+        enabled: false,
+        mixed: false,
+        minimum,
+        maximum,
+        step,
+    }
+}
+
+fn bool_field(value: bool) -> InspectorBoolFieldModel {
+    InspectorBoolFieldModel {
+        value,
+        display_text: if value { "On" } else { "Off" }.to_string(),
+        enabled: true,
+        mixed: false,
+    }
+}
+
+fn float_field_from_values(
+    values: &[f32],
+    minimum: f32,
+    maximum: f32,
+    step: f32,
+    precision: usize,
+) -> InspectorScalarFieldModel {
+    let average = if values.is_empty() {
+        minimum
+    } else {
+        values.iter().copied().sum::<f32>() / values.len() as f32
+    };
+    let mixed = values
+        .first()
+        .is_some_and(|first| values.iter().any(|value| (*value - *first).abs() > 0.0001));
+    InspectorScalarFieldModel {
+        value: average,
+        display_text: if mixed {
+            "Mixed".to_string()
+        } else {
+            format!("{average:.precision$}")
+        },
+        enabled: true,
+        mixed,
+        minimum,
+        maximum,
+        step,
     }
 }
 
@@ -705,14 +1386,6 @@ fn display_lines(
         format!("Transform: {}", gizmo_mode.label()),
         format!("Space: {}", gizmo_space.label()),
     ]
-}
-
-fn object_prefix(object: PresentedObjectRef) -> &'static str {
-    match object.kind {
-        PresentedObjectKind::Parametric => "[Obj]",
-        PresentedObjectKind::Voxel => "[Vox]",
-        PresentedObjectKind::Light => "[Lgt]",
-    }
 }
 
 fn object_kind_chip(object: PresentedObjectRef) -> &'static str {
@@ -764,14 +1437,7 @@ fn format_material(material: &crate::graph::scene::MaterialParams) -> String {
 }
 
 fn format_child(scene: &Scene, label: &str, child: Option<NodeId>) -> String {
-    let child_label = child
-        .and_then(|child_id| {
-            resolve_presented_object(scene, child_id)
-                .and_then(|object| scene.nodes.get(&object.host_id))
-                .map(|node| node.name.clone())
-        })
-        .unwrap_or_else(|| "(empty)".to_string());
-    format!("{label}: {child_label}")
+    format!("{label}: {}", child_name(scene, child))
 }
 
 #[cfg(test)]
@@ -786,7 +1452,7 @@ mod tests {
         let mut selection = SceneSelectionState::default();
         selection.select_single(sphere);
 
-        let model = build_scene_panel_model(&scene, &selection, "");
+        let model = build_scene_panel_model(&scene, &selection, &ScenePanelUiState::default());
 
         assert!(model
             .rows
@@ -795,36 +1461,68 @@ mod tests {
     }
 
     #[test]
-    fn scene_panel_filter_keeps_matching_rows() {
+    fn scene_panel_filter_expands_matching_ancestor_rows() {
         let mut scene = Scene::new();
         let sphere = scene.create_primitive(SdfPrimitive::Sphere);
-        let box_id = scene.create_primitive(SdfPrimitive::Box);
+        let transform = scene.create_transform(Some(sphere));
+        let mut ui = ScenePanelUiState::default();
+        ui.filter_query = "sphere".to_string();
 
-        let selection = SceneSelectionState::default();
-        let model = build_scene_panel_model(&scene, &selection, "sphere");
+        let model = build_scene_panel_model(&scene, &SceneSelectionState::default(), &ui);
 
-        assert!(model.rows.iter().any(|row| row.host_id == sphere));
-        assert!(!model.rows.iter().any(|row| row.host_id == box_id));
+        let parent_row = model
+            .rows
+            .iter()
+            .find(|row| row.object_root_id == transform)
+            .expect("transform row");
+        assert!(parent_row.expanded);
+        assert!(model
+            .rows
+            .iter()
+            .any(|row| row.host_id == sphere && row.depth == parent_row.depth + 1));
     }
 
     #[test]
-    fn inspector_reports_missing_selection_prompt() {
-        let scene = Scene::new();
-        let selection = SceneSelectionState::default();
-        let settings = Settings::default();
-        let sculpt_state = SculptState::new_inactive();
+    fn utility_maps_environment_settings() {
+        let mut settings = Settings::default();
+        settings.render.environment_source = EnvironmentSource::Hdri;
+        settings.render.hdri_path = Some("studio.hdr".to_string());
+        settings.render.environment_background_mode = EnvironmentBackgroundMode::Procedural;
 
-        let model = build_inspector_model(
-            &scene,
-            &selection,
+        let model = build_utility_model(
+            &History::new(),
+            &ReferenceImageStore::default(),
+            &ExpertPanelRegistry::default(),
             &settings,
-            &sculpt_state,
-            InteractionMode::Select,
-            &GizmoMode::Translate,
-            &GizmoSpace::Local,
         );
 
-        assert_eq!(model.title, "No selection");
-        assert!(model.property_lines[0].contains("Click an object"));
+        assert!(model.render_settings.environment_is_hdri);
+        assert_eq!(model.render_settings.hdri_path_display, "studio.hdr");
+        assert!(model.render_settings.background_is_procedural);
+    }
+
+    #[test]
+    fn tool_palette_marks_select_mode_active() {
+        let model = build_tool_palette_model(&PrimaryShellState::default());
+
+        assert!(model.select_tool.active);
+        assert!(model.brush_tools.iter().all(|tool| !tool.active));
+    }
+
+    #[test]
+    fn tool_palette_marks_active_brush() {
+        let mut shell = PrimaryShellState::default();
+        shell.interaction_mode = InteractionMode::Sculpt(BrushMode::Flatten);
+
+        let model = build_tool_palette_model(&shell);
+
+        assert!(!model.select_tool.active);
+        let active_labels = model
+            .brush_tools
+            .iter()
+            .filter(|tool| tool.active)
+            .map(|tool| tool.label.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(active_labels, vec!["Flatten"]);
     }
 }

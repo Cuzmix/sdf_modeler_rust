@@ -57,7 +57,9 @@ impl SlintHostState {
         let snapshot = build_shell_snapshot(ShellSnapshotInputs {
             scene: &self.app.doc.scene,
             selection: &self.app.ui.selection,
-            scene_filter_query: &self.app.ui.scene_tree_search,
+            scene_panel_ui: &self.app.ui.scene_panel,
+            primary_shell: &self.app.ui.primary_shell,
+            workspace: &self.app.ui.workspace,
             history: &self.app.doc.history,
             reference_images: &self.app.ui.reference_images,
             expert_panels: &self.app.ui.expert_panels,

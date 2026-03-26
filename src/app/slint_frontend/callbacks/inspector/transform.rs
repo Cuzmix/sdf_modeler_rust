@@ -32,9 +32,9 @@ fn handle_transform_edit(
                 |window| {
                     let state = window.get_inspector_panel_state();
                     [
-                        state.transform_pos_x,
-                        state.transform_pos_y,
-                        state.transform_pos_z,
+                        state.transform.pos_x.value,
+                        state.transform.pos_y.value,
+                        state.transform.pos_z.value,
                     ]
                 },
                 |app, component, next| {
@@ -52,9 +52,9 @@ fn handle_transform_edit(
                 |window| {
                     let state = window.get_inspector_panel_state();
                     [
-                        state.transform_rot_x,
-                        state.transform_rot_y,
-                        state.transform_rot_z,
+                        state.transform.rot_x.value,
+                        state.transform.rot_y.value,
+                        state.transform.rot_z.value,
                     ]
                 },
                 |app, component, next| {
@@ -72,9 +72,9 @@ fn handle_transform_edit(
                 |window| {
                     let state = window.get_inspector_panel_state();
                     [
-                        state.selected_scale_x,
-                        state.selected_scale_y,
-                        state.selected_scale_z,
+                        state.transform.scale_x.value,
+                        state.transform.scale_y.value,
+                        state.transform.scale_z.value,
                     ]
                 },
                 |app, component, next| {

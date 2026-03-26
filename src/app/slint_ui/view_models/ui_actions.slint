@@ -23,25 +23,45 @@ export enum TopBarAction {
     toggle-gizmo-space,
 }
 
+export enum ToolPaletteAction {
+    select,
+    brush-add,
+    brush-carve,
+    brush-smooth,
+    brush-flatten,
+    brush-inflate,
+    brush-grab,
+}
+
 export enum SceneToolbarAction {
     create-sphere,
     create-box,
     create-light,
     duplicate-selected,
     delete-selected,
+    start-rename-selected,
+    open-node-workspace,
+    open-light-workspace,
+    cancel-row-drag,
 }
 
 export enum SceneRowAction {
     select-row,
     toggle-row-selection,
+    toggle-row-expanded,
     toggle-row-visibility,
     toggle-row-lock,
+    begin-row-rename,
     duplicate-row,
     delete-row,
+    begin-row-drag,
+    drop-on-row,
 }
 
 export enum SceneTextAction {
     rename-selected,
+    update-rename-buffer,
+    cancel-rename,
     filter-scene,
 }
 
@@ -95,6 +115,16 @@ export enum RenderSettingsAction {
     nudge-export-resolution,
     set-export-resolution,
     set-adaptive-export,
+    set-environment-source-procedural,
+    set-environment-source-hdri,
+    pick-environment-hdri,
+    set-environment-rotation,
+    set-environment-exposure,
+    nudge-environment-bake-resolution,
+    set-environment-bake-resolution,
+    set-environment-background-environment,
+    set-environment-background-procedural,
+    set-environment-background-blur,
 }
 
 export enum ReferenceImageAction {
@@ -108,6 +138,19 @@ export enum ReferenceImageAction {
 
 export enum ImportDialogAction {
     nudge-import-resolution,
+    set-import-resolution,
     confirm-import,
     cancel-import,
+}
+
+export enum HistoryAction {
+    jump-to-entry,
+}
+
+export enum WorkspaceAction {
+    show-node-graph,
+    show-light-graph,
+    close-workspace,
+    focus-selected,
+    frame-all,
 }

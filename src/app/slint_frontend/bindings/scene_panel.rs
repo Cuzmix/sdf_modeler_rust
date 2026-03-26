@@ -2,33 +2,23 @@ use std::rc::Rc;
 
 use slint::VecModel;
 
-use crate::app::frontend_models::{HistoryEntry, ScenePanelRow, ShellSnapshot};
-use crate::app::slint_frontend::{HistoryRowView, ScenePanelState, SceneRowView, SlintHostWindow};
+use crate::app::frontend_models::{ScenePanelRow, ShellSnapshot};
+use crate::app::slint_frontend::{ScenePanelState, SceneRowView};
 
-pub(super) fn build_scene_panel_state(
-    window: &SlintHostWindow,
-    snapshot: &ShellSnapshot,
-) -> ScenePanelState {
-    let current_state = window.get_scene_panel_state();
-    let scene_rows = snapshot
-        .scene_panel
-        .rows
-        .iter()
-        .map(scene_row_view)
-        .collect::<Vec<_>>();
-    let history_rows = snapshot
-        .utility
-        .history_rows
-        .iter()
-        .map(history_row_view)
-        .collect::<Vec<_>>();
-
+pub(super) fn build_scene_panel_state(snapshot: &ShellSnapshot) -> ScenePanelState {
     ScenePanelState {
         selection_summary: selection_summary(snapshot).into(),
-        selected_name: snapshot.inspector.name.clone().into(),
-        scene_filter: current_state.scene_filter,
-        scene_rows: Rc::new(VecModel::from(scene_rows)).into(),
-        history_rows: Rc::new(VecModel::from(history_rows)).into(),
+        scene_filter: snapshot.scene_panel.filter_query.clone().into(),
+        drag_summary: drag_summary(snapshot).into(),
+        scene_rows: Rc::new(VecModel::from(
+            snapshot
+                .scene_panel
+                .rows
+                .iter()
+                .map(scene_row_view)
+                .collect::<Vec<_>>(),
+        ))
+        .into(),
     }
 }
 
@@ -41,26 +31,28 @@ fn selection_summary(snapshot: &ShellSnapshot) -> String {
     }
 }
 
-fn scene_row_view(row: &ScenePanelRow) -> SceneRowView {
-    SceneRowView {
-        label: scene_row_label(row).into(),
-        selected: row.selected,
-        hidden: row.hidden,
-        locked: row.locked,
+fn drag_summary(snapshot: &ShellSnapshot) -> String {
+    if snapshot.scene_panel.drag_active {
+        "Drag source armed. Use a row Drop action on a valid target.".to_string()
+    } else {
+        String::new()
     }
 }
 
-fn scene_row_label(row: &ScenePanelRow) -> String {
-    let indent = "  ".repeat(row.depth);
-    let visibility = if row.hidden { "[hidden] " } else { "" };
-    let locked = if row.locked { "[locked] " } else { "" };
-    let selection = if row.selected { "> " } else { "  " };
-    format!("{selection}{indent}{visibility}{locked}{}", row.label)
-}
-
-fn history_row_view(entry: &HistoryEntry) -> HistoryRowView {
-    HistoryRowView {
-        label: entry.label.clone().into(),
-        is_undo: entry.is_undo,
+fn scene_row_view(row: &ScenePanelRow) -> SceneRowView {
+    SceneRowView {
+        label: row.label.clone().into(),
+        kind_label: row.kind_label.clone().into(),
+        depth: row.depth as i32,
+        has_children: row.has_children,
+        expanded: row.expanded,
+        selected: row.selected,
+        hidden: row.hidden,
+        locked: row.locked,
+        renaming: row.renaming,
+        rename_value: row.rename_value.clone().into(),
+        dragging: row.dragging,
+        drop_allowed: row.drop_allowed,
+        drop_target: row.drop_target,
     }
 }

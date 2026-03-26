@@ -1,4 +1,11 @@
-import { ViewportDoubleClickAction, ViewportPathView, ViewportPointerAction, ViewportPointerButton, ViewportPointerPhase, ViewportScrollAction } from "view_models.slint";
+import {
+    ViewportDoubleClickAction,
+    ViewportPathView,
+    ViewportPointerAction,
+    ViewportPointerButton,
+    ViewportPointerPhase,
+    ViewportScrollAction,
+} from "view_models.slint";
 import { AppTheme } from "theme.slint";
 
 export component ViewportPanel inherits Rectangle {
@@ -25,7 +32,7 @@ export component ViewportPanel inherits Rectangle {
         image-fit: fill;
     }
 
-    for path in root.viewport_gizmo_paths : Path {
+    for path in root.viewport_gizmo_paths: Path {
         width: parent.width;
         height: parent.height;
         viewbox-width: root.viewport_gizmo_viewbox_width;
@@ -44,14 +51,8 @@ export component ViewportPanel inherits Rectangle {
 
         pointer-event(event) => {
             root.viewport_pointer_action({
-                phase: event.kind == PointerEventKind.down ? ViewportPointerPhase.down
-                    : event.kind == PointerEventKind.up ? ViewportPointerPhase.up
-                    : event.kind == PointerEventKind.cancel ? ViewportPointerPhase.cancel
-                    : ViewportPointerPhase.move,
-                button: event.button == PointerEventButton.left ? ViewportPointerButton.primary
-                    : event.button == PointerEventButton.right ? ViewportPointerButton.secondary
-                    : event.button == PointerEventButton.middle ? ViewportPointerButton.middle
-                    : ViewportPointerButton.other,
+                phase: event.kind == PointerEventKind.down ? ViewportPointerPhase.down : event.kind == PointerEventKind.up ? ViewportPointerPhase.up : event.kind == PointerEventKind.cancel ? ViewportPointerPhase.cancel : ViewportPointerPhase.move,
+                button: event.button == PointerEventButton.left ? ViewportPointerButton.primary : event.button == PointerEventButton.right ? ViewportPointerButton.secondary : event.button == PointerEventButton.middle ? ViewportPointerButton.middle : ViewportPointerButton.other,
                 x: self.mouse_x / 1px,
                 y: self.mouse_y / 1px,
                 modifiers: {

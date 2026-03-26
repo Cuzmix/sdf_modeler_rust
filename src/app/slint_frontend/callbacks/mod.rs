@@ -11,9 +11,11 @@ mod inspector;
 mod mutation;
 mod scene;
 mod scene_lookup;
+mod tool_palette;
 mod utilities;
 mod vector_axes;
 mod viewport;
+mod workspace;
 
 pub(super) fn install_callbacks(
     window: &SlintHostWindow,
@@ -22,7 +24,9 @@ pub(super) fn install_callbacks(
 ) {
     let context = context::CallbackContext::new(window, host, active_timer);
     scene::install(window, &context);
+    tool_palette::install(window, &context);
     inspector::install(window, &context);
     utilities::install(window, &context);
+    workspace::install(window, &context);
     viewport::install(window, &context);
 }

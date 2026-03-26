@@ -1,0 +1,49 @@
+import { Button, HorizontalBox, ScrollView, VerticalBox } from "std-widgets.slint";
+import { AppTheme } from "theme.slint";
+import { WorkspaceAction, WorkspacePanelState, WorkspaceSummaryRowView } from "view_models.slint";
+
+component WorkspaceSection inherits VerticalBox {
+    in property <string> title;
+    in property <[WorkspaceSummaryRowView]> rows;
+
+    spacing: AppTheme.section_spacing;
+
+    Text { text: title; }
+    for row in rows : Text { text: row.label + ": " + row.value; wrap: word-wrap; }
+}
+
+export component WorkspacePanel inherits Rectangle {
+    in property <WorkspacePanelState> state;
+
+    callback workspace_action(action: WorkspaceAction);
+
+    background: AppTheme.panel_background;
+    height: state.visible ? 220px : 0px;
+    visible: state.visible;
+
+    ScrollView {
+        width: parent.width;
+        height: parent.height;
+
+        VerticalBox {
+            spacing: AppTheme.section_spacing;
+
+            HorizontalBox {
+                spacing: AppTheme.section_spacing;
+                Button { text: root.state.node_graph_active ? "Node Graph*" : "Node Graph"; clicked => { root.workspace_action(WorkspaceAction.show-node-graph); } }
+                Button { text: root.state.light_graph_active ? "Light Graph*" : "Light Graph"; clicked => { root.workspace_action(WorkspaceAction.show-light-graph); } }
+                Button { text: "Focus"; clicked => { root.workspace_action(WorkspaceAction.focus-selected); } }
+                Button { text: "Frame"; clicked => { root.workspace_action(WorkspaceAction.frame-all); } }
+                Button { text: "Close"; clicked => { root.workspace_action(WorkspaceAction.close-workspace); } }
+            }
+
+            Text { text: root.state.route_label; }
+            Text { text: root.state.selection_summary; wrap: word-wrap; }
+            Text { text: root.state.detail_text; wrap: word-wrap; }
+
+            WorkspaceSection { title: "Context"; rows: root.state.context_rows; }
+            WorkspaceSection { title: "Inputs"; rows: root.state.input_rows; }
+            WorkspaceSection { title: "Outputs"; rows: root.state.output_rows; }
+        }
+    }
+}

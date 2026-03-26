@@ -27,7 +27,7 @@ fn handle_operation_edit(
                 context,
                 mode,
                 value,
-                |window| window.get_inspector_panel_state().operation_smooth_k,
+                |window| window.get_inspector_panel_state().operation.smooth_k.value,
                 |app, next| {
                     app.set_selected_operation_smooth_k(next);
                 },
@@ -39,7 +39,7 @@ fn handle_operation_edit(
                 context,
                 mode,
                 value,
-                |window| window.get_inspector_panel_state().operation_steps,
+                |window| window.get_inspector_panel_state().operation.steps.value,
                 |app, next| {
                     app.set_selected_operation_steps(next);
                 },
@@ -51,7 +51,13 @@ fn handle_operation_edit(
                 context,
                 mode,
                 value,
-                |window| window.get_inspector_panel_state().operation_color_blend,
+                |window| {
+                    window
+                        .get_inspector_panel_state()
+                        .operation
+                        .color_blend
+                        .value
+                },
                 |app, next| {
                     app.set_selected_operation_color_blend(next);
                 },

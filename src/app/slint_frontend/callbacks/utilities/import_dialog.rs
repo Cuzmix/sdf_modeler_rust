@@ -28,6 +28,14 @@ fn handle_import_dialog_action(
             dialog.resolution =
                 (dialog.resolution as i32 + value as i32).clamp(8, max_resolution) as u32;
         }
+        ImportDialogAction::SetImportResolution => {
+            let Some(dialog) = host_state.app.ui.import_dialog.as_mut() else {
+                return;
+            };
+            dialog.use_auto = false;
+            let max_resolution = host_state.app.settings.max_sculpt_resolution.max(8);
+            dialog.resolution = (value.max(8.0) as u32).min(max_resolution);
+        }
         ImportDialogAction::ConfirmImport => {
             let resolution = host_state
                 .app
