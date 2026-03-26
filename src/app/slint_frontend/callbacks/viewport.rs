@@ -1,93 +1,96 @@
 use super::CallbackContext;
-use crate::app::slint_frontend::SlintHostWindow;
+use crate::app::slint_frontend::{
+    SlintHostWindow, ViewportPointerAction, ViewportPointerButton, ViewportPointerPhase,
+};
 use crate::keymap::KeyboardModifiers;
 
 pub(super) fn install(window: &SlintHostWindow, context: &CallbackContext) {
     {
         let context = context.clone();
-        window.on_viewport_pointer_event(move |event, x, y| {
-            let modifiers = KeyboardModifiers {
-                ctrl: event.modifiers.control,
-                shift: event.modifiers.shift,
-                alt: event.modifiers.alt,
-            };
-            match format!("{:?}", event.kind).as_str() {
-                "Down" => context
-                    .host
-                    .borrow_mut()
-                    .viewport_input
-                    .handle_pointer_down(
-                        x,
-                        y,
-                        pointer_button_to_code(&event.button),
-                        modifiers,
-                        event.is_touch,
+        window.on_viewport_pointer_action(move |action| {
+            apply_viewport_input(&context, |viewport_input| {
+                handle_pointer_action(viewport_input, action);
+            });
+        });
+    }
+
+    {
+        let context = context.clone();
+        window.on_viewport_scroll_action(move |action| {
+            apply_viewport_input(&context, |viewport_input| {
+                viewport_input.handle_scroll(
+                    action.delta_x,
+                    action.delta_y,
+                    keyboard_modifiers(
+                        action.modifiers.ctrl,
+                        action.modifiers.shift,
+                        action.modifiers.alt,
                     ),
-                "Up" => context.host.borrow_mut().viewport_input.handle_pointer_up(
-                    x,
-                    y,
-                    pointer_button_to_code(&event.button),
-                    modifiers,
-                    event.is_touch,
-                ),
-                "Cancel" => {
-                    context
-                        .host
-                        .borrow_mut()
-                        .viewport_input
-                        .handle_pointer_cancel();
-                }
-                "Move" => context
-                    .host
-                    .borrow_mut()
-                    .viewport_input
-                    .handle_pointer_move(x, y, modifiers, event.is_touch),
-                _ => {}
-            }
-            if let Some(window) = context.window_weak.upgrade() {
-                super::super::drive_host_tick(&window, &context.host, &context.active_timer);
-            }
+                );
+            });
         });
     }
 
     {
         let context = context.clone();
-        window.on_viewport_scroll_event(move |event| {
-            context.host.borrow_mut().viewport_input.handle_scroll(
-                event.delta_x,
-                event.delta_y,
-                KeyboardModifiers {
-                    ctrl: event.modifiers.control,
-                    shift: event.modifiers.shift,
-                    alt: event.modifiers.alt,
-                },
-            );
-            if let Some(window) = context.window_weak.upgrade() {
-                super::super::drive_host_tick(&window, &context.host, &context.active_timer);
-            }
-        });
-    }
-
-    {
-        let context = context.clone();
-        window.on_viewport_double_clicked(move |x, y| {
-            context
-                .host
-                .borrow_mut()
-                .viewport_input
-                .handle_double_click(x, y);
-            if let Some(window) = context.window_weak.upgrade() {
-                super::super::drive_host_tick(&window, &context.host, &context.active_timer);
-            }
+        window.on_viewport_double_click(move |action| {
+            apply_viewport_input(&context, |viewport_input| {
+                viewport_input.handle_double_click(action.x, action.y);
+            });
         });
     }
 }
 
-fn pointer_button_to_code(button: &impl std::fmt::Debug) -> i32 {
-    match format!("{button:?}").as_str() {
-        "Left" => crate::app::slint_bridge::POINTER_BUTTON_PRIMARY,
-        "Right" => crate::app::slint_bridge::POINTER_BUTTON_SECONDARY,
-        "Middle" => crate::app::slint_bridge::POINTER_BUTTON_MIDDLE,
-        _ => crate::app::slint_bridge::POINTER_BUTTON_OTHER,
+fn apply_viewport_input<F>(context: &CallbackContext, mutate: F)
+where
+    F: FnOnce(&mut crate::app::slint_bridge::SlintViewportInputState),
+{
+    mutate(&mut context.host.borrow_mut().viewport_input);
+    if let Some(window) = context.window_weak.upgrade() {
+        super::super::drive_host_tick(&window, &context.host, &context.active_timer);
+    }
+}
+
+fn handle_pointer_action(
+    viewport_input: &mut crate::app::slint_bridge::SlintViewportInputState,
+    action: ViewportPointerAction,
+) {
+    let modifiers = keyboard_modifiers(
+        action.modifiers.ctrl,
+        action.modifiers.shift,
+        action.modifiers.alt,
+    );
+    match action.phase {
+        ViewportPointerPhase::Down => viewport_input.handle_pointer_down(
+            action.x,
+            action.y,
+            pointer_button_to_code(action.button),
+            modifiers,
+            action.is_touch,
+        ),
+        ViewportPointerPhase::Up => viewport_input.handle_pointer_up(
+            action.x,
+            action.y,
+            pointer_button_to_code(action.button),
+            modifiers,
+            action.is_touch,
+        ),
+        ViewportPointerPhase::Cancel => viewport_input.handle_pointer_cancel(),
+        ViewportPointerPhase::Move => {
+            viewport_input.handle_pointer_move(action.x, action.y, modifiers, action.is_touch);
+        }
+    }
+}
+
+fn keyboard_modifiers(ctrl: bool, shift: bool, alt: bool) -> KeyboardModifiers {
+    KeyboardModifiers { ctrl, shift, alt }
+}
+
+fn pointer_button_to_code(button: ViewportPointerButton) -> i32 {
+    match button {
+        ViewportPointerButton::Primary => crate::app::slint_bridge::POINTER_BUTTON_PRIMARY,
+        ViewportPointerButton::Secondary => crate::app::slint_bridge::POINTER_BUTTON_SECONDARY,
+        ViewportPointerButton::Middle => crate::app::slint_bridge::POINTER_BUTTON_MIDDLE,
+        ViewportPointerButton::Other => crate::app::slint_bridge::POINTER_BUTTON_OTHER,
     }
 }

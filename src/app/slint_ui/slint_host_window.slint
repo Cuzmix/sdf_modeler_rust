@@ -1,5 +1,5 @@
 import { HorizontalBox, VerticalBox } from "std-widgets.slint";
-import { ImportDialogAction, InspectorEditMode, InspectorPanelState, LightEditKind, MaterialEditKind, OperationEditKind, ReferenceImageAction, RenderSettingsAction, ScenePanelState, SceneRowAction, SceneTextAction, SceneToolbarAction, SculptEditKind, TopBarAction, TopBarState, TransformEditKind, UtilityPanelState, ViewportPathView } from "view_models.slint";
+import { ImportDialogAction, InspectorEditMode, InspectorPanelState, LightEditKind, MaterialEditKind, OperationEditKind, ReferenceImageAction, RenderSettingsAction, ScenePanelState, SceneRowAction, SceneTextAction, SceneToolbarAction, SculptEditKind, TopBarAction, TopBarState, TransformEditKind, UtilityPanelState, ViewportDoubleClickAction, ViewportPathView, ViewportPointerAction, ViewportScrollAction } from "view_models.slint";
 import { AppTheme } from "theme.slint";
 import { RightSidebar } from "right_sidebar.slint";
 import { ScenePanel } from "scene_panel.slint";
@@ -34,9 +34,9 @@ export component SlintHostWindow inherits Window {
     callback reference_image_action(action: ReferenceImageAction, index: int, value: float);
     callback render_settings_action(action: RenderSettingsAction, value: float);
     callback import_dialog_action(action: ImportDialogAction, value: float);
-    callback viewport_pointer_event(event: PointerEvent, x: float, y: float);
-    callback viewport_scroll_event(event: PointerScrollEvent);
-    callback viewport_double_clicked(x: float, y: float);
+    callback viewport_pointer_action(action: ViewportPointerAction);
+    callback viewport_scroll_action(action: ViewportScrollAction);
+    callback viewport_double_click(action: ViewportDoubleClickAction);
 
     width: 1480px;
     height: 920px;
@@ -65,9 +65,9 @@ export component SlintHostWindow inherits Window {
                 viewport_gizmo_viewbox_width: root.viewport_gizmo_viewbox_width;
                 viewport_gizmo_viewbox_height: root.viewport_gizmo_viewbox_height;
                 viewport_gizmo_paths: root.viewport_gizmo_paths;
-                viewport_pointer_event(event, x, y) => { root.viewport_pointer_event(event, x, y); }
-                viewport_scroll_event(event) => { root.viewport_scroll_event(event); }
-                viewport_double_clicked(x, y) => { root.viewport_double_clicked(x, y); }
+                viewport_pointer_action(action) => { root.viewport_pointer_action(action); }
+                viewport_scroll_action(action) => { root.viewport_scroll_action(action); }
+                viewport_double_click(action) => { root.viewport_double_click(action); }
             }
 
             RightSidebar {

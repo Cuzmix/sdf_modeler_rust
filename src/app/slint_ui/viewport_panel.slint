@@ -1,4 +1,4 @@
-import { ViewportPathView } from "view_models.slint";
+import { ViewportDoubleClickAction, ViewportPathView, ViewportPointerAction, ViewportPointerButton, ViewportPointerPhase, ViewportScrollAction } from "view_models.slint";
 import { AppTheme } from "theme.slint";
 
 export component ViewportPanel inherits Rectangle {
@@ -10,9 +10,9 @@ export component ViewportPanel inherits Rectangle {
     out property <float> viewport_width: viewport_frame.width / 1px;
     out property <float> viewport_height: viewport_frame.height / 1px;
 
-    callback viewport_pointer_event(event: PointerEvent, x: float, y: float);
-    callback viewport_scroll_event(event: PointerScrollEvent);
-    callback viewport_double_clicked(x: float, y: float);
+    callback viewport_pointer_action(action: ViewportPointerAction);
+    callback viewport_scroll_action(action: ViewportScrollAction);
+    callback viewport_double_click(action: ViewportDoubleClickAction);
 
     background: AppTheme.viewport_background;
     horizontal-stretch: 1;
@@ -43,16 +43,44 @@ export component ViewportPanel inherits Rectangle {
         height: parent.height;
 
         pointer-event(event) => {
-            root.viewport_pointer_event(event, self.mouse_x / 1px, self.mouse_y / 1px);
+            root.viewport_pointer_action({
+                phase: event.kind == PointerEventKind.down ? ViewportPointerPhase.down
+                    : event.kind == PointerEventKind.up ? ViewportPointerPhase.up
+                    : event.kind == PointerEventKind.cancel ? ViewportPointerPhase.cancel
+                    : ViewportPointerPhase.move,
+                button: event.button == PointerEventButton.left ? ViewportPointerButton.primary
+                    : event.button == PointerEventButton.right ? ViewportPointerButton.secondary
+                    : event.button == PointerEventButton.middle ? ViewportPointerButton.middle
+                    : ViewportPointerButton.other,
+                x: self.mouse_x / 1px,
+                y: self.mouse_y / 1px,
+                modifiers: {
+                    ctrl: event.modifiers.control,
+                    shift: event.modifiers.shift,
+                    alt: event.modifiers.alt,
+                },
+                is_touch: false,
+            });
         }
 
         scroll-event(event) => {
-            root.viewport_scroll_event(event);
+            root.viewport_scroll_action({
+                delta_x: event.delta_x / 1px,
+                delta_y: event.delta_y / 1px,
+                modifiers: {
+                    ctrl: event.modifiers.control,
+                    shift: event.modifiers.shift,
+                    alt: event.modifiers.alt,
+                },
+            });
             accept
         }
 
         double-clicked => {
-            root.viewport_double_clicked(self.mouse_x / 1px, self.mouse_y / 1px);
+            root.viewport_double_click({
+                x: self.mouse_x / 1px,
+                y: self.mouse_y / 1px,
+            });
         }
     }
 }

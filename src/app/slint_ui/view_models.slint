@@ -26,6 +26,46 @@ export struct ViewportPathView {
     stroke_width: float,
 }
 
+export struct ViewportModifiers {
+    ctrl: bool,
+    shift: bool,
+    alt: bool,
+}
+
+export enum ViewportPointerPhase {
+    down,
+    up,
+    move,
+    cancel,
+}
+
+export enum ViewportPointerButton {
+    other,
+    primary,
+    secondary,
+    middle,
+}
+
+export struct ViewportPointerAction {
+    phase: ViewportPointerPhase,
+    button: ViewportPointerButton,
+    x: float,
+    y: float,
+    modifiers: ViewportModifiers,
+    is_touch: bool,
+}
+
+export struct ViewportScrollAction {
+    delta_x: float,
+    delta_y: float,
+    modifiers: ViewportModifiers,
+}
+
+export struct ViewportDoubleClickAction {
+    x: float,
+    y: float,
+}
+
 export struct TopBarState {
     viewport_status: string,
     toast_text: string,
