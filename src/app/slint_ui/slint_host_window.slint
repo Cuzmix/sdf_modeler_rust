@@ -1,5 +1,5 @@
 import { HorizontalBox, VerticalBox } from "std-widgets.slint";
-import { HistoryRowView, ReferenceRowView, SceneRowView, ViewportPathView } from "view_models.slint";
+import { HistoryRowView, InspectorEditKind, InspectorEditMode, ReferenceRowView, SceneAction, SceneRowView, TopBarAction, UtilityAction, ViewportPathView } from "view_models.slint";
 import { AppTheme } from "theme.slint";
 import { RightSidebar } from "right_sidebar.slint";
 import { ScenePanel } from "scene_panel.slint";
@@ -86,92 +86,10 @@ export component SlintHostWindow inherits Window {
     out property <float> viewport_width: viewport_panel.viewport_width;
     out property <float> viewport_height: viewport_panel.viewport_height;
 
-    callback new_scene();
-    callback open_project();
-    callback save_project();
-    callback import_mesh();
-    callback export_mesh();
-    callback take_screenshot();
-    callback add_reference_image();
-    callback toggle_all_reference_images();
-    callback frame_all();
-    callback focus_selected();
-    callback undo();
-    callback redo();
-    callback camera_front();
-    callback camera_top();
-    callback camera_right();
-    callback toggle_ortho();
-    callback toggle_measurement();
-    callback toggle_turntable();
-    callback set_gizmo_translate();
-    callback set_gizmo_rotate();
-    callback set_gizmo_scale();
-    callback toggle_gizmo_space();
-    callback scene_filter_edited(text: string);
-    callback select_scene_row(index: int);
-    callback toggle_scene_row(index: int);
-    callback toggle_scene_visibility(index: int);
-    callback toggle_scene_lock(index: int);
-    callback duplicate_scene_row(index: int);
-    callback delete_scene_row(index: int);
-    callback create_sphere();
-    callback create_box();
-    callback create_light();
-    callback duplicate_selected();
-    callback delete_selected();
-    callback rename_selected(text: string);
-    callback nudge_selected_position(axis: int, delta: float);
-    callback nudge_selected_rotation(axis: int, delta: float);
-    callback nudge_selected_scale(axis: int, delta: float);
-    callback nudge_selected_material_color(axis: int, delta: float);
-    callback nudge_selected_material_roughness(delta: float);
-    callback nudge_selected_material_metallic(delta: float);
-    callback set_selected_material_roughness(value: float);
-    callback set_selected_material_metallic(value: float);
-    callback nudge_selected_operation_smooth_k(delta: float);
-    callback nudge_selected_operation_steps(delta: float);
-    callback nudge_selected_operation_color_blend(delta: float);
-    callback set_selected_operation_smooth_k(value: float);
-    callback set_selected_operation_steps(value: float);
-    callback set_selected_operation_color_blend(value: float);
-    callback nudge_selected_sculpt_resolution(delta: int);
-    callback nudge_selected_sculpt_layer_intensity(delta: float);
-    callback nudge_selected_brush_radius(delta: float);
-    callback nudge_selected_brush_strength(delta: float);
-    callback set_selected_sculpt_resolution(value: int);
-    callback set_selected_sculpt_layer_intensity(value: float);
-    callback set_selected_brush_radius(value: float);
-    callback set_selected_brush_strength(value: float);
-    callback nudge_selected_light_color(axis: int, delta: float);
-    callback nudge_selected_light_intensity(delta: float);
-    callback nudge_selected_light_range(delta: float);
-    callback toggle_selected_light_shadows();
-    callback toggle_selected_light_volumetric();
-    callback nudge_selected_light_volumetric_density(delta: float);
-    callback set_selected_light_intensity(value: float);
-    callback set_selected_light_range(value: float);
-    callback set_selected_light_shadows(value: bool);
-    callback set_selected_light_volumetric(value: bool);
-    callback set_selected_light_volumetric_density(value: float);
-    callback set_render_show_grid(value: bool);
-    callback set_render_show_node_labels(value: bool);
-    callback set_render_show_bounding_box(value: bool);
-    callback set_render_show_light_gizmos(value: bool);
-    callback set_render_shadows_enabled(value: bool);
-    callback set_render_ao_enabled(value: bool);
-    callback nudge_export_resolution(delta: int);
-    callback set_export_resolution(value: int);
-    callback set_adaptive_export(value: bool);
-    callback toggle_reference_visibility(index: int);
-    callback toggle_reference_lock(index: int);
-    callback cycle_reference_plane(index: int);
-    callback set_reference_opacity(index: int, value: float);
-    callback set_reference_scale(index: int, value: float);
-    callback remove_reference_image(index: int);
-    callback nudge_import_resolution(delta: int);
-    callback confirm_import();
-    callback cancel_import();
+    callback top_bar_action(action: TopBarAction);
+    callback scene_action(action: SceneAction, index: int, text: string);
+    callback inspector_edit(kind: InspectorEditKind, mode: InspectorEditMode, axis: int, value: float);
+    callback utility_action(action: UtilityAction, index: int, value: float);
     callback viewport_pointer_event(event: PointerEvent, x: float, y: float);
     callback viewport_scroll_event(event: PointerScrollEvent);
     callback viewport_double_clicked(x: float, y: float);
@@ -193,28 +111,7 @@ export component SlintHostWindow inherits Window {
             camera_is_ortho: root.camera_is_ortho;
             measurement_mode_active: root.measurement_mode_active;
             turntable_active: root.turntable_active;
-            new_scene => { root.new_scene(); }
-            open_project => { root.open_project(); }
-            save_project => { root.save_project(); }
-            import_mesh => { root.import_mesh(); }
-            export_mesh => { root.export_mesh(); }
-            take_screenshot => { root.take_screenshot(); }
-            add_reference_image => { root.add_reference_image(); }
-            toggle_all_reference_images => { root.toggle_all_reference_images(); }
-            frame_all => { root.frame_all(); }
-            focus_selected => { root.focus_selected(); }
-            undo => { root.undo(); }
-            redo => { root.redo(); }
-            camera_front => { root.camera_front(); }
-            camera_top => { root.camera_top(); }
-            camera_right => { root.camera_right(); }
-            toggle_ortho => { root.toggle_ortho(); }
-            toggle_measurement => { root.toggle_measurement(); }
-            toggle_turntable => { root.toggle_turntable(); }
-            set_gizmo_translate => { root.set_gizmo_translate(); }
-            set_gizmo_rotate => { root.set_gizmo_rotate(); }
-            set_gizmo_scale => { root.set_gizmo_scale(); }
-            toggle_gizmo_space => { root.toggle_gizmo_space(); }
+            perform_action(action) => { root.top_bar_action(action); }
         }
 
         HorizontalBox {
@@ -227,19 +124,7 @@ export component SlintHostWindow inherits Window {
                 scene_filter: root.scene_filter;
                 scene_rows: root.scene_rows;
                 history_rows: root.history_rows;
-                create_sphere => { root.create_sphere(); }
-                create_box => { root.create_box(); }
-                create_light => { root.create_light(); }
-                duplicate_selected => { root.duplicate_selected(); }
-                delete_selected => { root.delete_selected(); }
-                rename_selected(text) => { root.rename_selected(text); }
-                scene_filter_edited(text) => { root.scene_filter_edited(text); }
-                select_scene_row(index) => { root.select_scene_row(index); }
-                toggle_scene_row(index) => { root.toggle_scene_row(index); }
-                toggle_scene_visibility(index) => { root.toggle_scene_visibility(index); }
-                toggle_scene_lock(index) => { root.toggle_scene_lock(index); }
-                duplicate_scene_row(index) => { root.duplicate_scene_row(index); }
-                delete_scene_row(index) => { root.delete_scene_row(index); }
+                perform_action(action, index, text) => { root.scene_action(action, index, text); }
             }
 
             viewport_panel := ViewportPanel {
@@ -306,57 +191,8 @@ export component SlintHostWindow inherits Window {
                 show_import_dialog: root.show_import_dialog;
                 import_summary: root.import_summary;
                 import_resolution: root.import_resolution;
-                nudge_selected_position(axis, delta) => { root.nudge_selected_position(axis, delta); }
-                nudge_selected_rotation(axis, delta) => { root.nudge_selected_rotation(axis, delta); }
-                nudge_selected_scale(axis, delta) => { root.nudge_selected_scale(axis, delta); }
-                nudge_selected_material_color(axis, delta) => { root.nudge_selected_material_color(axis, delta); }
-                nudge_selected_material_roughness(delta) => { root.nudge_selected_material_roughness(delta); }
-                nudge_selected_material_metallic(delta) => { root.nudge_selected_material_metallic(delta); }
-                set_selected_material_roughness(value) => { root.set_selected_material_roughness(value); }
-                set_selected_material_metallic(value) => { root.set_selected_material_metallic(value); }
-                nudge_selected_operation_smooth_k(delta) => { root.nudge_selected_operation_smooth_k(delta); }
-                nudge_selected_operation_steps(delta) => { root.nudge_selected_operation_steps(delta); }
-                nudge_selected_operation_color_blend(delta) => { root.nudge_selected_operation_color_blend(delta); }
-                set_selected_operation_smooth_k(value) => { root.set_selected_operation_smooth_k(value); }
-                set_selected_operation_steps(value) => { root.set_selected_operation_steps(value); }
-                set_selected_operation_color_blend(value) => { root.set_selected_operation_color_blend(value); }
-                nudge_selected_sculpt_resolution(delta) => { root.nudge_selected_sculpt_resolution(delta); }
-                nudge_selected_sculpt_layer_intensity(delta) => { root.nudge_selected_sculpt_layer_intensity(delta); }
-                nudge_selected_brush_radius(delta) => { root.nudge_selected_brush_radius(delta); }
-                nudge_selected_brush_strength(delta) => { root.nudge_selected_brush_strength(delta); }
-                set_selected_sculpt_resolution(value) => { root.set_selected_sculpt_resolution(value); }
-                set_selected_sculpt_layer_intensity(value) => { root.set_selected_sculpt_layer_intensity(value); }
-                set_selected_brush_radius(value) => { root.set_selected_brush_radius(value); }
-                set_selected_brush_strength(value) => { root.set_selected_brush_strength(value); }
-                nudge_selected_light_color(axis, delta) => { root.nudge_selected_light_color(axis, delta); }
-                nudge_selected_light_intensity(delta) => { root.nudge_selected_light_intensity(delta); }
-                nudge_selected_light_range(delta) => { root.nudge_selected_light_range(delta); }
-                toggle_selected_light_shadows => { root.toggle_selected_light_shadows(); }
-                toggle_selected_light_volumetric => { root.toggle_selected_light_volumetric(); }
-                nudge_selected_light_volumetric_density(delta) => { root.nudge_selected_light_volumetric_density(delta); }
-                set_selected_light_intensity(value) => { root.set_selected_light_intensity(value); }
-                set_selected_light_range(value) => { root.set_selected_light_range(value); }
-                set_selected_light_shadows(value) => { root.set_selected_light_shadows(value); }
-                set_selected_light_volumetric(value) => { root.set_selected_light_volumetric(value); }
-                set_selected_light_volumetric_density(value) => { root.set_selected_light_volumetric_density(value); }
-                toggle_reference_visibility(index) => { root.toggle_reference_visibility(index); }
-                toggle_reference_lock(index) => { root.toggle_reference_lock(index); }
-                cycle_reference_plane(index) => { root.cycle_reference_plane(index); }
-                set_reference_opacity(index, value) => { root.set_reference_opacity(index, value); }
-                set_reference_scale(index, value) => { root.set_reference_scale(index, value); }
-                remove_reference_image(index) => { root.remove_reference_image(index); }
-                set_render_show_grid(value) => { root.set_render_show_grid(value); }
-                set_render_show_node_labels(value) => { root.set_render_show_node_labels(value); }
-                set_render_show_bounding_box(value) => { root.set_render_show_bounding_box(value); }
-                set_render_show_light_gizmos(value) => { root.set_render_show_light_gizmos(value); }
-                set_render_shadows_enabled(value) => { root.set_render_shadows_enabled(value); }
-                set_render_ao_enabled(value) => { root.set_render_ao_enabled(value); }
-                nudge_export_resolution(delta) => { root.nudge_export_resolution(delta); }
-                set_export_resolution(value) => { root.set_export_resolution(value); }
-                set_adaptive_export(value) => { root.set_adaptive_export(value); }
-                nudge_import_resolution(delta) => { root.nudge_import_resolution(delta); }
-                confirm_import => { root.confirm_import(); }
-                cancel_import => { root.cancel_import(); }
+                edit_inspector(kind, mode, axis, value) => { root.inspector_edit(kind, mode, axis, value); }
+                perform_utility_action(action, index, value) => { root.utility_action(action, index, value); }
             }
         }
     }

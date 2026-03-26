@@ -1,6 +1,7 @@
 import { CheckBox, Slider, SpinBox, VerticalBox } from "std-widgets.slint";
 import { NudgeRow } from "nudge_row.slint";
 import { AppTheme } from "theme.slint";
+import { InspectorEditKind, InspectorEditMode } from "view_models.slint";
 
 export component InspectorPanel inherits VerticalBox {
     in property <string> inspector_title;
@@ -45,39 +46,7 @@ export component InspectorPanel inherits VerticalBox {
     in property <bool> light_volumetric;
     in property <float> light_volumetric_density;
 
-    callback nudge_selected_position(axis: int, delta: float);
-    callback nudge_selected_rotation(axis: int, delta: float);
-    callback nudge_selected_scale(axis: int, delta: float);
-    callback nudge_selected_material_color(axis: int, delta: float);
-    callback nudge_selected_material_roughness(delta: float);
-    callback nudge_selected_material_metallic(delta: float);
-    callback set_selected_material_roughness(value: float);
-    callback set_selected_material_metallic(value: float);
-    callback nudge_selected_operation_smooth_k(delta: float);
-    callback nudge_selected_operation_steps(delta: float);
-    callback nudge_selected_operation_color_blend(delta: float);
-    callback set_selected_operation_smooth_k(value: float);
-    callback set_selected_operation_steps(value: float);
-    callback set_selected_operation_color_blend(value: float);
-    callback nudge_selected_sculpt_resolution(delta: int);
-    callback nudge_selected_sculpt_layer_intensity(delta: float);
-    callback nudge_selected_brush_radius(delta: float);
-    callback nudge_selected_brush_strength(delta: float);
-    callback set_selected_sculpt_resolution(value: int);
-    callback set_selected_sculpt_layer_intensity(value: float);
-    callback set_selected_brush_radius(value: float);
-    callback set_selected_brush_strength(value: float);
-    callback nudge_selected_light_color(axis: int, delta: float);
-    callback nudge_selected_light_intensity(delta: float);
-    callback nudge_selected_light_range(delta: float);
-    callback toggle_selected_light_shadows();
-    callback toggle_selected_light_volumetric();
-    callback nudge_selected_light_volumetric_density(delta: float);
-    callback set_selected_light_intensity(value: float);
-    callback set_selected_light_range(value: float);
-    callback set_selected_light_shadows(value: bool);
-    callback set_selected_light_volumetric(value: bool);
-    callback set_selected_light_volumetric_density(value: float);
+    callback edit_inspector(kind: InspectorEditKind, mode: InspectorEditMode, axis: int, value: float);
 
     spacing: AppTheme.section_spacing;
 
@@ -89,69 +58,69 @@ export component InspectorPanel inherits VerticalBox {
     if root.has_transform : VerticalBox {
         spacing: AppTheme.section_spacing;
         Text { text: "Transform"; }
-        NudgeRow { minus_label: "PX-"; value_label: "X " + root.transform_pos_x; plus_label: "PX+"; step_down => { root.nudge_selected_position(0, -0.1); } step_up => { root.nudge_selected_position(0, 0.1); } }
-        NudgeRow { minus_label: "PY-"; value_label: "Y " + root.transform_pos_y; plus_label: "PY+"; step_down => { root.nudge_selected_position(1, -0.1); } step_up => { root.nudge_selected_position(1, 0.1); } }
-        NudgeRow { minus_label: "PZ-"; value_label: "Z " + root.transform_pos_z; plus_label: "PZ+"; step_down => { root.nudge_selected_position(2, -0.1); } step_up => { root.nudge_selected_position(2, 0.1); } }
-        NudgeRow { minus_label: "RX-"; value_label: "RX " + root.transform_rot_x; plus_label: "RX+"; step_down => { root.nudge_selected_rotation(0, -5); } step_up => { root.nudge_selected_rotation(0, 5); } }
-        NudgeRow { minus_label: "RY-"; value_label: "RY " + root.transform_rot_y; plus_label: "RY+"; step_down => { root.nudge_selected_rotation(1, -5); } step_up => { root.nudge_selected_rotation(1, 5); } }
-        NudgeRow { minus_label: "RZ-"; value_label: "RZ " + root.transform_rot_z; plus_label: "RZ+"; step_down => { root.nudge_selected_rotation(2, -5); } step_up => { root.nudge_selected_rotation(2, 5); } }
+        NudgeRow { minus_label: "PX-"; value_label: "X " + root.transform_pos_x; plus_label: "PX+"; step_down => { root.edit_inspector(InspectorEditKind.position, InspectorEditMode.nudge, 0, -0.1); } step_up => { root.edit_inspector(InspectorEditKind.position, InspectorEditMode.nudge, 0, 0.1); } }
+        NudgeRow { minus_label: "PY-"; value_label: "Y " + root.transform_pos_y; plus_label: "PY+"; step_down => { root.edit_inspector(InspectorEditKind.position, InspectorEditMode.nudge, 1, -0.1); } step_up => { root.edit_inspector(InspectorEditKind.position, InspectorEditMode.nudge, 1, 0.1); } }
+        NudgeRow { minus_label: "PZ-"; value_label: "Z " + root.transform_pos_z; plus_label: "PZ+"; step_down => { root.edit_inspector(InspectorEditKind.position, InspectorEditMode.nudge, 2, -0.1); } step_up => { root.edit_inspector(InspectorEditKind.position, InspectorEditMode.nudge, 2, 0.1); } }
+        NudgeRow { minus_label: "RX-"; value_label: "RX " + root.transform_rot_x; plus_label: "RX+"; step_down => { root.edit_inspector(InspectorEditKind.rotation, InspectorEditMode.nudge, 0, -5); } step_up => { root.edit_inspector(InspectorEditKind.rotation, InspectorEditMode.nudge, 0, 5); } }
+        NudgeRow { minus_label: "RY-"; value_label: "RY " + root.transform_rot_y; plus_label: "RY+"; step_down => { root.edit_inspector(InspectorEditKind.rotation, InspectorEditMode.nudge, 1, -5); } step_up => { root.edit_inspector(InspectorEditKind.rotation, InspectorEditMode.nudge, 1, 5); } }
+        NudgeRow { minus_label: "RZ-"; value_label: "RZ " + root.transform_rot_z; plus_label: "RZ+"; step_down => { root.edit_inspector(InspectorEditKind.rotation, InspectorEditMode.nudge, 2, -5); } step_up => { root.edit_inspector(InspectorEditKind.rotation, InspectorEditMode.nudge, 2, 5); } }
 
         if root.can_scale : VerticalBox {
             spacing: AppTheme.section_spacing;
-            NudgeRow { minus_label: "SX-"; value_label: "SX " + root.selected_scale_x; plus_label: "SX+"; step_down => { root.nudge_selected_scale(0, -0.1); } step_up => { root.nudge_selected_scale(0, 0.1); } }
-            NudgeRow { minus_label: "SY-"; value_label: "SY " + root.selected_scale_y; plus_label: "SY+"; step_down => { root.nudge_selected_scale(1, -0.1); } step_up => { root.nudge_selected_scale(1, 0.1); } }
-            NudgeRow { minus_label: "SZ-"; value_label: "SZ " + root.selected_scale_z; plus_label: "SZ+"; step_down => { root.nudge_selected_scale(2, -0.1); } step_up => { root.nudge_selected_scale(2, 0.1); } }
+            NudgeRow { minus_label: "SX-"; value_label: "SX " + root.selected_scale_x; plus_label: "SX+"; step_down => { root.edit_inspector(InspectorEditKind.scale, InspectorEditMode.nudge, 0, -0.1); } step_up => { root.edit_inspector(InspectorEditKind.scale, InspectorEditMode.nudge, 0, 0.1); } }
+            NudgeRow { minus_label: "SY-"; value_label: "SY " + root.selected_scale_y; plus_label: "SY+"; step_down => { root.edit_inspector(InspectorEditKind.scale, InspectorEditMode.nudge, 1, -0.1); } step_up => { root.edit_inspector(InspectorEditKind.scale, InspectorEditMode.nudge, 1, 0.1); } }
+            NudgeRow { minus_label: "SZ-"; value_label: "SZ " + root.selected_scale_z; plus_label: "SZ+"; step_down => { root.edit_inspector(InspectorEditKind.scale, InspectorEditMode.nudge, 2, -0.1); } step_up => { root.edit_inspector(InspectorEditKind.scale, InspectorEditMode.nudge, 2, 0.1); } }
         }
     }
 
     if root.has_material : VerticalBox {
         spacing: AppTheme.section_spacing;
         Text { text: "Material"; }
-        NudgeRow { minus_label: "R-"; value_label: "R " + root.material_color_r; plus_label: "R+"; step_down => { root.nudge_selected_material_color(0, -0.05); } step_up => { root.nudge_selected_material_color(0, 0.05); } }
-        NudgeRow { minus_label: "G-"; value_label: "G " + root.material_color_g; plus_label: "G+"; step_down => { root.nudge_selected_material_color(1, -0.05); } step_up => { root.nudge_selected_material_color(1, 0.05); } }
-        NudgeRow { minus_label: "B-"; value_label: "B " + root.material_color_b; plus_label: "B+"; step_down => { root.nudge_selected_material_color(2, -0.05); } step_up => { root.nudge_selected_material_color(2, 0.05); } }
-        NudgeRow { minus_label: "Rgh-"; value_label: "Roughness " + root.material_roughness; plus_label: "Rgh+"; step_down => { root.nudge_selected_material_roughness(-0.05); } step_up => { root.nudge_selected_material_roughness(0.05); } }
-        Slider { minimum: 0; maximum: 1; step: 0.01; value: root.material_roughness; changed(value) => { root.set_selected_material_roughness(value); } }
-        NudgeRow { minus_label: "Met-"; value_label: "Metallic " + root.material_metallic; plus_label: "Met+"; step_down => { root.nudge_selected_material_metallic(-0.05); } step_up => { root.nudge_selected_material_metallic(0.05); } }
-        Slider { minimum: 0; maximum: 1; step: 0.01; value: root.material_metallic; changed(value) => { root.set_selected_material_metallic(value); } }
+        NudgeRow { minus_label: "R-"; value_label: "R " + root.material_color_r; plus_label: "R+"; step_down => { root.edit_inspector(InspectorEditKind.material-color, InspectorEditMode.nudge, 0, -0.05); } step_up => { root.edit_inspector(InspectorEditKind.material-color, InspectorEditMode.nudge, 0, 0.05); } }
+        NudgeRow { minus_label: "G-"; value_label: "G " + root.material_color_g; plus_label: "G+"; step_down => { root.edit_inspector(InspectorEditKind.material-color, InspectorEditMode.nudge, 1, -0.05); } step_up => { root.edit_inspector(InspectorEditKind.material-color, InspectorEditMode.nudge, 1, 0.05); } }
+        NudgeRow { minus_label: "B-"; value_label: "B " + root.material_color_b; plus_label: "B+"; step_down => { root.edit_inspector(InspectorEditKind.material-color, InspectorEditMode.nudge, 2, -0.05); } step_up => { root.edit_inspector(InspectorEditKind.material-color, InspectorEditMode.nudge, 2, 0.05); } }
+        NudgeRow { minus_label: "Rgh-"; value_label: "Roughness " + root.material_roughness; plus_label: "Rgh+"; step_down => { root.edit_inspector(InspectorEditKind.material-roughness, InspectorEditMode.nudge, -1, -0.05); } step_up => { root.edit_inspector(InspectorEditKind.material-roughness, InspectorEditMode.nudge, -1, 0.05); } }
+        Slider { minimum: 0; maximum: 1; step: 0.01; value: root.material_roughness; changed(value) => { root.edit_inspector(InspectorEditKind.material-roughness, InspectorEditMode.set, -1, value); } }
+        NudgeRow { minus_label: "Met-"; value_label: "Metallic " + root.material_metallic; plus_label: "Met+"; step_down => { root.edit_inspector(InspectorEditKind.material-metallic, InspectorEditMode.nudge, -1, -0.05); } step_up => { root.edit_inspector(InspectorEditKind.material-metallic, InspectorEditMode.nudge, -1, 0.05); } }
+        Slider { minimum: 0; maximum: 1; step: 0.01; value: root.material_metallic; changed(value) => { root.edit_inspector(InspectorEditKind.material-metallic, InspectorEditMode.set, -1, value); } }
     }
 
     if root.has_operation : VerticalBox {
         spacing: AppTheme.section_spacing;
         Text { text: root.operation_label; }
-        NudgeRow { minus_label: "K-"; value_label: "Smooth " + root.operation_smooth_k; plus_label: "K+"; step_down => { root.nudge_selected_operation_smooth_k(-0.05); } step_up => { root.nudge_selected_operation_smooth_k(0.05); } }
-        NudgeRow { minus_label: "Steps-"; value_label: "Steps " + root.operation_steps; plus_label: "Steps+"; step_down => { root.nudge_selected_operation_steps(-1); } step_up => { root.nudge_selected_operation_steps(1); } }
-        Slider { minimum: 0; maximum: 32; step: 1; value: root.operation_steps; changed(value) => { root.set_selected_operation_steps(value); } }
-        NudgeRow { minus_label: "Blend-"; value_label: "Blend " + root.operation_color_blend; plus_label: "Blend+"; step_down => { root.nudge_selected_operation_color_blend(-0.05); } step_up => { root.nudge_selected_operation_color_blend(0.05); } }
-        Slider { minimum: -1; maximum: 1; step: 0.01; value: root.operation_color_blend; changed(value) => { root.set_selected_operation_color_blend(value); } }
+        NudgeRow { minus_label: "K-"; value_label: "Smooth " + root.operation_smooth_k; plus_label: "K+"; step_down => { root.edit_inspector(InspectorEditKind.operation-smooth-k, InspectorEditMode.nudge, -1, -0.05); } step_up => { root.edit_inspector(InspectorEditKind.operation-smooth-k, InspectorEditMode.nudge, -1, 0.05); } }
+        NudgeRow { minus_label: "Steps-"; value_label: "Steps " + root.operation_steps; plus_label: "Steps+"; step_down => { root.edit_inspector(InspectorEditKind.operation-steps, InspectorEditMode.nudge, -1, -1); } step_up => { root.edit_inspector(InspectorEditKind.operation-steps, InspectorEditMode.nudge, -1, 1); } }
+        Slider { minimum: 0; maximum: 32; step: 1; value: root.operation_steps; changed(value) => { root.edit_inspector(InspectorEditKind.operation-steps, InspectorEditMode.set, -1, value); } }
+        NudgeRow { minus_label: "Blend-"; value_label: "Blend " + root.operation_color_blend; plus_label: "Blend+"; step_down => { root.edit_inspector(InspectorEditKind.operation-color-blend, InspectorEditMode.nudge, -1, -0.05); } step_up => { root.edit_inspector(InspectorEditKind.operation-color-blend, InspectorEditMode.nudge, -1, 0.05); } }
+        Slider { minimum: -1; maximum: 1; step: 0.01; value: root.operation_color_blend; changed(value) => { root.edit_inspector(InspectorEditKind.operation-color-blend, InspectorEditMode.set, -1, value); } }
     }
 
     if root.has_sculpt : VerticalBox {
         spacing: AppTheme.section_spacing;
         Text { text: "Sculpt"; }
-        NudgeRow { minus_label: "Res-"; value_label: "Resolution " + root.sculpt_resolution; plus_label: "Res+"; step_down => { root.nudge_selected_sculpt_resolution(-8); } step_up => { root.nudge_selected_sculpt_resolution(8); } }
-        SpinBox { minimum: 8; maximum: 512; step-size: 8; value: root.sculpt_resolution; edited => { root.set_selected_sculpt_resolution(self.value); } }
-        NudgeRow { minus_label: "Layer-"; value_label: "Layer " + root.sculpt_layer_intensity; plus_label: "Layer+"; step_down => { root.nudge_selected_sculpt_layer_intensity(-0.1); } step_up => { root.nudge_selected_sculpt_layer_intensity(0.1); } }
-        Slider { minimum: 0; maximum: 4; step: 0.01; value: root.sculpt_layer_intensity; changed(value) => { root.set_selected_sculpt_layer_intensity(value); } }
-        NudgeRow { minus_label: "Brush-"; value_label: "Radius " + root.sculpt_brush_radius; plus_label: "Brush+"; step_down => { root.nudge_selected_brush_radius(-0.05); } step_up => { root.nudge_selected_brush_radius(0.05); } }
-        Slider { minimum: 0.05; maximum: 2.0; step: 0.01; value: root.sculpt_brush_radius; changed(value) => { root.set_selected_brush_radius(value); } }
-        NudgeRow { minus_label: "Strength-"; value_label: "Strength " + root.sculpt_brush_strength; plus_label: "Strength+"; step_down => { root.nudge_selected_brush_strength(-0.05); } step_up => { root.nudge_selected_brush_strength(0.05); } }
-        Slider { minimum: -2; maximum: 2; step: 0.01; value: root.sculpt_brush_strength; changed(value) => { root.set_selected_brush_strength(value); } }
+        NudgeRow { minus_label: "Res-"; value_label: "Resolution " + root.sculpt_resolution; plus_label: "Res+"; step_down => { root.edit_inspector(InspectorEditKind.sculpt-resolution, InspectorEditMode.nudge, -1, -8); } step_up => { root.edit_inspector(InspectorEditKind.sculpt-resolution, InspectorEditMode.nudge, -1, 8); } }
+        SpinBox { minimum: 8; maximum: 512; step-size: 8; value: root.sculpt_resolution; edited => { root.edit_inspector(InspectorEditKind.sculpt-resolution, InspectorEditMode.set, -1, self.value); } }
+        NudgeRow { minus_label: "Layer-"; value_label: "Layer " + root.sculpt_layer_intensity; plus_label: "Layer+"; step_down => { root.edit_inspector(InspectorEditKind.sculpt-layer-intensity, InspectorEditMode.nudge, -1, -0.1); } step_up => { root.edit_inspector(InspectorEditKind.sculpt-layer-intensity, InspectorEditMode.nudge, -1, 0.1); } }
+        Slider { minimum: 0; maximum: 4; step: 0.01; value: root.sculpt_layer_intensity; changed(value) => { root.edit_inspector(InspectorEditKind.sculpt-layer-intensity, InspectorEditMode.set, -1, value); } }
+        NudgeRow { minus_label: "Brush-"; value_label: "Radius " + root.sculpt_brush_radius; plus_label: "Brush+"; step_down => { root.edit_inspector(InspectorEditKind.brush-radius, InspectorEditMode.nudge, -1, -0.05); } step_up => { root.edit_inspector(InspectorEditKind.brush-radius, InspectorEditMode.nudge, -1, 0.05); } }
+        Slider { minimum: 0.05; maximum: 2.0; step: 0.01; value: root.sculpt_brush_radius; changed(value) => { root.edit_inspector(InspectorEditKind.brush-radius, InspectorEditMode.set, -1, value); } }
+        NudgeRow { minus_label: "Strength-"; value_label: "Strength " + root.sculpt_brush_strength; plus_label: "Strength+"; step_down => { root.edit_inspector(InspectorEditKind.brush-strength, InspectorEditMode.nudge, -1, -0.05); } step_up => { root.edit_inspector(InspectorEditKind.brush-strength, InspectorEditMode.nudge, -1, 0.05); } }
+        Slider { minimum: -2; maximum: 2; step: 0.01; value: root.sculpt_brush_strength; changed(value) => { root.edit_inspector(InspectorEditKind.brush-strength, InspectorEditMode.set, -1, value); } }
     }
 
     if root.has_light : VerticalBox {
         spacing: AppTheme.section_spacing;
         Text { text: root.light_label; }
-        NudgeRow { minus_label: "LR-"; value_label: "R " + root.light_color_r; plus_label: "LR+"; step_down => { root.nudge_selected_light_color(0, -0.1); } step_up => { root.nudge_selected_light_color(0, 0.1); } }
-        NudgeRow { minus_label: "LG-"; value_label: "G " + root.light_color_g; plus_label: "LG+"; step_down => { root.nudge_selected_light_color(1, -0.1); } step_up => { root.nudge_selected_light_color(1, 0.1); } }
-        NudgeRow { minus_label: "LB-"; value_label: "B " + root.light_color_b; plus_label: "LB+"; step_down => { root.nudge_selected_light_color(2, -0.1); } step_up => { root.nudge_selected_light_color(2, 0.1); } }
-        NudgeRow { minus_label: "Int-"; value_label: "Intensity " + root.light_intensity; plus_label: "Int+"; step_down => { root.nudge_selected_light_intensity(-0.25); } step_up => { root.nudge_selected_light_intensity(0.25); } }
-        Slider { minimum: 0; maximum: 20; step: 0.05; value: root.light_intensity; changed(value) => { root.set_selected_light_intensity(value); } }
-        NudgeRow { minus_label: "Range-"; value_label: "Range " + root.light_range; plus_label: "Range+"; step_down => { root.nudge_selected_light_range(-0.25); } step_up => { root.nudge_selected_light_range(0.25); } }
-        Slider { minimum: 0.01; maximum: 50; step: 0.05; value: root.light_range; changed(value) => { root.set_selected_light_range(value); } }
-        CheckBox { text: "Cast shadows"; checked: root.light_cast_shadows; toggled => { root.set_selected_light_shadows(self.checked); } }
-        CheckBox { text: "Volumetric"; checked: root.light_volumetric; toggled => { root.set_selected_light_volumetric(self.checked); } }
-        NudgeRow { minus_label: "Vol-"; value_label: "Density " + root.light_volumetric_density; plus_label: "Vol+"; step_down => { root.nudge_selected_light_volumetric_density(-0.05); } step_up => { root.nudge_selected_light_volumetric_density(0.05); } }
-        Slider { minimum: 0; maximum: 1; step: 0.01; value: root.light_volumetric_density; changed(value) => { root.set_selected_light_volumetric_density(value); } }
+        NudgeRow { minus_label: "LR-"; value_label: "R " + root.light_color_r; plus_label: "LR+"; step_down => { root.edit_inspector(InspectorEditKind.light-color, InspectorEditMode.nudge, 0, -0.1); } step_up => { root.edit_inspector(InspectorEditKind.light-color, InspectorEditMode.nudge, 0, 0.1); } }
+        NudgeRow { minus_label: "LG-"; value_label: "G " + root.light_color_g; plus_label: "LG+"; step_down => { root.edit_inspector(InspectorEditKind.light-color, InspectorEditMode.nudge, 1, -0.1); } step_up => { root.edit_inspector(InspectorEditKind.light-color, InspectorEditMode.nudge, 1, 0.1); } }
+        NudgeRow { minus_label: "LB-"; value_label: "B " + root.light_color_b; plus_label: "LB+"; step_down => { root.edit_inspector(InspectorEditKind.light-color, InspectorEditMode.nudge, 2, -0.1); } step_up => { root.edit_inspector(InspectorEditKind.light-color, InspectorEditMode.nudge, 2, 0.1); } }
+        NudgeRow { minus_label: "Int-"; value_label: "Intensity " + root.light_intensity; plus_label: "Int+"; step_down => { root.edit_inspector(InspectorEditKind.light-intensity, InspectorEditMode.nudge, -1, -0.25); } step_up => { root.edit_inspector(InspectorEditKind.light-intensity, InspectorEditMode.nudge, -1, 0.25); } }
+        Slider { minimum: 0; maximum: 20; step: 0.05; value: root.light_intensity; changed(value) => { root.edit_inspector(InspectorEditKind.light-intensity, InspectorEditMode.set, -1, value); } }
+        NudgeRow { minus_label: "Range-"; value_label: "Range " + root.light_range; plus_label: "Range+"; step_down => { root.edit_inspector(InspectorEditKind.light-range, InspectorEditMode.nudge, -1, -0.25); } step_up => { root.edit_inspector(InspectorEditKind.light-range, InspectorEditMode.nudge, -1, 0.25); } }
+        Slider { minimum: 0.01; maximum: 50; step: 0.05; value: root.light_range; changed(value) => { root.edit_inspector(InspectorEditKind.light-range, InspectorEditMode.set, -1, value); } }
+        CheckBox { text: "Cast shadows"; checked: root.light_cast_shadows; toggled => { root.edit_inspector(InspectorEditKind.light-cast-shadows, InspectorEditMode.set, -1, self.checked ? 1.0 : 0.0); } }
+        CheckBox { text: "Volumetric"; checked: root.light_volumetric; toggled => { root.edit_inspector(InspectorEditKind.light-volumetric, InspectorEditMode.set, -1, self.checked ? 1.0 : 0.0); } }
+        NudgeRow { minus_label: "Vol-"; value_label: "Density " + root.light_volumetric_density; plus_label: "Vol+"; step_down => { root.edit_inspector(InspectorEditKind.light-volumetric-density, InspectorEditMode.nudge, -1, -0.05); } step_up => { root.edit_inspector(InspectorEditKind.light-volumetric-density, InspectorEditMode.nudge, -1, 0.05); } }
+        Slider { minimum: 0; maximum: 1; step: 0.01; value: root.light_volumetric_density; changed(value) => { root.edit_inspector(InspectorEditKind.light-volumetric-density, InspectorEditMode.set, -1, value); } }
     }
 }

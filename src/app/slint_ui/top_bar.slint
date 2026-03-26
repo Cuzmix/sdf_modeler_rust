@@ -1,5 +1,6 @@
 import { Button, HorizontalBox } from "std-widgets.slint";
 import { AppTheme } from "theme.slint";
+import { TopBarAction } from "view_models.slint";
 
 export component TopBar inherits HorizontalBox {
     in property <string> viewport_status;
@@ -13,53 +14,32 @@ export component TopBar inherits HorizontalBox {
     in property <bool> measurement_mode_active;
     in property <bool> turntable_active;
 
-    callback new_scene();
-    callback open_project();
-    callback save_project();
-    callback import_mesh();
-    callback export_mesh();
-    callback take_screenshot();
-    callback add_reference_image();
-    callback toggle_all_reference_images();
-    callback frame_all();
-    callback focus_selected();
-    callback undo();
-    callback redo();
-    callback camera_front();
-    callback camera_top();
-    callback camera_right();
-    callback toggle_ortho();
-    callback toggle_measurement();
-    callback toggle_turntable();
-    callback set_gizmo_translate();
-    callback set_gizmo_rotate();
-    callback set_gizmo_scale();
-    callback toggle_gizmo_space();
+    callback perform_action(action: TopBarAction);
 
     spacing: AppTheme.frame_spacing;
 
-    Button { text: "New"; clicked => { root.new_scene(); } }
-    Button { text: "Open"; clicked => { root.open_project(); } }
-    Button { text: "Save"; clicked => { root.save_project(); } }
-    Button { text: "Import"; clicked => { root.import_mesh(); } }
-    Button { text: "Export"; clicked => { root.export_mesh(); } }
-    Button { text: "Shot"; clicked => { root.take_screenshot(); } }
-    Button { text: "Add Ref"; clicked => { root.add_reference_image(); } }
-    Button { text: "Toggle Refs"; clicked => { root.toggle_all_reference_images(); } }
-    Button { text: "Frame"; clicked => { root.frame_all(); } }
-    Button { text: "Focus"; clicked => { root.focus_selected(); } }
-    Button { text: "Undo"; clicked => { root.undo(); } }
-    Button { text: "Redo"; clicked => { root.redo(); } }
-    Button { text: root.gizmo_translate_active ? "Move*" : "Move"; clicked => { root.set_gizmo_translate(); } }
-    Button { text: root.gizmo_rotate_active ? "Rotate*" : "Rotate"; clicked => { root.set_gizmo_rotate(); } }
-    Button { text: root.gizmo_scale_active ? "Scale*" : "Scale"; clicked => { root.set_gizmo_scale(); } }
-    Button { text: root.gizmo_local_space ? "Local" : "World"; clicked => { root.toggle_gizmo_space(); } }
-    Button { text: root.camera_is_ortho ? "Ortho" : "Persp"; clicked => { root.toggle_ortho(); } }
-    Button { text: root.measurement_mode_active ? "Measure*" : "Measure"; clicked => { root.toggle_measurement(); } }
-    Button { text: root.turntable_active ? "Turntable*" : "Turntable"; clicked => { root.toggle_turntable(); } }
-    Button { text: "Front"; clicked => { root.camera_front(); } }
-    Button { text: "Top"; clicked => { root.camera_top(); } }
-    Button { text: "Right"; clicked => { root.camera_right(); } }
+    Button { text: "New"; clicked => { root.perform_action(TopBarAction.new-scene); } }
+    Button { text: "Open"; clicked => { root.perform_action(TopBarAction.open-project); } }
+    Button { text: "Save"; clicked => { root.perform_action(TopBarAction.save-project); } }
+    Button { text: "Import"; clicked => { root.perform_action(TopBarAction.import-mesh); } }
+    Button { text: "Export"; clicked => { root.perform_action(TopBarAction.export-mesh); } }
+    Button { text: "Shot"; clicked => { root.perform_action(TopBarAction.take-screenshot); } }
+    Button { text: "Add Ref"; clicked => { root.perform_action(TopBarAction.add-reference-image); } }
+    Button { text: "Toggle Refs"; clicked => { root.perform_action(TopBarAction.toggle-all-reference-images); } }
+    Button { text: "Frame"; clicked => { root.perform_action(TopBarAction.frame-all); } }
+    Button { text: "Focus"; clicked => { root.perform_action(TopBarAction.focus-selected); } }
+    Button { text: "Undo"; clicked => { root.perform_action(TopBarAction.undo); } }
+    Button { text: "Redo"; clicked => { root.perform_action(TopBarAction.redo); } }
+    Button { text: root.gizmo_translate_active ? "Move*" : "Move"; clicked => { root.perform_action(TopBarAction.set-gizmo-translate); } }
+    Button { text: root.gizmo_rotate_active ? "Rotate*" : "Rotate"; clicked => { root.perform_action(TopBarAction.set-gizmo-rotate); } }
+    Button { text: root.gizmo_scale_active ? "Scale*" : "Scale"; clicked => { root.perform_action(TopBarAction.set-gizmo-scale); } }
+    Button { text: root.gizmo_local_space ? "Local" : "World"; clicked => { root.perform_action(TopBarAction.toggle-gizmo-space); } }
+    Button { text: root.camera_is_ortho ? "Ortho" : "Persp"; clicked => { root.perform_action(TopBarAction.toggle-ortho); } }
+    Button { text: root.measurement_mode_active ? "Measure*" : "Measure"; clicked => { root.perform_action(TopBarAction.toggle-measurement); } }
+    Button { text: root.turntable_active ? "Turntable*" : "Turntable"; clicked => { root.perform_action(TopBarAction.toggle-turntable); } }
+    Button { text: "Front"; clicked => { root.perform_action(TopBarAction.camera-front); } }
+    Button { text: "Top"; clicked => { root.perform_action(TopBarAction.camera-top); } }
+    Button { text: "Right"; clicked => { root.perform_action(TopBarAction.camera-right); } }
 
     Text { text: root.viewport_status; }
     Text { text: root.toast_text; }

@@ -1,6 +1,7 @@
 import { CheckBox, SpinBox, VerticalBox } from "std-widgets.slint";
 import { NudgeRow } from "nudge_row.slint";
 import { AppTheme } from "theme.slint";
+import { UtilityAction } from "view_models.slint";
 
 export component RenderSettingsPanel inherits VerticalBox {
     in property <bool> render_show_grid;
@@ -12,26 +13,18 @@ export component RenderSettingsPanel inherits VerticalBox {
     in property <int> export_resolution;
     in property <bool> adaptive_export;
 
-    callback set_render_show_grid(value: bool);
-    callback set_render_show_node_labels(value: bool);
-    callback set_render_show_bounding_box(value: bool);
-    callback set_render_show_light_gizmos(value: bool);
-    callback set_render_shadows_enabled(value: bool);
-    callback set_render_ao_enabled(value: bool);
-    callback nudge_export_resolution(delta: int);
-    callback set_export_resolution(value: int);
-    callback set_adaptive_export(value: bool);
+    callback perform_action(action: UtilityAction, index: int, value: float);
 
     spacing: AppTheme.section_spacing;
 
     Text { text: "Render"; }
-    CheckBox { text: "Show grid"; checked: root.render_show_grid; toggled => { root.set_render_show_grid(self.checked); } }
-    CheckBox { text: "Node labels"; checked: root.render_show_node_labels; toggled => { root.set_render_show_node_labels(self.checked); } }
-    CheckBox { text: "Bounding box"; checked: root.render_show_bounding_box; toggled => { root.set_render_show_bounding_box(self.checked); } }
-    CheckBox { text: "Light gizmos"; checked: root.render_show_light_gizmos; toggled => { root.set_render_show_light_gizmos(self.checked); } }
-    CheckBox { text: "Shadows"; checked: root.render_shadows_enabled; toggled => { root.set_render_shadows_enabled(self.checked); } }
-    CheckBox { text: "Ambient occlusion"; checked: root.render_ao_enabled; toggled => { root.set_render_ao_enabled(self.checked); } }
-    NudgeRow { minus_label: "Exp-"; value_label: "Export Res " + root.export_resolution; plus_label: "Exp+"; step_down => { root.nudge_export_resolution(-16); } step_up => { root.nudge_export_resolution(16); } }
-    SpinBox { minimum: 16; maximum: 2048; step-size: 16; value: root.export_resolution; edited => { root.set_export_resolution(self.value); } }
-    CheckBox { text: "Adaptive export"; checked: root.adaptive_export; toggled => { root.set_adaptive_export(self.checked); } }
+    CheckBox { text: "Show grid"; checked: root.render_show_grid; toggled => { root.perform_action(UtilityAction.set-render-show-grid, -1, self.checked ? 1.0 : 0.0); } }
+    CheckBox { text: "Node labels"; checked: root.render_show_node_labels; toggled => { root.perform_action(UtilityAction.set-render-show-node-labels, -1, self.checked ? 1.0 : 0.0); } }
+    CheckBox { text: "Bounding box"; checked: root.render_show_bounding_box; toggled => { root.perform_action(UtilityAction.set-render-show-bounding-box, -1, self.checked ? 1.0 : 0.0); } }
+    CheckBox { text: "Light gizmos"; checked: root.render_show_light_gizmos; toggled => { root.perform_action(UtilityAction.set-render-show-light-gizmos, -1, self.checked ? 1.0 : 0.0); } }
+    CheckBox { text: "Shadows"; checked: root.render_shadows_enabled; toggled => { root.perform_action(UtilityAction.set-render-shadows-enabled, -1, self.checked ? 1.0 : 0.0); } }
+    CheckBox { text: "Ambient occlusion"; checked: root.render_ao_enabled; toggled => { root.perform_action(UtilityAction.set-render-ao-enabled, -1, self.checked ? 1.0 : 0.0); } }
+    NudgeRow { minus_label: "Exp-"; value_label: "Export Res " + root.export_resolution; plus_label: "Exp+"; step_down => { root.perform_action(UtilityAction.nudge-export-resolution, -1, -16); } step_up => { root.perform_action(UtilityAction.nudge-export-resolution, -1, 16); } }
+    SpinBox { minimum: 16; maximum: 2048; step-size: 16; value: root.export_resolution; edited => { root.perform_action(UtilityAction.set-export-resolution, -1, self.value); } }
+    CheckBox { text: "Adaptive export"; checked: root.adaptive_export; toggled => { root.perform_action(UtilityAction.set-adaptive-export, -1, self.checked ? 1.0 : 0.0); } }
 }
