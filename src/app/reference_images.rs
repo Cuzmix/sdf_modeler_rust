@@ -88,3 +88,8 @@ impl ReferenceImageStore {
         }
     }
 }
+
+pub fn load_reference_image_metadata(path: &Path) -> Result<(u32, u32), String> {
+    image::image_dimensions(path)
+        .map_err(|error| format!("Failed to read reference image metadata: {error}"))
+}

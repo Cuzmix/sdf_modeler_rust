@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::collections::HashSet;
 
 use super::scene::{NodeData, NodeId, Scene};
@@ -265,6 +267,18 @@ pub fn collect_presented_selection(
     }
 }
 
+pub fn collect_render_highlight_ids(
+    scene: &Scene,
+    selected: Option<NodeId>,
+    selected_set: &HashSet<NodeId>,
+) -> HashSet<NodeId> {
+    collect_presented_selection(scene, selected, selected_set)
+        .ordered
+        .into_iter()
+        .map(PresentedObjectRef::render_highlight_id)
+        .collect()
+}
+
 pub fn presented_top_level_objects(scene: &Scene) -> Vec<PresentedObjectRef> {
     let mut objects = Vec::new();
     let mut seen_hosts = HashSet::new();
@@ -449,6 +463,25 @@ mod tests {
         let selection = collect_presented_selection(&scene, Some(sculpt_id), &selected_set);
         assert_eq!(selection.ordered.len(), 1);
         assert_eq!(selection.primary.unwrap().host_id, primitive_id);
+    }
+
+    #[test]
+    fn collect_render_highlight_ids_prefers_attached_sculpt_surface() {
+        let mut scene = Scene::new();
+        let primitive_id = scene.create_primitive(SdfPrimitive::Sphere);
+        let modifier_id = scene.insert_modifier_above(primitive_id, ModifierKind::Noise);
+        let sculpt_id = scene.insert_sculpt_above(
+            modifier_id,
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::new(0.8, 0.2, 0.2),
+            sculpt_grid(),
+        );
+        let selected_set = HashSet::from([primitive_id, modifier_id, sculpt_id]);
+
+        let highlight_ids = collect_render_highlight_ids(&scene, Some(primitive_id), &selected_set);
+
+        assert_eq!(highlight_ids, HashSet::from([sculpt_id]));
     }
 
     #[test]

@@ -1,7 +1,7 @@
+use crate::gizmo::GizmoMode;
 use crate::graph::scene::{CsgOp, LightType, ModifierKind, NodeId, SdfPrimitive};
 use crate::sculpt::ActiveTool;
 use crate::settings::SelectionBehaviorSettings;
-use crate::ui::gizmo::GizmoMode;
 
 use super::state::{ExpertPanelKind, InteractionMode, ShellPanelKind};
 use super::ui_geometry::FloatingPanelBounds;
@@ -72,6 +72,7 @@ pub enum Action {
 
     // ── Selection ────────────────────────────────────────────────────
     Select(Option<NodeId>),
+    ToggleSelection(NodeId),
     DeleteSelected,
     DeleteNode(NodeId),
     DeletePresentedObject(NodeId),

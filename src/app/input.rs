@@ -1,6 +1,6 @@
+use crate::gizmo::GizmoMode;
 use crate::keymap::ActionBinding;
 use crate::sculpt::BrushMode;
-use crate::ui::gizmo::GizmoMode;
 
 use super::actions::{Action, ActionSink};
 use super::state::InteractionMode;

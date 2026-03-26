@@ -91,7 +91,7 @@ impl fmt::Display for KeyCombo {
 }
 
 // ---------------------------------------------------------------------------
-// Serializable key enum (wraps egui::Key for serde support)
+// Serializable key enum for persisted shortcut bindings.
 // ---------------------------------------------------------------------------
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]

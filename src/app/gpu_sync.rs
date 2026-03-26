@@ -2,7 +2,7 @@ use glam::Vec3;
 
 use crate::gpu::buffers;
 use crate::gpu::codegen;
-use crate::graph::presented_object::resolve_host_selection;
+use crate::graph::presented_object::{collect_render_highlight_ids, resolve_host_selection};
 use crate::graph::scene::{NodeData, NodeId};
 
 use super::SdfApp;
@@ -98,11 +98,13 @@ impl SdfApp {
 
     pub(super) fn upload_scene_buffer(&mut self) {
         let (voxel_data, voxel_offsets) = buffers::build_voxel_buffer(&self.doc.scene);
-        let node_data = buffers::build_node_buffer(
+        let render_highlight_ids = collect_render_highlight_ids(
             &self.doc.scene,
+            self.ui.selection.selected,
             &self.ui.selection.selected_set,
-            &voxel_offsets,
         );
+        let node_data =
+            buffers::build_node_buffer(&self.doc.scene, &render_highlight_ids, &voxel_offsets);
         let sculpt_infos = buffers::collect_sculpt_tex_info(&self.doc.scene);
         self.gpu.voxel_gpu_offsets = voxel_offsets;
         self.gpu.sculpt_tex_indices = sculpt_infos

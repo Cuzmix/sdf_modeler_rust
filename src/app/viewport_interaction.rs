@@ -2,6 +2,7 @@ use glam::{Vec3, Vec4};
 
 use crate::app::actions::{Action, ActionSink};
 use crate::app::state::{ViewportInteractionState, ViewportPrimaryDragMode};
+use crate::gizmo::GizmoInputSnapshot;
 use crate::gpu::camera::{Camera, CameraUniform};
 use crate::gpu::picking::PendingPick;
 use crate::graph::scene::{NodeData, Scene};
@@ -74,6 +75,53 @@ impl SdfApp {
         input: &ViewportInputSnapshot,
         actions: &mut ActionSink,
     ) -> ViewportUiFeedback {
+        if self.gizmo.gizmo_visible
+            && !self.doc.sculpt_state.is_active()
+            && !self.ui.measurement_mode
+        {
+            let gizmo_mode = self.gizmo.mode.clone();
+            let gizmo_space = self.gizmo.space.clone();
+            let gizmo_input = GizmoInputSnapshot {
+                viewport_size_physical: input.viewport_size_physical,
+                pointer_inside: input.pointer_inside,
+                pointer_position_physical: input.pointer_position_physical,
+                pointer_delta_physical: input.pointer_delta_physical,
+                primary_down: input.primary.down,
+                primary_pressed: input.primary.pressed,
+                primary_released: input.primary.released,
+                modifiers: input.modifiers,
+            };
+            let gizmo_result = crate::gizmo::run_viewport_gizmo_interaction(
+                &gizmo_input,
+                &self.doc.camera,
+                &mut self.doc.scene,
+                self.ui.selection.selected,
+                &self.ui.selection.selected_set,
+                &mut self.gizmo.state,
+                &gizmo_mode,
+                &gizmo_space,
+                &mut self.gizmo.pivot_offset,
+                &self.settings.snap,
+                &self.settings.selection_behavior,
+                self.gizmo.gizmo_visible,
+            );
+            for target in gizmo_result.requested_transform_wrappers {
+                actions.push(Action::InsertTransformAbove { target });
+            }
+            if gizmo_result.consumed_pointer {
+                self.ui.viewport_interaction.primary_press_origin_physical = None;
+                self.ui.viewport_interaction.primary_drag_distance = 0.0;
+                self.ui.viewport_interaction.primary_drag_mode = ViewportPrimaryDragMode::None;
+                self.ui.viewport_interaction.last_pointer_pos_physical =
+                    input.pointer_position_physical;
+
+                return ViewportUiFeedback {
+                    gizmo_drag_active: gizmo_result.drag_active,
+                    ..ViewportUiFeedback::default()
+                };
+            }
+        }
+
         run_viewport_interaction_core(
             ViewportInteractionContext {
                 state: &mut self.ui.viewport_interaction,

@@ -4,10 +4,7 @@ mod action_handler;
 pub(crate) mod actions;
 mod async_tasks;
 pub(crate) mod backend_frame;
-mod egui_frontend;
-mod egui_runtime;
-mod egui_state;
-mod frontend_bridge;
+mod controllers;
 mod frontend_models;
 mod gpu_sync;
 mod input;
@@ -21,7 +18,6 @@ mod slint_bridge;
 pub(crate) mod slint_frontend;
 pub(crate) mod state;
 pub(crate) mod ui_geometry;
-mod ui_panels;
 pub(crate) mod viewport_interaction;
 
 use crate::compat::{Duration, Instant};
@@ -31,16 +27,15 @@ use std::sync::Arc;
 
 use glam::Vec3;
 
+use crate::gizmo::{GizmoMode, GizmoSpace, GizmoState};
 use crate::gpu::buffers;
 use crate::gpu::codegen;
 use crate::graph::scene::NodeId;
 use crate::graph::voxel;
 use crate::sculpt::{ActiveTool, SculptState};
 use crate::settings::Settings;
-use crate::ui::gizmo::{GizmoMode, GizmoSpace, GizmoState};
-use crate::ui::viewport::ViewportResources;
+use crate::viewport::ViewportResources;
 
-use egui_state::EguiFrontendState;
 use runtime::{AppRenderContext, ViewportResourceHandle, WakeHandle};
 use state::{
     AsyncState, DocumentState, GizmoContext, GpuSyncState, PerfState, PersistenceState, UiState,
@@ -234,8 +229,6 @@ pub struct SdfApp {
     pub(super) async_state: AsyncState,
     /// UI-only state: layout, dialogs, toasts.
     pub(super) ui: UiState,
-    /// egui-owned editor state, dock layout, and texture caches.
-    pub(in crate::app) egui: EguiFrontendState,
     /// File persistence state.
     pub(super) persistence: PersistenceState,
     /// Performance / profiling state.
@@ -349,25 +342,6 @@ impl SdfApp {
                 false
             }
         }
-    }
-
-    pub fn new_from_egui(
-        render_state: &egui_wgpu::RenderState,
-        ctx: &egui::Context,
-        settings: Settings,
-    ) -> Self {
-        let render_context = egui_runtime::app_render_context_from_egui(render_state);
-        let wake = egui_runtime::wake_handle_from_egui(ctx);
-        let app = Self::new_from_runtime(render_context, wake, settings);
-
-        {
-            let mut renderer = render_state.renderer.write();
-            renderer
-                .callback_resources
-                .insert(app.gpu.viewport_resources.clone());
-        }
-
-        app
     }
 
     pub fn new_from_runtime(
@@ -503,7 +477,6 @@ impl SdfApp {
                 measurement_points: Vec::new(),
                 multi_transform_edit: crate::app::state::MultiTransformSessionState::default(),
             },
-            egui: EguiFrontendState::default(),
             persistence: PersistenceState {
                 current_file_path: None,
                 scene_dirty: false,
@@ -521,72 +494,6 @@ impl SdfApp {
             initial_vsync,
             last_time: 0.0,
         }
-    }
-
-    pub fn open_startup_expert_panel(&mut self, panel: state::ExpertPanelKind) {
-        self.egui.set_workspace(
-            actions::WorkspacePreset::Modeling,
-            &mut self.ui.expert_panels,
-        );
-        self.egui
-            .open_expert_panel(&mut self.ui.expert_panels, panel);
-    }
-
-    pub fn run_egui_frame(&mut self, ctx: &egui::Context) {
-        let frame_start = Instant::now();
-        let frame_input = frontend_bridge::capture_frame_input(ctx);
-        let camera_animating = self.run_backend_pre_ui(&frame_input);
-
-        let mut action_sink = actions::ActionSink::new();
-        let triggered_inputs = frontend_bridge::collect_triggered_inputs(
-            ctx,
-            &self.settings.keymap,
-            frontend_bridge::KeyboardActionContext {
-                is_sculpt: self.doc.sculpt_state.is_active(),
-                active_tool: self.doc.active_tool,
-                export_idle: matches!(self.async_state.export_status, ExportStatus::Idle),
-            },
-        );
-        self.collect_keyboard_actions(triggered_inputs, &mut action_sink);
-
-        if self.ui.show_recovery_dialog {
-            #[cfg(not(target_arch = "wasm32"))]
-            if let Some(action) = crate::ui::recovery_dialog::draw(
-                ctx,
-                &mut self.ui.show_recovery_dialog,
-                &self.ui.recovery_summary,
-                !self.settings.recent_files.is_empty(),
-            ) {
-                match action {
-                    crate::ui::recovery_dialog::RecoveryDialogAction::Recover => {
-                        let _ = self.recover_from_autosave();
-                    }
-                    crate::ui::recovery_dialog::RecoveryDialogAction::Discard => {
-                        if let Err(error) = crate::io::remove_recovery_files() {
-                            log::error!("Failed to remove recovery files: {}", error);
-                        }
-                    }
-                    crate::ui::recovery_dialog::RecoveryDialogAction::OpenLastProject => {
-                        if let Some(path) = self.settings.recent_files.first() {
-                            let open_path = std::path::PathBuf::from(path);
-                            let _ = self.load_project_from_path(&open_path);
-                        }
-                    }
-                }
-            }
-            ctx.request_repaint();
-            return;
-        }
-
-        let ui_feedback = self.draw_egui_frontend(ctx, frame_input.now_seconds, &mut action_sink);
-        self.process_egui_only_actions(ctx, &mut action_sink);
-
-        self.process_actions(action_sink);
-
-        let frame_commands = self.run_backend_post_ui(&frame_input, camera_animating, ui_feedback);
-        frontend_bridge::apply_frame_commands(ctx, &frame_commands);
-
-        self.perf.timings.total_cpu_s = frame_start.elapsed().as_secs_f64();
     }
 
     #[cfg(not(target_arch = "wasm32"))]

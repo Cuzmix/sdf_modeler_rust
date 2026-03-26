@@ -672,6 +672,7 @@ pub fn collect_scene_lights(
 
 /// Identify which Light nodes are active (nearest to camera, up to MAX_SCENE_LIGHTS).
 /// Returns (active_light_node_ids, total_light_count).
+#[allow(dead_code)]
 pub fn identify_active_lights(
     scene: &Scene,
     camera_pos: glam::Vec3,

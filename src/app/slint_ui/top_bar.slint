@@ -1,0 +1,67 @@
+import { Button, HorizontalBox } from "std-widgets.slint";
+import { AppTheme } from "theme.slint";
+
+export component TopBar inherits HorizontalBox {
+    in property <string> viewport_status;
+    in property <string> toast_text;
+    in property <string> task_status;
+    in property <bool> gizmo_translate_active;
+    in property <bool> gizmo_rotate_active;
+    in property <bool> gizmo_scale_active;
+    in property <bool> gizmo_local_space;
+    in property <bool> camera_is_ortho;
+    in property <bool> measurement_mode_active;
+    in property <bool> turntable_active;
+
+    callback new_scene();
+    callback open_project();
+    callback save_project();
+    callback import_mesh();
+    callback export_mesh();
+    callback take_screenshot();
+    callback add_reference_image();
+    callback toggle_all_reference_images();
+    callback frame_all();
+    callback focus_selected();
+    callback undo();
+    callback redo();
+    callback camera_front();
+    callback camera_top();
+    callback camera_right();
+    callback toggle_ortho();
+    callback toggle_measurement();
+    callback toggle_turntable();
+    callback set_gizmo_translate();
+    callback set_gizmo_rotate();
+    callback set_gizmo_scale();
+    callback toggle_gizmo_space();
+
+    spacing: AppTheme.frame_spacing;
+
+    Button { text: "New"; clicked => { root.new_scene(); } }
+    Button { text: "Open"; clicked => { root.open_project(); } }
+    Button { text: "Save"; clicked => { root.save_project(); } }
+    Button { text: "Import"; clicked => { root.import_mesh(); } }
+    Button { text: "Export"; clicked => { root.export_mesh(); } }
+    Button { text: "Shot"; clicked => { root.take_screenshot(); } }
+    Button { text: "Add Ref"; clicked => { root.add_reference_image(); } }
+    Button { text: "Toggle Refs"; clicked => { root.toggle_all_reference_images(); } }
+    Button { text: "Frame"; clicked => { root.frame_all(); } }
+    Button { text: "Focus"; clicked => { root.focus_selected(); } }
+    Button { text: "Undo"; clicked => { root.undo(); } }
+    Button { text: "Redo"; clicked => { root.redo(); } }
+    Button { text: root.gizmo_translate_active ? "Move*" : "Move"; clicked => { root.set_gizmo_translate(); } }
+    Button { text: root.gizmo_rotate_active ? "Rotate*" : "Rotate"; clicked => { root.set_gizmo_rotate(); } }
+    Button { text: root.gizmo_scale_active ? "Scale*" : "Scale"; clicked => { root.set_gizmo_scale(); } }
+    Button { text: root.gizmo_local_space ? "Local" : "World"; clicked => { root.toggle_gizmo_space(); } }
+    Button { text: root.camera_is_ortho ? "Ortho" : "Persp"; clicked => { root.toggle_ortho(); } }
+    Button { text: root.measurement_mode_active ? "Measure*" : "Measure"; clicked => { root.toggle_measurement(); } }
+    Button { text: root.turntable_active ? "Turntable*" : "Turntable"; clicked => { root.toggle_turntable(); } }
+    Button { text: "Front"; clicked => { root.camera_front(); } }
+    Button { text: "Top"; clicked => { root.camera_top(); } }
+    Button { text: "Right"; clicked => { root.camera_right(); } }
+
+    Text { text: root.viewport_status; }
+    Text { text: root.toast_text; }
+    Text { text: root.task_status; }
+}

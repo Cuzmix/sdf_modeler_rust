@@ -1,0 +1,27 @@
+import { Button, HorizontalBox, VerticalBox } from "std-widgets.slint";
+import { NudgeRow } from "nudge_row.slint";
+import { AppTheme } from "theme.slint";
+
+export component ImportDialogPanel inherits VerticalBox {
+    in property <bool> show_import_dialog;
+    in property <string> import_summary;
+    in property <int> import_resolution;
+
+    callback nudge_import_resolution(delta: int);
+    callback confirm_import();
+    callback cancel_import();
+
+    spacing: AppTheme.section_spacing;
+
+    if root.show_import_dialog : VerticalBox {
+        spacing: AppTheme.section_spacing;
+        Text { text: "Import Mesh"; }
+        Text { text: root.import_summary; wrap: word-wrap; }
+        NudgeRow { minus_label: "Imp-"; value_label: "Resolution " + root.import_resolution; plus_label: "Imp+"; step_down => { root.nudge_import_resolution(-8); } step_up => { root.nudge_import_resolution(8); } }
+        HorizontalBox {
+            spacing: AppTheme.section_spacing;
+            Button { text: "Commit"; clicked => { root.confirm_import(); } }
+            Button { text: "Cancel"; clicked => { root.cancel_import(); } }
+        }
+    }
+}

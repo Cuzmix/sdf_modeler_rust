@@ -289,8 +289,8 @@ impl SdfApp {
     }
 
     fn toggle_expert_panel(&mut self, panel: ExpertPanelKind) {
-        self.egui
-            .toggle_expert_panel(&mut self.ui.expert_panels, panel);
+        let next_open = !self.ui.expert_panels.is_open(panel);
+        self.ui.expert_panels.set_open(panel, next_open);
     }
 
     /// Process all collected actions. This is the single mutation point — the
@@ -484,16 +484,46 @@ impl SdfApp {
                     }
                 }
                 Action::AddReferenceImage => {
-                    // Frontend adapters own file picking and texture upload for reference images.
+                    match crate::desktop_dialogs::reference_image_dialog() {
+                        FileDialogSelection::Selected(path) => {
+                            match crate::app::reference_images::load_reference_image_metadata(&path)
+                            {
+                                Ok((width, height)) => {
+                                    if let Err(error) =
+                                        self.ui.reference_images.add_loaded(&path, width, height)
+                                    {
+                                        self.ui.toasts.push(super::Toast {
+                                            message: error,
+                                            is_error: true,
+                                            created: crate::compat::Instant::now(),
+                                            duration: crate::compat::Duration::from_secs(5),
+                                        });
+                                    }
+                                }
+                                Err(error) => {
+                                    self.ui.toasts.push(super::Toast {
+                                        message: error,
+                                        is_error: true,
+                                        created: crate::compat::Instant::now(),
+                                        duration: crate::compat::Duration::from_secs(5),
+                                    });
+                                }
+                            }
+                        }
+                        FileDialogSelection::Unsupported => {
+                            push_platform_unsupported_toast(self, "Reference image dialogs");
+                        }
+                        FileDialogSelection::Cancelled => {}
+                    }
                 }
                 Action::RemoveReferenceImage(index) => {
-                    let _ = index;
+                    self.ui.reference_images.remove(index);
                 }
                 Action::ToggleReferenceImageVisibility(index) => {
-                    let _ = index;
+                    self.ui.reference_images.toggle_visibility(index);
                 }
                 Action::ToggleAllReferenceImages => {
-                    // Frontend adapters own reference-image presentation state.
+                    self.ui.reference_images.toggle_all_visibility();
                 }
                 Action::Select(id) => {
                     if let Some(node_id) = id {
@@ -503,6 +533,12 @@ impl SdfApp {
                     } else {
                         self.ui.selection.clear_selection();
                     }
+                    self.gpu.buffer_dirty = true;
+                }
+                Action::ToggleSelection(node_id) => {
+                    let selected_host =
+                        resolve_host_selection(&self.doc.scene, Some(node_id)).unwrap_or(node_id);
+                    self.ui.selection.toggle_select(selected_host);
                     self.gpu.buffer_dirty = true;
                 }
                 Action::DeleteSelected => {
@@ -705,8 +741,8 @@ impl SdfApp {
                 }
                 Action::ToggleGizmoSpace => {
                     self.gizmo.space = match self.gizmo.space {
-                        crate::ui::gizmo::GizmoSpace::Local => crate::ui::gizmo::GizmoSpace::World,
-                        crate::ui::gizmo::GizmoSpace::World => crate::ui::gizmo::GizmoSpace::Local,
+                        crate::gizmo::GizmoSpace::Local => crate::gizmo::GizmoSpace::World,
+                        crate::gizmo::GizmoSpace::World => crate::gizmo::GizmoSpace::Local,
                     };
                 }
                 Action::ResetPivot => {
@@ -915,7 +951,16 @@ impl SdfApp {
                 }
                 Action::InsertTransformAbove { target } => {
                     let new_id = self.doc.scene.insert_transform_above(target);
-                    self.ui.selection.select_single(new_id);
+                    let target_was_primary = self.ui.selection.selected == Some(target);
+                    let target_was_selected = self.ui.selection.selected_set.remove(&target);
+                    if target_was_primary {
+                        self.ui.selection.selected = Some(new_id);
+                    }
+                    if target_was_selected || target_was_primary {
+                        self.ui.selection.selected_set.insert(new_id);
+                    } else {
+                        self.ui.selection.select_single(new_id);
+                    }
                     self.ui.scene_graph_view.needs_initial_rebuild = true;
                     self.ui.scene_graph_view.pending_center_node = Some(new_id);
                     self.gpu.buffer_dirty = true;
@@ -1187,23 +1232,60 @@ impl SdfApp {
 
                 // ── Workspace ────────────────────────────────────────
                 Action::SetWorkspace(preset) => {
-                    self.egui.set_workspace(preset, &mut self.ui.expert_panels);
+                    self.ui.expert_panels.clear();
+                    match preset {
+                        super::actions::WorkspacePreset::Modeling => {
+                            self.ui
+                                .expert_panels
+                                .set_open(ExpertPanelKind::SceneTree, true);
+                            self.ui
+                                .expert_panels
+                                .set_open(ExpertPanelKind::Properties, true);
+                            self.ui
+                                .expert_panels
+                                .set_open(ExpertPanelKind::RenderSettings, true);
+                        }
+                        super::actions::WorkspacePreset::Sculpting => {
+                            self.ui
+                                .expert_panels
+                                .set_open(ExpertPanelKind::Properties, true);
+                            self.ui
+                                .expert_panels
+                                .set_open(ExpertPanelKind::BrushSettings, true);
+                            self.ui
+                                .expert_panels
+                                .set_open(ExpertPanelKind::ReferenceImages, true);
+                        }
+                        super::actions::WorkspacePreset::Rendering => {
+                            self.ui
+                                .expert_panels
+                                .set_open(ExpertPanelKind::RenderSettings, true);
+                            self.ui
+                                .expert_panels
+                                .set_open(ExpertPanelKind::History, true);
+                            self.ui
+                                .expert_panels
+                                .set_open(ExpertPanelKind::ReferenceImages, true);
+                        }
+                    }
                 }
                 Action::DockShellPanel { panel, rect } => {
-                    self.egui
-                        .dock_shell_panel(&mut self.ui.primary_shell, panel, rect);
+                    let shell_panel = self.ui.primary_shell.panel_mut(panel);
+                    shell_panel.remember_floating_rect(rect);
+                    shell_panel.dock();
                 }
                 Action::UndockShellPanel(panel) => {
-                    self.egui
-                        .undock_shell_panel(&mut self.ui.primary_shell, panel);
+                    let last_rect = self.ui.primary_shell.panel(panel).last_floating_rect;
+                    self.ui
+                        .primary_shell
+                        .panel_mut(panel)
+                        .show_floating(last_rect);
                 }
                 Action::HideShellPanel(panel) => {
-                    self.egui
-                        .hide_shell_panel(&mut self.ui.primary_shell, panel);
+                    self.ui.primary_shell.panel_mut(panel).hide();
                 }
                 Action::ResetPrimaryShellLayout => {
-                    self.egui
-                        .reset_primary_shell_layout(&mut self.ui.primary_shell);
+                    self.ui.primary_shell.reset_layout();
                 }
 
                 Action::ToggleExpertPanel(panel) => {
@@ -1626,13 +1708,11 @@ mod tests {
         SelectionBehaviorApplyResult,
     };
     use crate::app::actions::OperationInputSlot;
-    use crate::app::egui_state::{dock_tab_for_shell_panel, EguiFrontendState};
     use crate::app::reference_images::ReferenceImageStore;
     use crate::app::state::{
         DocumentState, ExpertPanelKind, MultiTransformSessionState, PrimaryShellState,
-        PrimaryShellUtilityTab, SceneGraphViewState, SceneSelectionState, ShellPanelKind, UiState,
+        SceneGraphViewState, SceneSelectionState, UiState,
     };
-    use crate::app::ui_geometry::FloatingPanelBounds;
     use crate::gpu::camera::Camera;
     use crate::graph::history::History;
     use crate::graph::presented_object::resolve_presented_object;
@@ -1693,10 +1773,6 @@ mod tests {
             measurement_points: Vec::new(),
             multi_transform_edit: MultiTransformSessionState::default(),
         }
-    }
-
-    fn test_egui_state() -> EguiFrontendState {
-        EguiFrontendState::default()
     }
 
     #[test]
@@ -1906,10 +1982,9 @@ mod tests {
     }
 
     #[test]
-    fn activate_sculpt_interaction_does_not_auto_open_brush_settings_dock() {
+    fn activate_sculpt_interaction_keeps_brush_settings_panel_closed_by_default() {
         let mut doc = test_document_state();
         let mut ui = test_ui_state();
-        let egui = test_egui_state();
         let base = doc.scene.create_primitive(SdfPrimitive::Sphere);
         let sculpt_id = doc.scene.create_sculpt(
             base,
@@ -1921,7 +1996,7 @@ mod tests {
 
         activate_sculpt_interaction_state(&mut doc, &mut ui, sculpt_id, BrushMode::Add, 1.0);
 
-        assert!(!egui.is_expert_panel_open(ExpertPanelKind::BrushSettings));
+        assert!(!ui.expert_panels.is_open(ExpertPanelKind::BrushSettings));
     }
 
     #[test]
@@ -1954,102 +2029,6 @@ mod tests {
         );
         assert!(ui.measurement_mode);
         assert_eq!(ui.measurement_points, vec![Vec3::Y]);
-    }
-
-    #[test]
-    fn dock_shell_panel_creates_detached_surface_and_marks_panel_docked() {
-        let mut ui = test_ui_state();
-        let mut egui = test_egui_state();
-        let rect = FloatingPanelBounds::from_min_size(32.0, 48.0, 320.0, 240.0);
-
-        egui.dock_shell_panel(&mut ui.primary_shell, ShellPanelKind::Tool, rect);
-
-        assert!(ui.primary_shell.tool_panel.is_docked());
-        let (surface, _, _) = egui
-            .dock_state
-            .find_tab(&dock_tab_for_shell_panel(ShellPanelKind::Tool))
-            .expect("tool panel should be docked");
-        assert!(!surface.is_main());
-        assert_eq!(ui.primary_shell.tool_panel.last_floating_rect, Some(rect));
-    }
-
-    #[test]
-    fn undock_shell_panel_restores_floating_rect_and_removes_only_target_tab() {
-        let mut ui = test_ui_state();
-        let mut egui = test_egui_state();
-        let rect = FloatingPanelBounds::from_min_size(16.0, 24.0, 400.0, 280.0);
-
-        egui.dock_shell_panel(&mut ui.primary_shell, ShellPanelKind::Tool, rect);
-        let (surface, node, _) = egui
-            .dock_state
-            .find_tab(&dock_tab_for_shell_panel(ShellPanelKind::Tool))
-            .expect("tool panel should be docked");
-        egui.dock_state[surface][node]
-            .append_tab(dock_tab_for_shell_panel(ShellPanelKind::Inspector));
-
-        egui.undock_shell_panel(&mut ui.primary_shell, ShellPanelKind::Tool);
-
-        assert!(ui.primary_shell.tool_panel.is_floating());
-        assert_eq!(ui.primary_shell.tool_panel.last_floating_rect, Some(rect));
-        assert!(egui
-            .dock_state
-            .find_tab(&dock_tab_for_shell_panel(ShellPanelKind::Tool))
-            .is_none());
-        assert!(egui
-            .dock_state
-            .find_tab(&dock_tab_for_shell_panel(ShellPanelKind::Inspector))
-            .is_some());
-    }
-
-    #[test]
-    fn hide_shell_panel_removes_only_target_tab_from_shared_detached_window() {
-        let mut ui = test_ui_state();
-        let mut egui = test_egui_state();
-        let rect = FloatingPanelBounds::from_min_size(20.0, 30.0, 420.0, 300.0);
-
-        egui.dock_shell_panel(&mut ui.primary_shell, ShellPanelKind::Tool, rect);
-        let (surface, node, _) = egui
-            .dock_state
-            .find_tab(&dock_tab_for_shell_panel(ShellPanelKind::Tool))
-            .expect("tool panel should be docked");
-        egui.dock_state[surface][node]
-            .append_tab(dock_tab_for_shell_panel(ShellPanelKind::Inspector));
-
-        egui.hide_shell_panel(&mut ui.primary_shell, ShellPanelKind::Tool);
-
-        assert!(ui.primary_shell.tool_panel.is_hidden());
-        assert!(egui
-            .dock_state
-            .find_tab(&dock_tab_for_shell_panel(ShellPanelKind::Tool))
-            .is_none());
-        assert!(egui
-            .dock_state
-            .find_tab(&dock_tab_for_shell_panel(ShellPanelKind::Inspector))
-            .is_some());
-    }
-
-    #[test]
-    fn reset_primary_shell_layout_restores_shell_defaults_and_clears_detached_shell_windows() {
-        let mut ui = test_ui_state();
-        let mut egui = test_egui_state();
-        let rect = FloatingPanelBounds::from_min_size(12.0, 18.0, 300.0, 220.0);
-
-        egui.dock_shell_panel(&mut ui.primary_shell, ShellPanelKind::Tool, rect);
-        ui.primary_shell.active_utility_tab = PrimaryShellUtilityTab::Advanced;
-
-        egui.reset_primary_shell_layout(&mut ui.primary_shell);
-
-        assert!(ui.primary_shell.tool_panel.is_floating());
-        assert!(ui.primary_shell.inspector_panel.is_floating());
-        assert!(ui.primary_shell.drawer_panel.is_hidden());
-        assert_eq!(
-            ui.primary_shell.active_utility_tab,
-            PrimaryShellUtilityTab::History
-        );
-        assert!(egui
-            .dock_state
-            .find_tab(&dock_tab_for_shell_panel(ShellPanelKind::Tool))
-            .is_none());
     }
 
     #[test]

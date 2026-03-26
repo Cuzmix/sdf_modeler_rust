@@ -1,0 +1,243 @@
+import { ScrollView, VerticalBox } from "std-widgets.slint";
+import { ReferenceRowView } from "view_models.slint";
+import { AppTheme } from "theme.slint";
+import { ImportDialogPanel } from "import_dialog_panel.slint";
+import { InspectorPanel } from "inspector_panel.slint";
+import { ReferenceImagesPanel } from "reference_images_panel.slint";
+import { RenderSettingsPanel } from "render_settings_panel.slint";
+
+export component RightSidebar inherits Rectangle {
+    in property <string> inspector_title;
+    in property <string> inspector_chips;
+    in property <string> inspector_display;
+    in property <string> inspector_property_summary;
+    in property <bool> has_transform;
+    in property <float> transform_pos_x;
+    in property <float> transform_pos_y;
+    in property <float> transform_pos_z;
+    in property <float> transform_rot_x;
+    in property <float> transform_rot_y;
+    in property <float> transform_rot_z;
+    in property <float> selected_scale_x;
+    in property <float> selected_scale_y;
+    in property <float> selected_scale_z;
+    in property <bool> can_scale;
+    in property <bool> has_material;
+    in property <float> material_color_r;
+    in property <float> material_color_g;
+    in property <float> material_color_b;
+    in property <float> material_roughness;
+    in property <float> material_metallic;
+    in property <bool> has_operation;
+    in property <string> operation_label;
+    in property <float> operation_smooth_k;
+    in property <float> operation_steps;
+    in property <float> operation_color_blend;
+    in property <bool> has_sculpt;
+    in property <int> sculpt_resolution;
+    in property <float> sculpt_layer_intensity;
+    in property <float> sculpt_brush_radius;
+    in property <float> sculpt_brush_strength;
+    in property <bool> has_light;
+    in property <string> light_label;
+    in property <float> light_color_r;
+    in property <float> light_color_g;
+    in property <float> light_color_b;
+    in property <float> light_intensity;
+    in property <float> light_range;
+    in property <bool> light_cast_shadows;
+    in property <bool> light_volumetric;
+    in property <float> light_volumetric_density;
+    in property <[ReferenceRowView]> reference_rows;
+    in property <bool> render_show_grid;
+    in property <bool> render_show_node_labels;
+    in property <bool> render_show_bounding_box;
+    in property <bool> render_show_light_gizmos;
+    in property <bool> render_shadows_enabled;
+    in property <bool> render_ao_enabled;
+    in property <int> export_resolution;
+    in property <bool> adaptive_export;
+    in property <bool> show_import_dialog;
+    in property <string> import_summary;
+    in property <int> import_resolution;
+
+    callback nudge_selected_position(axis: int, delta: float);
+    callback nudge_selected_rotation(axis: int, delta: float);
+    callback nudge_selected_scale(axis: int, delta: float);
+    callback nudge_selected_material_color(axis: int, delta: float);
+    callback nudge_selected_material_roughness(delta: float);
+    callback nudge_selected_material_metallic(delta: float);
+    callback set_selected_material_roughness(value: float);
+    callback set_selected_material_metallic(value: float);
+    callback nudge_selected_operation_smooth_k(delta: float);
+    callback nudge_selected_operation_steps(delta: float);
+    callback nudge_selected_operation_color_blend(delta: float);
+    callback set_selected_operation_smooth_k(value: float);
+    callback set_selected_operation_steps(value: float);
+    callback set_selected_operation_color_blend(value: float);
+    callback nudge_selected_sculpt_resolution(delta: int);
+    callback nudge_selected_sculpt_layer_intensity(delta: float);
+    callback nudge_selected_brush_radius(delta: float);
+    callback nudge_selected_brush_strength(delta: float);
+    callback set_selected_sculpt_resolution(value: int);
+    callback set_selected_sculpt_layer_intensity(value: float);
+    callback set_selected_brush_radius(value: float);
+    callback set_selected_brush_strength(value: float);
+    callback nudge_selected_light_color(axis: int, delta: float);
+    callback nudge_selected_light_intensity(delta: float);
+    callback nudge_selected_light_range(delta: float);
+    callback toggle_selected_light_shadows();
+    callback toggle_selected_light_volumetric();
+    callback nudge_selected_light_volumetric_density(delta: float);
+    callback set_selected_light_intensity(value: float);
+    callback set_selected_light_range(value: float);
+    callback set_selected_light_shadows(value: bool);
+    callback set_selected_light_volumetric(value: bool);
+    callback set_selected_light_volumetric_density(value: float);
+    callback toggle_reference_visibility(index: int);
+    callback toggle_reference_lock(index: int);
+    callback cycle_reference_plane(index: int);
+    callback set_reference_opacity(index: int, value: float);
+    callback set_reference_scale(index: int, value: float);
+    callback remove_reference_image(index: int);
+    callback set_render_show_grid(value: bool);
+    callback set_render_show_node_labels(value: bool);
+    callback set_render_show_bounding_box(value: bool);
+    callback set_render_show_light_gizmos(value: bool);
+    callback set_render_shadows_enabled(value: bool);
+    callback set_render_ao_enabled(value: bool);
+    callback nudge_export_resolution(delta: int);
+    callback set_export_resolution(value: int);
+    callback set_adaptive_export(value: bool);
+    callback nudge_import_resolution(delta: int);
+    callback confirm_import();
+    callback cancel_import();
+
+    width: 360px;
+    background: AppTheme.panel_background;
+
+    ScrollView {
+        width: parent.width;
+        height: parent.height;
+
+        VerticalBox {
+            spacing: AppTheme.section_spacing;
+
+            InspectorPanel {
+                inspector_title: root.inspector_title;
+                inspector_chips: root.inspector_chips;
+                inspector_display: root.inspector_display;
+                inspector_property_summary: root.inspector_property_summary;
+                has_transform: root.has_transform;
+                transform_pos_x: root.transform_pos_x;
+                transform_pos_y: root.transform_pos_y;
+                transform_pos_z: root.transform_pos_z;
+                transform_rot_x: root.transform_rot_x;
+                transform_rot_y: root.transform_rot_y;
+                transform_rot_z: root.transform_rot_z;
+                selected_scale_x: root.selected_scale_x;
+                selected_scale_y: root.selected_scale_y;
+                selected_scale_z: root.selected_scale_z;
+                can_scale: root.can_scale;
+                has_material: root.has_material;
+                material_color_r: root.material_color_r;
+                material_color_g: root.material_color_g;
+                material_color_b: root.material_color_b;
+                material_roughness: root.material_roughness;
+                material_metallic: root.material_metallic;
+                has_operation: root.has_operation;
+                operation_label: root.operation_label;
+                operation_smooth_k: root.operation_smooth_k;
+                operation_steps: root.operation_steps;
+                operation_color_blend: root.operation_color_blend;
+                has_sculpt: root.has_sculpt;
+                sculpt_resolution: root.sculpt_resolution;
+                sculpt_layer_intensity: root.sculpt_layer_intensity;
+                sculpt_brush_radius: root.sculpt_brush_radius;
+                sculpt_brush_strength: root.sculpt_brush_strength;
+                has_light: root.has_light;
+                light_label: root.light_label;
+                light_color_r: root.light_color_r;
+                light_color_g: root.light_color_g;
+                light_color_b: root.light_color_b;
+                light_intensity: root.light_intensity;
+                light_range: root.light_range;
+                light_cast_shadows: root.light_cast_shadows;
+                light_volumetric: root.light_volumetric;
+                light_volumetric_density: root.light_volumetric_density;
+                nudge_selected_position(axis, delta) => { root.nudge_selected_position(axis, delta); }
+                nudge_selected_rotation(axis, delta) => { root.nudge_selected_rotation(axis, delta); }
+                nudge_selected_scale(axis, delta) => { root.nudge_selected_scale(axis, delta); }
+                nudge_selected_material_color(axis, delta) => { root.nudge_selected_material_color(axis, delta); }
+                nudge_selected_material_roughness(delta) => { root.nudge_selected_material_roughness(delta); }
+                nudge_selected_material_metallic(delta) => { root.nudge_selected_material_metallic(delta); }
+                set_selected_material_roughness(value) => { root.set_selected_material_roughness(value); }
+                set_selected_material_metallic(value) => { root.set_selected_material_metallic(value); }
+                nudge_selected_operation_smooth_k(delta) => { root.nudge_selected_operation_smooth_k(delta); }
+                nudge_selected_operation_steps(delta) => { root.nudge_selected_operation_steps(delta); }
+                nudge_selected_operation_color_blend(delta) => { root.nudge_selected_operation_color_blend(delta); }
+                set_selected_operation_smooth_k(value) => { root.set_selected_operation_smooth_k(value); }
+                set_selected_operation_steps(value) => { root.set_selected_operation_steps(value); }
+                set_selected_operation_color_blend(value) => { root.set_selected_operation_color_blend(value); }
+                nudge_selected_sculpt_resolution(delta) => { root.nudge_selected_sculpt_resolution(delta); }
+                nudge_selected_sculpt_layer_intensity(delta) => { root.nudge_selected_sculpt_layer_intensity(delta); }
+                nudge_selected_brush_radius(delta) => { root.nudge_selected_brush_radius(delta); }
+                nudge_selected_brush_strength(delta) => { root.nudge_selected_brush_strength(delta); }
+                set_selected_sculpt_resolution(value) => { root.set_selected_sculpt_resolution(value); }
+                set_selected_sculpt_layer_intensity(value) => { root.set_selected_sculpt_layer_intensity(value); }
+                set_selected_brush_radius(value) => { root.set_selected_brush_radius(value); }
+                set_selected_brush_strength(value) => { root.set_selected_brush_strength(value); }
+                nudge_selected_light_color(axis, delta) => { root.nudge_selected_light_color(axis, delta); }
+                nudge_selected_light_intensity(delta) => { root.nudge_selected_light_intensity(delta); }
+                nudge_selected_light_range(delta) => { root.nudge_selected_light_range(delta); }
+                toggle_selected_light_shadows => { root.toggle_selected_light_shadows(); }
+                toggle_selected_light_volumetric => { root.toggle_selected_light_volumetric(); }
+                nudge_selected_light_volumetric_density(delta) => { root.nudge_selected_light_volumetric_density(delta); }
+                set_selected_light_intensity(value) => { root.set_selected_light_intensity(value); }
+                set_selected_light_range(value) => { root.set_selected_light_range(value); }
+                set_selected_light_shadows(value) => { root.set_selected_light_shadows(value); }
+                set_selected_light_volumetric(value) => { root.set_selected_light_volumetric(value); }
+                set_selected_light_volumetric_density(value) => { root.set_selected_light_volumetric_density(value); }
+            }
+
+            ReferenceImagesPanel {
+                reference_rows: root.reference_rows;
+                toggle_reference_visibility(index) => { root.toggle_reference_visibility(index); }
+                toggle_reference_lock(index) => { root.toggle_reference_lock(index); }
+                cycle_reference_plane(index) => { root.cycle_reference_plane(index); }
+                set_reference_opacity(index, value) => { root.set_reference_opacity(index, value); }
+                set_reference_scale(index, value) => { root.set_reference_scale(index, value); }
+                remove_reference_image(index) => { root.remove_reference_image(index); }
+            }
+
+            RenderSettingsPanel {
+                render_show_grid: root.render_show_grid;
+                render_show_node_labels: root.render_show_node_labels;
+                render_show_bounding_box: root.render_show_bounding_box;
+                render_show_light_gizmos: root.render_show_light_gizmos;
+                render_shadows_enabled: root.render_shadows_enabled;
+                render_ao_enabled: root.render_ao_enabled;
+                export_resolution: root.export_resolution;
+                adaptive_export: root.adaptive_export;
+                set_render_show_grid(value) => { root.set_render_show_grid(value); }
+                set_render_show_node_labels(value) => { root.set_render_show_node_labels(value); }
+                set_render_show_bounding_box(value) => { root.set_render_show_bounding_box(value); }
+                set_render_show_light_gizmos(value) => { root.set_render_show_light_gizmos(value); }
+                set_render_shadows_enabled(value) => { root.set_render_shadows_enabled(value); }
+                set_render_ao_enabled(value) => { root.set_render_ao_enabled(value); }
+                nudge_export_resolution(delta) => { root.nudge_export_resolution(delta); }
+                set_export_resolution(value) => { root.set_export_resolution(value); }
+                set_adaptive_export(value) => { root.set_adaptive_export(value); }
+            }
+
+            ImportDialogPanel {
+                show_import_dialog: root.show_import_dialog;
+                import_summary: root.import_summary;
+                import_resolution: root.import_resolution;
+                nudge_import_resolution(delta) => { root.nudge_import_resolution(delta); }
+                confirm_import => { root.confirm_import(); }
+                cancel_import => { root.cancel_import(); }
+            }
+        }
+    }
+}

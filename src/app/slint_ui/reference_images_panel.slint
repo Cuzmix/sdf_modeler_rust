@@ -1,0 +1,59 @@
+import { Button, HorizontalBox, Slider, VerticalBox } from "std-widgets.slint";
+import { ReferenceRowView } from "view_models.slint";
+import { AppTheme } from "theme.slint";
+
+export component ReferenceImagesPanel inherits VerticalBox {
+    in property <[ReferenceRowView]> reference_rows;
+
+    callback toggle_reference_visibility(index: int);
+    callback toggle_reference_lock(index: int);
+    callback cycle_reference_plane(index: int);
+    callback set_reference_opacity(index: int, value: float);
+    callback set_reference_scale(index: int, value: float);
+    callback remove_reference_image(index: int);
+
+    spacing: AppTheme.section_spacing;
+
+    Text { text: "Reference Images"; }
+
+    for reference[index] in root.reference_rows : HorizontalBox {
+        spacing: AppTheme.section_spacing;
+
+        VerticalBox {
+            spacing: 2px;
+
+            HorizontalBox {
+                spacing: AppTheme.section_spacing;
+                Button { text: reference.visible ? "Hide" : "Show"; clicked => { root.toggle_reference_visibility(index); } }
+                Button { text: reference.locked ? "Unlock" : "Lock"; clicked => { root.toggle_reference_lock(index); } }
+                Button { text: reference.plane_label; clicked => { root.cycle_reference_plane(index); } }
+                Text { text: reference.label; }
+                Button { text: "Remove"; clicked => { root.remove_reference_image(index); } }
+            }
+
+            HorizontalBox {
+                spacing: AppTheme.section_spacing;
+                Text { text: "Opacity " + reference.opacity; }
+                Slider {
+                    minimum: 0;
+                    maximum: 1;
+                    step: 0.01;
+                    value: reference.opacity;
+                    changed(value) => { root.set_reference_opacity(index, value); }
+                }
+            }
+
+            HorizontalBox {
+                spacing: AppTheme.section_spacing;
+                Text { text: "Scale " + reference.scale; }
+                Slider {
+                    minimum: 0.05;
+                    maximum: 20;
+                    step: 0.05;
+                    value: reference.scale;
+                    changed(value) => { root.set_reference_scale(index, value); }
+                }
+            }
+        }
+    }
+}

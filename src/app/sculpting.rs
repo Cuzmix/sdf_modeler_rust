@@ -4,7 +4,7 @@ use crate::gpu::picking::{PendingPick, PickResult};
 use crate::graph::presented_object::{resolve_presented_object, PresentedObjectKind};
 use crate::graph::scene::{NodeData, NodeId, Scene};
 use crate::sculpt::{self, ActiveTool, BrushMode, FalloffMode, SculptState};
-use crate::ui::viewport::{BrushDispatch, BrushGpuParams};
+use crate::viewport::{BrushDispatch, BrushGpuParams};
 
 use super::{state::SculptRuntimeCache, PickRayInputs, PickState, SdfApp};
 

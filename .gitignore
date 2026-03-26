@@ -12,3 +12,4 @@
 *.idsig
 *.keystore
 *.jks
+*.slint~

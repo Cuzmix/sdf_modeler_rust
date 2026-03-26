@@ -1,0 +1,27 @@
+import { Button, HorizontalBox } from "std-widgets.slint";
+import { AppTheme } from "theme.slint";
+
+export component NudgeRow inherits HorizontalBox {
+    in property <string> minus_label;
+    in property <string> value_label;
+    in property <string> plus_label;
+
+    callback step_down();
+    callback step_up();
+
+    spacing: AppTheme.section_spacing;
+
+    Button {
+        text: root.minus_label;
+        clicked => { root.step_down(); }
+    }
+
+    Text {
+        text: root.value_label;
+    }
+
+    Button {
+        text: root.plus_label;
+        clicked => { root.step_up(); }
+    }
+}

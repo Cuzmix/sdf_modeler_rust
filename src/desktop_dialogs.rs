@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

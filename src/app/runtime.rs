@@ -1,6 +1,6 @@
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
-use crate::ui::viewport::ViewportResources;
+use crate::viewport::ViewportResources;
 
 #[derive(Clone)]
 pub struct AppRenderContext {

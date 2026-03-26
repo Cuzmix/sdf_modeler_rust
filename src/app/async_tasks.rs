@@ -8,7 +8,7 @@ use crate::gpu::camera::CameraUniform;
 use crate::graph::presented_object::resolve_presented_object;
 use crate::graph::scene::{MaterialParams, NodeData};
 use crate::graph::voxel;
-use crate::ui::viewport::ViewportResources;
+use crate::viewport::ViewportResources;
 
 use super::{BakeRequest, SdfApp};
 #[cfg(not(target_arch = "wasm32"))]
@@ -156,14 +156,29 @@ impl SdfApp {
         height: u32,
         generation: u64,
     ) -> super::frontend_models::ViewportFrameImage {
-        let resources = self.gpu.viewport_resources.read();
+        let mut resources = self.gpu.viewport_resources.write();
         let uniform = self.build_viewport_uniform(&resources, width, height);
+        let post_process = crate::viewport::ViewportPostProcessOptions {
+            outline_color: self.settings.render.outline_color,
+            outline_width: self.settings.render.outline_thickness,
+            bloom_params: if self.settings.render.bloom_enabled {
+                [
+                    self.settings.render.bloom_threshold,
+                    self.settings.render.bloom_intensity,
+                    self.settings.render.bloom_radius,
+                    1.0,
+                ]
+            } else {
+                [0.0, 0.0, 0.0, 0.0]
+            },
+        };
         let rgba8 = resources.screenshot(
             &self.gpu.render_context.device,
             &self.gpu.render_context.queue,
             &uniform,
             width,
             height,
+            post_process,
         );
 
         super::frontend_models::ViewportFrameImage {
@@ -180,14 +195,32 @@ impl SdfApp {
         width: u32,
         height: u32,
     ) {
-        let resources = self.gpu.viewport_resources.read();
+        let mut resources = self.gpu.viewport_resources.write();
         let uniform = self.build_viewport_uniform(&resources, width, height);
-        resources.render_to_view(
-            &self.gpu.render_context.device,
-            &self.gpu.render_context.queue,
-            &uniform,
-            target_view,
-        );
+        let post_process = crate::viewport::ViewportPostProcessOptions {
+            outline_color: self.settings.render.outline_color,
+            outline_width: self.settings.render.outline_thickness,
+            bloom_params: if self.settings.render.bloom_enabled {
+                [
+                    self.settings.render.bloom_threshold,
+                    self.settings.render.bloom_intensity,
+                    self.settings.render.bloom_radius,
+                    1.0,
+                ]
+            } else {
+                [0.0, 0.0, 0.0, 0.0]
+            },
+        };
+        resources.render_to_view(crate::viewport::ViewportRenderRequest {
+            device: &self.gpu.render_context.device,
+            queue: &self.gpu.render_context.queue,
+            uniform: &uniform,
+            view: target_view,
+            camera: &self.doc.camera,
+            reference_images: &self.ui.reference_images,
+            viewport_size: (width, height),
+            post_process,
+        });
     }
     // ── Bake ─────────────────────────────────────────────────────────────
 

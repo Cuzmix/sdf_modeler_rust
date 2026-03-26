@@ -6,6 +6,7 @@ use glam::Vec3;
 
 use crate::app::reference_images::ReferenceImageStore;
 use crate::compat::Instant;
+use crate::gizmo::{GizmoMode, GizmoSelection, GizmoSpace, GizmoState};
 use crate::gpu::camera::Camera;
 use crate::gpu::picking::PendingPick;
 use crate::graph::history::History;
@@ -13,7 +14,6 @@ use crate::graph::scene::{MaterialParams, NodeId, Scene};
 use crate::mesh_import::TriMesh;
 use crate::sculpt::{ActiveTool, BrushMode, SculptState};
 use crate::settings::SelectionBehaviorSettings;
-use crate::ui::gizmo::{GizmoMode, GizmoSelection, GizmoSpace, GizmoState};
 
 use super::runtime::{AppRenderContext, ViewportResourceHandle};
 use super::ui_geometry::FloatingPanelBounds;
@@ -655,11 +655,8 @@ pub struct PerfState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::egui_state::reconcile_docked_panels;
     use crate::mesh_import::TriMesh;
     use crate::settings::{GroupRotateDirection, SelectionBehaviorSettings};
-    use crate::ui::dock::Tab;
-    use egui_dock::DockState;
 
     /// Create a simple test mesh (two triangles forming a 2x2x0 quad).
     fn test_quad_mesh(num_triangles: usize) -> TriMesh {
@@ -872,17 +869,6 @@ mod tests {
         assert!(state.sculpt_utility_strip_visible);
         assert!(state.sculpt_utility_drag.is_none());
         assert_eq!(state.layout_revision, 10);
-    }
-
-    #[test]
-    fn primary_shell_reconcile_hides_missing_docked_tab() {
-        let mut state = PrimaryShellState::default();
-        state.tool_panel.dock();
-        let dock_state = DockState::new(vec![Tab::Viewport]);
-
-        reconcile_docked_panels(&mut state, &dock_state);
-
-        assert!(state.tool_panel.is_hidden());
     }
 
     #[test]
