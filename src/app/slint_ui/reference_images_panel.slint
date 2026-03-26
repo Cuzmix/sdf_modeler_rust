@@ -1,11 +1,11 @@
 import { Button, HorizontalBox, Slider, VerticalBox } from "std-widgets.slint";
-import { ReferenceRowView, UtilityAction } from "view_models.slint";
+import { ReferenceImageAction, ReferenceRowView } from "view_models.slint";
 import { AppTheme } from "theme.slint";
 
 export component ReferenceImagesPanel inherits VerticalBox {
     in property <[ReferenceRowView]> reference_rows;
 
-    callback perform_action(action: UtilityAction, index: int, value: float);
+    callback perform_reference_action(action: ReferenceImageAction, index: int, value: float);
 
     spacing: AppTheme.section_spacing;
 
@@ -19,11 +19,11 @@ export component ReferenceImagesPanel inherits VerticalBox {
 
             HorizontalBox {
                 spacing: AppTheme.section_spacing;
-                Button { text: reference.visible ? "Hide" : "Show"; clicked => { root.perform_action(UtilityAction.toggle-reference-visibility, index, 0); } }
-                Button { text: reference.locked ? "Unlock" : "Lock"; clicked => { root.perform_action(UtilityAction.toggle-reference-lock, index, 0); } }
-                Button { text: reference.plane_label; clicked => { root.perform_action(UtilityAction.cycle-reference-plane, index, 0); } }
+                Button { text: reference.visible ? "Hide" : "Show"; clicked => { root.perform_reference_action(ReferenceImageAction.toggle-reference-visibility, index, 0); } }
+                Button { text: reference.locked ? "Unlock" : "Lock"; clicked => { root.perform_reference_action(ReferenceImageAction.toggle-reference-lock, index, 0); } }
+                Button { text: reference.plane_label; clicked => { root.perform_reference_action(ReferenceImageAction.cycle-reference-plane, index, 0); } }
                 Text { text: reference.label; }
-                Button { text: "Remove"; clicked => { root.perform_action(UtilityAction.remove-reference-image, index, 0); } }
+                Button { text: "Remove"; clicked => { root.perform_reference_action(ReferenceImageAction.remove-reference-image, index, 0); } }
             }
 
             HorizontalBox {
@@ -34,7 +34,7 @@ export component ReferenceImagesPanel inherits VerticalBox {
                     maximum: 1;
                     step: 0.01;
                     value: reference.opacity;
-                    changed(value) => { root.perform_action(UtilityAction.set-reference-opacity, index, value); }
+                    changed(value) => { root.perform_reference_action(ReferenceImageAction.set-reference-opacity, index, value); }
                 }
             }
 
@@ -46,7 +46,7 @@ export component ReferenceImagesPanel inherits VerticalBox {
                     maximum: 20;
                     step: 0.05;
                     value: reference.scale;
-                    changed(value) => { root.perform_action(UtilityAction.set-reference-scale, index, value); }
+                    changed(value) => { root.perform_reference_action(ReferenceImageAction.set-reference-scale, index, value); }
                 }
             }
         }

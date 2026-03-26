@@ -183,22 +183,28 @@ export enum InspectorEditMode {
     toggle,
 }
 
-export enum UtilityAction {
-    set-render-show-grid,
-    set-render-show-node-labels,
-    set-render-show-bounding-box,
-    set-render-show-light-gizmos,
-    set-render-shadows-enabled,
-    set-render-ao-enabled,
+export enum RenderSettingsAction {
+    set-show-grid,
+    set-show-node-labels,
+    set-show-bounding-box,
+    set-show-light-gizmos,
+    set-shadows-enabled,
+    set-ao-enabled,
     nudge-export-resolution,
     set-export-resolution,
     set-adaptive-export,
+}
+
+export enum ReferenceImageAction {
     toggle-reference-visibility,
     toggle-reference-lock,
     cycle-reference-plane,
     set-reference-opacity,
     set-reference-scale,
     remove-reference-image,
+}
+
+export enum ImportDialogAction {
     nudge-import-resolution,
     confirm-import,
     cancel-import,

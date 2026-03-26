@@ -1,23 +1,23 @@
 import { CheckBox, SpinBox, VerticalBox } from "std-widgets.slint";
 import { NudgeRow } from "nudge_row.slint";
 import { AppTheme } from "theme.slint";
-import { RenderSettingsState, UtilityAction } from "view_models.slint";
+import { RenderSettingsAction, RenderSettingsState } from "view_models.slint";
 
 export component RenderSettingsPanel inherits VerticalBox {
     in property <RenderSettingsState> state;
 
-    callback perform_action(action: UtilityAction, index: int, value: float);
+    callback perform_render_action(action: RenderSettingsAction, value: float);
 
     spacing: AppTheme.section_spacing;
 
     Text { text: "Render"; }
-    CheckBox { text: "Show grid"; checked: root.state.show_grid; toggled => { root.perform_action(UtilityAction.set-render-show-grid, -1, self.checked ? 1.0 : 0.0); } }
-    CheckBox { text: "Node labels"; checked: root.state.show_node_labels; toggled => { root.perform_action(UtilityAction.set-render-show-node-labels, -1, self.checked ? 1.0 : 0.0); } }
-    CheckBox { text: "Bounding box"; checked: root.state.show_bounding_box; toggled => { root.perform_action(UtilityAction.set-render-show-bounding-box, -1, self.checked ? 1.0 : 0.0); } }
-    CheckBox { text: "Light gizmos"; checked: root.state.show_light_gizmos; toggled => { root.perform_action(UtilityAction.set-render-show-light-gizmos, -1, self.checked ? 1.0 : 0.0); } }
-    CheckBox { text: "Shadows"; checked: root.state.shadows_enabled; toggled => { root.perform_action(UtilityAction.set-render-shadows-enabled, -1, self.checked ? 1.0 : 0.0); } }
-    CheckBox { text: "Ambient occlusion"; checked: root.state.ao_enabled; toggled => { root.perform_action(UtilityAction.set-render-ao-enabled, -1, self.checked ? 1.0 : 0.0); } }
-    NudgeRow { minus_label: "Exp-"; value_label: "Export Res " + root.state.export_resolution; plus_label: "Exp+"; step_down => { root.perform_action(UtilityAction.nudge-export-resolution, -1, -16); } step_up => { root.perform_action(UtilityAction.nudge-export-resolution, -1, 16); } }
-    SpinBox { minimum: 16; maximum: 2048; step-size: 16; value: root.state.export_resolution; edited => { root.perform_action(UtilityAction.set-export-resolution, -1, self.value); } }
-    CheckBox { text: "Adaptive export"; checked: root.state.adaptive_export; toggled => { root.perform_action(UtilityAction.set-adaptive-export, -1, self.checked ? 1.0 : 0.0); } }
+    CheckBox { text: "Show grid"; checked: root.state.show_grid; toggled => { root.perform_render_action(RenderSettingsAction.set-show-grid, self.checked ? 1.0 : 0.0); } }
+    CheckBox { text: "Node labels"; checked: root.state.show_node_labels; toggled => { root.perform_render_action(RenderSettingsAction.set-show-node-labels, self.checked ? 1.0 : 0.0); } }
+    CheckBox { text: "Bounding box"; checked: root.state.show_bounding_box; toggled => { root.perform_render_action(RenderSettingsAction.set-show-bounding-box, self.checked ? 1.0 : 0.0); } }
+    CheckBox { text: "Light gizmos"; checked: root.state.show_light_gizmos; toggled => { root.perform_render_action(RenderSettingsAction.set-show-light-gizmos, self.checked ? 1.0 : 0.0); } }
+    CheckBox { text: "Shadows"; checked: root.state.shadows_enabled; toggled => { root.perform_render_action(RenderSettingsAction.set-shadows-enabled, self.checked ? 1.0 : 0.0); } }
+    CheckBox { text: "Ambient occlusion"; checked: root.state.ao_enabled; toggled => { root.perform_render_action(RenderSettingsAction.set-ao-enabled, self.checked ? 1.0 : 0.0); } }
+    NudgeRow { minus_label: "Exp-"; value_label: "Export Res " + root.state.export_resolution; plus_label: "Exp+"; step_down => { root.perform_render_action(RenderSettingsAction.nudge-export-resolution, -16); } step_up => { root.perform_render_action(RenderSettingsAction.nudge-export-resolution, 16); } }
+    SpinBox { minimum: 16; maximum: 2048; step-size: 16; value: root.state.export_resolution; edited => { root.perform_render_action(RenderSettingsAction.set-export-resolution, self.value); } }
+    CheckBox { text: "Adaptive export"; checked: root.state.adaptive_export; toggled => { root.perform_render_action(RenderSettingsAction.set-adaptive-export, self.checked ? 1.0 : 0.0); } }
 }

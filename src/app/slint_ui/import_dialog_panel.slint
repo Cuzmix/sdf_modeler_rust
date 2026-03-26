@@ -1,12 +1,12 @@
 import { Button, HorizontalBox, VerticalBox } from "std-widgets.slint";
 import { NudgeRow } from "nudge_row.slint";
 import { AppTheme } from "theme.slint";
-import { ImportDialogState, UtilityAction } from "view_models.slint";
+import { ImportDialogAction, ImportDialogState } from "view_models.slint";
 
 export component ImportDialogPanel inherits VerticalBox {
     in property <ImportDialogState> state;
 
-    callback perform_action(action: UtilityAction, index: int, value: float);
+    callback perform_import_action(action: ImportDialogAction, value: float);
 
     spacing: AppTheme.section_spacing;
 
@@ -14,11 +14,11 @@ export component ImportDialogPanel inherits VerticalBox {
         spacing: AppTheme.section_spacing;
         Text { text: "Import Mesh"; }
         Text { text: root.state.summary; wrap: word-wrap; }
-        NudgeRow { minus_label: "Imp-"; value_label: "Resolution " + root.state.resolution; plus_label: "Imp+"; step_down => { root.perform_action(UtilityAction.nudge-import-resolution, -1, -8); } step_up => { root.perform_action(UtilityAction.nudge-import-resolution, -1, 8); } }
+        NudgeRow { minus_label: "Imp-"; value_label: "Resolution " + root.state.resolution; plus_label: "Imp+"; step_down => { root.perform_import_action(ImportDialogAction.nudge-import-resolution, -8); } step_up => { root.perform_import_action(ImportDialogAction.nudge-import-resolution, 8); } }
         HorizontalBox {
             spacing: AppTheme.section_spacing;
-            Button { text: "Commit"; clicked => { root.perform_action(UtilityAction.confirm-import, -1, 0); } }
-            Button { text: "Cancel"; clicked => { root.perform_action(UtilityAction.cancel-import, -1, 0); } }
+            Button { text: "Commit"; clicked => { root.perform_import_action(ImportDialogAction.confirm-import, 0); } }
+            Button { text: "Cancel"; clicked => { root.perform_import_action(ImportDialogAction.cancel-import, 0); } }
         }
     }
 }

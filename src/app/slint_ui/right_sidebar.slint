@@ -1,5 +1,5 @@
 import { ScrollView, VerticalBox } from "std-widgets.slint";
-import { InspectorEditKind, InspectorEditMode, InspectorPanelState, UtilityAction, UtilityPanelState } from "view_models.slint";
+import { ImportDialogAction, InspectorEditKind, InspectorEditMode, InspectorPanelState, ReferenceImageAction, RenderSettingsAction, UtilityPanelState } from "view_models.slint";
 import { AppTheme } from "theme.slint";
 import { ImportDialogPanel } from "import_dialog_panel.slint";
 import { InspectorPanel } from "inspector_panel.slint";
@@ -11,7 +11,9 @@ export component RightSidebar inherits Rectangle {
     in property <UtilityPanelState> utility_state;
 
     callback edit_inspector(kind: InspectorEditKind, mode: InspectorEditMode, axis: int, value: float);
-    callback perform_utility_action(action: UtilityAction, index: int, value: float);
+    callback reference_image_action(action: ReferenceImageAction, index: int, value: float);
+    callback render_settings_action(action: RenderSettingsAction, value: float);
+    callback import_dialog_action(action: ImportDialogAction, value: float);
 
     width: 360px;
     background: AppTheme.panel_background;
@@ -30,17 +32,17 @@ export component RightSidebar inherits Rectangle {
 
             ReferenceImagesPanel {
                 reference_rows: root.utility_state.reference_rows;
-                perform_action(action, index, value) => { root.perform_utility_action(action, index, value); }
+                perform_reference_action(action, index, value) => { root.reference_image_action(action, index, value); }
             }
 
             RenderSettingsPanel {
                 state: root.utility_state.render_settings;
-                perform_action(action, index, value) => { root.perform_utility_action(action, index, value); }
+                perform_render_action(action, value) => { root.render_settings_action(action, value); }
             }
 
             ImportDialogPanel {
                 state: root.utility_state.import_dialog;
-                perform_action(action, index, value) => { root.perform_utility_action(action, index, value); }
+                perform_import_action(action, value) => { root.import_dialog_action(action, value); }
             }
         }
     }

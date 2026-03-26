@@ -1,5 +1,5 @@
 import { HorizontalBox, VerticalBox } from "std-widgets.slint";
-import { InspectorEditKind, InspectorEditMode, InspectorPanelState, SceneAction, ScenePanelState, TopBarAction, TopBarState, UtilityAction, UtilityPanelState, ViewportPathView } from "view_models.slint";
+import { ImportDialogAction, InspectorEditKind, InspectorEditMode, InspectorPanelState, ReferenceImageAction, RenderSettingsAction, SceneAction, ScenePanelState, TopBarAction, TopBarState, UtilityPanelState, ViewportPathView } from "view_models.slint";
 import { AppTheme } from "theme.slint";
 import { RightSidebar } from "right_sidebar.slint";
 import { ScenePanel } from "scene_panel.slint";
@@ -25,7 +25,9 @@ export component SlintHostWindow inherits Window {
     callback top_bar_action(action: TopBarAction);
     callback scene_action(action: SceneAction, index: int, text: string);
     callback inspector_edit(kind: InspectorEditKind, mode: InspectorEditMode, axis: int, value: float);
-    callback utility_action(action: UtilityAction, index: int, value: float);
+    callback reference_image_action(action: ReferenceImageAction, index: int, value: float);
+    callback render_settings_action(action: RenderSettingsAction, value: float);
+    callback import_dialog_action(action: ImportDialogAction, value: float);
     callback viewport_pointer_event(event: PointerEvent, x: float, y: float);
     callback viewport_scroll_event(event: PointerScrollEvent);
     callback viewport_double_clicked(x: float, y: float);
@@ -64,7 +66,9 @@ export component SlintHostWindow inherits Window {
                 inspector_state: root.inspector_panel_state;
                 utility_state: root.utility_panel_state;
                 edit_inspector(kind, mode, axis, value) => { root.inspector_edit(kind, mode, axis, value); }
-                perform_utility_action(action, index, value) => { root.utility_action(action, index, value); }
+                reference_image_action(action, index, value) => { root.reference_image_action(action, index, value); }
+                render_settings_action(action, value) => { root.render_settings_action(action, value); }
+                import_dialog_action(action, value) => { root.import_dialog_action(action, value); }
             }
         }
     }
