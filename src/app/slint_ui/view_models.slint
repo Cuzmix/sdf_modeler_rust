@@ -139,20 +139,26 @@ export enum TopBarAction {
     toggle-gizmo-space,
 }
 
-export enum SceneAction {
+export enum SceneToolbarAction {
     create-sphere,
     create-box,
     create-light,
     duplicate-selected,
     delete-selected,
-    rename-selected,
-    filter-scene,
+}
+
+export enum SceneRowAction {
     select-row,
     toggle-row-selection,
     toggle-row-visibility,
     toggle-row-lock,
     duplicate-row,
     delete-row,
+}
+
+export enum SceneTextAction {
+    rename-selected,
+    filter-scene,
 }
 
 export enum InspectorEditKind {

@@ -1,5 +1,5 @@
 import { HorizontalBox, VerticalBox } from "std-widgets.slint";
-import { ImportDialogAction, InspectorEditKind, InspectorEditMode, InspectorPanelState, ReferenceImageAction, RenderSettingsAction, SceneAction, ScenePanelState, TopBarAction, TopBarState, UtilityPanelState, ViewportPathView } from "view_models.slint";
+import { ImportDialogAction, InspectorEditKind, InspectorEditMode, InspectorPanelState, ReferenceImageAction, RenderSettingsAction, ScenePanelState, SceneRowAction, SceneTextAction, SceneToolbarAction, TopBarAction, TopBarState, UtilityPanelState, ViewportPathView } from "view_models.slint";
 import { AppTheme } from "theme.slint";
 import { RightSidebar } from "right_sidebar.slint";
 import { ScenePanel } from "scene_panel.slint";
@@ -23,7 +23,9 @@ export component SlintHostWindow inherits Window {
     out property <float> viewport_height: viewport_panel.viewport_height;
 
     callback top_bar_action(action: TopBarAction);
-    callback scene_action(action: SceneAction, index: int, text: string);
+    callback scene_toolbar_action(action: SceneToolbarAction);
+    callback scene_row_action(action: SceneRowAction, index: int);
+    callback scene_text_action(action: SceneTextAction, text: string);
     callback inspector_edit(kind: InspectorEditKind, mode: InspectorEditMode, axis: int, value: float);
     callback reference_image_action(action: ReferenceImageAction, index: int, value: float);
     callback render_settings_action(action: RenderSettingsAction, value: float);
@@ -49,7 +51,9 @@ export component SlintHostWindow inherits Window {
 
             ScenePanel {
                 state: root.scene_panel_state;
-                perform_action(action, index, text) => { root.scene_action(action, index, text); }
+                toolbar_action(action) => { root.scene_toolbar_action(action); }
+                row_action(action, index) => { root.scene_row_action(action, index); }
+                text_action(action, text) => { root.scene_text_action(action, text); }
             }
 
             viewport_panel := ViewportPanel {

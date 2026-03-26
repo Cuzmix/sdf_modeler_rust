@@ -1,6 +1,8 @@
 use super::{mutate_host_and_tick, scene_row_at, CallbackContext};
 use crate::app::actions::Action;
-use crate::app::slint_frontend::{SceneAction, SlintHostWindow, TopBarAction};
+use crate::app::slint_frontend::{
+    SceneRowAction, SceneTextAction, SceneToolbarAction, SlintHostWindow, TopBarAction,
+};
 use crate::gizmo::GizmoMode;
 use crate::graph::scene::{LightType, SdfPrimitive};
 
@@ -18,9 +20,27 @@ pub(super) fn install(window: &SlintHostWindow, context: &CallbackContext) {
 
     {
         let context = context.clone();
-        window.on_scene_action(move |action, index, text| {
+        window.on_scene_toolbar_action(move |action| {
             mutate_host_and_tick(&context, move |host_state| {
-                handle_scene_action(host_state, action, index, text.to_string());
+                handle_scene_toolbar_action(host_state, action);
+            });
+        });
+    }
+
+    {
+        let context = context.clone();
+        window.on_scene_row_action(move |action, index| {
+            mutate_host_and_tick(&context, move |host_state| {
+                handle_scene_row_action(host_state, action, index);
+            });
+        });
+    }
+
+    {
+        let context = context.clone();
+        window.on_scene_text_action(move |action, text| {
+            mutate_host_and_tick(&context, move |host_state| {
+                handle_scene_text_action(host_state, action, text.to_string());
             });
         });
     }
@@ -63,63 +83,72 @@ fn handle_top_bar_action(host_state: &mut SlintHostState, action: TopBarAction) 
     }
 }
 
-fn handle_scene_action(
-    host_state: &mut SlintHostState,
-    action: SceneAction,
-    index: i32,
-    text: String,
-) {
+fn handle_scene_toolbar_action(host_state: &mut SlintHostState, action: SceneToolbarAction) {
     match action {
-        SceneAction::CreateSphere => {
+        SceneToolbarAction::CreateSphere => {
             host_state.queue_action(Action::CreatePrimitive(SdfPrimitive::Sphere));
         }
-        SceneAction::CreateBox => {
+        SceneToolbarAction::CreateBox => {
             host_state.queue_action(Action::CreatePrimitive(SdfPrimitive::Box));
         }
-        SceneAction::CreateLight => {
+        SceneToolbarAction::CreateLight => {
             host_state.queue_action(Action::CreateLight(LightType::Point));
         }
-        SceneAction::DuplicateSelected => host_state.queue_action(Action::Duplicate),
-        SceneAction::DeleteSelected => host_state.queue_action(Action::DeleteSelected),
-        SceneAction::RenameSelected => host_state.app.rename_selected_object(text),
-        SceneAction::FilterScene => {
-            host_state.app.ui.scene_tree_search = text;
-        }
-        SceneAction::SelectRow => {
+        SceneToolbarAction::DuplicateSelected => host_state.queue_action(Action::Duplicate),
+        SceneToolbarAction::DeleteSelected => host_state.queue_action(Action::DeleteSelected),
+    }
+}
+
+fn handle_scene_row_action(host_state: &mut SlintHostState, action: SceneRowAction, index: i32) {
+    match action {
+        SceneRowAction::SelectRow => {
             let Some(row) = scene_row_at(host_state.last_snapshot.as_ref(), index) else {
                 return;
             };
             host_state.queue_action(Action::Select(Some(row.host_id)));
         }
-        SceneAction::ToggleRowSelection => {
+        SceneRowAction::ToggleRowSelection => {
             let Some(row) = scene_row_at(host_state.last_snapshot.as_ref(), index) else {
                 return;
             };
             host_state.queue_action(Action::ToggleSelection(row.host_id));
         }
-        SceneAction::ToggleRowVisibility => {
+        SceneRowAction::ToggleRowVisibility => {
             let Some(row) = scene_row_at(host_state.last_snapshot.as_ref(), index) else {
                 return;
             };
             host_state.queue_action(Action::ToggleVisibility(row.object_root_id));
         }
-        SceneAction::ToggleRowLock => {
+        SceneRowAction::ToggleRowLock => {
             let Some(row) = scene_row_at(host_state.last_snapshot.as_ref(), index) else {
                 return;
             };
             host_state.queue_action(Action::ToggleLock(row.host_id));
         }
-        SceneAction::DuplicateRow => {
+        SceneRowAction::DuplicateRow => {
             let Some(row) = scene_row_at(host_state.last_snapshot.as_ref(), index) else {
                 return;
             };
             host_state.queue_action(Action::DuplicatePresentedObject(row.object_root_id));
         }
-        SceneAction::DeleteRow => {
+        SceneRowAction::DeleteRow => {
             let Some(row) = scene_row_at(host_state.last_snapshot.as_ref(), index) else {
                 return;
             };
             host_state.queue_action(Action::DeletePresentedObject(row.object_root_id));
+        }
+    }
+}
+
+fn handle_scene_text_action(
+    host_state: &mut SlintHostState,
+    action: SceneTextAction,
+    text: String,
+) {
+    match action {
+        SceneTextAction::RenameSelected => host_state.app.rename_selected_object(text),
+        SceneTextAction::FilterScene => {
+            host_state.app.ui.scene_tree_search = text;
         }
     }
 }

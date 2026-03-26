@@ -1,12 +1,12 @@
 import { Button, HorizontalBox, LineEdit, ScrollView, VerticalBox } from "std-widgets.slint";
-import { SceneAction, ScenePanelState, SceneRowView } from "view_models.slint";
+import { ScenePanelState, SceneRowAction, SceneRowView, SceneTextAction, SceneToolbarAction } from "view_models.slint";
 import { AppTheme } from "theme.slint";
 
 component SceneRowItem inherits Rectangle {
     in property <SceneRowView> scene_row;
     in property <int> row_index;
 
-    callback perform_action(action: SceneAction, index: int, text: string);
+    callback perform_row_action(action: SceneRowAction, index: int);
 
     height: 28px;
     background: scene_row.selected ? AppTheme.selected_row_background : transparent;
@@ -14,19 +14,21 @@ component SceneRowItem inherits Rectangle {
     HorizontalBox {
         spacing: AppTheme.section_spacing;
 
-        Button { text: scene_row.hidden ? "Show" : "Hide"; clicked => { root.perform_action(SceneAction.toggle-row-visibility, root.row_index, ""); } }
-        Button { text: scene_row.locked ? "Unlock" : "Lock"; clicked => { root.perform_action(SceneAction.toggle-row-lock, root.row_index, ""); } }
-        Button { text: "+"; clicked => { root.perform_action(SceneAction.toggle-row-selection, root.row_index, ""); } }
-        Button { text: scene_row.label; clicked => { root.perform_action(SceneAction.select-row, root.row_index, ""); } }
-        Button { text: "Dup"; clicked => { root.perform_action(SceneAction.duplicate-row, root.row_index, ""); } }
-        Button { text: "Del"; clicked => { root.perform_action(SceneAction.delete-row, root.row_index, ""); } }
+        Button { text: scene_row.hidden ? "Show" : "Hide"; clicked => { root.perform_row_action(SceneRowAction.toggle-row-visibility, root.row_index); } }
+        Button { text: scene_row.locked ? "Unlock" : "Lock"; clicked => { root.perform_row_action(SceneRowAction.toggle-row-lock, root.row_index); } }
+        Button { text: "+"; clicked => { root.perform_row_action(SceneRowAction.toggle-row-selection, root.row_index); } }
+        Button { text: scene_row.label; clicked => { root.perform_row_action(SceneRowAction.select-row, root.row_index); } }
+        Button { text: "Dup"; clicked => { root.perform_row_action(SceneRowAction.duplicate-row, root.row_index); } }
+        Button { text: "Del"; clicked => { root.perform_row_action(SceneRowAction.delete-row, root.row_index); } }
     }
 }
 
 export component ScenePanel inherits Rectangle {
     in property <ScenePanelState> state;
 
-    callback perform_action(action: SceneAction, index: int, text: string);
+    callback toolbar_action(action: SceneToolbarAction);
+    callback row_action(action: SceneRowAction, index: int);
+    callback text_action(action: SceneTextAction, text: string);
 
     width: 300px;
     background: AppTheme.panel_background;
@@ -43,33 +45,33 @@ export component ScenePanel inherits Rectangle {
 
             HorizontalBox {
                 spacing: AppTheme.section_spacing;
-                Button { text: "Sphere"; clicked => { root.perform_action(SceneAction.create-sphere, -1, ""); } }
-                Button { text: "Box"; clicked => { root.perform_action(SceneAction.create-box, -1, ""); } }
-                Button { text: "Light"; clicked => { root.perform_action(SceneAction.create-light, -1, ""); } }
+                Button { text: "Sphere"; clicked => { root.toolbar_action(SceneToolbarAction.create-sphere); } }
+                Button { text: "Box"; clicked => { root.toolbar_action(SceneToolbarAction.create-box); } }
+                Button { text: "Light"; clicked => { root.toolbar_action(SceneToolbarAction.create-light); } }
             }
 
             HorizontalBox {
                 spacing: AppTheme.section_spacing;
-                Button { text: "Dup Sel"; clicked => { root.perform_action(SceneAction.duplicate-selected, -1, ""); } }
-                Button { text: "Del Sel"; clicked => { root.perform_action(SceneAction.delete-selected, -1, ""); } }
+                Button { text: "Dup Sel"; clicked => { root.toolbar_action(SceneToolbarAction.duplicate-selected); } }
+                Button { text: "Del Sel"; clicked => { root.toolbar_action(SceneToolbarAction.delete-selected); } }
             }
 
             LineEdit {
                 text: root.state.selected_name;
                 placeholder-text: "Rename selection";
-                accepted => { root.perform_action(SceneAction.rename-selected, -1, self.text); }
+                accepted => { root.text_action(SceneTextAction.rename-selected, self.text); }
             }
 
             LineEdit {
                 text: root.state.scene_filter;
                 placeholder-text: "Filter scene";
-                edited(value) => { root.perform_action(SceneAction.filter-scene, -1, value); }
+                edited(value) => { root.text_action(SceneTextAction.filter-scene, value); }
             }
 
             for row[index] in root.state.scene_rows : SceneRowItem {
                 scene_row: row;
                 row_index: index;
-                perform_action(action, index, text) => { root.perform_action(action, index, text); }
+                perform_row_action(action, index) => { root.row_action(action, index); }
             }
 
             Text { text: "History"; }
