@@ -1,16 +1,18 @@
 import { Button, HorizontalBox, ScrollView, VerticalBox } from "std-widgets.slint";
 import { AppTheme } from "theme.slint";
-import { PanelHeaderAction } from "view_models.slint";
+import { PanelDragAction, PanelDragPhase, PanelHeaderAction } from "view_models.slint";
 
 export component PanelSheet inherits Rectangle {
     in property <string> title;
     in property <bool> pinned;
     in property <bool> collapsed;
     in property <length> expanded_height: 420px;
+    in property <bool> movable;
 
     callback header_action(action: PanelHeaderAction);
+    callback drag_action(action: PanelDragAction);
 
-    private property <length> header_height: 36px;
+    private property <length> header_height: 52px;
     private property <length> divider_y: AppTheme.overlay_panel_padding + header_height + AppTheme.section_spacing;
     private property <length> body_y: divider_y + 1px + AppTheme.section_spacing;
 
@@ -21,11 +23,42 @@ export component PanelSheet inherits Rectangle {
     background: AppTheme.overlay_panel_background;
     height: collapsed ? header_height + AppTheme.overlay_panel_padding * 2 : expanded_height;
 
+    if root.movable : Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: 8px;
+        width: 72px;
+        height: 18px;
+        background: #00000000;
+
+        for dot in [0, 1, 2, 3, 4, 5] : Rectangle {
+            width: 4px;
+            height: 4px;
+            x: dot * 10px + 6px;
+            y: (parent.height - self.height) / 2;
+            border-radius: 2px;
+            background: AppTheme.overlay_button_text;
+            opacity: 0.75;
+        }
+
+        TouchArea {
+            width: parent.width;
+            height: parent.height;
+
+            pointer-event(event) => {
+                root.drag_action({
+                    phase: event.kind == PointerEventKind.down ? PanelDragPhase.down : event.kind == PointerEventKind.up ? PanelDragPhase.up : event.kind == PointerEventKind.cancel ? PanelDragPhase.cancel : PanelDragPhase.move,
+                    x: parent.x / 1px + self.mouse_x / 1px,
+                    y: parent.y / 1px + self.mouse_y / 1px,
+                });
+            }
+        }
+    }
+
     header := HorizontalBox {
         x: AppTheme.overlay_panel_padding;
-        y: AppTheme.overlay_panel_padding;
+        y: AppTheme.overlay_panel_padding + (root.movable ? 14px : 0px);
         width: parent.width - AppTheme.overlay_panel_padding * 2;
-        height: root.header_height;
+        height: root.header_height - (root.movable ? 14px : 0px);
         spacing: AppTheme.section_spacing;
 
         Text {

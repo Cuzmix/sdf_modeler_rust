@@ -60,6 +60,7 @@ impl SlintHostState {
             scene_panel_ui: &self.app.ui.scene_panel,
             primary_shell: &self.app.ui.primary_shell,
             panel_framework: &self.app.ui.panel_framework,
+            viewport_size_logical: [window.get_viewport_width(), window.get_viewport_height()],
             workspace: &self.app.ui.workspace,
             history: &self.app.doc.history,
             reference_images: &self.app.ui.reference_images,

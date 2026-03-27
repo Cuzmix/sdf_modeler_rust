@@ -1355,6 +1355,32 @@ impl SdfApp {
                 Action::TogglePinnedPanelCollapsed(kind) => {
                     self.ui.panel_framework.toggle_pinned_collapsed(kind);
                 }
+                Action::BeginPanelDrag { kind, bar_id } => {
+                    self.ui.panel_framework.begin_panel_drag(kind, bar_id);
+                }
+                Action::DragPanel {
+                    kind,
+                    bar_id,
+                    delta_x,
+                    delta_y,
+                    viewport_width,
+                    viewport_height,
+                } => {
+                    self.ui.panel_framework.drag_panel(
+                        kind,
+                        bar_id,
+                        delta_x,
+                        delta_y,
+                        viewport_width,
+                        viewport_height,
+                    );
+                }
+                Action::EndPanelDrag { kind, bar_id } => {
+                    self.ui.panel_framework.end_panel_drag(kind, bar_id);
+                }
+                Action::CancelPanelDrag { kind, bar_id } => {
+                    self.ui.panel_framework.cancel_panel_drag(kind, bar_id);
+                }
                 Action::DismissTransientPanels => {
                     self.ui.panel_framework.dismiss_transient_panels();
                 }

@@ -15,7 +15,7 @@ component PanelLauncherButton inherits Rectangle {
     Text {
         x: 14px;
         y: 0px;
-        width: parent.width - 28px;
+        width: parent.width - 44px;
         height: parent.height;
         vertical-alignment: center;
         text: item.label;
@@ -30,6 +30,24 @@ component PanelLauncherButton inherits Rectangle {
         y: (parent.height - self.height) / 2;
         border-radius: 4px;
         background: AppTheme.overlay_button_active_border;
+    }
+
+    if item.show_drag_indicator : Rectangle {
+        width: 22px;
+        height: 10px;
+        x: parent.width - self.width - 12px;
+        y: (parent.height - self.height) / 2;
+        background: #00000000;
+
+        for dot in [0, 1, 2, 3] : Rectangle {
+            width: 3px;
+            height: 3px;
+            x: dot * 5px + 1px;
+            y: 3px;
+            border-radius: 2px;
+            background: AppTheme.overlay_button_text;
+            opacity: 0.75;
+        }
     }
 
     TouchArea {

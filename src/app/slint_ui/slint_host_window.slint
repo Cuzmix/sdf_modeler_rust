@@ -7,6 +7,8 @@ import {
     MaterialEditKind,
     OperationEditKind,
     PanelFrameworkViewState,
+    PanelDragAction,
+    PanelDragPhase,
     PanelHeaderAction,
     PanelKindView,
     ReferenceImageAction,
@@ -58,6 +60,7 @@ export component SlintHostWindow inherits Window {
     callback tool_palette_action(action: ToolPaletteAction);
     callback panel_launcher_action(kind: PanelKindView);
     callback panel_header_action(kind: PanelKindView, action: PanelHeaderAction);
+    callback panel_drag_action(kind: PanelKindView, action: PanelDragAction);
     callback dismiss_transient_panels();
     callback scene_toolbar_action(action: SceneToolbarAction);
     callback scene_row_action(action: SceneRowAction, index: int);
@@ -87,11 +90,6 @@ export component SlintHostWindow inherits Window {
 
         private property <length> panel_rail_width: 156px;
         private property <length> panel_margin: 20px;
-        private property <length> panel_gap: 14px;
-        private property <length> panel_sheet_width: self.width - self.panel_rail_width - self.panel_margin * 3 > 390px ? 390px : self.width - self.panel_rail_width - self.panel_margin * 3;
-        private property <length> panel_stack_x: self.width - self.panel_margin - self.panel_rail_width - self.panel_gap - self.panel_sheet_width;
-        private property <length> panel_stack_y: self.panel_margin;
-        private property <length> panel_stack_height: self.height - self.panel_margin * 2;
 
         viewport_panel := ViewportPanel {
             width: parent.width;
@@ -111,7 +109,7 @@ export component SlintHostWindow inherits Window {
             }
         }
 
-        if root.panel_framework_state.transient_panel.visible : Rectangle {
+        if root.panel_framework_state.transient_panel.visible && !root.panel_framework_state.panel_drag_active : Rectangle {
             width: parent.width;
             height: parent.height;
             background: AppTheme.overlay_panel_backdrop;
@@ -126,50 +124,44 @@ export component SlintHostWindow inherits Window {
             }
         }
 
-        panel_stack := Rectangle {
-            width: parent.panel_sheet_width;
-            height: parent.panel_stack_height;
-            x: parent.panel_stack_x;
-            y: parent.panel_stack_y;
-            background: #00000000;
-
-            VerticalLayout {
-                width: parent.width;
-                spacing: 12px;
-
-                PanelHost {
-                    width: parent.width;
-                    visible: root.panel_framework_state.transient_panel.visible;
-                    panel: root.panel_framework_state.transient_panel;
-                    inspector_state: root.inspector_panel_state;
-                    utility_state: root.utility_panel_state;
-                    panel_header_action(kind, action) => {
-                        root.panel_header_action(kind, action);
-                    }
-                    transform_edit(kind, mode, axis, value) => { root.transform_edit(kind, mode, axis, value); }
-                    material_edit(kind, mode, axis, value) => { root.material_edit(kind, mode, axis, value); }
-                    operation_edit(kind, mode, value) => { root.operation_edit(kind, mode, value); }
-                    sculpt_edit(kind, mode, value) => { root.sculpt_edit(kind, mode, value); }
-                    light_edit(kind, mode, axis, value) => { root.light_edit(kind, mode, axis, value); }
-                    render_settings_action(action, value) => { root.render_settings_action(action, value); }
-                }
-
-                for panel in root.panel_framework_state.pinned_panels : PanelHost {
-                    width: parent.width;
-                    panel: panel;
-                    inspector_state: root.inspector_panel_state;
-                    utility_state: root.utility_panel_state;
-                    panel_header_action(kind, action) => {
-                        root.panel_header_action(kind, action);
-                    }
-                    transform_edit(kind, mode, axis, value) => { root.transform_edit(kind, mode, axis, value); }
-                    material_edit(kind, mode, axis, value) => { root.material_edit(kind, mode, axis, value); }
-                    operation_edit(kind, mode, value) => { root.operation_edit(kind, mode, value); }
-                    sculpt_edit(kind, mode, value) => { root.sculpt_edit(kind, mode, value); }
-                    light_edit(kind, mode, axis, value) => { root.light_edit(kind, mode, axis, value); }
-                    render_settings_action(action, value) => { root.render_settings_action(action, value); }
-                }
+        for panel in root.panel_framework_state.pinned_panels : PanelHost {
+            x: panel.frame.x * 1px;
+            y: panel.frame.y * 1px;
+            panel: panel;
+            inspector_state: root.inspector_panel_state;
+            utility_state: root.utility_panel_state;
+            panel_header_action(kind, action) => {
+                root.panel_header_action(kind, action);
             }
+            panel_drag_action(kind, action) => {
+                root.panel_drag_action(kind, action);
+            }
+            transform_edit(kind, mode, axis, value) => { root.transform_edit(kind, mode, axis, value); }
+            material_edit(kind, mode, axis, value) => { root.material_edit(kind, mode, axis, value); }
+            operation_edit(kind, mode, value) => { root.operation_edit(kind, mode, value); }
+            sculpt_edit(kind, mode, value) => { root.sculpt_edit(kind, mode, value); }
+            light_edit(kind, mode, axis, value) => { root.light_edit(kind, mode, axis, value); }
+            render_settings_action(action, value) => { root.render_settings_action(action, value); }
+        }
+
+        transient_panel_host := PanelHost {
+            x: root.panel_framework_state.transient_panel.frame.x * 1px;
+            y: root.panel_framework_state.transient_panel.frame.y * 1px;
+            panel: root.panel_framework_state.transient_panel;
+            inspector_state: root.inspector_panel_state;
+            utility_state: root.utility_panel_state;
+            panel_header_action(kind, action) => {
+                root.panel_header_action(kind, action);
+            }
+            panel_drag_action(kind, action) => {
+                root.panel_drag_action(kind, action);
+            }
+            transform_edit(kind, mode, axis, value) => { root.transform_edit(kind, mode, axis, value); }
+            material_edit(kind, mode, axis, value) => { root.material_edit(kind, mode, axis, value); }
+            operation_edit(kind, mode, value) => { root.operation_edit(kind, mode, value); }
+            sculpt_edit(kind, mode, value) => { root.sculpt_edit(kind, mode, value); }
+            light_edit(kind, mode, axis, value) => { root.light_edit(kind, mode, axis, value); }
+            render_settings_action(action, value) => { root.render_settings_action(action, value); }
         }
 
         panel_bar := PanelBar {
@@ -189,6 +181,19 @@ export component SlintHostWindow inherits Window {
             y: parent.height - self.height - 28px;
             perform_action(action) => {
                 root.tool_palette_action(action);
+            }
+        }
+
+        if root.panel_framework_state.panel_drag_active : TouchArea {
+            width: parent.width;
+            height: parent.height;
+
+            pointer-event(event) => {
+                root.panel_drag_action(root.panel_framework_state.drag_panel_kind, {
+                    phase: event.kind == PointerEventKind.down ? PanelDragPhase.down : event.kind == PointerEventKind.up ? PanelDragPhase.up : event.kind == PointerEventKind.cancel ? PanelDragPhase.cancel : PanelDragPhase.move,
+                    x: self.mouse_x / 1px,
+                    y: self.mouse_y / 1px,
+                });
             }
         }
     }

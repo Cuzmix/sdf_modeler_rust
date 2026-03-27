@@ -6,6 +6,7 @@ import {
     InspectorPanelState,
     LightEditKind,
     MaterialEditKind,
+    PanelDragAction,
     OperationEditKind,
     PanelHeaderAction,
     PanelKindView,
@@ -22,6 +23,7 @@ export component PanelHost inherits Rectangle {
     in property <UtilityPanelState> utility_state;
 
     callback panel_header_action(kind: PanelKindView, action: PanelHeaderAction);
+    callback panel_drag_action(kind: PanelKindView, action: PanelDragAction);
     callback transform_edit(kind: TransformEditKind, mode: InspectorEditMode, axis: int, value: float);
     callback material_edit(kind: MaterialEditKind, mode: InspectorEditMode, axis: int, value: float);
     callback operation_edit(kind: OperationEditKind, mode: InspectorEditMode, value: float);
@@ -30,7 +32,8 @@ export component PanelHost inherits Rectangle {
     callback render_settings_action(action: RenderSettingsAction, value: float);
 
     visible: panel.visible;
-    height: panel.collapsed ? 64px : 420px;
+    height: panel.collapsed ? 64px : panel.frame.height * 1px;
+    width: panel.frame.width * 1px;
 
     PanelSheet {
         width: parent.width;
@@ -38,8 +41,16 @@ export component PanelHost inherits Rectangle {
         title: root.panel.title;
         pinned: root.panel.pinned;
         collapsed: root.panel.collapsed;
+        movable: root.panel.movable;
         header_action(action) => {
             root.panel_header_action(root.panel.kind, action);
+        }
+        drag_action(action) => {
+            root.panel_drag_action(root.panel.kind, {
+                phase: action.phase,
+                x: root.panel.frame.x + action.x,
+                y: root.panel.frame.y + action.y,
+            });
         }
 
         if root.panel.kind == PanelKindView.object-properties : InspectorPanel {

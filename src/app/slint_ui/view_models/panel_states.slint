@@ -63,6 +63,7 @@ export struct PanelLauncherItemView {
     label: string,
     active: bool,
     pinned: bool,
+    show_drag_indicator: bool,
     kind: PanelKindView,
 }
 
@@ -73,6 +74,13 @@ export struct PanelBarViewState {
     items: [PanelLauncherItemView],
 }
 
+export struct PanelFrameView {
+    x: float,
+    y: float,
+    width: float,
+    height: float,
+}
+
 export struct PanelSheetViewState {
     visible: bool,
     title: string,
@@ -80,12 +88,16 @@ export struct PanelSheetViewState {
     collapsed: bool,
     kind: PanelKindView,
     anchor: PanelAnchorView,
+    movable: bool,
+    frame: PanelFrameView,
 }
 
 export struct PanelFrameworkViewState {
     bar: PanelBarViewState,
     transient_panel: PanelSheetViewState,
     pinned_panels: [PanelSheetViewState],
+    panel_drag_active: bool,
+    drag_panel_kind: PanelKindView,
 }
 
 export struct ScenePanelState {

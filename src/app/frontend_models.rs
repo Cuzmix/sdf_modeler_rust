@@ -206,6 +206,7 @@ pub struct PanelLauncherItemModel {
     pub label: String,
     pub active: bool,
     pub pinned: bool,
+    pub show_drag_indicator: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -221,21 +222,33 @@ pub struct ActivePanelContentModel {
     pub kind: PanelKind,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PanelFrameModel {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct PanelSheetModel {
     pub kind: PanelKind,
     pub title: String,
     pub pinned: bool,
     pub collapsed: bool,
     pub anchor: PanelSheetAnchor,
+    pub frame: PanelFrameModel,
+    pub movable: bool,
     pub content: ActivePanelContentModel,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PanelFrameworkModel {
     pub bar: PanelBarModel,
     pub transient_panel: Option<PanelSheetModel>,
     pub pinned_panels: Vec<PanelSheetModel>,
+    pub panel_drag_active: bool,
+    pub drag_panel_kind: PanelKind,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -288,6 +301,7 @@ pub struct ShellSnapshotInputs<'a> {
     pub scene_panel_ui: &'a ScenePanelUiState,
     pub primary_shell: &'a PrimaryShellState,
     pub panel_framework: &'a PanelFrameworkState,
+    pub viewport_size_logical: [f32; 2],
     pub workspace: &'a WorkspaceUiState,
     pub history: &'a History,
     pub reference_images: &'a ReferenceImageStore,
@@ -302,7 +316,10 @@ pub struct ShellSnapshotInputs<'a> {
 pub fn build_shell_snapshot(inputs: ShellSnapshotInputs<'_>) -> ShellSnapshot {
     ShellSnapshot {
         tool_palette: build_tool_palette_model(inputs.primary_shell),
-        panel_framework: build_panel_framework_model(inputs.panel_framework),
+        panel_framework: build_panel_framework_model(
+            inputs.panel_framework,
+            inputs.viewport_size_logical,
+        ),
         scene_panel: build_scene_panel_model(inputs.scene, inputs.selection, inputs.scene_panel_ui),
         inspector: build_inspector_model(
             inputs.scene,
@@ -357,7 +374,10 @@ pub fn build_tool_palette_model(primary_shell: &PrimaryShellState) -> ToolPalett
     }
 }
 
-pub fn build_panel_framework_model(panel_framework: &PanelFrameworkState) -> PanelFrameworkModel {
+pub fn build_panel_framework_model(
+    panel_framework: &PanelFrameworkState,
+    viewport_size_logical: [f32; 2],
+) -> PanelFrameworkModel {
     let primary_bar = panel_framework
         .bar(crate::app::state::PanelBarId::PrimaryRight)
         .or_else(|| panel_framework.bars.first());
@@ -367,9 +387,17 @@ pub fn build_panel_framework_model(panel_framework: &PanelFrameworkState) -> Pan
         orientation: PanelBarOrientation::Vertical,
         items: PanelKind::ALL.to_vec(),
         active_transient: None,
+        transient_rect: None,
     };
     let bar = primary_bar.unwrap_or(&default_bar);
     let transient_kind = bar.active_transient;
+    let transient_frame = transient_kind.map(|_| {
+        panel_frame_model(panel_framework.resolved_transient_rect(
+            bar.id,
+            viewport_size_logical[0],
+            viewport_size_logical[1],
+        ))
+    });
 
     let items = bar
         .items
@@ -380,17 +408,24 @@ pub fn build_panel_framework_model(panel_framework: &PanelFrameworkState) -> Pan
             label: kind.label().to_string(),
             active: transient_kind == Some(kind) || panel_framework.pinned_instance(kind).is_some(),
             pinned: panel_framework.pinned_instance(kind).is_some(),
+            show_drag_indicator: transient_kind == Some(kind)
+                || panel_framework.pinned_instance(kind).is_some(),
         })
         .collect::<Vec<_>>();
 
-    let transient_panel = transient_kind.map(|kind| PanelSheetModel {
-        kind,
-        title: kind.label().to_string(),
-        pinned: false,
-        collapsed: false,
-        anchor: panel_framework.sheet_anchor_for_bar(bar.id),
-        content: ActivePanelContentModel { kind },
-    });
+    let transient_panel =
+        transient_kind
+            .zip(transient_frame)
+            .map(|(kind, frame)| PanelSheetModel {
+                kind,
+                title: kind.label().to_string(),
+                pinned: false,
+                collapsed: false,
+                anchor: panel_framework.sheet_anchor_for_bar(bar.id),
+                frame,
+                movable: true,
+                content: ActivePanelContentModel { kind },
+            });
 
     let mut pinned_instances = panel_framework
         .pinned_instances
@@ -413,6 +448,23 @@ pub fn build_panel_framework_model(panel_framework: &PanelFrameworkState) -> Pan
             pinned: true,
             collapsed: instance.collapsed,
             anchor: panel_framework.sheet_anchor_for_bar(instance.anchor_bar),
+            frame: panel_frame_model(
+                panel_framework
+                    .resolved_panel_rect(
+                        instance.kind,
+                        instance.anchor_bar,
+                        viewport_size_logical[0],
+                        viewport_size_logical[1],
+                    )
+                    .unwrap_or_else(|| {
+                        panel_framework.resolved_transient_rect(
+                            instance.anchor_bar,
+                            viewport_size_logical[0],
+                            viewport_size_logical[1],
+                        )
+                    }),
+            ),
+            movable: true,
             content: ActivePanelContentModel {
                 kind: instance.kind,
             },
@@ -428,6 +480,20 @@ pub fn build_panel_framework_model(panel_framework: &PanelFrameworkState) -> Pan
         },
         transient_panel,
         pinned_panels,
+        panel_drag_active: panel_framework.panel_drag.is_some(),
+        drag_panel_kind: panel_framework
+            .panel_drag
+            .map(|drag| drag.kind)
+            .unwrap_or(PanelKind::ObjectProperties),
+    }
+}
+
+fn panel_frame_model(bounds: crate::app::ui_geometry::FloatingPanelBounds) -> PanelFrameModel {
+    PanelFrameModel {
+        x: bounds.x,
+        y: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
     }
 }
 
@@ -1648,7 +1714,7 @@ mod tests {
         let mut state = PanelFrameworkState::default();
         state.open_panel(PanelKind::ObjectProperties, PanelBarId::PrimaryRight);
 
-        let model = build_panel_framework_model(&state);
+        let model = build_panel_framework_model(&state, [1200.0, 800.0]);
 
         assert_eq!(
             model.transient_panel.as_ref().map(|panel| panel.kind),
@@ -1668,16 +1734,74 @@ mod tests {
         state.pin_panel(PanelKind::RenderSettings);
         state.toggle_panel(PanelKind::RenderSettings, PanelBarId::PrimaryRight);
 
-        let model = build_panel_framework_model(&state);
+        let model = build_panel_framework_model(&state, [1200.0, 800.0]);
 
         assert!(model.transient_panel.is_none());
         assert_eq!(model.pinned_panels.len(), 1);
         assert_eq!(model.pinned_panels[0].kind, PanelKind::RenderSettings);
+        assert!(model.pinned_panels[0].movable);
         assert!(model
             .bar
             .items
             .iter()
             .any(|item| item.kind == PanelKind::RenderSettings && item.pinned && item.active));
+        assert!(model
+            .bar
+            .items
+            .iter()
+            .any(|item| item.kind == PanelKind::RenderSettings && item.show_drag_indicator));
+    }
+
+    #[test]
+    fn panel_framework_model_resolves_default_transient_frame() {
+        let mut state = PanelFrameworkState::default();
+        state.open_panel(PanelKind::ObjectProperties, PanelBarId::PrimaryRight);
+
+        let model = build_panel_framework_model(&state, [1200.0, 800.0]);
+        let panel = model.transient_panel.expect("transient panel");
+
+        assert!((panel.frame.width - 390.0).abs() < 0.01);
+        assert!((panel.frame.x - 620.0).abs() < 0.01);
+        assert!((panel.frame.y - 20.0).abs() < 0.01);
+        assert!(panel.movable);
+    }
+
+    #[test]
+    fn panel_framework_model_clamps_remembered_transient_frame() {
+        let mut state = PanelFrameworkState::default();
+        state.open_panel(PanelKind::ObjectProperties, PanelBarId::PrimaryRight);
+        state
+            .bar_mut(PanelBarId::PrimaryRight)
+            .expect("primary bar")
+            .transient_rect = Some(crate::app::ui_geometry::FloatingPanelBounds::from_min_size(
+            900.0, 700.0, 390.0, 420.0,
+        ));
+
+        let model = build_panel_framework_model(&state, [1000.0, 600.0]);
+        let panel = model.transient_panel.expect("transient panel");
+
+        assert!((panel.frame.x - 590.0).abs() < 0.01);
+        assert!((panel.frame.y - 160.0).abs() < 0.01);
+        assert!((panel.frame.height - 420.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn panel_framework_model_marks_only_active_transient_launcher_with_drag_hint() {
+        let mut state = PanelFrameworkState::default();
+        state.open_panel(PanelKind::RenderSettings, PanelBarId::PrimaryRight);
+
+        let model = build_panel_framework_model(&state, [1200.0, 800.0]);
+
+        assert!(model
+            .bar
+            .items
+            .iter()
+            .any(|item| item.kind == PanelKind::RenderSettings && item.show_drag_indicator));
+        assert!(model
+            .bar
+            .items
+            .iter()
+            .all(|item| item.kind == PanelKind::RenderSettings || !item.show_drag_indicator));
     }
 
     #[test]

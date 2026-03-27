@@ -228,6 +228,26 @@ pub enum Action {
     UnpinPanel(PanelKind),
     FocusPanel(PanelKind),
     TogglePinnedPanelCollapsed(PanelKind),
+    BeginPanelDrag {
+        kind: PanelKind,
+        bar_id: PanelBarId,
+    },
+    DragPanel {
+        kind: PanelKind,
+        bar_id: PanelBarId,
+        delta_x: f32,
+        delta_y: f32,
+        viewport_width: f32,
+        viewport_height: f32,
+    },
+    EndPanelDrag {
+        kind: PanelKind,
+        bar_id: PanelBarId,
+    },
+    CancelPanelDrag {
+        kind: PanelKind,
+        bar_id: PanelBarId,
+    },
     DismissTransientPanels,
     RemoveAttachedSculpt {
         host: NodeId,

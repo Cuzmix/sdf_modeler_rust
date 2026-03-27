@@ -3,11 +3,11 @@ use std::rc::Rc;
 use slint::VecModel;
 
 use crate::app::frontend_models::{
-    PanelBarModel, PanelLauncherItemModel, PanelSheetModel, ShellSnapshot,
+    PanelBarModel, PanelFrameModel, PanelLauncherItemModel, PanelSheetModel, ShellSnapshot,
 };
 use crate::app::slint_frontend::{
-    PanelAnchorView, PanelBarViewState, PanelEdgeView, PanelFrameworkViewState, PanelKindView,
-    PanelLauncherItemView, PanelOrientationView, PanelSheetViewState,
+    PanelAnchorView, PanelBarViewState, PanelEdgeView, PanelFrameView, PanelFrameworkViewState,
+    PanelKindView, PanelLauncherItemView, PanelOrientationView, PanelSheetViewState,
 };
 
 pub(super) fn build_panel_framework_state(snapshot: &ShellSnapshot) -> PanelFrameworkViewState {
@@ -23,6 +23,8 @@ pub(super) fn build_panel_framework_state(snapshot: &ShellSnapshot) -> PanelFram
                 .collect::<Vec<_>>(),
         ))
         .into(),
+        panel_drag_active: snapshot.panel_framework.panel_drag_active,
+        drag_panel_kind: panel_kind_view(snapshot.panel_framework.drag_panel_kind),
     }
 }
 
@@ -55,6 +57,7 @@ fn panel_launcher_item_view(model: &PanelLauncherItemModel) -> PanelLauncherItem
         label: model.label.clone().into(),
         active: model.active,
         pinned: model.pinned,
+        show_drag_indicator: model.show_drag_indicator,
         kind: panel_kind_view(model.kind),
     }
 }
@@ -68,6 +71,13 @@ fn panel_sheet_state(model: Option<&PanelSheetModel>) -> PanelSheetViewState {
             collapsed: false,
             kind: PanelKindView::ObjectProperties,
             anchor: PanelAnchorView::LeftOfBar,
+            movable: false,
+            frame: PanelFrameView {
+                x: 0.0,
+                y: 0.0,
+                width: 0.0,
+                height: 0.0,
+            },
         };
     };
 
@@ -83,6 +93,17 @@ fn panel_sheet_state(model: Option<&PanelSheetModel>) -> PanelSheetViewState {
             crate::app::state::PanelSheetAnchor::Above => PanelAnchorView::AboveBar,
             crate::app::state::PanelSheetAnchor::Below => PanelAnchorView::BelowBar,
         },
+        movable: model.movable,
+        frame: panel_frame_view(model.frame),
+    }
+}
+
+fn panel_frame_view(model: PanelFrameModel) -> PanelFrameView {
+    PanelFrameView {
+        x: model.x,
+        y: model.y,
+        width: model.width,
+        height: model.height,
     }
 }
 

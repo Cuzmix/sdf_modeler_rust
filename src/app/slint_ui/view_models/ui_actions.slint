@@ -40,6 +40,19 @@ export enum PanelHeaderAction {
     toggle-collapsed,
 }
 
+export enum PanelDragPhase {
+    down,
+    move,
+    up,
+    cancel,
+}
+
+export struct PanelDragAction {
+    phase: PanelDragPhase,
+    x: float,
+    y: float,
+}
+
 export enum SceneToolbarAction {
     create-sphere,
     create-box,
