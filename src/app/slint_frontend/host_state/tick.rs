@@ -97,6 +97,11 @@ impl SlintHostState {
             interaction_mode: self.app.ui.primary_shell.interaction_mode,
             gizmo_mode: self.app.gizmo.mode.clone(),
             gizmo_space: self.app.gizmo.space.clone(),
+            camera_is_ortho: self.app.doc.camera.orthographic,
+            measurement_mode_active: self.app.ui.measurement_mode,
+            turntable_active: self.app.ui.turntable_active,
+            help_visible: self.app.ui.show_help,
+            command_palette_visible: self.app.ui.command_palette_open,
         });
         apply_runtime_ui_state(window, &self.app);
 

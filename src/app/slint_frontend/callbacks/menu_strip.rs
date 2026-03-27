@@ -1,7 +1,9 @@
 use super::context::CallbackContext;
 use super::mutation::mutate_host_and_tick;
 use crate::app::actions::Action;
-use crate::app::frontend_models::{menu_commands_for_kind, MenuCommandKind, MenuCommandModel};
+use crate::app::frontend_models::{
+    menu_commands_for_kind, MenuCommandCheckState, MenuCommandKind, MenuCommandModel,
+};
 use crate::app::slint_frontend::{
     MenuCommandAction, MenuKindView, MenuNavigationAction, SettingsCardAction, SlintHostWindow,
 };
@@ -87,7 +89,12 @@ fn handle_menu_navigation_action(
     let Some(kind) = host_state.app.ui.menu.active_dropdown else {
         return;
     };
-    let items = menu_commands_for_kind(kind, file_actions_enabled(host_state), &host_state.app.settings);
+    let items = menu_commands_for_kind(
+        kind,
+        file_actions_enabled(host_state),
+        &host_state.app.settings,
+        menu_command_checks(host_state),
+    );
     let current_index = host_state.app.ui.menu.highlighted_command_index;
 
     match action {
@@ -302,6 +309,18 @@ fn active_enabled_command(
     items.get(active_index).map(|item| item.command)
 }
 
+fn menu_command_checks(
+    host_state: &crate::app::slint_frontend::host_state::SlintHostState,
+) -> MenuCommandCheckState {
+    MenuCommandCheckState {
+        ortho_enabled: host_state.app.doc.camera.orthographic,
+        measurement_enabled: host_state.app.ui.measurement_mode,
+        turntable_enabled: host_state.app.ui.turntable_active,
+        help_visible: host_state.app.ui.show_help,
+        command_palette_visible: host_state.app.ui.command_palette_open,
+    }
+}
+
 fn step_menu_kind(kind: MenuDropdownKind, forward: bool) -> MenuDropdownKind {
     const ORDER: [MenuDropdownKind; 4] = [
         MenuDropdownKind::File,
@@ -331,6 +350,7 @@ mod tests {
             label: format!("{command:?}"),
             shortcut_label: String::new(),
             enabled,
+            checked: false,
         }
     }
 

@@ -77,6 +77,7 @@ fn menu_dropdown_state(model: &MenuDropdownModel) -> MenuDropdownState {
                     shortcut_label: item.shortcut_label.clone().into(),
                     command: menu_command_view(item.command),
                     enabled: item.enabled,
+                    checked: item.checked,
                 })
                 .collect::<Vec<_>>(),
         ))

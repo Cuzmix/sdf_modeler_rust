@@ -25,9 +25,28 @@ component MenuDropdownRow inherits Rectangle {
         : #00000000;
     opacity: item.enabled ? 1.0 : 0.55;
 
+    Rectangle {
+        x: 10px;
+        y: (parent.height - self.height) / 2;
+        width: 14px;
+        height: 14px;
+        border-radius: 3px;
+        border-width: 1px;
+        border-color: AppTheme.overlay_button_border;
+        background: root.item.checked ? AppTheme.overlay_button_active_background : #00000000;
+
+        Text {
+            text: root.item.checked ? "x" : "";
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            color: AppTheme.overlay_button_text;
+            font-size: 11px;
+        }
+    }
+
     Text {
         text: item.label;
-        x: 10px;
+        x: 32px;
         y: (parent.height - self.height) / 2;
         color: AppTheme.overlay_button_text;
         font-size: 14px;

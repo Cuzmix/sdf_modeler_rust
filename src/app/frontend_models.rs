@@ -330,6 +330,7 @@ pub struct MenuCommandModel {
     pub label: String,
     pub shortcut_label: String,
     pub enabled: bool,
+    pub checked: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -499,6 +500,20 @@ pub struct ShellSnapshotInputs<'a> {
     pub interaction_mode: InteractionMode,
     pub gizmo_mode: GizmoMode,
     pub gizmo_space: GizmoSpace,
+    pub camera_is_ortho: bool,
+    pub measurement_mode_active: bool,
+    pub turntable_active: bool,
+    pub help_visible: bool,
+    pub command_palette_visible: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct MenuCommandCheckState {
+    pub ortho_enabled: bool,
+    pub measurement_enabled: bool,
+    pub turntable_enabled: bool,
+    pub help_visible: bool,
+    pub command_palette_visible: bool,
 }
 
 pub fn build_shell_snapshot(inputs: ShellSnapshotInputs<'_>) -> ShellSnapshot {
@@ -527,8 +542,18 @@ pub fn build_shell_snapshot(inputs: ShellSnapshotInputs<'_>) -> ShellSnapshot {
         &tool_context,
     );
     let menu_strip = build_menu_strip_model(inputs.menu_ui);
-    let menu_dropdown =
-        build_menu_dropdown_model(inputs.menu_ui, inputs.file_actions_enabled, inputs.settings);
+    let menu_dropdown = build_menu_dropdown_model(
+        inputs.menu_ui,
+        inputs.file_actions_enabled,
+        inputs.settings,
+        MenuCommandCheckState {
+            ortho_enabled: inputs.camera_is_ortho,
+            measurement_enabled: inputs.measurement_mode_active,
+            turntable_enabled: inputs.turntable_active,
+            help_visible: inputs.help_visible,
+            command_palette_visible: inputs.command_palette_visible,
+        },
+    );
     let settings_card = build_settings_card_model(inputs.menu_ui, inputs.settings);
 
     ShellSnapshot {
@@ -621,6 +646,7 @@ pub fn build_menu_dropdown_model(
     menu_ui: &MenuUiState,
     file_actions_enabled: bool,
     settings: &Settings,
+    checks: MenuCommandCheckState,
 ) -> MenuDropdownModel {
     let Some(kind) = menu_ui.active_dropdown else {
         return MenuDropdownModel {
@@ -640,7 +666,7 @@ pub fn build_menu_dropdown_model(
         MenuDropdownKind::Help => MenuStripKind::Help,
     };
 
-    let items = menu_commands_for_kind(kind, file_actions_enabled, settings);
+    let items = menu_commands_for_kind(kind, file_actions_enabled, settings, checks);
     let highlighted_index =
         resolve_menu_highlighted_index(menu_ui.highlighted_command_index, &items);
 
@@ -692,6 +718,7 @@ pub(crate) fn menu_commands_for_kind(
     kind: MenuDropdownKind,
     file_actions_enabled: bool,
     settings: &Settings,
+    checks: MenuCommandCheckState,
 ) -> Vec<MenuCommandModel> {
     match kind {
         MenuDropdownKind::File => vec![
@@ -700,84 +727,101 @@ pub(crate) fn menu_commands_for_kind(
                 "New Scene",
                 file_actions_enabled,
                 settings,
+                checks,
             ),
             menu_command(
                 MenuCommandKind::OpenProject,
                 "Open Project",
                 file_actions_enabled,
                 settings,
+                checks,
             ),
             menu_command(
                 MenuCommandKind::SaveProject,
                 "Save Project",
                 file_actions_enabled,
                 settings,
+                checks,
             ),
             menu_command(
                 MenuCommandKind::ImportMesh,
                 "Import Mesh",
                 file_actions_enabled,
                 settings,
+                checks,
             ),
             menu_command(
                 MenuCommandKind::ExportMesh,
                 "Export Mesh",
                 file_actions_enabled,
                 settings,
+                checks,
             ),
             menu_command(
                 MenuCommandKind::TakeScreenshot,
                 "Screenshot",
                 file_actions_enabled,
                 settings,
+                checks,
             ),
             menu_command(
                 MenuCommandKind::AddReferenceImage,
                 "Add Reference",
                 file_actions_enabled,
                 settings,
+                checks,
             ),
         ],
         MenuDropdownKind::Edit => vec![
-            menu_command(MenuCommandKind::Undo, "Undo", true, settings),
-            menu_command(MenuCommandKind::Redo, "Redo", true, settings),
-            menu_command(MenuCommandKind::Copy, "Copy", true, settings),
-            menu_command(MenuCommandKind::Paste, "Paste", true, settings),
-            menu_command(MenuCommandKind::Duplicate, "Duplicate", true, settings),
+            menu_command(MenuCommandKind::Undo, "Undo", true, settings, checks),
+            menu_command(MenuCommandKind::Redo, "Redo", true, settings, checks),
+            menu_command(MenuCommandKind::Copy, "Copy", true, settings, checks),
+            menu_command(MenuCommandKind::Paste, "Paste", true, settings, checks),
+            menu_command(MenuCommandKind::Duplicate, "Duplicate", true, settings, checks),
             menu_command(
                 MenuCommandKind::DeleteSelected,
                 "Delete Selected",
                 true,
                 settings,
+                checks,
             ),
         ],
         MenuDropdownKind::View => vec![
-            menu_command(MenuCommandKind::FrameAll, "Frame All", true, settings),
+            menu_command(MenuCommandKind::FrameAll, "Frame All", true, settings, checks),
             menu_command(
                 MenuCommandKind::FocusSelected,
                 "Focus Selected",
                 true,
                 settings,
+                checks,
             ),
-            menu_command(MenuCommandKind::CameraFront, "Front View", true, settings),
-            menu_command(MenuCommandKind::CameraTop, "Top View", true, settings),
-            menu_command(MenuCommandKind::CameraRight, "Right View", true, settings),
-            menu_command(MenuCommandKind::ToggleOrtho, "Toggle Ortho", true, settings),
-            menu_command(MenuCommandKind::ToggleMeasure, "Toggle Measure", true, settings),
+            menu_command(MenuCommandKind::CameraFront, "Front View", true, settings, checks),
+            menu_command(MenuCommandKind::CameraTop, "Top View", true, settings, checks),
+            menu_command(MenuCommandKind::CameraRight, "Right View", true, settings, checks),
+            menu_command(MenuCommandKind::ToggleOrtho, "Toggle Ortho", true, settings, checks),
+            menu_command(
+                MenuCommandKind::ToggleMeasure,
+                "Toggle Measure",
+                true,
+                settings,
+                checks,
+            ),
             menu_command(
                 MenuCommandKind::ToggleTurntable,
                 "Toggle Turntable",
                 true,
                 settings,
+                checks,
             ),
         ],
         MenuDropdownKind::Help => vec![
-            menu_command(MenuCommandKind::ToggleHelp, "Toggle Help", true, settings),
+            menu_command(MenuCommandKind::ToggleHelp, "Toggle Help", true, settings, checks),
             menu_command(
                 MenuCommandKind::ToggleCommandPalette,
                 "Command Palette",
                 true,
                 settings,
+                checks,
             ),
         ],
     }
@@ -788,12 +832,25 @@ fn menu_command(
     label: &str,
     enabled: bool,
     settings: &Settings,
+    checks: MenuCommandCheckState,
 ) -> MenuCommandModel {
     MenuCommandModel {
         command,
         label: label.to_string(),
         shortcut_label: menu_shortcut_label(command, settings),
         enabled,
+        checked: menu_command_checked(command, checks),
+    }
+}
+
+fn menu_command_checked(command: MenuCommandKind, checks: MenuCommandCheckState) -> bool {
+    match command {
+        MenuCommandKind::ToggleOrtho => checks.ortho_enabled,
+        MenuCommandKind::ToggleMeasure => checks.measurement_enabled,
+        MenuCommandKind::ToggleTurntable => checks.turntable_enabled,
+        MenuCommandKind::ToggleHelp => checks.help_visible,
+        MenuCommandKind::ToggleCommandPalette => checks.command_palette_visible,
+        _ => false,
     }
 }
 
@@ -2431,11 +2488,21 @@ mod tests {
         let mut menu_ui = MenuUiState::default();
         menu_ui.open_dropdown(MenuDropdownKind::File);
 
-        let disabled = build_menu_dropdown_model(&menu_ui, false, &Settings::default());
+        let disabled = build_menu_dropdown_model(
+            &menu_ui,
+            false,
+            &Settings::default(),
+            MenuCommandCheckState::default(),
+        );
         assert!(disabled.visible);
         assert!(disabled.items.iter().all(|item| !item.enabled));
 
-        let enabled = build_menu_dropdown_model(&menu_ui, true, &Settings::default());
+        let enabled = build_menu_dropdown_model(
+            &menu_ui,
+            true,
+            &Settings::default(),
+            MenuCommandCheckState::default(),
+        );
         assert!(enabled.items.iter().all(|item| item.enabled));
     }
 
@@ -2444,7 +2511,12 @@ mod tests {
         let mut menu_ui = MenuUiState::default();
         menu_ui.open_dropdown(MenuDropdownKind::Edit);
 
-        let model = build_menu_dropdown_model(&menu_ui, true, &Settings::default());
+        let model = build_menu_dropdown_model(
+            &menu_ui,
+            true,
+            &Settings::default(),
+            MenuCommandCheckState::default(),
+        );
         let undo = model
             .items
             .iter()
@@ -2458,6 +2530,45 @@ mod tests {
 
         assert_eq!(undo.shortcut_label, "Ctrl+Z");
         assert_eq!(copy.shortcut_label, "Ctrl+C");
+    }
+
+    #[test]
+    fn menu_dropdown_marks_toggle_commands_checked_from_runtime_state() {
+        let mut menu_ui = MenuUiState::default();
+        menu_ui.open_dropdown(MenuDropdownKind::View);
+
+        let model = build_menu_dropdown_model(
+            &menu_ui,
+            true,
+            &Settings::default(),
+            MenuCommandCheckState {
+                ortho_enabled: true,
+                measurement_enabled: false,
+                turntable_enabled: true,
+                help_visible: false,
+                command_palette_visible: false,
+            },
+        );
+
+        let ortho = model
+            .items
+            .iter()
+            .find(|item| item.command == MenuCommandKind::ToggleOrtho)
+            .expect("ortho command");
+        let measure = model
+            .items
+            .iter()
+            .find(|item| item.command == MenuCommandKind::ToggleMeasure)
+            .expect("measure command");
+        let turntable = model
+            .items
+            .iter()
+            .find(|item| item.command == MenuCommandKind::ToggleTurntable)
+            .expect("turntable command");
+
+        assert!(ortho.checked);
+        assert!(!measure.checked);
+        assert!(turntable.checked);
     }
 
     #[test]
