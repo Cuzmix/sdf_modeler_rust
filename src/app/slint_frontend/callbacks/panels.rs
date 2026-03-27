@@ -9,9 +9,7 @@ use crate::app::slint_frontend::{
     PanelPointerInteractionKind as PanelPointerInteractionKindView, PanelPointerPhase,
     PanelResizeHandle as PanelResizeHandleView, SlintHostWindow,
 };
-use crate::app::state::{
-    PanelBarId, PanelKind, PanelPointerInteractionKind, PanelResizeHandle,
-};
+use crate::app::state::{PanelBarId, PanelKind, PanelPointerInteractionKind, PanelResizeHandle};
 use crate::app::ui_geometry::FloatingPanelBounds;
 
 pub(super) fn install(window: &SlintHostWindow, context: &CallbackContext) {

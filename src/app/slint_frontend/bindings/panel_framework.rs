@@ -159,9 +159,7 @@ fn panel_resize_handle_view(
         Some(crate::app::state::PanelResizeHandle::Left) => PanelResizeHandleView::Left,
         Some(crate::app::state::PanelResizeHandle::TopLeft) => PanelResizeHandleView::TopLeft,
         Some(crate::app::state::PanelResizeHandle::TopRight) => PanelResizeHandleView::TopRight,
-        Some(crate::app::state::PanelResizeHandle::BottomLeft) => {
-            PanelResizeHandleView::BottomLeft
-        }
+        Some(crate::app::state::PanelResizeHandle::BottomLeft) => PanelResizeHandleView::BottomLeft,
         Some(crate::app::state::PanelResizeHandle::BottomRight) => {
             PanelResizeHandleView::BottomRight
         }

@@ -445,6 +445,7 @@ impl SdfApp {
                 primary_shell: state::PrimaryShellState::default(),
                 workspace: state::WorkspaceUiState::default(),
                 expert_panels: state::ExpertPanelRegistry::default(),
+                menu: state::MenuUiState::default(),
                 panel_framework: state::PanelFrameworkState::default(),
                 scene_panel: state::ScenePanelUiState::default(),
                 selection: state::SceneSelectionState::default(),

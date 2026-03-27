@@ -2,10 +2,10 @@ use std::path::Path;
 
 use crate::app::reference_images::ReferenceImageStore;
 use crate::app::state::{
-    ExpertPanelKind, ExpertPanelRegistry, InteractionMode, PanelBarEdge, PanelBarOrientation,
-    PanelFrameworkState, PanelKind, PanelPointerInteractionKind, PanelResizeHandle,
-    PanelSheetAnchor, PrimaryShellState, ScenePanelUiState, SceneSelectionState, WorkspaceRoute,
-    WorkspaceUiState,
+    ExpertPanelKind, ExpertPanelRegistry, InteractionMode, MenuDropdownKind, MenuUiState,
+    PanelBarEdge, PanelBarOrientation, PanelFrameworkState, PanelKind, PanelPointerInteractionKind,
+    PanelResizeHandle, PanelSheetAnchor, PrimaryShellState, ScenePanelUiState, SceneSelectionState,
+    WorkspaceRoute, WorkspaceUiState,
 };
 use crate::gizmo::{GizmoMode, GizmoSpace};
 use crate::graph::history::History;
@@ -17,7 +17,10 @@ use crate::graph::presented_object::{
 use crate::graph::scene::{NodeData, NodeId, Scene};
 use crate::sculpt::BrushMode;
 use crate::sculpt::SculptState;
-use crate::settings::{EnvironmentBackgroundMode, EnvironmentSource, Settings};
+use crate::settings::{
+    EnvironmentBackgroundMode, EnvironmentSource, GroupRotateDirection, MultiAxisOrientation,
+    MultiPivotMode, Settings,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ScenePanelRow {
@@ -230,6 +233,122 @@ pub struct ToolPanelModel {
     pub light: Option<InspectorLightModel>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum MenuStripKind {
+    File,
+    Edit,
+    View,
+    Settings,
+    Help,
+}
+
+impl MenuStripKind {
+    pub const ALL: [Self; 5] = [
+        Self::File,
+        Self::Edit,
+        Self::View,
+        Self::Settings,
+        Self::Help,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::File => "File",
+            Self::Edit => "Edit",
+            Self::View => "View",
+            Self::Settings => "Settings",
+            Self::Help => "Help",
+        }
+    }
+
+    pub fn dropdown_kind(self) -> Option<MenuDropdownKind> {
+        match self {
+            Self::File => Some(MenuDropdownKind::File),
+            Self::Edit => Some(MenuDropdownKind::Edit),
+            Self::View => Some(MenuDropdownKind::View),
+            Self::Settings => None,
+            Self::Help => Some(MenuDropdownKind::Help),
+        }
+    }
+
+    pub fn anchor_index(self) -> i32 {
+        match self {
+            Self::File => 0,
+            Self::Edit => 1,
+            Self::View => 2,
+            Self::Settings => 3,
+            Self::Help => 4,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum MenuCommandKind {
+    NewScene,
+    OpenProject,
+    SaveProject,
+    ImportMesh,
+    ExportMesh,
+    TakeScreenshot,
+    AddReferenceImage,
+    Undo,
+    Redo,
+    Copy,
+    Paste,
+    Duplicate,
+    DeleteSelected,
+    FrameAll,
+    FocusSelected,
+    CameraFront,
+    CameraTop,
+    CameraRight,
+    ToggleOrtho,
+    ToggleMeasure,
+    ToggleTurntable,
+    ToggleHelp,
+    ToggleCommandPalette,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MenuStripItemModel {
+    pub kind: MenuStripKind,
+    pub label: String,
+    pub active: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MenuStripModel {
+    pub visible: bool,
+    pub items: Vec<MenuStripItemModel>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MenuCommandModel {
+    pub command: MenuCommandKind,
+    pub label: String,
+    pub enabled: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MenuDropdownModel {
+    pub visible: bool,
+    pub kind: Option<MenuDropdownKind>,
+    pub title: String,
+    pub anchor_index: i32,
+    pub items: Vec<MenuCommandModel>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SettingsCardModel {
+    pub visible: bool,
+    pub multi_axis_orientation: MultiAxisOrientation,
+    pub group_rotate_direction: GroupRotateDirection,
+    pub multi_pivot_mode: MultiPivotMode,
+    pub auto_save_enabled: bool,
+    pub show_fps_overlay: bool,
+    pub continuous_repaint: bool,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PanelLauncherItemModel {
     pub kind: PanelKind,
@@ -341,6 +460,9 @@ pub struct WorkspacePanelModel {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ShellSnapshot {
     pub overlay_layout: OverlayLayoutModel,
+    pub menu_strip: MenuStripModel,
+    pub menu_dropdown: MenuDropdownModel,
+    pub settings_card: SettingsCardModel,
     pub tool_context: ToolContextModel,
     pub tool_palette: ToolPaletteModel,
     pub panel_framework: PanelFrameworkModel,
@@ -357,6 +479,7 @@ pub struct ShellSnapshotInputs<'a> {
     pub selection: &'a SceneSelectionState,
     pub scene_panel_ui: &'a ScenePanelUiState,
     pub primary_shell: &'a PrimaryShellState,
+    pub menu_ui: &'a MenuUiState,
     pub panel_framework: &'a PanelFrameworkState,
     pub viewport_size_logical: [f32; 2],
     pub safe_area_insets_logical: [f32; 4],
@@ -366,6 +489,7 @@ pub struct ShellSnapshotInputs<'a> {
     pub history: &'a History,
     pub reference_images: &'a ReferenceImageStore,
     pub expert_panels: &'a ExpertPanelRegistry,
+    pub file_actions_enabled: bool,
     pub settings: &'a Settings,
     pub sculpt_state: &'a SculptState,
     pub interaction_mode: InteractionMode,
@@ -398,15 +522,18 @@ pub fn build_shell_snapshot(inputs: ShellSnapshotInputs<'_>) -> ShellSnapshot {
         &inspector,
         &tool_context,
     );
+    let menu_strip = build_menu_strip_model(inputs.menu_ui);
+    let menu_dropdown = build_menu_dropdown_model(inputs.menu_ui, inputs.file_actions_enabled);
+    let settings_card = build_settings_card_model(inputs.menu_ui, inputs.settings);
 
     ShellSnapshot {
         overlay_layout: overlay_layout.clone(),
+        menu_strip,
+        menu_dropdown,
+        settings_card,
         tool_context: tool_context.clone(),
         tool_palette: build_tool_palette_model(&tool_context),
-        panel_framework: build_panel_framework_model(
-            inputs.panel_framework,
-            &overlay_layout,
-        ),
+        panel_framework: build_panel_framework_model(inputs.panel_framework, &overlay_layout),
         scene_panel: build_scene_panel_model(inputs.scene, inputs.selection, inputs.scene_panel_ui),
         inspector,
         tool_panel,
@@ -467,6 +594,196 @@ pub fn build_tool_palette_model(tool_context: &ToolContextModel) -> ToolPaletteM
     }
 }
 
+pub fn build_menu_strip_model(menu_ui: &MenuUiState) -> MenuStripModel {
+    MenuStripModel {
+        visible: true,
+        items: MenuStripKind::ALL
+            .into_iter()
+            .map(|kind| MenuStripItemModel {
+                kind,
+                label: kind.label().to_string(),
+                active: match kind.dropdown_kind() {
+                    Some(dropdown_kind) => menu_ui.active_dropdown == Some(dropdown_kind),
+                    None => menu_ui.settings_card_open,
+                },
+            })
+            .collect(),
+    }
+}
+
+pub fn build_menu_dropdown_model(
+    menu_ui: &MenuUiState,
+    file_actions_enabled: bool,
+) -> MenuDropdownModel {
+    let Some(kind) = menu_ui.active_dropdown else {
+        return MenuDropdownModel {
+            visible: false,
+            kind: None,
+            title: String::new(),
+            anchor_index: -1,
+            items: Vec::new(),
+        };
+    };
+
+    let strip_kind = match kind {
+        MenuDropdownKind::File => MenuStripKind::File,
+        MenuDropdownKind::Edit => MenuStripKind::Edit,
+        MenuDropdownKind::View => MenuStripKind::View,
+        MenuDropdownKind::Help => MenuStripKind::Help,
+    };
+
+    MenuDropdownModel {
+        visible: true,
+        kind: Some(kind),
+        title: kind.label().to_string(),
+        anchor_index: strip_kind.anchor_index(),
+        items: menu_commands_for_kind(kind, file_actions_enabled),
+    }
+}
+
+pub fn build_settings_card_model(menu_ui: &MenuUiState, settings: &Settings) -> SettingsCardModel {
+    SettingsCardModel {
+        visible: menu_ui.settings_card_open,
+        multi_axis_orientation: settings.selection_behavior.multi_axis_orientation,
+        group_rotate_direction: settings.selection_behavior.group_rotate_direction,
+        multi_pivot_mode: settings.selection_behavior.multi_pivot_mode,
+        auto_save_enabled: settings.auto_save_enabled,
+        show_fps_overlay: settings.show_fps_overlay,
+        continuous_repaint: settings.continuous_repaint,
+    }
+}
+
+fn menu_commands_for_kind(
+    kind: MenuDropdownKind,
+    file_actions_enabled: bool,
+) -> Vec<MenuCommandModel> {
+    match kind {
+        MenuDropdownKind::File => vec![
+            MenuCommandModel {
+                command: MenuCommandKind::NewScene,
+                label: "New Scene".to_string(),
+                enabled: file_actions_enabled,
+            },
+            MenuCommandModel {
+                command: MenuCommandKind::OpenProject,
+                label: "Open Project".to_string(),
+                enabled: file_actions_enabled,
+            },
+            MenuCommandModel {
+                command: MenuCommandKind::SaveProject,
+                label: "Save Project".to_string(),
+                enabled: file_actions_enabled,
+            },
+            MenuCommandModel {
+                command: MenuCommandKind::ImportMesh,
+                label: "Import Mesh".to_string(),
+                enabled: file_actions_enabled,
+            },
+            MenuCommandModel {
+                command: MenuCommandKind::ExportMesh,
+                label: "Export Mesh".to_string(),
+                enabled: file_actions_enabled,
+            },
+            MenuCommandModel {
+                command: MenuCommandKind::TakeScreenshot,
+                label: "Screenshot".to_string(),
+                enabled: file_actions_enabled,
+            },
+            MenuCommandModel {
+                command: MenuCommandKind::AddReferenceImage,
+                label: "Add Reference".to_string(),
+                enabled: file_actions_enabled,
+            },
+        ],
+        MenuDropdownKind::Edit => vec![
+            MenuCommandModel {
+                command: MenuCommandKind::Undo,
+                label: "Undo".to_string(),
+                enabled: true,
+            },
+            MenuCommandModel {
+                command: MenuCommandKind::Redo,
+                label: "Redo".to_string(),
+                enabled: true,
+            },
+            MenuCommandModel {
+                command: MenuCommandKind::Copy,
+                label: "Copy".to_string(),
+                enabled: true,
+            },
+            MenuCommandModel {
+                command: MenuCommandKind::Paste,
+                label: "Paste".to_string(),
+                enabled: true,
+            },
+            MenuCommandModel {
+                command: MenuCommandKind::Duplicate,
+                label: "Duplicate".to_string(),
+                enabled: true,
+            },
+            MenuCommandModel {
+                command: MenuCommandKind::DeleteSelected,
+                label: "Delete Selected".to_string(),
+                enabled: true,
+            },
+        ],
+        MenuDropdownKind::View => vec![
+            MenuCommandModel {
+                command: MenuCommandKind::FrameAll,
+                label: "Frame All".to_string(),
+                enabled: true,
+            },
+            MenuCommandModel {
+                command: MenuCommandKind::FocusSelected,
+                label: "Focus Selected".to_string(),
+                enabled: true,
+            },
+            MenuCommandModel {
+                command: MenuCommandKind::CameraFront,
+                label: "Front View".to_string(),
+                enabled: true,
+            },
+            MenuCommandModel {
+                command: MenuCommandKind::CameraTop,
+                label: "Top View".to_string(),
+                enabled: true,
+            },
+            MenuCommandModel {
+                command: MenuCommandKind::CameraRight,
+                label: "Right View".to_string(),
+                enabled: true,
+            },
+            MenuCommandModel {
+                command: MenuCommandKind::ToggleOrtho,
+                label: "Toggle Ortho".to_string(),
+                enabled: true,
+            },
+            MenuCommandModel {
+                command: MenuCommandKind::ToggleMeasure,
+                label: "Toggle Measure".to_string(),
+                enabled: true,
+            },
+            MenuCommandModel {
+                command: MenuCommandKind::ToggleTurntable,
+                label: "Toggle Turntable".to_string(),
+                enabled: true,
+            },
+        ],
+        MenuDropdownKind::Help => vec![
+            MenuCommandModel {
+                command: MenuCommandKind::ToggleHelp,
+                label: "Toggle Help".to_string(),
+                enabled: true,
+            },
+            MenuCommandModel {
+                command: MenuCommandKind::ToggleCommandPalette,
+                label: "Command Palette".to_string(),
+                enabled: true,
+            },
+        ],
+    }
+}
+
 pub fn build_panel_framework_model(
     panel_framework: &PanelFrameworkState,
     overlay_layout: &OverlayLayoutModel,
@@ -485,9 +802,8 @@ pub fn build_panel_framework_model(
     };
     let bar = primary_bar.unwrap_or(&default_bar);
     let transient_kind = bar.active_transient;
-    let transient_frame = transient_kind.map(|_| {
-        panel_frame_model(panel_framework.resolved_transient_rect(bar.id, usable_rect))
-    });
+    let transient_frame = transient_kind
+        .map(|_| panel_frame_model(panel_framework.resolved_transient_rect(bar.id, usable_rect)));
 
     let items = bar
         .items
@@ -549,7 +865,9 @@ pub fn build_panel_framework_model(
             frame: panel_frame_model(
                 panel_framework
                     .resolved_display_panel_rect(instance.kind, instance.anchor_bar, usable_rect)
-                    .unwrap_or_else(|| panel_framework.resolved_transient_rect(instance.anchor_bar, usable_rect)),
+                    .unwrap_or_else(|| {
+                        panel_framework.resolved_transient_rect(instance.anchor_bar, usable_rect)
+                    }),
             ),
             movable: true,
             resizable: !instance.collapsed,
@@ -642,7 +960,9 @@ pub fn build_overlay_layout_model(
     }
 }
 
-fn overlay_usable_rect(overlay_layout: &OverlayLayoutModel) -> crate::app::ui_geometry::FloatingPanelBounds {
+fn overlay_usable_rect(
+    overlay_layout: &OverlayLayoutModel,
+) -> crate::app::ui_geometry::FloatingPanelBounds {
     crate::app::ui_geometry::FloatingPanelBounds::from_min_size(
         overlay_layout.usable_x,
         overlay_layout.usable_y,
@@ -751,9 +1071,12 @@ fn build_tool_panel_model(
             brush,
             tool_context,
         ),
-        InteractionMode::Select | InteractionMode::Measure => {
-            build_select_tool_panel_model(scene, &presented_selection.ordered, inspector, tool_context)
-        }
+        InteractionMode::Select | InteractionMode::Measure => build_select_tool_panel_model(
+            scene,
+            &presented_selection.ordered,
+            inspector,
+            tool_context,
+        ),
     }
 }
 
@@ -1938,9 +2261,12 @@ fn format_child(scene: &Scene, label: &str, child: Option<NodeId>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::state::{PanelBarId, PanelFrameworkState, PanelKind};
+    use crate::app::state::{
+        MenuDropdownKind, MenuUiState, PanelBarId, PanelFrameworkState, PanelKind,
+    };
     use crate::graph::scene::{CsgOp, LightType, SdfPrimitive};
     use crate::graph::voxel::VoxelGrid;
+    use crate::settings::{GroupRotateDirection, MultiAxisOrientation, MultiPivotMode};
     use glam::Vec3;
 
     fn overlay_layout(width: f32, height: f32) -> OverlayLayoutModel {
@@ -2011,7 +2337,8 @@ mod tests {
 
     #[test]
     fn tool_palette_marks_select_mode_active() {
-        let model = build_tool_palette_model(&build_tool_context_model(&PrimaryShellState::default()));
+        let model =
+            build_tool_palette_model(&build_tool_context_model(&PrimaryShellState::default()));
 
         assert!(model.select_tool.active);
         assert!(model.brush_tools.iter().all(|tool| !tool.active));
@@ -2035,6 +2362,63 @@ mod tests {
     }
 
     #[test]
+    fn menu_strip_marks_settings_item_active_when_settings_card_open() {
+        let mut menu_ui = MenuUiState::default();
+        menu_ui.open_settings_card();
+
+        let model = build_menu_strip_model(&menu_ui);
+
+        assert!(model
+            .items
+            .iter()
+            .any(|item| item.kind == MenuStripKind::Settings && item.active));
+        assert!(model
+            .items
+            .iter()
+            .filter(|item| item.active)
+            .all(|item| item.kind == MenuStripKind::Settings));
+    }
+
+    #[test]
+    fn menu_dropdown_file_commands_follow_file_action_enablement() {
+        let mut menu_ui = MenuUiState::default();
+        menu_ui.open_dropdown(MenuDropdownKind::File);
+
+        let disabled = build_menu_dropdown_model(&menu_ui, false);
+        assert!(disabled.visible);
+        assert!(disabled.items.iter().all(|item| !item.enabled));
+
+        let enabled = build_menu_dropdown_model(&menu_ui, true);
+        assert!(enabled.items.iter().all(|item| item.enabled));
+    }
+
+    #[test]
+    fn settings_card_model_reflects_current_settings_values() {
+        let mut menu_ui = MenuUiState::default();
+        menu_ui.open_settings_card();
+        let mut settings = Settings::default();
+        settings.selection_behavior.multi_axis_orientation = MultiAxisOrientation::ActiveObject;
+        settings.selection_behavior.group_rotate_direction = GroupRotateDirection::Inverted;
+        settings.selection_behavior.multi_pivot_mode = MultiPivotMode::ActiveObject;
+        settings.auto_save_enabled = false;
+        settings.show_fps_overlay = false;
+        settings.continuous_repaint = true;
+
+        let model = build_settings_card_model(&menu_ui, &settings);
+
+        assert!(model.visible);
+        assert_eq!(
+            model.multi_axis_orientation,
+            MultiAxisOrientation::ActiveObject
+        );
+        assert_eq!(model.group_rotate_direction, GroupRotateDirection::Inverted);
+        assert_eq!(model.multi_pivot_mode, MultiPivotMode::ActiveObject);
+        assert!(!model.auto_save_enabled);
+        assert!(!model.show_fps_overlay);
+        assert!(model.continuous_repaint);
+    }
+
+    #[test]
     fn panel_framework_model_marks_open_transient_panel_active() {
         let mut state = PanelFrameworkState::default();
         state.open_panel(PanelKind::ObjectProperties, PanelBarId::PrimaryRight);
@@ -2054,8 +2438,10 @@ mod tests {
 
     #[test]
     fn panel_framework_model_orders_tool_first() {
-        let model =
-            build_panel_framework_model(&PanelFrameworkState::default(), &overlay_layout(1200.0, 800.0));
+        let model = build_panel_framework_model(
+            &PanelFrameworkState::default(),
+            &overlay_layout(1200.0, 800.0),
+        );
 
         let order = model
             .bar
@@ -2130,7 +2516,9 @@ mod tests {
 
         assert!(panel.collapsed);
         assert!((panel.collapsed_width - PanelFrameworkState::COLLAPSED_PANEL_WIDTH).abs() < 0.01);
-        assert!((panel.collapsed_height - PanelFrameworkState::COLLAPSED_PANEL_HEIGHT).abs() < 0.01);
+        assert!(
+            (panel.collapsed_height - PanelFrameworkState::COLLAPSED_PANEL_HEIGHT).abs() < 0.01
+        );
         assert!((panel.frame.width - PanelFrameworkState::COLLAPSED_PANEL_WIDTH).abs() < 0.01);
         assert!((panel.frame.height - PanelFrameworkState::COLLAPSED_PANEL_HEIGHT).abs() < 0.01);
         assert!(!panel.resizable);
@@ -2207,7 +2595,10 @@ mod tests {
             model.active_interaction_kind,
             PanelPointerInteractionKind::Resize(PanelResizeHandle::BottomRight)
         );
-        assert_eq!(model.active_resize_handle, Some(PanelResizeHandle::BottomRight));
+        assert_eq!(
+            model.active_resize_handle,
+            Some(PanelResizeHandle::BottomRight)
+        );
     }
 
     #[test]

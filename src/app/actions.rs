@@ -4,8 +4,8 @@ use crate::sculpt::ActiveTool;
 use crate::settings::SelectionBehaviorSettings;
 
 use super::state::{
-    ExpertPanelKind, InteractionMode, PanelBarId, PanelKind, PanelPointerInteractionKind,
-    ShellPanelKind,
+    ExpertPanelKind, InteractionMode, MenuDropdownKind, PanelBarId, PanelKind,
+    PanelPointerInteractionKind, ShellPanelKind,
 };
 use super::ui_geometry::FloatingPanelBounds;
 use super::BakeRequest;
@@ -255,6 +255,13 @@ pub enum Action {
     RemoveAttachedSculpt {
         host: NodeId,
     },
+    OpenMenuDropdown(MenuDropdownKind),
+    ToggleMenuDropdown(MenuDropdownKind),
+    CloseMenuDropdown,
+    OpenSettingsCard,
+    ToggleSettingsCard,
+    CloseSettingsCard,
+    DismissMenuSurfaces,
 
     // ── UI toggles ───────────────────────────────────────────────────
     ToggleDebug,
@@ -298,6 +305,11 @@ pub enum Action {
 
     // ── Settings / GPU ───────────────────────────────────────────────
     SetSelectionBehavior(SelectionBehaviorSettings),
+    SetAutoSaveEnabled(bool),
+    SetShowFpsOverlay(bool),
+    SetContinuousRepaint(bool),
+    ExportSettings,
+    ImportSettings,
     SettingsChanged,
     MarkBufferDirty,
 }

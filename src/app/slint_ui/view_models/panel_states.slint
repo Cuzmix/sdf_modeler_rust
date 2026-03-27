@@ -8,6 +8,7 @@ import {
 } from "common_views.slint";
 
 import {
+    MenuCommandAction,
     PanelPointerInteractionKind,
     PanelResizeHandle,
     ToolPaletteAction,
@@ -37,6 +38,65 @@ export struct ToolPaletteState {
     visible: bool,
     select_tool: ToolPaletteButtonView,
     brush_tools: [ToolPaletteButtonView],
+}
+
+export enum MenuKindView {
+    none,
+    file,
+    edit,
+    view,
+    settings,
+    help,
+}
+
+export struct MenuStripItemView {
+    label: string,
+    kind: MenuKindView,
+    active: bool,
+}
+
+export struct MenuStripState {
+    visible: bool,
+    items: [MenuStripItemView],
+}
+
+export struct MenuDropdownItemView {
+    label: string,
+    command: MenuCommandAction,
+    enabled: bool,
+}
+
+export struct MenuDropdownState {
+    visible: bool,
+    title: string,
+    menu: MenuKindView,
+    anchor_index: int,
+    items: [MenuDropdownItemView],
+}
+
+export enum MultiAxisOrientationView {
+    world-zero,
+    active-object,
+}
+
+export enum GroupRotateDirectionView {
+    standard,
+    inverted,
+}
+
+export enum MultiPivotModeView {
+    selection-center,
+    active-object,
+}
+
+export struct SettingsCardState {
+    visible: bool,
+    multi_axis_orientation: MultiAxisOrientationView,
+    group_rotate_direction: GroupRotateDirectionView,
+    multi_pivot_mode: MultiPivotModeView,
+    auto_save_enabled: bool,
+    show_fps_overlay: bool,
+    continuous_repaint: bool,
 }
 
 export enum PanelKindView {

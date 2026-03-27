@@ -276,6 +276,72 @@ impl ExpertPanelRegistry {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum MenuDropdownKind {
+    File,
+    Edit,
+    View,
+    Help,
+}
+
+impl MenuDropdownKind {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::File => "File",
+            Self::Edit => "Edit",
+            Self::View => "View",
+            Self::Help => "Help",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct MenuUiState {
+    pub active_dropdown: Option<MenuDropdownKind>,
+    pub settings_card_open: bool,
+}
+
+impl MenuUiState {
+    pub fn dismiss_all(&mut self) {
+        self.active_dropdown = None;
+        self.settings_card_open = false;
+    }
+
+    pub fn open_dropdown(&mut self, kind: MenuDropdownKind) {
+        self.active_dropdown = Some(kind);
+        self.settings_card_open = false;
+    }
+
+    pub fn toggle_dropdown(&mut self, kind: MenuDropdownKind) {
+        if self.active_dropdown == Some(kind) {
+            self.active_dropdown = None;
+        } else {
+            self.active_dropdown = Some(kind);
+        }
+        self.settings_card_open = false;
+    }
+
+    pub fn close_dropdown(&mut self) {
+        self.active_dropdown = None;
+    }
+
+    pub fn open_settings_card(&mut self) {
+        self.settings_card_open = true;
+        self.active_dropdown = None;
+    }
+
+    pub fn toggle_settings_card(&mut self) {
+        self.settings_card_open = !self.settings_card_open;
+        if self.settings_card_open {
+            self.active_dropdown = None;
+        }
+    }
+
+    pub fn close_settings_card(&mut self) {
+        self.settings_card_open = false;
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum PanelKind {
     Tool,
     ObjectProperties,
@@ -679,20 +745,25 @@ impl PanelFrameworkState {
         };
         if let Some(instance_id) = self.pinned_instance(kind).map(|instance| instance.id) {
             let fallback_transient_rect = self.resolved_transient_rect(bar_id, usable_rect);
-            let collapsed_move_stored_rect = pinned_snapshot.and_then(|(anchor_bar, collapsed, rect)| {
-                if collapsed && matches!(interaction.interaction, PanelPointerInteractionKind::Move) {
-                    Some(rect.unwrap_or_else(|| self.resolved_transient_rect(anchor_bar, usable_rect)))
-                } else {
-                    None
-                }
-            });
+            let collapsed_move_stored_rect =
+                pinned_snapshot.and_then(|(anchor_bar, collapsed, rect)| {
+                    if collapsed
+                        && matches!(interaction.interaction, PanelPointerInteractionKind::Move)
+                    {
+                        Some(rect.unwrap_or_else(|| {
+                            self.resolved_transient_rect(anchor_bar, usable_rect)
+                        }))
+                    } else {
+                        None
+                    }
+                });
             if let Some(instance) = self.pinned_instance_mut(kind) {
                 instance.rect = Some(
                     if instance.collapsed
                         && matches!(interaction.interaction, PanelPointerInteractionKind::Move)
                     {
-                        let stored_rect = collapsed_move_stored_rect
-                            .unwrap_or(fallback_transient_rect);
+                        let stored_rect =
+                            collapsed_move_stored_rect.unwrap_or(fallback_transient_rect);
                         FloatingPanelBounds::from_min_size(
                             next.x,
                             next.y,
@@ -745,9 +816,9 @@ impl PanelFrameworkState {
     ) -> Option<FloatingPanelBounds> {
         if let Some(instance) = self.pinned_instance(kind) {
             return Some(clamp_panel_rect(
-                instance
-                    .rect
-                    .unwrap_or_else(|| self.resolved_transient_rect(instance.anchor_bar, usable_rect)),
+                instance.rect.unwrap_or_else(|| {
+                    self.resolved_transient_rect(instance.anchor_bar, usable_rect)
+                }),
                 usable_rect,
             ));
         }
@@ -765,9 +836,9 @@ impl PanelFrameworkState {
     ) -> Option<FloatingPanelBounds> {
         if let Some(instance) = self.pinned_instance(kind) {
             if instance.collapsed {
-                let expanded_rect = instance
-                    .rect
-                    .unwrap_or_else(|| self.resolved_transient_rect(instance.anchor_bar, usable_rect));
+                let expanded_rect = instance.rect.unwrap_or_else(|| {
+                    self.resolved_transient_rect(instance.anchor_bar, usable_rect)
+                });
                 return Some(clamp_panel_display_rect(
                     collapsed_panel_rect(expanded_rect),
                     usable_rect,
@@ -831,18 +902,27 @@ fn default_transient_panel_rect(
         .min(available_width);
     let max_height = (usable_rect.height - margin * 2.0).max(1.0);
     let min_height = PanelFrameworkState::PANEL_MIN_HEIGHT.min(max_height);
-    let height = max_height.clamp(min_height, PanelFrameworkState::TRANSIENT_PANEL_DEFAULT_HEIGHT_MAX);
+    let height = max_height.clamp(
+        min_height,
+        PanelFrameworkState::TRANSIENT_PANEL_DEFAULT_HEIGHT_MAX,
+    );
 
     let edge = bar
         .map(|current_bar| current_bar.edge)
         .unwrap_or(PanelBarEdge::Right);
     let (x, y) = match edge {
-        PanelBarEdge::Left => (usable_rect.x + margin + bar_extent + gap, usable_rect.y + margin),
+        PanelBarEdge::Left => (
+            usable_rect.x + margin + bar_extent + gap,
+            usable_rect.y + margin,
+        ),
         PanelBarEdge::Right => (
             usable_rect.right() - margin - bar_extent - gap - width,
             usable_rect.y + margin,
         ),
-        PanelBarEdge::Top => (usable_rect.x + margin, usable_rect.y + margin + bar_extent + gap),
+        PanelBarEdge::Top => (
+            usable_rect.x + margin,
+            usable_rect.y + margin + bar_extent + gap,
+        ),
         PanelBarEdge::Bottom => (
             usable_rect.x + margin,
             usable_rect.bottom() - margin - bar_extent - gap - height,
@@ -873,14 +953,8 @@ fn clamp_panel_rect(
     let max_height = (usable_rect.height - margin * 2.0).max(1.0);
     let min_width = PanelFrameworkState::PANEL_MIN_WIDTH.min(max_width);
     let min_height = PanelFrameworkState::PANEL_MIN_HEIGHT.min(max_height);
-    let width = rect
-        .width
-        .max(min_width)
-        .min(max_width);
-    let height = rect
-        .height
-        .max(min_height)
-        .min(max_height);
+    let width = rect.width.max(min_width).min(max_width);
+    let height = rect.height.max(min_height).min(max_height);
     let min_x = usable_rect.x + margin;
     let max_x = (usable_rect.right() - margin - width).max(min_x);
     let min_y = usable_rect.y + margin;
@@ -942,9 +1016,7 @@ fn resize_panel_rect(
     }
     if matches!(
         handle,
-        PanelResizeHandle::Bottom
-            | PanelResizeHandle::BottomLeft
-            | PanelResizeHandle::BottomRight
+        PanelResizeHandle::Bottom | PanelResizeHandle::BottomLeft | PanelResizeHandle::BottomRight
     ) {
         bottom += delta_y;
     }
@@ -1376,6 +1448,7 @@ pub struct UiState {
     pub primary_shell: PrimaryShellState,
     pub workspace: WorkspaceUiState,
     pub expert_panels: ExpertPanelRegistry,
+    pub menu: MenuUiState,
     pub panel_framework: PanelFrameworkState,
     pub scene_panel: ScenePanelUiState,
     pub selection: SceneSelectionState,
@@ -1714,6 +1787,57 @@ mod tests {
     }
 
     #[test]
+    fn menu_ui_state_toggle_dropdown_is_single_open() {
+        let mut state = MenuUiState::default();
+
+        state.toggle_dropdown(MenuDropdownKind::File);
+        assert_eq!(state.active_dropdown, Some(MenuDropdownKind::File));
+        assert!(!state.settings_card_open);
+
+        state.toggle_dropdown(MenuDropdownKind::View);
+        assert_eq!(state.active_dropdown, Some(MenuDropdownKind::View));
+        assert!(!state.settings_card_open);
+    }
+
+    #[test]
+    fn menu_ui_state_toggle_same_dropdown_closes_it() {
+        let mut state = MenuUiState::default();
+        state.open_dropdown(MenuDropdownKind::Edit);
+
+        state.toggle_dropdown(MenuDropdownKind::Edit);
+
+        assert_eq!(state.active_dropdown, None);
+        assert!(!state.settings_card_open);
+    }
+
+    #[test]
+    fn menu_ui_state_settings_card_is_exclusive_with_dropdowns() {
+        let mut state = MenuUiState::default();
+        state.open_dropdown(MenuDropdownKind::Help);
+
+        state.open_settings_card();
+        assert!(state.settings_card_open);
+        assert_eq!(state.active_dropdown, None);
+
+        state.open_dropdown(MenuDropdownKind::File);
+        assert_eq!(state.active_dropdown, Some(MenuDropdownKind::File));
+        assert!(!state.settings_card_open);
+    }
+
+    #[test]
+    fn menu_ui_state_dismiss_all_clears_every_surface() {
+        let mut state = MenuUiState::default();
+        state.open_settings_card();
+        state.open_dropdown(MenuDropdownKind::View);
+        state.open_settings_card();
+
+        state.dismiss_all();
+
+        assert_eq!(state.active_dropdown, None);
+        assert!(!state.settings_card_open);
+    }
+
+    #[test]
     fn panel_framework_open_and_swap_transient_panel() {
         let mut state = PanelFrameworkState::default();
 
@@ -1926,7 +2050,11 @@ mod tests {
         state.pin_panel(PanelKind::RenderSettings);
 
         let before = state
-            .resolved_panel_rect(PanelKind::RenderSettings, PanelBarId::PrimaryRight, usable_rect(1200.0, 800.0))
+            .resolved_panel_rect(
+                PanelKind::RenderSettings,
+                PanelBarId::PrimaryRight,
+                usable_rect(1200.0, 800.0),
+            )
             .expect("pinned panel rect");
 
         state.begin_panel_interaction(
@@ -2002,7 +2130,9 @@ mod tests {
         state.open_panel(PanelKind::RenderSettings, PanelBarId::PrimaryRight);
         state.pin_panel(PanelKind::RenderSettings);
         if let Some(instance) = state.pinned_instance_mut(PanelKind::RenderSettings) {
-            instance.rect = Some(FloatingPanelBounds::from_min_size(700.0, 40.0, 500.0, 420.0));
+            instance.rect = Some(FloatingPanelBounds::from_min_size(
+                700.0, 40.0, 500.0, 420.0,
+            ));
             instance.collapsed = true;
         }
 
@@ -2030,7 +2160,9 @@ mod tests {
         let before = state
             .pinned_instance(PanelKind::RenderSettings)
             .and_then(|instance| instance.rect)
-            .unwrap_or_else(|| state.resolved_transient_rect(PanelBarId::PrimaryRight, usable_rect(1200.0, 800.0)));
+            .unwrap_or_else(|| {
+                state.resolved_transient_rect(PanelBarId::PrimaryRight, usable_rect(1200.0, 800.0))
+            });
         state.toggle_pinned_collapsed(PanelKind::RenderSettings);
 
         state.begin_panel_interaction(

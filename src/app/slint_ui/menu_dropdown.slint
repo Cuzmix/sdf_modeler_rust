@@ -1,0 +1,89 @@
+import { AppTheme } from "theme.slint";
+import { MenuCommandAction, MenuDropdownItemView, MenuDropdownState } from "view_models.slint";
+
+component MenuDropdownRow inherits Rectangle {
+    in property <MenuDropdownItemView> item;
+    in property <length> row_width: 0px;
+
+    callback execute(command: MenuCommandAction);
+
+    width: row_width;
+    height: 34px;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: row_touch.has-hover && item.enabled ? AppTheme.overlay_button_active_border : #00000000;
+    background: row_touch.has-hover && item.enabled ? AppTheme.overlay_button_active_background : #00000000;
+    opacity: item.enabled ? 1.0 : 0.55;
+
+    Text {
+        text: item.label;
+        x: 10px;
+        y: (parent.height - self.height) / 2;
+        color: AppTheme.overlay_button_text;
+        font-size: 14px;
+    }
+
+    row_touch := TouchArea {
+        width: parent.width;
+        height: parent.height;
+        mouse-cursor: item.enabled ? pointer : default;
+        clicked => {
+            if item.enabled {
+                root.execute(root.item.command);
+            }
+        }
+    }
+}
+
+export component MenuDropdown inherits Rectangle {
+    in property <MenuDropdownState> state;
+
+    callback execute_command(command: MenuCommandAction);
+
+    private property <int> item_count: state.items.length;
+
+    visible: state.visible;
+    border-radius: 14px;
+    border-width: 1px;
+    border-color: AppTheme.overlay_panel_border;
+    background: AppTheme.overlay_panel_background;
+    width: 236px;
+    height: AppTheme.overlay_panel_padding * 2
+        + 24px
+        + 1px
+        + 8px
+        + item_count * 34px
+        + (item_count > 0 ? (item_count - 1) * 4px : 0px);
+
+    Text {
+        text: state.title;
+        x: AppTheme.overlay_panel_padding;
+        y: AppTheme.overlay_panel_padding;
+        color: AppTheme.overlay_button_text;
+        font-size: 15px;
+        font-weight: 600;
+    }
+
+    Rectangle {
+        x: AppTheme.overlay_panel_padding;
+        y: AppTheme.overlay_panel_padding + 24px;
+        width: parent.width - AppTheme.overlay_panel_padding * 2;
+        height: 1px;
+        background: AppTheme.overlay_divider;
+    }
+
+    VerticalLayout {
+        x: AppTheme.overlay_panel_padding;
+        y: AppTheme.overlay_panel_padding + 33px;
+        width: parent.width - AppTheme.overlay_panel_padding * 2;
+        spacing: 4px;
+
+        for item in state.items : MenuDropdownRow {
+            item: item;
+            row_width: parent.width;
+            execute(command) => {
+                root.execute_command(command);
+            }
+        }
+    }
+}

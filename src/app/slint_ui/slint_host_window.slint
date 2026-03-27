@@ -3,6 +3,10 @@ import {
     ImportDialogAction,
     InspectorEditMode,
     InspectorPanelState,
+    MenuCommandAction,
+    MenuDropdownState,
+    MenuKindView,
+    MenuStripState,
     LightEditKind,
     OverlayLayoutViewState,
     MaterialEditKind,
@@ -24,6 +28,8 @@ import {
     ToolPaletteAction,
     ToolPaletteState,
     ToolPanelState,
+    SettingsCardAction,
+    SettingsCardState,
     TopBarAction,
     TopBarState,
     TransformEditKind,
@@ -36,8 +42,11 @@ import {
     WorkspacePanelState,
 } from "view_models.slint";
 import { AppTheme } from "theme.slint";
+import { MenuDropdown } from "menu_dropdown.slint";
+import { MenuStrip } from "menu_strip.slint";
 import { PanelBar } from "panel_bar.slint";
 import { PanelHost } from "panel_host.slint";
+import { SettingsCard } from "settings_card.slint";
 import { ToolPalette } from "tool_palette.slint";
 import { ViewportPanel } from "viewport_panel.slint";
 
@@ -50,6 +59,9 @@ export component SlintHostWindow inherits Window {
     in property <float> viewport_gizmo_viewbox_height;
     in property <[ViewportPathView]> viewport_gizmo_paths;
     in property <TopBarState> top_bar_state;
+    in property <MenuStripState> menu_strip_state;
+    in property <MenuDropdownState> menu_dropdown_state;
+    in property <SettingsCardState> settings_card_state;
     in property <ToolPaletteState> tool_palette_state;
     in property <OverlayLayoutViewState> overlay_layout_state;
     in property <PanelFrameworkViewState> panel_framework_state;
@@ -75,6 +87,10 @@ export component SlintHostWindow inherits Window {
     out property <length> overlay_usable_height: overlay_layout_state.usable_height * 1px;
 
     callback top_bar_action(action: TopBarAction);
+    callback menu_launcher_action(kind: MenuKindView);
+    callback menu_command_action(action: MenuCommandAction);
+    callback settings_card_action(action: SettingsCardAction, value: float);
+    callback dismiss_menu_surfaces();
     callback tool_palette_action(action: ToolPaletteAction);
     callback panel_launcher_action(kind: PanelKindView);
     callback panel_header_action(kind: PanelKindView, action: PanelHeaderAction);
@@ -108,6 +124,8 @@ export component SlintHostWindow inherits Window {
 
         private property <length> panel_rail_width: 144px;
         private property <length> panel_margin: 20px;
+        private property <length> menu_item_width: 88px;
+        private property <length> menu_surface_gap: 8px;
         private property <length> usable_x: root.overlay_layout_state.usable_width > 0 ? root.overlay_layout_state.usable_x * 1px : 0px;
         private property <length> usable_y: root.overlay_layout_state.usable_height > 0 ? root.overlay_layout_state.usable_y * 1px : 0px;
         private property <length> usable_width: root.overlay_layout_state.usable_width > 0 ? root.overlay_layout_state.usable_width * 1px : parent.width;
@@ -252,6 +270,43 @@ export component SlintHostWindow inherits Window {
             y: parent.usable_y + parent.usable_height - self.height - 28px;
             perform_action(action) => {
                 root.tool_palette_action(action);
+            }
+        }
+
+        if (root.menu_dropdown_state.visible || root.settings_card_state.visible)
+            && !root.panel_framework_state.panel_interaction_active : TouchArea {
+            width: parent.width;
+            height: parent.height;
+            clicked => {
+                root.dismiss_menu_surfaces();
+            }
+        }
+
+        menu_strip := MenuStrip {
+            state: root.menu_strip_state;
+            item_width: parent.menu_item_width;
+            x: parent.usable_x + parent.panel_margin;
+            y: parent.usable_y + parent.panel_margin;
+            toggle_menu(kind) => {
+                root.menu_launcher_action(kind);
+            }
+        }
+
+        menu_dropdown := MenuDropdown {
+            state: root.menu_dropdown_state;
+            x: menu_strip.x + root.menu_dropdown_state.anchor_index * parent.menu_item_width;
+            y: menu_strip.y + menu_strip.height + parent.menu_surface_gap;
+            execute_command(action) => {
+                root.menu_command_action(action);
+            }
+        }
+
+        settings_card := SettingsCard {
+            state: root.settings_card_state;
+            x: menu_strip.x + 3 * parent.menu_item_width;
+            y: menu_strip.y + menu_strip.height + parent.menu_surface_gap;
+            perform_action(action, value) => {
+                root.settings_card_action(action, value);
             }
         }
 

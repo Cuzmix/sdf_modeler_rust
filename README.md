@@ -49,6 +49,25 @@ cargo test
 cargo build
 ```
 
+### Windows Build Troubleshooting
+
+If `cargo run` fails at link time with unresolved symbols that look like `anon.*.llvm.*` (for example `LNK2019`/`LNK1120` from `link.exe`), the usual cause is stale or corrupted incremental artifacts in `target/debug`.
+
+Recommended recovery:
+
+```powershell
+# from repo root
+Remove-Item -Force target\debug\deps\sdf_model_lib* -ErrorAction SilentlyContinue
+Remove-Item -Force target\debug\deps\sdf_modeler_lib* -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force target\debug\incremental\sdf_modeler_lib-* -ErrorAction SilentlyContinue
+
+$env:CARGO_INCREMENTAL="0"
+cargo run
+Remove-Item Env:CARGO_INCREMENTAL
+```
+
+If you instead do a full clean rebuild (`cargo clean`), make sure Python 3 is available on `PATH` (`python --version`), because `skia-bindings` needs it during source build/setup.
+
 ## Architecture
 
 The application is organized into five layers:

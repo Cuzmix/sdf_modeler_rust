@@ -54,11 +54,23 @@ impl SlintHostState {
             window.set_window_title(self.last_window_title.clone().into());
         }
 
+        let file_actions_enabled = !matches!(
+            self.app.async_state.bake_status,
+            BakeStatus::InProgress { .. }
+        ) && !matches!(
+            self.app.async_state.export_status,
+            ExportStatus::InProgress { .. }
+        ) && !matches!(
+            self.app.async_state.import_status,
+            ImportStatus::InProgress { .. }
+        );
+
         let snapshot = build_shell_snapshot(ShellSnapshotInputs {
             scene: &self.app.doc.scene,
             selection: &self.app.ui.selection,
             scene_panel_ui: &self.app.ui.scene_panel,
             primary_shell: &self.app.ui.primary_shell,
+            menu_ui: &self.app.ui.menu,
             panel_framework: &self.app.ui.panel_framework,
             viewport_size_logical: [window.get_viewport_width(), window.get_viewport_height()],
             safe_area_insets_logical: [
@@ -79,6 +91,7 @@ impl SlintHostState {
             history: &self.app.doc.history,
             reference_images: &self.app.ui.reference_images,
             expert_panels: &self.app.ui.expert_panels,
+            file_actions_enabled,
             settings: &self.app.settings,
             sculpt_state: &self.app.doc.sculpt_state,
             interaction_mode: self.app.ui.primary_shell.interaction_mode,

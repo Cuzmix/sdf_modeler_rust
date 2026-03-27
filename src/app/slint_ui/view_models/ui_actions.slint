@@ -33,6 +33,44 @@ export enum ToolPaletteAction {
     brush-grab,
 }
 
+export enum MenuCommandAction {
+    new-scene,
+    open-project,
+    save-project,
+    import-mesh,
+    export-mesh,
+    take-screenshot,
+    add-reference-image,
+    undo,
+    redo,
+    copy,
+    paste,
+    duplicate,
+    delete-selected,
+    frame-all,
+    focus-selected,
+    camera-front,
+    camera-top,
+    camera-right,
+    toggle-ortho,
+    toggle-measurement,
+    toggle-turntable,
+    toggle-help,
+    toggle-command-palette,
+}
+
+export enum SettingsCardAction {
+    set-multi-axis-orientation,
+    set-group-rotate-direction,
+    set-multi-pivot-mode,
+    set-auto-save-enabled,
+    set-show-fps-overlay,
+    set-continuous-repaint,
+    export-settings,
+    import-settings,
+    reset-primary-shell-layout,
+}
+
 export enum PanelHeaderAction {
     close,
     pin,

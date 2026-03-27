@@ -1,0 +1,121 @@
+import { Button, CheckBox, HorizontalBox, ScrollView, VerticalBox } from "std-widgets.slint";
+import { AppTheme } from "theme.slint";
+import {
+    GroupRotateDirectionView,
+    MultiAxisOrientationView,
+    MultiPivotModeView,
+    SettingsCardAction,
+    SettingsCardState,
+} from "view_models.slint";
+
+export component SettingsCard inherits Rectangle {
+    in property <SettingsCardState> state;
+
+    callback perform_action(action: SettingsCardAction, value: float);
+
+    visible: state.visible;
+    border-radius: 16px;
+    border-width: 1px;
+    border-color: AppTheme.overlay_panel_border;
+    background: AppTheme.overlay_panel_background;
+    width: 360px;
+    height: 430px;
+
+    ScrollView {
+        x: AppTheme.overlay_panel_padding;
+        y: AppTheme.overlay_panel_padding;
+        width: parent.width - AppTheme.overlay_panel_padding * 2;
+        height: parent.height - AppTheme.overlay_panel_padding * 2;
+
+        VerticalBox {
+            spacing: AppTheme.section_spacing;
+
+            Text {
+                text: "Settings";
+                color: AppTheme.overlay_button_text;
+                font-size: 16px;
+                font-weight: 600;
+            }
+
+            Text { text: "Selection Behavior"; color: AppTheme.overlay_button_text; opacity: 0.8; }
+            Text { text: "Multi-axis orientation"; color: AppTheme.overlay_button_text; opacity: 0.75; }
+            HorizontalBox {
+                spacing: AppTheme.section_spacing;
+                Button {
+                    text: root.state.multi_axis_orientation == MultiAxisOrientationView.world-zero ? "World*" : "World";
+                    clicked => { root.perform_action(SettingsCardAction.set-multi-axis-orientation, 0.0); }
+                }
+                Button {
+                    text: root.state.multi_axis_orientation == MultiAxisOrientationView.active-object ? "Active*" : "Active";
+                    clicked => { root.perform_action(SettingsCardAction.set-multi-axis-orientation, 1.0); }
+                }
+            }
+
+            Text { text: "Group rotate direction"; color: AppTheme.overlay_button_text; opacity: 0.75; }
+            HorizontalBox {
+                spacing: AppTheme.section_spacing;
+                Button {
+                    text: root.state.group_rotate_direction == GroupRotateDirectionView.standard ? "Standard*" : "Standard";
+                    clicked => { root.perform_action(SettingsCardAction.set-group-rotate-direction, 0.0); }
+                }
+                Button {
+                    text: root.state.group_rotate_direction == GroupRotateDirectionView.inverted ? "Inverted*" : "Inverted";
+                    clicked => { root.perform_action(SettingsCardAction.set-group-rotate-direction, 1.0); }
+                }
+            }
+
+            Text { text: "Multi pivot mode"; color: AppTheme.overlay_button_text; opacity: 0.75; }
+            HorizontalBox {
+                spacing: AppTheme.section_spacing;
+                Button {
+                    text: root.state.multi_pivot_mode == MultiPivotModeView.selection-center ? "Selection Center*" : "Selection Center";
+                    clicked => { root.perform_action(SettingsCardAction.set-multi-pivot-mode, 0.0); }
+                }
+                Button {
+                    text: root.state.multi_pivot_mode == MultiPivotModeView.active-object ? "Active Object*" : "Active Object";
+                    clicked => { root.perform_action(SettingsCardAction.set-multi-pivot-mode, 1.0); }
+                }
+            }
+
+            Text { text: "Application"; color: AppTheme.overlay_button_text; opacity: 0.8; }
+            CheckBox {
+                text: "Auto save";
+                checked: root.state.auto_save_enabled;
+                toggled => {
+                    root.perform_action(SettingsCardAction.set-auto-save-enabled, self.checked ? 1.0 : 0.0);
+                }
+            }
+            CheckBox {
+                text: "Show FPS overlay";
+                checked: root.state.show_fps_overlay;
+                toggled => {
+                    root.perform_action(SettingsCardAction.set-show-fps-overlay, self.checked ? 1.0 : 0.0);
+                }
+            }
+            CheckBox {
+                text: "Continuous repaint";
+                checked: root.state.continuous_repaint;
+                toggled => {
+                    root.perform_action(SettingsCardAction.set-continuous-repaint, self.checked ? 1.0 : 0.0);
+                }
+            }
+
+            Text { text: "Actions"; color: AppTheme.overlay_button_text; opacity: 0.8; }
+            HorizontalBox {
+                spacing: AppTheme.section_spacing;
+                Button {
+                    text: "Export Settings";
+                    clicked => { root.perform_action(SettingsCardAction.export-settings, 0.0); }
+                }
+                Button {
+                    text: "Import Settings";
+                    clicked => { root.perform_action(SettingsCardAction.import-settings, 0.0); }
+                }
+            }
+            Button {
+                text: "Reset Primary Shell Layout";
+                clicked => { root.perform_action(SettingsCardAction.reset-primary-shell-layout, 0.0); }
+            }
+        }
+    }
+}

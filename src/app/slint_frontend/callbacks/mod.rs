@@ -8,6 +8,7 @@ use super::SlintHostWindow;
 
 mod context;
 mod inspector;
+mod menu_strip;
 mod mutation;
 mod panels;
 mod scene;
@@ -24,6 +25,7 @@ pub(super) fn install_callbacks(
     active_timer: &Rc<Timer>,
 ) {
     let context = context::CallbackContext::new(window, host, active_timer);
+    menu_strip::install(window, &context);
     panels::install(window, &context);
     scene::install(window, &context);
     tool_palette::install(window, &context);

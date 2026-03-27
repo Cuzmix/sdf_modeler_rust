@@ -59,6 +59,30 @@ fn apply_selection_behavior_settings(
     }
 }
 
+fn apply_auto_save_enabled(settings: &mut crate::settings::Settings, enabled: bool) -> bool {
+    if settings.auto_save_enabled == enabled {
+        return false;
+    }
+    settings.auto_save_enabled = enabled;
+    true
+}
+
+fn apply_show_fps_overlay(settings: &mut crate::settings::Settings, enabled: bool) -> bool {
+    if settings.show_fps_overlay == enabled {
+        return false;
+    }
+    settings.show_fps_overlay = enabled;
+    true
+}
+
+fn apply_continuous_repaint(settings: &mut crate::settings::Settings, enabled: bool) -> bool {
+    if settings.continuous_repaint == enabled {
+        return false;
+    }
+    settings.continuous_repaint = enabled;
+    true
+}
+
 fn resolve_sculpt_entry(scene: &Scene, selected: Option<NodeId>) -> SculptEntryDecision {
     let Some(selected_id) = selected else {
         return SculptEntryDecision::MissingSelection;
@@ -1383,7 +1407,9 @@ impl SdfApp {
                     self.ui.panel_framework.end_panel_interaction(kind, bar_id);
                 }
                 Action::CancelPanelInteraction { kind, bar_id } => {
-                    self.ui.panel_framework.cancel_panel_interaction(kind, bar_id);
+                    self.ui
+                        .panel_framework
+                        .cancel_panel_interaction(kind, bar_id);
                 }
                 Action::DismissTransientPanels => {
                     self.ui.panel_framework.dismiss_transient_panels();
@@ -1405,6 +1431,29 @@ impl SdfApp {
                 }
 
                 // ── Light linking ────────────────────────────────────
+                // Menu strip / settings card
+                Action::OpenMenuDropdown(menu) => {
+                    self.ui.menu.open_dropdown(menu);
+                }
+                Action::ToggleMenuDropdown(menu) => {
+                    self.ui.menu.toggle_dropdown(menu);
+                }
+                Action::CloseMenuDropdown => {
+                    self.ui.menu.close_dropdown();
+                }
+                Action::OpenSettingsCard => {
+                    self.ui.menu.open_settings_card();
+                }
+                Action::ToggleSettingsCard => {
+                    self.ui.menu.toggle_settings_card();
+                }
+                Action::CloseSettingsCard => {
+                    self.ui.menu.close_settings_card();
+                }
+                Action::DismissMenuSurfaces => {
+                    self.ui.menu.dismiss_all();
+                }
+                // Light linking
                 Action::SetLightMask { node_id, mask } => {
                     self.doc.scene.set_light_mask(node_id, mask);
                     self.gpu.buffer_dirty = true;
@@ -1488,6 +1537,45 @@ impl SdfApp {
                         apply_selection_behavior_settings(&mut self.settings, selection_behavior);
                     if result.changed {
                         self.settings.save();
+                    }
+                }
+                Action::SetAutoSaveEnabled(enabled) => {
+                    if apply_auto_save_enabled(&mut self.settings, enabled) {
+                        self.settings.save();
+                    }
+                }
+                Action::SetShowFpsOverlay(enabled) => {
+                    if apply_show_fps_overlay(&mut self.settings, enabled) {
+                        self.settings.save();
+                    }
+                }
+                Action::SetContinuousRepaint(enabled) => {
+                    if apply_continuous_repaint(&mut self.settings, enabled) {
+                        self.settings.save();
+                    }
+                }
+                Action::ExportSettings => {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        self.settings.export_dialog();
+                    }
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        push_platform_unsupported_toast(self, "Exporting settings");
+                    }
+                }
+                Action::ImportSettings => {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        if self.settings.import_dialog() {
+                            self.gpu.last_environment_fingerprint = 0;
+                            self.gpu.current_structure_key = 0;
+                            self.gpu.buffer_dirty = true;
+                        }
+                    }
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        push_platform_unsupported_toast(self, "Importing settings");
                     }
                 }
                 Action::SettingsChanged => {
@@ -1798,8 +1886,9 @@ mod tests {
     use glam::Vec3;
 
     use super::{
-        activate_sculpt_interaction_state, apply_measure_interaction_state,
-        apply_select_interaction_state, apply_selection_behavior_settings,
+        activate_sculpt_interaction_state, apply_auto_save_enabled, apply_continuous_repaint,
+        apply_measure_interaction_state, apply_select_interaction_state,
+        apply_selection_behavior_settings, apply_show_fps_overlay,
         duplicate_presented_object_and_offset, replace_operation_input_with_primitive,
         resolve_sculpt_entry, sync_interaction_mode_after_sculpt_exit_state, SculptEntryDecision,
         SelectionBehaviorApplyResult,
@@ -1838,6 +1927,7 @@ mod tests {
             primary_shell: PrimaryShellState::default(),
             workspace: WorkspaceUiState::default(),
             expert_panels: crate::app::state::ExpertPanelRegistry::default(),
+            menu: crate::app::state::MenuUiState::default(),
             panel_framework: crate::app::state::PanelFrameworkState::default(),
             scene_panel: ScenePanelUiState::default(),
             selection: SceneSelectionState::default(),
@@ -1903,6 +1993,33 @@ mod tests {
                 requires_buffer_dirty: false,
             }
         );
+    }
+
+    #[test]
+    fn auto_save_setting_apply_is_targeted_and_idempotent() {
+        let mut settings = Settings::default();
+
+        assert!(apply_auto_save_enabled(&mut settings, false));
+        assert!(!settings.auto_save_enabled);
+        assert!(!apply_auto_save_enabled(&mut settings, false));
+    }
+
+    #[test]
+    fn show_fps_setting_apply_is_targeted_and_idempotent() {
+        let mut settings = Settings::default();
+
+        assert!(apply_show_fps_overlay(&mut settings, false));
+        assert!(!settings.show_fps_overlay);
+        assert!(!apply_show_fps_overlay(&mut settings, false));
+    }
+
+    #[test]
+    fn continuous_repaint_setting_apply_is_targeted_and_idempotent() {
+        let mut settings = Settings::default();
+
+        assert!(apply_continuous_repaint(&mut settings, true));
+        assert!(settings.continuous_repaint);
+        assert!(!apply_continuous_repaint(&mut settings, true));
     }
 
     #[test]

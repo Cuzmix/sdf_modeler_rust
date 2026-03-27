@@ -1,0 +1,66 @@
+import { AppTheme } from "theme.slint";
+import { MenuKindView, MenuStripItemView, MenuStripState } from "view_models.slint";
+
+component MenuStripButton inherits Rectangle {
+    in property <MenuStripItemView> item;
+    in property <length> item_width: 88px;
+
+    callback activated(kind: MenuKindView);
+
+    width: item_width;
+    height: 34px;
+    border-radius: 10px;
+    border-width: 1px;
+    border-color: item.active ? AppTheme.overlay_button_active_border : AppTheme.overlay_button_border;
+    background: item.active ? AppTheme.overlay_button_active_background : AppTheme.overlay_button_background;
+
+    Text {
+        text: item.label;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        color: AppTheme.overlay_button_text;
+        font-size: 15px;
+    }
+
+    TouchArea {
+        width: parent.width;
+        height: parent.height;
+        clicked => {
+            root.activated(root.item.kind);
+        }
+    }
+}
+
+export component MenuStrip inherits Rectangle {
+    in property <MenuStripState> state;
+    in property <length> item_width: 88px;
+
+    callback toggle_menu(kind: MenuKindView);
+
+    private property <int> item_count: state.items.length;
+
+    visible: state.visible;
+    border-radius: 14px;
+    border-width: 1px;
+    border-color: AppTheme.overlay_panel_border;
+    background: AppTheme.overlay_panel_background;
+    width: AppTheme.overlay_panel_padding * 2
+        + item_count * root.item_width
+        + (item_count > 0 ? (item_count - 1) * 6px : 0px);
+    height: 46px;
+
+    HorizontalLayout {
+        x: AppTheme.overlay_panel_padding;
+        y: 6px;
+        width: parent.width - AppTheme.overlay_panel_padding * 2;
+        spacing: 6px;
+
+        for menu_item in root.state.items : MenuStripButton {
+            item: menu_item;
+            item_width: root.item_width;
+            activated(kind) => {
+                root.toggle_menu(kind);
+            }
+        }
+    }
+}
