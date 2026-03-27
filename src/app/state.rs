@@ -314,12 +314,25 @@ impl MenuLauncherKind {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MenuUiState {
+    pub strip_visible: bool,
     pub active_dropdown: Option<MenuDropdownKind>,
     pub settings_card_open: bool,
     pub focused_launcher: Option<MenuLauncherKind>,
     pub highlighted_command_index: Option<usize>,
+}
+
+impl Default for MenuUiState {
+    fn default() -> Self {
+        Self {
+            strip_visible: true,
+            active_dropdown: None,
+            settings_card_open: false,
+            focused_launcher: None,
+            highlighted_command_index: None,
+        }
+    }
 }
 
 impl MenuUiState {

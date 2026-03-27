@@ -1565,6 +1565,10 @@ impl SdfApp {
                 Action::ExportSettings => {
                     #[cfg(not(target_arch = "wasm32"))]
                     {
+                        self.settings.shell_chrome = super::shell_chrome_persistence::capture(
+                            &self.ui.menu,
+                            &self.ui.panel_framework,
+                        );
                         self.settings.export_dialog();
                     }
                     #[cfg(target_arch = "wasm32")]
@@ -1576,6 +1580,11 @@ impl SdfApp {
                     #[cfg(not(target_arch = "wasm32"))]
                     {
                         if self.settings.import_dialog() {
+                            super::shell_chrome_persistence::apply(
+                                &mut self.ui.menu,
+                                &mut self.ui.panel_framework,
+                                &self.settings.shell_chrome,
+                            );
                             self.gpu.last_environment_fingerprint = 0;
                             self.gpu.current_structure_key = 0;
                             self.gpu.buffer_dirty = true;

@@ -173,7 +173,15 @@ export component SlintHostWindow inherits Window {
                     ? self.menu_strip_max_y
                     : self.menu_strip_desired_y;
         private property <length> menu_dropdown_desired_x: self.menu_strip_x + root.menu_dropdown_state.anchor_index * self.menu_item_width;
-        private property <length> menu_dropdown_desired_y: self.menu_strip_y + menu_strip.height + self.menu_surface_gap;
+        private property <length> menu_dropdown_below_y: self.menu_strip_y + menu_strip.height + self.menu_surface_gap;
+        private property <length> menu_dropdown_above_y: self.menu_strip_y - self.menu_surface_gap - menu_dropdown.height;
+        private property <length> menu_dropdown_space_below: self.usable_y + self.usable_height - self.menu_dropdown_below_y;
+        private property <length> menu_dropdown_space_above: self.menu_strip_y - self.usable_y - self.menu_surface_gap;
+        private property <bool> menu_dropdown_open_above: self.menu_dropdown_space_below < menu_dropdown.height + self.menu_surface_margin
+            && self.menu_dropdown_space_above > self.menu_dropdown_space_below;
+        private property <length> menu_dropdown_desired_y: self.menu_dropdown_open_above
+            ? self.menu_dropdown_above_y
+            : self.menu_dropdown_below_y;
         private property <length> menu_dropdown_min_x: self.usable_x + self.menu_surface_margin;
         private property <length> menu_dropdown_max_x: self.usable_x + self.usable_width - menu_dropdown.width - self.menu_surface_margin;
         private property <length> menu_dropdown_min_y: self.usable_y + self.menu_surface_margin;
@@ -193,7 +201,15 @@ export component SlintHostWindow inherits Window {
                     ? self.menu_dropdown_max_y
                     : self.menu_dropdown_desired_y;
         private property <length> settings_card_desired_x: self.menu_strip_x + 3 * self.menu_item_width;
-        private property <length> settings_card_desired_y: self.menu_strip_y + menu_strip.height + self.menu_surface_gap;
+        private property <length> settings_card_below_y: self.menu_strip_y + menu_strip.height + self.menu_surface_gap;
+        private property <length> settings_card_above_y: self.menu_strip_y - self.menu_surface_gap - settings_card.height;
+        private property <length> settings_card_space_below: self.usable_y + self.usable_height - self.settings_card_below_y;
+        private property <length> settings_card_space_above: self.menu_strip_y - self.usable_y - self.menu_surface_gap;
+        private property <bool> settings_card_open_above: self.settings_card_space_below < settings_card.height + self.menu_surface_margin
+            && self.settings_card_space_above > self.settings_card_space_below;
+        private property <length> settings_card_desired_y: self.settings_card_open_above
+            ? self.settings_card_above_y
+            : self.settings_card_below_y;
         private property <length> settings_card_min_x: self.usable_x + self.menu_surface_margin;
         private property <length> settings_card_max_x: self.usable_x + self.usable_width - settings_card.width - self.menu_surface_margin;
         private property <length> settings_card_min_y: self.usable_y + self.menu_surface_margin;
@@ -359,6 +375,11 @@ export component SlintHostWindow inherits Window {
             && !root.panel_framework_state.panel_interaction_active : TouchArea {
             width: parent.width;
             height: parent.height;
+            pointer-event(event) => {
+            }
+            scroll-event(event) => {
+                accept
+            }
             clicked => {
                 root.dismiss_menu_surfaces();
             }
@@ -395,6 +416,13 @@ export component SlintHostWindow inherits Window {
             }
             dismiss_requested() => {
                 root.dismiss_menu_surfaces();
+            }
+        }
+
+        private property <bool> menu_surfaces_open: root.menu_dropdown_state.visible || root.settings_card_state.visible;
+        changed menu_surfaces_open => {
+            if !self.menu_surfaces_open {
+                menu_strip.focus_strip();
             }
         }
 

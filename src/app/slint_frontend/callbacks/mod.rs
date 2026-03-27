@@ -7,8 +7,8 @@ use super::host_state::SlintHostState;
 use super::SlintHostWindow;
 
 mod context;
-mod keyboard;
 mod inspector;
+mod keyboard;
 mod menu_strip;
 mod mutation;
 mod panels;

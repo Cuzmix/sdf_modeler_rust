@@ -8,8 +8,8 @@ use crate::app::frontend_models::{
 use crate::app::slint_frontend::{
     MenuCommandAction, MenuKindView, MenuNavigationAction, SettingsCardAction, SlintHostWindow,
 };
-use crate::app::{BakeStatus, ExportStatus, ImportStatus};
 use crate::app::state::MenuDropdownKind;
+use crate::app::{BakeStatus, ExportStatus, ImportStatus};
 
 enum MenuCommandDispatch {
     Queue(Action),
@@ -188,7 +188,9 @@ fn menu_dropdown_kind(kind: MenuKindView) -> Option<MenuDropdownKind> {
     }
 }
 
-fn file_actions_enabled(host_state: &crate::app::slint_frontend::host_state::SlintHostState) -> bool {
+fn file_actions_enabled(
+    host_state: &crate::app::slint_frontend::host_state::SlintHostState,
+) -> bool {
     !matches!(
         host_state.app.async_state.bake_status,
         BakeStatus::InProgress { .. }
@@ -289,8 +291,11 @@ fn step_enabled_index(
         return None;
     }
 
-    let current_slot = current_index
-        .and_then(|index| enabled_indices.iter().position(|candidate| *candidate == index));
+    let current_slot = current_index.and_then(|index| {
+        enabled_indices
+            .iter()
+            .position(|candidate| *candidate == index)
+    });
     let next_slot = match current_slot {
         Some(slot) if forward => (slot + 1) % enabled_indices.len(),
         Some(0) => enabled_indices.len() - 1,
@@ -345,7 +350,10 @@ fn step_menu_kind(kind: MenuDropdownKind, forward: bool) -> MenuDropdownKind {
         MenuDropdownKind::View,
         MenuDropdownKind::Help,
     ];
-    let current_index = ORDER.iter().position(|candidate| *candidate == kind).unwrap_or(0);
+    let current_index = ORDER
+        .iter()
+        .position(|candidate| *candidate == kind)
+        .unwrap_or(0);
     let offset = if forward { 1 } else { ORDER.len() - 1 };
     ORDER[(current_index + offset) % ORDER.len()]
 }
@@ -361,7 +369,10 @@ mod tests {
     use crate::app::slint_frontend::{MenuCommandAction, MenuKindView};
     use crate::app::state::MenuDropdownKind;
 
-    fn command_item(command: MenuCommandKind, enabled: bool) -> crate::app::frontend_models::MenuCommandModel {
+    fn command_item(
+        command: MenuCommandKind,
+        enabled: bool,
+    ) -> crate::app::frontend_models::MenuCommandModel {
         crate::app::frontend_models::MenuCommandModel {
             command,
             label: format!("{command:?}"),

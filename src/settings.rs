@@ -226,6 +226,78 @@ impl Default for SelectionBehaviorSettings {
 }
 
 // ---------------------------------------------------------------------------
+// Shell chrome persistence
+// ---------------------------------------------------------------------------
+
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[serde(rename_all = "kebab-case")]
+pub enum MenuLauncherPreference {
+    File,
+    Edit,
+    View,
+    Settings,
+    Help,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[serde(rename_all = "kebab-case")]
+pub enum PanelKindPreference {
+    Tool,
+    ObjectProperties,
+    RenderSettings,
+    Scene,
+    History,
+    ReferenceImages,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug, Default)]
+#[serde(default)]
+pub struct ShellFloatingRect {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[serde(default)]
+pub struct PinnedPanelPreference {
+    pub kind: PanelKindPreference,
+    pub collapsed: bool,
+    pub rect: Option<ShellFloatingRect>,
+}
+
+impl Default for PinnedPanelPreference {
+    fn default() -> Self {
+        Self {
+            kind: PanelKindPreference::Tool,
+            collapsed: false,
+            rect: None,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[serde(default)]
+pub struct ShellChromeSettings {
+    pub menu_strip_visible: bool,
+    pub menu_focused_launcher: Option<MenuLauncherPreference>,
+    pub primary_transient_rect: Option<ShellFloatingRect>,
+    pub pinned_panels: Vec<PinnedPanelPreference>,
+}
+
+impl Default for ShellChromeSettings {
+    fn default() -> Self {
+        Self {
+            menu_strip_visible: true,
+            menu_focused_launcher: None,
+            primary_transient_rect: None,
+            pinned_panels: Vec::new(),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Export presets
 // ---------------------------------------------------------------------------
 
@@ -303,6 +375,8 @@ pub struct Settings {
     pub keymap: KeymapConfig,
     #[serde(default)]
     pub selection_behavior: SelectionBehaviorSettings,
+    #[serde(default)]
+    pub shell_chrome: ShellChromeSettings,
     #[serde(default = "default_true")]
     pub last_clean_exit: bool,
 }
@@ -326,6 +400,7 @@ impl Default for Settings {
             export_presets: default_export_presets(),
             keymap: KeymapConfig::default(),
             selection_behavior: SelectionBehaviorSettings::default(),
+            shell_chrome: ShellChromeSettings::default(),
             last_clean_exit: true,
         }
     }
@@ -982,8 +1057,9 @@ impl RenderConfig {
 mod tests {
     use super::{
         AmbientOcclusionMode, BackgroundMode, EnvironmentBackgroundMode, EnvironmentSource,
-        GroupRotateDirection, LocalReflectionMode, MultiAxisOrientation, MultiPivotMode,
-        RenderConfig, SelectionBehaviorSettings, Settings, ShadingMode,
+        GroupRotateDirection, LocalReflectionMode, MenuLauncherPreference, MultiAxisOrientation,
+        MultiPivotMode, PanelKindPreference, PinnedPanelPreference, RenderConfig,
+        SelectionBehaviorSettings, Settings, ShadingMode, ShellChromeSettings, ShellFloatingRect,
     };
 
     #[test]
@@ -1200,5 +1276,47 @@ mod tests {
             parsed.selection_behavior,
             SelectionBehaviorSettings::default()
         );
+    }
+
+    #[test]
+    fn settings_legacy_deserialize_defaults_shell_chrome() {
+        let mut legacy = serde_json::to_value(Settings::default()).expect("serialize settings");
+        legacy
+            .as_object_mut()
+            .expect("settings object")
+            .remove("shell_chrome");
+
+        let parsed: Settings = serde_json::from_value(legacy).expect("deserialize settings");
+        assert_eq!(parsed.shell_chrome, ShellChromeSettings::default());
+    }
+
+    #[test]
+    fn shell_chrome_serialization_roundtrip() {
+        let mut settings = Settings::default();
+        settings.shell_chrome = ShellChromeSettings {
+            menu_strip_visible: false,
+            menu_focused_launcher: Some(MenuLauncherPreference::Help),
+            primary_transient_rect: Some(ShellFloatingRect {
+                x: 12.0,
+                y: 34.0,
+                width: 320.0,
+                height: 260.0,
+            }),
+            pinned_panels: vec![PinnedPanelPreference {
+                kind: PanelKindPreference::RenderSettings,
+                collapsed: true,
+                rect: Some(ShellFloatingRect {
+                    x: 56.0,
+                    y: 78.0,
+                    width: 360.0,
+                    height: 300.0,
+                }),
+            }],
+        };
+
+        let json = serde_json::to_string(&settings).expect("serialize settings");
+        let parsed: Settings = serde_json::from_str(&json).expect("deserialize settings");
+
+        assert_eq!(parsed.shell_chrome, settings.shell_chrome);
     }
 }

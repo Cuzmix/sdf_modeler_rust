@@ -2,9 +2,15 @@ use slint::SharedString;
 
 use super::context::CallbackContext;
 use crate::app::actions::Action;
-use crate::app::state::MenuDropdownKind;
 use crate::app::slint_frontend::SlintHostWindow;
+use crate::app::state::MenuDropdownKind;
 use crate::keymap::{ActionBinding, KeyCombo, KeymapConfig, SerializableKey};
+
+enum OpenMenuShortcutIntent {
+    Dismiss,
+    Launch(Action),
+    Consume,
+}
 
 pub(super) fn install(window: &SlintHostWindow, context: &CallbackContext) {
     let context = context.clone();
@@ -44,6 +50,15 @@ fn dispatch_shortcut_binding(
     shift: bool,
     alt: bool,
 ) -> bool {
+    if host_state.app.ui.menu.has_open_surface() {
+        match resolve_open_menu_shortcut_intent(key_text, ctrl, shift, alt) {
+            OpenMenuShortcutIntent::Dismiss => host_state.queue_action(Action::DismissMenuSurfaces),
+            OpenMenuShortcutIntent::Launch(action) => host_state.queue_action(action),
+            OpenMenuShortcutIntent::Consume => {}
+        }
+        return true;
+    }
+
     if let Some(binding) =
         resolve_binding_for_shortcut(key_text, ctrl, shift, alt, &host_state.app.settings.keymap)
     {
@@ -65,6 +80,21 @@ fn dispatch_shortcut_binding(
     }
 
     false
+}
+
+fn resolve_open_menu_shortcut_intent(
+    key_text: &str,
+    ctrl: bool,
+    shift: bool,
+    alt: bool,
+) -> OpenMenuShortcutIntent {
+    if parse_serializable_key(key_text) == Some(SerializableKey::Escape) {
+        return OpenMenuShortcutIntent::Dismiss;
+    }
+    if let Some(action) = resolve_menu_launcher_shortcut(key_text, ctrl, shift, alt) {
+        return OpenMenuShortcutIntent::Launch(action);
+    }
+    OpenMenuShortcutIntent::Consume
 }
 
 fn resolve_binding_for_shortcut(
@@ -233,6 +263,7 @@ fn resolve_menu_launcher_shortcut(
 mod tests {
     use super::{
         parse_serializable_key, resolve_binding_for_shortcut, resolve_menu_launcher_shortcut,
+        resolve_open_menu_shortcut_intent, OpenMenuShortcutIntent,
     };
     use crate::app::actions::Action;
     use crate::app::state::MenuDropdownKind;
@@ -247,9 +278,15 @@ mod tests {
             Some(SerializableKey::ArrowUp)
         );
         assert_eq!(parse_serializable_key("?"), Some(SerializableKey::Slash));
-        assert_eq!(parse_serializable_key("{"), Some(SerializableKey::OpenBracket));
+        assert_eq!(
+            parse_serializable_key("{"),
+            Some(SerializableKey::OpenBracket)
+        );
         assert_eq!(parse_serializable_key(" "), Some(SerializableKey::Space));
-        assert_eq!(parse_serializable_key("\u{1b}"), Some(SerializableKey::Escape));
+        assert_eq!(
+            parse_serializable_key("\u{1b}"),
+            Some(SerializableKey::Escape)
+        );
     }
 
     #[test]
@@ -299,5 +336,29 @@ mod tests {
         assert!(resolve_menu_launcher_shortcut("f", false, false, false).is_none());
         assert!(resolve_menu_launcher_shortcut("f", true, false, true).is_none());
         assert!(resolve_menu_launcher_shortcut("F10", false, false, true).is_none());
+    }
+
+    #[test]
+    fn resolve_open_menu_shortcut_intent_prioritizes_escape() {
+        assert!(matches!(
+            resolve_open_menu_shortcut_intent("\u{1b}", false, false, false),
+            OpenMenuShortcutIntent::Dismiss
+        ));
+    }
+
+    #[test]
+    fn resolve_open_menu_shortcut_intent_allows_alt_launcher_shortcuts() {
+        assert!(matches!(
+            resolve_open_menu_shortcut_intent("h", false, false, true),
+            OpenMenuShortcutIntent::Launch(Action::ToggleMenuDropdown(MenuDropdownKind::Help))
+        ));
+    }
+
+    #[test]
+    fn resolve_open_menu_shortcut_intent_consumes_unhandled_shortcuts() {
+        assert!(matches!(
+            resolve_open_menu_shortcut_intent("z", true, false, false),
+            OpenMenuShortcutIntent::Consume
+        ));
     }
 }

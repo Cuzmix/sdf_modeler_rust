@@ -12,6 +12,7 @@ pub(crate) mod reference_images;
 pub(crate) mod runtime;
 mod sculpt_detail;
 mod sculpting;
+mod shell_chrome_persistence;
 #[cfg(all(not(target_arch = "wasm32"), not(target_os = "android")))]
 mod slint_bridge;
 #[cfg(all(not(target_arch = "wasm32"), not(target_os = "android")))]
@@ -397,6 +398,48 @@ impl SdfApp {
             settings.save();
         }
 
+        let mut ui = UiState {
+            primary_shell: state::PrimaryShellState::default(),
+            workspace: state::WorkspaceUiState::default(),
+            expert_panels: state::ExpertPanelRegistry::default(),
+            menu: state::MenuUiState::default(),
+            panel_framework: state::PanelFrameworkState::default(),
+            scene_panel: state::ScenePanelUiState::default(),
+            selection: state::SceneSelectionState::default(),
+            scene_graph_view: state::SceneGraphViewState::default(),
+            viewport_interaction: state::ViewportInteractionState::default(),
+            show_debug: false,
+            show_help: false,
+            show_export_dialog: false,
+            show_settings: false,
+            isolation_state: None,
+            toasts: Vec::new(),
+            turntable_active: false,
+            property_clipboard: None,
+            command_palette_open: false,
+            command_palette_query: String::new(),
+            command_palette_selected: 0,
+            sculpt_convert_dialog: None,
+            import_dialog: None,
+            rebinding_action: None,
+            active_light_ids: std::collections::HashSet::new(),
+            total_light_count: 0,
+            last_light_warning_count: None,
+            show_recovery_dialog,
+            recovery_summary,
+            reference_images: crate::app::reference_images::ReferenceImageStore::default(),
+            sculpt_brush_adjust: None,
+            show_distance_readout: false,
+            measurement_mode: false,
+            measurement_points: Vec::new(),
+            multi_transform_edit: crate::app::state::MultiTransformSessionState::default(),
+        };
+        shell_chrome_persistence::apply(
+            &mut ui.menu,
+            &mut ui.panel_framework,
+            &settings.shell_chrome,
+        );
+
         Self {
             doc: DocumentState {
                 camera: crate::gpu::camera::Camera::default(),
@@ -441,42 +484,7 @@ impl SdfApp {
                 sculpt_dragging: false,
                 sculpt_runtime_cache: None,
             },
-            ui: UiState {
-                primary_shell: state::PrimaryShellState::default(),
-                workspace: state::WorkspaceUiState::default(),
-                expert_panels: state::ExpertPanelRegistry::default(),
-                menu: state::MenuUiState::default(),
-                panel_framework: state::PanelFrameworkState::default(),
-                scene_panel: state::ScenePanelUiState::default(),
-                selection: state::SceneSelectionState::default(),
-                scene_graph_view: state::SceneGraphViewState::default(),
-                viewport_interaction: state::ViewportInteractionState::default(),
-                show_debug: false,
-                show_help: false,
-                show_export_dialog: false,
-                show_settings: false,
-                isolation_state: None,
-                toasts: Vec::new(),
-                turntable_active: false,
-                property_clipboard: None,
-                command_palette_open: false,
-                command_palette_query: String::new(),
-                command_palette_selected: 0,
-                sculpt_convert_dialog: None,
-                import_dialog: None,
-                rebinding_action: None,
-                active_light_ids: std::collections::HashSet::new(),
-                total_light_count: 0,
-                last_light_warning_count: None,
-                show_recovery_dialog,
-                recovery_summary,
-                reference_images: crate::app::reference_images::ReferenceImageStore::default(),
-                sculpt_brush_adjust: None,
-                show_distance_readout: false,
-                measurement_mode: false,
-                measurement_points: Vec::new(),
-                multi_transform_edit: crate::app::state::MultiTransformSessionState::default(),
-            },
+            ui,
             persistence: PersistenceState {
                 current_file_path: None,
                 scene_dirty: false,
@@ -498,6 +506,8 @@ impl SdfApp {
 
     #[cfg(not(target_arch = "wasm32"))]
     pub fn mark_clean_exit(&mut self) {
+        self.settings.shell_chrome =
+            shell_chrome_persistence::capture(&self.ui.menu, &self.ui.panel_framework);
         self.settings.last_clean_exit = true;
         self.settings.save();
     }

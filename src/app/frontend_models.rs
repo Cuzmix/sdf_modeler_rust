@@ -15,13 +15,13 @@ use crate::graph::presented_object::{
     PresentedObjectRef,
 };
 use crate::graph::scene::{NodeData, NodeId, Scene};
+use crate::keymap::ActionBinding;
 use crate::sculpt::BrushMode;
 use crate::sculpt::SculptState;
 use crate::settings::{
     EnvironmentBackgroundMode, EnvironmentSource, GroupRotateDirection, MultiAxisOrientation,
     MultiPivotMode, Settings,
 };
-use crate::keymap::ActionBinding;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ScenePanelRow {
@@ -650,7 +650,7 @@ pub fn build_tool_palette_model(tool_context: &ToolContextModel) -> ToolPaletteM
 
 pub fn build_menu_strip_model(menu_ui: &MenuUiState) -> MenuStripModel {
     MenuStripModel {
-        visible: true,
+        visible: menu_ui.strip_visible,
         items: MenuStripKind::ALL
             .into_iter()
             .map(|kind| MenuStripItemModel {
@@ -843,7 +843,13 @@ pub(crate) fn menu_commands_for_kind(
             ),
         ],
         MenuDropdownKind::View => vec![
-            menu_command(MenuCommandKind::FrameAll, "Frame All", true, settings, checks),
+            menu_command(
+                MenuCommandKind::FrameAll,
+                "Frame All",
+                true,
+                settings,
+                checks,
+            ),
             menu_command(
                 MenuCommandKind::FocusSelected,
                 "Focus Selected",
@@ -851,10 +857,34 @@ pub(crate) fn menu_commands_for_kind(
                 settings,
                 checks,
             ),
-            menu_command(MenuCommandKind::CameraFront, "Front View", true, settings, checks),
-            menu_command(MenuCommandKind::CameraTop, "Top View", true, settings, checks),
-            menu_command(MenuCommandKind::CameraRight, "Right View", true, settings, checks),
-            menu_command(MenuCommandKind::ToggleOrtho, "Toggle Ortho", true, settings, checks),
+            menu_command(
+                MenuCommandKind::CameraFront,
+                "Front View",
+                true,
+                settings,
+                checks,
+            ),
+            menu_command(
+                MenuCommandKind::CameraTop,
+                "Top View",
+                true,
+                settings,
+                checks,
+            ),
+            menu_command(
+                MenuCommandKind::CameraRight,
+                "Right View",
+                true,
+                settings,
+                checks,
+            ),
+            menu_command(
+                MenuCommandKind::ToggleOrtho,
+                "Toggle Ortho",
+                true,
+                settings,
+                checks,
+            ),
             menu_command(
                 MenuCommandKind::ToggleMeasure,
                 "Toggle Measure",
@@ -871,7 +901,13 @@ pub(crate) fn menu_commands_for_kind(
             ),
         ],
         MenuDropdownKind::Help => vec![
-            menu_command(MenuCommandKind::ToggleHelp, "Toggle Help", true, settings, checks),
+            menu_command(
+                MenuCommandKind::ToggleHelp,
+                "Toggle Help",
+                true,
+                settings,
+                checks,
+            ),
             menu_command(
                 MenuCommandKind::ToggleCommandPalette,
                 "Command Palette",
@@ -2537,6 +2573,16 @@ mod tests {
             .iter()
             .filter(|item| item.active)
             .all(|item| item.kind == MenuStripKind::Settings));
+    }
+
+    #[test]
+    fn menu_strip_visibility_comes_from_menu_state() {
+        let mut menu_ui = MenuUiState::default();
+        menu_ui.strip_visible = false;
+
+        let model = build_menu_strip_model(&menu_ui);
+
+        assert!(!model.visible);
     }
 
     #[test]
