@@ -145,12 +145,73 @@ export component SlintHostWindow inherits Window {
 
         private property <length> panel_rail_width: 144px;
         private property <length> panel_margin: 20px;
+        private property <length> menu_surface_margin: 10px;
         private property <length> menu_item_width: 88px;
         private property <length> menu_surface_gap: 8px;
         private property <length> usable_x: root.overlay_layout_state.usable_width > 0 ? root.overlay_layout_state.usable_x * 1px : 0px;
         private property <length> usable_y: root.overlay_layout_state.usable_height > 0 ? root.overlay_layout_state.usable_y * 1px : 0px;
         private property <length> usable_width: root.overlay_layout_state.usable_width > 0 ? root.overlay_layout_state.usable_width * 1px : parent.width;
         private property <length> usable_height: root.overlay_layout_state.usable_height > 0 ? root.overlay_layout_state.usable_height * 1px : parent.height;
+        private property <length> menu_strip_desired_x: self.usable_x + self.panel_margin;
+        private property <length> menu_strip_desired_y: self.usable_y + self.panel_margin;
+        private property <length> menu_strip_min_x: self.usable_x + self.menu_surface_margin;
+        private property <length> menu_strip_max_x: self.usable_x + self.usable_width - menu_strip.width - self.menu_surface_margin;
+        private property <length> menu_strip_min_y: self.usable_y + self.menu_surface_margin;
+        private property <length> menu_strip_max_y: self.usable_y + self.usable_height - menu_strip.height - self.menu_surface_margin;
+        private property <length> menu_strip_x: self.menu_strip_max_x < self.menu_strip_min_x
+            ? self.menu_strip_min_x
+            : self.menu_strip_desired_x < self.menu_strip_min_x
+                ? self.menu_strip_min_x
+                : self.menu_strip_desired_x > self.menu_strip_max_x
+                    ? self.menu_strip_max_x
+                    : self.menu_strip_desired_x;
+        private property <length> menu_strip_y: self.menu_strip_max_y < self.menu_strip_min_y
+            ? self.menu_strip_min_y
+            : self.menu_strip_desired_y < self.menu_strip_min_y
+                ? self.menu_strip_min_y
+                : self.menu_strip_desired_y > self.menu_strip_max_y
+                    ? self.menu_strip_max_y
+                    : self.menu_strip_desired_y;
+        private property <length> menu_dropdown_desired_x: self.menu_strip_x + root.menu_dropdown_state.anchor_index * self.menu_item_width;
+        private property <length> menu_dropdown_desired_y: self.menu_strip_y + menu_strip.height + self.menu_surface_gap;
+        private property <length> menu_dropdown_min_x: self.usable_x + self.menu_surface_margin;
+        private property <length> menu_dropdown_max_x: self.usable_x + self.usable_width - menu_dropdown.width - self.menu_surface_margin;
+        private property <length> menu_dropdown_min_y: self.usable_y + self.menu_surface_margin;
+        private property <length> menu_dropdown_max_y: self.usable_y + self.usable_height - menu_dropdown.height - self.menu_surface_margin;
+        private property <length> menu_dropdown_x: self.menu_dropdown_max_x < self.menu_dropdown_min_x
+            ? self.menu_dropdown_min_x
+            : self.menu_dropdown_desired_x < self.menu_dropdown_min_x
+                ? self.menu_dropdown_min_x
+                : self.menu_dropdown_desired_x > self.menu_dropdown_max_x
+                    ? self.menu_dropdown_max_x
+                    : self.menu_dropdown_desired_x;
+        private property <length> menu_dropdown_y: self.menu_dropdown_max_y < self.menu_dropdown_min_y
+            ? self.menu_dropdown_min_y
+            : self.menu_dropdown_desired_y < self.menu_dropdown_min_y
+                ? self.menu_dropdown_min_y
+                : self.menu_dropdown_desired_y > self.menu_dropdown_max_y
+                    ? self.menu_dropdown_max_y
+                    : self.menu_dropdown_desired_y;
+        private property <length> settings_card_desired_x: self.menu_strip_x + 3 * self.menu_item_width;
+        private property <length> settings_card_desired_y: self.menu_strip_y + menu_strip.height + self.menu_surface_gap;
+        private property <length> settings_card_min_x: self.usable_x + self.menu_surface_margin;
+        private property <length> settings_card_max_x: self.usable_x + self.usable_width - settings_card.width - self.menu_surface_margin;
+        private property <length> settings_card_min_y: self.usable_y + self.menu_surface_margin;
+        private property <length> settings_card_max_y: self.usable_y + self.usable_height - settings_card.height - self.menu_surface_margin;
+        private property <length> settings_card_x: self.settings_card_max_x < self.settings_card_min_x
+            ? self.settings_card_min_x
+            : self.settings_card_desired_x < self.settings_card_min_x
+                ? self.settings_card_min_x
+                : self.settings_card_desired_x > self.settings_card_max_x
+                    ? self.settings_card_max_x
+                    : self.settings_card_desired_x;
+        private property <length> settings_card_y: self.settings_card_max_y < self.settings_card_min_y
+            ? self.settings_card_min_y
+            : self.settings_card_desired_y < self.settings_card_min_y
+                ? self.settings_card_min_y
+                : self.settings_card_desired_y > self.settings_card_max_y
+                    ? self.settings_card_max_y
+                    : self.settings_card_desired_y;
         private property <MouseCursor> active_panel_cursor: root.panel_framework_state.active_interaction_kind == PanelPointerInteractionKind.move
             ? grabbing
             : root.panel_framework_state.active_resize_handle == PanelResizeHandle.top
@@ -306,8 +367,8 @@ export component SlintHostWindow inherits Window {
         menu_strip := MenuStrip {
             state: root.menu_strip_state;
             item_width: parent.menu_item_width;
-            x: parent.usable_x + parent.panel_margin;
-            y: parent.usable_y + parent.panel_margin;
+            x: parent.menu_strip_x;
+            y: parent.menu_strip_y;
             toggle_menu(kind) => {
                 root.menu_launcher_action(kind);
             }
@@ -315,8 +376,8 @@ export component SlintHostWindow inherits Window {
 
         menu_dropdown := MenuDropdown {
             state: root.menu_dropdown_state;
-            x: menu_strip.x + root.menu_dropdown_state.anchor_index * parent.menu_item_width;
-            y: menu_strip.y + menu_strip.height + parent.menu_surface_gap;
+            x: parent.menu_dropdown_x;
+            y: parent.menu_dropdown_y;
             execute_command(action) => {
                 root.menu_command_action(action);
             }
@@ -327,8 +388,8 @@ export component SlintHostWindow inherits Window {
 
         settings_card := SettingsCard {
             state: root.settings_card_state;
-            x: menu_strip.x + 3 * parent.menu_item_width;
-            y: menu_strip.y + menu_strip.height + parent.menu_surface_gap;
+            x: parent.settings_card_x;
+            y: parent.settings_card_y;
             perform_action(action, value) => {
                 root.settings_card_action(action, value);
             }
