@@ -2,7 +2,8 @@ use super::context::CallbackContext;
 use super::mutation::mutate_host_and_tick;
 use crate::app::actions::Action;
 use crate::app::frontend_models::{
-    menu_commands_for_kind, MenuCommandCheckState, MenuCommandKind, MenuCommandModel,
+    menu_commands_for_kind, MenuCommandAvailability, MenuCommandCheckState, MenuCommandKind,
+    MenuCommandModel,
 };
 use crate::app::slint_frontend::{
     MenuCommandAction, MenuKindView, MenuNavigationAction, SettingsCardAction, SlintHostWindow,
@@ -94,6 +95,7 @@ fn handle_menu_navigation_action(
         file_actions_enabled(host_state),
         &host_state.app.settings,
         menu_command_checks(host_state),
+        menu_command_availability(host_state),
     );
     let current_index = host_state.app.ui.menu.highlighted_command_index;
 
@@ -318,6 +320,21 @@ fn menu_command_checks(
         turntable_enabled: host_state.app.ui.turntable_active,
         help_visible: host_state.app.ui.show_help,
         command_palette_visible: host_state.app.ui.command_palette_open,
+    }
+}
+
+fn menu_command_availability(
+    host_state: &crate::app::slint_frontend::host_state::SlintHostState,
+) -> MenuCommandAvailability {
+    let has_selection = !host_state.app.ui.selection.selected_set.is_empty();
+    MenuCommandAvailability {
+        undo_enabled: host_state.app.doc.history.undo_count() > 0,
+        redo_enabled: host_state.app.doc.history.redo_count() > 0,
+        copy_enabled: has_selection,
+        paste_enabled: host_state.app.doc.clipboard_node.is_some(),
+        duplicate_enabled: has_selection,
+        delete_enabled: has_selection,
+        focus_selected_enabled: has_selection,
     }
 }
 

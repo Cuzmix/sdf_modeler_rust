@@ -102,6 +102,10 @@ impl SlintHostState {
             turntable_active: self.app.ui.turntable_active,
             help_visible: self.app.ui.show_help,
             command_palette_visible: self.app.ui.command_palette_open,
+            can_undo: self.app.doc.history.undo_count() > 0,
+            can_redo: self.app.doc.history.redo_count() > 0,
+            has_selection: !self.app.ui.selection.selected_set.is_empty(),
+            has_clipboard_node: self.app.doc.clipboard_node.is_some(),
         });
         apply_runtime_ui_state(window, &self.app);
 

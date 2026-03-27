@@ -505,6 +505,10 @@ pub struct ShellSnapshotInputs<'a> {
     pub turntable_active: bool,
     pub help_visible: bool,
     pub command_palette_visible: bool,
+    pub can_undo: bool,
+    pub can_redo: bool,
+    pub has_selection: bool,
+    pub has_clipboard_node: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -514,6 +518,17 @@ pub struct MenuCommandCheckState {
     pub turntable_enabled: bool,
     pub help_visible: bool,
     pub command_palette_visible: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct MenuCommandAvailability {
+    pub undo_enabled: bool,
+    pub redo_enabled: bool,
+    pub copy_enabled: bool,
+    pub paste_enabled: bool,
+    pub duplicate_enabled: bool,
+    pub delete_enabled: bool,
+    pub focus_selected_enabled: bool,
 }
 
 pub fn build_shell_snapshot(inputs: ShellSnapshotInputs<'_>) -> ShellSnapshot {
@@ -552,6 +567,15 @@ pub fn build_shell_snapshot(inputs: ShellSnapshotInputs<'_>) -> ShellSnapshot {
             turntable_enabled: inputs.turntable_active,
             help_visible: inputs.help_visible,
             command_palette_visible: inputs.command_palette_visible,
+        },
+        MenuCommandAvailability {
+            undo_enabled: inputs.can_undo,
+            redo_enabled: inputs.can_redo,
+            copy_enabled: inputs.has_selection,
+            paste_enabled: inputs.has_clipboard_node,
+            duplicate_enabled: inputs.has_selection,
+            delete_enabled: inputs.has_selection,
+            focus_selected_enabled: inputs.has_selection,
         },
     );
     let settings_card = build_settings_card_model(inputs.menu_ui, inputs.settings);
@@ -647,6 +671,7 @@ pub fn build_menu_dropdown_model(
     file_actions_enabled: bool,
     settings: &Settings,
     checks: MenuCommandCheckState,
+    availability: MenuCommandAvailability,
 ) -> MenuDropdownModel {
     let Some(kind) = menu_ui.active_dropdown else {
         return MenuDropdownModel {
@@ -666,7 +691,7 @@ pub fn build_menu_dropdown_model(
         MenuDropdownKind::Help => MenuStripKind::Help,
     };
 
-    let items = menu_commands_for_kind(kind, file_actions_enabled, settings, checks);
+    let items = menu_commands_for_kind(kind, file_actions_enabled, settings, checks, availability);
     let highlighted_index =
         resolve_menu_highlighted_index(menu_ui.highlighted_command_index, &items);
 
@@ -719,6 +744,7 @@ pub(crate) fn menu_commands_for_kind(
     file_actions_enabled: bool,
     settings: &Settings,
     checks: MenuCommandCheckState,
+    availability: MenuCommandAvailability,
 ) -> Vec<MenuCommandModel> {
     match kind {
         MenuDropdownKind::File => vec![
@@ -773,15 +799,45 @@ pub(crate) fn menu_commands_for_kind(
             ),
         ],
         MenuDropdownKind::Edit => vec![
-            menu_command(MenuCommandKind::Undo, "Undo", true, settings, checks),
-            menu_command(MenuCommandKind::Redo, "Redo", true, settings, checks),
-            menu_command(MenuCommandKind::Copy, "Copy", true, settings, checks),
-            menu_command(MenuCommandKind::Paste, "Paste", true, settings, checks),
-            menu_command(MenuCommandKind::Duplicate, "Duplicate", true, settings, checks),
+            menu_command(
+                MenuCommandKind::Undo,
+                "Undo",
+                availability.undo_enabled,
+                settings,
+                checks,
+            ),
+            menu_command(
+                MenuCommandKind::Redo,
+                "Redo",
+                availability.redo_enabled,
+                settings,
+                checks,
+            ),
+            menu_command(
+                MenuCommandKind::Copy,
+                "Copy",
+                availability.copy_enabled,
+                settings,
+                checks,
+            ),
+            menu_command(
+                MenuCommandKind::Paste,
+                "Paste",
+                availability.paste_enabled,
+                settings,
+                checks,
+            ),
+            menu_command(
+                MenuCommandKind::Duplicate,
+                "Duplicate",
+                availability.duplicate_enabled,
+                settings,
+                checks,
+            ),
             menu_command(
                 MenuCommandKind::DeleteSelected,
                 "Delete Selected",
-                true,
+                availability.delete_enabled,
                 settings,
                 checks,
             ),
@@ -791,7 +847,7 @@ pub(crate) fn menu_commands_for_kind(
             menu_command(
                 MenuCommandKind::FocusSelected,
                 "Focus Selected",
-                true,
+                availability.focus_selected_enabled,
                 settings,
                 checks,
             ),
@@ -2493,6 +2549,7 @@ mod tests {
             false,
             &Settings::default(),
             MenuCommandCheckState::default(),
+            MenuCommandAvailability::default(),
         );
         assert!(disabled.visible);
         assert!(disabled.items.iter().all(|item| !item.enabled));
@@ -2502,6 +2559,7 @@ mod tests {
             true,
             &Settings::default(),
             MenuCommandCheckState::default(),
+            MenuCommandAvailability::default(),
         );
         assert!(enabled.items.iter().all(|item| item.enabled));
     }
@@ -2516,6 +2574,7 @@ mod tests {
             true,
             &Settings::default(),
             MenuCommandCheckState::default(),
+            MenuCommandAvailability::default(),
         );
         let undo = model
             .items
@@ -2530,6 +2589,65 @@ mod tests {
 
         assert_eq!(undo.shortcut_label, "Ctrl+Z");
         assert_eq!(copy.shortcut_label, "Ctrl+C");
+    }
+
+    #[test]
+    fn menu_dropdown_edit_and_view_enablement_uses_runtime_availability() {
+        let mut edit_menu = MenuUiState::default();
+        edit_menu.open_dropdown(MenuDropdownKind::Edit);
+
+        let disabled_edit = build_menu_dropdown_model(
+            &edit_menu,
+            true,
+            &Settings::default(),
+            MenuCommandCheckState::default(),
+            MenuCommandAvailability::default(),
+        );
+
+        assert!(disabled_edit
+            .items
+            .iter()
+            .any(|item| item.command == MenuCommandKind::Undo && !item.enabled));
+        assert!(disabled_edit
+            .items
+            .iter()
+            .any(|item| item.command == MenuCommandKind::Paste && !item.enabled));
+        assert!(disabled_edit
+            .items
+            .iter()
+            .any(|item| item.command == MenuCommandKind::DeleteSelected && !item.enabled));
+
+        let enabled_edit = build_menu_dropdown_model(
+            &edit_menu,
+            true,
+            &Settings::default(),
+            MenuCommandCheckState::default(),
+            MenuCommandAvailability {
+                undo_enabled: true,
+                redo_enabled: true,
+                copy_enabled: true,
+                paste_enabled: true,
+                duplicate_enabled: true,
+                delete_enabled: true,
+                focus_selected_enabled: true,
+            },
+        );
+
+        assert!(enabled_edit.items.iter().all(|item| item.enabled));
+
+        let mut view_menu = MenuUiState::default();
+        view_menu.open_dropdown(MenuDropdownKind::View);
+        let disabled_focus = build_menu_dropdown_model(
+            &view_menu,
+            true,
+            &Settings::default(),
+            MenuCommandCheckState::default(),
+            MenuCommandAvailability::default(),
+        );
+        assert!(disabled_focus
+            .items
+            .iter()
+            .any(|item| item.command == MenuCommandKind::FocusSelected && !item.enabled));
     }
 
     #[test]
@@ -2548,6 +2666,7 @@ mod tests {
                 help_visible: false,
                 command_palette_visible: false,
             },
+            MenuCommandAvailability::default(),
         );
 
         let ortho = model
