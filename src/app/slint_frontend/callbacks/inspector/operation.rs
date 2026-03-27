@@ -27,7 +27,14 @@ fn handle_operation_edit(
                 context,
                 mode,
                 value,
-                |window| window.get_inspector_panel_state().operation.smooth_k.value,
+                |window| {
+                    let tool_state = window.get_tool_panel_state();
+                    if tool_state.operation.visible {
+                        tool_state.operation.smooth_k.value
+                    } else {
+                        window.get_inspector_panel_state().operation.smooth_k.value
+                    }
+                },
                 |app, next| {
                     app.set_selected_operation_smooth_k(next);
                 },
@@ -39,7 +46,14 @@ fn handle_operation_edit(
                 context,
                 mode,
                 value,
-                |window| window.get_inspector_panel_state().operation.steps.value,
+                |window| {
+                    let tool_state = window.get_tool_panel_state();
+                    if tool_state.operation.visible {
+                        tool_state.operation.steps.value
+                    } else {
+                        window.get_inspector_panel_state().operation.steps.value
+                    }
+                },
                 |app, next| {
                     app.set_selected_operation_steps(next);
                 },
@@ -52,11 +66,16 @@ fn handle_operation_edit(
                 mode,
                 value,
                 |window| {
-                    window
-                        .get_inspector_panel_state()
-                        .operation
-                        .color_blend
-                        .value
+                    let tool_state = window.get_tool_panel_state();
+                    if tool_state.operation.visible {
+                        tool_state.operation.color_blend.value
+                    } else {
+                        window
+                            .get_inspector_panel_state()
+                            .operation
+                            .color_blend
+                            .value
+                    }
                 },
                 |app, next| {
                     app.set_selected_operation_color_blend(next);

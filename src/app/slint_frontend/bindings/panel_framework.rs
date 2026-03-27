@@ -109,6 +109,7 @@ fn panel_frame_view(model: PanelFrameModel) -> PanelFrameView {
 
 fn panel_kind_view(kind: crate::app::state::PanelKind) -> PanelKindView {
     match kind {
+        crate::app::state::PanelKind::Tool => PanelKindView::Tool,
         crate::app::state::PanelKind::ObjectProperties => PanelKindView::ObjectProperties,
         crate::app::state::PanelKind::RenderSettings => PanelKindView::RenderSettings,
     }

@@ -200,6 +200,26 @@ pub struct ToolPaletteModel {
     pub brush_tools: Vec<ToolPaletteEntry>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ToolPanelMode {
+    Select,
+    Sculpt,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ToolPanelModel {
+    pub title: String,
+    pub mode: ToolPanelMode,
+    pub summary: String,
+    pub empty_state: String,
+    pub show_sculpt_target_fields: bool,
+    pub transform: Option<InspectorTransformModel>,
+    pub material: Option<InspectorMaterialModel>,
+    pub operation: Option<InspectorOperationModel>,
+    pub sculpt: Option<InspectorSculptModel>,
+    pub light: Option<InspectorLightModel>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PanelLauncherItemModel {
     pub kind: PanelKind,
@@ -290,6 +310,7 @@ pub struct ShellSnapshot {
     pub panel_framework: PanelFrameworkModel,
     pub scene_panel: ScenePanelModel,
     pub inspector: InspectorModel,
+    pub tool_panel: ToolPanelModel,
     pub utility: UtilityModel,
     pub viewport_status: ViewportStatusModel,
     pub workspace: WorkspacePanelModel,
@@ -314,6 +335,23 @@ pub struct ShellSnapshotInputs<'a> {
 }
 
 pub fn build_shell_snapshot(inputs: ShellSnapshotInputs<'_>) -> ShellSnapshot {
+    let inspector = build_inspector_model(
+        inputs.scene,
+        inputs.selection,
+        inputs.settings,
+        inputs.sculpt_state,
+        inputs.interaction_mode,
+        &inputs.gizmo_mode,
+        &inputs.gizmo_space,
+    );
+    let tool_panel = build_tool_panel_model(
+        inputs.scene,
+        inputs.selection,
+        inputs.sculpt_state,
+        inputs.interaction_mode,
+        &inspector,
+    );
+
     ShellSnapshot {
         tool_palette: build_tool_palette_model(inputs.primary_shell),
         panel_framework: build_panel_framework_model(
@@ -321,15 +359,8 @@ pub fn build_shell_snapshot(inputs: ShellSnapshotInputs<'_>) -> ShellSnapshot {
             inputs.viewport_size_logical,
         ),
         scene_panel: build_scene_panel_model(inputs.scene, inputs.selection, inputs.scene_panel_ui),
-        inspector: build_inspector_model(
-            inputs.scene,
-            inputs.selection,
-            inputs.settings,
-            inputs.sculpt_state,
-            inputs.interaction_mode,
-            &inputs.gizmo_mode,
-            &inputs.gizmo_space,
-        ),
+        inspector,
+        tool_panel,
         utility: build_utility_model(
             inputs.history,
             inputs.reference_images,
@@ -575,6 +606,158 @@ pub fn build_inspector_model(
             gizmo_mode,
             gizmo_space,
         ),
+    }
+}
+
+fn build_tool_panel_model(
+    scene: &Scene,
+    selection: &SceneSelectionState,
+    sculpt_state: &SculptState,
+    interaction_mode: InteractionMode,
+    inspector: &InspectorModel,
+) -> ToolPanelModel {
+    let presented_selection =
+        collect_presented_selection(scene, selection.selected, &selection.selected_set);
+
+    match interaction_mode {
+        InteractionMode::Sculpt(brush) => {
+            build_sculpt_tool_panel_model(scene, &presented_selection.ordered, sculpt_state, brush)
+        }
+        InteractionMode::Select | InteractionMode::Measure => {
+            build_select_tool_panel_model(scene, &presented_selection.ordered, inspector)
+        }
+    }
+}
+
+fn build_select_tool_panel_model(
+    scene: &Scene,
+    selected_objects: &[PresentedObjectRef],
+    inspector: &InspectorModel,
+) -> ToolPanelModel {
+    let (summary, empty_state) = match selected_objects {
+        [] => (String::new(), "No selection".to_string()),
+        [object] => (
+            scene
+                .nodes
+                .get(&object.host_id)
+                .map(|node| node.name.clone())
+                .unwrap_or_else(|| inspector.title.clone()),
+            String::new(),
+        ),
+        objects => (format!("{} selected", objects.len()), String::new()),
+    };
+
+    let primary_object = selected_objects.first().copied();
+    let single_selection = selected_objects.len() == 1;
+    let material = single_selection
+        .then(|| inspector.material.clone())
+        .flatten();
+    let operation = single_selection
+        .then(|| inspector.operation.clone())
+        .flatten();
+    let light = single_selection.then(|| inspector.light.clone()).flatten();
+
+    let (quick_material, quick_operation, quick_light) = match primary_object {
+        Some(object) if matches!(object.kind, PresentedObjectKind::Light) => (None, None, light),
+        Some(_) if operation.is_some() => (None, operation, None),
+        Some(_) => (material, None, None),
+        None => (None, None, None),
+    };
+
+    ToolPanelModel {
+        title: "Tool".to_string(),
+        mode: ToolPanelMode::Select,
+        summary,
+        empty_state,
+        show_sculpt_target_fields: false,
+        transform: inspector.transform.clone(),
+        material: if selected_objects.len() == 1 {
+            quick_material
+        } else {
+            None
+        },
+        operation: if selected_objects.len() == 1 {
+            quick_operation
+        } else {
+            None
+        },
+        sculpt: None,
+        light: if selected_objects.len() == 1 {
+            quick_light
+        } else {
+            None
+        },
+    }
+}
+
+fn build_sculpt_tool_panel_model(
+    scene: &Scene,
+    selected_objects: &[PresentedObjectRef],
+    sculpt_state: &SculptState,
+    brush: BrushMode,
+) -> ToolPanelModel {
+    let sculpt_profile = sculpt_state.selected_profile();
+    let sculpt_target = if selected_objects.len() == 1 {
+        selected_objects
+            .first()
+            .and_then(|object| resolve_sculpt_tool_target(scene, *object))
+    } else {
+        None
+    };
+
+    let (desired_resolution, layer_intensity, show_sculpt_target_fields) = sculpt_target
+        .and_then(|target_id| scene.nodes.get(&target_id))
+        .and_then(|node| match &node.data {
+            NodeData::Sculpt {
+                desired_resolution,
+                layer_intensity,
+                ..
+            } => Some((
+                int_field(*desired_resolution as f32, 8.0, 512.0, 8.0),
+                float_field(*layer_intensity, 0.0, 4.0, 0.01, 2),
+                true,
+            )),
+            _ => None,
+        })
+        .unwrap_or_else(|| {
+            (
+                disabled_field("No sculpt target".to_string(), 8.0, 512.0, 8.0),
+                disabled_field("No sculpt target".to_string(), 0.0, 4.0, 0.01),
+                false,
+            )
+        });
+
+    ToolPanelModel {
+        title: "Tool".to_string(),
+        mode: ToolPanelMode::Sculpt,
+        summary: format!("Brush: {}", brush.label()),
+        empty_state: if show_sculpt_target_fields {
+            String::new()
+        } else {
+            "No sculpt target selected".to_string()
+        },
+        show_sculpt_target_fields,
+        transform: None,
+        material: None,
+        operation: None,
+        sculpt: Some(InspectorSculptModel {
+            desired_resolution,
+            layer_intensity,
+            brush_radius: float_field(sculpt_profile.radius, 0.05, 2.0, 0.01, 2),
+            brush_strength: float_field(sculpt_profile.strength, -2.0, 2.0, 0.01, 2),
+        }),
+        light: None,
+    }
+}
+
+fn resolve_sculpt_tool_target(scene: &Scene, object: PresentedObjectRef) -> Option<NodeId> {
+    if let Some(sculpt_id) = object.attached_sculpt_id {
+        return Some(sculpt_id);
+    }
+
+    match scene.nodes.get(&object.host_id).map(|node| &node.data) {
+        Some(NodeData::Sculpt { .. }) => Some(object.host_id),
+        _ => None,
     }
 }
 
@@ -1626,7 +1809,9 @@ fn format_child(scene: &Scene, label: &str, child: Option<NodeId>) -> String {
 mod tests {
     use super::*;
     use crate::app::state::{PanelBarId, PanelFrameworkState, PanelKind};
-    use crate::graph::scene::SdfPrimitive;
+    use crate::graph::scene::{CsgOp, LightType, SdfPrimitive};
+    use crate::graph::voxel::VoxelGrid;
+    use glam::Vec3;
 
     #[test]
     fn scene_panel_marks_selected_row() {
@@ -1728,6 +1913,38 @@ mod tests {
     }
 
     #[test]
+    fn panel_framework_model_orders_tool_first() {
+        let model = build_panel_framework_model(&PanelFrameworkState::default(), [1200.0, 800.0]);
+
+        let order = model
+            .bar
+            .items
+            .iter()
+            .map(|item| item.kind)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            order,
+            vec![
+                PanelKind::Tool,
+                PanelKind::ObjectProperties,
+                PanelKind::RenderSettings,
+            ]
+        );
+    }
+
+    #[test]
+    fn panel_framework_model_opens_tool_panel_with_expected_title() {
+        let mut state = PanelFrameworkState::default();
+        state.open_panel(PanelKind::Tool, PanelBarId::PrimaryRight);
+
+        let model = build_panel_framework_model(&state, [1200.0, 800.0]);
+        let panel = model.transient_panel.expect("tool panel");
+
+        assert_eq!(panel.kind, PanelKind::Tool);
+        assert_eq!(panel.title, "Tool");
+    }
+
+    #[test]
     fn panel_framework_model_marks_pinned_panel_without_duplication() {
         let mut state = PanelFrameworkState::default();
         state.open_panel(PanelKind::RenderSettings, PanelBarId::PrimaryRight);
@@ -1821,5 +2038,235 @@ mod tests {
             .property_lines
             .iter()
             .any(|line| line.contains("Click an object")));
+    }
+
+    #[test]
+    fn tool_panel_select_mode_shows_no_selection_empty_state() {
+        let model = build_tool_panel_model(
+            &Scene::new(),
+            &SceneSelectionState::default(),
+            &SculptState::new_inactive(),
+            InteractionMode::Select,
+            &build_inspector_model(
+                &Scene::new(),
+                &SceneSelectionState::default(),
+                &Settings::default(),
+                &SculptState::new_inactive(),
+                InteractionMode::Select,
+                &GizmoMode::Translate,
+                &GizmoSpace::Local,
+            ),
+        );
+
+        assert_eq!(model.mode, ToolPanelMode::Select);
+        assert_eq!(model.title, "Tool");
+        assert_eq!(model.empty_state, "No selection");
+        assert!(model.transform.is_none());
+        assert!(model.material.is_none());
+        assert!(model.operation.is_none());
+        assert!(model.light.is_none());
+    }
+
+    #[test]
+    fn tool_panel_select_mode_uses_material_for_single_primitive() {
+        let scene = Scene::new();
+        let selected_id = scene
+            .nodes
+            .iter()
+            .find(|(_, node)| matches!(node.data, NodeData::Primitive { .. }))
+            .map(|(id, _)| *id)
+            .expect("default primitive");
+        let mut selection = SceneSelectionState::default();
+        selection.select_single(selected_id);
+        let inspector = build_inspector_model(
+            &scene,
+            &selection,
+            &Settings::default(),
+            &SculptState::new_inactive(),
+            InteractionMode::Select,
+            &GizmoMode::Translate,
+            &GizmoSpace::Local,
+        );
+
+        let model = build_tool_panel_model(
+            &scene,
+            &selection,
+            &SculptState::new_inactive(),
+            InteractionMode::Select,
+            &inspector,
+        );
+
+        assert_eq!(model.mode, ToolPanelMode::Select);
+        assert_eq!(model.summary, inspector.title);
+        assert!(model.transform.is_some());
+        assert!(model.material.is_some());
+        assert!(model.operation.is_none());
+        assert!(model.light.is_none());
+    }
+
+    #[test]
+    fn tool_panel_select_mode_uses_operation_quick_section() {
+        let mut scene = Scene::new();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        let box_id = scene.create_primitive(SdfPrimitive::Box);
+        let operation = scene.create_operation(CsgOp::Union, Some(sphere), Some(box_id));
+        let mut selection = SceneSelectionState::default();
+        selection.select_single(operation);
+        let inspector = build_inspector_model(
+            &scene,
+            &selection,
+            &Settings::default(),
+            &SculptState::new_inactive(),
+            InteractionMode::Select,
+            &GizmoMode::Translate,
+            &GizmoSpace::Local,
+        );
+
+        let model = build_tool_panel_model(
+            &scene,
+            &selection,
+            &SculptState::new_inactive(),
+            InteractionMode::Select,
+            &inspector,
+        );
+
+        assert!(model.operation.is_some());
+        assert!(model.material.is_none());
+        assert!(model.light.is_none());
+    }
+
+    #[test]
+    fn tool_panel_select_mode_uses_light_quick_section() {
+        let mut scene = Scene::new();
+        let (_light_id, light_transform_id) = scene.create_light(LightType::Point);
+        let mut selection = SceneSelectionState::default();
+        selection.select_single(light_transform_id);
+        let inspector = build_inspector_model(
+            &scene,
+            &selection,
+            &Settings::default(),
+            &SculptState::new_inactive(),
+            InteractionMode::Select,
+            &GizmoMode::Translate,
+            &GizmoSpace::Local,
+        );
+
+        let model = build_tool_panel_model(
+            &scene,
+            &selection,
+            &SculptState::new_inactive(),
+            InteractionMode::Select,
+            &inspector,
+        );
+
+        assert!(model.transform.is_some());
+        assert!(model.light.is_some());
+        assert!(model.material.is_none());
+        assert!(model.operation.is_none());
+    }
+
+    #[test]
+    fn tool_panel_select_mode_keeps_multi_selection_compact() {
+        let mut scene = Scene::new();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        let box_id = scene.create_primitive(SdfPrimitive::Box);
+        let mut selection = SceneSelectionState::default();
+        selection.select_single(sphere);
+        selection.selected_set.insert(box_id);
+        let inspector = build_inspector_model(
+            &scene,
+            &selection,
+            &Settings::default(),
+            &SculptState::new_inactive(),
+            InteractionMode::Select,
+            &GizmoMode::Translate,
+            &GizmoSpace::Local,
+        );
+
+        let model = build_tool_panel_model(
+            &scene,
+            &selection,
+            &SculptState::new_inactive(),
+            InteractionMode::Select,
+            &inspector,
+        );
+
+        assert_eq!(model.summary, "2 selected");
+        assert!(model.transform.is_some());
+        assert!(model.material.is_none());
+        assert!(model.operation.is_none());
+        assert!(model.light.is_none());
+    }
+
+    #[test]
+    fn tool_panel_sculpt_mode_shows_brush_without_target() {
+        let mut scene = Scene::new();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        let mut selection = SceneSelectionState::default();
+        selection.select_single(sphere);
+        let sculpt_state = SculptState::new_inactive();
+        let inspector = build_inspector_model(
+            &scene,
+            &selection,
+            &Settings::default(),
+            &sculpt_state,
+            InteractionMode::Sculpt(BrushMode::Smooth),
+            &GizmoMode::Translate,
+            &GizmoSpace::Local,
+        );
+
+        let model = build_tool_panel_model(
+            &scene,
+            &selection,
+            &sculpt_state,
+            InteractionMode::Sculpt(BrushMode::Smooth),
+            &inspector,
+        );
+
+        assert_eq!(model.mode, ToolPanelMode::Sculpt);
+        assert_eq!(model.summary, "Brush: Smooth");
+        assert_eq!(model.empty_state, "No sculpt target selected");
+        assert!(model.sculpt.is_some());
+        assert!(!model.show_sculpt_target_fields);
+    }
+
+    #[test]
+    fn tool_panel_sculpt_mode_shows_target_fields_for_attached_sculpt() {
+        let mut scene = Scene::new();
+        let sphere = scene.create_primitive(SdfPrimitive::Sphere);
+        let sculpt_id = scene.create_sculpt(
+            sphere,
+            Vec3::ZERO,
+            Vec3::ZERO,
+            Vec3::splat(0.7),
+            VoxelGrid::new_displacement(8, Vec3::splat(-1.0), Vec3::splat(1.0)),
+        );
+        let mut selection = SceneSelectionState::default();
+        selection.select_single(sphere);
+        let sculpt_state = SculptState::new_inactive();
+        let inspector = build_inspector_model(
+            &scene,
+            &selection,
+            &Settings::default(),
+            &sculpt_state,
+            InteractionMode::Sculpt(BrushMode::Add),
+            &GizmoMode::Translate,
+            &GizmoSpace::Local,
+        );
+
+        let model = build_tool_panel_model(
+            &scene,
+            &selection,
+            &sculpt_state,
+            InteractionMode::Sculpt(BrushMode::Add),
+            &inspector,
+        );
+
+        assert_eq!(model.summary, "Brush: Add");
+        assert_eq!(model.empty_state, "");
+        assert!(model.show_sculpt_target_fields);
+        let sculpt = model.sculpt.expect("sculpt tool section");
+        assert_eq!(sculpt.desired_resolution.display_text, "8");
+        assert_ne!(sculpt_id, sphere);
     }
 }

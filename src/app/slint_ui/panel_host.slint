@@ -1,6 +1,7 @@
 import { InspectorPanel } from "inspector_panel.slint";
 import { PanelSheet } from "panel_sheet.slint";
 import { RenderSettingsPanel } from "render_settings_panel.slint";
+import { ToolPanel } from "tool_panel.slint";
 import {
     InspectorEditMode,
     InspectorPanelState,
@@ -13,6 +14,7 @@ import {
     PanelSheetViewState,
     RenderSettingsAction,
     SculptEditKind,
+    ToolPanelState,
     TransformEditKind,
     UtilityPanelState,
 } from "view_models.slint";
@@ -20,6 +22,7 @@ import {
 export component PanelHost inherits Rectangle {
     in property <PanelSheetViewState> panel;
     in property <InspectorPanelState> inspector_state;
+    in property <ToolPanelState> tool_state;
     in property <UtilityPanelState> utility_state;
 
     callback panel_header_action(kind: PanelKindView, action: PanelHeaderAction);
@@ -51,6 +54,15 @@ export component PanelHost inherits Rectangle {
                 x: root.panel.frame.x + action.x,
                 y: root.panel.frame.y + action.y,
             });
+        }
+
+        if root.panel.kind == PanelKindView.tool : ToolPanel {
+            state: root.tool_state;
+            transform_edit(kind, mode, axis, value) => { root.transform_edit(kind, mode, axis, value); }
+            material_edit(kind, mode, axis, value) => { root.material_edit(kind, mode, axis, value); }
+            operation_edit(kind, mode, value) => { root.operation_edit(kind, mode, value); }
+            sculpt_edit(kind, mode, value) => { root.sculpt_edit(kind, mode, value); }
+            light_edit(kind, mode, axis, value) => { root.light_edit(kind, mode, axis, value); }
         }
 
         if root.panel.kind == PanelKindView.object-properties : InspectorPanel {

@@ -1,9 +1,11 @@
 mod gizmo_overlay;
 mod inspector_panel;
 mod panel_framework;
+mod property_sections;
 mod runtime_state;
 mod scene_panel;
 mod tool_palette;
+mod tool_panel;
 mod top_bar;
 mod utility_panel;
 mod workspace_panel;
@@ -20,6 +22,7 @@ pub(super) fn apply_shell_snapshot(window: &SlintHostWindow, snapshot: &ShellSna
     window.set_panel_framework_state(panel_framework::build_panel_framework_state(snapshot));
     window.set_scene_panel_state(scene_panel::build_scene_panel_state(snapshot));
     window.set_inspector_panel_state(inspector_panel::build_inspector_panel_state(snapshot));
+    window.set_tool_panel_state(tool_panel::build_tool_panel_state(snapshot));
     window.set_utility_panel_state(utility_panel::build_utility_panel_snapshot(
         window, snapshot,
     ));

@@ -109,10 +109,10 @@ impl SdfApp {
     }
 
     pub(super) fn set_selected_sculpt_resolution(&mut self, value: u32) {
-        let Some(selected_id) = self.ui.selection.selected else {
+        let Some(target_id) = self.selected_sculpt_target_id() else {
             return;
         };
-        let Some(node) = self.doc.scene.nodes.get_mut(&selected_id) else {
+        let Some(node) = self.doc.scene.nodes.get_mut(&target_id) else {
             return;
         };
         if let NodeData::Sculpt {
@@ -125,10 +125,10 @@ impl SdfApp {
     }
 
     pub(super) fn set_selected_sculpt_layer_intensity(&mut self, value: f32) {
-        let Some(selected_id) = self.ui.selection.selected else {
+        let Some(target_id) = self.selected_sculpt_target_id() else {
             return;
         };
-        let Some(node) = self.doc.scene.nodes.get_mut(&selected_id) else {
+        let Some(node) = self.doc.scene.nodes.get_mut(&target_id) else {
             return;
         };
         if let NodeData::Sculpt {
@@ -356,6 +356,14 @@ impl SdfApp {
         targets.sort_unstable();
         targets.dedup();
         targets
+    }
+
+    fn selected_sculpt_target_id(&self) -> Option<NodeId> {
+        let selected_id = self.ui.selection.selected?;
+        let presented = resolve_presented_object(&self.doc.scene, selected_id)?;
+        presented.attached_sculpt_id.or_else(|| {
+            matches!(presented.kind, PresentedObjectKind::Voxel).then_some(presented.host_id)
+        })
     }
 
     fn selected_material_target_ids(&self) -> Vec<NodeId> {

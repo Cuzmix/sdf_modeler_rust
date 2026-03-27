@@ -30,11 +30,16 @@ fn handle_material_edit(
                 mode,
                 value,
                 |window| {
-                    let state = window.get_inspector_panel_state();
+                    let tool_state = window.get_tool_panel_state();
+                    let state = if tool_state.material.visible {
+                        tool_state.material
+                    } else {
+                        window.get_inspector_panel_state().material
+                    };
                     [
-                        state.material.color_r.value,
-                        state.material.color_g.value,
-                        state.material.color_b.value,
+                        state.color_r.value,
+                        state.color_g.value,
+                        state.color_b.value,
                     ]
                 },
                 |app, component, next| {
@@ -48,7 +53,14 @@ fn handle_material_edit(
                 context,
                 mode,
                 value,
-                |window| window.get_inspector_panel_state().material.roughness.value,
+                |window| {
+                    let tool_state = window.get_tool_panel_state();
+                    if tool_state.material.visible {
+                        tool_state.material.roughness.value
+                    } else {
+                        window.get_inspector_panel_state().material.roughness.value
+                    }
+                },
                 |app, next| {
                     app.set_selected_material_roughness(next);
                 },
@@ -60,7 +72,14 @@ fn handle_material_edit(
                 context,
                 mode,
                 value,
-                |window| window.get_inspector_panel_state().material.metallic.value,
+                |window| {
+                    let tool_state = window.get_tool_panel_state();
+                    if tool_state.material.visible {
+                        tool_state.material.metallic.value
+                    } else {
+                        window.get_inspector_panel_state().material.metallic.value
+                    }
+                },
                 |app, next| {
                     app.set_selected_material_metallic(next);
                 },

@@ -1,0 +1,97 @@
+import { VerticalBox } from "std-widgets.slint";
+import { AppTheme } from "theme.slint";
+import { BoolFieldRow, ScalarFieldRow, SectionTitle } from "property_grid.slint";
+import {
+    InspectorEditMode,
+    LightEditKind,
+    MaterialEditKind,
+    OperationEditKind,
+    SculptEditKind,
+    ToolPanelModeView,
+    ToolPanelState,
+    TransformEditKind,
+} from "view_models.slint";
+
+export component ToolPanel inherits VerticalBox {
+    in property <ToolPanelState> state;
+
+    callback transform_edit(kind: TransformEditKind, mode: InspectorEditMode, axis: int, value: float);
+    callback material_edit(kind: MaterialEditKind, mode: InspectorEditMode, axis: int, value: float);
+    callback operation_edit(kind: OperationEditKind, mode: InspectorEditMode, value: float);
+    callback sculpt_edit(kind: SculptEditKind, mode: InspectorEditMode, value: float);
+    callback light_edit(kind: LightEditKind, mode: InspectorEditMode, axis: int, value: float);
+
+    spacing: AppTheme.section_spacing;
+
+    Text { text: root.state.title; }
+    if root.state.summary != "" : Text { text: root.state.summary; wrap: word-wrap; }
+    if root.state.empty_state != "" : Text { text: root.state.empty_state; wrap: word-wrap; }
+
+    if root.state.transform.visible : VerticalBox {
+        spacing: AppTheme.section_spacing;
+        SectionTitle {
+            title: "Transform";
+            subtitle: root.state.transform.multi_editing ? "Multi-editing active selection." : "";
+        }
+        ScalarFieldRow { label: "Position X"; field: root.state.transform.pos_x; value_changed(value) => { root.transform_edit(TransformEditKind.position, InspectorEditMode.set, 0, value); } }
+        ScalarFieldRow { label: "Position Y"; field: root.state.transform.pos_y; value_changed(value) => { root.transform_edit(TransformEditKind.position, InspectorEditMode.set, 1, value); } }
+        ScalarFieldRow { label: "Position Z"; field: root.state.transform.pos_z; value_changed(value) => { root.transform_edit(TransformEditKind.position, InspectorEditMode.set, 2, value); } }
+        ScalarFieldRow { label: "Rotation X"; field: root.state.transform.rot_x; value_changed(value) => { root.transform_edit(TransformEditKind.rotation, InspectorEditMode.set, 0, value); } }
+        ScalarFieldRow { label: "Rotation Y"; field: root.state.transform.rot_y; value_changed(value) => { root.transform_edit(TransformEditKind.rotation, InspectorEditMode.set, 1, value); } }
+        ScalarFieldRow { label: "Rotation Z"; field: root.state.transform.rot_z; value_changed(value) => { root.transform_edit(TransformEditKind.rotation, InspectorEditMode.set, 2, value); } }
+        if root.state.transform.can_scale : VerticalBox {
+            spacing: AppTheme.section_spacing;
+            ScalarFieldRow { label: "Scale X"; field: root.state.transform.scale_x; value_changed(value) => { root.transform_edit(TransformEditKind.scale, InspectorEditMode.set, 0, value); } }
+            ScalarFieldRow { label: "Scale Y"; field: root.state.transform.scale_y; value_changed(value) => { root.transform_edit(TransformEditKind.scale, InspectorEditMode.set, 1, value); } }
+            ScalarFieldRow { label: "Scale Z"; field: root.state.transform.scale_z; value_changed(value) => { root.transform_edit(TransformEditKind.scale, InspectorEditMode.set, 2, value); } }
+        }
+    }
+
+    if root.state.material.visible : VerticalBox {
+        spacing: AppTheme.section_spacing;
+        SectionTitle { title: "Material"; subtitle: ""; }
+        ScalarFieldRow { label: "Color R"; field: root.state.material.color_r; value_changed(value) => { root.material_edit(MaterialEditKind.color, InspectorEditMode.set, 0, value); } }
+        ScalarFieldRow { label: "Color G"; field: root.state.material.color_g; value_changed(value) => { root.material_edit(MaterialEditKind.color, InspectorEditMode.set, 1, value); } }
+        ScalarFieldRow { label: "Color B"; field: root.state.material.color_b; value_changed(value) => { root.material_edit(MaterialEditKind.color, InspectorEditMode.set, 2, value); } }
+        ScalarFieldRow { label: "Roughness"; field: root.state.material.roughness; value_changed(value) => { root.material_edit(MaterialEditKind.roughness, InspectorEditMode.set, -1, value); } }
+        ScalarFieldRow { label: "Metallic"; field: root.state.material.metallic; value_changed(value) => { root.material_edit(MaterialEditKind.metallic, InspectorEditMode.set, -1, value); } }
+    }
+
+    if root.state.operation.visible : VerticalBox {
+        spacing: AppTheme.section_spacing;
+        SectionTitle { title: root.state.operation.label; subtitle: ""; }
+        ScalarFieldRow { label: "Smooth K"; field: root.state.operation.smooth_k; value_changed(value) => { root.operation_edit(OperationEditKind.smooth-k, InspectorEditMode.set, value); } }
+        ScalarFieldRow { label: "Steps"; field: root.state.operation.steps; value_changed(value) => { root.operation_edit(OperationEditKind.steps, InspectorEditMode.set, value); } }
+        ScalarFieldRow { label: "Color Blend"; field: root.state.operation.color_blend; value_changed(value) => { root.operation_edit(OperationEditKind.color-blend, InspectorEditMode.set, value); } }
+    }
+
+    if root.state.sculpt.visible : VerticalBox {
+        spacing: AppTheme.section_spacing;
+        SectionTitle {
+            title: root.state.mode == ToolPanelModeView.sculpt ? "Brush" : "Sculpt";
+            subtitle: "";
+        }
+        ScalarFieldRow { label: "Brush Radius"; field: root.state.sculpt.brush_radius; value_changed(value) => { root.sculpt_edit(SculptEditKind.brush-radius, InspectorEditMode.set, value); } }
+        ScalarFieldRow { label: "Brush Strength"; field: root.state.sculpt.brush_strength; value_changed(value) => { root.sculpt_edit(SculptEditKind.brush-strength, InspectorEditMode.set, value); } }
+
+        if root.state.show_sculpt_target_fields : VerticalBox {
+            spacing: AppTheme.section_spacing;
+            SectionTitle { title: "Target"; subtitle: ""; }
+            ScalarFieldRow { label: "Resolution"; field: root.state.sculpt.resolution; value_changed(value) => { root.sculpt_edit(SculptEditKind.resolution, InspectorEditMode.set, value); } }
+            ScalarFieldRow { label: "Layer Intensity"; field: root.state.sculpt.layer_intensity; value_changed(value) => { root.sculpt_edit(SculptEditKind.layer-intensity, InspectorEditMode.set, value); } }
+        }
+    }
+
+    if root.state.light.visible : VerticalBox {
+        spacing: AppTheme.section_spacing;
+        SectionTitle { title: root.state.light.label; subtitle: ""; }
+        ScalarFieldRow { label: "Color R"; field: root.state.light.color_r; value_changed(value) => { root.light_edit(LightEditKind.color, InspectorEditMode.set, 0, value); } }
+        ScalarFieldRow { label: "Color G"; field: root.state.light.color_g; value_changed(value) => { root.light_edit(LightEditKind.color, InspectorEditMode.set, 1, value); } }
+        ScalarFieldRow { label: "Color B"; field: root.state.light.color_b; value_changed(value) => { root.light_edit(LightEditKind.color, InspectorEditMode.set, 2, value); } }
+        ScalarFieldRow { label: "Intensity"; field: root.state.light.intensity; value_changed(value) => { root.light_edit(LightEditKind.intensity, InspectorEditMode.set, -1, value); } }
+        ScalarFieldRow { label: "Range"; field: root.state.light.range; value_changed(value) => { root.light_edit(LightEditKind.range, InspectorEditMode.set, -1, value); } }
+        BoolFieldRow { label: "Cast Shadows"; field: root.state.light.cast_shadows; value_toggled(value) => { root.light_edit(LightEditKind.cast-shadows, InspectorEditMode.set, -1, value ? 1.0 : 0.0); } }
+        BoolFieldRow { label: "Volumetric"; field: root.state.light.volumetric; value_toggled(value) => { root.light_edit(LightEditKind.volumetric, InspectorEditMode.set, -1, value ? 1.0 : 0.0); } }
+        ScalarFieldRow { label: "Volumetric Density"; field: root.state.light.volumetric_density; value_changed(value) => { root.light_edit(LightEditKind.volumetric-density, InspectorEditMode.set, -1, value); } }
+    }
+}

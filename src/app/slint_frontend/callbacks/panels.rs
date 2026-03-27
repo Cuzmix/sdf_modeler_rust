@@ -66,6 +66,7 @@ pub(super) fn install(window: &SlintHostWindow, context: &CallbackContext) {
 
 fn panel_kind(kind: PanelKindView) -> PanelKind {
     match kind {
+        PanelKindView::Tool => PanelKind::Tool,
         PanelKindView::ObjectProperties => PanelKind::ObjectProperties,
         PanelKindView::RenderSettings => PanelKind::RenderSettings,
     }

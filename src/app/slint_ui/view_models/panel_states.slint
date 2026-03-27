@@ -36,8 +36,14 @@ export struct ToolPaletteState {
 }
 
 export enum PanelKindView {
+    tool,
     object-properties,
     render-settings,
+}
+
+export enum ToolPanelModeView {
+    select,
+    sculpt,
 }
 
 export enum PanelOrientationView {
@@ -166,6 +172,19 @@ export struct InspectorPanelState {
     display: string,
     property_summary: string,
     multi_selection_summary: string,
+    transform: TransformSectionState,
+    material: MaterialSectionState,
+    operation: OperationSectionState,
+    sculpt: SculptSectionState,
+    light: LightSectionState,
+}
+
+export struct ToolPanelState {
+    title: string,
+    mode: ToolPanelModeView,
+    summary: string,
+    empty_state: string,
+    show_sculpt_target_fields: bool,
     transform: TransformSectionState,
     material: MaterialSectionState,
     operation: OperationSectionState,

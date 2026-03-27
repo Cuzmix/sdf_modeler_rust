@@ -277,15 +277,17 @@ impl ExpertPanelRegistry {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum PanelKind {
+    Tool,
     ObjectProperties,
     RenderSettings,
 }
 
 impl PanelKind {
-    pub const ALL: [Self; 2] = [Self::ObjectProperties, Self::RenderSettings];
+    pub const ALL: [Self; 3] = [Self::Tool, Self::ObjectProperties, Self::RenderSettings];
 
     pub fn label(self) -> &'static str {
         match self {
+            Self::Tool => "Tool",
             Self::ObjectProperties => "Object Properties",
             Self::RenderSettings => "Render Settings",
         }

@@ -20,6 +20,7 @@ import {
     SculptEditKind,
     ToolPaletteAction,
     ToolPaletteState,
+    ToolPanelState,
     TopBarAction,
     TopBarState,
     TransformEditKind,
@@ -50,6 +51,7 @@ export component SlintHostWindow inherits Window {
     in property <PanelFrameworkViewState> panel_framework_state;
     in property <ScenePanelState> scene_panel_state;
     in property <InspectorPanelState> inspector_panel_state;
+    in property <ToolPanelState> tool_panel_state;
     in property <UtilityPanelState> utility_panel_state;
     in property <WorkspacePanelState> workspace_panel_state;
 
@@ -129,6 +131,7 @@ export component SlintHostWindow inherits Window {
             y: panel.frame.y * 1px;
             panel: panel;
             inspector_state: root.inspector_panel_state;
+            tool_state: root.tool_panel_state;
             utility_state: root.utility_panel_state;
             panel_header_action(kind, action) => {
                 root.panel_header_action(kind, action);
@@ -149,6 +152,7 @@ export component SlintHostWindow inherits Window {
             y: root.panel_framework_state.transient_panel.frame.y * 1px;
             panel: root.panel_framework_state.transient_panel;
             inspector_state: root.inspector_panel_state;
+            tool_state: root.tool_panel_state;
             utility_state: root.utility_panel_state;
             panel_header_action(kind, action) => {
                 root.panel_header_action(kind, action);

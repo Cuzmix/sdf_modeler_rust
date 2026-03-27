@@ -30,12 +30,13 @@ fn handle_transform_edit(
                 mode,
                 value,
                 |window| {
-                    let state = window.get_inspector_panel_state();
-                    [
-                        state.transform.pos_x.value,
-                        state.transform.pos_y.value,
-                        state.transform.pos_z.value,
-                    ]
+                    let tool_state = window.get_tool_panel_state();
+                    let state = if tool_state.transform.visible {
+                        tool_state.transform
+                    } else {
+                        window.get_inspector_panel_state().transform
+                    };
+                    [state.pos_x.value, state.pos_y.value, state.pos_z.value]
                 },
                 |app, component, next| {
                     app.set_selected_position_component(component, next);
@@ -50,12 +51,13 @@ fn handle_transform_edit(
                 mode,
                 value,
                 |window| {
-                    let state = window.get_inspector_panel_state();
-                    [
-                        state.transform.rot_x.value,
-                        state.transform.rot_y.value,
-                        state.transform.rot_z.value,
-                    ]
+                    let tool_state = window.get_tool_panel_state();
+                    let state = if tool_state.transform.visible {
+                        tool_state.transform
+                    } else {
+                        window.get_inspector_panel_state().transform
+                    };
+                    [state.rot_x.value, state.rot_y.value, state.rot_z.value]
                 },
                 |app, component, next| {
                     app.set_selected_rotation_deg_component(component, next);
@@ -70,11 +72,16 @@ fn handle_transform_edit(
                 mode,
                 value,
                 |window| {
-                    let state = window.get_inspector_panel_state();
+                    let tool_state = window.get_tool_panel_state();
+                    let state = if tool_state.transform.visible {
+                        tool_state.transform
+                    } else {
+                        window.get_inspector_panel_state().transform
+                    };
                     [
-                        state.transform.scale_x.value,
-                        state.transform.scale_y.value,
-                        state.transform.scale_z.value,
+                        state.scale_x.value,
+                        state.scale_y.value,
+                        state.scale_z.value,
                     ]
                 },
                 |app, component, next| {
