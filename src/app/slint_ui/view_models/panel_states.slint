@@ -7,7 +7,11 @@ import {
     WorkspaceSummaryRowView,
 } from "common_views.slint";
 
-import { ToolPaletteAction } from "ui_actions.slint";
+import {
+    PanelPointerInteractionKind,
+    PanelResizeHandle,
+    ToolPaletteAction,
+} from "ui_actions.slint";
 
 export struct TopBarState {
     viewport_status: string,
@@ -39,6 +43,9 @@ export enum PanelKindView {
     tool,
     object-properties,
     render-settings,
+    scene,
+    history,
+    reference-images,
 }
 
 export enum ToolPanelModeView {
@@ -67,6 +74,8 @@ export enum PanelAnchorView {
 
 export struct PanelLauncherItemView {
     label: string,
+    short_label: string,
+    icon_key: string,
     active: bool,
     pinned: bool,
     show_drag_indicator: bool,
@@ -90,11 +99,15 @@ export struct PanelFrameView {
 export struct PanelSheetViewState {
     visible: bool,
     title: string,
+    collapsed_title: string,
+    collapsed_width: float,
+    collapsed_height: float,
     pinned: bool,
     collapsed: bool,
     kind: PanelKindView,
     anchor: PanelAnchorView,
     movable: bool,
+    resizable: bool,
     frame: PanelFrameView,
 }
 
@@ -102,8 +115,25 @@ export struct PanelFrameworkViewState {
     bar: PanelBarViewState,
     transient_panel: PanelSheetViewState,
     pinned_panels: [PanelSheetViewState],
-    panel_drag_active: bool,
-    drag_panel_kind: PanelKindView,
+    panel_interaction_active: bool,
+    interaction_panel_kind: PanelKindView,
+    active_interaction_kind: PanelPointerInteractionKind,
+    active_resize_handle: PanelResizeHandle,
+}
+
+export struct OverlayLayoutViewState {
+    safe_area_left: float,
+    safe_area_top: float,
+    safe_area_right: float,
+    safe_area_bottom: float,
+    virtual_keyboard_x: float,
+    virtual_keyboard_y: float,
+    virtual_keyboard_width: float,
+    virtual_keyboard_height: float,
+    usable_x: float,
+    usable_y: float,
+    usable_width: float,
+    usable_height: float,
 }
 
 export struct ScenePanelState {

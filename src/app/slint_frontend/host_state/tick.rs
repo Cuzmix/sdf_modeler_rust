@@ -61,6 +61,20 @@ impl SlintHostState {
             primary_shell: &self.app.ui.primary_shell,
             panel_framework: &self.app.ui.panel_framework,
             viewport_size_logical: [window.get_viewport_width(), window.get_viewport_height()],
+            safe_area_insets_logical: [
+                window.get_safe_area_left(),
+                window.get_safe_area_top(),
+                window.get_safe_area_right(),
+                window.get_safe_area_bottom(),
+            ],
+            virtual_keyboard_position_logical: [
+                window.get_virtual_keyboard_x(),
+                window.get_virtual_keyboard_y(),
+            ],
+            virtual_keyboard_size_logical: [
+                window.get_virtual_keyboard_width(),
+                window.get_virtual_keyboard_height(),
+            ],
             workspace: &self.app.ui.workspace,
             history: &self.app.doc.history,
             reference_images: &self.app.ui.reference_images,

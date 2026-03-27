@@ -1,52 +1,93 @@
 import { Button, HorizontalBox, ScrollView, VerticalBox } from "std-widgets.slint";
+import { PanelResizeHandles } from "panel_resize_handles.slint";
 import { AppTheme } from "theme.slint";
-import { PanelDragAction, PanelDragPhase, PanelHeaderAction } from "view_models.slint";
+import {
+    PanelHeaderAction,
+    PanelPointerAction,
+    PanelPointerInteractionKind,
+    PanelPointerPhase,
+    PanelResizeHandle,
+} from "view_models.slint";
 
 export component PanelSheet inherits Rectangle {
     in property <string> title;
+    in property <string> collapsed_title;
     in property <bool> pinned;
     in property <bool> collapsed;
+    in property <length> expanded_width: 390px;
     in property <length> expanded_height: 420px;
+    in property <length> collapsed_width: 320px;
+    in property <length> collapsed_height: 76px;
     in property <bool> movable;
+    in property <bool> resizable;
+    in property <bool> interaction_active;
+    in property <PanelPointerInteractionKind> active_interaction_kind: PanelPointerInteractionKind.move;
+    in property <PanelResizeHandle> active_resize_handle: PanelResizeHandle.none;
 
     callback header_action(action: PanelHeaderAction);
-    callback drag_action(action: PanelDragAction);
+    callback pointer_action(action: PanelPointerAction);
 
     private property <length> header_height: 52px;
     private property <length> divider_y: AppTheme.overlay_panel_padding + header_height + AppTheme.section_spacing;
     private property <length> body_y: divider_y + 1px + AppTheme.section_spacing;
+    private property <string> display_title: root.collapsed ? root.collapsed_title : root.title;
 
     clip: true;
     border-radius: AppTheme.overlay_panel_radius;
     border-width: 1px;
     border-color: AppTheme.overlay_panel_border;
     background: AppTheme.overlay_panel_background;
-    height: collapsed ? header_height + AppTheme.overlay_panel_padding * 2 : expanded_height;
+    width: collapsed ? collapsed_width : expanded_width;
+    height: collapsed ? collapsed_height : expanded_height;
 
-    if root.movable : Rectangle {
+    TouchArea {
+        width: parent.width;
+        height: parent.height;
+    }
+
+    if root.movable : grip_host := Rectangle {
         x: (parent.width - self.width) / 2;
-        y: 8px;
-        width: 72px;
-        height: 18px;
+        y: 12px;
+        width: 88px;
+        height: 30px;
+        private property <bool> active_drag: root.interaction_active
+            && root.active_interaction_kind == PanelPointerInteractionKind.move;
+        private property <bool> grip_highlighted: grip_touch.has-hover || grip_touch.pressed || self.active_drag;
         background: #00000000;
+
+        Rectangle {
+            width: parent.width;
+            height: 18px;
+            y: 0px;
+            border-radius: 9px;
+            border-width: grip_host.grip_highlighted ? 1px : 0px;
+            border-color: AppTheme.overlay_button_active_border;
+            background: AppTheme.overlay_button_active_background;
+            opacity: grip_host.active_drag ? 0.38 : grip_host.grip_highlighted ? 0.2 : 0.0;
+        }
 
         for dot in [0, 1, 2, 3, 4, 5] : Rectangle {
             width: 4px;
             height: 4px;
-            x: dot * 10px + 6px;
-            y: (parent.height - self.height) / 2;
+            x: dot * 12px + 12px;
+            y: 7px;
             border-radius: 2px;
             background: AppTheme.overlay_button_text;
-            opacity: 0.75;
+            opacity: grip_host.active_drag ? 1.0 : grip_host.grip_highlighted ? 0.92 : 0.75;
         }
 
-        TouchArea {
+        grip_touch := TouchArea {
+            x: 0px;
+            y: 8px;
             width: parent.width;
-            height: parent.height;
+            height: 22px;
+            mouse-cursor: grip_host.active_drag ? grabbing : grab;
 
             pointer-event(event) => {
-                root.drag_action({
-                    phase: event.kind == PointerEventKind.down ? PanelDragPhase.down : event.kind == PointerEventKind.up ? PanelDragPhase.up : event.kind == PointerEventKind.cancel ? PanelDragPhase.cancel : PanelDragPhase.move,
+                root.pointer_action({
+                    phase: event.kind == PointerEventKind.down ? PanelPointerPhase.down : event.kind == PointerEventKind.up ? PanelPointerPhase.up : event.kind == PointerEventKind.cancel ? PanelPointerPhase.cancel : PanelPointerPhase.move,
+                    interaction: PanelPointerInteractionKind.move,
+                    handle: PanelResizeHandle.none,
                     x: parent.x / 1px + self.mouse_x / 1px,
                     y: parent.y / 1px + self.mouse_y / 1px,
                 });
@@ -63,12 +104,12 @@ export component PanelSheet inherits Rectangle {
 
         Text {
             vertical-alignment: center;
-            text: root.title;
+            text: root.display_title;
             color: AppTheme.overlay_button_text;
             font-size: 16px;
         }
 
-        Rectangle { horizontal-stretch: 1; }
+        if !root.collapsed : Rectangle { horizontal-stretch: 1; }
 
         Button {
             text: root.collapsed ? "Expand" : "Collapse";
@@ -84,6 +125,8 @@ export component PanelSheet inherits Rectangle {
             text: "Close";
             clicked => { root.header_action(PanelHeaderAction.close); }
         }
+
+        if root.collapsed : Rectangle { horizontal-stretch: 1; }
     }
 
     Rectangle {
@@ -104,6 +147,17 @@ export component PanelSheet inherits Rectangle {
         VerticalBox {
             spacing: AppTheme.section_spacing;
             @children
+        }
+    }
+
+    if root.resizable : PanelResizeHandles {
+        width: parent.width;
+        height: parent.height;
+        interaction_active: root.interaction_active
+            && root.active_interaction_kind == PanelPointerInteractionKind.resize;
+        active_resize_handle: root.active_resize_handle;
+        pointer_action(action) => {
+            root.pointer_action(action);
         }
     }
 }

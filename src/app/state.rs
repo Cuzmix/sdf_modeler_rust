@@ -280,16 +280,51 @@ pub enum PanelKind {
     Tool,
     ObjectProperties,
     RenderSettings,
+    Scene,
+    History,
+    ReferenceImages,
 }
 
 impl PanelKind {
-    pub const ALL: [Self; 3] = [Self::Tool, Self::ObjectProperties, Self::RenderSettings];
+    pub const ALL: [Self; 6] = [
+        Self::Tool,
+        Self::ObjectProperties,
+        Self::RenderSettings,
+        Self::Scene,
+        Self::History,
+        Self::ReferenceImages,
+    ];
 
     pub fn label(self) -> &'static str {
         match self {
             Self::Tool => "Tool",
             Self::ObjectProperties => "Object Properties",
             Self::RenderSettings => "Render Settings",
+            Self::Scene => "Scene",
+            Self::History => "History",
+            Self::ReferenceImages => "Reference Images",
+        }
+    }
+
+    pub fn short_label(self) -> &'static str {
+        match self {
+            Self::Tool => "Tool",
+            Self::ObjectProperties => "Props",
+            Self::RenderSettings => "Render",
+            Self::Scene => "Scene",
+            Self::History => "History",
+            Self::ReferenceImages => "Refs",
+        }
+    }
+
+    pub fn icon_key(self) -> &'static str {
+        match self {
+            Self::Tool => "tool",
+            Self::ObjectProperties => "object-properties",
+            Self::RenderSettings => "render-settings",
+            Self::Scene => "scene",
+            Self::History => "history",
+            Self::ReferenceImages => "reference-images",
         }
     }
 }
@@ -351,9 +386,28 @@ pub struct PanelInstanceState {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct PanelDragState {
+pub enum PanelResizeHandle {
+    Top,
+    Right,
+    Bottom,
+    Left,
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PanelPointerInteractionKind {
+    Move,
+    Resize(PanelResizeHandle),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PanelPointerInteractionState {
     pub bar_id: PanelBarId,
     pub kind: PanelKind,
+    pub interaction: PanelPointerInteractionKind,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -370,7 +424,7 @@ pub struct PanelFrameworkState {
     pub pinned_instances: Vec<PanelInstanceState>,
     pub focus_order: Vec<PanelInstanceId>,
     pub next_instance_id: PanelInstanceId,
-    pub panel_drag: Option<PanelDragState>,
+    pub panel_interaction: Option<PanelPointerInteractionState>,
 }
 
 impl Default for PanelFrameworkState {
@@ -387,18 +441,21 @@ impl Default for PanelFrameworkState {
             pinned_instances: Vec::new(),
             focus_order: Vec::new(),
             next_instance_id: 1,
-            panel_drag: None,
+            panel_interaction: None,
         }
     }
 }
 
 impl PanelFrameworkState {
     pub const TRANSIENT_PANEL_MARGIN: f32 = 20.0;
-    pub const TRANSIENT_PANEL_BAR_WIDTH: f32 = 156.0;
+    pub const TRANSIENT_PANEL_BAR_WIDTH: f32 = 144.0;
     pub const TRANSIENT_PANEL_GAP: f32 = 14.0;
-    pub const TRANSIENT_PANEL_WIDTH_MAX: f32 = 390.0;
-    pub const TRANSIENT_PANEL_HEIGHT_MAX: f32 = 420.0;
-    pub const TRANSIENT_PANEL_MIN_SIZE: f32 = 160.0;
+    pub const TRANSIENT_PANEL_DEFAULT_WIDTH_MAX: f32 = 390.0;
+    pub const TRANSIENT_PANEL_DEFAULT_HEIGHT_MAX: f32 = 420.0;
+    pub const COLLAPSED_PANEL_WIDTH: f32 = 320.0;
+    pub const COLLAPSED_PANEL_HEIGHT: f32 = 76.0;
+    pub const PANEL_MIN_WIDTH: f32 = 340.0;
+    pub const PANEL_MIN_HEIGHT: f32 = 180.0;
 
     pub fn bar(&self, id: PanelBarId) -> Option<&PanelBarState> {
         self.bars.iter().find(|bar| bar.id == id)
@@ -432,7 +489,7 @@ impl PanelFrameworkState {
         for bar in &mut self.bars {
             bar.active_transient = None;
         }
-        self.panel_drag = None;
+        self.panel_interaction = None;
     }
 
     pub fn close_panel(&mut self, kind: PanelKind) {
@@ -441,7 +498,7 @@ impl PanelFrameworkState {
                 bar.active_transient = None;
             }
         }
-        self.clear_panel_drag_for_kind(kind);
+        self.clear_panel_interaction_for_kind(kind);
 
         if let Some(index) = self
             .pinned_instances
@@ -496,7 +553,7 @@ impl PanelFrameworkState {
         if self.pinned_instance(kind).is_some() {
             self.focus_panel(kind);
             self.dismiss_kind_from_transient(kind);
-            self.clear_panel_drag_for_kind(kind);
+            self.clear_panel_interaction_for_kind(kind);
             return;
         }
 
@@ -515,7 +572,7 @@ impl PanelFrameworkState {
 
         let remembered_rect = self.bar(anchor_bar).and_then(|bar| bar.transient_rect);
         self.dismiss_kind_from_transient(kind);
-        self.clear_panel_drag_for_kind(kind);
+        self.clear_panel_interaction_for_kind(kind);
 
         let instance_id = self.next_instance_id;
         self.next_instance_id = self.next_instance_id.wrapping_add(1);
@@ -561,48 +618,91 @@ impl PanelFrameworkState {
         }
     }
 
-    pub fn begin_panel_drag(&mut self, kind: PanelKind, bar_id: PanelBarId) {
+    pub fn begin_panel_interaction(
+        &mut self,
+        kind: PanelKind,
+        bar_id: PanelBarId,
+        interaction: PanelPointerInteractionKind,
+    ) {
         if let Some(instance_id) = self.pinned_instance(kind).map(|instance| instance.id) {
             self.focus_instance(instance_id);
-            self.panel_drag = Some(PanelDragState { bar_id, kind });
+            self.panel_interaction = Some(PanelPointerInteractionState {
+                bar_id,
+                kind,
+                interaction,
+            });
             return;
         }
         if self.active_transient(bar_id) == Some(kind) {
-            self.panel_drag = Some(PanelDragState { bar_id, kind });
+            self.panel_interaction = Some(PanelPointerInteractionState {
+                bar_id,
+                kind,
+                interaction,
+            });
         }
     }
 
-    pub fn drag_panel(
+    pub fn update_panel_interaction(
         &mut self,
         kind: PanelKind,
         bar_id: PanelBarId,
         delta_x: f32,
         delta_y: f32,
-        viewport_width: f32,
-        viewport_height: f32,
+        usable_rect: FloatingPanelBounds,
     ) {
-        if !self
-            .panel_drag
-            .is_some_and(|drag| drag.bar_id == bar_id && drag.kind == kind)
-        {
+        let Some(interaction) = self.panel_interaction else {
+            return;
+        };
+        if interaction.bar_id != bar_id || interaction.kind != kind {
             return;
         }
 
+        let pinned_snapshot = self
+            .pinned_instance(kind)
+            .map(|instance| (instance.anchor_bar, instance.collapsed, instance.rect));
         let current = self
-            .resolved_panel_rect(kind, bar_id, viewport_width, viewport_height)
-            .unwrap_or_else(|| {
-                self.resolved_transient_rect(bar_id, viewport_width, viewport_height)
-            });
-        let next = FloatingPanelBounds::from_min_size(
-            current.x + delta_x,
-            current.y + delta_y,
-            current.width,
-            current.height,
-        );
-        let next = clamp_transient_panel_rect(next, viewport_width, viewport_height);
+            .resolved_display_panel_rect(kind, bar_id, usable_rect)
+            .unwrap_or_else(|| self.resolved_transient_rect(bar_id, usable_rect));
+        let next = match interaction.interaction {
+            PanelPointerInteractionKind::Move => clamp_panel_rect(
+                FloatingPanelBounds::from_min_size(
+                    current.x + delta_x,
+                    current.y + delta_y,
+                    current.width,
+                    current.height,
+                ),
+                usable_rect,
+            ),
+            PanelPointerInteractionKind::Resize(handle) => {
+                resize_panel_rect(current, handle, delta_x, delta_y, usable_rect)
+            }
+        };
         if let Some(instance_id) = self.pinned_instance(kind).map(|instance| instance.id) {
+            let fallback_transient_rect = self.resolved_transient_rect(bar_id, usable_rect);
+            let collapsed_move_stored_rect = pinned_snapshot.and_then(|(anchor_bar, collapsed, rect)| {
+                if collapsed && matches!(interaction.interaction, PanelPointerInteractionKind::Move) {
+                    Some(rect.unwrap_or_else(|| self.resolved_transient_rect(anchor_bar, usable_rect)))
+                } else {
+                    None
+                }
+            });
             if let Some(instance) = self.pinned_instance_mut(kind) {
-                instance.rect = Some(next);
+                instance.rect = Some(
+                    if instance.collapsed
+                        && matches!(interaction.interaction, PanelPointerInteractionKind::Move)
+                    {
+                        let stored_rect = collapsed_move_stored_rect
+                            .unwrap_or(fallback_transient_rect);
+                        FloatingPanelBounds::from_min_size(
+                            next.x,
+                            next.y,
+                            stored_rect.width,
+                            stored_rect.height,
+                        )
+                    } else {
+                        next
+                    },
+                );
             }
             self.focus_instance(instance_id);
         } else if self.active_transient(bar_id) == Some(kind) {
@@ -612,56 +712,70 @@ impl PanelFrameworkState {
         }
     }
 
-    pub fn end_panel_drag(&mut self, kind: PanelKind, bar_id: PanelBarId) {
+    pub fn end_panel_interaction(&mut self, kind: PanelKind, bar_id: PanelBarId) {
         if self
-            .panel_drag
-            .is_some_and(|drag| drag.bar_id == bar_id && drag.kind == kind)
+            .panel_interaction
+            .is_some_and(|interaction| interaction.bar_id == bar_id && interaction.kind == kind)
         {
-            self.panel_drag = None;
+            self.panel_interaction = None;
         }
     }
 
-    pub fn cancel_panel_drag(&mut self, kind: PanelKind, bar_id: PanelBarId) {
-        self.end_panel_drag(kind, bar_id);
+    pub fn cancel_panel_interaction(&mut self, kind: PanelKind, bar_id: PanelBarId) {
+        self.end_panel_interaction(kind, bar_id);
     }
 
     pub fn resolved_transient_rect(
         &self,
         bar_id: PanelBarId,
-        viewport_width: f32,
-        viewport_height: f32,
+        usable_rect: FloatingPanelBounds,
     ) -> FloatingPanelBounds {
         let bar = self.bar(bar_id);
         let resolved = bar
             .and_then(|current_bar| current_bar.transient_rect)
-            .unwrap_or_else(|| default_transient_panel_rect(bar, viewport_width, viewport_height));
-        clamp_transient_panel_rect(resolved, viewport_width, viewport_height)
+            .unwrap_or_else(|| default_transient_panel_rect(bar, usable_rect));
+        clamp_panel_rect(resolved, usable_rect)
     }
 
     pub fn resolved_panel_rect(
         &self,
         kind: PanelKind,
         bar_id: PanelBarId,
-        viewport_width: f32,
-        viewport_height: f32,
+        usable_rect: FloatingPanelBounds,
     ) -> Option<FloatingPanelBounds> {
         if let Some(instance) = self.pinned_instance(kind) {
-            return Some(clamp_transient_panel_rect(
-                instance.rect.unwrap_or_else(|| {
-                    self.resolved_transient_rect(
-                        instance.anchor_bar,
-                        viewport_width,
-                        viewport_height,
-                    )
-                }),
-                viewport_width,
-                viewport_height,
+            return Some(clamp_panel_rect(
+                instance
+                    .rect
+                    .unwrap_or_else(|| self.resolved_transient_rect(instance.anchor_bar, usable_rect)),
+                usable_rect,
             ));
         }
         if self.active_transient(bar_id) == Some(kind) {
-            return Some(self.resolved_transient_rect(bar_id, viewport_width, viewport_height));
+            return Some(self.resolved_transient_rect(bar_id, usable_rect));
         }
         None
+    }
+
+    pub fn resolved_display_panel_rect(
+        &self,
+        kind: PanelKind,
+        bar_id: PanelBarId,
+        usable_rect: FloatingPanelBounds,
+    ) -> Option<FloatingPanelBounds> {
+        if let Some(instance) = self.pinned_instance(kind) {
+            if instance.collapsed {
+                let expanded_rect = instance
+                    .rect
+                    .unwrap_or_else(|| self.resolved_transient_rect(instance.anchor_bar, usable_rect));
+                return Some(clamp_panel_display_rect(
+                    collapsed_panel_rect(expanded_rect),
+                    usable_rect,
+                ));
+            }
+        }
+
+        self.resolved_panel_rect(kind, bar_id, usable_rect)
     }
 
     pub fn sheet_anchor_for_bar(&self, bar_id: PanelBarId) -> PanelSheetAnchor {
@@ -685,9 +799,12 @@ impl PanelFrameworkState {
         }
     }
 
-    fn clear_panel_drag_for_kind(&mut self, kind: PanelKind) {
-        if self.panel_drag.is_some_and(|drag| drag.kind == kind) {
-            self.panel_drag = None;
+    fn clear_panel_interaction_for_kind(&mut self, kind: PanelKind) {
+        if self
+            .panel_interaction
+            .is_some_and(|interaction| interaction.kind == kind)
+        {
+            self.panel_interaction = None;
         }
     }
 
@@ -700,69 +817,178 @@ impl PanelFrameworkState {
 
 fn default_transient_panel_rect(
     bar: Option<&PanelBarState>,
-    viewport_width: f32,
-    viewport_height: f32,
+    usable_rect: FloatingPanelBounds,
 ) -> FloatingPanelBounds {
     let margin = PanelFrameworkState::TRANSIENT_PANEL_MARGIN;
     let gap = PanelFrameworkState::TRANSIENT_PANEL_GAP;
     let bar_extent = PanelFrameworkState::TRANSIENT_PANEL_BAR_WIDTH;
-    let available_width =
-        (viewport_width - margin * 2.0).max(PanelFrameworkState::TRANSIENT_PANEL_MIN_SIZE);
-    let preferred_width = (viewport_width - bar_extent - margin * 3.0)
-        .max(PanelFrameworkState::TRANSIENT_PANEL_MIN_SIZE);
+    let max_width = (usable_rect.width - margin * 2.0).max(1.0);
+    let min_width = PanelFrameworkState::PANEL_MIN_WIDTH.min(max_width);
+    let available_width = max_width;
+    let preferred_width = (usable_rect.width - bar_extent - margin * 3.0).max(min_width);
     let width = preferred_width
-        .min(PanelFrameworkState::TRANSIENT_PANEL_WIDTH_MAX)
+        .min(PanelFrameworkState::TRANSIENT_PANEL_DEFAULT_WIDTH_MAX)
         .min(available_width);
-    let height = (viewport_height - margin * 2.0).clamp(
-        PanelFrameworkState::TRANSIENT_PANEL_MIN_SIZE,
-        PanelFrameworkState::TRANSIENT_PANEL_HEIGHT_MAX,
-    );
+    let max_height = (usable_rect.height - margin * 2.0).max(1.0);
+    let min_height = PanelFrameworkState::PANEL_MIN_HEIGHT.min(max_height);
+    let height = max_height.clamp(min_height, PanelFrameworkState::TRANSIENT_PANEL_DEFAULT_HEIGHT_MAX);
 
     let edge = bar
         .map(|current_bar| current_bar.edge)
         .unwrap_or(PanelBarEdge::Right);
     let (x, y) = match edge {
-        PanelBarEdge::Left => (margin + bar_extent + gap, margin),
-        PanelBarEdge::Right => (viewport_width - margin - bar_extent - gap - width, margin),
-        PanelBarEdge::Top => (margin, margin + bar_extent + gap),
-        PanelBarEdge::Bottom => (margin, viewport_height - margin - bar_extent - gap - height),
+        PanelBarEdge::Left => (usable_rect.x + margin + bar_extent + gap, usable_rect.y + margin),
+        PanelBarEdge::Right => (
+            usable_rect.right() - margin - bar_extent - gap - width,
+            usable_rect.y + margin,
+        ),
+        PanelBarEdge::Top => (usable_rect.x + margin, usable_rect.y + margin + bar_extent + gap),
+        PanelBarEdge::Bottom => (
+            usable_rect.x + margin,
+            usable_rect.bottom() - margin - bar_extent - gap - height,
+        ),
     };
 
-    clamp_transient_panel_rect(
+    clamp_panel_rect(
         FloatingPanelBounds::from_min_size(x, y, width, height),
-        viewport_width,
-        viewport_height,
+        usable_rect,
     )
 }
 
-fn clamp_transient_panel_rect(
+fn collapsed_panel_rect(rect: FloatingPanelBounds) -> FloatingPanelBounds {
+    FloatingPanelBounds::from_min_size(
+        rect.x,
+        rect.y,
+        rect.width.min(PanelFrameworkState::COLLAPSED_PANEL_WIDTH),
+        PanelFrameworkState::COLLAPSED_PANEL_HEIGHT,
+    )
+}
+
+fn clamp_panel_rect(
     rect: FloatingPanelBounds,
-    viewport_width: f32,
-    viewport_height: f32,
+    usable_rect: FloatingPanelBounds,
 ) -> FloatingPanelBounds {
     let margin = PanelFrameworkState::TRANSIENT_PANEL_MARGIN;
-    let max_width =
-        (viewport_width - margin * 2.0).max(PanelFrameworkState::TRANSIENT_PANEL_MIN_SIZE);
-    let max_height =
-        (viewport_height - margin * 2.0).max(PanelFrameworkState::TRANSIENT_PANEL_MIN_SIZE);
+    let max_width = (usable_rect.width - margin * 2.0).max(1.0);
+    let max_height = (usable_rect.height - margin * 2.0).max(1.0);
+    let min_width = PanelFrameworkState::PANEL_MIN_WIDTH.min(max_width);
+    let min_height = PanelFrameworkState::PANEL_MIN_HEIGHT.min(max_height);
     let width = rect
         .width
-        .max(PanelFrameworkState::TRANSIENT_PANEL_MIN_SIZE)
+        .max(min_width)
         .min(max_width);
     let height = rect
         .height
-        .max(PanelFrameworkState::TRANSIENT_PANEL_MIN_SIZE)
+        .max(min_height)
         .min(max_height);
-    let min_x = margin;
-    let max_x = (viewport_width - margin - width).max(min_x);
-    let min_y = margin;
-    let max_y = (viewport_height - margin - height).max(min_y);
+    let min_x = usable_rect.x + margin;
+    let max_x = (usable_rect.right() - margin - width).max(min_x);
+    let min_y = usable_rect.y + margin;
+    let max_y = (usable_rect.bottom() - margin - height).max(min_y);
     FloatingPanelBounds::from_min_size(
         rect.x.clamp(min_x, max_x),
         rect.y.clamp(min_y, max_y),
         width,
         height,
     )
+}
+
+fn clamp_panel_display_rect(
+    rect: FloatingPanelBounds,
+    usable_rect: FloatingPanelBounds,
+) -> FloatingPanelBounds {
+    let margin = PanelFrameworkState::TRANSIENT_PANEL_MARGIN;
+    let max_width = (usable_rect.width - margin * 2.0).max(1.0);
+    let max_height = (usable_rect.height - margin * 2.0).max(1.0);
+    let width = rect.width.max(1.0).min(max_width);
+    let height = rect.height.max(1.0).min(max_height);
+    let min_x = usable_rect.x + margin;
+    let max_x = (usable_rect.right() - margin - width).max(min_x);
+    let min_y = usable_rect.y + margin;
+    let max_y = (usable_rect.bottom() - margin - height).max(min_y);
+    FloatingPanelBounds::from_min_size(
+        rect.x.clamp(min_x, max_x),
+        rect.y.clamp(min_y, max_y),
+        width,
+        height,
+    )
+}
+
+fn resize_panel_rect(
+    rect: FloatingPanelBounds,
+    handle: PanelResizeHandle,
+    delta_x: f32,
+    delta_y: f32,
+    usable_rect: FloatingPanelBounds,
+) -> FloatingPanelBounds {
+    let margin = PanelFrameworkState::TRANSIENT_PANEL_MARGIN;
+    let min_width =
+        PanelFrameworkState::PANEL_MIN_WIDTH.min((usable_rect.width - margin * 2.0).max(1.0));
+    let min_height =
+        PanelFrameworkState::PANEL_MIN_HEIGHT.min((usable_rect.height - margin * 2.0).max(1.0));
+    let usable_right = usable_rect.right();
+    let usable_bottom = usable_rect.bottom();
+
+    let mut left = rect.x;
+    let mut right = rect.right();
+    let mut top = rect.y;
+    let mut bottom = rect.bottom();
+
+    if matches!(
+        handle,
+        PanelResizeHandle::Top | PanelResizeHandle::TopLeft | PanelResizeHandle::TopRight
+    ) {
+        top += delta_y;
+    }
+    if matches!(
+        handle,
+        PanelResizeHandle::Bottom
+            | PanelResizeHandle::BottomLeft
+            | PanelResizeHandle::BottomRight
+    ) {
+        bottom += delta_y;
+    }
+
+    if matches!(
+        handle,
+        PanelResizeHandle::Left | PanelResizeHandle::TopLeft | PanelResizeHandle::BottomLeft
+    ) {
+        left += delta_x;
+    }
+    if matches!(
+        handle,
+        PanelResizeHandle::Right | PanelResizeHandle::TopRight | PanelResizeHandle::BottomRight
+    ) {
+        right += delta_x;
+    }
+
+    if matches!(
+        handle,
+        PanelResizeHandle::Left | PanelResizeHandle::TopLeft | PanelResizeHandle::BottomLeft
+    ) {
+        left = left.clamp(usable_rect.x, right - min_width);
+    }
+    if matches!(
+        handle,
+        PanelResizeHandle::Right | PanelResizeHandle::TopRight | PanelResizeHandle::BottomRight
+    ) {
+        right = right.clamp(left + min_width, usable_right);
+    }
+    if matches!(
+        handle,
+        PanelResizeHandle::Top | PanelResizeHandle::TopLeft | PanelResizeHandle::TopRight
+    ) {
+        top = top.clamp(usable_rect.y, bottom - min_height);
+    }
+    if matches!(
+        handle,
+        PanelResizeHandle::Bottom | PanelResizeHandle::BottomLeft | PanelResizeHandle::BottomRight
+    ) {
+        bottom = bottom.clamp(top + min_height, usable_bottom);
+    }
+
+    let resized = FloatingPanelBounds::from_min_size(left, top, right - left, bottom - top);
+    clamp_panel_rect(resized, usable_rect)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1228,6 +1454,10 @@ mod tests {
     use crate::mesh_import::TriMesh;
     use crate::settings::{GroupRotateDirection, SelectionBehaviorSettings};
 
+    fn usable_rect(width: f32, height: f32) -> FloatingPanelBounds {
+        FloatingPanelBounds::from_min_size(0.0, 0.0, width, height)
+    }
+
     /// Create a simple test mesh (two triangles forming a 2x2x0 quad).
     fn test_quad_mesh(num_triangles: usize) -> TriMesh {
         let mut vertices = vec![
@@ -1576,15 +1806,18 @@ mod tests {
     fn panel_framework_drag_updates_and_clamps_transient_rect() {
         let mut state = PanelFrameworkState::default();
         state.open_panel(PanelKind::ObjectProperties, PanelBarId::PrimaryRight);
-        state.begin_panel_drag(PanelKind::ObjectProperties, PanelBarId::PrimaryRight);
+        state.begin_panel_interaction(
+            PanelKind::ObjectProperties,
+            PanelBarId::PrimaryRight,
+            PanelPointerInteractionKind::Move,
+        );
 
-        state.drag_panel(
+        state.update_panel_interaction(
             PanelKind::ObjectProperties,
             PanelBarId::PrimaryRight,
             -5000.0,
             5000.0,
-            1200.0,
-            800.0,
+            usable_rect(1200.0, 800.0),
         );
 
         let rect = state
@@ -1602,14 +1835,17 @@ mod tests {
     fn panel_framework_close_preserves_remembered_transient_rect() {
         let mut state = PanelFrameworkState::default();
         state.open_panel(PanelKind::ObjectProperties, PanelBarId::PrimaryRight);
-        state.begin_panel_drag(PanelKind::ObjectProperties, PanelBarId::PrimaryRight);
-        state.drag_panel(
+        state.begin_panel_interaction(
+            PanelKind::ObjectProperties,
+            PanelBarId::PrimaryRight,
+            PanelPointerInteractionKind::Move,
+        );
+        state.update_panel_interaction(
             PanelKind::ObjectProperties,
             PanelBarId::PrimaryRight,
             -40.0,
             22.0,
-            1200.0,
-            800.0,
+            usable_rect(1200.0, 800.0),
         );
         let remembered = state.remembered_transient_rect(PanelBarId::PrimaryRight);
 
@@ -1626,14 +1862,17 @@ mod tests {
     fn panel_framework_switching_transient_kind_preserves_rect() {
         let mut state = PanelFrameworkState::default();
         state.open_panel(PanelKind::ObjectProperties, PanelBarId::PrimaryRight);
-        state.begin_panel_drag(PanelKind::ObjectProperties, PanelBarId::PrimaryRight);
-        state.drag_panel(
+        state.begin_panel_interaction(
+            PanelKind::ObjectProperties,
+            PanelBarId::PrimaryRight,
+            PanelPointerInteractionKind::Move,
+        );
+        state.update_panel_interaction(
             PanelKind::ObjectProperties,
             PanelBarId::PrimaryRight,
             -80.0,
             32.0,
-            1200.0,
-            800.0,
+            usable_rect(1200.0, 800.0),
         );
         let remembered = state.remembered_transient_rect(PanelBarId::PrimaryRight);
 
@@ -1653,14 +1892,17 @@ mod tests {
     fn panel_framework_unpin_reopens_at_remembered_transient_rect() {
         let mut state = PanelFrameworkState::default();
         state.open_panel(PanelKind::RenderSettings, PanelBarId::PrimaryRight);
-        state.begin_panel_drag(PanelKind::RenderSettings, PanelBarId::PrimaryRight);
-        state.drag_panel(
+        state.begin_panel_interaction(
+            PanelKind::RenderSettings,
+            PanelBarId::PrimaryRight,
+            PanelPointerInteractionKind::Move,
+        );
+        state.update_panel_interaction(
             PanelKind::RenderSettings,
             PanelBarId::PrimaryRight,
             -60.0,
             28.0,
-            1200.0,
-            800.0,
+            usable_rect(1200.0, 800.0),
         );
         let remembered = state.remembered_transient_rect(PanelBarId::PrimaryRight);
         state.pin_panel(PanelKind::RenderSettings);
@@ -1684,22 +1926,20 @@ mod tests {
         state.pin_panel(PanelKind::RenderSettings);
 
         let before = state
-            .resolved_panel_rect(
-                PanelKind::RenderSettings,
-                PanelBarId::PrimaryRight,
-                1200.0,
-                800.0,
-            )
+            .resolved_panel_rect(PanelKind::RenderSettings, PanelBarId::PrimaryRight, usable_rect(1200.0, 800.0))
             .expect("pinned panel rect");
 
-        state.begin_panel_drag(PanelKind::RenderSettings, PanelBarId::PrimaryRight);
-        state.drag_panel(
+        state.begin_panel_interaction(
+            PanelKind::RenderSettings,
+            PanelBarId::PrimaryRight,
+            PanelPointerInteractionKind::Move,
+        );
+        state.update_panel_interaction(
             PanelKind::RenderSettings,
             PanelBarId::PrimaryRight,
             -80.0,
             24.0,
-            1200.0,
-            800.0,
+            usable_rect(1200.0, 800.0),
         );
 
         let after = state
@@ -1708,5 +1948,108 @@ mod tests {
             .expect("stored pinned rect");
         assert!((after.x - (before.x - 80.0)).abs() < 0.01);
         assert!((after.y - (before.y + 24.0)).abs() < 0.01);
+    }
+
+    #[test]
+    fn panel_framework_resize_updates_transient_rect_and_clamps_bounds() {
+        let mut state = PanelFrameworkState::default();
+        state.open_panel(PanelKind::ObjectProperties, PanelBarId::PrimaryRight);
+        state.begin_panel_interaction(
+            PanelKind::ObjectProperties,
+            PanelBarId::PrimaryRight,
+            PanelPointerInteractionKind::Resize(PanelResizeHandle::BottomRight),
+        );
+
+        state.update_panel_interaction(
+            PanelKind::ObjectProperties,
+            PanelBarId::PrimaryRight,
+            4000.0,
+            4000.0,
+            usable_rect(900.0, 700.0),
+        );
+
+        let rect = state
+            .remembered_transient_rect(PanelBarId::PrimaryRight)
+            .expect("resized transient rect");
+        assert!(rect.width <= 860.0);
+        assert!(rect.height <= 660.0);
+        assert!(rect.right() <= 880.0 + 0.01);
+        assert!(rect.bottom() <= 680.0 + 0.01);
+    }
+
+    #[test]
+    fn panel_framework_collapsed_pinned_panel_uses_display_height() {
+        let mut state = PanelFrameworkState::default();
+        state.open_panel(PanelKind::RenderSettings, PanelBarId::PrimaryRight);
+        state.pin_panel(PanelKind::RenderSettings);
+        state.toggle_pinned_collapsed(PanelKind::RenderSettings);
+
+        let rect = state
+            .resolved_display_panel_rect(
+                PanelKind::RenderSettings,
+                PanelBarId::PrimaryRight,
+                usable_rect(1200.0, 800.0),
+            )
+            .expect("collapsed pinned panel rect");
+
+        assert!((rect.width - PanelFrameworkState::COLLAPSED_PANEL_WIDTH).abs() < 0.01);
+        assert!((rect.height - PanelFrameworkState::COLLAPSED_PANEL_HEIGHT).abs() < 0.01);
+    }
+
+    #[test]
+    fn panel_framework_collapsed_pinned_panel_clamps_with_collapsed_footprint() {
+        let mut state = PanelFrameworkState::default();
+        state.open_panel(PanelKind::RenderSettings, PanelBarId::PrimaryRight);
+        state.pin_panel(PanelKind::RenderSettings);
+        if let Some(instance) = state.pinned_instance_mut(PanelKind::RenderSettings) {
+            instance.rect = Some(FloatingPanelBounds::from_min_size(700.0, 40.0, 500.0, 420.0));
+            instance.collapsed = true;
+        }
+
+        let rect = state
+            .resolved_display_panel_rect(
+                PanelKind::RenderSettings,
+                PanelBarId::PrimaryRight,
+                usable_rect(1000.0, 800.0),
+            )
+            .expect("collapsed pinned panel rect");
+        let expected_x = 1000.0
+            - PanelFrameworkState::TRANSIENT_PANEL_MARGIN
+            - PanelFrameworkState::COLLAPSED_PANEL_WIDTH;
+
+        assert!((rect.x - expected_x).abs() < 0.01);
+        assert!((rect.width - PanelFrameworkState::COLLAPSED_PANEL_WIDTH).abs() < 0.01);
+        assert!((rect.height - PanelFrameworkState::COLLAPSED_PANEL_HEIGHT).abs() < 0.01);
+    }
+
+    #[test]
+    fn panel_framework_moving_collapsed_pinned_panel_preserves_expanded_rect_height() {
+        let mut state = PanelFrameworkState::default();
+        state.open_panel(PanelKind::RenderSettings, PanelBarId::PrimaryRight);
+        state.pin_panel(PanelKind::RenderSettings);
+        let before = state
+            .pinned_instance(PanelKind::RenderSettings)
+            .and_then(|instance| instance.rect)
+            .unwrap_or_else(|| state.resolved_transient_rect(PanelBarId::PrimaryRight, usable_rect(1200.0, 800.0)));
+        state.toggle_pinned_collapsed(PanelKind::RenderSettings);
+
+        state.begin_panel_interaction(
+            PanelKind::RenderSettings,
+            PanelBarId::PrimaryRight,
+            PanelPointerInteractionKind::Move,
+        );
+        state.update_panel_interaction(
+            PanelKind::RenderSettings,
+            PanelBarId::PrimaryRight,
+            0.0,
+            40.0,
+            usable_rect(1200.0, 800.0),
+        );
+
+        let after = state
+            .pinned_instance(PanelKind::RenderSettings)
+            .and_then(|instance| instance.rect)
+            .expect("stored pinned rect");
+        assert!((after.height - before.height).abs() < 0.01);
     }
 }

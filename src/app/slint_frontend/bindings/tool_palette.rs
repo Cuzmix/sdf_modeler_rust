@@ -7,11 +7,11 @@ use crate::app::slint_frontend::{ToolPaletteAction, ToolPaletteButtonView, ToolP
 
 pub(super) fn build_tool_palette_state(snapshot: &ShellSnapshot) -> ToolPaletteState {
     ToolPaletteState {
-        visible: snapshot.tool_palette.visible,
-        select_tool: tool_button_view(&snapshot.tool_palette.select_tool),
+        visible: snapshot.tool_context.visible,
+        select_tool: tool_button_view(&snapshot.tool_context.select_tool),
         brush_tools: Rc::new(VecModel::from(
             snapshot
-                .tool_palette
+                .tool_context
                 .brush_tools
                 .iter()
                 .map(tool_button_view)

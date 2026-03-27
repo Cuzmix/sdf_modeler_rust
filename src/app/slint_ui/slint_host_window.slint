@@ -4,11 +4,14 @@ import {
     InspectorEditMode,
     InspectorPanelState,
     LightEditKind,
+    OverlayLayoutViewState,
     MaterialEditKind,
     OperationEditKind,
     PanelFrameworkViewState,
-    PanelDragAction,
-    PanelDragPhase,
+    PanelPointerAction,
+    PanelPointerInteractionKind,
+    PanelPointerPhase,
+    PanelResizeHandle,
     PanelHeaderAction,
     PanelKindView,
     ReferenceImageAction,
@@ -48,6 +51,7 @@ export component SlintHostWindow inherits Window {
     in property <[ViewportPathView]> viewport_gizmo_paths;
     in property <TopBarState> top_bar_state;
     in property <ToolPaletteState> tool_palette_state;
+    in property <OverlayLayoutViewState> overlay_layout_state;
     in property <PanelFrameworkViewState> panel_framework_state;
     in property <ScenePanelState> scene_panel_state;
     in property <InspectorPanelState> inspector_panel_state;
@@ -57,12 +61,24 @@ export component SlintHostWindow inherits Window {
 
     out property <float> viewport_width: viewport_panel.viewport_width;
     out property <float> viewport_height: viewport_panel.viewport_height;
+    out property <length> safe_area_left: self.safe-area-insets.left;
+    out property <length> safe_area_top: self.safe-area-insets.top;
+    out property <length> safe_area_right: self.safe-area-insets.right;
+    out property <length> safe_area_bottom: self.safe-area-insets.bottom;
+    out property <length> virtual_keyboard_x: self.virtual-keyboard-position.x;
+    out property <length> virtual_keyboard_y: self.virtual-keyboard-position.y;
+    out property <length> virtual_keyboard_width: self.virtual-keyboard-size.width;
+    out property <length> virtual_keyboard_height: self.virtual-keyboard-size.height;
+    out property <length> overlay_usable_x: overlay_layout_state.usable_x * 1px;
+    out property <length> overlay_usable_y: overlay_layout_state.usable_y * 1px;
+    out property <length> overlay_usable_width: overlay_layout_state.usable_width * 1px;
+    out property <length> overlay_usable_height: overlay_layout_state.usable_height * 1px;
 
     callback top_bar_action(action: TopBarAction);
     callback tool_palette_action(action: ToolPaletteAction);
     callback panel_launcher_action(kind: PanelKindView);
     callback panel_header_action(kind: PanelKindView, action: PanelHeaderAction);
-    callback panel_drag_action(kind: PanelKindView, action: PanelDragAction);
+    callback panel_pointer_action(kind: PanelKindView, action: PanelPointerAction);
     callback dismiss_transient_panels();
     callback scene_toolbar_action(action: SceneToolbarAction);
     callback scene_row_action(action: SceneRowAction, index: int);
@@ -90,8 +106,27 @@ export component SlintHostWindow inherits Window {
         background: AppTheme.viewport_background;
         clip: true;
 
-        private property <length> panel_rail_width: 156px;
+        private property <length> panel_rail_width: 144px;
         private property <length> panel_margin: 20px;
+        private property <length> usable_x: root.overlay_layout_state.usable_width > 0 ? root.overlay_layout_state.usable_x * 1px : 0px;
+        private property <length> usable_y: root.overlay_layout_state.usable_height > 0 ? root.overlay_layout_state.usable_y * 1px : 0px;
+        private property <length> usable_width: root.overlay_layout_state.usable_width > 0 ? root.overlay_layout_state.usable_width * 1px : parent.width;
+        private property <length> usable_height: root.overlay_layout_state.usable_height > 0 ? root.overlay_layout_state.usable_height * 1px : parent.height;
+        private property <MouseCursor> active_panel_cursor: root.panel_framework_state.active_interaction_kind == PanelPointerInteractionKind.move
+            ? grabbing
+            : root.panel_framework_state.active_resize_handle == PanelResizeHandle.top
+                || root.panel_framework_state.active_resize_handle == PanelResizeHandle.bottom
+                ? ns-resize
+                : root.panel_framework_state.active_resize_handle == PanelResizeHandle.left
+                    || root.panel_framework_state.active_resize_handle == PanelResizeHandle.right
+                    ? ew-resize
+                    : root.panel_framework_state.active_resize_handle == PanelResizeHandle.top-left
+                        || root.panel_framework_state.active_resize_handle == PanelResizeHandle.bottom-right
+                        ? nwse-resize
+                        : root.panel_framework_state.active_resize_handle == PanelResizeHandle.top-right
+                            || root.panel_framework_state.active_resize_handle == PanelResizeHandle.bottom-left
+                            ? nesw-resize
+                            : default;
 
         viewport_panel := ViewportPanel {
             width: parent.width;
@@ -111,7 +146,7 @@ export component SlintHostWindow inherits Window {
             }
         }
 
-        if root.panel_framework_state.transient_panel.visible && !root.panel_framework_state.panel_drag_active : Rectangle {
+        if root.panel_framework_state.transient_panel.visible && !root.panel_framework_state.panel_interaction_active : Rectangle {
             width: parent.width;
             height: parent.height;
             background: AppTheme.overlay_panel_backdrop;
@@ -130,20 +165,36 @@ export component SlintHostWindow inherits Window {
             x: panel.frame.x * 1px;
             y: panel.frame.y * 1px;
             panel: panel;
+            scene_state: root.scene_panel_state;
             inspector_state: root.inspector_panel_state;
             tool_state: root.tool_panel_state;
             utility_state: root.utility_panel_state;
+            interaction_active: root.panel_framework_state.panel_interaction_active
+                && root.panel_framework_state.interaction_panel_kind == self.panel.kind;
+            active_interaction_kind: root.panel_framework_state.active_interaction_kind;
+            active_resize_handle: root.panel_framework_state.active_resize_handle;
             panel_header_action(kind, action) => {
                 root.panel_header_action(kind, action);
             }
-            panel_drag_action(kind, action) => {
-                root.panel_drag_action(kind, action);
+            panel_pointer_action(kind, action) => {
+                root.panel_pointer_action(kind, action);
+            }
+            scene_toolbar_action(action) => {
+                root.scene_toolbar_action(action);
+            }
+            scene_row_action(action, index) => {
+                root.scene_row_action(action, index);
+            }
+            scene_text_action(action, text) => {
+                root.scene_text_action(action, text);
             }
             transform_edit(kind, mode, axis, value) => { root.transform_edit(kind, mode, axis, value); }
             material_edit(kind, mode, axis, value) => { root.material_edit(kind, mode, axis, value); }
             operation_edit(kind, mode, value) => { root.operation_edit(kind, mode, value); }
             sculpt_edit(kind, mode, value) => { root.sculpt_edit(kind, mode, value); }
             light_edit(kind, mode, axis, value) => { root.light_edit(kind, mode, axis, value); }
+            history_action(action, index) => { root.history_action(action, index); }
+            reference_image_action(action, index, value) => { root.reference_image_action(action, index, value); }
             render_settings_action(action, value) => { root.render_settings_action(action, value); }
         }
 
@@ -151,28 +202,44 @@ export component SlintHostWindow inherits Window {
             x: root.panel_framework_state.transient_panel.frame.x * 1px;
             y: root.panel_framework_state.transient_panel.frame.y * 1px;
             panel: root.panel_framework_state.transient_panel;
+            scene_state: root.scene_panel_state;
             inspector_state: root.inspector_panel_state;
             tool_state: root.tool_panel_state;
             utility_state: root.utility_panel_state;
+            interaction_active: root.panel_framework_state.panel_interaction_active
+                && root.panel_framework_state.interaction_panel_kind == self.panel.kind;
+            active_interaction_kind: root.panel_framework_state.active_interaction_kind;
+            active_resize_handle: root.panel_framework_state.active_resize_handle;
             panel_header_action(kind, action) => {
                 root.panel_header_action(kind, action);
             }
-            panel_drag_action(kind, action) => {
-                root.panel_drag_action(kind, action);
+            panel_pointer_action(kind, action) => {
+                root.panel_pointer_action(kind, action);
+            }
+            scene_toolbar_action(action) => {
+                root.scene_toolbar_action(action);
+            }
+            scene_row_action(action, index) => {
+                root.scene_row_action(action, index);
+            }
+            scene_text_action(action, text) => {
+                root.scene_text_action(action, text);
             }
             transform_edit(kind, mode, axis, value) => { root.transform_edit(kind, mode, axis, value); }
             material_edit(kind, mode, axis, value) => { root.material_edit(kind, mode, axis, value); }
             operation_edit(kind, mode, value) => { root.operation_edit(kind, mode, value); }
             sculpt_edit(kind, mode, value) => { root.sculpt_edit(kind, mode, value); }
             light_edit(kind, mode, axis, value) => { root.light_edit(kind, mode, axis, value); }
+            history_action(action, index) => { root.history_action(action, index); }
+            reference_image_action(action, index, value) => { root.reference_image_action(action, index, value); }
             render_settings_action(action, value) => { root.render_settings_action(action, value); }
         }
 
         panel_bar := PanelBar {
             state: root.panel_framework_state.bar;
             width: parent.panel_rail_width;
-            x: parent.width - self.width - parent.panel_margin;
-            y: parent.panel_margin;
+            x: parent.usable_x + parent.usable_width - self.width - parent.panel_margin;
+            y: parent.usable_y + parent.panel_margin;
             toggle_panel(kind) => {
                 root.panel_launcher_action(kind);
             }
@@ -180,21 +247,24 @@ export component SlintHostWindow inherits Window {
 
         tool_palette := ToolPalette {
             state: root.tool_palette_state;
-            width: parent.width - 48px > 620px ? 620px : parent.width - 48px;
-            x: (parent.width - self.width) / 2;
-            y: parent.height - self.height - 28px;
+            width: parent.usable_width - 48px > 620px ? 620px : parent.usable_width - 48px > 260px ? parent.usable_width - 48px : 260px;
+            x: parent.usable_x + (parent.usable_width - self.width) / 2;
+            y: parent.usable_y + parent.usable_height - self.height - 28px;
             perform_action(action) => {
                 root.tool_palette_action(action);
             }
         }
 
-        if root.panel_framework_state.panel_drag_active : TouchArea {
+        if root.panel_framework_state.panel_interaction_active : TouchArea {
             width: parent.width;
             height: parent.height;
+            mouse-cursor: parent.active_panel_cursor;
 
             pointer-event(event) => {
-                root.panel_drag_action(root.panel_framework_state.drag_panel_kind, {
-                    phase: event.kind == PointerEventKind.down ? PanelDragPhase.down : event.kind == PointerEventKind.up ? PanelDragPhase.up : event.kind == PointerEventKind.cancel ? PanelDragPhase.cancel : PanelDragPhase.move,
+                root.panel_pointer_action(root.panel_framework_state.interaction_panel_kind, {
+                    phase: event.kind == PointerEventKind.down ? PanelPointerPhase.down : event.kind == PointerEventKind.up ? PanelPointerPhase.up : event.kind == PointerEventKind.cancel ? PanelPointerPhase.cancel : PanelPointerPhase.move,
+                    interaction: PanelPointerInteractionKind.move,
+                    handle: PanelResizeHandle.none,
                     x: self.mouse_x / 1px,
                     y: self.mouse_y / 1px,
                 });

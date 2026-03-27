@@ -1,0 +1,161 @@
+import {
+    PanelPointerAction,
+    PanelPointerInteractionKind,
+    PanelPointerPhase,
+    PanelResizeHandle,
+} from "view_models.slint";
+
+component ResizeTouchTarget inherits Rectangle {
+    in property <PanelResizeHandle> handle;
+    in property <MouseCursor> cursor;
+
+    out property <bool> hovered: pointer_touch.has-hover;
+    out property <bool> pressed: pointer_touch.pressed;
+
+    callback pointer_action(action: PanelPointerAction);
+
+    background: #00000000;
+
+    pointer_touch := TouchArea {
+        width: parent.width;
+        height: parent.height;
+        mouse-cursor: root.cursor;
+
+        pointer-event(event) => {
+            root.pointer_action({
+                phase: event.kind == PointerEventKind.down ? PanelPointerPhase.down : event.kind == PointerEventKind.up ? PanelPointerPhase.up : event.kind == PointerEventKind.cancel ? PanelPointerPhase.cancel : PanelPointerPhase.move,
+                interaction: PanelPointerInteractionKind.resize,
+                handle: root.handle,
+                x: parent.x / 1px + self.mouse_x / 1px,
+                y: parent.y / 1px + self.mouse_y / 1px,
+            });
+        }
+    }
+}
+
+export component PanelResizeHandles inherits Rectangle {
+    in property <bool> interaction_active;
+    in property <PanelResizeHandle> active_resize_handle: PanelResizeHandle.none;
+
+    callback pointer_action(action: PanelPointerAction);
+
+    private property <length> edge_hit_size: 18px;
+    private property <length> corner_hit_size: 26px;
+    private property <length> top_edge_height: 16px;
+    private property <length> top_center_keep_out_width: 104px;
+    private property <length> top_side_width: root.width > root.top_center_keep_out_width
+        ? (((root.width - root.top_center_keep_out_width) / 1px) / 2) * 1px
+        : 0px;
+    private property <bool> bottom_right_indicator_active: bottom_right_handle.hovered
+        || bottom_right_handle.pressed
+        || (root.interaction_active && root.active_resize_handle == PanelResizeHandle.bottom-right);
+
+    background: #00000000;
+
+    ResizeTouchTarget {
+        x: 0px;
+        y: 0px;
+        width: root.top_side_width;
+        height: root.top_edge_height;
+        handle: PanelResizeHandle.top;
+        cursor: ns-resize;
+        pointer_action(action) => { root.pointer_action(action); }
+    }
+
+    ResizeTouchTarget {
+        x: parent.width - root.top_side_width;
+        y: 0px;
+        width: root.top_side_width;
+        height: root.top_edge_height;
+        handle: PanelResizeHandle.top;
+        cursor: ns-resize;
+        pointer_action(action) => { root.pointer_action(action); }
+    }
+
+    ResizeTouchTarget {
+        x: parent.width - root.edge_hit_size;
+        y: 0px;
+        width: root.edge_hit_size;
+        height: parent.height;
+        handle: PanelResizeHandle.right;
+        cursor: ew-resize;
+        pointer_action(action) => { root.pointer_action(action); }
+    }
+
+    ResizeTouchTarget {
+        x: 0px;
+        y: parent.height - root.edge_hit_size;
+        width: parent.width;
+        height: root.edge_hit_size;
+        handle: PanelResizeHandle.bottom;
+        cursor: ns-resize;
+        pointer_action(action) => { root.pointer_action(action); }
+    }
+
+    ResizeTouchTarget {
+        x: 0px;
+        y: 0px;
+        width: root.edge_hit_size;
+        height: parent.height;
+        handle: PanelResizeHandle.left;
+        cursor: ew-resize;
+        pointer_action(action) => { root.pointer_action(action); }
+    }
+
+    ResizeTouchTarget {
+        x: 0px;
+        y: 0px;
+        width: root.corner_hit_size;
+        height: root.corner_hit_size;
+        handle: PanelResizeHandle.top-left;
+        cursor: nwse-resize;
+        pointer_action(action) => { root.pointer_action(action); }
+    }
+
+    ResizeTouchTarget {
+        x: parent.width - root.corner_hit_size;
+        y: 0px;
+        width: root.corner_hit_size;
+        height: root.corner_hit_size;
+        handle: PanelResizeHandle.top-right;
+        cursor: nesw-resize;
+        pointer_action(action) => { root.pointer_action(action); }
+    }
+
+    ResizeTouchTarget {
+        x: 0px;
+        y: parent.height - root.corner_hit_size;
+        width: root.corner_hit_size;
+        height: root.corner_hit_size;
+        handle: PanelResizeHandle.bottom-left;
+        cursor: nesw-resize;
+        pointer_action(action) => { root.pointer_action(action); }
+    }
+
+    bottom_right_handle := ResizeTouchTarget {
+        x: parent.width - root.corner_hit_size;
+        y: parent.height - root.corner_hit_size;
+        width: root.corner_hit_size;
+        height: root.corner_hit_size;
+        handle: PanelResizeHandle.bottom-right;
+        cursor: nwse-resize;
+        pointer_action(action) => { root.pointer_action(action); }
+    }
+
+    Rectangle {
+        width: 14px;
+        height: 14px;
+        x: parent.width - self.width - 10px;
+        y: parent.height - self.height - 10px;
+        background: #00000000;
+        opacity: root.bottom_right_indicator_active ? 0.95 : 0.42;
+
+        for stroke in [0, 1, 2] : Rectangle {
+            width: 8px - stroke * 2px;
+            height: 1px;
+            x: stroke * 4px + 3px;
+            y: parent.height - self.height - 3px;
+            background: #f2f5fb;
+        }
+    }
+}

@@ -40,15 +40,34 @@ export enum PanelHeaderAction {
     toggle-collapsed,
 }
 
-export enum PanelDragPhase {
+export enum PanelPointerPhase {
     down,
     move,
     up,
     cancel,
 }
 
-export struct PanelDragAction {
-    phase: PanelDragPhase,
+export enum PanelPointerInteractionKind {
+    move,
+    resize,
+}
+
+export enum PanelResizeHandle {
+    none,
+    top,
+    right,
+    bottom,
+    left,
+    top-left,
+    top-right,
+    bottom-left,
+    bottom-right,
+}
+
+export struct PanelPointerAction {
+    phase: PanelPointerPhase,
+    interaction: PanelPointerInteractionKind,
+    handle: PanelResizeHandle,
     x: float,
     y: float,
 }

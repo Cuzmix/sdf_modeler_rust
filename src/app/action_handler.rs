@@ -1355,31 +1355,35 @@ impl SdfApp {
                 Action::TogglePinnedPanelCollapsed(kind) => {
                     self.ui.panel_framework.toggle_pinned_collapsed(kind);
                 }
-                Action::BeginPanelDrag { kind, bar_id } => {
-                    self.ui.panel_framework.begin_panel_drag(kind, bar_id);
+                Action::BeginPanelInteraction {
+                    kind,
+                    bar_id,
+                    interaction,
+                } => {
+                    self.ui
+                        .panel_framework
+                        .begin_panel_interaction(kind, bar_id, interaction);
                 }
-                Action::DragPanel {
+                Action::UpdatePanelInteraction {
                     kind,
                     bar_id,
                     delta_x,
                     delta_y,
-                    viewport_width,
-                    viewport_height,
+                    usable_rect,
                 } => {
-                    self.ui.panel_framework.drag_panel(
+                    self.ui.panel_framework.update_panel_interaction(
                         kind,
                         bar_id,
                         delta_x,
                         delta_y,
-                        viewport_width,
-                        viewport_height,
+                        usable_rect,
                     );
                 }
-                Action::EndPanelDrag { kind, bar_id } => {
-                    self.ui.panel_framework.end_panel_drag(kind, bar_id);
+                Action::EndPanelInteraction { kind, bar_id } => {
+                    self.ui.panel_framework.end_panel_interaction(kind, bar_id);
                 }
-                Action::CancelPanelDrag { kind, bar_id } => {
-                    self.ui.panel_framework.cancel_panel_drag(kind, bar_id);
+                Action::CancelPanelInteraction { kind, bar_id } => {
+                    self.ui.panel_framework.cancel_panel_interaction(kind, bar_id);
                 }
                 Action::DismissTransientPanels => {
                     self.ui.panel_framework.dismiss_transient_panels();

@@ -3,8 +3,9 @@ use std::path::Path;
 use crate::app::reference_images::ReferenceImageStore;
 use crate::app::state::{
     ExpertPanelKind, ExpertPanelRegistry, InteractionMode, PanelBarEdge, PanelBarOrientation,
-    PanelFrameworkState, PanelKind, PanelSheetAnchor, PrimaryShellState, ScenePanelUiState,
-    SceneSelectionState, WorkspaceRoute, WorkspaceUiState,
+    PanelFrameworkState, PanelKind, PanelPointerInteractionKind, PanelResizeHandle,
+    PanelSheetAnchor, PrimaryShellState, ScenePanelUiState, SceneSelectionState, WorkspaceRoute,
+    WorkspaceUiState,
 };
 use crate::gizmo::{GizmoMode, GizmoSpace};
 use crate::graph::history::History;
@@ -206,6 +207,15 @@ pub enum ToolPanelMode {
     Sculpt,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ToolContextModel {
+    pub visible: bool,
+    pub mode: ToolPanelMode,
+    pub active_brush: Option<BrushMode>,
+    pub select_tool: ToolPaletteEntry,
+    pub brush_tools: Vec<ToolPaletteEntry>,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct ToolPanelModel {
     pub title: String,
@@ -224,6 +234,8 @@ pub struct ToolPanelModel {
 pub struct PanelLauncherItemModel {
     pub kind: PanelKind,
     pub label: String,
+    pub short_label: String,
+    pub icon_key: Option<String>,
     pub active: bool,
     pub pinned: bool,
     pub show_drag_indicator: bool,
@@ -254,11 +266,15 @@ pub struct PanelFrameModel {
 pub struct PanelSheetModel {
     pub kind: PanelKind,
     pub title: String,
+    pub collapsed_title: String,
+    pub collapsed_width: f32,
+    pub collapsed_height: f32,
     pub pinned: bool,
     pub collapsed: bool,
     pub anchor: PanelSheetAnchor,
     pub frame: PanelFrameModel,
     pub movable: bool,
+    pub resizable: bool,
     pub content: ActivePanelContentModel,
 }
 
@@ -267,8 +283,26 @@ pub struct PanelFrameworkModel {
     pub bar: PanelBarModel,
     pub transient_panel: Option<PanelSheetModel>,
     pub pinned_panels: Vec<PanelSheetModel>,
-    pub panel_drag_active: bool,
-    pub drag_panel_kind: PanelKind,
+    pub panel_interaction_active: bool,
+    pub interaction_panel_kind: PanelKind,
+    pub active_interaction_kind: PanelPointerInteractionKind,
+    pub active_resize_handle: Option<PanelResizeHandle>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct OverlayLayoutModel {
+    pub safe_area_left: f32,
+    pub safe_area_top: f32,
+    pub safe_area_right: f32,
+    pub safe_area_bottom: f32,
+    pub virtual_keyboard_x: f32,
+    pub virtual_keyboard_y: f32,
+    pub virtual_keyboard_width: f32,
+    pub virtual_keyboard_height: f32,
+    pub usable_x: f32,
+    pub usable_y: f32,
+    pub usable_width: f32,
+    pub usable_height: f32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -306,6 +340,8 @@ pub struct WorkspacePanelModel {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ShellSnapshot {
+    pub overlay_layout: OverlayLayoutModel,
+    pub tool_context: ToolContextModel,
     pub tool_palette: ToolPaletteModel,
     pub panel_framework: PanelFrameworkModel,
     pub scene_panel: ScenePanelModel,
@@ -323,6 +359,9 @@ pub struct ShellSnapshotInputs<'a> {
     pub primary_shell: &'a PrimaryShellState,
     pub panel_framework: &'a PanelFrameworkState,
     pub viewport_size_logical: [f32; 2],
+    pub safe_area_insets_logical: [f32; 4],
+    pub virtual_keyboard_position_logical: [f32; 2],
+    pub virtual_keyboard_size_logical: [f32; 2],
     pub workspace: &'a WorkspaceUiState,
     pub history: &'a History,
     pub reference_images: &'a ReferenceImageStore,
@@ -335,6 +374,13 @@ pub struct ShellSnapshotInputs<'a> {
 }
 
 pub fn build_shell_snapshot(inputs: ShellSnapshotInputs<'_>) -> ShellSnapshot {
+    let overlay_layout = build_overlay_layout_model(
+        inputs.viewport_size_logical,
+        inputs.safe_area_insets_logical,
+        inputs.virtual_keyboard_position_logical,
+        inputs.virtual_keyboard_size_logical,
+    );
+    let tool_context = build_tool_context_model(inputs.primary_shell);
     let inspector = build_inspector_model(
         inputs.scene,
         inputs.selection,
@@ -350,13 +396,16 @@ pub fn build_shell_snapshot(inputs: ShellSnapshotInputs<'_>) -> ShellSnapshot {
         inputs.sculpt_state,
         inputs.interaction_mode,
         &inspector,
+        &tool_context,
     );
 
     ShellSnapshot {
-        tool_palette: build_tool_palette_model(inputs.primary_shell),
+        overlay_layout: overlay_layout.clone(),
+        tool_context: tool_context.clone(),
+        tool_palette: build_tool_palette_model(&tool_context),
         panel_framework: build_panel_framework_model(
             inputs.panel_framework,
-            inputs.viewport_size_logical,
+            &overlay_layout,
         ),
         scene_panel: build_scene_panel_model(inputs.scene, inputs.selection, inputs.scene_panel_ui),
         inspector,
@@ -381,18 +430,23 @@ pub fn build_shell_snapshot(inputs: ShellSnapshotInputs<'_>) -> ShellSnapshot {
     }
 }
 
-pub fn build_tool_palette_model(primary_shell: &PrimaryShellState) -> ToolPaletteModel {
-    let active_brush = match primary_shell.interaction_mode {
-        InteractionMode::Sculpt(brush) => Some(brush),
-        _ => None,
+pub fn build_tool_context_model(primary_shell: &PrimaryShellState) -> ToolContextModel {
+    let (mode, active_brush) = match primary_shell.interaction_mode {
+        InteractionMode::Sculpt(brush) => (ToolPanelMode::Sculpt, Some(brush)),
+        InteractionMode::Select | InteractionMode::Measure => (ToolPanelMode::Select, None),
     };
 
-    ToolPaletteModel {
+    ToolContextModel {
         visible: primary_shell.tool_rail_visible,
+        mode,
+        active_brush,
         select_tool: ToolPaletteEntry {
             kind: ToolPaletteKind::Select,
             label: "Select".to_string(),
-            active: matches!(primary_shell.interaction_mode, InteractionMode::Select),
+            active: matches!(
+                primary_shell.interaction_mode,
+                InteractionMode::Select | InteractionMode::Measure
+            ),
         },
         brush_tools: BrushMode::ALL
             .into_iter()
@@ -405,10 +459,19 @@ pub fn build_tool_palette_model(primary_shell: &PrimaryShellState) -> ToolPalett
     }
 }
 
+pub fn build_tool_palette_model(tool_context: &ToolContextModel) -> ToolPaletteModel {
+    ToolPaletteModel {
+        visible: tool_context.visible,
+        select_tool: tool_context.select_tool.clone(),
+        brush_tools: tool_context.brush_tools.clone(),
+    }
+}
+
 pub fn build_panel_framework_model(
     panel_framework: &PanelFrameworkState,
-    viewport_size_logical: [f32; 2],
+    overlay_layout: &OverlayLayoutModel,
 ) -> PanelFrameworkModel {
+    let usable_rect = overlay_usable_rect(overlay_layout);
     let primary_bar = panel_framework
         .bar(crate::app::state::PanelBarId::PrimaryRight)
         .or_else(|| panel_framework.bars.first());
@@ -423,11 +486,7 @@ pub fn build_panel_framework_model(
     let bar = primary_bar.unwrap_or(&default_bar);
     let transient_kind = bar.active_transient;
     let transient_frame = transient_kind.map(|_| {
-        panel_frame_model(panel_framework.resolved_transient_rect(
-            bar.id,
-            viewport_size_logical[0],
-            viewport_size_logical[1],
-        ))
+        panel_frame_model(panel_framework.resolved_transient_rect(bar.id, usable_rect))
     });
 
     let items = bar
@@ -437,10 +496,11 @@ pub fn build_panel_framework_model(
         .map(|kind| PanelLauncherItemModel {
             kind,
             label: kind.label().to_string(),
+            short_label: kind.short_label().to_string(),
+            icon_key: Some(kind.icon_key().to_string()),
             active: transient_kind == Some(kind) || panel_framework.pinned_instance(kind).is_some(),
             pinned: panel_framework.pinned_instance(kind).is_some(),
-            show_drag_indicator: transient_kind == Some(kind)
-                || panel_framework.pinned_instance(kind).is_some(),
+            show_drag_indicator: transient_kind == Some(kind),
         })
         .collect::<Vec<_>>();
 
@@ -450,11 +510,15 @@ pub fn build_panel_framework_model(
             .map(|(kind, frame)| PanelSheetModel {
                 kind,
                 title: kind.label().to_string(),
+                collapsed_title: kind.short_label().to_string(),
+                collapsed_width: PanelFrameworkState::COLLAPSED_PANEL_WIDTH,
+                collapsed_height: PanelFrameworkState::COLLAPSED_PANEL_HEIGHT,
                 pinned: false,
                 collapsed: false,
                 anchor: panel_framework.sheet_anchor_for_bar(bar.id),
                 frame,
                 movable: true,
+                resizable: true,
                 content: ActivePanelContentModel { kind },
             });
 
@@ -476,26 +540,19 @@ pub fn build_panel_framework_model(
         .map(|instance| PanelSheetModel {
             kind: instance.kind,
             title: instance.kind.label().to_string(),
+            collapsed_title: instance.kind.short_label().to_string(),
+            collapsed_width: PanelFrameworkState::COLLAPSED_PANEL_WIDTH,
+            collapsed_height: PanelFrameworkState::COLLAPSED_PANEL_HEIGHT,
             pinned: true,
             collapsed: instance.collapsed,
             anchor: panel_framework.sheet_anchor_for_bar(instance.anchor_bar),
             frame: panel_frame_model(
                 panel_framework
-                    .resolved_panel_rect(
-                        instance.kind,
-                        instance.anchor_bar,
-                        viewport_size_logical[0],
-                        viewport_size_logical[1],
-                    )
-                    .unwrap_or_else(|| {
-                        panel_framework.resolved_transient_rect(
-                            instance.anchor_bar,
-                            viewport_size_logical[0],
-                            viewport_size_logical[1],
-                        )
-                    }),
+                    .resolved_display_panel_rect(instance.kind, instance.anchor_bar, usable_rect)
+                    .unwrap_or_else(|| panel_framework.resolved_transient_rect(instance.anchor_bar, usable_rect)),
             ),
             movable: true,
+            resizable: !instance.collapsed,
             content: ActivePanelContentModel {
                 kind: instance.kind,
             },
@@ -511,11 +568,21 @@ pub fn build_panel_framework_model(
         },
         transient_panel,
         pinned_panels,
-        panel_drag_active: panel_framework.panel_drag.is_some(),
-        drag_panel_kind: panel_framework
-            .panel_drag
-            .map(|drag| drag.kind)
-            .unwrap_or(PanelKind::ObjectProperties),
+        panel_interaction_active: panel_framework.panel_interaction.is_some(),
+        interaction_panel_kind: panel_framework
+            .panel_interaction
+            .map(|interaction| interaction.kind)
+            .unwrap_or(PanelKind::Tool),
+        active_interaction_kind: panel_framework
+            .panel_interaction
+            .map(|interaction| interaction.interaction)
+            .unwrap_or(PanelPointerInteractionKind::Move),
+        active_resize_handle: panel_framework.panel_interaction.and_then(|interaction| {
+            match interaction.interaction {
+                PanelPointerInteractionKind::Move => None,
+                PanelPointerInteractionKind::Resize(handle) => Some(handle),
+            }
+        }),
     }
 }
 
@@ -526,6 +593,62 @@ fn panel_frame_model(bounds: crate::app::ui_geometry::FloatingPanelBounds) -> Pa
         width: bounds.width,
         height: bounds.height,
     }
+}
+
+pub fn build_overlay_layout_model(
+    viewport_size_logical: [f32; 2],
+    safe_area_insets_logical: [f32; 4],
+    virtual_keyboard_position_logical: [f32; 2],
+    virtual_keyboard_size_logical: [f32; 2],
+) -> OverlayLayoutModel {
+    let viewport_width = viewport_size_logical[0].max(1.0);
+    let viewport_height = viewport_size_logical[1].max(1.0);
+    let safe_left = safe_area_insets_logical[0].max(0.0);
+    let safe_top = safe_area_insets_logical[1].max(0.0);
+    let safe_right = safe_area_insets_logical[2].max(0.0);
+    let safe_bottom = safe_area_insets_logical[3].max(0.0);
+
+    let usable_x = safe_left;
+    let usable_y = safe_top;
+    let usable_width = (viewport_width - safe_left - safe_right).max(1.0);
+    let mut usable_height = (viewport_height - safe_top - safe_bottom).max(1.0);
+
+    let keyboard_x = virtual_keyboard_position_logical[0].max(0.0);
+    let keyboard_y = virtual_keyboard_position_logical[1].max(0.0);
+    let keyboard_width = virtual_keyboard_size_logical[0].max(0.0);
+    let keyboard_height = virtual_keyboard_size_logical[1].max(0.0);
+
+    if keyboard_width > 0.0 && keyboard_height > 0.0 {
+        let usable_bottom = usable_y + usable_height;
+        let keyboard_top = keyboard_y;
+        if keyboard_top.is_finite() && keyboard_top > usable_y && keyboard_top < usable_bottom {
+            usable_height = (keyboard_top - usable_y).max(1.0);
+        }
+    }
+
+    OverlayLayoutModel {
+        safe_area_left: safe_left,
+        safe_area_top: safe_top,
+        safe_area_right: safe_right,
+        safe_area_bottom: safe_bottom,
+        virtual_keyboard_x: keyboard_x,
+        virtual_keyboard_y: keyboard_y,
+        virtual_keyboard_width: keyboard_width,
+        virtual_keyboard_height: keyboard_height,
+        usable_x,
+        usable_y,
+        usable_width,
+        usable_height,
+    }
+}
+
+fn overlay_usable_rect(overlay_layout: &OverlayLayoutModel) -> crate::app::ui_geometry::FloatingPanelBounds {
+    crate::app::ui_geometry::FloatingPanelBounds::from_min_size(
+        overlay_layout.usable_x,
+        overlay_layout.usable_y,
+        overlay_layout.usable_width.max(1.0),
+        overlay_layout.usable_height.max(1.0),
+    )
 }
 
 pub fn build_scene_panel_model(
@@ -615,16 +738,21 @@ fn build_tool_panel_model(
     sculpt_state: &SculptState,
     interaction_mode: InteractionMode,
     inspector: &InspectorModel,
+    tool_context: &ToolContextModel,
 ) -> ToolPanelModel {
     let presented_selection =
         collect_presented_selection(scene, selection.selected, &selection.selected_set);
 
     match interaction_mode {
-        InteractionMode::Sculpt(brush) => {
-            build_sculpt_tool_panel_model(scene, &presented_selection.ordered, sculpt_state, brush)
-        }
+        InteractionMode::Sculpt(brush) => build_sculpt_tool_panel_model(
+            scene,
+            &presented_selection.ordered,
+            sculpt_state,
+            brush,
+            tool_context,
+        ),
         InteractionMode::Select | InteractionMode::Measure => {
-            build_select_tool_panel_model(scene, &presented_selection.ordered, inspector)
+            build_select_tool_panel_model(scene, &presented_selection.ordered, inspector, tool_context)
         }
     }
 }
@@ -633,6 +761,7 @@ fn build_select_tool_panel_model(
     scene: &Scene,
     selected_objects: &[PresentedObjectRef],
     inspector: &InspectorModel,
+    tool_context: &ToolContextModel,
 ) -> ToolPanelModel {
     let (summary, empty_state) = match selected_objects {
         [] => (String::new(), "No selection".to_string()),
@@ -666,7 +795,7 @@ fn build_select_tool_panel_model(
 
     ToolPanelModel {
         title: "Tool".to_string(),
-        mode: ToolPanelMode::Select,
+        mode: tool_context.mode,
         summary,
         empty_state,
         show_sculpt_target_fields: false,
@@ -695,6 +824,7 @@ fn build_sculpt_tool_panel_model(
     selected_objects: &[PresentedObjectRef],
     sculpt_state: &SculptState,
     brush: BrushMode,
+    tool_context: &ToolContextModel,
 ) -> ToolPanelModel {
     let sculpt_profile = sculpt_state.selected_profile();
     let sculpt_target = if selected_objects.len() == 1 {
@@ -729,7 +859,7 @@ fn build_sculpt_tool_panel_model(
 
     ToolPanelModel {
         title: "Tool".to_string(),
-        mode: ToolPanelMode::Sculpt,
+        mode: tool_context.mode,
         summary: format!("Brush: {}", brush.label()),
         empty_state: if show_sculpt_target_fields {
             String::new()
@@ -1813,6 +1943,16 @@ mod tests {
     use crate::graph::voxel::VoxelGrid;
     use glam::Vec3;
 
+    fn overlay_layout(width: f32, height: f32) -> OverlayLayoutModel {
+        build_overlay_layout_model([width, height], [0.0; 4], [0.0; 2], [0.0; 2])
+    }
+
+    fn tool_context_for_mode(interaction_mode: InteractionMode) -> ToolContextModel {
+        let mut shell = PrimaryShellState::default();
+        shell.interaction_mode = interaction_mode;
+        build_tool_context_model(&shell)
+    }
+
     #[test]
     fn scene_panel_marks_selected_row() {
         let mut scene = Scene::new();
@@ -1871,7 +2011,7 @@ mod tests {
 
     #[test]
     fn tool_palette_marks_select_mode_active() {
-        let model = build_tool_palette_model(&PrimaryShellState::default());
+        let model = build_tool_palette_model(&build_tool_context_model(&PrimaryShellState::default()));
 
         assert!(model.select_tool.active);
         assert!(model.brush_tools.iter().all(|tool| !tool.active));
@@ -1882,7 +2022,7 @@ mod tests {
         let mut shell = PrimaryShellState::default();
         shell.interaction_mode = InteractionMode::Sculpt(BrushMode::Flatten);
 
-        let model = build_tool_palette_model(&shell);
+        let model = build_tool_palette_model(&build_tool_context_model(&shell));
 
         assert!(!model.select_tool.active);
         let active_labels = model
@@ -1899,7 +2039,7 @@ mod tests {
         let mut state = PanelFrameworkState::default();
         state.open_panel(PanelKind::ObjectProperties, PanelBarId::PrimaryRight);
 
-        let model = build_panel_framework_model(&state, [1200.0, 800.0]);
+        let model = build_panel_framework_model(&state, &overlay_layout(1200.0, 800.0));
 
         assert_eq!(
             model.transient_panel.as_ref().map(|panel| panel.kind),
@@ -1914,7 +2054,8 @@ mod tests {
 
     #[test]
     fn panel_framework_model_orders_tool_first() {
-        let model = build_panel_framework_model(&PanelFrameworkState::default(), [1200.0, 800.0]);
+        let model =
+            build_panel_framework_model(&PanelFrameworkState::default(), &overlay_layout(1200.0, 800.0));
 
         let order = model
             .bar
@@ -1928,6 +2069,9 @@ mod tests {
                 PanelKind::Tool,
                 PanelKind::ObjectProperties,
                 PanelKind::RenderSettings,
+                PanelKind::Scene,
+                PanelKind::History,
+                PanelKind::ReferenceImages,
             ]
         );
     }
@@ -1937,7 +2081,7 @@ mod tests {
         let mut state = PanelFrameworkState::default();
         state.open_panel(PanelKind::Tool, PanelBarId::PrimaryRight);
 
-        let model = build_panel_framework_model(&state, [1200.0, 800.0]);
+        let model = build_panel_framework_model(&state, &overlay_layout(1200.0, 800.0));
         let panel = model.transient_panel.expect("tool panel");
 
         assert_eq!(panel.kind, PanelKind::Tool);
@@ -1951,12 +2095,13 @@ mod tests {
         state.pin_panel(PanelKind::RenderSettings);
         state.toggle_panel(PanelKind::RenderSettings, PanelBarId::PrimaryRight);
 
-        let model = build_panel_framework_model(&state, [1200.0, 800.0]);
+        let model = build_panel_framework_model(&state, &overlay_layout(1200.0, 800.0));
 
         assert!(model.transient_panel.is_none());
         assert_eq!(model.pinned_panels.len(), 1);
         assert_eq!(model.pinned_panels[0].kind, PanelKind::RenderSettings);
         assert!(model.pinned_panels[0].movable);
+        assert!(model.pinned_panels[0].resizable);
         assert!(model
             .bar
             .items
@@ -1966,7 +2111,29 @@ mod tests {
             .bar
             .items
             .iter()
-            .any(|item| item.kind == PanelKind::RenderSettings && item.show_drag_indicator));
+            .all(|item| item.kind != PanelKind::RenderSettings || !item.show_drag_indicator));
+    }
+
+    #[test]
+    fn panel_framework_model_uses_collapsed_frame_for_collapsed_pinned_panel() {
+        let mut state = PanelFrameworkState::default();
+        state.open_panel(PanelKind::RenderSettings, PanelBarId::PrimaryRight);
+        state.pin_panel(PanelKind::RenderSettings);
+        state.toggle_pinned_collapsed(PanelKind::RenderSettings);
+
+        let model = build_panel_framework_model(&state, &overlay_layout(1200.0, 800.0));
+        let panel = model
+            .pinned_panels
+            .iter()
+            .find(|panel| panel.kind == PanelKind::RenderSettings)
+            .expect("collapsed pinned panel");
+
+        assert!(panel.collapsed);
+        assert!((panel.collapsed_width - PanelFrameworkState::COLLAPSED_PANEL_WIDTH).abs() < 0.01);
+        assert!((panel.collapsed_height - PanelFrameworkState::COLLAPSED_PANEL_HEIGHT).abs() < 0.01);
+        assert!((panel.frame.width - PanelFrameworkState::COLLAPSED_PANEL_WIDTH).abs() < 0.01);
+        assert!((panel.frame.height - PanelFrameworkState::COLLAPSED_PANEL_HEIGHT).abs() < 0.01);
+        assert!(!panel.resizable);
     }
 
     #[test]
@@ -1974,13 +2141,14 @@ mod tests {
         let mut state = PanelFrameworkState::default();
         state.open_panel(PanelKind::ObjectProperties, PanelBarId::PrimaryRight);
 
-        let model = build_panel_framework_model(&state, [1200.0, 800.0]);
+        let model = build_panel_framework_model(&state, &overlay_layout(1200.0, 800.0));
         let panel = model.transient_panel.expect("transient panel");
 
         assert!((panel.frame.width - 390.0).abs() < 0.01);
-        assert!((panel.frame.x - 620.0).abs() < 0.01);
+        assert!((panel.frame.x - 632.0).abs() < 0.01);
         assert!((panel.frame.y - 20.0).abs() < 0.01);
         assert!(panel.movable);
+        assert!(panel.resizable);
     }
 
     #[test]
@@ -1994,7 +2162,7 @@ mod tests {
             900.0, 700.0, 390.0, 420.0,
         ));
 
-        let model = build_panel_framework_model(&state, [1000.0, 600.0]);
+        let model = build_panel_framework_model(&state, &overlay_layout(1000.0, 600.0));
         let panel = model.transient_panel.expect("transient panel");
 
         assert!((panel.frame.x - 590.0).abs() < 0.01);
@@ -2007,7 +2175,7 @@ mod tests {
         let mut state = PanelFrameworkState::default();
         state.open_panel(PanelKind::RenderSettings, PanelBarId::PrimaryRight);
 
-        let model = build_panel_framework_model(&state, [1200.0, 800.0]);
+        let model = build_panel_framework_model(&state, &overlay_layout(1200.0, 800.0));
 
         assert!(model
             .bar
@@ -2019,6 +2187,51 @@ mod tests {
             .items
             .iter()
             .all(|item| item.kind == PanelKind::RenderSettings || !item.show_drag_indicator));
+    }
+
+    #[test]
+    fn panel_framework_model_exposes_active_resize_interaction_metadata() {
+        let mut state = PanelFrameworkState::default();
+        state.open_panel(PanelKind::ObjectProperties, PanelBarId::PrimaryRight);
+        state.begin_panel_interaction(
+            PanelKind::ObjectProperties,
+            PanelBarId::PrimaryRight,
+            PanelPointerInteractionKind::Resize(PanelResizeHandle::BottomRight),
+        );
+
+        let model = build_panel_framework_model(&state, &overlay_layout(1200.0, 800.0));
+
+        assert!(model.panel_interaction_active);
+        assert_eq!(model.interaction_panel_kind, PanelKind::ObjectProperties);
+        assert_eq!(
+            model.active_interaction_kind,
+            PanelPointerInteractionKind::Resize(PanelResizeHandle::BottomRight)
+        );
+        assert_eq!(model.active_resize_handle, Some(PanelResizeHandle::BottomRight));
+    }
+
+    #[test]
+    fn overlay_layout_model_shrinks_usable_height_for_keyboard() {
+        let model = build_overlay_layout_model(
+            [1200.0, 900.0],
+            [16.0, 24.0, 18.0, 20.0],
+            [0.0, 620.0],
+            [1200.0, 280.0],
+        );
+
+        assert!((model.usable_x - 16.0).abs() < 0.01);
+        assert!((model.usable_y - 24.0).abs() < 0.01);
+        assert!((model.usable_width - 1166.0).abs() < 0.01);
+        assert!((model.usable_height - 596.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn tool_context_treats_measure_as_select_family() {
+        let context = tool_context_for_mode(InteractionMode::Measure);
+
+        assert_eq!(context.mode, ToolPanelMode::Select);
+        assert!(context.select_tool.active);
+        assert!(context.brush_tools.iter().all(|tool| !tool.active));
     }
 
     #[test]
@@ -2056,6 +2269,7 @@ mod tests {
                 &GizmoMode::Translate,
                 &GizmoSpace::Local,
             ),
+            &tool_context_for_mode(InteractionMode::Select),
         );
 
         assert_eq!(model.mode, ToolPanelMode::Select);
@@ -2094,6 +2308,7 @@ mod tests {
             &SculptState::new_inactive(),
             InteractionMode::Select,
             &inspector,
+            &tool_context_for_mode(InteractionMode::Select),
         );
 
         assert_eq!(model.mode, ToolPanelMode::Select);
@@ -2128,6 +2343,7 @@ mod tests {
             &SculptState::new_inactive(),
             InteractionMode::Select,
             &inspector,
+            &tool_context_for_mode(InteractionMode::Select),
         );
 
         assert!(model.operation.is_some());
@@ -2157,6 +2373,7 @@ mod tests {
             &SculptState::new_inactive(),
             InteractionMode::Select,
             &inspector,
+            &tool_context_for_mode(InteractionMode::Select),
         );
 
         assert!(model.transform.is_some());
@@ -2189,6 +2406,7 @@ mod tests {
             &SculptState::new_inactive(),
             InteractionMode::Select,
             &inspector,
+            &tool_context_for_mode(InteractionMode::Select),
         );
 
         assert_eq!(model.summary, "2 selected");
@@ -2221,6 +2439,7 @@ mod tests {
             &sculpt_state,
             InteractionMode::Sculpt(BrushMode::Smooth),
             &inspector,
+            &tool_context_for_mode(InteractionMode::Sculpt(BrushMode::Smooth)),
         );
 
         assert_eq!(model.mode, ToolPanelMode::Sculpt);
@@ -2260,6 +2479,7 @@ mod tests {
             &sculpt_state,
             InteractionMode::Sculpt(BrushMode::Add),
             &inspector,
+            &tool_context_for_mode(InteractionMode::Sculpt(BrushMode::Add)),
         );
 
         assert_eq!(model.summary, "Brush: Add");

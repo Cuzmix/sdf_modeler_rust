@@ -5,9 +5,14 @@ use super::context::CallbackContext;
 use super::mutation::mutate_host_and_tick;
 use crate::app::actions::Action;
 use crate::app::slint_frontend::{
-    PanelDragAction, PanelDragPhase, PanelHeaderAction, PanelKindView, SlintHostWindow,
+    PanelHeaderAction, PanelKindView, PanelPointerAction,
+    PanelPointerInteractionKind as PanelPointerInteractionKindView, PanelPointerPhase,
+    PanelResizeHandle as PanelResizeHandleView, SlintHostWindow,
 };
-use crate::app::state::{PanelBarId, PanelKind};
+use crate::app::state::{
+    PanelBarId, PanelKind, PanelPointerInteractionKind, PanelResizeHandle,
+};
+use crate::app::ui_geometry::FloatingPanelBounds;
 
 pub(super) fn install(window: &SlintHostWindow, context: &CallbackContext) {
     let launcher_context = context.clone();
@@ -45,19 +50,26 @@ pub(super) fn install(window: &SlintHostWindow, context: &CallbackContext) {
     let drag_context = context.clone();
     let drag_last_position = Rc::new(RefCell::new(None::<[f32; 2]>));
     let drag_last_position_for_callback = drag_last_position.clone();
-    window.on_panel_drag_action(move |kind, action| {
-        let viewport_size = drag_context
+    window.on_panel_pointer_action(move |kind, action| {
+        let usable_rect = drag_context
             .window_weak
             .upgrade()
-            .map(|window| [window.get_viewport_width(), window.get_viewport_height()])
-            .unwrap_or([960.0, 540.0]);
+            .map(|window| {
+                FloatingPanelBounds::from_min_size(
+                    window.get_overlay_usable_x(),
+                    window.get_overlay_usable_y(),
+                    window.get_overlay_usable_width(),
+                    window.get_overlay_usable_height(),
+                )
+            })
+            .unwrap_or_else(|| FloatingPanelBounds::from_min_size(0.0, 0.0, 960.0, 540.0));
         let drag_last_position = drag_last_position_for_callback.clone();
         mutate_host_and_tick(&drag_context, move |host_state| {
-            handle_panel_drag_action(
+            handle_panel_pointer_action(
                 host_state,
                 panel_kind(kind),
                 action,
-                viewport_size,
+                usable_rect,
                 &drag_last_position,
             );
         });
@@ -69,18 +81,21 @@ fn panel_kind(kind: PanelKindView) -> PanelKind {
         PanelKindView::Tool => PanelKind::Tool,
         PanelKindView::ObjectProperties => PanelKind::ObjectProperties,
         PanelKindView::RenderSettings => PanelKind::RenderSettings,
+        PanelKindView::Scene => PanelKind::Scene,
+        PanelKindView::History => PanelKind::History,
+        PanelKindView::ReferenceImages => PanelKind::ReferenceImages,
     }
 }
 
-fn handle_panel_drag_action(
+fn handle_panel_pointer_action(
     host_state: &mut crate::app::slint_frontend::host_state::SlintHostState,
     kind: PanelKind,
-    action: PanelDragAction,
-    viewport_size: [f32; 2],
+    action: PanelPointerAction,
+    usable_rect: FloatingPanelBounds,
     drag_last_position: &Rc<RefCell<Option<[f32; 2]>>>,
 ) {
     match action.phase {
-        PanelDragPhase::Down => {
+        PanelPointerPhase::Down => {
             let is_visible = host_state
                 .app
                 .ui
@@ -97,12 +112,13 @@ fn handle_panel_drag_action(
                 return;
             }
             *drag_last_position.borrow_mut() = Some([action.x, action.y]);
-            host_state.queue_action(Action::BeginPanelDrag {
+            host_state.queue_action(Action::BeginPanelInteraction {
                 kind,
                 bar_id: PanelBarId::PrimaryRight,
+                interaction: panel_pointer_interaction(action.interaction, action.handle),
             });
         }
-        PanelDragPhase::Move => {
+        PanelPointerPhase::Move => {
             let Some(previous) = *drag_last_position.borrow() else {
                 return;
             };
@@ -112,28 +128,53 @@ fn handle_panel_drag_action(
             if delta_x.abs() <= f32::EPSILON && delta_y.abs() <= f32::EPSILON {
                 return;
             }
-            host_state.queue_action(Action::DragPanel {
+            host_state.queue_action(Action::UpdatePanelInteraction {
                 kind,
                 bar_id: PanelBarId::PrimaryRight,
                 delta_x,
                 delta_y,
-                viewport_width: viewport_size[0],
-                viewport_height: viewport_size[1],
+                usable_rect,
             });
         }
-        PanelDragPhase::Up => {
+        PanelPointerPhase::Up => {
             *drag_last_position.borrow_mut() = None;
-            host_state.queue_action(Action::EndPanelDrag {
+            host_state.queue_action(Action::EndPanelInteraction {
                 kind,
                 bar_id: PanelBarId::PrimaryRight,
             });
         }
-        PanelDragPhase::Cancel => {
+        PanelPointerPhase::Cancel => {
             *drag_last_position.borrow_mut() = None;
-            host_state.queue_action(Action::CancelPanelDrag {
+            host_state.queue_action(Action::CancelPanelInteraction {
                 kind,
                 bar_id: PanelBarId::PrimaryRight,
             });
         }
+    }
+}
+
+fn panel_pointer_interaction(
+    interaction: PanelPointerInteractionKindView,
+    handle: PanelResizeHandleView,
+) -> PanelPointerInteractionKind {
+    match interaction {
+        PanelPointerInteractionKindView::Move => PanelPointerInteractionKind::Move,
+        PanelPointerInteractionKindView::Resize => {
+            PanelPointerInteractionKind::Resize(panel_resize_handle(handle))
+        }
+    }
+}
+
+fn panel_resize_handle(handle: PanelResizeHandleView) -> PanelResizeHandle {
+    match handle {
+        PanelResizeHandleView::Top => PanelResizeHandle::Top,
+        PanelResizeHandleView::Right => PanelResizeHandle::Right,
+        PanelResizeHandleView::Bottom => PanelResizeHandle::Bottom,
+        PanelResizeHandleView::Left => PanelResizeHandle::Left,
+        PanelResizeHandleView::TopLeft => PanelResizeHandle::TopLeft,
+        PanelResizeHandleView::TopRight => PanelResizeHandle::TopRight,
+        PanelResizeHandleView::BottomLeft => PanelResizeHandle::BottomLeft,
+        PanelResizeHandleView::BottomRight => PanelResizeHandle::BottomRight,
+        PanelResizeHandleView::None => PanelResizeHandle::Top,
     }
 }

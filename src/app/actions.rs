@@ -3,7 +3,10 @@ use crate::graph::scene::{CsgOp, LightType, ModifierKind, NodeId, SdfPrimitive};
 use crate::sculpt::ActiveTool;
 use crate::settings::SelectionBehaviorSettings;
 
-use super::state::{ExpertPanelKind, InteractionMode, PanelBarId, PanelKind, ShellPanelKind};
+use super::state::{
+    ExpertPanelKind, InteractionMode, PanelBarId, PanelKind, PanelPointerInteractionKind,
+    ShellPanelKind,
+};
 use super::ui_geometry::FloatingPanelBounds;
 use super::BakeRequest;
 
@@ -228,23 +231,23 @@ pub enum Action {
     UnpinPanel(PanelKind),
     FocusPanel(PanelKind),
     TogglePinnedPanelCollapsed(PanelKind),
-    BeginPanelDrag {
+    BeginPanelInteraction {
         kind: PanelKind,
         bar_id: PanelBarId,
+        interaction: PanelPointerInteractionKind,
     },
-    DragPanel {
+    UpdatePanelInteraction {
         kind: PanelKind,
         bar_id: PanelBarId,
         delta_x: f32,
         delta_y: f32,
-        viewport_width: f32,
-        viewport_height: f32,
+        usable_rect: FloatingPanelBounds,
     },
-    EndPanelDrag {
+    EndPanelInteraction {
         kind: PanelKind,
         bar_id: PanelBarId,
     },
-    CancelPanelDrag {
+    CancelPanelInteraction {
         kind: PanelKind,
         bar_id: PanelBarId,
     },

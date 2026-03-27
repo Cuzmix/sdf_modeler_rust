@@ -6,21 +6,33 @@ component PanelLauncherButton inherits Rectangle {
 
     callback activated(kind: PanelKindView);
 
-    height: 44px;
+    height: 54px;
     border-radius: AppTheme.overlay_button_radius;
     border-width: 1px;
     border-color: item.active ? AppTheme.overlay_button_active_border : AppTheme.overlay_button_border;
     background: item.active ? AppTheme.overlay_button_active_background : AppTheme.overlay_button_background;
 
-    Text {
+    VerticalLayout {
         x: 14px;
-        y: 0px;
-        width: parent.width - 44px;
-        height: parent.height;
-        vertical-alignment: center;
-        text: item.label;
-        color: AppTheme.overlay_button_text;
-        font-size: 14px;
+        y: 8px;
+        width: parent.width - 40px;
+        height: parent.height - 16px;
+        spacing: 2px;
+
+        Text {
+            text: item.short_label;
+            color: AppTheme.overlay_button_text;
+            font-size: 15px;
+            font-weight: 600;
+        }
+
+        if item.short_label != item.label : Text {
+            text: item.label;
+            color: AppTheme.overlay_button_text;
+            font-size: 11px;
+            opacity: 0.65;
+            wrap: word-wrap;
+        }
     }
 
     if item.pinned : Rectangle {
@@ -71,10 +83,10 @@ export component PanelBar inherits Rectangle {
     border-width: 1px;
     border-color: AppTheme.overlay_panel_border;
     background: AppTheme.overlay_panel_background;
-    width: state.orientation == PanelOrientationView.vertical ? 156px : 380px;
+    width: state.orientation == PanelOrientationView.vertical ? 144px : 420px;
     height: state.orientation == PanelOrientationView.vertical
-        ? AppTheme.overlay_panel_padding * 2 + item_count * 44px + (item_count > 0 ? (item_count - 1) * AppTheme.overlay_tool_spacing : 0px)
-        : 44px + AppTheme.overlay_panel_padding * 2;
+        ? AppTheme.overlay_panel_padding * 2 + item_count * 54px + (item_count > 0 ? (item_count - 1) * AppTheme.overlay_tool_spacing : 0px)
+        : 54px + AppTheme.overlay_panel_padding * 2;
 
     vertical_content := VerticalLayout {
         visible: root.state.orientation == PanelOrientationView.vertical;

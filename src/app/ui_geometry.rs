@@ -20,6 +20,10 @@ impl FloatingPanelBounds {
         self.x + self.width
     }
 
+    pub fn bottom(self) -> f32 {
+        self.y + self.height
+    }
+
     pub fn is_valid(self) -> bool {
         self.x.is_finite()
             && self.y.is_finite()
