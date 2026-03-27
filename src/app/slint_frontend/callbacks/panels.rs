@@ -16,6 +16,9 @@ pub(super) fn install(window: &SlintHostWindow, context: &CallbackContext) {
     let launcher_context = context.clone();
     window.on_panel_launcher_action(move |kind| {
         mutate_host_and_tick(&launcher_context, move |host_state| {
+            if host_state.app.ui.menu.has_open_surface() {
+                return;
+            }
             host_state.queue_action(Action::TogglePanel(
                 panel_kind(kind),
                 PanelBarId::PrimaryRight,
@@ -26,6 +29,9 @@ pub(super) fn install(window: &SlintHostWindow, context: &CallbackContext) {
     let header_context = context.clone();
     window.on_panel_header_action(move |kind, action| {
         mutate_host_and_tick(&header_context, move |host_state| {
+            if host_state.app.ui.menu.has_open_surface() {
+                return;
+            }
             let action = match action {
                 PanelHeaderAction::Close => Action::ClosePanel(panel_kind(kind)),
                 PanelHeaderAction::Pin => Action::PinPanel(panel_kind(kind)),
@@ -41,6 +47,9 @@ pub(super) fn install(window: &SlintHostWindow, context: &CallbackContext) {
     let dismiss_context = context.clone();
     window.on_dismiss_transient_panels(move || {
         mutate_host_and_tick(&dismiss_context, move |host_state| {
+            if host_state.app.ui.menu.has_open_surface() {
+                return;
+            }
             host_state.queue_action(Action::DismissTransientPanels);
         });
     });
@@ -92,6 +101,11 @@ fn handle_panel_pointer_action(
     usable_rect: FloatingPanelBounds,
     drag_last_position: &Rc<RefCell<Option<[f32; 2]>>>,
 ) {
+    if host_state.app.ui.menu.has_open_surface() {
+        *drag_last_position.borrow_mut() = None;
+        return;
+    }
+
     match action.phase {
         PanelPointerPhase::Down => {
             let is_visible = host_state

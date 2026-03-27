@@ -11,8 +11,14 @@ component MenuStripButton inherits Rectangle {
     height: 34px;
     border-radius: 10px;
     border-width: 1px;
-    border-color: item.active ? AppTheme.overlay_button_active_border : AppTheme.overlay_button_border;
-    background: item.active ? AppTheme.overlay_button_active_background : AppTheme.overlay_button_background;
+    border-color: item.active || item.focused
+        ? AppTheme.overlay_button_active_border
+        : AppTheme.overlay_button_border;
+    background: item.active
+        ? AppTheme.overlay_button_active_background
+        : item.focused
+            ? AppTheme.overlay_button_background
+            : AppTheme.overlay_button_background;
 
     Text {
         text: item.label;
@@ -49,17 +55,28 @@ export component MenuStrip inherits Rectangle {
         + (item_count > 0 ? (item_count - 1) * 6px : 0px);
     height: 46px;
 
-    HorizontalLayout {
-        x: AppTheme.overlay_panel_padding;
-        y: 6px;
-        width: parent.width - AppTheme.overlay_panel_padding * 2;
-        spacing: 6px;
+    public function focus_strip() {
+        strip_focus.focus();
+    }
 
-        for menu_item in root.state.items : MenuStripButton {
-            item: menu_item;
-            item_width: root.item_width;
-            activated(kind) => {
-                root.toggle_menu(kind);
+    strip_focus := FocusScope {
+        x: 0px;
+        y: 0px;
+        width: parent.width;
+        height: parent.height;
+
+        HorizontalLayout {
+            x: AppTheme.overlay_panel_padding;
+            y: 6px;
+            width: parent.width - AppTheme.overlay_panel_padding * 2;
+            spacing: 6px;
+
+            for menu_item in root.state.items : MenuStripButton {
+                item: menu_item;
+                item_width: root.item_width;
+                activated(kind) => {
+                    root.toggle_menu(kind);
+                }
             }
         }
     }

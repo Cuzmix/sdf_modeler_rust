@@ -53,6 +53,7 @@ export struct MenuStripItemView {
     label: string,
     kind: MenuKindView,
     active: bool,
+    focused: bool,
 }
 
 export struct MenuStripState {
@@ -62,6 +63,7 @@ export struct MenuStripState {
 
 export struct MenuDropdownItemView {
     label: string,
+    shortcut_label: string,
     command: MenuCommandAction,
     enabled: bool,
 }
@@ -71,6 +73,7 @@ export struct MenuDropdownState {
     title: string,
     menu: MenuKindView,
     anchor_index: int,
+    highlighted_index: int,
     items: [MenuDropdownItemView],
 }
 

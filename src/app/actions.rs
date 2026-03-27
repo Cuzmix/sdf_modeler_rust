@@ -258,6 +258,7 @@ pub enum Action {
     OpenMenuDropdown(MenuDropdownKind),
     ToggleMenuDropdown(MenuDropdownKind),
     CloseMenuDropdown,
+    SetMenuHighlightedIndex(Option<usize>),
     OpenSettingsCard,
     ToggleSettingsCard,
     CloseSettingsCard,

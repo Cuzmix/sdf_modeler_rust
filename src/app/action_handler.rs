@@ -1434,24 +1434,32 @@ impl SdfApp {
                 // Menu strip / settings card
                 Action::OpenMenuDropdown(menu) => {
                     self.ui.menu.open_dropdown(menu);
+                    self.ui.panel_framework.panel_interaction = None;
                 }
                 Action::ToggleMenuDropdown(menu) => {
                     self.ui.menu.toggle_dropdown(menu);
+                    self.ui.panel_framework.panel_interaction = None;
                 }
                 Action::CloseMenuDropdown => {
                     self.ui.menu.close_dropdown();
                 }
+                Action::SetMenuHighlightedIndex(index) => {
+                    self.ui.menu.set_highlighted_command_index(index);
+                }
                 Action::OpenSettingsCard => {
                     self.ui.menu.open_settings_card();
+                    self.ui.panel_framework.panel_interaction = None;
                 }
                 Action::ToggleSettingsCard => {
                     self.ui.menu.toggle_settings_card();
+                    self.ui.panel_framework.panel_interaction = None;
                 }
                 Action::CloseSettingsCard => {
                     self.ui.menu.close_settings_card();
                 }
                 Action::DismissMenuSurfaces => {
                     self.ui.menu.dismiss_all();
+                    self.ui.panel_framework.panel_interaction = None;
                 }
                 // Light linking
                 Action::SetLightMask { node_id, mask } => {

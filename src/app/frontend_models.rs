@@ -21,6 +21,7 @@ use crate::settings::{
     EnvironmentBackgroundMode, EnvironmentSource, GroupRotateDirection, MultiAxisOrientation,
     MultiPivotMode, Settings,
 };
+use crate::keymap::ActionBinding;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ScenePanelRow {
@@ -314,6 +315,7 @@ pub struct MenuStripItemModel {
     pub kind: MenuStripKind,
     pub label: String,
     pub active: bool,
+    pub focused: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -326,6 +328,7 @@ pub struct MenuStripModel {
 pub struct MenuCommandModel {
     pub command: MenuCommandKind,
     pub label: String,
+    pub shortcut_label: String,
     pub enabled: bool,
 }
 
@@ -335,6 +338,7 @@ pub struct MenuDropdownModel {
     pub kind: Option<MenuDropdownKind>,
     pub title: String,
     pub anchor_index: i32,
+    pub highlighted_index: i32,
     pub items: Vec<MenuCommandModel>,
 }
 
@@ -523,7 +527,8 @@ pub fn build_shell_snapshot(inputs: ShellSnapshotInputs<'_>) -> ShellSnapshot {
         &tool_context,
     );
     let menu_strip = build_menu_strip_model(inputs.menu_ui);
-    let menu_dropdown = build_menu_dropdown_model(inputs.menu_ui, inputs.file_actions_enabled);
+    let menu_dropdown =
+        build_menu_dropdown_model(inputs.menu_ui, inputs.file_actions_enabled, inputs.settings);
     let settings_card = build_settings_card_model(inputs.menu_ui, inputs.settings);
 
     ShellSnapshot {
@@ -606,6 +611,7 @@ pub fn build_menu_strip_model(menu_ui: &MenuUiState) -> MenuStripModel {
                     Some(dropdown_kind) => menu_ui.active_dropdown == Some(dropdown_kind),
                     None => menu_ui.settings_card_open,
                 },
+                focused: menu_ui.focused_launcher == Some(menu_launcher_kind(kind)),
             })
             .collect(),
     }
@@ -614,6 +620,7 @@ pub fn build_menu_strip_model(menu_ui: &MenuUiState) -> MenuStripModel {
 pub fn build_menu_dropdown_model(
     menu_ui: &MenuUiState,
     file_actions_enabled: bool,
+    settings: &Settings,
 ) -> MenuDropdownModel {
     let Some(kind) = menu_ui.active_dropdown else {
         return MenuDropdownModel {
@@ -621,6 +628,7 @@ pub fn build_menu_dropdown_model(
             kind: None,
             title: String::new(),
             anchor_index: -1,
+            highlighted_index: -1,
             items: Vec::new(),
         };
     };
@@ -632,12 +640,17 @@ pub fn build_menu_dropdown_model(
         MenuDropdownKind::Help => MenuStripKind::Help,
     };
 
+    let items = menu_commands_for_kind(kind, file_actions_enabled, settings);
+    let highlighted_index =
+        resolve_menu_highlighted_index(menu_ui.highlighted_command_index, &items);
+
     MenuDropdownModel {
         visible: true,
         kind: Some(kind),
         title: kind.label().to_string(),
         anchor_index: strip_kind.anchor_index(),
-        items: menu_commands_for_kind(kind, file_actions_enabled),
+        highlighted_index: highlighted_index.map(|index| index as i32).unwrap_or(-1),
+        items,
     }
 }
 
@@ -653,134 +666,168 @@ pub fn build_settings_card_model(menu_ui: &MenuUiState, settings: &Settings) -> 
     }
 }
 
-fn menu_commands_for_kind(
+fn menu_launcher_kind(kind: MenuStripKind) -> crate::app::state::MenuLauncherKind {
+    match kind {
+        MenuStripKind::File => crate::app::state::MenuLauncherKind::File,
+        MenuStripKind::Edit => crate::app::state::MenuLauncherKind::Edit,
+        MenuStripKind::View => crate::app::state::MenuLauncherKind::View,
+        MenuStripKind::Settings => crate::app::state::MenuLauncherKind::Settings,
+        MenuStripKind::Help => crate::app::state::MenuLauncherKind::Help,
+    }
+}
+
+fn resolve_menu_highlighted_index(
+    preferred: Option<usize>,
+    items: &[MenuCommandModel],
+) -> Option<usize> {
+    if let Some(index) = preferred {
+        if items.get(index).is_some_and(|item| item.enabled) {
+            return Some(index);
+        }
+    }
+    items.iter().position(|item| item.enabled)
+}
+
+pub(crate) fn menu_commands_for_kind(
     kind: MenuDropdownKind,
     file_actions_enabled: bool,
+    settings: &Settings,
 ) -> Vec<MenuCommandModel> {
     match kind {
         MenuDropdownKind::File => vec![
-            MenuCommandModel {
-                command: MenuCommandKind::NewScene,
-                label: "New Scene".to_string(),
-                enabled: file_actions_enabled,
-            },
-            MenuCommandModel {
-                command: MenuCommandKind::OpenProject,
-                label: "Open Project".to_string(),
-                enabled: file_actions_enabled,
-            },
-            MenuCommandModel {
-                command: MenuCommandKind::SaveProject,
-                label: "Save Project".to_string(),
-                enabled: file_actions_enabled,
-            },
-            MenuCommandModel {
-                command: MenuCommandKind::ImportMesh,
-                label: "Import Mesh".to_string(),
-                enabled: file_actions_enabled,
-            },
-            MenuCommandModel {
-                command: MenuCommandKind::ExportMesh,
-                label: "Export Mesh".to_string(),
-                enabled: file_actions_enabled,
-            },
-            MenuCommandModel {
-                command: MenuCommandKind::TakeScreenshot,
-                label: "Screenshot".to_string(),
-                enabled: file_actions_enabled,
-            },
-            MenuCommandModel {
-                command: MenuCommandKind::AddReferenceImage,
-                label: "Add Reference".to_string(),
-                enabled: file_actions_enabled,
-            },
+            menu_command(
+                MenuCommandKind::NewScene,
+                "New Scene",
+                file_actions_enabled,
+                settings,
+            ),
+            menu_command(
+                MenuCommandKind::OpenProject,
+                "Open Project",
+                file_actions_enabled,
+                settings,
+            ),
+            menu_command(
+                MenuCommandKind::SaveProject,
+                "Save Project",
+                file_actions_enabled,
+                settings,
+            ),
+            menu_command(
+                MenuCommandKind::ImportMesh,
+                "Import Mesh",
+                file_actions_enabled,
+                settings,
+            ),
+            menu_command(
+                MenuCommandKind::ExportMesh,
+                "Export Mesh",
+                file_actions_enabled,
+                settings,
+            ),
+            menu_command(
+                MenuCommandKind::TakeScreenshot,
+                "Screenshot",
+                file_actions_enabled,
+                settings,
+            ),
+            menu_command(
+                MenuCommandKind::AddReferenceImage,
+                "Add Reference",
+                file_actions_enabled,
+                settings,
+            ),
         ],
         MenuDropdownKind::Edit => vec![
-            MenuCommandModel {
-                command: MenuCommandKind::Undo,
-                label: "Undo".to_string(),
-                enabled: true,
-            },
-            MenuCommandModel {
-                command: MenuCommandKind::Redo,
-                label: "Redo".to_string(),
-                enabled: true,
-            },
-            MenuCommandModel {
-                command: MenuCommandKind::Copy,
-                label: "Copy".to_string(),
-                enabled: true,
-            },
-            MenuCommandModel {
-                command: MenuCommandKind::Paste,
-                label: "Paste".to_string(),
-                enabled: true,
-            },
-            MenuCommandModel {
-                command: MenuCommandKind::Duplicate,
-                label: "Duplicate".to_string(),
-                enabled: true,
-            },
-            MenuCommandModel {
-                command: MenuCommandKind::DeleteSelected,
-                label: "Delete Selected".to_string(),
-                enabled: true,
-            },
+            menu_command(MenuCommandKind::Undo, "Undo", true, settings),
+            menu_command(MenuCommandKind::Redo, "Redo", true, settings),
+            menu_command(MenuCommandKind::Copy, "Copy", true, settings),
+            menu_command(MenuCommandKind::Paste, "Paste", true, settings),
+            menu_command(MenuCommandKind::Duplicate, "Duplicate", true, settings),
+            menu_command(
+                MenuCommandKind::DeleteSelected,
+                "Delete Selected",
+                true,
+                settings,
+            ),
         ],
         MenuDropdownKind::View => vec![
-            MenuCommandModel {
-                command: MenuCommandKind::FrameAll,
-                label: "Frame All".to_string(),
-                enabled: true,
-            },
-            MenuCommandModel {
-                command: MenuCommandKind::FocusSelected,
-                label: "Focus Selected".to_string(),
-                enabled: true,
-            },
-            MenuCommandModel {
-                command: MenuCommandKind::CameraFront,
-                label: "Front View".to_string(),
-                enabled: true,
-            },
-            MenuCommandModel {
-                command: MenuCommandKind::CameraTop,
-                label: "Top View".to_string(),
-                enabled: true,
-            },
-            MenuCommandModel {
-                command: MenuCommandKind::CameraRight,
-                label: "Right View".to_string(),
-                enabled: true,
-            },
-            MenuCommandModel {
-                command: MenuCommandKind::ToggleOrtho,
-                label: "Toggle Ortho".to_string(),
-                enabled: true,
-            },
-            MenuCommandModel {
-                command: MenuCommandKind::ToggleMeasure,
-                label: "Toggle Measure".to_string(),
-                enabled: true,
-            },
-            MenuCommandModel {
-                command: MenuCommandKind::ToggleTurntable,
-                label: "Toggle Turntable".to_string(),
-                enabled: true,
-            },
+            menu_command(MenuCommandKind::FrameAll, "Frame All", true, settings),
+            menu_command(
+                MenuCommandKind::FocusSelected,
+                "Focus Selected",
+                true,
+                settings,
+            ),
+            menu_command(MenuCommandKind::CameraFront, "Front View", true, settings),
+            menu_command(MenuCommandKind::CameraTop, "Top View", true, settings),
+            menu_command(MenuCommandKind::CameraRight, "Right View", true, settings),
+            menu_command(MenuCommandKind::ToggleOrtho, "Toggle Ortho", true, settings),
+            menu_command(MenuCommandKind::ToggleMeasure, "Toggle Measure", true, settings),
+            menu_command(
+                MenuCommandKind::ToggleTurntable,
+                "Toggle Turntable",
+                true,
+                settings,
+            ),
         ],
         MenuDropdownKind::Help => vec![
-            MenuCommandModel {
-                command: MenuCommandKind::ToggleHelp,
-                label: "Toggle Help".to_string(),
-                enabled: true,
-            },
-            MenuCommandModel {
-                command: MenuCommandKind::ToggleCommandPalette,
-                label: "Command Palette".to_string(),
-                enabled: true,
-            },
+            menu_command(MenuCommandKind::ToggleHelp, "Toggle Help", true, settings),
+            menu_command(
+                MenuCommandKind::ToggleCommandPalette,
+                "Command Palette",
+                true,
+                settings,
+            ),
         ],
+    }
+}
+
+fn menu_command(
+    command: MenuCommandKind,
+    label: &str,
+    enabled: bool,
+    settings: &Settings,
+) -> MenuCommandModel {
+    MenuCommandModel {
+        command,
+        label: label.to_string(),
+        shortcut_label: menu_shortcut_label(command, settings),
+        enabled,
+    }
+}
+
+fn menu_shortcut_label(command: MenuCommandKind, settings: &Settings) -> String {
+    menu_action_binding(command)
+        .and_then(|binding| settings.keymap.format_shortcut(binding))
+        .unwrap_or_default()
+}
+
+fn menu_action_binding(command: MenuCommandKind) -> Option<ActionBinding> {
+    match command {
+        MenuCommandKind::NewScene => Some(ActionBinding::NewScene),
+        MenuCommandKind::OpenProject => Some(ActionBinding::OpenProject),
+        MenuCommandKind::SaveProject => Some(ActionBinding::SaveProject),
+        MenuCommandKind::ImportMesh => None,
+        MenuCommandKind::ExportMesh => Some(ActionBinding::ShowExportDialog),
+        MenuCommandKind::TakeScreenshot => Some(ActionBinding::TakeScreenshot),
+        MenuCommandKind::AddReferenceImage => None,
+        MenuCommandKind::Undo => Some(ActionBinding::Undo),
+        MenuCommandKind::Redo => Some(ActionBinding::Redo),
+        MenuCommandKind::Copy => Some(ActionBinding::Copy),
+        MenuCommandKind::Paste => Some(ActionBinding::Paste),
+        MenuCommandKind::Duplicate => Some(ActionBinding::Duplicate),
+        MenuCommandKind::DeleteSelected => Some(ActionBinding::DeleteSelected),
+        MenuCommandKind::FrameAll => Some(ActionBinding::FrameAll),
+        MenuCommandKind::FocusSelected => Some(ActionBinding::FocusSelected),
+        MenuCommandKind::CameraFront => Some(ActionBinding::CameraFront),
+        MenuCommandKind::CameraTop => Some(ActionBinding::CameraTop),
+        MenuCommandKind::CameraRight => Some(ActionBinding::CameraRight),
+        MenuCommandKind::ToggleOrtho => Some(ActionBinding::ToggleOrtho),
+        MenuCommandKind::ToggleMeasure => Some(ActionBinding::ToggleMeasurementTool),
+        MenuCommandKind::ToggleTurntable => Some(ActionBinding::ToggleTurntable),
+        MenuCommandKind::ToggleHelp => Some(ActionBinding::ToggleHelp),
+        MenuCommandKind::ToggleCommandPalette => Some(ActionBinding::ToggleCommandPalette),
     }
 }
 
@@ -2384,12 +2431,33 @@ mod tests {
         let mut menu_ui = MenuUiState::default();
         menu_ui.open_dropdown(MenuDropdownKind::File);
 
-        let disabled = build_menu_dropdown_model(&menu_ui, false);
+        let disabled = build_menu_dropdown_model(&menu_ui, false, &Settings::default());
         assert!(disabled.visible);
         assert!(disabled.items.iter().all(|item| !item.enabled));
 
-        let enabled = build_menu_dropdown_model(&menu_ui, true);
+        let enabled = build_menu_dropdown_model(&menu_ui, true, &Settings::default());
         assert!(enabled.items.iter().all(|item| item.enabled));
+    }
+
+    #[test]
+    fn menu_dropdown_exposes_shortcut_labels_from_keymap() {
+        let mut menu_ui = MenuUiState::default();
+        menu_ui.open_dropdown(MenuDropdownKind::Edit);
+
+        let model = build_menu_dropdown_model(&menu_ui, true, &Settings::default());
+        let undo = model
+            .items
+            .iter()
+            .find(|item| item.command == MenuCommandKind::Undo)
+            .expect("undo menu command");
+        let copy = model
+            .items
+            .iter()
+            .find(|item| item.command == MenuCommandKind::Copy)
+            .expect("copy menu command");
+
+        assert_eq!(undo.shortcut_label, "Ctrl+Z");
+        assert_eq!(copy.shortcut_label, "Ctrl+C");
     }
 
     #[test]

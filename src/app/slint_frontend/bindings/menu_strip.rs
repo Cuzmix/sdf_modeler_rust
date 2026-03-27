@@ -23,6 +23,7 @@ pub(super) fn build_menu_strip_state(snapshot: &ShellSnapshot) -> MenuStripState
                     label: item.label.clone().into(),
                     kind: menu_strip_kind_view(item.kind),
                     active: item.active,
+                    focused: item.focused,
                 })
                 .collect::<Vec<_>>(),
         ))
@@ -66,12 +67,14 @@ fn menu_dropdown_state(model: &MenuDropdownModel) -> MenuDropdownState {
             .map(menu_dropdown_kind_view)
             .unwrap_or(MenuKindView::None),
         anchor_index: model.anchor_index,
+        highlighted_index: model.highlighted_index,
         items: Rc::new(VecModel::from(
             model
                 .items
                 .iter()
                 .map(|item| MenuDropdownItemView {
                     label: item.label.clone().into(),
+                    shortcut_label: item.shortcut_label.clone().into(),
                     command: menu_command_view(item.command),
                     enabled: item.enabled,
                 })

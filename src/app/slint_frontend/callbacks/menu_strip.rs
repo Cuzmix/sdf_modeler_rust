@@ -1,9 +1,11 @@
 use super::context::CallbackContext;
 use super::mutation::mutate_host_and_tick;
 use crate::app::actions::Action;
+use crate::app::frontend_models::{menu_commands_for_kind, MenuCommandKind, MenuCommandModel};
 use crate::app::slint_frontend::{
-    MenuCommandAction, MenuKindView, SettingsCardAction, SlintHostWindow,
+    MenuCommandAction, MenuKindView, MenuNavigationAction, SettingsCardAction, SlintHostWindow,
 };
+use crate::app::{BakeStatus, ExportStatus, ImportStatus};
 use crate::app::state::MenuDropdownKind;
 
 enum MenuCommandDispatch {
@@ -23,6 +25,13 @@ pub(super) fn install(window: &SlintHostWindow, context: &CallbackContext) {
     window.on_menu_command_action(move |command| {
         mutate_host_and_tick(&command_context, move |host_state| {
             handle_menu_command_action(host_state, command);
+        });
+    });
+
+    let navigation_context = context.clone();
+    window.on_menu_navigation_action(move |action| {
+        mutate_host_and_tick(&navigation_context, move |host_state| {
+            handle_menu_navigation_action(host_state, action);
         });
     });
 
@@ -62,11 +71,42 @@ fn handle_menu_command_action(
     host_state: &mut crate::app::slint_frontend::host_state::SlintHostState,
     command: MenuCommandAction,
 ) {
-    match map_menu_command(command) {
-        MenuCommandDispatch::Queue(action) => host_state.queue_action(action),
-        MenuCommandDispatch::StartExport => host_state.app.start_export(),
-    }
+    dispatch_menu_command(host_state, map_menu_command(command));
     host_state.queue_action(Action::DismissMenuSurfaces);
+}
+
+fn handle_menu_navigation_action(
+    host_state: &mut crate::app::slint_frontend::host_state::SlintHostState,
+    action: MenuNavigationAction,
+) {
+    if matches!(action, MenuNavigationAction::Dismiss) {
+        host_state.queue_action(Action::DismissMenuSurfaces);
+        return;
+    }
+
+    let Some(kind) = host_state.app.ui.menu.active_dropdown else {
+        return;
+    };
+    let items = menu_commands_for_kind(kind, file_actions_enabled(host_state), &host_state.app.settings);
+    let current_index = host_state.app.ui.menu.highlighted_command_index;
+
+    match action {
+        MenuNavigationAction::Dismiss => {}
+        MenuNavigationAction::SelectNext => {
+            let next = step_enabled_index(&items, current_index, true);
+            host_state.queue_action(Action::SetMenuHighlightedIndex(next));
+        }
+        MenuNavigationAction::SelectPrevious => {
+            let previous = step_enabled_index(&items, current_index, false);
+            host_state.queue_action(Action::SetMenuHighlightedIndex(previous));
+        }
+        MenuNavigationAction::ActivateSelected => {
+            if let Some(command) = active_enabled_command(&items, current_index) {
+                dispatch_menu_command(host_state, map_menu_command_kind(command));
+                host_state.queue_action(Action::DismissMenuSurfaces);
+            }
+        }
+    }
 }
 
 fn handle_settings_card_action(
@@ -133,6 +173,29 @@ fn menu_dropdown_kind(kind: MenuKindView) -> Option<MenuDropdownKind> {
     }
 }
 
+fn file_actions_enabled(host_state: &crate::app::slint_frontend::host_state::SlintHostState) -> bool {
+    !matches!(
+        host_state.app.async_state.bake_status,
+        BakeStatus::InProgress { .. }
+    ) && !matches!(
+        host_state.app.async_state.export_status,
+        ExportStatus::InProgress { .. }
+    ) && !matches!(
+        host_state.app.async_state.import_status,
+        ImportStatus::InProgress { .. }
+    )
+}
+
+fn dispatch_menu_command(
+    host_state: &mut crate::app::slint_frontend::host_state::SlintHostState,
+    dispatch: MenuCommandDispatch,
+) {
+    match dispatch {
+        MenuCommandDispatch::Queue(action) => host_state.queue_action(action),
+        MenuCommandDispatch::StartExport => host_state.app.start_export(),
+    }
+}
+
 fn map_menu_command(command: MenuCommandAction) -> MenuCommandDispatch {
     match command {
         MenuCommandAction::NewScene => MenuCommandDispatch::Queue(Action::NewScene),
@@ -167,12 +230,91 @@ fn map_menu_command(command: MenuCommandAction) -> MenuCommandDispatch {
     }
 }
 
+fn map_menu_command_kind(command: MenuCommandKind) -> MenuCommandDispatch {
+    match command {
+        MenuCommandKind::NewScene => MenuCommandDispatch::Queue(Action::NewScene),
+        MenuCommandKind::OpenProject => MenuCommandDispatch::Queue(Action::OpenProject),
+        MenuCommandKind::SaveProject => MenuCommandDispatch::Queue(Action::SaveProject),
+        MenuCommandKind::ImportMesh => MenuCommandDispatch::Queue(Action::ImportMesh),
+        MenuCommandKind::ExportMesh => MenuCommandDispatch::StartExport,
+        MenuCommandKind::TakeScreenshot => MenuCommandDispatch::Queue(Action::TakeScreenshot),
+        MenuCommandKind::AddReferenceImage => MenuCommandDispatch::Queue(Action::AddReferenceImage),
+        MenuCommandKind::Undo => MenuCommandDispatch::Queue(Action::Undo),
+        MenuCommandKind::Redo => MenuCommandDispatch::Queue(Action::Redo),
+        MenuCommandKind::Copy => MenuCommandDispatch::Queue(Action::Copy),
+        MenuCommandKind::Paste => MenuCommandDispatch::Queue(Action::Paste),
+        MenuCommandKind::Duplicate => MenuCommandDispatch::Queue(Action::Duplicate),
+        MenuCommandKind::DeleteSelected => MenuCommandDispatch::Queue(Action::DeleteSelected),
+        MenuCommandKind::FrameAll => MenuCommandDispatch::Queue(Action::FrameAll),
+        MenuCommandKind::FocusSelected => MenuCommandDispatch::Queue(Action::FocusSelected),
+        MenuCommandKind::CameraFront => MenuCommandDispatch::Queue(Action::CameraFront),
+        MenuCommandKind::CameraTop => MenuCommandDispatch::Queue(Action::CameraTop),
+        MenuCommandKind::CameraRight => MenuCommandDispatch::Queue(Action::CameraRight),
+        MenuCommandKind::ToggleOrtho => MenuCommandDispatch::Queue(Action::ToggleOrtho),
+        MenuCommandKind::ToggleMeasure => MenuCommandDispatch::Queue(Action::ToggleMeasurementTool),
+        MenuCommandKind::ToggleTurntable => MenuCommandDispatch::Queue(Action::ToggleTurntable),
+        MenuCommandKind::ToggleHelp => MenuCommandDispatch::Queue(Action::ToggleHelp),
+        MenuCommandKind::ToggleCommandPalette => {
+            MenuCommandDispatch::Queue(Action::ToggleCommandPalette)
+        }
+    }
+}
+
+fn step_enabled_index(
+    items: &[MenuCommandModel],
+    current_index: Option<usize>,
+    forward: bool,
+) -> Option<usize> {
+    let enabled_indices = items
+        .iter()
+        .enumerate()
+        .filter_map(|(index, item)| item.enabled.then_some(index))
+        .collect::<Vec<_>>();
+    if enabled_indices.is_empty() {
+        return None;
+    }
+
+    let current_slot = current_index
+        .and_then(|index| enabled_indices.iter().position(|candidate| *candidate == index));
+    let next_slot = match current_slot {
+        Some(slot) if forward => (slot + 1) % enabled_indices.len(),
+        Some(0) => enabled_indices.len() - 1,
+        Some(slot) => slot - 1,
+        None if forward => 0,
+        None => enabled_indices.len() - 1,
+    };
+    Some(enabled_indices[next_slot])
+}
+
+fn active_enabled_command(
+    items: &[MenuCommandModel],
+    current_index: Option<usize>,
+) -> Option<MenuCommandKind> {
+    let active_index = current_index
+        .filter(|index| items.get(*index).is_some_and(|item| item.enabled))
+        .or_else(|| items.iter().position(|item| item.enabled))?;
+    items.get(active_index).map(|item| item.command)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{map_menu_command, menu_dropdown_kind, MenuCommandDispatch};
+    use super::{
+        active_enabled_command, map_menu_command, map_menu_command_kind, menu_dropdown_kind,
+        step_enabled_index, MenuCommandDispatch,
+    };
     use crate::app::actions::Action;
+    use crate::app::frontend_models::MenuCommandKind;
     use crate::app::slint_frontend::{MenuCommandAction, MenuKindView};
     use crate::app::state::MenuDropdownKind;
+
+    fn command_item(command: MenuCommandKind, enabled: bool) -> crate::app::frontend_models::MenuCommandModel {
+        crate::app::frontend_models::MenuCommandModel {
+            command,
+            label: format!("{command:?}"),
+            shortcut_label: String::new(),
+            enabled,
+        }
+    }
 
     #[test]
     fn dropdown_kind_mapping_is_defined_for_dropdown_launchers_only() {
@@ -214,5 +356,59 @@ mod tests {
             map_menu_command(MenuCommandAction::ToggleCommandPalette),
             MenuCommandDispatch::Queue(Action::ToggleCommandPalette)
         ));
+    }
+
+    #[test]
+    fn menu_command_kind_mapping_matches_command_action_mapping() {
+        assert!(matches!(
+            map_menu_command_kind(MenuCommandKind::SaveProject),
+            MenuCommandDispatch::Queue(Action::SaveProject)
+        ));
+        assert!(matches!(
+            map_menu_command_kind(MenuCommandKind::ExportMesh),
+            MenuCommandDispatch::StartExport
+        ));
+    }
+
+    #[test]
+    fn step_enabled_index_skips_disabled_and_wraps_forward() {
+        let items = vec![
+            command_item(MenuCommandKind::Undo, true),
+            command_item(MenuCommandKind::Redo, false),
+            command_item(MenuCommandKind::Copy, true),
+        ];
+
+        assert_eq!(step_enabled_index(&items, Some(0), true), Some(2));
+        assert_eq!(step_enabled_index(&items, Some(2), true), Some(0));
+    }
+
+    #[test]
+    fn step_enabled_index_wraps_backward() {
+        let items = vec![
+            command_item(MenuCommandKind::Undo, true),
+            command_item(MenuCommandKind::Redo, false),
+            command_item(MenuCommandKind::Copy, true),
+        ];
+
+        assert_eq!(step_enabled_index(&items, Some(0), false), Some(2));
+        assert_eq!(step_enabled_index(&items, None, false), Some(2));
+    }
+
+    #[test]
+    fn active_enabled_command_falls_back_to_first_enabled_item() {
+        let items = vec![
+            command_item(MenuCommandKind::Undo, false),
+            command_item(MenuCommandKind::Redo, true),
+            command_item(MenuCommandKind::Copy, true),
+        ];
+
+        assert_eq!(
+            active_enabled_command(&items, Some(0)),
+            Some(MenuCommandKind::Redo)
+        );
+        assert_eq!(
+            active_enabled_command(&items, Some(2)),
+            Some(MenuCommandKind::Copy)
+        );
     }
 }

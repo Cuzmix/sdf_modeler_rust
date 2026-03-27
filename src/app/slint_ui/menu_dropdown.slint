@@ -1,9 +1,15 @@
 import { AppTheme } from "theme.slint";
-import { MenuCommandAction, MenuDropdownItemView, MenuDropdownState } from "view_models.slint";
+import {
+    MenuCommandAction,
+    MenuDropdownItemView,
+    MenuDropdownState,
+    MenuNavigationAction,
+} from "view_models.slint";
 
 component MenuDropdownRow inherits Rectangle {
     in property <MenuDropdownItemView> item;
     in property <length> row_width: 0px;
+    in property <bool> highlighted: false;
 
     callback execute(command: MenuCommandAction);
 
@@ -11,8 +17,12 @@ component MenuDropdownRow inherits Rectangle {
     height: 34px;
     border-radius: 8px;
     border-width: 1px;
-    border-color: row_touch.has-hover && item.enabled ? AppTheme.overlay_button_active_border : #00000000;
-    background: row_touch.has-hover && item.enabled ? AppTheme.overlay_button_active_background : #00000000;
+    border-color: (row_touch.has-hover || root.highlighted) && item.enabled
+        ? AppTheme.overlay_button_active_border
+        : #00000000;
+    background: (row_touch.has-hover || root.highlighted) && item.enabled
+        ? AppTheme.overlay_button_active_background
+        : #00000000;
     opacity: item.enabled ? 1.0 : 0.55;
 
     Text {
@@ -21,6 +31,15 @@ component MenuDropdownRow inherits Rectangle {
         y: (parent.height - self.height) / 2;
         color: AppTheme.overlay_button_text;
         font-size: 14px;
+    }
+
+    Text {
+        text: item.shortcut_label;
+        x: parent.width - self.width - 10px;
+        y: (parent.height - self.height) / 2;
+        color: AppTheme.overlay_button_text;
+        opacity: 0.7;
+        font-size: 13px;
     }
 
     row_touch := TouchArea {
@@ -39,6 +58,7 @@ export component MenuDropdown inherits Rectangle {
     in property <MenuDropdownState> state;
 
     callback execute_command(command: MenuCommandAction);
+    callback navigate(action: MenuNavigationAction);
 
     private property <int> item_count: state.items.length;
 
@@ -55,35 +75,69 @@ export component MenuDropdown inherits Rectangle {
         + item_count * 34px
         + (item_count > 0 ? (item_count - 1) * 4px : 0px);
 
-    Text {
-        text: state.title;
-        x: AppTheme.overlay_panel_padding;
-        y: AppTheme.overlay_panel_padding;
-        color: AppTheme.overlay_button_text;
-        font-size: 15px;
-        font-weight: 600;
-    }
+    dropdown_focus := FocusScope {
+        x: 0px;
+        y: 0px;
+        width: parent.width;
+        height: parent.height;
 
-    Rectangle {
-        x: AppTheme.overlay_panel_padding;
-        y: AppTheme.overlay_panel_padding + 24px;
-        width: parent.width - AppTheme.overlay_panel_padding * 2;
-        height: 1px;
-        background: AppTheme.overlay_divider;
-    }
-
-    VerticalLayout {
-        x: AppTheme.overlay_panel_padding;
-        y: AppTheme.overlay_panel_padding + 33px;
-        width: parent.width - AppTheme.overlay_panel_padding * 2;
-        spacing: 4px;
-
-        for item in state.items : MenuDropdownRow {
-            item: item;
-            row_width: parent.width;
-            execute(command) => {
-                root.execute_command(command);
+        key-pressed(event) => {
+            if event.text == Key.Escape {
+                root.navigate(MenuNavigationAction.dismiss);
+                return accept;
             }
+            if event.text == Key.UpArrow {
+                root.navigate(MenuNavigationAction.select-previous);
+                return accept;
+            }
+            if event.text == Key.DownArrow {
+                root.navigate(MenuNavigationAction.select-next);
+                return accept;
+            }
+            if event.text == Key.Return {
+                root.navigate(MenuNavigationAction.activate-selected);
+                return accept;
+            }
+            reject
+        }
+
+        Text {
+            text: state.title;
+            x: AppTheme.overlay_panel_padding;
+            y: AppTheme.overlay_panel_padding;
+            color: AppTheme.overlay_button_text;
+            font-size: 15px;
+            font-weight: 600;
+        }
+
+        Rectangle {
+            x: AppTheme.overlay_panel_padding;
+            y: AppTheme.overlay_panel_padding + 24px;
+            width: parent.width - AppTheme.overlay_panel_padding * 2;
+            height: 1px;
+            background: AppTheme.overlay_divider;
+        }
+
+        VerticalLayout {
+            x: AppTheme.overlay_panel_padding;
+            y: AppTheme.overlay_panel_padding + 33px;
+            width: parent.width - AppTheme.overlay_panel_padding * 2;
+            spacing: 4px;
+
+            for item[index] in state.items : MenuDropdownRow {
+                item: item;
+                highlighted: root.state.highlighted_index == index;
+                row_width: parent.width;
+                execute(command) => {
+                    root.execute_command(command);
+                }
+            }
+        }
+    }
+
+    changed visible => {
+        if self.visible {
+            dropdown_focus.focus();
         }
     }
 }

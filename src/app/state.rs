@@ -294,50 +294,104 @@ impl MenuDropdownKind {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum MenuLauncherKind {
+    File,
+    Edit,
+    View,
+    Settings,
+    Help,
+}
+
+impl MenuLauncherKind {
+    pub fn from_dropdown(kind: MenuDropdownKind) -> Self {
+        match kind {
+            MenuDropdownKind::File => Self::File,
+            MenuDropdownKind::Edit => Self::Edit,
+            MenuDropdownKind::View => Self::View,
+            MenuDropdownKind::Help => Self::Help,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct MenuUiState {
     pub active_dropdown: Option<MenuDropdownKind>,
     pub settings_card_open: bool,
+    pub focused_launcher: Option<MenuLauncherKind>,
+    pub highlighted_command_index: Option<usize>,
 }
 
 impl MenuUiState {
+    pub fn has_open_surface(&self) -> bool {
+        self.active_dropdown.is_some() || self.settings_card_open
+    }
+
+    pub fn active_launcher(&self) -> Option<MenuLauncherKind> {
+        if let Some(dropdown) = self.active_dropdown {
+            return Some(MenuLauncherKind::from_dropdown(dropdown));
+        }
+        if self.settings_card_open {
+            return Some(MenuLauncherKind::Settings);
+        }
+        None
+    }
+
     pub fn dismiss_all(&mut self) {
+        self.focused_launcher = self.active_launcher().or(self.focused_launcher);
         self.active_dropdown = None;
         self.settings_card_open = false;
+        self.highlighted_command_index = None;
     }
 
     pub fn open_dropdown(&mut self, kind: MenuDropdownKind) {
         self.active_dropdown = Some(kind);
         self.settings_card_open = false;
+        self.focused_launcher = Some(MenuLauncherKind::from_dropdown(kind));
+        self.highlighted_command_index = None;
     }
 
     pub fn toggle_dropdown(&mut self, kind: MenuDropdownKind) {
+        self.focused_launcher = Some(MenuLauncherKind::from_dropdown(kind));
         if self.active_dropdown == Some(kind) {
             self.active_dropdown = None;
         } else {
             self.active_dropdown = Some(kind);
         }
         self.settings_card_open = false;
+        self.highlighted_command_index = None;
     }
 
     pub fn close_dropdown(&mut self) {
+        self.focused_launcher = self.active_launcher().or(self.focused_launcher);
         self.active_dropdown = None;
+        self.highlighted_command_index = None;
     }
 
     pub fn open_settings_card(&mut self) {
         self.settings_card_open = true;
         self.active_dropdown = None;
+        self.focused_launcher = Some(MenuLauncherKind::Settings);
+        self.highlighted_command_index = None;
     }
 
     pub fn toggle_settings_card(&mut self) {
+        self.focused_launcher = Some(MenuLauncherKind::Settings);
         self.settings_card_open = !self.settings_card_open;
         if self.settings_card_open {
             self.active_dropdown = None;
         }
+        self.highlighted_command_index = None;
     }
 
     pub fn close_settings_card(&mut self) {
+        self.focused_launcher = self.active_launcher().or(self.focused_launcher);
         self.settings_card_open = false;
+        self.highlighted_command_index = None;
+    }
+
+    pub fn set_highlighted_command_index(&mut self, index: Option<usize>) {
+        self.highlighted_command_index = index;
     }
 }
 

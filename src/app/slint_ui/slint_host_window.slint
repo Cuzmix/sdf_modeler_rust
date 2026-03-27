@@ -6,6 +6,7 @@ import {
     MenuCommandAction,
     MenuDropdownState,
     MenuKindView,
+    MenuNavigationAction,
     MenuStripState,
     LightEditKind,
     OverlayLayoutViewState,
@@ -89,6 +90,7 @@ export component SlintHostWindow inherits Window {
     callback top_bar_action(action: TopBarAction);
     callback menu_launcher_action(kind: MenuKindView);
     callback menu_command_action(action: MenuCommandAction);
+    callback menu_navigation_action(action: MenuNavigationAction);
     callback settings_card_action(action: SettingsCardAction, value: float);
     callback dismiss_menu_surfaces();
     callback tool_palette_action(action: ToolPaletteAction);
@@ -299,6 +301,9 @@ export component SlintHostWindow inherits Window {
             execute_command(action) => {
                 root.menu_command_action(action);
             }
+            navigate(action) => {
+                root.menu_navigation_action(action);
+            }
         }
 
         settings_card := SettingsCard {
@@ -307,6 +312,9 @@ export component SlintHostWindow inherits Window {
             y: menu_strip.y + menu_strip.height + parent.menu_surface_gap;
             perform_action(action, value) => {
                 root.settings_card_action(action, value);
+            }
+            dismiss_requested() => {
+                root.dismiss_menu_surfaces();
             }
         }
 
