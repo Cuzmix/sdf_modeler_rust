@@ -2,6 +2,7 @@ use slint::SharedString;
 
 use super::context::CallbackContext;
 use crate::app::actions::Action;
+use crate::app::state::MenuDropdownKind;
 use crate::app::slint_frontend::SlintHostWindow;
 use crate::keymap::{ActionBinding, KeyCombo, KeymapConfig, SerializableKey};
 
@@ -43,23 +44,27 @@ fn dispatch_shortcut_binding(
     shift: bool,
     alt: bool,
 ) -> bool {
-    let Some(binding) =
+    if let Some(binding) =
         resolve_binding_for_shortcut(key_text, ctrl, shift, alt, &host_state.app.settings.keymap)
-    else {
-        return false;
-    };
+    {
+        let mut actions = Vec::new();
+        host_state.app.collect_binding_action(binding, &mut actions);
+        for action in actions {
+            host_state.queue_action(action);
+        }
 
-    let mut actions = Vec::new();
-    host_state.app.collect_binding_action(binding, &mut actions);
-    for action in actions {
+        if host_state.app.ui.menu.has_open_surface() {
+            host_state.queue_action(Action::DismissMenuSurfaces);
+        }
+        return true;
+    }
+
+    if let Some(action) = resolve_menu_launcher_shortcut(key_text, ctrl, shift, alt) {
         host_state.queue_action(action);
+        return true;
     }
 
-    if host_state.app.ui.menu.has_open_surface() {
-        host_state.queue_action(Action::DismissMenuSurfaces);
-    }
-
-    true
+    false
 }
 
 fn resolve_binding_for_shortcut(
@@ -198,9 +203,39 @@ fn parse_digit_key(character: char) -> Option<SerializableKey> {
     }
 }
 
+fn resolve_menu_launcher_shortcut(
+    key_text: &str,
+    ctrl: bool,
+    shift: bool,
+    alt: bool,
+) -> Option<Action> {
+    if ctrl || shift || !alt {
+        return None;
+    }
+
+    let normalized = key_text.trim();
+    if normalized.len() != 1 {
+        return None;
+    }
+
+    let key = normalized.chars().next()?.to_ascii_uppercase();
+    match key {
+        'F' => Some(Action::ToggleMenuDropdown(MenuDropdownKind::File)),
+        'E' => Some(Action::ToggleMenuDropdown(MenuDropdownKind::Edit)),
+        'V' => Some(Action::ToggleMenuDropdown(MenuDropdownKind::View)),
+        'S' => Some(Action::ToggleSettingsCard),
+        'H' => Some(Action::ToggleMenuDropdown(MenuDropdownKind::Help)),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{parse_serializable_key, resolve_binding_for_shortcut};
+    use super::{
+        parse_serializable_key, resolve_binding_for_shortcut, resolve_menu_launcher_shortcut,
+    };
+    use crate::app::actions::Action;
+    use crate::app::state::MenuDropdownKind;
     use crate::keymap::{ActionBinding, KeymapConfig, SerializableKey};
 
     #[test]
@@ -241,5 +276,28 @@ mod tests {
             resolve_binding_for_shortcut("UnknownKey", false, false, false, &keymap),
             None
         );
+    }
+
+    #[test]
+    fn resolve_menu_launcher_shortcut_maps_alt_letter_combos() {
+        assert!(matches!(
+            resolve_menu_launcher_shortcut("f", false, false, true),
+            Some(Action::ToggleMenuDropdown(MenuDropdownKind::File))
+        ));
+        assert!(matches!(
+            resolve_menu_launcher_shortcut("S", false, false, true),
+            Some(Action::ToggleSettingsCard)
+        ));
+        assert!(matches!(
+            resolve_menu_launcher_shortcut("h", false, false, true),
+            Some(Action::ToggleMenuDropdown(MenuDropdownKind::Help))
+        ));
+    }
+
+    #[test]
+    fn resolve_menu_launcher_shortcut_ignores_non_alt_or_modified_combos() {
+        assert!(resolve_menu_launcher_shortcut("f", false, false, false).is_none());
+        assert!(resolve_menu_launcher_shortcut("f", true, false, true).is_none());
+        assert!(resolve_menu_launcher_shortcut("F10", false, false, true).is_none());
     }
 }

@@ -94,6 +94,14 @@ export component MenuDropdown inherits Rectangle {
                 root.navigate(MenuNavigationAction.select-next);
                 return accept;
             }
+            if event.text == Key.LeftArrow {
+                root.navigate(MenuNavigationAction.select-previous-menu);
+                return accept;
+            }
+            if event.text == Key.RightArrow {
+                root.navigate(MenuNavigationAction.select-next-menu);
+                return accept;
+            }
             if event.text == Key.Return {
                 root.navigate(MenuNavigationAction.activate-selected);
                 return accept;

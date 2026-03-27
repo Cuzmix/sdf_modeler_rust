@@ -100,6 +100,12 @@ fn handle_menu_navigation_action(
             let previous = step_enabled_index(&items, current_index, false);
             host_state.queue_action(Action::SetMenuHighlightedIndex(previous));
         }
+        MenuNavigationAction::SelectNextMenu => {
+            host_state.queue_action(Action::OpenMenuDropdown(step_menu_kind(kind, true)));
+        }
+        MenuNavigationAction::SelectPreviousMenu => {
+            host_state.queue_action(Action::OpenMenuDropdown(step_menu_kind(kind, false)));
+        }
         MenuNavigationAction::ActivateSelected => {
             if let Some(command) = active_enabled_command(&items, current_index) {
                 dispatch_menu_command(host_state, map_menu_command_kind(command));
@@ -296,11 +302,23 @@ fn active_enabled_command(
     items.get(active_index).map(|item| item.command)
 }
 
+fn step_menu_kind(kind: MenuDropdownKind, forward: bool) -> MenuDropdownKind {
+    const ORDER: [MenuDropdownKind; 4] = [
+        MenuDropdownKind::File,
+        MenuDropdownKind::Edit,
+        MenuDropdownKind::View,
+        MenuDropdownKind::Help,
+    ];
+    let current_index = ORDER.iter().position(|candidate| *candidate == kind).unwrap_or(0);
+    let offset = if forward { 1 } else { ORDER.len() - 1 };
+    ORDER[(current_index + offset) % ORDER.len()]
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         active_enabled_command, map_menu_command, map_menu_command_kind, menu_dropdown_kind,
-        step_enabled_index, MenuCommandDispatch,
+        step_enabled_index, step_menu_kind, MenuCommandDispatch,
     };
     use crate::app::actions::Action;
     use crate::app::frontend_models::MenuCommandKind;
@@ -409,6 +427,22 @@ mod tests {
         assert_eq!(
             active_enabled_command(&items, Some(2)),
             Some(MenuCommandKind::Copy)
+        );
+    }
+
+    #[test]
+    fn step_menu_kind_wraps_in_both_directions() {
+        assert_eq!(
+            step_menu_kind(MenuDropdownKind::File, false),
+            MenuDropdownKind::Help
+        );
+        assert_eq!(
+            step_menu_kind(MenuDropdownKind::Help, true),
+            MenuDropdownKind::File
+        );
+        assert_eq!(
+            step_menu_kind(MenuDropdownKind::Edit, true),
+            MenuDropdownKind::View
         );
     }
 }
