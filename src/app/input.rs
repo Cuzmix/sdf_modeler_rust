@@ -39,6 +39,15 @@ impl SdfApp {
         }
     }
 
+    /// Collect actions for a single resolved keyboard binding.
+    pub(super) fn collect_binding_action(
+        &mut self,
+        binding: ActionBinding,
+        actions: &mut ActionSink,
+    ) {
+        self.dispatch_binding(binding, actions);
+    }
+
     /// Map an ActionBinding to the corresponding app action or direct state mutation.
     fn dispatch_binding(&mut self, binding: ActionBinding, actions: &mut ActionSink) {
         match binding {

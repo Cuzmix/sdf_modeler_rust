@@ -7,6 +7,7 @@ use super::host_state::SlintHostState;
 use super::SlintHostWindow;
 
 mod context;
+mod keyboard;
 mod inspector;
 mod menu_strip;
 mod mutation;
@@ -25,6 +26,7 @@ pub(super) fn install_callbacks(
     active_timer: &Rc<Timer>,
 ) {
     let context = context::CallbackContext::new(window, host, active_timer);
+    keyboard::install(window, &context);
     menu_strip::install(window, &context);
     panels::install(window, &context);
     scene::install(window, &context);

@@ -52,6 +52,8 @@ import { ToolPalette } from "tool_palette.slint";
 import { ViewportPanel } from "viewport_panel.slint";
 
 export component SlintHostWindow inherits Window {
+    forward-focus: keyboard_shortcuts_scope;
+
     in property <string> window_title;
     title: root.window_title;
 
@@ -91,6 +93,7 @@ export component SlintHostWindow inherits Window {
     callback menu_launcher_action(kind: MenuKindView);
     callback menu_command_action(action: MenuCommandAction);
     callback menu_navigation_action(action: MenuNavigationAction);
+    callback keyboard_shortcut(text: string, ctrl: bool, shift: bool, alt: bool) -> bool;
     callback settings_card_action(action: SettingsCardAction, value: float);
     callback dismiss_menu_surfaces();
     callback tool_palette_action(action: ToolPaletteAction);
@@ -123,6 +126,22 @@ export component SlintHostWindow inherits Window {
         height: parent.height;
         background: AppTheme.viewport_background;
         clip: true;
+
+        keyboard_shortcuts_scope := FocusScope {
+            width: parent.width;
+            height: parent.height;
+            key-pressed(event) => {
+                if root.keyboard_shortcut(
+                    event.text,
+                    event.modifiers.control,
+                    event.modifiers.shift,
+                    event.modifiers.alt
+                ) {
+                    return accept;
+                }
+                reject
+            }
+        }
 
         private property <length> panel_rail_width: 144px;
         private property <length> panel_margin: 20px;
