@@ -275,6 +275,282 @@ impl ExpertPanelRegistry {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum PanelKind {
+    ObjectProperties,
+    RenderSettings,
+}
+
+impl PanelKind {
+    pub const ALL: [Self; 2] = [Self::ObjectProperties, Self::RenderSettings];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::ObjectProperties => "Object Properties",
+            Self::RenderSettings => "Render Settings",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum PanelBarId {
+    PrimaryRight,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PanelBarOrientation {
+    Vertical,
+    Horizontal,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PanelBarEdge {
+    Left,
+    Right,
+    Top,
+    Bottom,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PanelPresentation {
+    TransientSheet,
+    PinnedDocked,
+    PinnedFloating,
+}
+
+pub type PanelInstanceId = u64;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PanelBarState {
+    pub id: PanelBarId,
+    pub edge: PanelBarEdge,
+    pub orientation: PanelBarOrientation,
+    pub items: Vec<PanelKind>,
+    pub active_transient: Option<PanelKind>,
+}
+
+impl PanelBarState {
+    pub fn contains_kind(&self, kind: PanelKind) -> bool {
+        self.items.contains(&kind)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct PanelInstanceState {
+    pub id: PanelInstanceId,
+    pub kind: PanelKind,
+    pub presentation: PanelPresentation,
+    pub pinned: bool,
+    pub anchor_bar: PanelBarId,
+    pub visible: bool,
+    pub collapsed: bool,
+    pub rect: Option<FloatingPanelBounds>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PanelSheetAnchor {
+    Left,
+    Right,
+    Above,
+    Below,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct PanelFrameworkState {
+    pub bars: Vec<PanelBarState>,
+    pub pinned_instances: Vec<PanelInstanceState>,
+    pub focus_order: Vec<PanelInstanceId>,
+    pub next_instance_id: PanelInstanceId,
+}
+
+impl Default for PanelFrameworkState {
+    fn default() -> Self {
+        Self {
+            bars: vec![PanelBarState {
+                id: PanelBarId::PrimaryRight,
+                edge: PanelBarEdge::Right,
+                orientation: PanelBarOrientation::Vertical,
+                items: PanelKind::ALL.to_vec(),
+                active_transient: None,
+            }],
+            pinned_instances: Vec::new(),
+            focus_order: Vec::new(),
+            next_instance_id: 1,
+        }
+    }
+}
+
+impl PanelFrameworkState {
+    pub fn bar(&self, id: PanelBarId) -> Option<&PanelBarState> {
+        self.bars.iter().find(|bar| bar.id == id)
+    }
+
+    pub fn bar_mut(&mut self, id: PanelBarId) -> Option<&mut PanelBarState> {
+        self.bars.iter_mut().find(|bar| bar.id == id)
+    }
+
+    pub fn pinned_instance(&self, kind: PanelKind) -> Option<&PanelInstanceState> {
+        self.pinned_instances
+            .iter()
+            .find(|instance| instance.kind == kind && instance.visible)
+    }
+
+    pub fn pinned_instance_mut(&mut self, kind: PanelKind) -> Option<&mut PanelInstanceState> {
+        self.pinned_instances
+            .iter_mut()
+            .find(|instance| instance.kind == kind && instance.visible)
+    }
+
+    pub fn active_transient(&self, bar_id: PanelBarId) -> Option<PanelKind> {
+        self.bar(bar_id).and_then(|bar| bar.active_transient)
+    }
+
+    pub fn dismiss_transient_panels(&mut self) {
+        for bar in &mut self.bars {
+            bar.active_transient = None;
+        }
+    }
+
+    pub fn close_panel(&mut self, kind: PanelKind) {
+        for bar in &mut self.bars {
+            if bar.active_transient == Some(kind) {
+                bar.active_transient = None;
+            }
+        }
+
+        if let Some(index) = self
+            .pinned_instances
+            .iter()
+            .position(|instance| instance.kind == kind)
+        {
+            let id = self.pinned_instances[index].id;
+            self.pinned_instances.remove(index);
+            self.focus_order.retain(|focused_id| *focused_id != id);
+        }
+    }
+
+    pub fn focus_panel(&mut self, kind: PanelKind) {
+        if let Some(instance_id) = self.pinned_instance(kind).map(|instance| instance.id) {
+            self.focus_instance(instance_id);
+        }
+    }
+
+    pub fn open_panel(&mut self, kind: PanelKind, bar_id: PanelBarId) {
+        if self.pinned_instance(kind).is_some() {
+            self.focus_panel(kind);
+            return;
+        }
+
+        if let Some(bar) = self.bar_mut(bar_id) {
+            bar.active_transient = Some(kind);
+        }
+    }
+
+    pub fn toggle_panel(&mut self, kind: PanelKind, bar_id: PanelBarId) {
+        if self.pinned_instance(kind).is_some() {
+            self.focus_panel(kind);
+            return;
+        }
+
+        let current = self.active_transient(bar_id);
+        if current == Some(kind) {
+            if let Some(bar) = self.bar_mut(bar_id) {
+                bar.active_transient = None;
+            }
+        } else {
+            self.open_panel(kind, bar_id);
+        }
+    }
+
+    pub fn pin_panel(&mut self, kind: PanelKind) {
+        if self.pinned_instance(kind).is_some() {
+            self.focus_panel(kind);
+            self.dismiss_kind_from_transient(kind);
+            return;
+        }
+
+        let anchor_bar = self
+            .bars
+            .iter()
+            .find(|bar| bar.active_transient == Some(kind))
+            .map(|bar| bar.id)
+            .or_else(|| {
+                self.bars
+                    .iter()
+                    .find(|bar| bar.contains_kind(kind))
+                    .map(|bar| bar.id)
+            })
+            .unwrap_or(PanelBarId::PrimaryRight);
+
+        self.dismiss_kind_from_transient(kind);
+
+        let instance_id = self.next_instance_id;
+        self.next_instance_id = self.next_instance_id.wrapping_add(1);
+        self.pinned_instances.push(PanelInstanceState {
+            id: instance_id,
+            kind,
+            presentation: PanelPresentation::PinnedDocked,
+            pinned: true,
+            anchor_bar,
+            visible: true,
+            collapsed: false,
+            rect: None,
+        });
+        self.focus_instance(instance_id);
+    }
+
+    pub fn unpin_panel(&mut self, kind: PanelKind) {
+        let Some(index) = self
+            .pinned_instances
+            .iter()
+            .position(|instance| instance.kind == kind)
+        else {
+            return;
+        };
+
+        let instance = self.pinned_instances.remove(index);
+        self.focus_order
+            .retain(|focused_id| *focused_id != instance.id);
+        self.open_panel(kind, instance.anchor_bar);
+    }
+
+    pub fn toggle_pinned_collapsed(&mut self, kind: PanelKind) {
+        if let Some(instance) = self.pinned_instance_mut(kind) {
+            instance.collapsed = !instance.collapsed;
+            let instance_id = instance.id;
+            let _ = instance;
+            self.focus_instance(instance_id);
+        }
+    }
+
+    pub fn sheet_anchor_for_bar(&self, bar_id: PanelBarId) -> PanelSheetAnchor {
+        match self
+            .bar(bar_id)
+            .map(|bar| bar.edge)
+            .unwrap_or(PanelBarEdge::Right)
+        {
+            PanelBarEdge::Left => PanelSheetAnchor::Right,
+            PanelBarEdge::Right => PanelSheetAnchor::Left,
+            PanelBarEdge::Top => PanelSheetAnchor::Below,
+            PanelBarEdge::Bottom => PanelSheetAnchor::Above,
+        }
+    }
+
+    fn dismiss_kind_from_transient(&mut self, kind: PanelKind) {
+        for bar in &mut self.bars {
+            if bar.active_transient == Some(kind) {
+                bar.active_transient = None;
+            }
+        }
+    }
+
+    fn focus_instance(&mut self, instance_id: PanelInstanceId) {
+        self.focus_order
+            .retain(|focused_id| *focused_id != instance_id);
+        self.focus_order.push(instance_id);
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InteractionMode {
     Select,
@@ -660,6 +936,7 @@ pub struct UiState {
     pub primary_shell: PrimaryShellState,
     pub workspace: WorkspaceUiState,
     pub expert_panels: ExpertPanelRegistry,
+    pub panel_framework: PanelFrameworkState,
     pub scene_panel: ScenePanelUiState,
     pub selection: SceneSelectionState,
     pub scene_graph_view: SceneGraphViewState,
@@ -990,5 +1267,94 @@ mod tests {
 
         assert!(state.needs_initial_rebuild);
         assert!(state.pending_center_node.is_none());
+    }
+
+    #[test]
+    fn panel_framework_open_and_swap_transient_panel() {
+        let mut state = PanelFrameworkState::default();
+
+        state.open_panel(PanelKind::ObjectProperties, PanelBarId::PrimaryRight);
+        assert_eq!(
+            state.active_transient(PanelBarId::PrimaryRight),
+            Some(PanelKind::ObjectProperties)
+        );
+
+        state.open_panel(PanelKind::RenderSettings, PanelBarId::PrimaryRight);
+        assert_eq!(
+            state.active_transient(PanelBarId::PrimaryRight),
+            Some(PanelKind::RenderSettings)
+        );
+        assert!(state.pinned_instances.is_empty());
+    }
+
+    #[test]
+    fn panel_framework_toggle_closes_active_transient_panel() {
+        let mut state = PanelFrameworkState::default();
+        state.open_panel(PanelKind::ObjectProperties, PanelBarId::PrimaryRight);
+
+        state.toggle_panel(PanelKind::ObjectProperties, PanelBarId::PrimaryRight);
+
+        assert_eq!(state.active_transient(PanelBarId::PrimaryRight), None);
+    }
+
+    #[test]
+    fn panel_framework_pin_converts_transient_to_persistent_instance() {
+        let mut state = PanelFrameworkState::default();
+        state.open_panel(PanelKind::ObjectProperties, PanelBarId::PrimaryRight);
+
+        state.pin_panel(PanelKind::ObjectProperties);
+
+        assert_eq!(state.active_transient(PanelBarId::PrimaryRight), None);
+        let instance = state
+            .pinned_instance(PanelKind::ObjectProperties)
+            .expect("pinned object properties panel");
+        assert!(instance.pinned);
+        assert_eq!(instance.anchor_bar, PanelBarId::PrimaryRight);
+        assert_eq!(instance.presentation, PanelPresentation::PinnedDocked);
+    }
+
+    #[test]
+    fn panel_framework_reopening_pinned_panel_focuses_existing_instance() {
+        let mut state = PanelFrameworkState::default();
+        state.open_panel(PanelKind::RenderSettings, PanelBarId::PrimaryRight);
+        state.pin_panel(PanelKind::RenderSettings);
+        let instance_id = state
+            .pinned_instance(PanelKind::RenderSettings)
+            .expect("pinned render settings")
+            .id;
+
+        state.toggle_panel(PanelKind::RenderSettings, PanelBarId::PrimaryRight);
+
+        assert_eq!(state.pinned_instances.len(), 1);
+        assert_eq!(
+            state
+                .pinned_instance(PanelKind::RenderSettings)
+                .expect("render settings still pinned")
+                .id,
+            instance_id
+        );
+        assert_eq!(state.focus_order.last().copied(), Some(instance_id));
+    }
+
+    #[test]
+    fn panel_framework_edge_maps_to_sheet_anchor() {
+        let mut state = PanelFrameworkState::default();
+        state
+            .bar_mut(PanelBarId::PrimaryRight)
+            .expect("primary bar")
+            .edge = PanelBarEdge::Top;
+        assert_eq!(
+            state.sheet_anchor_for_bar(PanelBarId::PrimaryRight),
+            PanelSheetAnchor::Below
+        );
+
+        state
+            .bar_mut(PanelBarId::PrimaryRight)
+            .expect("primary bar")
+            .edge = PanelBarEdge::Left;
+        assert_eq!(
+            state.sheet_anchor_for_bar(PanelBarId::PrimaryRight),
+            PanelSheetAnchor::Right
+        );
     }
 }

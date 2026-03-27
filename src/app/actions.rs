@@ -3,7 +3,7 @@ use crate::graph::scene::{CsgOp, LightType, ModifierKind, NodeId, SdfPrimitive};
 use crate::sculpt::ActiveTool;
 use crate::settings::SelectionBehaviorSettings;
 
-use super::state::{ExpertPanelKind, InteractionMode, ShellPanelKind};
+use super::state::{ExpertPanelKind, InteractionMode, PanelBarId, PanelKind, ShellPanelKind};
 use super::ui_geometry::FloatingPanelBounds;
 use super::BakeRequest;
 
@@ -221,6 +221,14 @@ pub enum Action {
     HideShellPanel(ShellPanelKind),
     ResetPrimaryShellLayout,
     ToggleExpertPanel(ExpertPanelKind),
+    OpenPanel(PanelKind, PanelBarId),
+    ClosePanel(PanelKind),
+    TogglePanel(PanelKind, PanelBarId),
+    PinPanel(PanelKind),
+    UnpinPanel(PanelKind),
+    FocusPanel(PanelKind),
+    TogglePinnedPanelCollapsed(PanelKind),
+    DismissTransientPanels,
     RemoveAttachedSculpt {
         host: NodeId,
     },

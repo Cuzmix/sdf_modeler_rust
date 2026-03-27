@@ -1,0 +1,76 @@
+import { Button, HorizontalBox, ScrollView, VerticalBox } from "std-widgets.slint";
+import { AppTheme } from "theme.slint";
+import { PanelHeaderAction } from "view_models.slint";
+
+export component PanelSheet inherits Rectangle {
+    in property <string> title;
+    in property <bool> pinned;
+    in property <bool> collapsed;
+    in property <length> expanded_height: 420px;
+
+    callback header_action(action: PanelHeaderAction);
+
+    private property <length> header_height: 36px;
+    private property <length> divider_y: AppTheme.overlay_panel_padding + header_height + AppTheme.section_spacing;
+    private property <length> body_y: divider_y + 1px + AppTheme.section_spacing;
+
+    clip: true;
+    border-radius: AppTheme.overlay_panel_radius;
+    border-width: 1px;
+    border-color: AppTheme.overlay_panel_border;
+    background: AppTheme.overlay_panel_background;
+    height: collapsed ? header_height + AppTheme.overlay_panel_padding * 2 : expanded_height;
+
+    header := HorizontalBox {
+        x: AppTheme.overlay_panel_padding;
+        y: AppTheme.overlay_panel_padding;
+        width: parent.width - AppTheme.overlay_panel_padding * 2;
+        height: root.header_height;
+        spacing: AppTheme.section_spacing;
+
+        Text {
+            vertical-alignment: center;
+            text: root.title;
+            color: AppTheme.overlay_button_text;
+            font-size: 16px;
+        }
+
+        Rectangle { horizontal-stretch: 1; }
+
+        Button {
+            text: root.collapsed ? "Expand" : "Collapse";
+            clicked => { root.header_action(PanelHeaderAction.toggle-collapsed); }
+        }
+        Button {
+            text: root.pinned ? "Unpin" : "Pin";
+            clicked => {
+                root.header_action(root.pinned ? PanelHeaderAction.unpin : PanelHeaderAction.pin);
+            }
+        }
+        Button {
+            text: "Close";
+            clicked => { root.header_action(PanelHeaderAction.close); }
+        }
+    }
+
+    Rectangle {
+        x: AppTheme.overlay_panel_padding;
+        y: root.divider_y;
+        width: parent.width - AppTheme.overlay_panel_padding * 2;
+        height: 1px;
+        background: AppTheme.overlay_divider;
+    }
+
+    ScrollView {
+        visible: !root.collapsed;
+        x: AppTheme.overlay_panel_padding;
+        y: root.body_y;
+        width: parent.width - AppTheme.overlay_panel_padding * 2;
+        height: root.collapsed ? 0px : parent.height - root.body_y - AppTheme.overlay_panel_padding;
+
+        VerticalBox {
+            spacing: AppTheme.section_spacing;
+            @children
+        }
+    }
+}

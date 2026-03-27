@@ -35,6 +35,59 @@ export struct ToolPaletteState {
     brush_tools: [ToolPaletteButtonView],
 }
 
+export enum PanelKindView {
+    object-properties,
+    render-settings,
+}
+
+export enum PanelOrientationView {
+    vertical,
+    horizontal,
+}
+
+export enum PanelEdgeView {
+    left,
+    right,
+    top,
+    bottom,
+}
+
+export enum PanelAnchorView {
+    left-of-bar,
+    right-of-bar,
+    above-bar,
+    below-bar,
+}
+
+export struct PanelLauncherItemView {
+    label: string,
+    active: bool,
+    pinned: bool,
+    kind: PanelKindView,
+}
+
+export struct PanelBarViewState {
+    visible: bool,
+    edge: PanelEdgeView,
+    orientation: PanelOrientationView,
+    items: [PanelLauncherItemView],
+}
+
+export struct PanelSheetViewState {
+    visible: bool,
+    title: string,
+    pinned: bool,
+    collapsed: bool,
+    kind: PanelKindView,
+    anchor: PanelAnchorView,
+}
+
+export struct PanelFrameworkViewState {
+    bar: PanelBarViewState,
+    transient_panel: PanelSheetViewState,
+    pinned_panels: [PanelSheetViewState],
+}
+
 export struct ScenePanelState {
     selection_summary: string,
     scene_filter: string,

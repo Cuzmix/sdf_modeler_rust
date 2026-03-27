@@ -1334,6 +1334,30 @@ impl SdfApp {
                 Action::ToggleExpertPanel(panel) => {
                     self.toggle_expert_panel(panel);
                 }
+                Action::OpenPanel(kind, bar_id) => {
+                    self.ui.panel_framework.open_panel(kind, bar_id);
+                }
+                Action::ClosePanel(kind) => {
+                    self.ui.panel_framework.close_panel(kind);
+                }
+                Action::TogglePanel(kind, bar_id) => {
+                    self.ui.panel_framework.toggle_panel(kind, bar_id);
+                }
+                Action::PinPanel(kind) => {
+                    self.ui.panel_framework.pin_panel(kind);
+                }
+                Action::UnpinPanel(kind) => {
+                    self.ui.panel_framework.unpin_panel(kind);
+                }
+                Action::FocusPanel(kind) => {
+                    self.ui.panel_framework.focus_panel(kind);
+                }
+                Action::TogglePinnedPanelCollapsed(kind) => {
+                    self.ui.panel_framework.toggle_pinned_collapsed(kind);
+                }
+                Action::DismissTransientPanels => {
+                    self.ui.panel_framework.dismiss_transient_panels();
+                }
                 Action::RemoveAttachedSculpt { host } => {
                     if let Some(removed_sculpt_id) = self.doc.scene.remove_attached_sculpt(host) {
                         if self.doc.sculpt_state.active_node() == Some(removed_sculpt_id) {
@@ -1784,6 +1808,7 @@ mod tests {
             primary_shell: PrimaryShellState::default(),
             workspace: WorkspaceUiState::default(),
             expert_panels: crate::app::state::ExpertPanelRegistry::default(),
+            panel_framework: crate::app::state::PanelFrameworkState::default(),
             scene_panel: ScenePanelUiState::default(),
             selection: SceneSelectionState::default(),
             scene_graph_view: SceneGraphViewState::default(),

@@ -1,0 +1,91 @@
+import { AppTheme } from "theme.slint";
+import { PanelBarViewState, PanelKindView, PanelLauncherItemView, PanelOrientationView } from "view_models.slint";
+
+component PanelLauncherButton inherits Rectangle {
+    in property <PanelLauncherItemView> item;
+
+    callback activated(kind: PanelKindView);
+
+    height: 44px;
+    border-radius: AppTheme.overlay_button_radius;
+    border-width: 1px;
+    border-color: item.active ? AppTheme.overlay_button_active_border : AppTheme.overlay_button_border;
+    background: item.active ? AppTheme.overlay_button_active_background : AppTheme.overlay_button_background;
+
+    Text {
+        x: 14px;
+        y: 0px;
+        width: parent.width - 28px;
+        height: parent.height;
+        vertical-alignment: center;
+        text: item.label;
+        color: AppTheme.overlay_button_text;
+        font-size: 14px;
+    }
+
+    if item.pinned : Rectangle {
+        width: 7px;
+        height: 7px;
+        x: parent.width - self.width - 12px;
+        y: (parent.height - self.height) / 2;
+        border-radius: 4px;
+        background: AppTheme.overlay_button_active_border;
+    }
+
+    TouchArea {
+        width: parent.width;
+        height: parent.height;
+        clicked => {
+            root.activated(root.item.kind);
+        }
+    }
+}
+
+export component PanelBar inherits Rectangle {
+    in property <PanelBarViewState> state;
+
+    callback toggle_panel(kind: PanelKindView);
+
+    private property <int> item_count: state.items.length;
+
+    visible: state.visible;
+    border-radius: AppTheme.overlay_panel_radius;
+    border-width: 1px;
+    border-color: AppTheme.overlay_panel_border;
+    background: AppTheme.overlay_panel_background;
+    width: state.orientation == PanelOrientationView.vertical ? 156px : 380px;
+    height: state.orientation == PanelOrientationView.vertical
+        ? AppTheme.overlay_panel_padding * 2 + item_count * 44px + (item_count > 0 ? (item_count - 1) * AppTheme.overlay_tool_spacing : 0px)
+        : 44px + AppTheme.overlay_panel_padding * 2;
+
+    vertical_content := VerticalLayout {
+        visible: root.state.orientation == PanelOrientationView.vertical;
+        x: AppTheme.overlay_panel_padding;
+        y: AppTheme.overlay_panel_padding;
+        width: parent.width - AppTheme.overlay_panel_padding * 2;
+        spacing: AppTheme.overlay_tool_spacing;
+
+        for item in root.state.items : PanelLauncherButton {
+            item: item;
+            activated(kind) => {
+                root.toggle_panel(kind);
+            }
+        }
+    }
+
+    horizontal_content := HorizontalLayout {
+        visible: root.state.orientation == PanelOrientationView.horizontal;
+        x: AppTheme.overlay_panel_padding;
+        y: AppTheme.overlay_panel_padding;
+        width: parent.width - AppTheme.overlay_panel_padding * 2;
+        spacing: AppTheme.overlay_tool_spacing;
+
+        for item in root.state.items : PanelLauncherButton {
+            width: 160px;
+            item: item;
+            activated(kind) => {
+                root.toggle_panel(kind);
+            }
+        }
+    }
+}

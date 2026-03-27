@@ -2,7 +2,8 @@ use std::path::Path;
 
 use crate::app::reference_images::ReferenceImageStore;
 use crate::app::state::{
-    ExpertPanelKind, ExpertPanelRegistry, InteractionMode, PrimaryShellState, ScenePanelUiState,
+    ExpertPanelKind, ExpertPanelRegistry, InteractionMode, PanelBarEdge, PanelBarOrientation,
+    PanelFrameworkState, PanelKind, PanelSheetAnchor, PrimaryShellState, ScenePanelUiState,
     SceneSelectionState, WorkspaceRoute, WorkspaceUiState,
 };
 use crate::gizmo::{GizmoMode, GizmoSpace};
@@ -200,6 +201,44 @@ pub struct ToolPaletteModel {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PanelLauncherItemModel {
+    pub kind: PanelKind,
+    pub label: String,
+    pub active: bool,
+    pub pinned: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PanelBarModel {
+    pub visible: bool,
+    pub edge: PanelBarEdge,
+    pub orientation: PanelBarOrientation,
+    pub items: Vec<PanelLauncherItemModel>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ActivePanelContentModel {
+    pub kind: PanelKind,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PanelSheetModel {
+    pub kind: PanelKind,
+    pub title: String,
+    pub pinned: bool,
+    pub collapsed: bool,
+    pub anchor: PanelSheetAnchor,
+    pub content: ActivePanelContentModel,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PanelFrameworkModel {
+    pub bar: PanelBarModel,
+    pub transient_panel: Option<PanelSheetModel>,
+    pub pinned_panels: Vec<PanelSheetModel>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ViewportStatusModel {
     pub interaction_label: String,
     pub transform_label: String,
@@ -235,6 +274,7 @@ pub struct WorkspacePanelModel {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ShellSnapshot {
     pub tool_palette: ToolPaletteModel,
+    pub panel_framework: PanelFrameworkModel,
     pub scene_panel: ScenePanelModel,
     pub inspector: InspectorModel,
     pub utility: UtilityModel,
@@ -247,6 +287,7 @@ pub struct ShellSnapshotInputs<'a> {
     pub selection: &'a SceneSelectionState,
     pub scene_panel_ui: &'a ScenePanelUiState,
     pub primary_shell: &'a PrimaryShellState,
+    pub panel_framework: &'a PanelFrameworkState,
     pub workspace: &'a WorkspaceUiState,
     pub history: &'a History,
     pub reference_images: &'a ReferenceImageStore,
@@ -261,6 +302,7 @@ pub struct ShellSnapshotInputs<'a> {
 pub fn build_shell_snapshot(inputs: ShellSnapshotInputs<'_>) -> ShellSnapshot {
     ShellSnapshot {
         tool_palette: build_tool_palette_model(inputs.primary_shell),
+        panel_framework: build_panel_framework_model(inputs.panel_framework),
         scene_panel: build_scene_panel_model(inputs.scene, inputs.selection, inputs.scene_panel_ui),
         inspector: build_inspector_model(
             inputs.scene,
@@ -312,6 +354,80 @@ pub fn build_tool_palette_model(primary_shell: &PrimaryShellState) -> ToolPalett
                 active: active_brush == Some(brush),
             })
             .collect(),
+    }
+}
+
+pub fn build_panel_framework_model(panel_framework: &PanelFrameworkState) -> PanelFrameworkModel {
+    let primary_bar = panel_framework
+        .bar(crate::app::state::PanelBarId::PrimaryRight)
+        .or_else(|| panel_framework.bars.first());
+    let default_bar = crate::app::state::PanelBarState {
+        id: crate::app::state::PanelBarId::PrimaryRight,
+        edge: PanelBarEdge::Right,
+        orientation: PanelBarOrientation::Vertical,
+        items: PanelKind::ALL.to_vec(),
+        active_transient: None,
+    };
+    let bar = primary_bar.unwrap_or(&default_bar);
+    let transient_kind = bar.active_transient;
+
+    let items = bar
+        .items
+        .iter()
+        .copied()
+        .map(|kind| PanelLauncherItemModel {
+            kind,
+            label: kind.label().to_string(),
+            active: transient_kind == Some(kind) || panel_framework.pinned_instance(kind).is_some(),
+            pinned: panel_framework.pinned_instance(kind).is_some(),
+        })
+        .collect::<Vec<_>>();
+
+    let transient_panel = transient_kind.map(|kind| PanelSheetModel {
+        kind,
+        title: kind.label().to_string(),
+        pinned: false,
+        collapsed: false,
+        anchor: panel_framework.sheet_anchor_for_bar(bar.id),
+        content: ActivePanelContentModel { kind },
+    });
+
+    let mut pinned_instances = panel_framework
+        .pinned_instances
+        .iter()
+        .filter(|instance| instance.visible)
+        .collect::<Vec<_>>();
+    pinned_instances.sort_by_key(|instance| {
+        panel_framework
+            .focus_order
+            .iter()
+            .position(|focused_id| *focused_id == instance.id)
+            .unwrap_or(usize::MAX)
+    });
+
+    let pinned_panels = pinned_instances
+        .into_iter()
+        .map(|instance| PanelSheetModel {
+            kind: instance.kind,
+            title: instance.kind.label().to_string(),
+            pinned: true,
+            collapsed: instance.collapsed,
+            anchor: panel_framework.sheet_anchor_for_bar(instance.anchor_bar),
+            content: ActivePanelContentModel {
+                kind: instance.kind,
+            },
+        })
+        .collect();
+
+    PanelFrameworkModel {
+        bar: PanelBarModel {
+            visible: true,
+            edge: bar.edge,
+            orientation: bar.orientation,
+            items,
+        },
+        transient_panel,
+        pinned_panels,
     }
 }
 
@@ -1443,6 +1559,7 @@ fn format_child(scene: &Scene, label: &str, child: Option<NodeId>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::state::{PanelBarId, PanelFrameworkState, PanelKind};
     use crate::graph::scene::SdfPrimitive;
 
     #[test]
@@ -1524,5 +1641,61 @@ mod tests {
             .map(|tool| tool.label.as_str())
             .collect::<Vec<_>>();
         assert_eq!(active_labels, vec!["Flatten"]);
+    }
+
+    #[test]
+    fn panel_framework_model_marks_open_transient_panel_active() {
+        let mut state = PanelFrameworkState::default();
+        state.open_panel(PanelKind::ObjectProperties, PanelBarId::PrimaryRight);
+
+        let model = build_panel_framework_model(&state);
+
+        assert_eq!(
+            model.transient_panel.as_ref().map(|panel| panel.kind),
+            Some(PanelKind::ObjectProperties)
+        );
+        assert!(model
+            .bar
+            .items
+            .iter()
+            .any(|item| item.kind == PanelKind::ObjectProperties && item.active));
+    }
+
+    #[test]
+    fn panel_framework_model_marks_pinned_panel_without_duplication() {
+        let mut state = PanelFrameworkState::default();
+        state.open_panel(PanelKind::RenderSettings, PanelBarId::PrimaryRight);
+        state.pin_panel(PanelKind::RenderSettings);
+        state.toggle_panel(PanelKind::RenderSettings, PanelBarId::PrimaryRight);
+
+        let model = build_panel_framework_model(&state);
+
+        assert!(model.transient_panel.is_none());
+        assert_eq!(model.pinned_panels.len(), 1);
+        assert_eq!(model.pinned_panels[0].kind, PanelKind::RenderSettings);
+        assert!(model
+            .bar
+            .items
+            .iter()
+            .any(|item| item.kind == PanelKind::RenderSettings && item.pinned && item.active));
+    }
+
+    #[test]
+    fn inspector_model_keeps_no_selection_state_available() {
+        let model = build_inspector_model(
+            &Scene::new(),
+            &SceneSelectionState::default(),
+            &Settings::default(),
+            &SculptState::new_inactive(),
+            InteractionMode::Select,
+            &GizmoMode::Translate,
+            &GizmoSpace::Local,
+        );
+
+        assert_eq!(model.title, "No selection");
+        assert!(model
+            .property_lines
+            .iter()
+            .any(|line| line.contains("Click an object")));
     }
 }

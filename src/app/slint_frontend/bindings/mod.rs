@@ -1,5 +1,6 @@
 mod gizmo_overlay;
 mod inspector_panel;
+mod panel_framework;
 mod runtime_state;
 mod scene_panel;
 mod tool_palette;
@@ -16,6 +17,7 @@ use super::SlintHostWindow;
 pub(super) fn apply_shell_snapshot(window: &SlintHostWindow, snapshot: &ShellSnapshot) {
     window.set_top_bar_state(top_bar::build_top_bar_snapshot(window, snapshot));
     window.set_tool_palette_state(tool_palette::build_tool_palette_state(snapshot));
+    window.set_panel_framework_state(panel_framework::build_panel_framework_state(snapshot));
     window.set_scene_panel_state(scene_panel::build_scene_panel_state(snapshot));
     window.set_inspector_panel_state(inspector_panel::build_inspector_panel_state(snapshot));
     window.set_utility_panel_state(utility_panel::build_utility_panel_snapshot(

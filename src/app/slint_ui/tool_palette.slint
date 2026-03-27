@@ -6,7 +6,8 @@ component ToolPaletteButton inherits Rectangle {
 
     callback activated;
 
-    min-width: 70px;
+    min-width: 0px;
+    horizontal-stretch: 1;
     height: 42px;
     border-radius: AppTheme.overlay_button_radius;
     border-width: 1px;
@@ -42,12 +43,14 @@ export component ToolPalette inherits Rectangle {
     border-width: 1px;
     border-color: AppTheme.overlay_panel_border;
     background: AppTheme.overlay_panel_background;
-    width: content.preferred-width + AppTheme.overlay_panel_padding * 2;
-    height: content.preferred-height + AppTheme.overlay_panel_padding * 2;
+    width: 620px;
+    height: 42px + AppTheme.overlay_panel_padding * 2;
 
     content := HorizontalLayout {
         x: AppTheme.overlay_panel_padding;
         y: AppTheme.overlay_panel_padding;
+        width: parent.width - AppTheme.overlay_panel_padding * 2;
+        height: parent.height - AppTheme.overlay_panel_padding * 2;
         spacing: AppTheme.overlay_tool_spacing;
 
         ToolPaletteButton {
