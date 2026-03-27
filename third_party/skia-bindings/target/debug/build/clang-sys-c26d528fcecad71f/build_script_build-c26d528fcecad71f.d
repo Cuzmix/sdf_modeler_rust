@@ -1,0 +1,9 @@
+\\?\C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\third_party\skia-bindings\target\debug\build\clang-sys-c26d528fcecad71f\build_script_build-c26d528fcecad71f.d: C:\Users\Manny\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clang-sys-1.8.1\build.rs C:\Users\Manny\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clang-sys-1.8.1\build\macros.rs C:\Users\Manny\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clang-sys-1.8.1\build\common.rs C:\Users\Manny\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clang-sys-1.8.1\build\dynamic.rs C:\Users\Manny\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clang-sys-1.8.1\build\static.rs
+
+\\?\C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\third_party\skia-bindings\target\debug\build\clang-sys-c26d528fcecad71f\build_script_build-c26d528fcecad71f.exe: C:\Users\Manny\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clang-sys-1.8.1\build.rs C:\Users\Manny\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clang-sys-1.8.1\build\macros.rs C:\Users\Manny\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clang-sys-1.8.1\build\common.rs C:\Users\Manny\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clang-sys-1.8.1\build\dynamic.rs C:\Users\Manny\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clang-sys-1.8.1\build\static.rs
+
+C:\Users\Manny\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clang-sys-1.8.1\build.rs:
+C:\Users\Manny\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clang-sys-1.8.1\build\macros.rs:
+C:\Users\Manny\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clang-sys-1.8.1\build\common.rs:
+C:\Users\Manny\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clang-sys-1.8.1\build\dynamic.rs:
+C:\Users\Manny\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\clang-sys-1.8.1\build\static.rs:

@@ -1,0 +1,74 @@
+defines = -D_CRT_SECURE_NO_WARNINGS -D_HAS_EXCEPTIONS=0 -DWIN32_LEAN_AND_MEAN -DNOMINMAX -DNDEBUG -DSK_CODEC_DECODES_BMP -DSK_CODEC_DECODES_WBMP -DSK_ENABLE_PRECOMPILE -DSK_DISABLE_TRACING -DSK_GAMMA_APPLY_TO_A8 -DSK_ENABLE_AVX512_OPTS -DSKIA_IMPLEMENTATION=1 -DSK_SUPPORT_PDF -DSK_TYPEFACE_FACTORY_DIRECTWRITE -DSK_FONTMGR_DIRECTWRITE_AVAILABLE -DSK_FONTMGR_GDI_AVAILABLE -DSK_CODEC_DECODES_ICO -DSK_CODEC_DECODES_PNG -DSK_CODEC_DECODES_PNG_WITH_LIBPNG -DSK_CODEC_ENCODES_PNG -DSK_CODEC_ENCODES_PNG_WITH_LIBPNG
+include_dirs = -I../../../../../../../../.tools/skia -I../../../../../../../../.tools/skia/third_party/externals/zlib
+cflags = -Wno-attributes /bigobj /utf-8 -imsvc "C$:\Program$ Files$ (x86)\Microsoft$ Visual$ Studio\2019\BuildTools\VC/Tools/MSVC/14.29.30133/include" -imsvc "C$:/Program$ Files$ (x86)/Windows$ Kits/10/Include/10.0.22621.0/shared" -imsvc "C$:/Program$ Files$ (x86)/Windows$ Kits/10/Include/10.0.22621.0/ucrt" -imsvc "C$:/Program$ Files$ (x86)/Windows$ Kits/10/Include/10.0.22621.0/um" -imsvc "C$:/Program$ Files$ (x86)/Windows$ Kits/10/Include/10.0.22621.0/winrt" /O2 /Zc$:inline /MD -D__RTMINTRIN_H --target=x86_64-pc-windows-msvc /imsvc "C$:/Users/Manny/Documents/Code$ Projects/Typscript/sdf_modeler_rust/.tools/skia/third_party/externals/zlib"
+cflags_cc = /std$:c++17 /GR-
+label_name = pdf
+root_out_dir = .
+target_out_dir = obj
+target_output_name = pdf
+
+build obj/src/pdf/pdf.SkClusterator.obj: cxx ../../../../../../../../.tools/skia/src/pdf/SkClusterator.cpp
+  source_file_part = SkClusterator.cpp
+  source_name_part = SkClusterator
+build obj/src/pdf/pdf.SkDeflate.obj: cxx ../../../../../../../../.tools/skia/src/pdf/SkDeflate.cpp
+  source_file_part = SkDeflate.cpp
+  source_name_part = SkDeflate
+build obj/src/pdf/pdf.SkKeyedImage.obj: cxx ../../../../../../../../.tools/skia/src/pdf/SkKeyedImage.cpp
+  source_file_part = SkKeyedImage.cpp
+  source_name_part = SkKeyedImage
+build obj/src/pdf/pdf.SkPDFBitmap.obj: cxx ../../../../../../../../.tools/skia/src/pdf/SkPDFBitmap.cpp
+  source_file_part = SkPDFBitmap.cpp
+  source_name_part = SkPDFBitmap
+build obj/src/pdf/pdf.SkPDFDevice.obj: cxx ../../../../../../../../.tools/skia/src/pdf/SkPDFDevice.cpp
+  source_file_part = SkPDFDevice.cpp
+  source_name_part = SkPDFDevice
+build obj/src/pdf/pdf.SkPDFDocument.obj: cxx ../../../../../../../../.tools/skia/src/pdf/SkPDFDocument.cpp
+  source_file_part = SkPDFDocument.cpp
+  source_name_part = SkPDFDocument
+build obj/src/pdf/pdf.SkPDFFont.obj: cxx ../../../../../../../../.tools/skia/src/pdf/SkPDFFont.cpp
+  source_file_part = SkPDFFont.cpp
+  source_name_part = SkPDFFont
+build obj/src/pdf/pdf.SkPDFFormXObject.obj: cxx ../../../../../../../../.tools/skia/src/pdf/SkPDFFormXObject.cpp
+  source_file_part = SkPDFFormXObject.cpp
+  source_name_part = SkPDFFormXObject
+build obj/src/pdf/pdf.SkPDFGradientShader.obj: cxx ../../../../../../../../.tools/skia/src/pdf/SkPDFGradientShader.cpp
+  source_file_part = SkPDFGradientShader.cpp
+  source_name_part = SkPDFGradientShader
+build obj/src/pdf/pdf.SkPDFGraphicStackState.obj: cxx ../../../../../../../../.tools/skia/src/pdf/SkPDFGraphicStackState.cpp
+  source_file_part = SkPDFGraphicStackState.cpp
+  source_name_part = SkPDFGraphicStackState
+build obj/src/pdf/pdf.SkPDFGraphicState.obj: cxx ../../../../../../../../.tools/skia/src/pdf/SkPDFGraphicState.cpp
+  source_file_part = SkPDFGraphicState.cpp
+  source_name_part = SkPDFGraphicState
+build obj/src/pdf/pdf.SkPDFMakeCIDGlyphWidthsArray.obj: cxx ../../../../../../../../.tools/skia/src/pdf/SkPDFMakeCIDGlyphWidthsArray.cpp
+  source_file_part = SkPDFMakeCIDGlyphWidthsArray.cpp
+  source_name_part = SkPDFMakeCIDGlyphWidthsArray
+build obj/src/pdf/pdf.SkPDFMakeToUnicodeCmap.obj: cxx ../../../../../../../../.tools/skia/src/pdf/SkPDFMakeToUnicodeCmap.cpp
+  source_file_part = SkPDFMakeToUnicodeCmap.cpp
+  source_name_part = SkPDFMakeToUnicodeCmap
+build obj/src/pdf/pdf.SkPDFMetadata.obj: cxx ../../../../../../../../.tools/skia/src/pdf/SkPDFMetadata.cpp
+  source_file_part = SkPDFMetadata.cpp
+  source_name_part = SkPDFMetadata
+build obj/src/pdf/pdf.SkPDFResourceDict.obj: cxx ../../../../../../../../.tools/skia/src/pdf/SkPDFResourceDict.cpp
+  source_file_part = SkPDFResourceDict.cpp
+  source_name_part = SkPDFResourceDict
+build obj/src/pdf/pdf.SkPDFShader.obj: cxx ../../../../../../../../.tools/skia/src/pdf/SkPDFShader.cpp
+  source_file_part = SkPDFShader.cpp
+  source_name_part = SkPDFShader
+build obj/src/pdf/pdf.SkPDFSubsetFont.obj: cxx ../../../../../../../../.tools/skia/src/pdf/SkPDFSubsetFont.cpp
+  source_file_part = SkPDFSubsetFont.cpp
+  source_name_part = SkPDFSubsetFont
+build obj/src/pdf/pdf.SkPDFTag.obj: cxx ../../../../../../../../.tools/skia/src/pdf/SkPDFTag.cpp
+  source_file_part = SkPDFTag.cpp
+  source_name_part = SkPDFTag
+build obj/src/pdf/pdf.SkPDFType1Font.obj: cxx ../../../../../../../../.tools/skia/src/pdf/SkPDFType1Font.cpp
+  source_file_part = SkPDFType1Font.cpp
+  source_name_part = SkPDFType1Font
+build obj/src/pdf/pdf.SkPDFTypes.obj: cxx ../../../../../../../../.tools/skia/src/pdf/SkPDFTypes.cpp
+  source_file_part = SkPDFTypes.cpp
+  source_name_part = SkPDFTypes
+build obj/src/pdf/pdf.SkPDFUtils.obj: cxx ../../../../../../../../.tools/skia/src/pdf/SkPDFUtils.cpp
+  source_file_part = SkPDFUtils.cpp
+  source_name_part = SkPDFUtils
+
+build obj/pdf.stamp: stamp obj/src/pdf/pdf.SkClusterator.obj obj/src/pdf/pdf.SkDeflate.obj obj/src/pdf/pdf.SkKeyedImage.obj obj/src/pdf/pdf.SkPDFBitmap.obj obj/src/pdf/pdf.SkPDFDevice.obj obj/src/pdf/pdf.SkPDFDocument.obj obj/src/pdf/pdf.SkPDFFont.obj obj/src/pdf/pdf.SkPDFFormXObject.obj obj/src/pdf/pdf.SkPDFGradientShader.obj obj/src/pdf/pdf.SkPDFGraphicStackState.obj obj/src/pdf/pdf.SkPDFGraphicState.obj obj/src/pdf/pdf.SkPDFMakeCIDGlyphWidthsArray.obj obj/src/pdf/pdf.SkPDFMakeToUnicodeCmap.obj obj/src/pdf/pdf.SkPDFMetadata.obj obj/src/pdf/pdf.SkPDFResourceDict.obj obj/src/pdf/pdf.SkPDFShader.obj obj/src/pdf/pdf.SkPDFSubsetFont.obj obj/src/pdf/pdf.SkPDFTag.obj obj/src/pdf/pdf.SkPDFType1Font.obj obj/src/pdf/pdf.SkPDFTypes.obj obj/src/pdf/pdf.SkPDFUtils.obj || obj/clipstack_utils.stamp obj/pathops.stamp ./zlib.lib obj/core.stamp obj/fontmgr_FontConfigInterface.stamp obj/fontmgr_android.stamp obj/fontmgr_android_ndk.stamp obj/fontmgr_custom_directory.stamp obj/fontmgr_custom_embedded.stamp obj/fontmgr_custom_empty.stamp obj/fontmgr_fontations_empty.stamp obj/fontmgr_fontconfig.stamp obj/fontmgr_mac_ct.stamp obj/fontmgr_win.stamp obj/fontmgr_win_gdi.stamp obj/png_decode_libpng.stamp obj/png_decode_common.stamp ./libpng.lib obj/third_party/zlib/zlib_adler32_simd.stamp obj/third_party/zlib/zlib_common_headers.stamp obj/third_party/zlib/zlib_inflate_chunk_simd.stamp obj/third_party/zlib/zlib_slide_hash_simd.stamp obj/third_party/zlib/zlib_crc32_simd.stamp obj/png_encode_libpng.stamp obj/png_encode_common.stamp obj/typeface_fontations.stamp

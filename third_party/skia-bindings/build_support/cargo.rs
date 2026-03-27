@@ -11,7 +11,32 @@ pub fn warning(warning: impl AsRef<str>) {
 }
 
 pub fn output_directory() -> PathBuf {
-    PathBuf::from(env::var("OUT_DIR").unwrap())
+    normalize_path_for_windows_tools(PathBuf::from(env::var("OUT_DIR").unwrap()))
+}
+
+/// External Windows tools like GN do not understand verbatim paths such as `\\?\C:\...`.
+/// Strip that prefix before handing paths to subprocesses.
+pub fn normalize_path_for_windows_tools(path: impl AsRef<Path>) -> PathBuf {
+    #[cfg(windows)]
+    {
+        let path = path.as_ref();
+        let text = path.as_os_str().to_string_lossy();
+
+        if let Some(stripped) = text.strip_prefix(r"\\?\UNC\") {
+            return PathBuf::from(format!(r"\\{stripped}"));
+        }
+
+        if let Some(stripped) = text.strip_prefix(r"\\?\") {
+            return PathBuf::from(stripped);
+        }
+
+        path.to_path_buf()
+    }
+
+    #[cfg(not(windows))]
+    {
+        path.as_ref().to_path_buf()
+    }
 }
 
 pub fn rerun_if_file_changed(path: impl AsRef<Path>) {
@@ -258,4 +283,28 @@ fn parse_target_tests() {
         }
     );
     assert!(std::panic::catch_unwind(|| parse_target("garbage")).is_err());
+}
+
+#[test]
+fn normalize_regular_tool_paths_are_unchanged() {
+    let path = PathBuf::from("target/debug");
+    assert_eq!(normalize_path_for_windows_tools(&path), path);
+}
+
+#[cfg(windows)]
+#[test]
+fn normalize_verbatim_disk_path_for_windows_tools() {
+    assert_eq!(
+        normalize_path_for_windows_tools(PathBuf::from(r"\\?\C:\work\repo\target")),
+        PathBuf::from(r"C:\work\repo\target")
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn normalize_verbatim_unc_path_for_windows_tools() {
+    assert_eq!(
+        normalize_path_for_windows_tools(PathBuf::from(r"\\?\UNC\server\share\repo")),
+        PathBuf::from(r"\\server\share\repo")
+    );
 }

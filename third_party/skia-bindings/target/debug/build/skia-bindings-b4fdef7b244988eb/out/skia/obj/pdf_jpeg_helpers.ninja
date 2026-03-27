@@ -1,0 +1,9 @@
+defines = -D_CRT_SECURE_NO_WARNINGS -D_HAS_EXCEPTIONS=0 -DWIN32_LEAN_AND_MEAN -DNOMINMAX -DNDEBUG -DSK_CODEC_DECODES_BMP -DSK_CODEC_DECODES_WBMP -DSK_ENABLE_PRECOMPILE -DSK_DISABLE_TRACING -DSK_GAMMA_APPLY_TO_A8 -DSK_ENABLE_AVX512_OPTS -DSKIA_IMPLEMENTATION=1 -DSK_CODEC_DECODES_JPEG -DSK_CODEC_ENCODES_JPEG -DSK_SUPPORT_PDF -DSK_TYPEFACE_FACTORY_DIRECTWRITE -DSK_FONTMGR_DIRECTWRITE_AVAILABLE -DSK_FONTMGR_GDI_AVAILABLE -DSK_CODEC_DECODES_ICO -DSK_CODEC_DECODES_PNG -DSK_CODEC_DECODES_PNG_WITH_LIBPNG -DSK_CODEC_ENCODES_PNG -DSK_CODEC_ENCODES_PNG_WITH_LIBPNG
+include_dirs = -I../../../../../../../../.tools/skia
+label_name = pdf_jpeg_helpers
+root_out_dir = .
+target_out_dir = obj
+target_output_name = pdf_jpeg_helpers
+
+
+build obj/pdf_jpeg_helpers.stamp: stamp || obj/jpeg_decode.stamp obj/jpeg_encode.stamp obj/pdf.stamp ./libjpeg.lib ./libjpeg12.lib obj/third_party/libjpeg-turbo/libjpeg_headers.stamp ./libjpeg16.lib obj/clipstack_utils.stamp obj/core.stamp obj/fontmgr_FontConfigInterface.stamp obj/fontmgr_android.stamp obj/fontmgr_android_ndk.stamp obj/fontmgr_custom_directory.stamp obj/fontmgr_custom_embedded.stamp obj/fontmgr_custom_empty.stamp obj/fontmgr_fontations_empty.stamp obj/fontmgr_fontconfig.stamp obj/fontmgr_mac_ct.stamp obj/fontmgr_win.stamp obj/fontmgr_win_gdi.stamp obj/png_decode_libpng.stamp obj/png_decode_common.stamp ./libpng.lib ./zlib.lib obj/third_party/zlib/zlib_adler32_simd.stamp obj/third_party/zlib/zlib_common_headers.stamp obj/third_party/zlib/zlib_inflate_chunk_simd.stamp obj/third_party/zlib/zlib_slide_hash_simd.stamp obj/third_party/zlib/zlib_crc32_simd.stamp obj/png_encode_libpng.stamp obj/png_encode_common.stamp obj/typeface_fontations.stamp obj/pathops.stamp

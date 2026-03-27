@@ -1,0 +1,9 @@
+defines = -D_CRT_SECURE_NO_WARNINGS -D_HAS_EXCEPTIONS=0 -DWIN32_LEAN_AND_MEAN -DNOMINMAX -DNDEBUG -DSK_CODEC_DECODES_BMP -DSK_CODEC_DECODES_WBMP -DSK_ENABLE_PRECOMPILE -DSK_DISABLE_TRACING
+include_dirs = -I../../../../../../../../.tools/skia/client_utils/android -I../../../../../../../../.tools/skia/include/android -I../../../../../../../../.tools/skia/include/codec -I../../../../../../../../.tools/skia/include/config -I../../../../../../../../.tools/skia/include/core -I../../../../../../../../.tools/skia/include/docs -I../../../../../../../../.tools/skia/include/effects -I../../../../../../../../.tools/skia/include/encode -I../../../../../../../../.tools/skia/include/gpu -I../../../../../../../../.tools/skia/include/pathops -I../../../../../../../../.tools/skia/include/ports -I../../../../../../../../.tools/skia/include/svg -I../../../../../../../../.tools/skia/include/utils -I../../../../../../../../.tools/skia/include/utils/mac -I../../../../../../../../.tools/skia/modules/skottie/include -I../../../../../../../../.tools/skia/modules/skparagraph/include -I../../../../../../../../.tools/skia/modules/skshaper/include -I../../../../../../../../.tools/skia/modules/svg/include -I../../../../../../../../.tools/skia
+label_name = public
+root_out_dir = .
+target_out_dir = obj
+target_output_name = public
+
+
+build obj/public.stamp: stamp

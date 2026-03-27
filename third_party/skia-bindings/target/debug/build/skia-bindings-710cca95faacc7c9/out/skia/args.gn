@@ -1,0 +1,34 @@
+is_official_build = true
+is_debug = false
+skia_enable_svg = false
+skia_enable_ganesh = false
+skia_enable_skottie = false
+skia_enable_pdf = true
+skia_use_gl = false
+skia_use_egl = false
+skia_use_x11 = false
+skia_use_system_libpng = false
+skia_use_libwebp_encode = false
+skia_use_libwebp_decode = false
+skia_use_system_zlib = false
+skia_use_xps = false
+skia_use_dng_sdk = false
+cc = "clang"
+cxx = "clang++"
+skia_use_icu = false
+skia_use_harfbuzz = false
+skia_use_freetype = false
+skia_use_system_libjpeg_turbo = false
+skia_use_expat = true
+skia_use_system_expat = false
+win_vc = "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC"
+clang_win = "C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools/llvm"
+clang_win_version = "C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools/llvm\lib\clang\21"
+target_cpu = "x86_64"
+is_trivial_abi = false
+extra_cflags = [
+  "/MD",
+  "-D__RTMINTRIN_H",
+  "--target=x86_64-pc-windows-msvc",
+]
+extra_asmflags = [ "--target=x86_64-pc-windows-msvc" ]

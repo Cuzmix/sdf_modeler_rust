@@ -1,0 +1,14 @@
+defines = -D_CRT_SECURE_NO_WARNINGS -D_HAS_EXCEPTIONS=0 -DWIN32_LEAN_AND_MEAN -DNOMINMAX -DNDEBUG -DSK_CODEC_DECODES_BMP -DSK_CODEC_DECODES_WBMP -DSK_ENABLE_PRECOMPILE -DSK_DISABLE_TRACING
+include_dirs = -I../../../../../../../../.tools/skia
+cflags = -Wno-attributes /bigobj /utf-8 -imsvc "C$:\Program$ Files$ (x86)\Microsoft$ Visual$ Studio\2019\BuildTools\VC/Tools/MSVC/14.29.30133/include" -imsvc "C$:/Program$ Files$ (x86)/Windows$ Kits/10/Include/10.0.22621.0/shared" -imsvc "C$:/Program$ Files$ (x86)/Windows$ Kits/10/Include/10.0.22621.0/ucrt" -imsvc "C$:/Program$ Files$ (x86)/Windows$ Kits/10/Include/10.0.22621.0/um" -imsvc "C$:/Program$ Files$ (x86)/Windows$ Kits/10/Include/10.0.22621.0/winrt" /O2 /Zc$:inline /MD -D__RTMINTRIN_H --target=x86_64-pc-windows-msvc
+cflags_cc = /std$:c++17 /GR-
+label_name = typeface_proxy
+root_out_dir = .
+target_out_dir = obj
+target_output_name = typeface_proxy
+
+build obj/src/ports/typeface_proxy.SkTypeface_proxy.obj: cxx ../../../../../../../../.tools/skia/src/ports/SkTypeface_proxy.cpp
+  source_file_part = SkTypeface_proxy.cpp
+  source_name_part = SkTypeface_proxy
+
+build obj/typeface_proxy.stamp: stamp obj/src/ports/typeface_proxy.SkTypeface_proxy.obj

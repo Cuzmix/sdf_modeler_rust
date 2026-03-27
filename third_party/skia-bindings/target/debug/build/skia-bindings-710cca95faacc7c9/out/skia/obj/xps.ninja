@@ -1,0 +1,9 @@
+defines = -D_CRT_SECURE_NO_WARNINGS -D_HAS_EXCEPTIONS=0 -DWIN32_LEAN_AND_MEAN -DNOMINMAX -DNDEBUG -DSK_CODEC_DECODES_BMP -DSK_CODEC_DECODES_WBMP -DSK_ENABLE_PRECOMPILE -DSK_DISABLE_TRACING -DSK_GAMMA_APPLY_TO_A8 -DSK_ENABLE_AVX512_OPTS -DSKIA_IMPLEMENTATION=1
+include_dirs = -I../../../../../../../../.tools/skia
+label_name = xps
+root_out_dir = .
+target_out_dir = obj
+target_output_name = xps
+
+
+build obj/xps.stamp: stamp

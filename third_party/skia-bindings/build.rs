@@ -9,6 +9,8 @@ use build_support::{
 mod build_support;
 
 fn main() -> Result<(), io::Error> {
+    env::normalize_toolchain_env_paths();
+
     if env::is_docs_rs_build() {
         println!("DETECTED DOCS_RS BUILD");
         return fake_bindings();
@@ -119,7 +121,8 @@ fn main() -> Result<(), io::Error> {
             println!("STARTING A FULL BUILD");
             println!("HOST: {}", cargo::host());
 
-            let source_dir = std::env::current_dir().unwrap().join("skia");
+            let source_dir = cargo::normalize_path_for_windows_tools(std::env::current_dir().unwrap())
+                .join("skia");
             let final_build_configuration = build_from_source(
                 features.clone(),
                 &binaries_config,
@@ -217,14 +220,30 @@ mod env {
     use crate::build_support::cargo;
     use std::path::PathBuf;
 
+    /// Some Windows shells expose the working directory through a verbatim path (`\\?\...`).
+    /// Normalize toolchain-related environment variables so downstream crates like clang-sys
+    /// can still discover LLVM and libclang.
+    pub fn normalize_toolchain_env_paths() {
+        for name in ["LLVM_HOME", "LIBCLANG_PATH"] {
+            if let Ok(value) = std::env::var(name) {
+                let normalized = cargo::normalize_path_for_windows_tools(PathBuf::from(value));
+                std::env::set_var(name, normalized);
+            }
+        }
+    }
+
     /// The path to the Skia source directory.
     pub fn source_dir() -> Option<PathBuf> {
-        cargo::env_var("SKIA_SOURCE_DIR").map(PathBuf::from)
+        cargo::env_var("SKIA_SOURCE_DIR")
+            .map(PathBuf::from)
+            .map(cargo::normalize_path_for_windows_tools)
     }
 
     /// The path to where a pre-built Skia library can be found.
     pub fn skia_lib_search_path() -> Option<PathBuf> {
-        cargo::env_var("SKIA_LIBRARY_SEARCH_PATH").map(PathBuf::from)
+        cargo::env_var("SKIA_LIBRARY_SEARCH_PATH")
+            .map(PathBuf::from)
+            .map(cargo::normalize_path_for_windows_tools)
     }
 
     pub fn is_skia_debug() -> bool {

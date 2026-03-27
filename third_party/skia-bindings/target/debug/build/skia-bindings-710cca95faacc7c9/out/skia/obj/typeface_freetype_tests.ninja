@@ -1,0 +1,9 @@
+defines = -D_CRT_SECURE_NO_WARNINGS -D_HAS_EXCEPTIONS=0 -DWIN32_LEAN_AND_MEAN -DNOMINMAX -DNDEBUG
+include_dirs =
+label_name = typeface_freetype_tests
+root_out_dir = .
+target_out_dir = obj
+target_output_name = typeface_freetype_tests
+
+
+build obj/typeface_freetype_tests.stamp: stamp

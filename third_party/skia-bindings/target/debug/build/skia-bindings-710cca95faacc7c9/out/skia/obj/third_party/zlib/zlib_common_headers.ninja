@@ -1,0 +1,9 @@
+defines = -D_CRT_SECURE_NO_WARNINGS -D_HAS_EXCEPTIONS=0 -DWIN32_LEAN_AND_MEAN -DNOMINMAX -DNDEBUG
+include_dirs =
+label_name = zlib_common_headers
+root_out_dir = .
+target_out_dir = obj/third_party/zlib
+target_output_name = zlib_common_headers
+
+
+build obj/third_party/zlib/zlib_common_headers.stamp: stamp

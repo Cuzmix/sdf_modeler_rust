@@ -1,0 +1,26 @@
+defines = -D_CRT_SECURE_NO_WARNINGS -D_HAS_EXCEPTIONS=0 -DWIN32_LEAN_AND_MEAN -DNOMINMAX -DNDEBUG -DSK_CODEC_DECODES_BMP -DSK_CODEC_DECODES_WBMP -DSK_ENABLE_PRECOMPILE -DSK_DISABLE_TRACING -DSK_GAMMA_APPLY_TO_A8 -DSK_ENABLE_AVX512_OPTS -DSKIA_IMPLEMENTATION=1 -DSK_CODEC_DECODES_JPEG
+include_dirs = -I../../../../../../../../.tools/skia -I../../../../../../../../.tools/skia/third_party/libjpeg-turbo -I../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo -I../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src
+cflags = -Wno-attributes /bigobj /utf-8 -imsvc "C$:\Program$ Files$ (x86)\Microsoft$ Visual$ Studio\2019\BuildTools\VC/Tools/MSVC/14.29.30133/include" -imsvc "C$:/Program$ Files$ (x86)/Windows$ Kits/10/Include/10.0.22621.0/shared" -imsvc "C$:/Program$ Files$ (x86)/Windows$ Kits/10/Include/10.0.22621.0/ucrt" -imsvc "C$:/Program$ Files$ (x86)/Windows$ Kits/10/Include/10.0.22621.0/um" -imsvc "C$:/Program$ Files$ (x86)/Windows$ Kits/10/Include/10.0.22621.0/winrt" /O2 /Zc$:inline /MD -D__RTMINTRIN_H --target=x86_64-pc-windows-msvc /imsvc "C$:/Users/Manny/Documents/Code$ Projects/Typscript/sdf_modeler_rust/.tools/skia/third_party/libjpeg-turbo" /imsvc "C$:/Users/Manny/Documents/Code$ Projects/Typscript/sdf_modeler_rust/.tools/skia/third_party/externals/libjpeg-turbo" /imsvc "C$:/Users/Manny/Documents/Code$ Projects/Typscript/sdf_modeler_rust/.tools/skia/third_party/externals/libjpeg-turbo/src"
+cflags_cc = /std$:c++17 /GR-
+label_name = jpeg_decode
+root_out_dir = .
+target_out_dir = obj
+target_output_name = jpeg_decode
+
+build obj/src/codec/jpeg_decode.SkJpegCodec.obj: cxx ../../../../../../../../.tools/skia/src/codec/SkJpegCodec.cpp
+  source_file_part = SkJpegCodec.cpp
+  source_name_part = SkJpegCodec
+build obj/src/codec/jpeg_decode.SkJpegDecoderMgr.obj: cxx ../../../../../../../../.tools/skia/src/codec/SkJpegDecoderMgr.cpp
+  source_file_part = SkJpegDecoderMgr.cpp
+  source_name_part = SkJpegDecoderMgr
+build obj/src/codec/jpeg_decode.SkJpegMetadataDecoderImpl.obj: cxx ../../../../../../../../.tools/skia/src/codec/SkJpegMetadataDecoderImpl.cpp
+  source_file_part = SkJpegMetadataDecoderImpl.cpp
+  source_name_part = SkJpegMetadataDecoderImpl
+build obj/src/codec/jpeg_decode.SkJpegSourceMgr.obj: cxx ../../../../../../../../.tools/skia/src/codec/SkJpegSourceMgr.cpp
+  source_file_part = SkJpegSourceMgr.cpp
+  source_name_part = SkJpegSourceMgr
+build obj/src/codec/jpeg_decode.SkJpegUtility.obj: cxx ../../../../../../../../.tools/skia/src/codec/SkJpegUtility.cpp
+  source_file_part = SkJpegUtility.cpp
+  source_name_part = SkJpegUtility
+
+build obj/jpeg_decode.stamp: stamp obj/src/codec/jpeg_decode.SkJpegCodec.obj obj/src/codec/jpeg_decode.SkJpegDecoderMgr.obj obj/src/codec/jpeg_decode.SkJpegMetadataDecoderImpl.obj obj/src/codec/jpeg_decode.SkJpegSourceMgr.obj obj/src/codec/jpeg_decode.SkJpegUtility.obj || ./libjpeg.lib ./libjpeg12.lib obj/third_party/libjpeg-turbo/libjpeg_headers.stamp ./libjpeg16.lib

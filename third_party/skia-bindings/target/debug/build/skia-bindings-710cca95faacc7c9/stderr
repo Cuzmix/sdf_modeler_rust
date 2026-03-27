@@ -1,0 +1,17 @@
+Checking for "C:\\Users\\Manny\\Documents\\Code Projects\\Typscript\\sdf_modeler_rust\\.tools/llvm\\bin\\clang-cl.exe"
+clang version 21.1.7
+Target: x86_64-pc-windows-msvc
+Thread model: posix
+InstalledDir: 
+ignoring nonexistent directory "lib\clang\21\include"
+ignoring nonexistent directory "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Tools\MSVC\14.29.30133\atlmfc\include"
+#include "..." search starts here:
+#include <...> search starts here:
+ C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools/skia
+ C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Tools\MSVC\14.29.30133\include
+ C:\Program Files (x86)\Windows Kits\10\Include\10.0.22621.0\ucrt
+ C:\Program Files (x86)\Windows Kits\10\Include\10.0.22621.0\shared
+ C:\Program Files (x86)\Windows Kits\10\Include\10.0.22621.0\um
+ C:\Program Files (x86)\Windows Kits\10\Include\10.0.22621.0\winrt
+ C:\Program Files (x86)\Windows Kits\10\Include\10.0.22621.0\cppwinrt
+End of search list.

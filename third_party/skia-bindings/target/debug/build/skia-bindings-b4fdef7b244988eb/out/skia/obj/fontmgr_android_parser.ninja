@@ -1,0 +1,14 @@
+defines = -D_CRT_SECURE_NO_WARNINGS -D_HAS_EXCEPTIONS=0 -DWIN32_LEAN_AND_MEAN -DNOMINMAX -DNDEBUG -DSK_CODEC_DECODES_BMP -DSK_CODEC_DECODES_WBMP -DSK_ENABLE_PRECOMPILE -DSK_DISABLE_TRACING -DSK_GAMMA_APPLY_TO_A8 -DSK_ENABLE_AVX512_OPTS -DSKIA_IMPLEMENTATION=1 -DXML_STATIC
+include_dirs = -I../../../../../../../../.tools/skia -I../../../../../../../../.tools/skia/third_party/externals/expat/expat/lib -I../../../../../../../../.tools/skia/third_party/expat/include/expat_config
+cflags = -Wno-attributes /bigobj /utf-8 -imsvc "C$:\Program$ Files$ (x86)\Microsoft$ Visual$ Studio\2019\BuildTools\VC/Tools/MSVC/14.29.30133/include" -imsvc "C$:/Program$ Files$ (x86)/Windows$ Kits/10/Include/10.0.22621.0/shared" -imsvc "C$:/Program$ Files$ (x86)/Windows$ Kits/10/Include/10.0.22621.0/ucrt" -imsvc "C$:/Program$ Files$ (x86)/Windows$ Kits/10/Include/10.0.22621.0/um" -imsvc "C$:/Program$ Files$ (x86)/Windows$ Kits/10/Include/10.0.22621.0/winrt" /O2 /Zc$:inline /MD -D__RTMINTRIN_H --target=x86_64-pc-windows-msvc /imsvc "C$:/Users/Manny/Documents/Code$ Projects/Typscript/sdf_modeler_rust/.tools/skia/third_party/externals/expat/expat/lib" /imsvc "C$:/Users/Manny/Documents/Code$ Projects/Typscript/sdf_modeler_rust/.tools/skia/third_party/expat/include/expat_config"
+cflags_cc = /std$:c++17 /GR-
+label_name = fontmgr_android_parser
+root_out_dir = .
+target_out_dir = obj
+target_output_name = fontmgr_android_parser
+
+build obj/src/ports/fontmgr_android_parser.SkFontMgr_android_parser.obj: cxx ../../../../../../../../.tools/skia/src/ports/SkFontMgr_android_parser.cpp
+  source_file_part = SkFontMgr_android_parser.cpp
+  source_name_part = SkFontMgr_android_parser
+
+build obj/fontmgr_android_parser.stamp: stamp obj/src/ports/fontmgr_android_parser.SkFontMgr_android_parser.obj || ./expat.lib

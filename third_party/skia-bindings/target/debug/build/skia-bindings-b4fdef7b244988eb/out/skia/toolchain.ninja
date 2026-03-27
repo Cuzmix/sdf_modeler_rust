@@ -1,0 +1,141 @@
+rule copy
+  command = cmd.exe /c  python "C:/Users/Manny/Documents/Code Projects/Typscript/sdf_modeler_rust/.tools/skia/gn/cp.py" ${in} ${out}
+  description = copy ${in} ${out}
+rule stamp
+  command = cmd.exe /c  echo > ${out}
+  description = stamp ${out}
+rule cc
+  command =  "C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools\llvm/bin/clang-cl.exe" /nologo /showIncludes /FC ${defines} ${include_dirs} ${cflags}  ${cflags_c} /c ${in} /Fo${out} /Fd"${target_out_dir}/${label_name}_c.pdb"
+  description = compile ${in}
+  deps = msvc
+rule cxx
+  command =  "C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools\llvm/bin/clang-cl.exe" /nologo /showIncludes /FC ${defines} ${include_dirs} ${cflags}  ${cflags_cc} /c ${in} /Fo${out} /Fd"${target_out_dir}/${label_name}_c.pdb"
+  description = compile ${in}
+  deps = msvc
+rule asm
+  command = "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC/Tools/MSVC/14.29.30133/bin/HostX64/x64/ml64.exe" ${asmflags} /nologo /c /Fo ${out} ${in}
+  description = assemble ${in}
+rule alink
+  command = "C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools\llvm/bin/lld-link.exe" /lib /nologo /ignore:4221 ${arflags} /OUT:${out} @${out}.rsp
+  description = link ${out}
+  rspfile = ${out}.rsp
+  rspfile_content = ${in_newline}
+rule solink
+  command = "C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools\llvm/bin/lld-link.exe" /nologo /IMPLIB:${output_dir}/${target_output_name}${output_extension}.lib /DLL /OUT:${output_dir}/${target_output_name}${output_extension} /PDB:${output_dir}/${target_output_name}${output_extension}.pdb @${output_dir}/${target_output_name}${output_extension}.rsp
+  description = link ${out}
+  rspfile = ${output_dir}/${target_output_name}${output_extension}.rsp
+  rspfile_content = ${in_newline} ${libs} ${solibs} ${ldflags}
+  restat = 1
+rule link
+  command = "C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools\llvm/bin/lld-link.exe" /nologo /OUT:${root_out_dir}/${target_output_name}${output_extension} /PDB:${root_out_dir}/${target_output_name}${output_extension}.pdb @${root_out_dir}/${target_output_name}${output_extension}.rsp
+  description = link ${out}
+  rspfile = ${root_out_dir}/${target_output_name}${output_extension}.rsp
+  rspfile_content = ${in_newline} ${libs} ${solibs} ${ldflags}
+
+subninja obj/android_utils.ninja
+subninja obj/avif.ninja
+subninja obj/clipstack_utils.ninja
+build obj/compile_all_sksl_tests.stamp: stamp obj/compile_sksl_glsl_nosettings_tests.stamp obj/compile_sksl_glsl_tests.stamp obj/compile_sksl_hlsl_tests.stamp obj/compile_sksl_metal_tests.stamp obj/compile_sksl_skrp_tests.stamp obj/compile_sksl_spirv_tests.stamp obj/compile_sksl_wgsl_tests.stamp
+build obj/compile_sksl_glsl_nosettings_tests.stamp: stamp
+build obj/compile_sksl_glsl_tests.stamp: stamp
+build obj/compile_sksl_hlsl_tests.stamp: stamp
+build obj/compile_sksl_metal_tests.stamp: stamp
+build obj/compile_sksl_skrp_tests.stamp: stamp
+build obj/compile_sksl_spirv_tests.stamp: stamp
+build obj/compile_sksl_wgsl_tests.stamp: stamp
+subninja obj/core.ninja
+subninja obj/crabbyavif.ninja
+subninja obj/fontmgr_FontConfigInterface.ninja
+subninja obj/fontmgr_FontConfigInterface_tests.ninja
+subninja obj/fontmgr_android.ninja
+subninja obj/fontmgr_android_ndk.ninja
+subninja obj/fontmgr_android_parser.ninja
+subninja obj/fontmgr_android_tests.ninja
+subninja obj/fontmgr_custom.ninja
+subninja obj/fontmgr_custom_directory.ninja
+subninja obj/fontmgr_custom_embedded.ninja
+subninja obj/fontmgr_custom_empty.ninja
+subninja obj/fontmgr_fontations_empty.ninja
+subninja obj/fontmgr_fontconfig.ninja
+subninja obj/fontmgr_fontconfig_tests.ninja
+subninja obj/fontmgr_mac_ct.ninja
+subninja obj/fontmgr_mac_ct_tests.ninja
+subninja obj/fontmgr_win.ninja
+subninja obj/fontmgr_win_gdi.ninja
+subninja obj/fontscanner_tests.ninja
+subninja obj/gpu.ninja
+subninja obj/gpu_shared.ninja
+subninja obj/graphite.ninja
+subninja obj/hsw.ninja
+subninja obj/jpeg_decode.ninja
+subninja obj/jpeg_encode.ninja
+subninja obj/jpeg_mpf.ninja
+subninja obj/jpegxl_decode.ninja
+subninja obj/lasx.ninja
+build obj/minify_sksl.stamp: stamp
+build obj/minify_sksl_tests.stamp: stamp
+build obj/modules.stamp: stamp obj/modules/svg/svg.stamp
+subninja obj/ndk_images.ninja
+subninja obj/pathkit.ninja
+subninja obj/pathops.ninja
+subninja obj/pdf.ninja
+subninja obj/pdf_jpeg_helpers.ninja
+subninja obj/png_decode_common.ninja
+subninja obj/png_decode_libpng.ninja
+subninja obj/png_decode_rust.ninja
+subninja obj/png_decode_rust_tests.ninja
+subninja obj/png_encode_common.ninja
+subninja obj/png_encode_libpng.ninja
+subninja obj/png_encode_rust.ninja
+subninja obj/png_encode_rust_tests.ninja
+subninja obj/public.ninja
+subninja obj/public_headers_warnings_check.ninja
+subninja obj/raw.ninja
+build obj/run_sksllex.stamp: stamp
+subninja obj/skia.ninja
+rule ___skia.h___gn_toolchain_msvc__rule
+  command = C$:/Users/Manny/AppData/Local/Programs/Python/Python311/python.exe ../../../../../../../../.tools/skia/gn/find_headers.py "C$:/Users/Manny/Documents/Code$ Projects/Typscript/sdf_modeler_rust/.tools/skia/bin/gn" "C$:/Users/Manny/Documents/Code$ Projects/Typscript/sdf_modeler_rust/.tools/skia/" gen/skia.h "C$:/Users/Manny/Documents/Code$ Projects/Typscript/sdf_modeler_rust/.tools/skia/client_utils/android" "C$:/Users/Manny/Documents/Code$ Projects/Typscript/sdf_modeler_rust/.tools/skia/include/android" "C$:/Users/Manny/Documents/Code$ Projects/Typscript/sdf_modeler_rust/.tools/skia/include/codec" "C$:/Users/Manny/Documents/Code$ Projects/Typscript/sdf_modeler_rust/.tools/skia/include/config" "C$:/Users/Manny/Documents/Code$ Projects/Typscript/sdf_modeler_rust/.tools/skia/include/core" "C$:/Users/Manny/Documents/Code$ Projects/Typscript/sdf_modeler_rust/.tools/skia/include/docs" "C$:/Users/Manny/Documents/Code$ Projects/Typscript/sdf_modeler_rust/.tools/skia/include/effects" "C$:/Users/Manny/Documents/Code$ Projects/Typscript/sdf_modeler_rust/.tools/skia/include/encode" "C$:/Users/Manny/Documents/Code$ Projects/Typscript/sdf_modeler_rust/.tools/skia/include/gpu" "C$:/Users/Manny/Documents/Code$ Projects/Typscript/sdf_modeler_rust/.tools/skia/include/pathops" "C$:/Users/Manny/Documents/Code$ Projects/Typscript/sdf_modeler_rust/.tools/skia/include/ports" "C$:/Users/Manny/Documents/Code$ Projects/Typscript/sdf_modeler_rust/.tools/skia/include/svg" "C$:/Users/Manny/Documents/Code$ Projects/Typscript/sdf_modeler_rust/.tools/skia/include/utils" "C$:/Users/Manny/Documents/Code$ Projects/Typscript/sdf_modeler_rust/.tools/skia/include/utils/mac" "C$:/Users/Manny/Documents/Code$ Projects/Typscript/sdf_modeler_rust/.tools/skia/modules/skottie/include" "C$:/Users/Manny/Documents/Code$ Projects/Typscript/sdf_modeler_rust/.tools/skia/modules/skparagraph/include" "C$:/Users/Manny/Documents/Code$ Projects/Typscript/sdf_modeler_rust/.tools/skia/modules/skshaper/include" "C$:/Users/Manny/Documents/Code$ Projects/Typscript/sdf_modeler_rust/.tools/skia/modules/svg/include"
+  description = ACTION //:skia.h(//gn/toolchain:msvc)
+  restat = 1
+
+build gen/skia.h: ___skia.h___gn_toolchain_msvc__rule | ../../../../../../../../.tools/skia/gn/find_headers.py
+  depfile = gen/skia.h.deps
+
+build obj/skia.h.stamp: stamp gen/skia.h
+subninja obj/skx.ninja
+subninja obj/typeface_fontations.ninja
+subninja obj/typeface_fontations_tests.ninja
+subninja obj/typeface_freetype.ninja
+subninja obj/typeface_freetype_tests.ninja
+subninja obj/typeface_proxy.ninja
+subninja obj/vello.ninja
+subninja obj/webp_decode.ninja
+subninja obj/webp_encode.ninja
+subninja obj/wuffs.ninja
+subninja obj/xml.ninja
+subninja obj/xps.ninja
+subninja obj/modules/skcms/skcms.ninja
+subninja obj/modules/skcms/skcms_TransformHsw.ninja
+subninja obj/modules/skcms/skcms_TransformSkx.ninja
+build obj/modules/skottie/fuzz.stamp: stamp
+build obj/modules/skottie/gm.stamp: stamp
+build obj/modules/skottie/skottie.stamp: stamp
+build obj/modules/skottie/tests.stamp: stamp
+build obj/modules/skottie/utils.stamp: stamp
+subninja obj/modules/skshaper/skshaper.ninja
+build obj/modules/svg/svg.stamp: stamp
+build obj/modules/svg/tests.stamp: stamp
+subninja obj/third_party/expat/expat.ninja
+subninja obj/third_party/libjpeg-turbo/libjpeg.ninja
+subninja obj/third_party/libjpeg-turbo/libjpeg12.ninja
+subninja obj/third_party/libjpeg-turbo/libjpeg16.ninja
+subninja obj/third_party/libjpeg-turbo/libjpeg_headers.ninja
+subninja obj/third_party/libpng/libpng.ninja
+subninja obj/third_party/wuffs/wuffs.ninja
+subninja obj/third_party/zlib/compression_utils_portable.ninja
+subninja obj/third_party/zlib/zlib.ninja
+subninja obj/third_party/zlib/zlib_adler32_simd.ninja
+subninja obj/third_party/zlib/zlib_common_headers.ninja
+subninja obj/third_party/zlib/zlib_crc32_simd.ninja
+subninja obj/third_party/zlib/zlib_inflate_chunk_simd.ninja
+subninja obj/third_party/zlib/zlib_slide_hash_simd.ninja

@@ -1,0 +1,110 @@
+defines = -D_CRT_SECURE_NO_WARNINGS -D_HAS_EXCEPTIONS=0 -DWIN32_LEAN_AND_MEAN -DNOMINMAX -DNDEBUG -DSK_CODEC_DECODES_BMP -DSK_CODEC_DECODES_WBMP -DSK_ENABLE_PRECOMPILE -DSK_DISABLE_TRACING -DSK_GAMMA_APPLY_TO_A8 -DSK_ENABLE_AVX512_OPTS -DSKIA_IMPLEMENTATION=1 -DSK_TYPEFACE_FACTORY_DIRECTWRITE -DSK_FONTMGR_DIRECTWRITE_AVAILABLE -DSK_FONTMGR_GDI_AVAILABLE -DSK_CODEC_DECODES_ICO -DSK_CODEC_DECODES_PNG -DSK_CODEC_DECODES_PNG_WITH_LIBPNG -DSK_CODEC_ENCODES_PNG -DSK_CODEC_ENCODES_PNG_WITH_LIBPNG -DSK_CODEC_ENCODES_JPEG -DSK_SUPPORT_PDF -DSK_CODEC_DECODES_JPEG -DSK_HAS_WUFFS_LIBRARY -DSK_CODEC_DECODES_GIF -DSK_XML
+include_dirs = -I../../../../../../../../.tools/skia
+cflags = -Wno-attributes /bigobj /utf-8 -imsvc "C$:\Program$ Files$ (x86)\Microsoft$ Visual$ Studio\2019\BuildTools\VC/Tools/MSVC/14.29.30133/include" -imsvc "C$:/Program$ Files$ (x86)/Windows$ Kits/10/Include/10.0.22621.0/shared" -imsvc "C$:/Program$ Files$ (x86)/Windows$ Kits/10/Include/10.0.22621.0/ucrt" -imsvc "C$:/Program$ Files$ (x86)/Windows$ Kits/10/Include/10.0.22621.0/um" -imsvc "C$:/Program$ Files$ (x86)/Windows$ Kits/10/Include/10.0.22621.0/winrt" /O2 /Zc$:inline /MD -D__RTMINTRIN_H --target=x86_64-pc-windows-msvc
+cflags_cc = /std$:c++17 /GR-
+label_name = pathkit
+root_out_dir = .
+target_out_dir = obj
+target_output_name = pathkit
+
+build obj/src/pathops/pathkit.SkAddIntersections.obj: cxx ../../../../../../../../.tools/skia/src/pathops/SkAddIntersections.cpp
+  source_file_part = SkAddIntersections.cpp
+  source_name_part = SkAddIntersections
+build obj/src/pathops/pathkit.SkDConicLineIntersection.obj: cxx ../../../../../../../../.tools/skia/src/pathops/SkDConicLineIntersection.cpp
+  source_file_part = SkDConicLineIntersection.cpp
+  source_name_part = SkDConicLineIntersection
+build obj/src/pathops/pathkit.SkDCubicLineIntersection.obj: cxx ../../../../../../../../.tools/skia/src/pathops/SkDCubicLineIntersection.cpp
+  source_file_part = SkDCubicLineIntersection.cpp
+  source_name_part = SkDCubicLineIntersection
+build obj/src/pathops/pathkit.SkDCubicToQuads.obj: cxx ../../../../../../../../.tools/skia/src/pathops/SkDCubicToQuads.cpp
+  source_file_part = SkDCubicToQuads.cpp
+  source_name_part = SkDCubicToQuads
+build obj/src/pathops/pathkit.SkDLineIntersection.obj: cxx ../../../../../../../../.tools/skia/src/pathops/SkDLineIntersection.cpp
+  source_file_part = SkDLineIntersection.cpp
+  source_name_part = SkDLineIntersection
+build obj/src/pathops/pathkit.SkDQuadLineIntersection.obj: cxx ../../../../../../../../.tools/skia/src/pathops/SkDQuadLineIntersection.cpp
+  source_file_part = SkDQuadLineIntersection.cpp
+  source_name_part = SkDQuadLineIntersection
+build obj/src/pathops/pathkit.SkIntersections.obj: cxx ../../../../../../../../.tools/skia/src/pathops/SkIntersections.cpp
+  source_file_part = SkIntersections.cpp
+  source_name_part = SkIntersections
+build obj/src/pathops/pathkit.SkOpAngle.obj: cxx ../../../../../../../../.tools/skia/src/pathops/SkOpAngle.cpp
+  source_file_part = SkOpAngle.cpp
+  source_name_part = SkOpAngle
+build obj/src/pathops/pathkit.SkOpBuilder.obj: cxx ../../../../../../../../.tools/skia/src/pathops/SkOpBuilder.cpp
+  source_file_part = SkOpBuilder.cpp
+  source_name_part = SkOpBuilder
+build obj/src/pathops/pathkit.SkOpCoincidence.obj: cxx ../../../../../../../../.tools/skia/src/pathops/SkOpCoincidence.cpp
+  source_file_part = SkOpCoincidence.cpp
+  source_name_part = SkOpCoincidence
+build obj/src/pathops/pathkit.SkOpContour.obj: cxx ../../../../../../../../.tools/skia/src/pathops/SkOpContour.cpp
+  source_file_part = SkOpContour.cpp
+  source_name_part = SkOpContour
+build obj/src/pathops/pathkit.SkOpCubicHull.obj: cxx ../../../../../../../../.tools/skia/src/pathops/SkOpCubicHull.cpp
+  source_file_part = SkOpCubicHull.cpp
+  source_name_part = SkOpCubicHull
+build obj/src/pathops/pathkit.SkOpEdgeBuilder.obj: cxx ../../../../../../../../.tools/skia/src/pathops/SkOpEdgeBuilder.cpp
+  source_file_part = SkOpEdgeBuilder.cpp
+  source_name_part = SkOpEdgeBuilder
+build obj/src/pathops/pathkit.SkOpSegment.obj: cxx ../../../../../../../../.tools/skia/src/pathops/SkOpSegment.cpp
+  source_file_part = SkOpSegment.cpp
+  source_name_part = SkOpSegment
+build obj/src/pathops/pathkit.SkOpSpan.obj: cxx ../../../../../../../../.tools/skia/src/pathops/SkOpSpan.cpp
+  source_file_part = SkOpSpan.cpp
+  source_name_part = SkOpSpan
+build obj/src/pathops/pathkit.SkPathOpsAsWinding.obj: cxx ../../../../../../../../.tools/skia/src/pathops/SkPathOpsAsWinding.cpp
+  source_file_part = SkPathOpsAsWinding.cpp
+  source_name_part = SkPathOpsAsWinding
+build obj/src/pathops/pathkit.SkPathOpsCommon.obj: cxx ../../../../../../../../.tools/skia/src/pathops/SkPathOpsCommon.cpp
+  source_file_part = SkPathOpsCommon.cpp
+  source_name_part = SkPathOpsCommon
+build obj/src/pathops/pathkit.SkPathOpsConic.obj: cxx ../../../../../../../../.tools/skia/src/pathops/SkPathOpsConic.cpp
+  source_file_part = SkPathOpsConic.cpp
+  source_name_part = SkPathOpsConic
+build obj/src/pathops/pathkit.SkPathOpsCubic.obj: cxx ../../../../../../../../.tools/skia/src/pathops/SkPathOpsCubic.cpp
+  source_file_part = SkPathOpsCubic.cpp
+  source_name_part = SkPathOpsCubic
+build obj/src/pathops/pathkit.SkPathOpsCurve.obj: cxx ../../../../../../../../.tools/skia/src/pathops/SkPathOpsCurve.cpp
+  source_file_part = SkPathOpsCurve.cpp
+  source_name_part = SkPathOpsCurve
+build obj/src/pathops/pathkit.SkPathOpsDebug.obj: cxx ../../../../../../../../.tools/skia/src/pathops/SkPathOpsDebug.cpp
+  source_file_part = SkPathOpsDebug.cpp
+  source_name_part = SkPathOpsDebug
+build obj/src/pathops/pathkit.SkPathOpsLine.obj: cxx ../../../../../../../../.tools/skia/src/pathops/SkPathOpsLine.cpp
+  source_file_part = SkPathOpsLine.cpp
+  source_name_part = SkPathOpsLine
+build obj/src/pathops/pathkit.SkPathOpsOp.obj: cxx ../../../../../../../../.tools/skia/src/pathops/SkPathOpsOp.cpp
+  source_file_part = SkPathOpsOp.cpp
+  source_name_part = SkPathOpsOp
+build obj/src/pathops/pathkit.SkPathOpsQuad.obj: cxx ../../../../../../../../.tools/skia/src/pathops/SkPathOpsQuad.cpp
+  source_file_part = SkPathOpsQuad.cpp
+  source_name_part = SkPathOpsQuad
+build obj/src/pathops/pathkit.SkPathOpsRect.obj: cxx ../../../../../../../../.tools/skia/src/pathops/SkPathOpsRect.cpp
+  source_file_part = SkPathOpsRect.cpp
+  source_name_part = SkPathOpsRect
+build obj/src/pathops/pathkit.SkPathOpsSimplify.obj: cxx ../../../../../../../../.tools/skia/src/pathops/SkPathOpsSimplify.cpp
+  source_file_part = SkPathOpsSimplify.cpp
+  source_name_part = SkPathOpsSimplify
+build obj/src/pathops/pathkit.SkPathOpsTSect.obj: cxx ../../../../../../../../.tools/skia/src/pathops/SkPathOpsTSect.cpp
+  source_file_part = SkPathOpsTSect.cpp
+  source_name_part = SkPathOpsTSect
+build obj/src/pathops/pathkit.SkPathOpsTightBounds.obj: cxx ../../../../../../../../.tools/skia/src/pathops/SkPathOpsTightBounds.cpp
+  source_file_part = SkPathOpsTightBounds.cpp
+  source_name_part = SkPathOpsTightBounds
+build obj/src/pathops/pathkit.SkPathOpsTypes.obj: cxx ../../../../../../../../.tools/skia/src/pathops/SkPathOpsTypes.cpp
+  source_file_part = SkPathOpsTypes.cpp
+  source_name_part = SkPathOpsTypes
+build obj/src/pathops/pathkit.SkPathOpsWinding.obj: cxx ../../../../../../../../.tools/skia/src/pathops/SkPathOpsWinding.cpp
+  source_file_part = SkPathOpsWinding.cpp
+  source_name_part = SkPathOpsWinding
+build obj/src/pathops/pathkit.SkPathWriter.obj: cxx ../../../../../../../../.tools/skia/src/pathops/SkPathWriter.cpp
+  source_file_part = SkPathWriter.cpp
+  source_name_part = SkPathWriter
+build obj/src/pathops/pathkit.SkReduceOrder.obj: cxx ../../../../../../../../.tools/skia/src/pathops/SkReduceOrder.cpp
+  source_file_part = SkReduceOrder.cpp
+  source_name_part = SkReduceOrder
+
+build ./pathkit.lib: alink obj/src/pathops/pathkit.SkAddIntersections.obj obj/src/pathops/pathkit.SkDConicLineIntersection.obj obj/src/pathops/pathkit.SkDCubicLineIntersection.obj obj/src/pathops/pathkit.SkDCubicToQuads.obj obj/src/pathops/pathkit.SkDLineIntersection.obj obj/src/pathops/pathkit.SkDQuadLineIntersection.obj obj/src/pathops/pathkit.SkIntersections.obj obj/src/pathops/pathkit.SkOpAngle.obj obj/src/pathops/pathkit.SkOpBuilder.obj obj/src/pathops/pathkit.SkOpCoincidence.obj obj/src/pathops/pathkit.SkOpContour.obj obj/src/pathops/pathkit.SkOpCubicHull.obj obj/src/pathops/pathkit.SkOpEdgeBuilder.obj obj/src/pathops/pathkit.SkOpSegment.obj obj/src/pathops/pathkit.SkOpSpan.obj obj/src/pathops/pathkit.SkPathOpsAsWinding.obj obj/src/pathops/pathkit.SkPathOpsCommon.obj obj/src/pathops/pathkit.SkPathOpsConic.obj obj/src/pathops/pathkit.SkPathOpsCubic.obj obj/src/pathops/pathkit.SkPathOpsCurve.obj obj/src/pathops/pathkit.SkPathOpsDebug.obj obj/src/pathops/pathkit.SkPathOpsLine.obj obj/src/pathops/pathkit.SkPathOpsOp.obj obj/src/pathops/pathkit.SkPathOpsQuad.obj obj/src/pathops/pathkit.SkPathOpsRect.obj obj/src/pathops/pathkit.SkPathOpsSimplify.obj obj/src/pathops/pathkit.SkPathOpsTSect.obj obj/src/pathops/pathkit.SkPathOpsTightBounds.obj obj/src/pathops/pathkit.SkPathOpsTypes.obj obj/src/pathops/pathkit.SkPathOpsWinding.obj obj/src/pathops/pathkit.SkPathWriter.obj obj/src/pathops/pathkit.SkReduceOrder.obj || ./skia.lib
+  arflags =
+  output_extension = .lib
+  output_dir = obj

@@ -1,0 +1,98 @@
+defines = -DNO_GETENV -DNO_PUTENV -DBITS_IN_JSAMPLE=12 -D_CRT_SECURE_NO_WARNINGS -D_HAS_EXCEPTIONS=0 -DWIN32_LEAN_AND_MEAN -DNOMINMAX -DNDEBUG
+include_dirs =
+cflags = -Wno-attributes /bigobj /utf-8 -imsvc "C$:\Program$ Files$ (x86)\Microsoft$ Visual$ Studio\2019\BuildTools\VC/Tools/MSVC/14.29.30133/include" -imsvc "C$:/Program$ Files$ (x86)/Windows$ Kits/10/Include/10.0.22621.0/shared" -imsvc "C$:/Program$ Files$ (x86)/Windows$ Kits/10/Include/10.0.22621.0/ucrt" -imsvc "C$:/Program$ Files$ (x86)/Windows$ Kits/10/Include/10.0.22621.0/um" -imsvc "C$:/Program$ Files$ (x86)/Windows$ Kits/10/Include/10.0.22621.0/winrt" /O2 /Zc$:inline /MD -D__RTMINTRIN_H --target=x86_64-pc-windows-msvc
+cflags_c =
+label_name = libjpeg12
+root_out_dir = .
+target_out_dir = obj/third_party/libjpeg-turbo
+target_output_name = libjpeg12
+
+build obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jcapistd.obj: cc ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jcapistd.c
+  source_file_part = jcapistd.c
+  source_name_part = jcapistd
+build obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jccolor.obj: cc ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jccolor.c
+  source_file_part = jccolor.c
+  source_name_part = jccolor
+build obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jcdiffct.obj: cc ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jcdiffct.c
+  source_file_part = jcdiffct.c
+  source_name_part = jcdiffct
+build obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jclossls.obj: cc ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jclossls.c
+  source_file_part = jclossls.c
+  source_name_part = jclossls
+build obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jcmainct.obj: cc ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jcmainct.c
+  source_file_part = jcmainct.c
+  source_name_part = jcmainct
+build obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jcprepct.obj: cc ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jcprepct.c
+  source_file_part = jcprepct.c
+  source_name_part = jcprepct
+build obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jcsample.obj: cc ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jcsample.c
+  source_file_part = jcsample.c
+  source_name_part = jcsample
+build obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jdapistd.obj: cc ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdapistd.c
+  source_file_part = jdapistd.c
+  source_name_part = jdapistd
+build obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jdcolor.obj: cc ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdcolor.c
+  source_file_part = jdcolor.c
+  source_name_part = jdcolor
+build obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jddiffct.obj: cc ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jddiffct.c
+  source_file_part = jddiffct.c
+  source_name_part = jddiffct
+build obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jdlossls.obj: cc ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdlossls.c
+  source_file_part = jdlossls.c
+  source_name_part = jdlossls
+build obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jdmainct.obj: cc ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdmainct.c
+  source_file_part = jdmainct.c
+  source_name_part = jdmainct
+build obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jdpostct.obj: cc ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdpostct.c
+  source_file_part = jdpostct.c
+  source_name_part = jdpostct
+build obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jdsample.obj: cc ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdsample.c
+  source_file_part = jdsample.c
+  source_name_part = jdsample
+build obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jutils.obj: cc ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jutils.c
+  source_file_part = jutils.c
+  source_name_part = jutils
+build obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jccoefct.obj: cc ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jccoefct.c
+  source_file_part = jccoefct.c
+  source_name_part = jccoefct
+build obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jcdctmgr.obj: cc ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jcdctmgr.c
+  source_file_part = jcdctmgr.c
+  source_name_part = jcdctmgr
+build obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jdcoefct.obj: cc ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdcoefct.c
+  source_file_part = jdcoefct.c
+  source_name_part = jdcoefct
+build obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jddctmgr.obj: cc ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jddctmgr.c
+  source_file_part = jddctmgr.c
+  source_name_part = jddctmgr
+build obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jdmerge.obj: cc ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdmerge.c
+  source_file_part = jdmerge.c
+  source_name_part = jdmerge
+build obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jfdctfst.obj: cc ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jfdctfst.c
+  source_file_part = jfdctfst.c
+  source_name_part = jfdctfst
+build obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jfdctint.obj: cc ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jfdctint.c
+  source_file_part = jfdctint.c
+  source_name_part = jfdctint
+build obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jidctflt.obj: cc ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jidctflt.c
+  source_file_part = jidctflt.c
+  source_name_part = jidctflt
+build obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jidctfst.obj: cc ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jidctfst.c
+  source_file_part = jidctfst.c
+  source_name_part = jidctfst
+build obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jidctint.obj: cc ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jidctint.c
+  source_file_part = jidctint.c
+  source_name_part = jidctint
+build obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jidctred.obj: cc ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jidctred.c
+  source_file_part = jidctred.c
+  source_name_part = jidctred
+build obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jquant1.obj: cc ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jquant1.c
+  source_file_part = jquant1.c
+  source_name_part = jquant1
+build obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jquant2.obj: cc ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jquant2.c
+  source_file_part = jquant2.c
+  source_name_part = jquant2
+
+build ./libjpeg12.lib: alink obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jcapistd.obj obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jccolor.obj obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jcdiffct.obj obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jclossls.obj obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jcmainct.obj obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jcprepct.obj obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jcsample.obj obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jdapistd.obj obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jdcolor.obj obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jddiffct.obj obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jdlossls.obj obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jdmainct.obj obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jdpostct.obj obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jdsample.obj obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jutils.obj obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jccoefct.obj obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jcdctmgr.obj obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jdcoefct.obj obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jddctmgr.obj obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jdmerge.obj obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jfdctfst.obj obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jfdctint.obj obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jidctflt.obj obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jidctfst.obj obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jidctint.obj obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jidctred.obj obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jquant1.obj obj/third_party/externals/libjpeg-turbo/src/libjpeg12.jquant2.obj || obj/third_party/libjpeg-turbo/libjpeg_headers.stamp
+  arflags =
+  output_extension = .lib
+  output_dir = obj/third_party/libjpeg-turbo

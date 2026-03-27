@@ -1,0 +1,23 @@
+defines = -DSKSHAPER_IMPLEMENTATION=1 -D_CRT_SECURE_NO_WARNINGS -D_HAS_EXCEPTIONS=0 -DWIN32_LEAN_AND_MEAN -DNOMINMAX -DNDEBUG -DSK_GAMMA_APPLY_TO_A8 -DSK_ENABLE_AVX512_OPTS -DSK_SHAPER_PRIMITIVE_AVAILABLE -DSK_TYPEFACE_FACTORY_DIRECTWRITE -DSK_FONTMGR_DIRECTWRITE_AVAILABLE -DSK_FONTMGR_GDI_AVAILABLE -DSK_CODEC_DECODES_ICO -DSK_CODEC_DECODES_PNG -DSK_CODEC_DECODES_PNG_WITH_LIBPNG -DSK_CODEC_ENCODES_PNG -DSK_CODEC_ENCODES_PNG_WITH_LIBPNG -DSK_CODEC_ENCODES_JPEG -DSK_SUPPORT_PDF -DSK_CODEC_DECODES_JPEG -DSK_HAS_WUFFS_LIBRARY -DSK_CODEC_DECODES_GIF -DSK_XML -DSK_CODEC_DECODES_BMP -DSK_CODEC_DECODES_WBMP -DSK_ENABLE_PRECOMPILE -DSK_DISABLE_TRACING
+include_dirs = -I../../../../../../../../.tools/skia/modules/skshaper/include -I../../../../../../../../.tools/skia
+cflags = -Wno-attributes /bigobj /utf-8 -imsvc "C$:\Program$ Files$ (x86)\Microsoft$ Visual$ Studio\2019\BuildTools\VC/Tools/MSVC/14.29.30133/include" -imsvc "C$:/Program$ Files$ (x86)/Windows$ Kits/10/Include/10.0.22621.0/shared" -imsvc "C$:/Program$ Files$ (x86)/Windows$ Kits/10/Include/10.0.22621.0/ucrt" -imsvc "C$:/Program$ Files$ (x86)/Windows$ Kits/10/Include/10.0.22621.0/um" -imsvc "C$:/Program$ Files$ (x86)/Windows$ Kits/10/Include/10.0.22621.0/winrt" /O2 /Zc$:inline /MD -D__RTMINTRIN_H --target=x86_64-pc-windows-msvc
+cflags_cc = /std$:c++17 /GR-
+label_name = skshaper
+root_out_dir = .
+target_out_dir = obj/modules/skshaper
+target_output_name = skshaper
+
+build obj/modules/skshaper/src/skshaper.SkShaper.obj: cxx ../../../../../../../../.tools/skia/modules/skshaper/src/SkShaper.cpp
+  source_file_part = SkShaper.cpp
+  source_name_part = SkShaper
+build obj/modules/skshaper/src/skshaper.SkShaper_factory.obj: cxx ../../../../../../../../.tools/skia/modules/skshaper/src/SkShaper_factory.cpp
+  source_file_part = SkShaper_factory.cpp
+  source_name_part = SkShaper_factory
+build obj/modules/skshaper/src/skshaper.SkShaper_primitive.obj: cxx ../../../../../../../../.tools/skia/modules/skshaper/src/SkShaper_primitive.cpp
+  source_file_part = SkShaper_primitive.cpp
+  source_name_part = SkShaper_primitive
+
+build ./skshaper.lib: alink obj/modules/skshaper/src/skshaper.SkShaper.obj obj/modules/skshaper/src/skshaper.SkShaper_factory.obj obj/modules/skshaper/src/skshaper.SkShaper_primitive.obj || ./skia.lib
+  arflags =
+  output_extension = .lib
+  output_dir = obj/modules/skshaper

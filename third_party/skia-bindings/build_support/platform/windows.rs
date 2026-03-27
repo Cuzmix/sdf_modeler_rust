@@ -11,6 +11,7 @@ impl PlatformDetails for Msvc {
 
     fn gn_args(&self, config: &BuildConfiguration, builder: &mut GnArgsBuilder) {
         if let Some(win_vc) = resolve_vc() {
+            let win_vc = cargo::normalize_path_for_windows_tools(win_vc);
             builder.arg(
                 "win_vc",
                 quote(
@@ -116,7 +117,9 @@ fn resolve_vc() -> Option<PathBuf> {
         // vcvars.bat may end up setting VCINSTALLDIR to a path with trailing backslash, we
         // invoke GN  as win_vc="the path", and we end up with "foo\", which erroneously
         // escapes the quote instead of closing.
-        return Some(PathBuf::from(install_dir.trim_end_matches('\\')));
+        return Some(cargo::normalize_path_for_windows_tools(PathBuf::from(
+            install_dir.trim_end_matches('\\'),
+        )));
     }
 
     let releases = [("Program Files", "2022"), ("Program Files (x86)", "2019")];
@@ -166,7 +169,9 @@ mod llvm {
     /// Return the clang's highest version directory by scanning the directories in
     /// `LLVM_HOME\lib\clang\*`.
     pub fn clang_version_dir(home: &str) -> Option<String> {
-        let path: PathBuf = [home, "lib", "clang"].into_iter().collect();
+        let path = cargo::normalize_path_for_windows_tools(PathBuf::from(home))
+            .join("lib")
+            .join("clang");
         let mut highest_version = None;
         let mut highest_version_path = None;
         for entry in fs::read_dir(path).ok()? {
@@ -181,14 +186,17 @@ mod llvm {
                 }
             }
         }
-        let path = highest_version_path?;
+        let path = cargo::normalize_path_for_windows_tools(highest_version_path?);
         Some(path.to_str()?.to_string())
     }
 
     fn validate_home(home: &str) -> Option<String> {
-        let clang_cl: PathBuf = [home, "bin", "clang-cl.exe"].into_iter().collect();
+        let home = cargo::normalize_path_for_windows_tools(PathBuf::from(home));
+        let clang_cl = home.join("bin").join("clang-cl.exe");
         eprintln!("Checking for {clang_cl:?}");
-        clang_cl.exists().then(|| home.to_string())
+        clang_cl
+            .exists()
+            .then(|| home.to_str().expect("llvm home must be valid UTF-8").to_string())
     }
 
     fn parse_version(s: &str) -> Option<(usize, usize, usize)> {

@@ -1,0 +1,902 @@
+cargo:rerun-if-env-changed=DOCS_RS
+cargo:rerun-if-env-changed=SKIA_DEBUG
+cargo:rerun-if-env-changed=SKIA_SOURCE_DIR
+cargo:rerun-if-env-changed=SKIA_LIBRARY_SEARCH_PATH
+STARTING CUSTOM SOURCE BUILD
+cargo:rerun-if-env-changed=CLANGCC
+cargo:rerun-if-env-changed=CC
+cargo:rerun-if-env-changed=CLANGCXX
+cargo:rerun-if-env-changed=CXX
+cargo:rerun-if-env-changed=OPT_LEVEL
+cargo:rerun-if-env-changed=SKIA_USE_SYSTEM_LIBRARIES
+cargo:rerun-if-env-changed=SDKTARGETSYSROOT
+cargo:rerun-if-env-changed=SDKROOT
+cargo:rerun-if-env-changed=VCINSTALLDIR
+cargo:rerun-if-env-changed=LLVM_HOME
+cargo:rerun-if-env-changed=SKIA_NINJA_COMMAND
+cargo:rerun-if-env-changed=SKIA_GN_COMMAND
+Probing 'python'
+Python 3 found: "python"
+Synchronizing Skia dependencies
+cargo:rerun-if-env-changed=SKIA_SOURCE_DIR
+Skipping "bin".
+Skipping "infra/skia-infra".
+Skipping "task_drivers".
+skia\third_party/externals/brotli    @ 6d03dfbedda1615c4cba1211f8d81735575209c8
+skia\third_party/externals/expat     @ 8e49998f003d693213b538ef765814c7d21abada
+...rd_party/externals/d3d12allocator @ 169895d529dfce00390a20e69c2f516066fe7a3b
+skia\third_party/externals/harfbuzz  @ 08b52ae2e44931eef163dbad71697f911fadc323
+skia\third_party/externals/icu       @ 364118a1d9da24bb5b770ac3d762ac144d6da5a4
+skia\third_party/externals/zlib      @ 646b7f569718921d7d4b5b8e22572ff6c76f2596
+...third_party/externals/spirv-cross @ b8fcf307f1f347089e3c46eb4451d27f32ebc8d3
+...ird_party/externals/libjpeg-turbo @ e14cbfaa85529d47f9f55b0f104a579c1061f9ad
+skia\third_party/externals/freetype  @ 1518bc83d26b434031bd12c706ac3c7dab3902fd
+...y/externals/vulkanmemoryallocator @ a6bfc237255a6bac1513f7c1ebde6d8aed6b5191
+skia\third_party/externals/wuffs     @ e3f919ccfe3ef542cfc983a82146070258fb57f8
+skia\third_party/externals/libpng    @ ed217e3e601d8e462f7fd1e04bed43ac42212429
+skia\third_party/externals/libwebp   @ 845d5476a866141ba35ac133f856fa62f0b7445f
+cargo:rerun-if-env-changed=SKIA_GN_ARGS
+Skia args: is_official_build=true is_debug=false skia_enable_svg=false skia_enable_ganesh=false skia_enable_skottie=false skia_enable_pdf=true skia_use_gl=false skia_use_egl=false skia_use_x11=false skia_use_system_libpng=false skia_use_libwebp_encode=false skia_use_libwebp_decode=false skia_use_system_zlib=false skia_use_xps=false skia_use_dng_sdk=false cc="clang" cxx="clang++" skia_use_icu=false skia_use_harfbuzz=false skia_use_freetype=false skia_use_system_libjpeg_turbo=false skia_use_expat=true skia_use_system_expat=false win_vc="C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC" clang_win="C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools/llvm" clang_win_version="C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools/llvm\lib\clang\21" target_cpu="x86_64" is_trivial_abi=false extra_cflags=["/MD","-D__RTMINTRIN_H","--target=x86_64-pc-windows-msvc"] extra_asmflags=["--target=x86_64-pc-windows-msvc"]
+Done. Made 99 targets from 38 files in 267ms
+ninja: Entering directory `C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\third_party\skia-bindings\target\debug\build\skia-bindings-710cca95faacc7c9\out\skia'
+[1/768] stamp obj/third_party/zlib/zlib_common_headers.stamp
+[2/768] compile ../../../../../../../../.tools/skia/third_party/externals/zlib/gzread.c
+[3/768] compile ../../../../../../../../.tools/skia/third_party/externals/zlib/crc32.c
+[4/768] compile ../../../../../../../../.tools/skia/third_party/externals/zlib/adler32_simd.c
+[5/768] compile ../../../../../../../../.tools/skia/third_party/externals/zlib/gzclose.c
+[6/768] compile ../../../../../../../../.tools/skia/third_party/externals/zlib/compress.c
+[7/768] compile ../../../../../../../../.tools/skia/third_party/externals/zlib/gzlib.c
+[8/768] compile ../../../../../../../../.tools/skia/third_party/externals/zlib/gzwrite.c
+[9/768] compile ../../../../../../../../.tools/skia/third_party/externals/zlib/adler32.c
+[10/768] compile ../../../../../../../../.tools/skia/third_party/externals/zlib/crc32_simd.c
+[11/768] stamp obj/third_party/zlib/zlib_adler32_simd.stamp
+[12/768] stamp obj/third_party/zlib/zlib_slide_hash_simd.stamp
+[13/768] compile ../../../../../../../../.tools/skia/third_party/externals/zlib/contrib/optimizations/inffast_chunk.c
+[14/768] compile ../../../../../../../../.tools/skia/third_party/externals/zlib/uncompr.c
+[15/768] compile ../../../../../../../../.tools/skia/third_party/externals/zlib/inftrees.c
+[16/768] compile ../../../../../../../../.tools/skia/third_party/externals/zlib/zutil.c
+[17/768] compile ../../../../../../../../.tools/skia/third_party/externals/zlib/deflate.c
+[18/768] compile ../../../../../../../../.tools/skia/third_party/externals/zlib/inffast.c
+[19/768] compile ../../../../../../../../.tools/skia/third_party/externals/zlib/infback.c
+[20/768] compile ../../../../../../../../.tools/skia/third_party/externals/zlib/trees.c
+[21/768] compile ../../../../../../../../.tools/skia/third_party/externals/zlib/contrib/optimizations/inflate.c
+[22/768] stamp obj/third_party/zlib/zlib_inflate_chunk_simd.stamp
+[23/768] compile ../../../../../../../../.tools/skia/third_party/externals/libpng/pngrio.c
+[24/768] compile ../../../../../../../../.tools/skia/third_party/externals/zlib/crc_folding.c
+[25/768] compile ../../../../../../../../.tools/skia/third_party/externals/libpng/pngmem.c
+[26/768] compile ../../../../../../../../.tools/skia/third_party/externals/libpng/pngerror.c
+[27/768] stamp obj/third_party/zlib/zlib_crc32_simd.stamp
+[28/768] compile ../../../../../../../../.tools/skia/third_party/externals/libpng/pngpread.c
+[29/768] compile ../../../../../../../../.tools/skia/third_party/externals/libpng/pngget.c
+[30/768] compile ../../../../../../../../.tools/skia/third_party/externals/libpng/pngset.c
+[31/768] compile ../../../../../../../../.tools/skia/src/encode/SkPngEncoderBase.cpp
+[32/768] compile ../../../../../../../../.tools/skia/third_party/externals/zlib/cpu_features.c
+[33/768] compile ../../../../../../../../.tools/skia/third_party/externals/libpng/pngread.c
+[34/768] compile ../../../../../../../../.tools/skia/third_party/externals/libpng/png.c
+[35/768] compile ../../../../../../../../.tools/skia/src/codec/SkPngCodecBase.cpp
+[36/768] compile ../../../../../../../../.tools/skia/third_party/externals/libpng/pngrutil.c
+[37/768] compile ../../../../../../../../.tools/skia/third_party/externals/libpng/pngwio.c
+[38/768] compile ../../../../../../../../.tools/skia/third_party/externals/libpng/pngtrans.c
+[39/768] stamp obj/png_decode_common.stamp
+[40/768] compile ../../../../../../../../.tools/skia/third_party/externals/libpng/pngwtran.c
+[41/768] compile ../../../../../../../../.tools/skia/third_party/externals/libpng/pngrtran.c
+[42/768] stamp obj/png_encode_common.stamp
+[43/768] compile ../../../../../../../../.tools/skia/third_party/externals/libpng/intel/intel_init.c
+[44/768] link zlib.lib
+[45/768] compile ../../../../../../../../.tools/skia/third_party/externals/libpng/pngwrite.c
+[46/768] compile ../../../../../../../../.tools/skia/src/base/SkBase64.cpp
+[47/768] compile ../../../../../../../../.tools/skia/third_party/externals/libpng/intel/filter_sse2_intrinsics.c
+[48/768] compile ../../../../../../../../.tools/skia/src/base/SkArenaAlloc.cpp
+[49/768] compile ../../../../../../../../.tools/skia/third_party/externals/libpng/pngwutil.c
+[50/768] compile ../../../../../../../../.tools/skia/src/codec/SkPngCompositeChunkReader.cpp
+[51/768] compile ../../../../../../../../.tools/skia/src/base/SkBezierCurves.cpp
+[52/768] compile ../../../../../../../../.tools/skia/src/base/SkBlockAllocator.cpp
+[53/768] compile ../../../../../../../../.tools/skia/src/base/SkBuffer.cpp
+[54/768] compile ../../../../../../../../.tools/skia/src/base/SkDebug.cpp
+[55/768] compile ../../../../../../../../.tools/skia/src/base/SkContainers.cpp
+[56/768] compile ../../../../../../../../.tools/skia/src/base/SkDeque.cpp
+[57/768] link libpng.lib
+[58/768] compile ../../../../../../../../.tools/skia/src/base/SkCubics.cpp
+[59/768] compile ../../../../../../../../.tools/skia/src/codec/SkPngCodec.cpp
+[60/768] compile ../../../../../../../../.tools/skia/src/encode/SkPngEncoderImpl.cpp
+[61/768] compile ../../../../../../../../.tools/skia/src/base/SkFloatingPoint.cpp
+[62/768] compile ../../../../../../../../.tools/skia/src/base/SkSafeMath.cpp
+[63/768] compile ../../../../../../../../.tools/skia/src/base/SkMalloc.cpp
+[64/768] compile ../../../../../../../../.tools/skia/src/base/SkQuads.cpp
+[65/768] compile ../../../../../../../../.tools/skia/src/base/SkHalf.cpp
+[66/768] compile ../../../../../../../../.tools/skia/src/base/SkSpinlock.cpp
+[67/768] compile ../../../../../../../../.tools/skia/src/base/SkSharedMutex.cpp
+[68/768] compile ../../../../../../../../.tools/skia/src/base/SkTDArray.cpp
+[69/768] compile ../../../../../../../../.tools/skia/src/codec/SkIcoCodec.cpp
+[70/768] compile ../../../../../../../../.tools/skia/src/base/SkTSearch.cpp
+[71/768] compile ../../../../../../../../.tools/skia/src/base/SkSemaphore.cpp
+[72/768] compile ../../../../../../../../.tools/skia/src/base/SkThreadID.cpp
+[73/768] compile ../../../../../../../../.tools/skia/src/base/SkUtils.cpp
+[74/768] compile ../../../../../../../../.tools/skia/src/base/SkUTF.cpp
+[75/768] compile ../../../../../../../../.tools/skia/src/base/SkTime.cpp
+[76/768] compile ../../../../../../../../.tools/skia/src/ports/SkFontMgr_win_dw.cpp
+[77/768] compile ../../../../../../../../.tools/skia/src/core/SkATrace.cpp
+[78/768] compile ../../../../../../../../.tools/skia/src/base/SkMathPriv.cpp
+[79/768] compile ../../../../../../../../.tools/skia/src/core/SkAlphaRuns.cpp
+[80/768] compile ../../../../../../../../.tools/skia/src/capture/SkCaptureManager.cpp
+[81/768] compile ../../../../../../../../.tools/skia/src/core/SkAutoPixmapStorage.cpp
+[82/768] compile ../../../../../../../../.tools/skia/src/capture/SkCaptureCanvas.cpp
+[83/768] compile ../../../../../../../../.tools/skia/src/core/SkAnnotation.cpp
+[84/768] compile ../../../../../../../../.tools/skia/src/core/SkBBHFactory.cpp
+[85/768] compile ../../../../../../../../.tools/skia/src/core/SkBitmapProcState_opts_lasx.cpp
+[86/768] compile ../../../../../../../../.tools/skia/src/ports/SkTypeface_win_dw.cpp
+[87/768] compile ../../../../../../../../.tools/skia/src/ports/SkScalerContext_win_dw.cpp
+[88/768] compile ../../../../../../../../.tools/skia/src/core/SkAAClip.cpp
+[89/768] compile ../../../../../../../../.tools/skia/src/core/SkBitmap.cpp
+[90/768] compile ../../../../../../../../.tools/skia/src/core/SkBitmapCache.cpp
+[91/768] compile ../../../../../../../../.tools/skia/src/core/SkBitmapProcState.cpp
+[92/768] compile ../../../../../../../../.tools/skia/src/core/SkAnalyticEdge.cpp
+[93/768] compile ../../../../../../../../.tools/skia/src/ports/SkFontHost_win.cpp
+[94/768] compile ../../../../../../../../.tools/skia/src/core/SkBitmapProcState_matrixProcs.cpp
+[95/768] compile ../../../../../../../../.tools/skia/src/core/SkBlendMode.cpp
+[96/768] compile ../../../../../../../../.tools/skia/src/core/SkBigPicture.cpp
+[97/768] compile ../../../../../../../../.tools/skia/src/core/SkBlitRow_D32.cpp
+[98/768] compile ../../../../../../../../.tools/skia/src/core/SkBlitMask_opts.cpp
+[99/768] compile ../../../../../../../../.tools/skia/src/core/SkBitmapDevice.cpp
+[100/768] compile ../../../../../../../../.tools/skia/src/core/SkBlitRow_opts_lasx.cpp
+[101/768] compile ../../../../../../../../.tools/skia/src/core/SkBitmapProcState_opts_ssse3.cpp
+In file included from ../../../../../../../../.tools/skia/src/core/SkBitmapProcState_opts_ssse3.cpp:19:
+../../../../../../../../.tools/skia\src/opts/SkOpts_SetTarget.h(68,17): warning: '__RTMINTRIN_H' macro redefined [-Wmacro-redefined]
+   68 |         #define __RTMINTRIN_H  // Workaround for https://github.com/llvm/llvm-project/issues/95133
+      |                 ^
+<command line>(23,9): note: previous definition is here
+   23 | #define __RTMINTRIN_H 1
+      |         ^
+1 warning generated.
+[102/768] compile ../../../../../../../../.tools/skia/src/core/SkBitmapProcState_opts.cpp
+[103/768] compile ../../../../../../../../.tools/skia/src/core/SkBlitter_Sprite.cpp
+[104/768] compile ../../../../../../../../.tools/skia/src/core/SkBlitter.cpp
+[105/768] compile ../../../../../../../../.tools/skia/src/core/SkBlitRow_opts_hsw.cpp
+In file included from ../../../../../../../../.tools/skia/src/core/SkBlitRow_opts_hsw.cpp:20:
+../../../../../../../../.tools/skia\src/opts/SkOpts_SetTarget.h(68,17): warning: '__RTMINTRIN_H' macro redefined [-Wmacro-redefined]
+   68 |         #define __RTMINTRIN_H  // Workaround for https://github.com/llvm/llvm-project/issues/95133
+      |                 ^
+<command line>(23,9): note: previous definition is here
+   23 | #define __RTMINTRIN_H 1
+      |         ^
+1 warning generated.
+[106/768] compile ../../../../../../../../.tools/skia/src/core/SkCPUContext.cpp
+[107/768] compile ../../../../../../../../.tools/skia/src/core/SkBlitter_ARGB32.cpp
+[108/768] compile ../../../../../../../../.tools/skia/src/core/SkBlitter_A8.cpp
+[109/768] compile ../../../../../../../../.tools/skia/src/core/SkBlitMask_opts_ssse3.cpp
+In file included from ../../../../../../../../.tools/skia/src/core/SkBlitMask_opts_ssse3.cpp:20:
+../../../../../../../../.tools/skia\src/opts/SkOpts_SetTarget.h(68,17): warning: '__RTMINTRIN_H' macro redefined [-Wmacro-redefined]
+   68 |         #define __RTMINTRIN_H  // Workaround for https://github.com/llvm/llvm-project/issues/95133
+      |                 ^
+<command line>(23,9): note: previous definition is here
+   23 | #define __RTMINTRIN_H 1
+      |         ^
+1 warning generated.
+[110/768] compile ../../../../../../../../.tools/skia/src/core/SkCachedData.cpp
+[111/768] compile ../../../../../../../../.tools/skia/src/core/SkCPURecorder.cpp
+[112/768] compile ../../../../../../../../.tools/skia/src/core/SkBlitRow_opts.cpp
+[113/768] compile ../../../../../../../../.tools/skia/src/core/SkCapabilities.cpp
+[114/768] compile ../../../../../../../../.tools/skia/src/core/SkColorFilter.cpp
+[115/768] compile ../../../../../../../../.tools/skia/src/core/SkColor.cpp
+[116/768] compile ../../../../../../../../.tools/skia/src/core/SkBlendModeBlender.cpp
+[117/768] compile ../../../../../../../../.tools/skia/src/core/SkChecksum.cpp
+[118/768] compile ../../../../../../../../.tools/skia/src/core/SkBlurMask.cpp
+[119/768] compile ../../../../../../../../.tools/skia/src/core/SkCanvasPriv.cpp
+[120/768] compile ../../../../../../../../.tools/skia/src/core/SkBlurMaskFilterImpl.cpp
+[121/768] compile ../../../../../../../../.tools/skia/src/core/SkBlurEngine.cpp
+[122/768] compile ../../../../../../../../.tools/skia/src/core/SkCanvas_Raster.cpp
+[123/768] compile ../../../../../../../../.tools/skia/src/core/SkColorSpaceXformSteps.cpp
+[124/768] compile ../../../../../../../../.tools/skia/src/core/SkCubicClipper.cpp
+[125/768] compile ../../../../../../../../.tools/skia/src/core/SkClipStackDevice.cpp
+[126/768] compile ../../../../../../../../.tools/skia/src/core/SkConvertPixels.cpp
+[127/768] compile ../../../../../../../../.tools/skia/src/core/SkContourMeasure.cpp
+[128/768] compile ../../../../../../../../.tools/skia/src/core/SkCubicMap.cpp
+[129/768] compile ../../../../../../../../.tools/skia/src/core/SkColorTable.cpp
+[130/768] compile ../../../../../../../../.tools/skia/src/core/SkColorSpace.cpp
+[131/768] compile ../../../../../../../../.tools/skia/src/core/SkClipStack.cpp
+[132/768] compile ../../../../../../../../.tools/skia/src/core/SkDistanceFieldGen.cpp
+[133/768] compile ../../../../../../../../.tools/skia/src/core/SkData.cpp
+[134/768] compile ../../../../../../../../.tools/skia/src/core/SkDataTable.cpp
+[135/768] compile ../../../../../../../../.tools/skia/src/core/SkCompressedDataUtils.cpp
+[136/768] compile ../../../../../../../../.tools/skia/src/core/SkCpu.cpp
+[137/768] compile ../../../../../../../../.tools/skia/src/core/SkDrawable.cpp
+[138/768] compile ../../../../../../../../.tools/skia/src/core/SkCanvas.cpp
+[139/768] compile ../../../../../../../../.tools/skia/src/core/SkDocument.cpp
+[140/768] compile ../../../../../../../../.tools/skia/src/core/SkDraw_text.cpp
+[141/768] compile ../../../../../../../../.tools/skia/src/core/SkDrawShadowInfo.cpp
+[142/768] compile ../../../../../../../../.tools/skia/src/core/SkDescriptor.cpp
+[143/768] compile ../../../../../../../../.tools/skia/src/core/SkDraw_atlas.cpp
+[144/768] compile ../../../../../../../../.tools/skia/src/core/SkEdgeBuilder.cpp
+[145/768] compile ../../../../../../../../.tools/skia/src/core/SkEdgeClipper.cpp
+[146/768] compile ../../../../../../../../.tools/skia/src/core/SkEdge.cpp
+[147/768] compile ../../../../../../../../.tools/skia/src/core/SkDraw_vertices.cpp
+[148/768] compile ../../../../../../../../.tools/skia/src/core/SkFontStream.cpp
+[149/768] compile ../../../../../../../../.tools/skia/src/core/SkDraw.cpp
+[150/768] compile ../../../../../../../../.tools/skia/src/core/SkFontDescriptor.cpp
+[151/768] compile ../../../../../../../../.tools/skia/src/core/SkGaussFilter.cpp
+[152/768] compile ../../../../../../../../.tools/skia/src/core/SkFontMgr.cpp
+[153/768] compile ../../../../../../../../.tools/skia/src/core/SkGlobalInitialization_core.cpp
+[154/768] compile ../../../../../../../../.tools/skia/src/core/SkExecutor.cpp
+[155/768] compile ../../../../../../../../.tools/skia/src/core/SkFontMetricsPriv.cpp
+[156/768] compile ../../../../../../../../.tools/skia/src/core/SkIDChangeListener.cpp
+[157/768] compile ../../../../../../../../.tools/skia/src/core/SkFont.cpp
+[158/768] compile ../../../../../../../../.tools/skia/src/core/SkGeometry.cpp
+[159/768] compile ../../../../../../../../.tools/skia/src/core/SkImageGenerator.cpp
+[160/768] compile ../../../../../../../../.tools/skia/src/core/SkDevice.cpp
+[161/768] compile ../../../../../../../../.tools/skia/src/core/SkFont_serial.cpp
+[162/768] compile ../../../../../../../../.tools/skia/src/core/SkFlattenable.cpp
+[163/768] compile ../../../../../../../../.tools/skia/src/core/SkImageInfo.cpp
+[164/768] compile ../../../../../../../../.tools/skia/src/core/SkLineClipper.cpp
+[165/768] compile ../../../../../../../../.tools/skia/src/core/SkLatticeIter.cpp
+[166/768] compile ../../../../../../../../.tools/skia/src/core/SkMallocPixelRef.cpp
+[167/768] compile ../../../../../../../../.tools/skia/src/core/SkKnownRuntimeEffects.cpp
+[168/768] compile ../../../../../../../../.tools/skia/src/core/SkGlyph.cpp
+[169/768] compile ../../../../../../../../.tools/skia/src/core/SkGraphics.cpp
+[170/768] compile ../../../../../../../../.tools/skia/src/core/SkM44.cpp
+[171/768] compile ../../../../../../../../.tools/skia/src/core/SkImageFilter.cpp
+[172/768] compile ../../../../../../../../.tools/skia/src/core/SkMD5.cpp
+[173/768] compile ../../../../../../../../.tools/skia/src/core/SkMask.cpp
+[174/768] compile ../../../../../../../../.tools/skia/src/core/SkMaskGamma.cpp
+[175/768] compile ../../../../../../../../.tools/skia/src/core/SkMasks.cpp
+[176/768] compile ../../../../../../../../.tools/skia/src/core/SkGlyphRunPainter.cpp
+[177/768] compile ../../../../../../../../.tools/skia/src/core/SkMaskBlurFilter.cpp
+[178/768] compile ../../../../../../../../.tools/skia/src/core/SkImageFilterCache.cpp
+[179/768] compile ../../../../../../../../.tools/skia/src/core/SkMaskFilter.cpp
+[180/768] compile ../../../../../../../../.tools/skia/src/core/SkMatrixInvert.cpp
+[181/768] compile ../../../../../../../../.tools/skia/src/core/SkMemset_opts.cpp
+[182/768] compile ../../../../../../../../.tools/skia/src/core/SkMaskCache.cpp
+[183/768] compile ../../../../../../../../.tools/skia/src/core/SkMipmapDrawDownSampler.cpp
+[184/768] compile ../../../../../../../../.tools/skia/src/core/SkMipmapBuilder.cpp
+[185/768] compile ../../../../../../../../.tools/skia/src/core/SkMatrix.cpp
+[186/768] compile ../../../../../../../../.tools/skia/src/core/SkLocalMatrixImageFilter.cpp
+[187/768] compile ../../../../../../../../.tools/skia/src/core/SkMemset_opts_erms.cpp
+[188/768] compile ../../../../../../../../.tools/skia/src/core/SkMaskFilterBase.cpp
+[189/768] compile ../../../../../../../../.tools/skia/src/core/SkMipmap.cpp
+[190/768] compile ../../../../../../../../.tools/skia/src/core/SkMipmapAccessor.cpp
+[191/768] compile ../../../../../../../../.tools/skia/src/core/SkImageFilterTypes.cpp
+[192/768] compile ../../../../../../../../.tools/skia/src/core/SkMemset_opts_avx.cpp
+In file included from ../../../../../../../../.tools/skia/src/core/SkMemset_opts_avx.cpp:20:
+../../../../../../../../.tools/skia\src/opts/SkOpts_SetTarget.h(68,17): warning: '__RTMINTRIN_H' macro redefined [-Wmacro-redefined]
+   68 |         #define __RTMINTRIN_H  // Workaround for https://github.com/llvm/llvm-project/issues/95133
+      |                 ^
+<command line>(23,9): note: previous definition is here
+   23 | #define __RTMINTRIN_H 1
+      |         ^
+1 warning generated.
+[193/768] compile ../../../../../../../../.tools/skia/src/core/SkOverdrawCanvas.cpp
+[194/768] compile ../../../../../../../../.tools/skia/src/core/SkPathMeasure.cpp
+[195/768] compile ../../../../../../../../.tools/skia/src/core/SkMipmapHQDownSampler.cpp
+[196/768] compile ../../../../../../../../.tools/skia/src/core/SkPathBuilder.cpp
+[197/768] compile ../../../../../../../../.tools/skia/src/core/SkPathRaw.cpp
+[198/768] compile ../../../../../../../../.tools/skia/src/core/SkPaint.cpp
+[199/768] compile ../../../../../../../../.tools/skia/src/core/SkPathIter.cpp
+[200/768] compile ../../../../../../../../.tools/skia/src/core/SkPaintPriv.cpp
+[201/768] compile ../../../../../../../../.tools/skia/src/core/SkPath_serial.cpp
+[202/768] compile ../../../../../../../../.tools/skia/src/core/SkPathRef.cpp
+[203/768] compile ../../../../../../../../.tools/skia/src/core/SkPathPriv.cpp
+[204/768] compile ../../../../../../../../.tools/skia/src/core/SkPathRawShapes.cpp
+[205/768] compile ../../../../../../../../.tools/skia/src/core/SkPathEffect.cpp
+[206/768] compile ../../../../../../../../.tools/skia/src/core/SkPathUtils.cpp
+[207/768] compile ../../../../../../../../.tools/skia/src/core/SkPictureRecorder.cpp
+[208/768] compile ../../../../../../../../.tools/skia/src/core/SkPoint.cpp
+[209/768] compile ../../../../../../../../.tools/skia/src/core/SkPoint3.cpp
+[210/768] compile ../../../../../../../../.tools/skia/src/core/SkPixelRef.cpp
+[211/768] compile ../../../../../../../../.tools/skia/src/core/SkPixmap.cpp
+[212/768] compile ../../../../../../../../.tools/skia/src/core/SkPath.cpp
+[213/768] compile ../../../../../../../../.tools/skia/src/core/SkPtrRecorder.cpp
+[214/768] compile ../../../../../../../../.tools/skia/src/core/SkPicturePlayback.cpp
+[215/768] compile ../../../../../../../../.tools/skia/src/core/SkPictureData.cpp
+[216/768] compile ../../../../../../../../.tools/skia/src/core/SkRSXform.cpp
+[217/768] compile ../../../../../../../../.tools/skia/src/core/SkPixmapDraw.cpp
+[218/768] compile ../../../../../../../../.tools/skia/src/core/SkQuadClipper.cpp
+[219/768] compile ../../../../../../../../.tools/skia/src/core/SkMesh.cpp
+[220/768] compile ../../../../../../../../.tools/skia/src/core/SkReadPixelsRec.cpp
+[221/768] compile ../../../../../../../../.tools/skia/src/core/SkRasterClip.cpp
+[222/768] compile ../../../../../../../../.tools/skia/src/core/SkPicture.cpp
+[223/768] compile ../../../../../../../../.tools/skia/src/core/SkPictureFlat.cpp
+[224/768] compile ../../../../../../../../.tools/skia/src/core/SkRTree.cpp
+[225/768] compile ../../../../../../../../.tools/skia/src/core/SkOpts.cpp
+[226/768] compile ../../../../../../../../.tools/skia/src/core/SkRasterPipeline.cpp
+[227/768] compile ../../../../../../../../.tools/skia/src/core/SkRRect.cpp
+[228/768] compile ../../../../../../../../.tools/skia/src/core/SkRasterPipelineBlitter.cpp
+[229/768] compile ../../../../../../../../.tools/skia/src/core/SkPictureRecord.cpp
+[230/768] compile ../../../../../../../../.tools/skia/src/core/SkRecords.cpp
+[231/768] compile ../../../../../../../../.tools/skia/src/core/SkRecord.cpp
+[232/768] compile ../../../../../../../../.tools/skia/src/core/SkSLTypeShared.cpp
+[233/768] compile ../../../../../../../../.tools/skia/src/core/SkScalar.cpp
+[234/768] compile ../../../../../../../../.tools/skia/src/core/SkRegion.cpp
+[235/768] compile ../../../../../../../../.tools/skia/src/core/SkRecordDraw.cpp
+[236/768] compile ../../../../../../../../.tools/skia/src/core/SkRecordCanvas.cpp
+[237/768] compile ../../../../../../../../.tools/skia/src/core/SkRecordOpts.cpp
+[238/768] compile ../../../../../../../../.tools/skia/src/core/SkRect.cpp
+[239/768] compile ../../../../../../../../.tools/skia/src/core/SkScan.cpp
+[240/768] compile ../../../../../../../../.tools/skia/src/core/SkScan_AntiPath.cpp
+[241/768] compile ../../../../../../../../.tools/skia/src/core/SkRecordedDrawable.cpp
+[242/768] compile ../../../../../../../../.tools/skia/src/core/SkResourceCache.cpp
+[243/768] compile ../../../../../../../../.tools/skia/src/core/SkReadBuffer.cpp
+[244/768] compile ../../../../../../../../.tools/skia/src/core/SkScan_Antihair.cpp
+[245/768] compile ../../../../../../../../.tools/skia/src/core/SkSpecialImage.cpp
+[246/768] compile ../../../../../../../../.tools/skia/src/core/SkRegion_path.cpp
+[247/768] compile ../../../../../../../../.tools/skia/src/core/SkSpriteBlitter_ARGB32.cpp
+[248/768] compile ../../../../../../../../.tools/skia/src/core/SkScan_Hairline.cpp
+[249/768] compile ../../../../../../../../.tools/skia/src/core/SkString.cpp
+[250/768] compile ../../../../../../../../.tools/skia/src/core/SkRuntimeBlender.cpp
+[251/768] compile ../../../../../../../../.tools/skia/src/core/SkRuntimeEffect.cpp
+[252/768] compile ../../../../../../../../.tools/skia/src/core/SkStrikeCache.cpp
+[253/768] compile ../../../../../../../../.tools/skia/src/core/SkScan_Path.cpp
+[254/768] compile ../../../../../../../../.tools/skia/src/core/SkStrokerPriv.cpp
+[255/768] compile ../../../../../../../../.tools/skia/src/core/SkStringUtils.cpp
+[256/768] compile ../../../../../../../../.tools/skia/src/core/SkStream.cpp
+[257/768] compile ../../../../../../../../.tools/skia/src/core/SkStrokeRec.cpp
+[258/768] compile ../../../../../../../../.tools/skia/src/core/SkSwizzle.cpp
+[259/768] compile ../../../../../../../../.tools/skia/src/core/SkSwizzler_opts_lasx.cpp
+[260/768] compile ../../../../../../../../.tools/skia/src/core/SkSynchronizedResourceCache.cpp
+[261/768] compile ../../../../../../../../.tools/skia/src/core/SkStroke.cpp
+[262/768] compile ../../../../../../../../.tools/skia/src/core/SkSwizzler_opts.cpp
+[263/768] compile ../../../../../../../../.tools/skia/src/core/SkScalerContext.cpp
+[264/768] compile ../../../../../../../../.tools/skia/src/core/SkUnPreMultiply.cpp
+[265/768] compile ../../../../../../../../.tools/skia/src/core/SkScan_AAAPath.cpp
+[266/768] compile ../../../../../../../../.tools/skia/src/core/SkTypefaceCache.cpp
+[267/768] compile ../../../../../../../../.tools/skia/src/core/SkStrike.cpp
+[268/768] compile ../../../../../../../../.tools/skia/src/core/SkStrikeSpec.cpp
+[269/768] compile ../../../../../../../../.tools/skia/src/core/SkTaskGroup.cpp
+[270/768] compile ../../../../../../../../.tools/skia/src/core/SkWriter32.cpp
+[271/768] compile ../../../../../../../../.tools/skia/src/core/SkVertState.cpp
+[272/768] compile ../../../../../../../../.tools/skia/src/core/SkWritePixelsRec.cpp
+[273/768] compile ../../../../../../../../.tools/skia/src/core/SkTextBlob.cpp
+[274/768] compile ../../../../../../../../.tools/skia/src/core/SkVertices.cpp
+[275/768] compile ../../../../../../../../.tools/skia/src/core/SkYUVAPixmaps.cpp
+[276/768] compile ../../../../../../../../.tools/skia/src/core/SkYUVPlanesCache.cpp
+[277/768] compile ../../../../../../../../.tools/skia/src/core/SkYUVAInfo.cpp
+[278/768] compile ../../../../../../../../.tools/skia/src/core/SkSwizzler_opts_ssse3.cpp
+In file included from ../../../../../../../../.tools/skia/src/core/SkSwizzler_opts_ssse3.cpp:23:
+../../../../../../../../.tools/skia\src/opts/SkOpts_SetTarget.h(68,17): warning: '__RTMINTRIN_H' macro redefined [-Wmacro-redefined]
+   68 |         #define __RTMINTRIN_H  // Workaround for https://github.com/llvm/llvm-project/issues/95133
+      |                 ^
+<command line>(23,9): note: previous definition is here
+   23 | #define __RTMINTRIN_H 1
+      |         ^
+1 warning generated.
+[279/768] compile ../../../../../../../../.tools/skia/src/image/SkImage_Base.cpp
+[280/768] compile ../../../../../../../../.tools/skia/src/core/SkSwizzler_opts_hsw.cpp
+In file included from ../../../../../../../../.tools/skia/src/core/SkSwizzler_opts_hsw.cpp:23:
+../../../../../../../../.tools/skia\src/opts/SkOpts_SetTarget.h(68,17): warning: '__RTMINTRIN_H' macro redefined [-Wmacro-redefined]
+   68 |         #define __RTMINTRIN_H  // Workaround for https://github.com/llvm/llvm-project/issues/95133
+      |                 ^
+<command line>(23,9): note: previous definition is here
+   23 | #define __RTMINTRIN_H 1
+      |         ^
+1 warning generated.
+[281/768] compile ../../../../../../../../.tools/skia/src/core/SkYUVMath.cpp
+[282/768] compile ../../../../../../../../.tools/skia/src/image/SkImage_Raster.cpp
+[283/768] compile ../../../../../../../../.tools/skia/src/image/SkImage_LazyFactories.cpp
+[284/768] compile ../../../../../../../../.tools/skia/src/image/SkPictureImageGenerator.cpp
+[285/768] compile ../../../../../../../../.tools/skia/src/image/SkSurface.cpp
+[286/768] compile ../../../../../../../../.tools/skia/src/image/SkSurface_Null.cpp
+[287/768] compile ../../../../../../../../.tools/skia/src/image/SkTiledImageUtils.cpp
+[288/768] compile ../../../../../../../../.tools/skia/src/image/SkImage.cpp
+[289/768] compile ../../../../../../../../.tools/skia/src/shaders/SkBitmapProcShader.cpp
+[290/768] compile ../../../../../../../../.tools/skia/src/core/SkTypeface.cpp
+[291/768] compile ../../../../../../../../.tools/skia/src/image/SkImage_RasterFactories.cpp
+[292/768] compile ../../../../../../../../.tools/skia/src/image/SkImage_Lazy.cpp
+[293/768] compile ../../../../../../../../.tools/skia/src/image/SkImage_Picture.cpp
+[294/768] compile ../../../../../../../../.tools/skia/src/lazy/SkDiscardableMemoryPool.cpp
+[295/768] compile ../../../../../../../../.tools/skia/src/image/SkSurface_Base.cpp
+[296/768] compile ../../../../../../../../.tools/skia/src/shaders/SkGainmapShader.cpp
+[297/768] compile ../../../../../../../../.tools/skia/src/core/SkWriteBuffer.cpp
+[298/768] compile ../../../../../../../../.tools/skia/src/shaders/SkEmptyShader.cpp
+[299/768] compile ../../../../../../../../.tools/skia/src/image/SkRescaleAndReadPixels.cpp
+[300/768] compile ../../../../../../../../.tools/skia/src/shaders/SkColorFilterShader.cpp
+[301/768] compile ../../../../../../../../.tools/skia/src/shaders/SkCoordClampShader.cpp
+[302/768] compile ../../../../../../../../.tools/skia/src/core/SkTypeface_remote.cpp
+[303/768] compile ../../../../../../../../.tools/skia/src/shaders/SkShader.cpp
+[304/768] compile ../../../../../../../../.tools/skia/src/image/SkSurface_Raster.cpp
+[305/768] compile ../../../../../../../../.tools/skia/src/shaders/SkTransformShader.cpp
+[306/768] stamp obj/fontmgr_FontConfigInterface.stamp
+[307/768] compile ../../../../../../../../.tools/skia/src/shaders/SkLocalMatrixShader.cpp
+[308/768] stamp obj/fontmgr_android.stamp
+[309/768] stamp obj/fontmgr_android_ndk.stamp
+[310/768] stamp obj/fontmgr_custom_embedded.stamp
+[311/768] stamp obj/fontmgr_custom_directory.stamp
+[312/768] stamp obj/fontmgr_fontations_empty.stamp
+[313/768] compile ../../../../../../../../.tools/skia/src/shaders/SkPictureShader.cpp
+[314/768] stamp obj/fontmgr_mac_ct.stamp
+[315/768] stamp obj/fontmgr_fontconfig.stamp
+[316/768] stamp obj/fontmgr_win_gdi.stamp
+[317/768] stamp obj/fontmgr_custom_empty.stamp
+[318/768] compile ../../../../../../../../.tools/skia/src/shaders/SkShaderBase.cpp
+[319/768] stamp obj/png_encode_libpng.stamp
+[320/768] stamp obj/png_decode_libpng.stamp
+[321/768] compile ../../../../../../../../.tools/skia/src/shaders/SkBlendShader.cpp
+[322/768] stamp obj/typeface_fontations.stamp
+[323/768] compile ../../../../../../../../.tools/skia/src/shaders/SkTriColorShader.cpp
+[324/768] stamp obj/fontmgr_win.stamp
+[325/768] compile ../../../../../../../../.tools/skia/src/text/SlugFromBuffer.cpp
+[326/768] compile ../../../../../../../../.tools/skia/src/shaders/SkColorShader.cpp
+[327/768] compile ../../../../../../../../.tools/skia/src/shaders/SkWorkingColorSpaceShader.cpp
+[328/768] compile ../../../../../../../../.tools/skia/src/text/GlyphRun.cpp
+[329/768] compile ../../../../../../../../.tools/skia/src/pathops/SkDCubicLineIntersection.cpp
+[330/768] compile ../../../../../../../../.tools/skia/src/shaders/SkPerlinNoiseShaderImpl.cpp
+[331/768] compile ../../../../../../../../.tools/skia/src/pathops/SkIntersections.cpp
+[332/768] compile ../../../../../../../../.tools/skia/src/pathops/SkDLineIntersection.cpp
+[333/768] compile ../../../../../../../../.tools/skia/src/pathops/SkAddIntersections.cpp
+[334/768] compile ../../../../../../../../.tools/skia/src/shaders/SkImageShader.cpp
+[335/768] compile ../../../../../../../../.tools/skia/src/pathops/SkOpBuilder.cpp
+[336/768] compile ../../../../../../../../.tools/skia/src/pathops/SkDCubicToQuads.cpp
+[337/768] compile ../../../../../../../../.tools/skia/src/pathops/SkOpContour.cpp
+[338/768] compile ../../../../../../../../.tools/skia/src/pathops/SkDConicLineIntersection.cpp
+[339/768] compile ../../../../../../../../.tools/skia/src/pathops/SkOpSpan.cpp
+[340/768] compile ../../../../../../../../.tools/skia/src/pathops/SkDQuadLineIntersection.cpp
+[341/768] compile ../../../../../../../../.tools/skia/src/text/StrikeForGPU.cpp
+[342/768] compile ../../../../../../../../.tools/skia/src/shaders/SkRuntimeShader.cpp
+[343/768] compile ../../../../../../../../.tools/skia/src/pathops/SkOpCubicHull.cpp
+[344/768] compile ../../../../../../../../.tools/skia/src/pathops/SkPathOpsCurve.cpp
+[345/768] compile ../../../../../../../../.tools/skia/src/pathops/SkPathOpsConic.cpp
+[346/768] compile ../../../../../../../../.tools/skia/src/pathops/SkPathOpsDebug.cpp
+[347/768] compile ../../../../../../../../.tools/skia/src/pathops/SkPathOpsCommon.cpp
+[348/768] stamp obj/core.stamp
+[349/768] compile ../../../../../../../../.tools/skia/src/pathops/SkOpEdgeBuilder.cpp
+[350/768] compile ../../../../../../../../.tools/skia/src/pathops/SkOpCoincidence.cpp
+[351/768] compile ../../../../../../../../.tools/skia/src/pathops/SkPathOpsOp.cpp
+[352/768] compile ../../../../../../../../.tools/skia/src/pathops/SkPathOpsLine.cpp
+[353/768] compile ../../../../../../../../.tools/skia/src/pathops/SkOpSegment.cpp
+[354/768] compile ../../../../../../../../.tools/skia/src/pathops/SkPathOpsAsWinding.cpp
+[355/768] compile ../../../../../../../../.tools/skia/src/pathops/SkOpAngle.cpp
+[356/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jcapistd.c
+[357/768] compile ../../../../../../../../.tools/skia/src/pathops/SkPathOpsCubic.cpp
+[358/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jcdiffct.c
+[359/768] compile ../../../../../../../../.tools/skia/src/pathops/SkPathOpsSimplify.cpp
+[360/768] compile ../../../../../../../../.tools/skia/src/pathops/SkPathOpsTightBounds.cpp
+[361/768] compile ../../../../../../../../.tools/skia/src/pathops/SkPathOpsQuad.cpp
+[362/768] compile ../../../../../../../../.tools/skia/src/pathops/SkPathOpsRect.cpp
+[363/768] compile ../../../../../../../../.tools/skia/src/pathops/SkPathOpsTypes.cpp
+[364/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jcmainct.c
+[365/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jcprepct.c
+[366/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jclossls.c
+[367/768] compile ../../../../../../../../.tools/skia/src/pathops/SkReduceOrder.cpp
+[368/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jddiffct.c
+[369/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdapistd.c
+[370/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jcsample.c
+[371/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jccolor.c
+[372/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdpostct.c
+[373/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jutils.c
+[374/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdmainct.c
+[375/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jddctmgr.c
+[376/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jccoefct.c
+[377/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdlossls.c
+[378/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdsample.c
+[379/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jcdctmgr.c
+[380/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdcolor.c
+[381/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdcoefct.c
+[382/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jidctfst.c
+[383/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jfdctfst.c
+[384/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jfdctint.c
+[385/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jidctflt.c
+[386/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jidctred.c
+[387/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdmerge.c
+[388/768] compile ../../../../../../../../.tools/skia/src/pathops/SkPathOpsWinding.cpp
+[389/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jcdiffct.c
+[390/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jcprepct.c
+[391/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jcmainct.c
+[392/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jquant1.c
+[393/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jcapistd.c
+[394/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jclossls.c
+[395/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jccolor.c
+[396/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jquant2.c
+[397/768] stamp obj/third_party/libjpeg-turbo/libjpeg_headers.stamp
+[398/768] compile ../../../../../../../../.tools/skia/src/pathops/SkPathWriter.cpp
+[399/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdapistd.c
+[400/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jcapistd.c
+[401/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jddiffct.c
+[402/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jutils.c
+[403/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdsample.c
+[404/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdmainct.c
+[405/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jcdiffct.c
+[406/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jcmainct.c
+[407/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdpostct.c
+[408/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jidctint.c
+[409/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jcsample.c
+[410/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdlossls.c
+[411/768] compile ../../../../../../../../.tools/skia/src/utils/SkClipStackUtils.cpp
+[412/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdpostct.c
+[413/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdlossls.c
+[414/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdcolor.c
+[415/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jcsample.c
+[416/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jutils.c
+[417/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jcprepct.c
+[418/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jcdctmgr.c
+[419/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jddctmgr.c
+[420/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jclossls.c
+[421/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jfdctfst.c
+[422/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jidctflt.c
+[423/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdmainct.c
+[424/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jddiffct.c
+[425/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdcolor.c
+[426/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jaricom.c
+[427/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jquant1.c
+[428/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jccoefct.c
+[429/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdapistd.c
+[430/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jccolor.c
+[431/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdsample.c
+[432/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdcoefct.c
+[433/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jidctint.c
+[434/768] compile ../../../../../../../../.tools/skia/src/pathops/SkPathOpsTSect.cpp
+[435/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jfdctint.c
+[436/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jidctred.c
+[437/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdmerge.c
+[438/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jcicc.c
+[439/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jidctfst.c
+[440/768] stamp obj/pathops.stamp
+[441/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jclhuff.c
+[442/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jcapimin.c
+[443/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jcomapi.c
+[444/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jcmaster.c
+[445/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jcarith.c
+[446/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdapimin.c
+[447/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdatadst.c
+[448/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdinput.c
+[449/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jcinit.c
+[450/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jctrans.c
+[451/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdatasrc.c
+[452/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdhuff.c
+[453/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdphuff.c
+[454/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdlhuff.c
+[455/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jcphuff.c
+[456/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdmarker.c
+[457/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jpeg_nbits.c
+[458/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdicc.c
+[459/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdtrans.c
+[460/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jerror.c
+[461/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jmemmgr.c
+[462/768] link libjpeg16.lib
+[463/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jcparam.c
+[464/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jcmarker.c
+[465/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jquant2.c
+[466/768] stamp obj/clipstack_utils.stamp
+[467/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jmemnobs.c
+[468/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdmaster.c
+[469/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jfdctflt.c
+[470/768] link libjpeg12.lib
+[471/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jdarith.c
+[472/768] compile ../../../../../../../../.tools/skia/src/pdf/SkDeflate.cpp
+[473/768] compile ../../../../../../../../.tools/skia/src/codec/SkJpegUtility.cpp
+[474/768] compile ../../../../../../../../.tools/skia/src/codec/SkJpegMetadataDecoderImpl.cpp
+[475/768] compile ../../../../../../../../.tools/skia/src/encode/SkJPEGWriteUtility.cpp
+[476/768] compile ../../../../../../../../.tools/skia/src/codec/SkJpegSourceMgr.cpp
+[477/768] compile ../../../../../../../../.tools/skia/src/codec/SkJpegDecoderMgr.cpp
+[478/768] compile ../../../../../../../../.tools/skia/src/encode/SkJpegEncoderImpl.cpp
+[479/768] compile ../../../../../../../../.tools/skia/src/pdf/SkKeyedImage.cpp
+[480/768] compile ../../../../../../../../.tools/skia/src/pdf/SkClusterator.cpp
+[481/768] compile ../../../../../../../../.tools/skia/src/codec/SkJpegCodec.cpp
+[482/768] compile ../../../../../../../../.tools/skia/src/pdf/SkPDFFormXObject.cpp
+[483/768] compile ../../../../../../../../.tools/skia/src/pdf/SkPDFGraphicStackState.cpp
+[484/768] compile ../../../../../../../../.tools/skia/src/pdf/SkPDFMetadata.cpp
+[485/768] compile ../../../../../../../../.tools/skia/src/pdf/SkPDFSubsetFont.cpp
+[486/768] compile ../../../../../../../../.tools/skia/src/pdf/SkPDFBitmap.cpp
+[487/768] compile ../../../../../../../../.tools/skia/src/pdf/SkPDFResourceDict.cpp
+[488/768] compile ../../../../../../../../.tools/skia/src/pdf/SkPDFMakeCIDGlyphWidthsArray.cpp
+[489/768] compile ../../../../../../../../.tools/skia/src/pdf/SkPDFMakeToUnicodeCmap.cpp
+[490/768] compile ../../../../../../../../.tools/skia/src/pdf/SkPDFDocument.cpp
+[491/768] compile ../../../../../../../../.tools/skia/src/pdf/SkPDFShader.cpp
+[492/768] compile ../../../../../../../../.tools/skia/modules/skcms/src/skcms_TransformHsw.cc
+[493/768] compile ../../../../../../../../.tools/skia/third_party/externals/expat/expat/lib/xmlrole.c
+[494/768] compile ../../../../../../../../.tools/skia/src/pdf/SkPDFGraphicState.cpp
+[495/768] compile ../../../../../../../../.tools/skia/src/pdf/SkPDFTypes.cpp
+[496/768] compile ../../../../../../../../.tools/skia/src/pdf/SkPDFTag.cpp
+[497/768] compile ../../../../../../../../.tools/skia/src/pdf/SkPDFFont.cpp
+[498/768] compile ../../../../../../../../.tools/skia/src/pdf/SkPDFDevice.cpp
+[499/768] compile ../../../../../../../../.tools/skia/modules/skcms/src/skcms_TransformSkx.cc
+[500/768] compile ../../../../../../../../.tools/skia/third_party/externals/libjpeg-turbo/src/jchuff.c
+[501/768] compile ../../../../../../../../.tools/skia/src/pdf/SkPDFUtils.cpp
+[502/768] compile ../../../../../../../../.tools/skia/src/xml/SkXMLParser.cpp
+[503/768] compile ../../../../../../../../.tools/skia/src/pdf/SkPDFGradientShader.cpp
+[504/768] compile ../../../../../../../../.tools/skia/src/xml/SkDOM.cpp
+[505/768] compile ../../../../../../../../.tools/skia/third_party/externals/expat/expat/lib/xmlparse.c
+[506/768] compile ../../../../../../../../.tools/skia/src/codec/SkXmp.cpp
+[507/768] compile ../../../../../../../../.tools/skia/src/svg/SkSVGCanvas.cpp
+[508/768] stamp obj/android_utils.stamp
+[509/768] compile ../../../../../../../../.tools/skia/src/xml/SkXMLWriter.cpp
+[510/768] stamp obj/crabbyavif.stamp
+[511/768] stamp obj/modules/skcms/skcms_TransformSkx.stamp
+[512/768] compile ../../../../../../../../.tools/skia/src/pdf/SkPDFType1Font.cpp
+[513/768] stamp obj/graphite.stamp
+[514/768] stamp obj/avif.stamp
+[515/768] compile ../../../../../../../../.tools/skia/src/codec/SkWuffsCodec.cpp
+[516/768] stamp obj/jpegxl_decode.stamp
+[517/768] stamp obj/gpu.stamp
+[518/768] stamp obj/minify_sksl.stamp
+[519/768] stamp obj/png_decode_rust.stamp
+[520/768] stamp obj/lasx.stamp
+[521/768] stamp obj/ndk_images.stamp
+[522/768] stamp obj/raw.stamp
+[523/768] stamp obj/pdf.stamp
+[524/768] stamp obj/modules/skcms/skcms_TransformHsw.stamp
+[525/768] compile ../../../../../../../../.tools/skia/modules/skcms/skcms.cc
+clang-cl: warning: unknown argument ignored in clang-cl: '-std=c11' [-Wunknown-argument]
+[526/768] link libjpeg.lib
+[527/768] compile ../../../../../../../../.tools/skia/src/utils/SkEventTracer.cpp
+[528/768] compile ../../../../../../../../.tools/skia/src/utils/SkCamera.cpp
+[529/768] stamp obj/jpeg_decode.stamp
+[530/768] stamp obj/jpeg_encode.stamp
+[531/768] stamp obj/pdf_jpeg_helpers.stamp
+[532/768] compile ../../../../../../../../.tools/skia/third_party/externals/wuffs/release/c/wuffs-v0.3.c
+[533/768] compile ../../../../../../../../.tools/skia/src/utils/SkFloatToDecimal.cpp
+[534/768] link wuffs.lib
+[535/768] compile ../../../../../../../../.tools/skia/src/utils/SkCanvasStateUtils.cpp
+[536/768] compile ../../../../../../../../.tools/skia/src/utils/SkCharToGlyphCache.cpp
+[537/768] compile ../../../../../../../../.tools/skia/src/opts/SkOpts_hsw.cpp
+[538/768] compile ../../../../../../../../.tools/skia/src/utils/SkCustomTypeface.cpp
+[539/768] compile ../../../../../../../../.tools/skia/third_party/externals/expat/expat/lib/xmltok.c
+[540/768] compile ../../../../../../../../.tools/skia/src/utils/SkMatrix22.cpp
+[541/768] compile ../../../../../../../../.tools/skia/src/utils/SkCanvasStack.cpp
+[542/768] compile ../../../../../../../../.tools/skia/src/utils/SkJSONWriter.cpp
+[543/768] compile ../../../../../../../../.tools/skia/modules/skcms/src/skcms_TransformBaseline.cc
+clang-cl: warning: unknown argument ignored in clang-cl: '-std=c11' [-Wunknown-argument]
+[544/768] stamp obj/hsw.stamp
+[545/768] compile ../../../../../../../../.tools/skia/src/utils/SkOSPath.cpp
+[546/768] compile ../../../../../../../../.tools/skia/src/utils/SkNWayCanvas.cpp
+[547/768] compile ../../../../../../../../.tools/skia/src/utils/SkNullCanvas.cpp
+[548/768] compile ../../../../../../../../.tools/skia/src/utils/SkParseColor.cpp
+[549/768] link expat.lib
+[550/768] compile ../../../../../../../../.tools/skia/src/utils/SkDashPath.cpp
+[551/768] compile ../../../../../../../../.tools/skia/src/utils/SkOrderedFontMgr.cpp
+[552/768] compile ../../../../../../../../.tools/skia/src/utils/SkMultiPictureDocument.cpp
+[553/768] compile ../../../../../../../../.tools/skia/src/utils/mac/SkCTFontCreateExactCopy.cpp
+[554/768] compile ../../../../../../../../.tools/skia/src/utils/SkPaintFilterCanvas.cpp
+[555/768] compile ../../../../../../../../.tools/skia/src/utils/mac/SkCTFont.cpp
+[556/768] compile ../../../../../../../../.tools/skia/src/utils/SkParse.cpp
+[557/768] compile ../../../../../../../../.tools/skia/src/svg/SkSVGDevice.cpp
+[558/768] compile ../../../../../../../../.tools/skia/src/utils/SkParsePath.cpp
+[559/768] compile ../../../../../../../../.tools/skia/src/opts/SkOpts_skx.cpp
+[560/768] compile ../../../../../../../../.tools/skia/src/utils/win/SkWGL_win.cpp
+[561/768] compile ../../../../../../../../.tools/skia/src/utils/mac/SkCreateCGImageRef.cpp
+[562/768] compile ../../../../../../../../.tools/skia/src/utils/SkPatchUtils.cpp
+[563/768] compile ../../../../../../../../.tools/skia/src/utils/SkTextUtils.cpp
+[564/768] compile ../../../../../../../../.tools/skia/src/utils/win/SkAutoCoInitialize.cpp
+[565/768] compile ../../../../../../../../.tools/skia/src/utils/SkShadowTessellator.cpp
+[566/768] compile ../../../../../../../../.tools/skia/src/utils/win/SkHRESULT.cpp
+[567/768] compile ../../../../../../../../.tools/skia/src/effects/SkColorMatrixFilter.cpp
+[568/768] compile ../../../../../../../../.tools/skia/src/utils/SkPolyUtils.cpp
+[569/768] compile ../../../../../../../../.tools/skia/src/effects/SkColorMatrix.cpp
+[570/768] compile ../../../../../../../../.tools/skia/src/utils/SkShadowUtils.cpp
+[571/768] compile ../../../../../../../../.tools/skia/src/utils/win/SkIStream.cpp
+[572/768] compile ../../../../../../../../.tools/skia/src/effects/SkBlenders.cpp
+[573/768] compile ../../../../../../../../.tools/skia/src/utils/win/SkDWrite.cpp
+[574/768] compile ../../../../../../../../.tools/skia/src/utils/SkShaderUtils.cpp
+[575/768] compile ../../../../../../../../.tools/skia/src/utils/win/SkDWriteFontFileStream.cpp
+[576/768] compile ../../../../../../../../.tools/skia/src/utils/win/SkDWriteGeometrySink.cpp
+[577/768] compile ../../../../../../../../.tools/skia/src/effects/Sk1DPathEffect.cpp
+[578/768] compile ../../../../../../../../.tools/skia/src/effects/SkHighContrastFilter.cpp
+[579/768] compile ../../../../../../../../.tools/skia/src/effects/SkEmbossMask.cpp
+[580/768] compile ../../../../../../../../.tools/skia/src/effects/SkDashPathEffect.cpp
+[581/768] compile ../../../../../../../../.tools/skia/src/effects/SkTableMaskFilter.cpp
+[582/768] compile ../../../../../../../../.tools/skia/src/effects/Sk2DPathEffect.cpp
+[583/768] compile ../../../../../../../../.tools/skia/src/shaders/gradients/SkConicalGradient.cpp
+[584/768] compile ../../../../../../../../.tools/skia/src/effects/colorfilters/SkColorFilterBase.cpp
+[585/768] compile ../../../../../../../../.tools/skia/src/shaders/gradients/SkLinearGradient.cpp
+[586/768] compile ../../../../../../../../.tools/skia/src/effects/SkDiscretePathEffect.cpp
+[587/768] compile ../../../../../../../../.tools/skia/src/shaders/gradients/SkSweepGradient.cpp
+[588/768] compile ../../../../../../../../.tools/skia/src/effects/SkCornerPathEffect.cpp
+[589/768] compile ../../../../../../../../.tools/skia/src/effects/SkTrimPathEffect.cpp
+[590/768] compile ../../../../../../../../.tools/skia/src/effects/SkEmbossMaskFilter.cpp
+[591/768] compile ../../../../../../../../.tools/skia/src/effects/SkShaderMaskFilterImpl.cpp
+[592/768] compile ../../../../../../../../.tools/skia/src/effects/colorfilters/SkTableColorFilter.cpp
+[593/768] compile ../../../../../../../../.tools/skia/src/shaders/gradients/SkRadialGradient.cpp
+[594/768] compile ../../../../../../../../.tools/skia/src/effects/colorfilters/SkGaussianColorFilter.cpp
+[595/768] compile ../../../../../../../../.tools/skia/src/effects/colorfilters/SkComposeColorFilter.cpp
+[596/768] compile ../../../../../../../../.tools/skia/src/shaders/gradients/SkGradientBaseShader.cpp
+[597/768] compile ../../../../../../../../.tools/skia/src/effects/imagefilters/SkComposeImageFilter.cpp
+[598/768] compile ../../../../../../../../.tools/skia/src/effects/colorfilters/SkMatrixColorFilter.cpp
+[599/768] compile ../../../../../../../../.tools/skia/src/effects/colorfilters/SkBlendModeColorFilter.cpp
+[600/768] compile ../../../../../../../../.tools/skia/src/effects/colorfilters/SkColorSpaceXformColorFilter.cpp
+[601/768] compile ../../../../../../../../.tools/skia/src/effects/colorfilters/SkWorkingFormatColorFilter.cpp
+[602/768] compile ../../../../../../../../.tools/skia/src/effects/colorfilters/SkRuntimeColorFilter.cpp
+[603/768] compile ../../../../../../../../.tools/skia/src/effects/imagefilters/SkColorFilterImageFilter.cpp
+[604/768] compile ../../../../../../../../.tools/skia/src/effects/imagefilters/SkBlendImageFilter.cpp
+[605/768] compile ../../../../../../../../.tools/skia/src/effects/imagefilters/SkBlurImageFilter.cpp
+[606/768] compile ../../../../../../../../.tools/skia/src/effects/imagefilters/SkCropImageFilter.cpp
+[607/768] compile ../../../../../../../../.tools/skia/src/effects/imagefilters/SkDropShadowImageFilter.cpp
+[608/768] compile ../../../../../../../../.tools/skia/src/effects/imagefilters/SkDisplacementMapImageFilter.cpp
+[609/768] compile ../../../../../../../../.tools/skia/src/effects/imagefilters/SkImageImageFilter.cpp
+[610/768] compile ../../../../../../../../.tools/skia/src/effects/imagefilters/SkMatrixTransformImageFilter.cpp
+[611/768] compile ../../../../../../../../.tools/skia/src/effects/imagefilters/SkMagnifierImageFilter.cpp
+[612/768] compile ../../../../../../../../.tools/skia/src/effects/imagefilters/SkMatrixConvolutionImageFilter.cpp
+[613/768] compile ../../../../../../../../.tools/skia/src/codec/SkColorPalette.cpp
+[614/768] compile ../../../../../../../../.tools/skia/src/codec/SkEncodedInfo.cpp
+[615/768] compile ../../../../../../../../.tools/skia/src/effects/imagefilters/SkLightingImageFilter.cpp
+[616/768] compile ../../../../../../../../.tools/skia/src/effects/imagefilters/SkPictureImageFilter.cpp
+[617/768] compile ../../../../../../../../.tools/skia/src/effects/imagefilters/SkMergeImageFilter.cpp
+[618/768] compile ../../../../../../../../.tools/skia/src/codec/SkCodecImageGenerator.cpp
+[619/768] compile ../../../../../../../../.tools/skia/src/effects/imagefilters/SkMorphologyImageFilter.cpp
+[620/768] compile ../../../../../../../../.tools/skia/src/codec/SkCodec.cpp
+[621/768] compile ../../../../../../../../.tools/skia/src/codec/SkExif.cpp
+[622/768] compile ../../../../../../../../.tools/skia/src/effects/imagefilters/SkShaderImageFilter.cpp
+[623/768] compile ../../../../../../../../.tools/skia/src/codec/SkParseEncodedOrigin.cpp
+[624/768] compile ../../../../../../../../.tools/skia/src/effects/imagefilters/SkRuntimeImageFilter.cpp
+[625/768] compile ../../../../../../../../.tools/skia/src/codec/SkSampler.cpp
+[626/768] compile ../../../../../../../../.tools/skia/src/codec/SkHdrMetadata.cpp
+[627/768] compile ../../../../../../../../.tools/skia/src/codec/SkPixmapUtils.cpp
+[628/768] compile ../../../../../../../../.tools/skia/src/codec/SkMaskSwizzler.cpp
+[629/768] compile ../../../../../../../../.tools/skia/src/codec/SkImageGenerator_FromEncoded.cpp
+[630/768] compile ../../../../../../../../.tools/skia/src/codec/SkTiffUtility.cpp
+[631/768] compile ../../../../../../../../.tools/skia/src/codec/SkGainmapInfo.cpp
+[632/768] compile ../../../../../../../../.tools/skia/src/codec/SkSwizzler.cpp
+[633/768] compile ../../../../../../../../.tools/skia/src/codec/SkBmpBaseCodec.cpp
+[634/768] compile ../../../../../../../../.tools/skia/src/sksl/SkSLContext.cpp
+[635/768] compile ../../../../../../../../.tools/skia/src/codec/SkBmpCodec.cpp
+[636/768] compile ../../../../../../../../.tools/skia/src/encode/SkEncoder.cpp
+[637/768] compile ../../../../../../../../.tools/skia/src/codec/SkBmpRLECodec.cpp
+[638/768] compile ../../../../../../../../.tools/skia/src/codec/SkBmpMaskCodec.cpp
+[639/768] compile ../../../../../../../../.tools/skia/src/codec/SkWbmpCodec.cpp
+[640/768] compile ../../../../../../../../.tools/skia/src/encode/SkICC.cpp
+[641/768] compile ../../../../../../../../.tools/skia/src/sksl/SkSLBuiltinTypes.cpp
+[642/768] compile ../../../../../../../../.tools/skia/src/sksl/SkSLErrorReporter.cpp
+[643/768] compile ../../../../../../../../.tools/skia/src/sksl/SkSLLexer.cpp
+[644/768] compile ../../../../../../../../.tools/skia/src/sksl/SkSLOutputStream.cpp
+[645/768] compile ../../../../../../../../.tools/skia/src/codec/SkBmpStandardCodec.cpp
+[646/768] compile ../../../../../../../../.tools/skia/src/sksl/SkSLPool.cpp
+[647/768] compile ../../../../../../../../.tools/skia/src/sksl/SkSLSampleUsage.cpp
+[648/768] compile ../../../../../../../../.tools/skia/src/sksl/SkSLMangler.cpp
+[649/768] compile ../../../../../../../../.tools/skia/src/sksl/SkSLIntrinsicList.cpp
+[650/768] compile ../../../../../../../../.tools/skia/src/sksl/SkSLConstantFolder.cpp
+[651/768] compile ../../../../../../../../.tools/skia/src/sksl/SkSLAnalysis.cpp
+[652/768] compile ../../../../../../../../.tools/skia/src/sksl/SkSLCompiler.cpp
+[653/768] compile ../../../../../../../../.tools/skia/src/sksl/SkSLModuleLoader.cpp
+[654/768] compile ../../../../../../../../.tools/skia/src/sksl/SkSLPosition.cpp
+[655/768] compile ../../../../../../../../.tools/skia/src/sksl/SkSLUtil.cpp
+[656/768] compile ../../../../../../../../.tools/skia/src/sksl/SkSLModule.cpp
+[657/768] compile ../../../../../../../../.tools/skia/src/sksl/SkSLOperator.cpp
+[658/768] compile ../../../../../../../../.tools/skia/src/sksl/SkSLString.cpp
+[659/768] compile ../../../../../../../../.tools/skia/src/sksl/analysis/SkSLGetLoopControlFlowInfo.cpp
+[660/768] compile ../../../../../../../../.tools/skia/src/sksl/SkSLInliner.cpp
+[661/768] compile ../../../../../../../../.tools/skia/src/sksl/analysis/SkSLCheckProgramStructure.cpp
+[662/768] compile ../../../../../../../../.tools/skia/src/sksl/analysis/SkSLFinalizationChecks.cpp
+[663/768] compile ../../../../../../../../.tools/skia/src/sksl/analysis/SkSLIsDynamicallyUniformExpression.cpp
+[664/768] compile ../../../../../../../../.tools/skia/src/sksl/analysis/SkSLIsSameExpressionTree.cpp
+[665/768] compile ../../../../../../../../.tools/skia/src/sksl/analysis/SkSLCanExitWithoutReturningValue.cpp
+[666/768] compile ../../../../../../../../.tools/skia/src/sksl/analysis/SkSLCheckSymbolTableCorrectness.cpp
+[667/768] compile ../../../../../../../../.tools/skia/src/sksl/analysis/SkSLIsTrivialExpression.cpp
+[668/768] compile ../../../../../../../../.tools/skia/src/sksl/analysis/SkSLGetLoopUnrollInfo.cpp
+[669/768] compile ../../../../../../../../.tools/skia/src/sksl/analysis/SkSLHasSideEffects.cpp
+[670/768] compile ../../../../../../../../.tools/skia/src/sksl/analysis/SkSLGetReturnComplexity.cpp
+[671/768] compile ../../../../../../../../.tools/skia/src/sksl/analysis/SkSLIsConstantExpression.cpp
+[672/768] compile ../../../../../../../../.tools/skia/src/sksl/analysis/SkSLSwitchCaseContainsExit.cpp
+[673/768] compile ../../../../../../../../.tools/skia/src/sksl/SkSLParser.cpp
+[674/768] compile ../../../../../../../../.tools/skia/src/sksl/analysis/SkSLReturnsInputAlpha.cpp
+[675/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLChildCall.cpp
+[676/768] compile ../../../../../../../../.tools/skia/src/sksl/analysis/SkSLProgramUsage.cpp
+[677/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLConstructor.cpp
+[678/768] compile ../../../../../../../../.tools/skia/src/sksl/analysis/SkSLSymbolTableStackBuilder.cpp
+[679/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLConstructorArrayCast.cpp
+[680/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLBlock.cpp
+[681/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLConstructorCompoundCast.cpp
+[682/768] compile ../../../../../../../../.tools/skia/src/sksl/analysis/SkSLSpecialization.cpp
+[683/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLBinaryExpression.cpp
+[684/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLConstructorDiagonalMatrix.cpp
+[685/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLConstructorMatrixResize.cpp
+[686/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLConstructorSplat.cpp
+[687/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLConstructorScalarCast.cpp
+[688/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLConstructorArray.cpp
+[689/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLConstructorStruct.cpp
+[690/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLConstructorCompound.cpp
+[691/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLExpression.cpp
+[692/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLDiscardStatement.cpp
+[693/768] compile ../../../../../../../../.tools/skia/src/sksl/codegen/SkSLRasterPipelineCodeGenerator.cpp
+[694/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLDoStatement.cpp
+[695/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLExpressionStatement.cpp
+[696/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLExtension.cpp
+[697/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLForStatement.cpp
+[698/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLFieldAccess.cpp
+[699/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLFunctionDeclaration.cpp
+[700/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLLiteral.cpp
+[701/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLModifierFlags.cpp
+[702/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLIndexExpression.cpp
+[703/768] compile ../../../../../../../../.tools/skia/src/sksl/codegen/SkSLRasterPipelineBuilder.cpp
+[704/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLIfStatement.cpp
+[705/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLPostfixExpression.cpp
+[706/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLFunctionDefinition.cpp
+[707/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLFunctionCall.cpp
+[708/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLInterfaceBlock.cpp
+[709/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLLayout.cpp
+[710/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLSwitchCase.cpp
+[711/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLModifiersDeclaration.cpp
+[712/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLSwizzle.cpp
+[713/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLPrefixExpression.cpp
+[714/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLProgram.cpp
+[715/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLVariableReference.cpp
+[716/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLStructDefinition.cpp
+[717/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLSetting.cpp
+[718/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLSymbol.cpp
+[719/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLSwitchStatement.cpp
+[720/768] compile ../../../../../../../../.tools/skia/src/sksl/tracing/SkSLDebugTracePriv.cpp
+[721/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLSymbolTable.cpp
+[722/768] compile ../../../../../../../../.tools/skia/src/sksl/tracing/SkSLTraceHook.cpp
+[723/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLTypeReference.cpp
+[724/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLVariable.cpp
+[725/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLTernaryExpression.cpp
+[726/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLVarDeclarations.cpp
+[727/768] compile ../../../../../../../../.tools/skia/src/sksl/transform/SkSLAddConstToVarModifiers.cpp
+[728/768] compile ../../../../../../../../.tools/skia/src/sksl/ir/SkSLType.cpp
+[729/768] compile ../../../../../../../../.tools/skia/src/sksl/transform/SkSLEliminateDeadGlobalVariables.cpp
+[730/768] compile ../../../../../../../../.tools/skia/src/sksl/transform/SkSLEliminateDeadFunctions.cpp
+[731/768] compile ../../../../../../../../.tools/skia/src/sksl/transform/SkSLEliminateEmptyStatements.cpp
+[732/768] compile ../../../../../../../../.tools/skia/src/sksl/transform/SkSLEliminateUnreachableCode.cpp
+[733/768] compile ../../../../../../../../.tools/skia/src/sksl/transform/SkSLRewriteIndexedSwizzle.cpp
+[734/768] compile ../../../../../../../../.tools/skia/src/sksl/transform/SkSLFindAndDeclareBuiltinStructs.cpp
+[735/768] compile ../../../../../../../../.tools/skia/src/sksl/transform/SkSLHoistSwitchVarDeclarationsAtTopLevel.cpp
+[736/768] compile ../../../../../../../../.tools/skia/src/sksl/transform/SkSLReplaceConstVarsWithLiterals.cpp
+[737/768] compile ../../../../../../../../.tools/skia/src/ports/SkOSFile_stdio.cpp
+[738/768] compile ../../../../../../../../.tools/skia/src/sksl/SkSLModuleDataDefault.cpp
+[739/768] compile ../../../../../../../../.tools/skia/src/sksl/transform/SkSLEliminateUnnecessaryBraces.cpp
+[740/768] compile ../../../../../../../../.tools/skia/src/sksl/transform/SkSLEliminateDeadLocalVariables.cpp
+[741/768] compile ../../../../../../../../.tools/skia/src/sksl/transform/SkSLTransform.cpp
+[742/768] compile ../../../../../../../../.tools/skia/src/android/SkAnimatedImage.cpp
+[743/768] compile ../../../../../../../../.tools/skia/src/codec/SkSampledCodec.cpp
+[744/768] compile ../../../../../../../../.tools/skia/src/sfnt/SkOTTable_name.cpp
+[745/768] compile ../../../../../../../../.tools/skia/src/sfnt/SkOTUtils.cpp
+[746/768] compile ../../../../../../../../.tools/skia/src/ports/SkDiscardableMemory_none.cpp
+[747/768] compile ../../../../../../../../.tools/skia/src/sksl/transform/SkSLReplaceSplatCastsWithSwizzles.cpp
+[748/768] stamp obj/skx.stamp
+[749/768] stamp obj/webp_decode.stamp
+[750/768] compile ../../../../../../../../.tools/skia/src/sksl/transform/SkSLFindAndDeclareBuiltinFunctions.cpp
+[751/768] compile ../../../../../../../../.tools/skia/src/sksl/transform/SkSLRenamePrivateSymbols.cpp
+[752/768] compile ../../../../../../../../.tools/skia/src/ports/SkDebug_win.cpp
+[753/768] compile ../../../../../../../../.tools/skia/src/sksl/transform/SkSLFindAndDeclareBuiltinVariables.cpp
+[754/768] link skcms.lib
+[755/768] stamp obj/wuffs.stamp
+[756/768] stamp obj/xml.stamp
+[757/768] stamp obj/vello.stamp
+[758/768] compile ../../../../../../../../.tools/skia/src/ports/SkMemory_malloc.cpp
+[759/768] compile ../../../../../../../../.tools/skia/src/codec/SkAndroidCodecAdapter.cpp
+[760/768] stamp obj/webp_encode.stamp
+[761/768] compile ../../../../../../../../.tools/skia/src/android/SkAndroidFrameworkUtils.cpp
+[762/768] stamp obj/xps.stamp
+[763/768] compile ../../../../../../../../.tools/skia/src/ports/SkOSFile_win.cpp
+[764/768] compile ../../../../../../../../.tools/skia/src/ports/SkGlobalInitialization_default.cpp
+[765/768] compile ../../../../../../../../.tools/skia/src/codec/SkAndroidCodec.cpp
+[766/768] compile ../../../../../../../../.tools/skia/src/ports/SkImageGeneratorWIC.cpp
+[767/768] compile ../../../../../../../../.tools/skia/src/sksl/tracing/SkSLDebugTracePlayer.cpp
+[768/768] link skia.lib
+cargo:rerun-if-changed=src/bindings.cpp
+cargo:rerun-if-changed=C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools/skia\include
+COMPILING BINDINGS: ["src/bindings.cpp"]
+  DEFINES: _CRT_SECURE_NO_WARNINGS= _HAS_EXCEPTIONS=0 WIN32_LEAN_AND_MEAN= NOMINMAX= NDEBUG= SK_CODEC_DECODES_BMP= SK_CODEC_DECODES_WBMP= SK_ENABLE_PRECOMPILE= SK_DISABLE_TRACING= SK_GAMMA_APPLY_TO_A8= SK_ENABLE_AVX512_OPTS= SKIA_IMPLEMENTATION=1 SK_TYPEFACE_FACTORY_DIRECTWRITE= SK_FONTMGR_DIRECTWRITE_AVAILABLE= SK_FONTMGR_GDI_AVAILABLE= SK_CODEC_DECODES_ICO= SK_CODEC_DECODES_PNG= SK_CODEC_DECODES_PNG_WITH_LIBPNG= SK_CODEC_ENCODES_PNG= SK_CODEC_ENCODES_PNG_WITH_LIBPNG= SK_CODEC_ENCODES_JPEG= SK_SUPPORT_PDF= SK_CODEC_DECODES_JPEG= SK_HAS_WUFFS_LIBRARY= SK_CODEC_DECODES_GIF= SK_XML=
+  ARGS: /std:c++17 /GR-
+bindings.cpp
+C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools\skia\include/core/SkRect.h(885): warning C4244: '=': conversion from 'const int32_t' to 'float', possible loss of data
+C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools\skia\include/core/SkRect.h(886): warning C4244: '=': conversion from 'const int32_t' to 'float', possible loss of data
+C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools\skia\include/core/SkRect.h(887): warning C4244: '=': conversion from 'const int32_t' to 'float', possible loss of data
+C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools\skia\include/core/SkRect.h(888): warning C4244: '=': conversion from 'const int32_t' to 'float', possible loss of data
+C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools\skia\include/core/SkRect.h(1007): warning C4244: 'argument': conversion from 'int32_t' to 'float', possible loss of data
+C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools\skia\include/core/SkRect.h(1007): warning C4244: 'argument': conversion from 'int32_t' to 'float', possible loss of data
+C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools\skia\include/core/SkMatrix.h(99): warning C4244: 'argument': conversion from 'int32_t' to 'SkScalar', possible loss of data
+C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools\skia\include/core/SkMatrix.h(99): warning C4244: 'argument': conversion from 'int32_t' to 'SkScalar', possible loss of data
+C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools\skia\include/codec/SkEncodedOrigin.h(35): warning C4244: 'argument': conversion from 'int' to 'SkScalar', possible loss of data
+C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools\skia\include/codec/SkEncodedOrigin.h(36): warning C4244: 'argument': conversion from 'int' to 'SkScalar', possible loss of data
+C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools\skia\include/codec/SkEncodedOrigin.h(36): warning C4244: 'argument': conversion from 'int' to 'SkScalar', possible loss of data
+C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools\skia\include/codec/SkEncodedOrigin.h(37): warning C4244: 'argument': conversion from 'int' to 'SkScalar', possible loss of data
+C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools\skia\include/codec/SkEncodedOrigin.h(39): warning C4244: 'argument': conversion from 'int' to 'SkScalar', possible loss of data
+C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools\skia\include/codec/SkEncodedOrigin.h(40): warning C4244: 'argument': conversion from 'int' to 'SkScalar', possible loss of data
+C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools\skia\include/codec/SkEncodedOrigin.h(40): warning C4244: 'argument': conversion from 'int' to 'SkScalar', possible loss of data
+C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools\skia\include/codec/SkEncodedOrigin.h(41): warning C4244: 'argument': conversion from 'int' to 'SkScalar', possible loss of data
+C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools\skia\modules\skcms\src/skcms_public.h(142): warning C4201: nonstandard extension used: nameless struct/union
+C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools\skia\modules\skcms\src/skcms_public.h(147): warning C4201: nonstandard extension used: nameless struct/union
+C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools\skia\include/private/base/SkTArray.h(762): warning C4267: 'initializing': conversion from 'size_t' to 'const int', possible loss of data
+C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools\skia\include/core/SkCanvas.h(2494): note: see reference to class template instantiation 'skia_private::STArray<1,sk_sp<SkImageFilter>,true>' being compiled
+C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools\skia\include/private/SkPathRef.h(121): warning C4244: '=': conversion from 'unsigned int' to 'uint8_t', possible loss of data
+C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools\skia\include/private/base/SkTemplates.h(125): warning C5030: attribute 'clang::reinitializes' is not recognized
+C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools\skia\include/private/base/SkTemplates.h(168): note: see reference to class template instantiation 'skia_private::AutoTArray<T>' being compiled
+C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools\skia\include/core/SkTiledImageUtils.h(90): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools\skia\include/core/SkTiledImageUtils.h(90): warning C4244: 'argument': conversion from 'int' to 'float', possible loss of data
+GENERATING BINDINGS
+  ARGS: -IC:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\.tools/skia -D_CRT_SECURE_NO_WARNINGS -D_HAS_EXCEPTIONS=0 -DWIN32_LEAN_AND_MEAN -DNOMINMAX -DNDEBUG -DSK_CODEC_DECODES_BMP -DSK_CODEC_DECODES_WBMP -DSK_ENABLE_PRECOMPILE -DSK_DISABLE_TRACING -DSK_GAMMA_APPLY_TO_A8 -DSK_ENABLE_AVX512_OPTS -DSKIA_IMPLEMENTATION=1 -DSK_TYPEFACE_FACTORY_DIRECTWRITE -DSK_FONTMGR_DIRECTWRITE_AVAILABLE -DSK_FONTMGR_GDI_AVAILABLE -DSK_CODEC_DECODES_ICO -DSK_CODEC_DECODES_PNG -DSK_CODEC_DECODES_PNG_WITH_LIBPNG -DSK_CODEC_ENCODES_PNG -DSK_CODEC_ENCODES_PNG_WITH_LIBPNG -DSK_CODEC_ENCODES_JPEG -DSK_SUPPORT_PDF -DSK_CODEC_DECODES_JPEG -DSK_HAS_WUFFS_LIBRARY -DSK_CODEC_DECODES_GIF -DSK_XML -fno-rtti --target=x86_64-pc-windows-msvc
+cargo:rustc-link-search=C:\Users\Manny\Documents\Code Projects\Typscript\sdf_modeler_rust\third_party\skia-bindings\target\debug\build\skia-bindings-710cca95faacc7c9\out\skia
+cargo:rustc-link-lib=skia
+cargo:rustc-link-lib=skia-bindings
+cargo:rustc-link-lib=usp10
+cargo:rustc-link-lib=ole32
+cargo:rustc-link-lib=user32
+cargo:rustc-link-lib=gdi32
+cargo:rustc-link-lib=fontsub
+cargo:rustc-link-lib=Advapi32
+cargo:rerun-if-env-changed=BUILD_ARTIFACTSTAGINGDIRECTORY
