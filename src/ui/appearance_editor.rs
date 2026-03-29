@@ -8,6 +8,7 @@ use crate::egui_theme::{
     ThemeScrollbarsSettings, ThemeSpacingSettings, ThemeWidgetStatesSettings,
     ThemeWidgetVisualsSettings, ThemeWindowsPanelsSettings, UiMotionSettings,
 };
+use crate::ui::chrome;
 
 pub fn draw(
     ui: &mut egui::Ui,
@@ -17,25 +18,23 @@ pub fn draw(
 ) {
     let mut requested_import = None;
 
-    egui::CollapsingHeader::new("Appearance")
-        .default_open(true)
-        .show(ui, |ui| {
-            draw_preset_section(ui, theme);
-            draw_typography_section(ui, theme, &mut requested_import);
-            draw_text_sizes_section(ui, theme);
-            draw_base_colors_section(ui, theme);
-            draw_widget_states_section(ui, &mut theme.widget_states);
-            draw_windows_panels_section(ui, &mut theme.windows_panels);
-            draw_layout_spacing_section(ui, &mut theme.spacing);
-            draw_scrollbars_section(ui, &mut theme.scrollbars);
-            draw_motion_section(ui, &mut theme.motion);
+    chrome::framed_collapsing_group(ui, "Appearance", true, |ui| {
+        draw_preset_section(ui, theme);
+        draw_typography_section(ui, theme, &mut requested_import);
+        draw_text_sizes_section(ui, theme);
+        draw_base_colors_section(ui, theme);
+        draw_widget_states_section(ui, &mut theme.widget_states);
+        draw_windows_panels_section(ui, &mut theme.windows_panels);
+        draw_layout_spacing_section(ui, &mut theme.spacing);
+        draw_scrollbars_section(ui, &mut theme.scrollbars);
+        draw_motion_section(ui, &mut theme.motion);
 
-            egui::CollapsingHeader::new("Existing Dock Styling")
-                .default_open(false)
-                .show(ui, |ui| {
-                    crate::ui::dock_style_editor::draw_embedded(ui, dock_style)
-                });
-        });
+        egui::CollapsingHeader::new("Existing Dock Styling")
+            .default_open(false)
+            .show(ui, |ui| {
+                crate::ui::dock_style_editor::draw_embedded(ui, dock_style)
+            });
+    });
 
     if let Some(role) = requested_import {
         match theme.import_font_from_dialog(role) {

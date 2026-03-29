@@ -10,6 +10,11 @@ use crate::settings::{
 };
 use crate::ui::chrome::{self, BadgeTone};
 
+const RENDER_LABEL_COL_WIDTH: f32 = 112.0;
+const RENDER_ROW_HEIGHT: f32 = 24.0;
+const RENDER_ROW_GAP: f32 = 6.0;
+const RENDER_MIN_CONTROL_WIDTH: f32 = 120.0;
+
 /// Draw the Render Settings panel. Pushes `Action::SettingsChanged` if a shader-affecting
 /// setting changed.
 pub fn draw(ui: &mut egui::Ui, settings: &mut Settings, actions: &mut ActionSink) {
@@ -654,12 +659,20 @@ fn settings_section(
     default_open: bool,
     add_contents: impl FnOnce(&mut egui::Ui),
 ) {
-    chrome::inset_frame(ui).show(ui, |ui| {
-        egui::CollapsingHeader::new(egui::RichText::new(title).strong())
-            .default_open(default_open)
-            .show(ui, add_contents);
-    });
-    ui.add_space(6.0);
+    let section_width = ui.available_width();
+    ui.allocate_ui_with_layout(
+        egui::vec2(section_width, 0.0),
+        egui::Layout::top_down(egui::Align::Min),
+        |ui| {
+            chrome::inset_frame(ui).show(ui, |ui| {
+                ui.set_min_width(ui.available_width());
+                egui::CollapsingHeader::new(egui::RichText::new(title).strong())
+                    .default_open(default_open)
+                    .show(ui, add_contents);
+            });
+        },
+    );
+    ui.add_space(RENDER_ROW_GAP);
 }
 
 fn labeled_slider(
@@ -671,7 +684,11 @@ fn labeled_slider(
     tooltip: &str,
 ) {
     ui.horizontal(|ui| {
-        let lbl = ui.label(label);
+        ui.spacing_mut().item_spacing.x = 8.0;
+        let lbl = ui.add_sized(
+            [RENDER_LABEL_COL_WIDTH, RENDER_ROW_HEIGHT],
+            egui::Label::new(label),
+        );
         if !tooltip.is_empty() {
             lbl.on_hover_text(tooltip);
         }
@@ -679,8 +696,13 @@ fn labeled_slider(
         if logarithmic {
             slider = slider.logarithmic(true);
         }
-        ui.add(slider);
+        let control_width = ui.available_width().max(RENDER_MIN_CONTROL_WIDTH);
+        ui.add_sized([control_width, RENDER_ROW_HEIGHT], slider);
     });
+    let extra_gap = (RENDER_ROW_GAP - ui.spacing().item_spacing.y).max(0.0);
+    if extra_gap > 0.0 {
+        ui.add_space(extra_gap);
+    }
 }
 
 fn labeled_slider_i32(
@@ -691,12 +713,24 @@ fn labeled_slider_i32(
     tooltip: &str,
 ) {
     ui.horizontal(|ui| {
-        let lbl = ui.label(label);
+        ui.spacing_mut().item_spacing.x = 8.0;
+        let lbl = ui.add_sized(
+            [RENDER_LABEL_COL_WIDTH, RENDER_ROW_HEIGHT],
+            egui::Label::new(label),
+        );
         if !tooltip.is_empty() {
             lbl.on_hover_text(tooltip);
         }
-        ui.add(egui::Slider::new(value, range));
+        let control_width = ui.available_width().max(RENDER_MIN_CONTROL_WIDTH);
+        ui.add_sized(
+            [control_width, RENDER_ROW_HEIGHT],
+            egui::Slider::new(value, range),
+        );
     });
+    let extra_gap = (RENDER_ROW_GAP - ui.spacing().item_spacing.y).max(0.0);
+    if extra_gap > 0.0 {
+        ui.add_space(extra_gap);
+    }
 }
 
 fn apply_preset_fast(config: &mut crate::settings::RenderConfig) {

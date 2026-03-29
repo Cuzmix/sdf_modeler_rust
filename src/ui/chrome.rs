@@ -132,6 +132,17 @@ pub fn inset_frame(ui: &egui::Ui) -> Frame {
     }
 }
 
+pub fn section_surface_frame(ui: &egui::Ui) -> Frame {
+    let tokens = tokens(ui);
+    Frame {
+        fill: mix_color(tokens.card, tokens.background, 0.24),
+        stroke: Stroke::new(1.0, tokens.border.gamma_multiply(0.72)),
+        inner_margin: Margin::symmetric(6.0, 5.0),
+        rounding: egui::Rounding::same(tokens.radius_sm),
+        ..Default::default()
+    }
+}
+
 pub fn item_frame(ui: &egui::Ui, selected: bool) -> Frame {
     let tokens = tokens(ui);
     let (fill, stroke) = if selected {
@@ -184,18 +195,24 @@ pub fn section_card<R>(
     add_contents: impl FnOnce(&mut egui::Ui) -> R,
 ) -> InnerResponse<R> {
     let tokens = tokens(ui);
-    Frame {
-        fill: Color32::TRANSPARENT,
-        stroke: Stroke::new(1.0, tokens.border.gamma_multiply(0.6)),
-        inner_margin: Margin::symmetric(6.0, 5.0),
-        rounding: egui::Rounding::same(tokens.radius_sm),
-        ..Default::default()
-    }
-    .show(ui, |ui| {
+    section_surface_frame(ui).show(ui, |ui| {
         panel_header(ui, title, description);
         ui.add_space(tokens.section_spacing);
         add_contents(ui)
     })
+}
+
+pub fn framed_collapsing_group(
+    ui: &mut egui::Ui,
+    title: &str,
+    default_open: bool,
+    add_contents: impl FnOnce(&mut egui::Ui),
+) {
+    section_surface_frame(ui).show(ui, |ui| {
+        egui::CollapsingHeader::new(title)
+            .default_open(default_open)
+            .show(ui, add_contents);
+    });
 }
 
 pub fn badge(ui: &mut egui::Ui, tone: BadgeTone, text: impl Into<String>) -> Response {

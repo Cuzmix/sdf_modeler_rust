@@ -80,28 +80,25 @@ pub fn draw(
                     &mut settings.dock_style,
                     actions,
                 );
+                ui.add_space(8.0);
 
                 // --- Display ---
-                egui::CollapsingHeader::new("Display")
-                    .default_open(true)
-                    .show(ui, |ui| {
-                        ui.checkbox(&mut settings.show_fps_overlay, "Show FPS Overlay")
-                            .on_hover_text("Display FPS counter in the top-left of the viewport");
-                        ui.checkbox(show_debug, "Show Profiler")
-                            .on_hover_text("Toggle the profiler window (F4)");
-                        ui.separator();
-                        ui.checkbox(&mut settings.vsync_enabled, "VSync");
-                        if settings.vsync_enabled != initial_vsync {
-                            ui.weak("(restart required)");
-                        }
-                        ui.checkbox(&mut settings.continuous_repaint, "Continuous Repaint")
-                            .on_hover_text("Force repaint every frame (useful for benchmarking)");
-                    });
+                framed_settings_group(ui, "Display", true, |ui| {
+                    ui.checkbox(&mut settings.show_fps_overlay, "Show FPS Overlay")
+                        .on_hover_text("Display FPS counter in the top-left of the viewport");
+                    ui.checkbox(show_debug, "Show Profiler")
+                        .on_hover_text("Toggle the profiler window (F4)");
+                    ui.separator();
+                    ui.checkbox(&mut settings.vsync_enabled, "VSync");
+                    if settings.vsync_enabled != initial_vsync {
+                        ui.weak("(restart required)");
+                    }
+                    ui.checkbox(&mut settings.continuous_repaint, "Continuous Repaint")
+                        .on_hover_text("Force repaint every frame (useful for benchmarking)");
+                });
 
                 // --- Viewport ---
-                egui::CollapsingHeader::new("Viewport")
-                    .default_open(true)
-                    .show(ui, |ui| {
+                framed_settings_group(ui, "Viewport", true, |ui| {
                         ui.checkbox(&mut settings.render.show_grid, "Show Grid")
                             .on_hover_text("Display ground plane grid at Y=0");
                         ui.checkbox(&mut settings.render.show_node_labels, "Show Node Labels")
@@ -186,9 +183,7 @@ pub fn draw(
                     });
 
                 // --- Snapping ---
-                egui::CollapsingHeader::new("Snapping")
-                    .default_open(false)
-                    .show(ui, |ui| {
+                framed_settings_group(ui, "Snapping", false, |ui| {
                         ui.label("Hold Ctrl while dragging a gizmo to snap.");
                         labeled_slider(ui, "Translate", &mut settings.snap.translate_snap, 0.05..=2.0, false,
                             "Snap increment for position (world units)");
@@ -199,9 +194,7 @@ pub fn draw(
                     });
 
                 // --- Touch Input ---
-                egui::CollapsingHeader::new("Touch / Tablet Input")
-                    .default_open(true)
-                    .show(ui, |ui| {
+                framed_settings_group(ui, "Touch / Tablet Input", true, |ui| {
                         labeled_slider(ui, "Zoom Sensitivity", &mut settings.render.touch_zoom_sensitivity, 100.0..=2000.0, false,
                             "How fast pinch-to-zoom responds");
                         ui.checkbox(&mut settings.render.invert_touch_pan, "Invert Touch Pan")
@@ -212,9 +205,7 @@ pub fn draw(
                     });
 
                 // --- Auto-save ---
-                egui::CollapsingHeader::new("Auto-save")
-                    .default_open(false)
-                    .show(ui, |ui| {
+                framed_settings_group(ui, "Auto-save", false, |ui| {
                         ui.checkbox(&mut settings.auto_save_enabled, "Enable Auto-save");
                         ui.add_enabled_ui(settings.auto_save_enabled, |ui| {
                             ui.horizontal(|ui| {
@@ -226,9 +217,7 @@ pub fn draw(
                     });
 
                 // --- Resolution Limits ---
-                egui::CollapsingHeader::new("Resolution Limits")
-                    .default_open(false)
-                    .show(ui, |ui| {
+                framed_settings_group(ui, "Resolution Limits", false, |ui| {
                         ui.horizontal(|ui| {
                             ui.label("Max Export Resolution:");
                             ui.add(
@@ -273,9 +262,7 @@ pub fn draw(
 
                 // --- Performance ---
                 let config = &mut settings.render;
-                egui::CollapsingHeader::new("Performance")
-                    .default_open(false)
-                    .show(ui, |ui| {
+                framed_settings_group(ui, "Performance", false, |ui| {
                         ui.checkbox(&mut config.sculpt_fast_mode, "Fast mode while sculpting")
                             .on_hover_text("Half steps + skip AO/shadows during brush strokes");
                         ui.checkbox(&mut config.auto_reduce_steps, "Auto-reduce steps (multi-sculpt)")
@@ -344,6 +331,16 @@ pub fn draw(
     }
 }
 
+fn framed_settings_group(
+    ui: &mut egui::Ui,
+    title: &str,
+    default_open: bool,
+    add_contents: impl FnOnce(&mut egui::Ui),
+) {
+    chrome::framed_collapsing_group(ui, title, default_open, add_contents);
+    ui.add_space(8.0);
+}
+
 // ---------------------------------------------------------------------------
 // Keybindings section
 // ---------------------------------------------------------------------------
@@ -353,9 +350,7 @@ fn draw_keybindings_section(
     keymap: &mut KeymapConfig,
     rebinding_action: &mut Option<ActionBinding>,
 ) {
-    egui::CollapsingHeader::new("Keybindings")
-        .default_open(false)
-        .show(ui, |ui| {
+    framed_settings_group(ui, "Keybindings", false, |ui| {
             // Toolbar: Reset / Export / Import
             ui.horizontal(|ui| {
                 if ui
@@ -413,7 +408,7 @@ fn draw_keybindings_section(
                             });
                     });
             }
-        });
+    });
 }
 
 fn draw_binding_row(
