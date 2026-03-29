@@ -127,6 +127,10 @@ impl SdfApp {
         }
 
         let selection_behavior = self.settings.selection_behavior;
+        let dock_style = self
+            .settings
+            .dock_style
+            .to_egui_dock_style(ctx.style().as_ref());
         let mut tab_viewer = SdfTabViewer {
             camera: &mut self.doc.camera,
             scene: &mut self.doc.scene,
@@ -182,7 +186,9 @@ impl SdfApp {
         egui::CentralPanel::default()
             .frame(egui::Frame::none())
             .show(ctx, |ui| {
-                egui_dock::DockArea::new(&mut self.ui.dock_state).show_inside(ui, &mut tab_viewer);
+                egui_dock::DockArea::new(&mut self.ui.dock_state)
+                    .style(dock_style)
+                    .show_inside(ui, &mut tab_viewer);
             });
 
         crate::ui::command_palette::draw(

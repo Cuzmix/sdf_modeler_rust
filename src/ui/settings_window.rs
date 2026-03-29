@@ -2,9 +2,7 @@ use eframe::egui;
 
 use crate::app::actions::{Action, ActionSink};
 use crate::keymap::{ActionBinding, KeyCombo, KeymapConfig, SerializableKey};
-use crate::settings::{
-    GroupRotateDirection, MultiAxisOrientation, MultiPivotMode, Settings,
-};
+use crate::settings::{GroupRotateDirection, MultiAxisOrientation, MultiPivotMode, Settings};
 
 /// Draw the System Settings window. Pushes `Action::SettingsChanged` if a
 /// shader-affecting setting changed.
@@ -17,8 +15,8 @@ pub fn draw(
     actions: &mut ActionSink,
     rebinding_action: &mut Option<ActionBinding>,
 ) {
-    let before = settings.render.clone();
-    let mut imported = false;
+    let before = settings.clone();
+    let before_render = settings.render.clone();
 
     egui::Window::new("Settings")
         .open(open)
@@ -40,13 +38,20 @@ pub fn draw(
                         settings.export_dialog();
                     }
                     if ui.button("Import...").on_hover_text("Load settings from a file").clicked() {
-                        imported = settings.import_dialog();
+                        settings.import_dialog();
                     }
                 }
             });
             ui.separator();
 
             egui::ScrollArea::vertical().show(ui, |ui| {
+                crate::ui::appearance_editor::draw(
+                    ui,
+                    &mut settings.egui_theme,
+                    &mut settings.dock_style,
+                    actions,
+                );
+
                 // --- Display ---
                 egui::CollapsingHeader::new("Display")
                     .default_open(true)
@@ -297,8 +302,10 @@ pub fn draw(
             });
         });
 
-    if imported || settings.render != before {
+    if settings.render != before_render {
         actions.push(Action::SettingsChanged);
+    } else if *settings != before {
+        settings.save();
     }
 }
 

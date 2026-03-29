@@ -288,6 +288,12 @@ pub struct UiState {
     /// The last total light count that triggered a toast warning.
     /// Used to avoid spamming the same warning repeatedly.
     pub last_light_warning_count: Option<usize>,
+    /// Fingerprint queued for theme style application after egui has activated new font definitions.
+    pub pending_egui_theme_fingerprint: Option<u64>,
+    /// Fingerprint of the last egui theme settings applied to the live egui context.
+    pub last_applied_egui_theme_fingerprint: Option<u64>,
+    /// Fingerprint of the last theme warning batch shown to the user.
+    pub last_egui_theme_warning_fingerprint: Option<u64>,
     /// Startup crash recovery modal visibility.
     pub show_recovery_dialog: bool,
     /// Recovery modal context built from autosave.meta.

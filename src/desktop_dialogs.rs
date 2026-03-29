@@ -221,6 +221,24 @@ pub fn settings_import_dialog() -> FileDialogSelection {
     }
 }
 
+pub fn font_import_dialog(role_name: &str) -> FileDialogSelection {
+    #[cfg(all(not(target_arch = "wasm32"), not(target_os = "android")))]
+    {
+        dialog_selection(
+            rfd::FileDialog::new()
+                .set_title(format!("Import {role_name} Font"))
+                .add_filter("Fonts", &["ttf", "otf"])
+                .pick_file(),
+        )
+    }
+
+    #[cfg(any(target_arch = "wasm32", target_os = "android"))]
+    {
+        let _ = role_name;
+        unsupported_dialog()
+    }
+}
+
 pub fn keybindings_export_dialog() -> FileDialogSelection {
     #[cfg(all(not(target_arch = "wasm32"), not(target_os = "android")))]
     {

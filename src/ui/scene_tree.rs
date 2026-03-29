@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use eframe::egui;
 
 use crate::app::actions::{Action, ActionSink};
+use crate::egui_theme::{resolve_scaled_font_id, AppTextRole};
 use crate::graph::scene::{NodeData, NodeId, Scene, SceneNode};
 
 const COLOR_SELECTED: egui::Color32 = egui::Color32::from_rgb(255, 200, 60);
@@ -133,7 +134,7 @@ pub fn draw(
             rect.center(),
             egui::Align2::CENTER_CENTER,
             "Drop here for top-level",
-            egui::FontId::proportional(11.0),
+            resolve_scaled_font_id(ui.style().as_ref(), AppTextRole::SceneLabel, 11.0),
             color,
         );
 

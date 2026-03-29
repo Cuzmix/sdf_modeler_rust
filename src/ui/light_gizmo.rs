@@ -2,6 +2,7 @@ use eframe::egui::{self, Color32, Pos2, Rect, Stroke};
 use glam::Vec3;
 use std::collections::HashMap;
 
+use crate::egui_theme::{resolve_scaled_font_id, AppTextRole};
 use crate::gpu::camera::Camera;
 use crate::graph::scene::{LightType, NodeData, NodeId, Scene};
 use crate::ui::gizmo::world_to_screen;
@@ -747,11 +748,16 @@ pub fn draw_and_interact(
             let badge_text_col =
                 Color32::from_rgba_unmultiplied(255, 255, 255, (alpha * 255.0) as u8);
             painter.circle_filled(badge_center, badge_radius + 1.0, badge_bg);
+            let style = painter.ctx().style();
             painter.text(
                 badge_center,
                 egui::Align2::CENTER_CENTER,
                 "C",
-                egui::FontId::proportional(badge_radius * 1.6),
+                resolve_scaled_font_id(
+                    style.as_ref(),
+                    AppTextRole::ViewportHud,
+                    badge_radius * 1.6,
+                ),
                 badge_text_col,
             );
         }

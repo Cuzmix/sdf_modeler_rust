@@ -1,6 +1,8 @@
 mod app;
 mod compat;
 mod desktop_dialogs;
+mod dock_style;
+mod egui_theme;
 mod export;
 pub mod expression;
 mod gpu;

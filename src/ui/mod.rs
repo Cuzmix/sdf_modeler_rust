@@ -1,6 +1,8 @@
+pub mod appearance_editor;
 pub mod brush_settings;
 pub mod command_palette;
 pub mod dock;
+pub mod dock_style_editor;
 pub mod export_dialog;
 pub mod export_progress;
 pub mod gizmo;
