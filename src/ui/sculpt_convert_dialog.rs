@@ -10,6 +10,15 @@ pub fn draw(
     actions: &mut ActionSink,
     max_sculpt_resolution: u32,
 ) {
+    let motion = crate::ui::motion::settings(ctx);
+    let window_id = egui::Id::new("convert_to_sculpt_dialog");
+    let is_open = dialog.is_some();
+    let t = crate::ui::motion::surface_open_t(ctx, window_id, is_open, motion);
+    if !is_open {
+        crate::ui::motion::clear_surface_layers(ctx, window_id);
+        return;
+    }
+    let alpha = crate::ui::motion::fade_alpha(t, motion.reduced_motion);
     let Some(state) = dialog.as_mut() else {
         return;
     };
@@ -18,12 +27,20 @@ pub fn draw(
     let mut do_convert = false;
     let mut do_cancel = false;
 
-    egui::Window::new("Convert to Sculpt")
+    if let Some(window_response) = egui::Window::new("Convert to Sculpt")
+        .id(window_id)
+        .fade_in(false)
         .resizable(false)
         .collapsible(false)
         .default_width(320.0)
         .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+        .frame(crate::ui::motion::frame_with_alpha(
+            egui::Frame::window(&ctx.style()),
+            t,
+            motion,
+        ))
         .show(ctx, |ui| {
+            ui.multiply_opacity(alpha);
             ui.add_space(4.0);
 
             ui.label("Choose how to create the sculpt layer:");
@@ -126,7 +143,10 @@ pub fn draw(
                     do_cancel = true;
                 }
             });
-        });
+        })
+    {
+        crate::ui::motion::apply_surface_transform(ctx, &window_response.response, t, motion);
+    }
 
     if do_convert {
         let mode = state.mode;

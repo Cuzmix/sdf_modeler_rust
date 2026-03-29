@@ -2,6 +2,8 @@ use std::hash::{Hash, Hasher};
 
 use serde::{Deserialize, Serialize};
 
+use crate::dock_style::DockStyleSettings;
+use crate::egui_theme::EguiThemeSettings;
 use crate::keymap::KeymapConfig;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::native_paths;
@@ -227,7 +229,7 @@ impl Default for SelectionBehaviorSettings {
 // Export presets
 // ---------------------------------------------------------------------------
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct ExportPreset {
     pub name: String,
     pub resolution: u32,
@@ -258,7 +260,7 @@ fn default_export_presets() -> Vec<ExportPreset> {
 // Camera bookmarks
 // ---------------------------------------------------------------------------
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct CameraBookmark {
     pub yaw: f32,
     pub pitch: f32,
@@ -268,7 +270,7 @@ pub struct CameraBookmark {
     pub orthographic: bool,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct Settings {
     pub vsync_enabled: bool,
     #[serde(default = "default_true")]
@@ -301,6 +303,10 @@ pub struct Settings {
     pub keymap: KeymapConfig,
     #[serde(default)]
     pub selection_behavior: SelectionBehaviorSettings,
+    #[serde(default)]
+    pub egui_theme: EguiThemeSettings,
+    #[serde(default)]
+    pub dock_style: DockStyleSettings,
     #[serde(default = "default_true")]
     pub last_clean_exit: bool,
 }
@@ -324,6 +330,8 @@ impl Default for Settings {
             export_presets: default_export_presets(),
             keymap: KeymapConfig::default(),
             selection_behavior: SelectionBehaviorSettings::default(),
+            egui_theme: EguiThemeSettings::default(),
+            dock_style: DockStyleSettings::default(),
             last_clean_exit: true,
         }
     }
@@ -1174,8 +1182,14 @@ mod tests {
     #[test]
     fn selection_behavior_defaults_are_expected() {
         let defaults = SelectionBehaviorSettings::default();
-        assert_eq!(defaults.multi_axis_orientation, MultiAxisOrientation::WorldZero);
-        assert_eq!(defaults.group_rotate_direction, GroupRotateDirection::Standard);
+        assert_eq!(
+            defaults.multi_axis_orientation,
+            MultiAxisOrientation::WorldZero
+        );
+        assert_eq!(
+            defaults.group_rotate_direction,
+            GroupRotateDirection::Standard
+        );
         assert_eq!(defaults.multi_pivot_mode, MultiPivotMode::SelectionCenter);
     }
 

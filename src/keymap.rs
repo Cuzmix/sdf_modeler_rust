@@ -639,7 +639,7 @@ impl ActionBinding {
 // Keymap configuration
 // ---------------------------------------------------------------------------
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct KeymapConfig {
     bindings: HashMap<ActionBinding, KeyCombo>,
 }

@@ -6,6 +6,10 @@ use crate::app::actions::{Action, ActionSink};
 use crate::app::state::{
     MultiTransformSessionState, SculptBrushAdjustMode, SculptBrushAdjustState,
 };
+use crate::egui_theme::{
+    resolve_font_id, resolve_scaled_font_id, scene_label_size_scale, viewport_hud_size_scale,
+    viewport_mono_size_scale, AppTextRole,
+};
 use crate::gpu::camera::{Camera, CameraUniform};
 use crate::gpu::picking::PendingPick;
 use crate::graph::scene::{CsgOp, ModifierKind, NodeData, NodeId, Scene, SdfPrimitive};
@@ -107,79 +111,98 @@ fn draw_selection_behavior_panel(
             selected_count += 1;
         }
     }
-    if selected_count <= 1 || *active_tool != ActiveTool::Select {
+    let is_visible = selected_count > 1 && *active_tool == ActiveTool::Select;
+    let motion = crate::ui::motion::settings(ui.ctx());
+    let panel_id = ui.id().with("selection_behavior_panel");
+    let surface_t = crate::ui::motion::surface_open_t(ui.ctx(), panel_id, is_visible, motion);
+    if !crate::ui::motion::should_draw_surface(is_visible, surface_t) {
         return;
     }
 
-    let overlay_frame = egui::Frame::window(&ui.ctx().style())
-        .fill(egui::Color32::from_rgba_premultiplied(30, 30, 38, 220));
-    let panel_id = ui.id().with("selection_behavior_panel");
+    let overlay_frame = crate::ui::motion::frame_with_alpha(
+        egui::Frame::window(&ui.ctx().style())
+            .fill(egui::Color32::from_rgba_premultiplied(30, 30, 38, 220)),
+        surface_t,
+        motion,
+    );
+    let alpha = crate::ui::motion::fade_alpha(surface_t, motion.reduced_motion);
     let mut edited = *selection_behavior;
     let mut changed = false;
 
-    egui::Window::new(egui::RichText::new("Selection Behaviour").size(11.0))
-        .id(panel_id)
-        .resizable(false)
-        .collapsible(false)
-        .frame(overlay_frame)
-        .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-8.0, -8.0))
-        .show(ui.ctx(), |ui| {
-            ui.small(format!("{selected_count} selected"));
+    if let Some(window_response) =
+        egui::Window::new(egui::RichText::new("Selection Behaviour").size(11.0))
+            .id(panel_id)
+            .fade_in(false)
+            .resizable(false)
+            .collapsible(false)
+            .frame(overlay_frame)
+            .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-8.0, -8.0))
+            .show(ui.ctx(), |ui| {
+                ui.multiply_opacity(alpha);
+                ui.small(format!("{selected_count} selected"));
 
-            ui.horizontal(|ui| {
-                ui.label("Axes");
-                changed |= ui
-                    .selectable_value(
-                        &mut edited.multi_axis_orientation,
-                        MultiAxisOrientation::WorldZero,
-                        MultiAxisOrientation::WorldZero.label(),
-                    )
-                    .changed();
-                changed |= ui
-                    .selectable_value(
-                        &mut edited.multi_axis_orientation,
-                        MultiAxisOrientation::ActiveObject,
-                        MultiAxisOrientation::ActiveObject.label(),
-                    )
-                    .changed();
-            });
+                ui.horizontal(|ui| {
+                    ui.label("Axes");
+                    changed |= ui
+                        .selectable_value(
+                            &mut edited.multi_axis_orientation,
+                            MultiAxisOrientation::WorldZero,
+                            MultiAxisOrientation::WorldZero.label(),
+                        )
+                        .changed();
+                    changed |= ui
+                        .selectable_value(
+                            &mut edited.multi_axis_orientation,
+                            MultiAxisOrientation::ActiveObject,
+                            MultiAxisOrientation::ActiveObject.label(),
+                        )
+                        .changed();
+                });
 
-            ui.horizontal(|ui| {
-                ui.label("Rotate");
-                changed |= ui
-                    .selectable_value(
-                        &mut edited.group_rotate_direction,
-                        GroupRotateDirection::Standard,
-                        GroupRotateDirection::Standard.label(),
-                    )
-                    .changed();
-                changed |= ui
-                    .selectable_value(
-                        &mut edited.group_rotate_direction,
-                        GroupRotateDirection::Inverted,
-                        GroupRotateDirection::Inverted.label(),
-                    )
-                    .changed();
-            });
+                ui.horizontal(|ui| {
+                    ui.label("Rotate");
+                    changed |= ui
+                        .selectable_value(
+                            &mut edited.group_rotate_direction,
+                            GroupRotateDirection::Standard,
+                            GroupRotateDirection::Standard.label(),
+                        )
+                        .changed();
+                    changed |= ui
+                        .selectable_value(
+                            &mut edited.group_rotate_direction,
+                            GroupRotateDirection::Inverted,
+                            GroupRotateDirection::Inverted.label(),
+                        )
+                        .changed();
+                });
 
-            ui.horizontal(|ui| {
-                ui.label("Pivot");
-                changed |= ui
-                    .selectable_value(
-                        &mut edited.multi_pivot_mode,
-                        MultiPivotMode::SelectionCenter,
-                        MultiPivotMode::SelectionCenter.label(),
-                    )
-                    .changed();
-                changed |= ui
-                    .selectable_value(
-                        &mut edited.multi_pivot_mode,
-                        MultiPivotMode::ActiveObject,
-                        MultiPivotMode::ActiveObject.label(),
-                    )
-                    .changed();
-            });
-        });
+                ui.horizontal(|ui| {
+                    ui.label("Pivot");
+                    changed |= ui
+                        .selectable_value(
+                            &mut edited.multi_pivot_mode,
+                            MultiPivotMode::SelectionCenter,
+                            MultiPivotMode::SelectionCenter.label(),
+                        )
+                        .changed();
+                    changed |= ui
+                        .selectable_value(
+                            &mut edited.multi_pivot_mode,
+                            MultiPivotMode::ActiveObject,
+                            MultiPivotMode::ActiveObject.label(),
+                        )
+                        .changed();
+                });
+            })
+    {
+        crate::ui::motion::apply_surface_transform(
+            ui.ctx(),
+            &window_response.response,
+            surface_t,
+            motion,
+        );
+    }
 
     if changed && edited != *selection_behavior {
         actions.push(Action::SetSelectionBehavior(edited));
@@ -592,7 +615,8 @@ fn draw_symmetry_plane(
         _ => glam::Vec3::new(0.0, extent * 0.9, 0.0),
     };
     if let Some(label_pos) = gizmo::world_to_screen(label_world, &view_proj, rect) {
-        let font = egui::FontId::proportional(13.0);
+        let style = painter.ctx().style();
+        let font = resolve_scaled_font_id(style.as_ref(), AppTextRole::ViewportHud, 13.0);
         painter.text(
             label_pos + egui::vec2(1.0, 1.0),
             egui::Align2::CENTER_CENTER,
@@ -1382,10 +1406,15 @@ pub fn draw(
         }
     }
 
+    let overlay_style = ui.style();
+    let overlay_style = overlay_style.as_ref();
+    let hud_scale = viewport_hud_size_scale(overlay_style).clamp(0.75, 1.8);
+    let mono_scale = viewport_mono_size_scale(overlay_style).clamp(0.75, 1.8);
+
     // --- FPS counter overlay (top-left of viewport) ---
     if let Some((fps, frame_ms)) = fps_info {
         let text = format!("{:.0} FPS ({:.1} ms)", fps, frame_ms);
-        let font = egui::FontId::monospace(11.0);
+        let font = resolve_font_id(overlay_style, AppTextRole::ViewportMono);
         let pos = rect.min + egui::vec2(6.0, 4.0);
         // Shadow for readability
         ui.painter().text(
@@ -1456,8 +1485,8 @@ pub fn draw(
                 preview_radius, effective_strength, detail_size, symmetry
             )
         };
-        let font = egui::FontId::monospace(11.0);
-        let pos = egui::pos2(rect.min.x + 6.0, rect.min.y + 22.0);
+        let font = resolve_font_id(overlay_style, AppTextRole::ViewportMono);
+        let pos = egui::pos2(rect.min.x + 6.0, rect.min.y + 22.0 * hud_scale);
         ui.painter().text(
             pos + egui::vec2(1.0, 1.0),
             egui::Align2::LEFT_TOP,
@@ -1477,8 +1506,8 @@ pub fn draw(
     // --- Isolation mode indicator ---
     if let Some(label) = isolation_label {
         let text = format!("ISOLATED: {}", label);
-        let font = egui::FontId::proportional(13.0);
-        let pos = egui::pos2(rect.center().x, rect.min.y + 8.0);
+        let font = resolve_scaled_font_id(overlay_style, AppTextRole::ViewportHud, 13.0);
+        let pos = egui::pos2(rect.center().x, rect.min.y + 8.0 * hud_scale);
         ui.painter().text(
             pos + egui::vec2(1.0, 1.0),
             egui::Align2::CENTER_TOP,
@@ -1498,8 +1527,8 @@ pub fn draw(
     // --- Solo light indicator ---
     if let Some(label) = solo_label {
         let text = format!("SOLO: {}", label);
-        let font = egui::FontId::proportional(13.0);
-        let y_offset = if isolation_label.is_some() { 24.0 } else { 8.0 };
+        let font = resolve_scaled_font_id(overlay_style, AppTextRole::ViewportHud, 13.0);
+        let y_offset = if isolation_label.is_some() { 24.0 } else { 8.0 } * hud_scale;
         let pos = egui::pos2(rect.center().x, rect.min.y + y_offset);
         ui.painter().text(
             pos + egui::vec2(1.0, 1.0),
@@ -1525,7 +1554,7 @@ pub fn draw(
             .map(|n| n.name.as_str())
             .unwrap_or("Unknown");
         let text = format!("Sculpting: {}", node_name);
-        let font = egui::FontId::proportional(13.0);
+        let font = resolve_scaled_font_id(overlay_style, AppTextRole::ViewportHud, 13.0);
         let mut y_offset = 8.0;
         if isolation_label.is_some() {
             y_offset += 16.0;
@@ -1533,7 +1562,7 @@ pub fn draw(
         if solo_label.is_some() {
             y_offset += 16.0;
         }
-        let pos = egui::pos2(rect.center().x, rect.min.y + y_offset);
+        let pos = egui::pos2(rect.center().x, rect.min.y + y_offset * hud_scale);
         ui.painter().text(
             pos + egui::vec2(1.0, 1.0),
             egui::Align2::CENTER_TOP,
@@ -1553,8 +1582,8 @@ pub fn draw(
     // --- Turntable indicator (top-right, below orientation gizmo area) ---
     if turntable_active {
         let text = "TURNTABLE";
-        let font = egui::FontId::proportional(11.0);
-        let pos = egui::pos2(rect.right() - 40.0, rect.top() + 100.0);
+        let font = resolve_scaled_font_id(overlay_style, AppTextRole::ViewportHud, 11.0);
+        let pos = egui::pos2(rect.right() - 40.0, rect.top() + 100.0 * hud_scale);
         ui.painter().text(
             pos + egui::vec2(1.0, 1.0),
             egui::Align2::CENTER_TOP,
@@ -1584,8 +1613,8 @@ pub fn draw(
                     let d = crate::graph::voxel::evaluate_scene_sdf_at_point(scene, sample_point);
                     format!("D: {:.3}", d)
                 };
-                let pos = cursor + egui::vec2(12.0, 12.0);
-                let font = egui::FontId::monospace(11.0);
+                let pos = cursor + egui::vec2(12.0 * mono_scale, 12.0 * mono_scale);
+                let font = resolve_scaled_font_id(overlay_style, AppTextRole::ViewportMono, 11.0);
                 ui.painter().text(
                     pos + egui::vec2(1.0, 1.0),
                     egui::Align2::LEFT_TOP,
@@ -1611,7 +1640,7 @@ pub fn draw(
         if measurement_points.len() == 1 {
             let text = "Measure: click second point";
             let pos = egui::pos2(rect.center().x, rect.max.y - 24.0);
-            let font = egui::FontId::proportional(12.0);
+            let font = resolve_scaled_font_id(overlay_style, AppTextRole::ViewportHud, 12.0);
             ui.painter().text(
                 pos + egui::vec2(1.0, 1.0),
                 egui::Align2::CENTER_CENTER,
@@ -1647,7 +1676,7 @@ pub fn draw(
                     (a_screen.y + b_screen.y) * 0.5,
                 );
                 let label = format!("{:.3} units", dist);
-                let font = egui::FontId::monospace(11.0);
+                let font = resolve_scaled_font_id(overlay_style, AppTextRole::ViewportMono, 11.0);
                 ui.painter().text(
                     mid + egui::vec2(1.0, 1.0),
                     egui::Align2::CENTER_BOTTOM,
@@ -1724,18 +1753,29 @@ pub fn draw(
         });
 
     // --- Shapes panel (hidden in sculpt mode) ---
-    if *active_tool != ActiveTool::Sculpt {
-        let shapes_id = ui.id().with("viewport_shapes");
-        let overlay_frame = egui::Frame::window(&ui.ctx().style())
-            .fill(egui::Color32::from_rgba_premultiplied(30, 30, 38, 220));
+    let shapes_visible = *active_tool != ActiveTool::Sculpt;
+    let shapes_id = ui.id().with("viewport_shapes");
+    let shapes_motion = crate::ui::motion::settings(ui.ctx());
+    let shapes_t =
+        crate::ui::motion::surface_open_t(ui.ctx(), shapes_id, shapes_visible, shapes_motion);
+    if crate::ui::motion::should_draw_surface(shapes_visible, shapes_t) {
+        let shapes_alpha = crate::ui::motion::fade_alpha(shapes_t, shapes_motion.reduced_motion);
+        let overlay_frame = crate::ui::motion::frame_with_alpha(
+            egui::Frame::window(&ui.ctx().style())
+                .fill(egui::Color32::from_rgba_premultiplied(30, 30, 38, 220)),
+            shapes_t,
+            shapes_motion,
+        );
 
-        egui::Window::new(egui::RichText::new("Shapes").size(11.0))
+        if let Some(window_response) = egui::Window::new(egui::RichText::new("Shapes").size(11.0))
             .id(shapes_id)
+            .fade_in(false)
             .default_pos(rect.min + egui::vec2(8.0, 130.0))
             .resizable(true)
             .collapsible(true)
             .frame(overlay_frame)
             .show(ui.ctx(), |ui| {
+                ui.multiply_opacity(shapes_alpha);
                 let btn_size = egui::vec2(72.0, 22.0);
 
                 // Primitives — flow layout wraps based on window width
@@ -1792,7 +1832,15 @@ pub fn draw(
                         }
                     });
                 }
-            });
+            })
+        {
+            crate::ui::motion::apply_surface_transform(
+                ui.ctx(),
+                &window_response.response,
+                shapes_t,
+                shapes_motion,
+            );
+        }
     }
 
     // --- Orientation Gizmo (top-right corner, interactive) ---
@@ -1898,7 +1946,11 @@ pub fn draw(
                     pos_end,
                     egui::Align2::CENTER_CENTER,
                     label,
-                    egui::FontId::proportional(if pos_hovered { 12.0 } else { 10.0 }),
+                    resolve_scaled_font_id(
+                        overlay_style,
+                        AppTextRole::ViewportHud,
+                        if pos_hovered { 12.0 } else { 10.0 },
+                    ),
                     pos_color,
                 );
             }
@@ -1943,7 +1995,7 @@ pub fn draw(
             label_pos,
             egui::Align2::CENTER_CENTER,
             proj_label,
-            egui::FontId::proportional(9.0),
+            resolve_scaled_font_id(overlay_style, AppTextRole::ViewportHud, 9.0),
             egui::Color32::from_rgb(160, 160, 170),
         );
     }
@@ -1997,6 +2049,9 @@ fn draw_node_labels(
     let proj = camera.projection_matrix(aspect);
     let vp = proj * view;
     let cam_pos = camera.eye();
+    let style = painter.ctx().style();
+    let style = style.as_ref();
+    let label_scale = scene_label_size_scale(style).clamp(0.75, 1.8);
 
     for (&id, node) in &scene.nodes {
         // Only show labels for geometry nodes with position
@@ -2037,8 +2092,8 @@ fn draw_node_labels(
         let color = base_color.gamma_multiply(alpha);
         let shadow_color = egui::Color32::from_rgba_premultiplied(0, 0, 0, (alpha * 180.0) as u8);
 
-        let label_pos = egui::pos2(screen_pos.x, screen_pos.y - font_size - 4.0);
-        let font = egui::FontId::proportional(font_size);
+        let label_pos = egui::pos2(screen_pos.x, screen_pos.y - font_size - 4.0 * label_scale);
+        let font = resolve_scaled_font_id(style, AppTextRole::SceneLabel, font_size);
 
         // Text shadow
         painter.text(

@@ -42,110 +42,128 @@ pub fn draw(
     settings: &mut Settings,
     export_status: &ExportStatus,
 ) -> ExportDialogResult {
-    if !*show {
+    let motion = crate::ui::motion::settings(ctx);
+    let window_id = egui::Id::new("export_mesh_dialog");
+    let t = crate::ui::motion::surface_open_t(ctx, window_id, *show, motion);
+    if !crate::ui::motion::should_draw_surface(*show, t) {
+        crate::ui::motion::clear_surface_layers(ctx, window_id);
         return ExportDialogResult::None;
     }
+    let alpha = crate::ui::motion::fade_alpha(t, motion.reduced_motion);
     let mut open = *show;
     let mut do_export = false;
     let mut do_cancel = false;
 
-    egui::Window::new("Export Mesh")
-        .open(&mut open)
+    let mut window = egui::Window::new("Export Mesh")
+        .id(window_id)
+        .fade_in(false)
         .resizable(false)
         .collapsible(false)
         .default_width(300.0)
         .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
-        .show(ctx, |ui| {
-            ui.heading("Export Settings");
-            ui.add_space(4.0);
+        .frame(crate::ui::motion::frame_with_alpha(
+            egui::Frame::window(&ctx.style()),
+            t,
+            motion,
+        ));
+    if *show {
+        window = window.open(&mut open);
+    }
 
-            // Preset buttons
-            if !settings.export_presets.is_empty() {
-                ui.label("Presets:");
-                ui.horizontal(|ui| {
-                    let presets = settings.export_presets.clone();
-                    for preset in &presets {
-                        if ui.button(&preset.name).clicked() {
-                            settings.export_resolution = preset.resolution;
-                        }
+    if let Some(window_response) = window.show(ctx, |ui| {
+        ui.multiply_opacity(alpha);
+        ui.heading("Export Settings");
+        ui.add_space(4.0);
+
+        // Preset buttons
+        if !settings.export_presets.is_empty() {
+            ui.label("Presets:");
+            ui.horizontal(|ui| {
+                let presets = settings.export_presets.clone();
+                for preset in &presets {
+                    if ui.button(&preset.name).clicked() {
+                        settings.export_resolution = preset.resolution;
                     }
-                });
-                ui.add_space(4.0);
-            }
-
-            // Resolution input
-            let max_res = settings.max_export_resolution.max(16);
-            let mut res_i32 = settings.export_resolution as i32;
-            ui.horizontal(|ui| {
-                ui.label("Resolution:");
-                ui.add(
-                    egui::DragValue::new(&mut res_i32)
-                        .speed(1)
-                        .range(16..=max_res as i32)
-                        .suffix("^3"),
-                );
+                }
             });
-            settings.export_resolution = (res_i32 as u32).clamp(16, max_res);
-
-            // Marching cubes estimate: surface-crossing cells ≈ 6*N^2 (sphere-like),
-            // each generates ~2 triangles and ~3 unique vertices on average.
-            let res = settings.export_resolution as u64;
-            let voxels = res.pow(3);
-            let mem_mb = (voxels as f64 * 4.0) / (1024.0 * 1024.0);
-            let estimated_tris = 6 * res * res * 2;
-            let estimated_verts = estimated_tris * 3 / 2; // ~1.5 verts per tri after dedup
-            ui.weak(format!(
-                "{} voxels ({:.1} MB)",
-                format_voxel_count(voxels),
-                mem_mb
-            ));
-            ui.weak(format!(
-                "~{} triangles, ~{} vertices (estimate for typical geometry)",
-                format_vertex_count(estimated_tris),
-                format_vertex_count(estimated_verts)
-            ));
-
-            // Warnings
-            if settings.export_resolution > 512 {
-                ui.colored_label(
-                    egui::Color32::from_rgb(255, 100, 100),
-                    format!(
-                        "Warning: {:.0} MB — export may take very long or run out of memory",
-                        mem_mb
-                    ),
-                );
-            } else if settings.export_resolution > 256 {
-                ui.colored_label(
-                    egui::Color32::YELLOW,
-                    "High resolution — export may take longer",
-                );
-            }
             ui.add_space(4.0);
+        }
 
-            // Adaptive toggle
-            ui.checkbox(&mut settings.adaptive_export, "Adaptive sampling")
-                .on_hover_text("Skip empty regions for faster export at high resolutions");
-            ui.add_space(8.0);
-
-            // Info text
-            ui.label("Supported formats: OBJ, STL, PLY, glTF (.glb), USD (.usda)");
-            ui.weak("PLY, glTF, and USD include vertex colors.");
-            ui.add_space(8.0);
-
-            // Export button
-            let export_idle = matches!(export_status, ExportStatus::Idle);
-            ui.horizontal(|ui| {
-                if ui
-                    .add_enabled(export_idle, egui::Button::new("Export..."))
-                    .clicked()
-                {
-                    do_export = true;
-                }
-                if ui.button("Cancel").clicked() {
-                    do_cancel = true;
-                }
-            });
+        // Resolution input
+        let max_res = settings.max_export_resolution.max(16);
+        let mut res_i32 = settings.export_resolution as i32;
+        ui.horizontal(|ui| {
+            ui.label("Resolution:");
+            ui.add(
+                egui::DragValue::new(&mut res_i32)
+                    .speed(1)
+                    .range(16..=max_res as i32)
+                    .suffix("^3"),
+            );
         });
+        settings.export_resolution = (res_i32 as u32).clamp(16, max_res);
+
+        // Marching cubes estimate: surface-crossing cells ≈ 6*N^2 (sphere-like),
+        // each generates ~2 triangles and ~3 unique vertices on average.
+        let res = settings.export_resolution as u64;
+        let voxels = res.pow(3);
+        let mem_mb = (voxels as f64 * 4.0) / (1024.0 * 1024.0);
+        let estimated_tris = 6 * res * res * 2;
+        let estimated_verts = estimated_tris * 3 / 2; // ~1.5 verts per tri after dedup
+        ui.weak(format!(
+            "{} voxels ({:.1} MB)",
+            format_voxel_count(voxels),
+            mem_mb
+        ));
+        ui.weak(format!(
+            "~{} triangles, ~{} vertices (estimate for typical geometry)",
+            format_vertex_count(estimated_tris),
+            format_vertex_count(estimated_verts)
+        ));
+
+        // Warnings
+        if settings.export_resolution > 512 {
+            ui.colored_label(
+                egui::Color32::from_rgb(255, 100, 100),
+                format!(
+                    "Warning: {:.0} MB — export may take very long or run out of memory",
+                    mem_mb
+                ),
+            );
+        } else if settings.export_resolution > 256 {
+            ui.colored_label(
+                egui::Color32::YELLOW,
+                "High resolution — export may take longer",
+            );
+        }
+        ui.add_space(4.0);
+
+        // Adaptive toggle
+        ui.checkbox(&mut settings.adaptive_export, "Adaptive sampling")
+            .on_hover_text("Skip empty regions for faster export at high resolutions");
+        ui.add_space(8.0);
+
+        // Info text
+        ui.label("Supported formats: OBJ, STL, PLY, glTF (.glb), USD (.usda)");
+        ui.weak("PLY, glTF, and USD include vertex colors.");
+        ui.add_space(8.0);
+
+        // Export button
+        let export_idle = matches!(export_status, ExportStatus::Idle);
+        ui.horizontal(|ui| {
+            if ui
+                .add_enabled(export_idle, egui::Button::new("Export..."))
+                .clicked()
+            {
+                do_export = true;
+            }
+            if ui.button("Cancel").clicked() {
+                do_cancel = true;
+            }
+        });
+    }) {
+        crate::ui::motion::apply_surface_transform(ctx, &window_response.response, t, motion);
+    }
 
     if !open || do_cancel {
         *show = false;

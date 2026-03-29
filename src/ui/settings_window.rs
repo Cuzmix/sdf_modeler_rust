@@ -2,9 +2,8 @@ use eframe::egui;
 
 use crate::app::actions::{Action, ActionSink};
 use crate::keymap::{ActionBinding, KeyCombo, KeymapConfig, SerializableKey};
-use crate::settings::{
-    GroupRotateDirection, MultiAxisOrientation, MultiPivotMode, Settings,
-};
+use crate::settings::{GroupRotateDirection, MultiAxisOrientation, MultiPivotMode, Settings};
+use crate::ui::chrome::{self, BadgeTone};
 
 /// Draw the System Settings window. Pushes `Action::SettingsChanged` if a
 /// shader-affecting setting changed.
@@ -17,36 +16,71 @@ pub fn draw(
     actions: &mut ActionSink,
     rebinding_action: &mut Option<ActionBinding>,
 ) {
-    let before = settings.render.clone();
-    let mut imported = false;
+    let before = settings.clone();
+    let before_render = settings.render.clone();
+    let motion = crate::ui::motion::settings(ctx);
+    let window_id = egui::Id::new("settings_window");
+    let t = crate::ui::motion::surface_open_t(ctx, window_id, *open, motion);
+    if !crate::ui::motion::should_draw_surface(*open, t) {
+        crate::ui::motion::clear_surface_layers(ctx, window_id);
+        return;
+    }
+    let alpha = crate::ui::motion::fade_alpha(t, motion.reduced_motion);
 
-    egui::Window::new("Settings")
-        .open(open)
+    let mut still_open = true;
+    let mut window = egui::Window::new("Settings")
+        .id(window_id)
+        .fade_in(false)
         .default_width(340.0)
         .resizable(true)
-        .show(ctx, |ui| {
+        .frame(crate::ui::motion::frame_with_alpha(
+            egui::Frame::window(&ctx.style()),
+            t,
+            motion,
+        ));
+    if *open {
+        window = window.open(&mut still_open);
+    }
+
+    if let Some(window_response) = window.show(ctx, |ui| {
+            ui.multiply_opacity(alpha);
+            chrome::panel_header(
+                ui,
+                "Settings",
+                "Appearance, input, viewport, and performance controls for the full application.",
+            );
+            ui.add_space(10.0);
             // --- Top toolbar: Reset / Export / Import ---
-            ui.horizontal(|ui| {
-                if ui.button("Reset All").on_hover_text("Reset all settings to defaults").clicked() {
-                    let recent = std::mem::take(&mut settings.recent_files);
-                    *settings = Settings::default();
-                    settings.recent_files = recent;
-                    settings.save();
-                }
-                ui.separator();
-                #[cfg(all(not(target_arch = "wasm32"), not(target_os = "android")))]
-                {
-                    if ui.button("Export...").on_hover_text("Save settings to a file").clicked() {
-                        settings.export_dialog();
+            chrome::section_card(ui, "Toolbar", "Reset the app configuration or move settings between machines.", |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    chrome::badge(ui, BadgeTone::Muted, "System");
+                    if ui.button("Reset All").on_hover_text("Reset all settings to defaults").clicked() {
+                        let recent = std::mem::take(&mut settings.recent_files);
+                        *settings = Settings::default();
+                        settings.recent_files = recent;
+                        settings.save();
                     }
-                    if ui.button("Import...").on_hover_text("Load settings from a file").clicked() {
-                        imported = settings.import_dialog();
+                    #[cfg(all(not(target_arch = "wasm32"), not(target_os = "android")))]
+                    {
+                        if ui.button("Export...").on_hover_text("Save settings to a file").clicked() {
+                            settings.export_dialog();
+                        }
+                        if ui.button("Import...").on_hover_text("Load settings from a file").clicked() {
+                            settings.import_dialog();
+                        }
                     }
-                }
+                });
             });
-            ui.separator();
+            ui.add_space(10.0);
 
             egui::ScrollArea::vertical().show(ui, |ui| {
+                crate::ui::appearance_editor::draw(
+                    ui,
+                    &mut settings.egui_theme,
+                    &mut settings.dock_style,
+                    actions,
+                );
+
                 // --- Display ---
                 egui::CollapsingHeader::new("Display")
                     .default_open(true)
@@ -295,10 +329,18 @@ pub fn draw(
                 // --- Keybindings ---
                 draw_keybindings_section(ui, &mut settings.keymap, rebinding_action);
             });
-        });
+        }) {
+        crate::ui::motion::apply_surface_transform(ctx, &window_response.response, t, motion);
+    }
 
-    if imported || settings.render != before {
+    if *open && !still_open {
+        *open = false;
+    }
+
+    if settings.render != before_render {
         actions.push(Action::SettingsChanged);
+    } else if *settings != before {
+        settings.save();
     }
 }
 

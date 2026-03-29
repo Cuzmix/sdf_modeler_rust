@@ -1343,9 +1343,11 @@ pub(crate) fn derive_multi_transform_readout(
 
     let current_pivot_world = match baseline.pivot_mode {
         MultiPivotMode::SelectionCenter => current_selection_center_world,
-        MultiPivotMode::ActiveObject => find_target_by_id(&current_targets, baseline.reference_target_id)
-            .map(|target| target.world_position)
-            .unwrap_or(current_targets[0].world_position),
+        MultiPivotMode::ActiveObject => {
+            find_target_by_id(&current_targets, baseline.reference_target_id)
+                .map(|target| target.world_position)
+                .unwrap_or(current_targets[0].world_position)
+        }
     };
     let position_delta = current_pivot_world - baseline.base_center_world;
 
@@ -2329,7 +2331,8 @@ mod tests {
         let selected_set = HashSet::from([left, right]);
         let mut behavior = SelectionBehaviorSettings::default();
         behavior.multi_pivot_mode = MultiPivotMode::ActiveObject;
-        let selection = collect_gizmo_selection(&scene, Some(right), &selected_set, &behavior).unwrap();
+        let selection =
+            collect_gizmo_selection(&scene, Some(right), &selected_set, &behavior).unwrap();
 
         assert_vec3_close(selection.base_center_world, Vec3::new(2.0, 0.0, 0.0));
     }
@@ -2417,5 +2420,3 @@ mod tests {
         assert_f32_close(total_c, 30.0_f32.to_radians());
     }
 }
-
-

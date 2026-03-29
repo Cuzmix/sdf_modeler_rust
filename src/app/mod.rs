@@ -13,6 +13,7 @@ mod ui_panels;
 
 use crate::compat::{Duration, Instant};
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::sync::atomic::{AtomicBool, AtomicU32};
 use std::sync::Arc;
 
@@ -327,6 +328,50 @@ impl SdfApp {
         }
     }
 
+    fn apply_egui_theme_if_needed(&mut self, ctx: &egui::Context) {
+        let fingerprint = self.settings.egui_theme.fingerprint();
+        if self.ui.pending_egui_theme_fingerprint == Some(fingerprint) {
+            let build = self.settings.egui_theme.build();
+            ctx.set_theme(build.theme);
+            ctx.set_style(build.style);
+
+            if build.warnings.is_empty() {
+                self.ui.last_egui_theme_warning_fingerprint = None;
+            } else {
+                let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                for warning in &build.warnings {
+                    warning.hash(&mut hasher);
+                }
+                let warning_fingerprint = hasher.finish();
+                if self.ui.last_egui_theme_warning_fingerprint != Some(warning_fingerprint) {
+                    for warning in &build.warnings {
+                        log::warn!("{warning}");
+                        self.ui.toasts.push(Toast {
+                            message: warning.clone(),
+                            is_error: false,
+                            created: Instant::now(),
+                            duration: Duration::from_secs(6),
+                        });
+                    }
+                    self.ui.last_egui_theme_warning_fingerprint = Some(warning_fingerprint);
+                }
+            }
+
+            self.ui.pending_egui_theme_fingerprint = None;
+            self.ui.last_applied_egui_theme_fingerprint = Some(fingerprint);
+            return;
+        }
+
+        if self.ui.last_applied_egui_theme_fingerprint == Some(fingerprint) {
+            return;
+        }
+
+        let build = self.settings.egui_theme.build();
+        ctx.set_fonts(build.fonts);
+        self.ui.pending_egui_theme_fingerprint = Some(fingerprint);
+        ctx.request_repaint();
+    }
+
     pub fn new(cc: &eframe::CreationContext<'_>, settings: Settings) -> Self {
         let render_state = cc
             .wgpu_render_state
@@ -453,6 +498,10 @@ impl SdfApp {
                 active_light_ids: std::collections::HashSet::new(),
                 total_light_count: 0,
                 last_light_warning_count: None,
+                hovered_dock_tabs: std::collections::HashSet::new(),
+                pending_egui_theme_fingerprint: None,
+                last_applied_egui_theme_fingerprint: None,
+                last_egui_theme_warning_fingerprint: None,
                 show_recovery_dialog,
                 recovery_summary,
                 reference_images: crate::ui::reference_image::ReferenceImageManager::default(),
@@ -483,6 +532,9 @@ impl SdfApp {
 
 impl eframe::App for SdfApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.apply_egui_theme_if_needed(ctx);
+        crate::ui::motion::store_runtime_settings(ctx, self.settings.egui_theme.motion);
+
         let frame_start = Instant::now();
         let frame_input = frontend_bridge::capture_frame_input(ctx);
         let camera_animating = self.run_backend_pre_ui(&frame_input);

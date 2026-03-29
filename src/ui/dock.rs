@@ -1,5 +1,9 @@
+use std::collections::{HashMap, HashSet};
+
 use eframe::egui;
-use egui_dock::{DockState, Node, NodeIndex, Split, TabViewer};
+use egui_dock::{
+    DockState, Node, NodeIndex, Split, SurfaceIndex, TabInteractionStyle, TabStyle, TabViewer,
+};
 use glam::Vec3;
 
 use crate::app::actions::ActionSink;
@@ -15,7 +19,7 @@ use crate::ui::{
     brush_settings, history_panel, light_graph, properties, render_settings, scene_tree, viewport,
 };
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Tab {
     Viewport,
     NodeGraph,
@@ -29,6 +33,23 @@ pub enum Tab {
     Lights,
     LightLinking,
     SceneStats,
+}
+
+pub fn collect_active_tabs(dock_state: &DockState<Tab>) -> HashSet<Tab> {
+    let mut active_tabs = HashSet::new();
+
+    for surface_index in 0..dock_state.surfaces_count() {
+        let tree = &dock_state[SurfaceIndex(surface_index)];
+        for node_index in 0..tree.len() {
+            if let Node::Leaf { tabs, active, .. } = &tree[NodeIndex(node_index)] {
+                if let Some(tab) = tabs.get(active.0) {
+                    active_tabs.insert(tab.clone());
+                }
+            }
+        }
+    }
+
+    active_tabs
 }
 
 impl Tab {
@@ -228,6 +249,10 @@ pub struct SdfTabViewer<'a> {
     pub multi_transform_edit: &'a mut crate::app::state::MultiTransformSessionState,
     /// Frame timing data for scene stats panel.
     pub timings: &'a crate::app::FrameTimings,
+    /// Animated dock tab emphasis per tab.
+    pub dock_tab_emphasis: HashMap<Tab, f32>,
+    /// Hovered dock tabs from the most recent frame.
+    pub hovered_dock_tabs: &'a mut HashSet<Tab>,
 }
 
 impl<'a> TabViewer for SdfTabViewer<'a> {
@@ -247,6 +272,29 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
             Tab::Lights => "Lights".into(),
             Tab::LightLinking => "Light Linking".into(),
             Tab::SceneStats => "Scene Stats".into(),
+        }
+    }
+
+    fn on_tab_button(&mut self, tab: &mut Self::Tab, response: &egui::Response) {
+        if response.hovered() || response.has_focus() || response.is_pointer_button_down_on() {
+            self.hovered_dock_tabs.insert(tab.clone());
+        } else {
+            self.hovered_dock_tabs.remove(tab);
+        }
+    }
+
+    fn tab_style_override(&self, tab: &Self::Tab, global_style: &TabStyle) -> Option<TabStyle> {
+        let emphasis = self.dock_tab_emphasis.get(tab).copied().unwrap_or_default()
+            * self
+                .settings
+                .egui_theme
+                .motion
+                .effective_dock_hover_emphasis();
+
+        if emphasis <= 0.001 {
+            None
+        } else {
+            Some(animated_tab_style(global_style, emphasis.clamp(0.0, 1.0)))
         }
     }
 
@@ -404,4 +452,85 @@ impl<'a> TabViewer for SdfTabViewer<'a> {
             }
         }
     }
+}
+
+fn animated_tab_style(global_style: &TabStyle, emphasis: f32) -> TabStyle {
+    let mut style = global_style.clone();
+    style.hline_below_active_tab_name = true;
+    style.inactive = blend_tab_interaction(
+        &global_style.inactive,
+        &global_style.hovered,
+        0.35 * emphasis,
+    );
+    style.hovered =
+        blend_tab_interaction(&global_style.hovered, &global_style.active, 0.65 * emphasis);
+    style.focused =
+        blend_tab_interaction(&global_style.focused, &global_style.active, 0.55 * emphasis);
+    style.active =
+        blend_tab_interaction(&global_style.active, &global_style.hovered, 0.45 * emphasis);
+    style.inactive_with_kb_focus = blend_tab_interaction(
+        &global_style.inactive_with_kb_focus,
+        &global_style.active_with_kb_focus,
+        0.45 * emphasis,
+    );
+    style.active_with_kb_focus = blend_tab_interaction(
+        &global_style.active_with_kb_focus,
+        &global_style.hovered,
+        0.35 * emphasis,
+    );
+    style.focused_with_kb_focus = blend_tab_interaction(
+        &global_style.focused_with_kb_focus,
+        &global_style.active_with_kb_focus,
+        0.4 * emphasis,
+    );
+    style.tab_body.stroke.color = blend_color(
+        style.tab_body.stroke.color,
+        style.active.outline_color,
+        0.25 * emphasis,
+    );
+    style.tab_body.bg_fill = blend_color(
+        style.tab_body.bg_fill,
+        style.active.bg_fill,
+        0.12 * emphasis,
+    );
+    style
+}
+
+fn blend_tab_interaction(
+    base: &TabInteractionStyle,
+    accent: &TabInteractionStyle,
+    factor: f32,
+) -> TabInteractionStyle {
+    TabInteractionStyle {
+        outline_color: blend_color(base.outline_color, accent.outline_color, factor),
+        rounding: blend_rounding(base.rounding, accent.rounding, factor),
+        bg_fill: blend_color(base.bg_fill, accent.bg_fill, factor),
+        text_color: blend_color(base.text_color, accent.text_color, factor),
+    }
+}
+
+fn blend_color(base: egui::Color32, accent: egui::Color32, factor: f32) -> egui::Color32 {
+    let factor = factor.clamp(0.0, 1.0);
+    egui::Color32::from_rgba_premultiplied(
+        lerp_u8(base.r(), accent.r(), factor),
+        lerp_u8(base.g(), accent.g(), factor),
+        lerp_u8(base.b(), accent.b(), factor),
+        lerp_u8(base.a(), accent.a(), factor),
+    )
+}
+
+fn blend_rounding(base: egui::Rounding, accent: egui::Rounding, factor: f32) -> egui::Rounding {
+    let factor = factor.clamp(0.0, 1.0);
+    egui::Rounding {
+        nw: egui::lerp(base.nw..=accent.nw, factor),
+        ne: egui::lerp(base.ne..=accent.ne, factor),
+        sw: egui::lerp(base.sw..=accent.sw, factor),
+        se: egui::lerp(base.se..=accent.se, factor),
+    }
+}
+
+fn lerp_u8(base: u8, accent: u8, factor: f32) -> u8 {
+    egui::lerp(base as f32..=accent as f32, factor)
+        .round()
+        .clamp(0.0, 255.0) as u8
 }

@@ -1,6 +1,9 @@
+pub mod appearance_editor;
 pub mod brush_settings;
+pub mod chrome;
 pub mod command_palette;
 pub mod dock;
+pub mod dock_style_editor;
 pub mod export_dialog;
 pub mod export_progress;
 pub mod gizmo;
@@ -11,6 +14,7 @@ pub mod light_gizmo;
 pub mod light_graph;
 pub mod light_linking;
 pub mod lights_panel;
+pub mod motion;
 pub mod node_graph;
 pub mod profiler;
 pub mod properties;
