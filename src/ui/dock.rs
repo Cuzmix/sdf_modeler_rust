@@ -126,7 +126,7 @@ pub fn create_dock_sculpting() -> DockState<Tab> {
     let [_center, right] = surface.split(
         NodeIndex::root(),
         Split::Right,
-        0.82,
+        0.8,
         Node::leaf_with(vec![
             Tab::BrushSettings,
             Tab::Properties,
@@ -149,7 +149,7 @@ pub fn create_dock_rendering() -> DockState<Tab> {
     let [_center, _right] = surface.split(
         NodeIndex::root(),
         Split::Right,
-        0.75,
+        0.8,
         Node::leaf_with(vec![
             Tab::RenderSettings,
             Tab::Properties,
@@ -503,7 +503,8 @@ fn blend_tab_interaction(
 ) -> TabInteractionStyle {
     TabInteractionStyle {
         outline_color: blend_color(base.outline_color, accent.outline_color, factor),
-        rounding: blend_rounding(base.rounding, accent.rounding, factor),
+        // Keep a stable silhouette so tab corners don't "morph" on hover.
+        rounding: base.rounding,
         bg_fill: blend_color(base.bg_fill, accent.bg_fill, factor),
         text_color: blend_color(base.text_color, accent.text_color, factor),
     }
@@ -517,16 +518,6 @@ fn blend_color(base: egui::Color32, accent: egui::Color32, factor: f32) -> egui:
         lerp_u8(base.b(), accent.b(), factor),
         lerp_u8(base.a(), accent.a(), factor),
     )
-}
-
-fn blend_rounding(base: egui::Rounding, accent: egui::Rounding, factor: f32) -> egui::Rounding {
-    let factor = factor.clamp(0.0, 1.0);
-    egui::Rounding {
-        nw: egui::lerp(base.nw..=accent.nw, factor),
-        ne: egui::lerp(base.ne..=accent.ne, factor),
-        sw: egui::lerp(base.sw..=accent.sw, factor),
-        se: egui::lerp(base.se..=accent.se, factor),
-    }
 }
 
 fn lerp_u8(base: u8, accent: u8, factor: f32) -> u8 {

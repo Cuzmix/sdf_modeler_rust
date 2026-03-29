@@ -654,12 +654,12 @@ fn settings_section(
     default_open: bool,
     add_contents: impl FnOnce(&mut egui::Ui),
 ) {
-    chrome::card_frame(ui).show(ui, |ui| {
+    chrome::inset_frame(ui).show(ui, |ui| {
         egui::CollapsingHeader::new(egui::RichText::new(title).strong())
             .default_open(default_open)
             .show(ui, add_contents);
     });
-    ui.add_space(10.0);
+    ui.add_space(6.0);
 }
 
 fn labeled_slider(

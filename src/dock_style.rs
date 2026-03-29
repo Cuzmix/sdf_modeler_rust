@@ -597,14 +597,90 @@ impl DockStyleSettings {
         Self::from_dock_style(&egui_dock::Style::from_egui(style))
     }
 
+    pub fn compact_elegant_from_egui_style(style: &egui::Style) -> Self {
+        let mut settings = Self::from_egui_style(style);
+        let border_color = style.visuals.widgets.noninteractive.bg_stroke.color;
+        let idle_text = style.visuals.weak_text_color();
+        let active_text = style.visuals.text_color();
+        let tab_rounding = DockRounding {
+            nw: 4.0,
+            ne: 4.0,
+            sw: 0.0,
+            se: 0.0,
+        };
+
+        settings.enabled = true;
+        settings.main_surface_border_stroke = DockStroke {
+            width: 1.0,
+            color: color_to_rgba(border_color),
+        };
+        settings.main_surface_border_rounding = DockRounding {
+            nw: 6.0,
+            ne: 6.0,
+            sw: 6.0,
+            se: 6.0,
+        };
+
+        settings.tab_bar.height = 24.0;
+        settings.tab_bar.rounding = DockRounding {
+            nw: 4.0,
+            ne: 4.0,
+            sw: 0.0,
+            se: 0.0,
+        };
+        settings.tab_bar.hline_color = color_to_rgba(border_color);
+        settings.tab_bar.fill_tab_bar = true;
+        settings.tab_bar.show_scroll_bar_on_overflow = false;
+
+        settings.tab.hline_below_active_tab_name = true;
+        settings.tab.minimum_width_enabled = true;
+        settings.tab.minimum_width = 84.0;
+        settings.tab.active.rounding = tab_rounding;
+        settings.tab.inactive.rounding = tab_rounding;
+        settings.tab.focused.rounding = tab_rounding;
+        settings.tab.hovered.rounding = tab_rounding;
+        settings.tab.inactive_with_kb_focus.rounding = tab_rounding;
+        settings.tab.active_with_kb_focus.rounding = tab_rounding;
+        settings.tab.focused_with_kb_focus.rounding = tab_rounding;
+        settings.tab.tab_body.rounding = DockRounding {
+            nw: 0.0,
+            ne: 0.0,
+            sw: 6.0,
+            se: 6.0,
+        };
+        settings.tab.tab_body.inner_margin = DockEdgeInsets {
+            left: 8.0,
+            right: 8.0,
+            top: 6.0,
+            bottom: 6.0,
+        };
+
+        settings.buttons.close_tab_color = color_to_rgba(egui::Color32::from_rgba_premultiplied(
+            idle_text.r(),
+            idle_text.g(),
+            idle_text.b(),
+            80,
+        ));
+        settings.buttons.close_tab_active_color =
+            color_to_rgba(egui::Color32::from_rgba_premultiplied(
+                active_text.r(),
+                active_text.g(),
+                active_text.b(),
+                235,
+            ));
+        settings.buttons.close_tab_bg_fill = [0, 0, 0, 0];
+
+        settings
+    }
+
     pub fn reset_to_current_theme(&mut self, style: &egui::Style) {
-        let mut reset = Self::from_egui_style(style);
+        let mut reset = Self::compact_elegant_from_egui_style(style);
         reset.enabled = self.enabled;
         *self = reset;
     }
 
     pub fn enable_from_current_theme(&mut self, style: &egui::Style) {
-        *self = Self::from_egui_style(style);
+        *self = Self::compact_elegant_from_egui_style(style);
         self.enabled = true;
     }
 

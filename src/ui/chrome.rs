@@ -54,9 +54,9 @@ impl DesignTokens {
         let kbd_chip = visuals.code_bg_color;
         let text = visuals.text_color();
         let muted_text = visuals.weak_text_color();
-        let radius_lg = visuals.window_rounding.nw.max(10.0);
-        let radius_md = (radius_lg - 3.0).max(7.0);
-        let radius_sm = (radius_md - 3.0).max(5.0);
+        let radius_lg = visuals.window_rounding.nw.clamp(6.0, 8.0);
+        let radius_md = (radius_lg - 2.0).max(6.0);
+        let radius_sm = (radius_md - 2.0).max(4.0);
 
         Self {
             background,
@@ -75,9 +75,9 @@ impl DesignTokens {
             radius_sm,
             radius_md,
             radius_lg,
-            control_height: style.spacing.interact_size.y.max(28.0),
-            dense_spacing: egui::vec2(style.spacing.item_spacing.x.min(10.0), 8.0),
-            section_spacing: style.spacing.item_spacing.y.max(8.0),
+            control_height: style.spacing.interact_size.y.max(24.0),
+            dense_spacing: egui::vec2(style.spacing.item_spacing.x.min(8.0), 6.0),
+            section_spacing: style.spacing.item_spacing.y.max(6.0),
         }
     }
 }
@@ -95,7 +95,7 @@ pub fn app_header_frame(ui: &egui::Ui) -> Frame {
     Frame {
         fill: mix_color(tokens.background, tokens.card, 0.35),
         stroke: Stroke::new(1.0, tokens.border),
-        inner_margin: Margin::symmetric(14.0, 10.0),
+        inner_margin: Margin::symmetric(8.0, 6.0),
         ..Default::default()
     }
 }
@@ -105,7 +105,7 @@ pub fn ribbon_frame(ui: &egui::Ui) -> Frame {
     Frame {
         fill: mix_color(tokens.background, tokens.muted, 0.45),
         stroke: Stroke::new(1.0, tokens.border.gamma_multiply(0.85)),
-        inner_margin: Margin::symmetric(14.0, 8.0),
+        inner_margin: Margin::symmetric(8.0, 4.0),
         ..Default::default()
     }
 }
@@ -115,8 +115,8 @@ pub fn card_frame(ui: &egui::Ui) -> Frame {
     Frame {
         fill: tokens.card,
         stroke: Stroke::new(1.0, tokens.border.gamma_multiply(0.95)),
-        inner_margin: Margin::same(12.0),
-        rounding: egui::Rounding::same(tokens.radius_lg),
+        inner_margin: Margin::same(8.0),
+        rounding: egui::Rounding::same(tokens.radius_md),
         ..Default::default()
     }
 }
@@ -126,7 +126,7 @@ pub fn inset_frame(ui: &egui::Ui) -> Frame {
     Frame {
         fill: mix_color(tokens.card, tokens.input, 0.4),
         stroke: Stroke::new(1.0, tokens.border.gamma_multiply(0.8)),
-        inner_margin: Margin::symmetric(10.0, 8.0),
+        inner_margin: Margin::symmetric(8.0, 6.0),
         rounding: egui::Rounding::same(tokens.radius_md),
         ..Default::default()
     }
@@ -149,7 +149,7 @@ pub fn item_frame(ui: &egui::Ui, selected: bool) -> Frame {
     Frame {
         fill,
         stroke,
-        inner_margin: Margin::symmetric(10.0, 8.0),
+        inner_margin: Margin::symmetric(8.0, 5.0),
         rounding: egui::Rounding::same(tokens.radius_md),
         ..Default::default()
     }
@@ -169,7 +169,7 @@ pub fn header_group<R>(
 pub fn panel_header(ui: &mut egui::Ui, title: &str, description: &str) {
     let tokens = tokens(ui);
     ui.vertical(|ui| {
-        ui.label(RichText::new(title).size(18.0).strong().color(tokens.text));
+        ui.label(RichText::new(title).size(16.0).strong().color(tokens.text));
         if !description.is_empty() {
             ui.add_space(2.0);
             ui.label(RichText::new(description).color(tokens.muted_text));
@@ -184,7 +184,14 @@ pub fn section_card<R>(
     add_contents: impl FnOnce(&mut egui::Ui) -> R,
 ) -> InnerResponse<R> {
     let tokens = tokens(ui);
-    card_frame(ui).show(ui, |ui| {
+    Frame {
+        fill: Color32::TRANSPARENT,
+        stroke: Stroke::new(1.0, tokens.border.gamma_multiply(0.6)),
+        inner_margin: Margin::symmetric(6.0, 5.0),
+        rounding: egui::Rounding::same(tokens.radius_sm),
+        ..Default::default()
+    }
+    .show(ui, |ui| {
         panel_header(ui, title, description);
         ui.add_space(tokens.section_spacing);
         add_contents(ui)

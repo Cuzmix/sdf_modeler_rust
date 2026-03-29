@@ -8,6 +8,8 @@ use crate::keymap::KeymapConfig;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::native_paths;
 
+const CURRENT_UI_CHROME_REVISION: u32 = 1;
+
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Default, Debug)]
 pub enum BackgroundMode {
     #[default]
@@ -307,12 +309,16 @@ pub struct Settings {
     pub egui_theme: EguiThemeSettings,
     #[serde(default)]
     pub dock_style: DockStyleSettings,
+    #[serde(default)]
+    pub ui_chrome_revision: u32,
     #[serde(default = "default_true")]
     pub last_clean_exit: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
+        let egui_theme = EguiThemeSettings::default();
+        let dock_style = DockStyleSettings::compact_elegant_from_egui_style(&egui_theme.build().style);
         Self {
             vsync_enabled: true,
             show_fps_overlay: true,
@@ -330,8 +336,9 @@ impl Default for Settings {
             export_presets: default_export_presets(),
             keymap: KeymapConfig::default(),
             selection_behavior: SelectionBehaviorSettings::default(),
-            egui_theme: EguiThemeSettings::default(),
-            dock_style: DockStyleSettings::default(),
+            egui_theme,
+            dock_style,
+            ui_chrome_revision: CURRENT_UI_CHROME_REVISION,
             last_clean_exit: true,
         }
     }
@@ -344,6 +351,24 @@ impl Settings {
         self.recent_files.truncate(10);
         self.save();
     }
+
+    fn apply_ui_chrome_migration(&mut self) -> bool {
+        if self.ui_chrome_revision >= CURRENT_UI_CHROME_REVISION {
+            return false;
+        }
+
+        // Forced one-time migration: reset UI chrome defaults for all users.
+        let preset = self.egui_theme.preset;
+        self.egui_theme = EguiThemeSettings::from_preset(preset);
+        let theme_style = self.egui_theme.build().style;
+        self.dock_style = DockStyleSettings::compact_elegant_from_egui_style(&theme_style);
+        self.ui_chrome_revision = CURRENT_UI_CHROME_REVISION;
+        true
+    }
+
+    fn apply_required_migrations(&mut self) -> bool {
+        self.apply_ui_chrome_migration()
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -354,10 +379,14 @@ impl Settings {
 
     pub fn load() -> Self {
         let path = Self::path();
-        match std::fs::read_to_string(&path) {
+        let mut settings = match std::fs::read_to_string(&path) {
             Ok(contents) => serde_json::from_str(&contents).unwrap_or_default(),
             Err(_) => Self::default(),
+        };
+        if settings.apply_required_migrations() {
+            settings.save();
         }
+        settings
     }
 
     pub fn save(&self) {
@@ -404,6 +433,7 @@ impl Settings {
                     let recent = std::mem::take(&mut self.recent_files);
                     *self = imported;
                     self.recent_files = recent;
+                    self.apply_required_migrations();
                     self.save();
                     return true;
                 }
@@ -424,10 +454,14 @@ impl Settings {
         let Some(storage) = storage else {
             return Self::default();
         };
-        match storage.get_item(Self::STORAGE_KEY) {
+        let mut settings = match storage.get_item(Self::STORAGE_KEY) {
             Ok(Some(json)) => serde_json::from_str(&json).unwrap_or_default(),
             _ => Self::default(),
+        };
+        if settings.apply_required_migrations() {
+            settings.save();
         }
+        settings
     }
 
     pub fn save(&self) {
@@ -988,9 +1022,10 @@ impl RenderConfig {
 mod tests {
     use super::{
         AmbientOcclusionMode, BackgroundMode, EnvironmentBackgroundMode, EnvironmentSource,
-        GroupRotateDirection, LocalReflectionMode, MultiAxisOrientation, MultiPivotMode,
-        RenderConfig, SelectionBehaviorSettings, Settings, ShadingMode,
+        GroupRotateDirection, LocalReflectionMode, MultiAxisOrientation, MultiPivotMode, RenderConfig,
+        SelectionBehaviorSettings, Settings, ShadingMode, CURRENT_UI_CHROME_REVISION,
     };
+    use crate::egui_theme::{EguiThemeSettings, ThemePreset};
 
     #[test]
     fn shading_mode_cycle_includes_field_quality() {
@@ -1206,5 +1241,34 @@ mod tests {
             parsed.selection_behavior,
             SelectionBehaviorSettings::default()
         );
+    }
+
+    #[test]
+    fn ui_chrome_migration_forces_new_theme_and_dock_defaults() {
+        let mut settings = Settings::default();
+        settings.egui_theme.preset = ThemePreset::SlateLight;
+        settings.egui_theme.spacing.interact_size.x = 99.0;
+        settings.dock_style.enabled = false;
+        settings.ui_chrome_revision = 0;
+
+        assert!(settings.apply_required_migrations());
+        assert_eq!(settings.ui_chrome_revision, CURRENT_UI_CHROME_REVISION);
+        assert_eq!(
+            settings.egui_theme,
+            EguiThemeSettings::from_preset(ThemePreset::SlateLight)
+        );
+        assert!(settings.dock_style.enabled);
+        assert_eq!(settings.dock_style.tab_bar.height, 24.0);
+        assert!(settings.dock_style.tab.hline_below_active_tab_name);
+    }
+
+    #[test]
+    fn ui_chrome_migration_is_noop_after_revision_is_current() {
+        let mut settings = Settings::default();
+        settings.ui_chrome_revision = CURRENT_UI_CHROME_REVISION;
+        let before = settings.clone();
+
+        assert!(!settings.apply_required_migrations());
+        assert!(settings == before);
     }
 }

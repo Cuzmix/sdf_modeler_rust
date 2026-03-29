@@ -272,10 +272,10 @@ impl Default for ThemeTextSizes {
     fn default() -> Self {
         Self {
             small: 10.0,
-            body: 14.0,
-            button: 14.0,
-            monospace: 13.0,
-            heading: 20.0,
+            body: 13.0,
+            button: 13.0,
+            monospace: 12.0,
+            heading: 18.0,
             viewport_hud: DEFAULT_VIEWPORT_HUD_POINTS,
             viewport_mono: DEFAULT_VIEWPORT_MONO_POINTS,
             scene_label: DEFAULT_SCENE_LABEL_POINTS,
@@ -1099,20 +1099,43 @@ fn validate_font_bytes(bytes: &[u8]) -> Result<(), String> {
         .map_err(|error| error.to_string())
 }
 
+fn apply_compact_desktop_text_sizes(style: &mut egui::Style) {
+    style.text_styles.insert(
+        TextStyle::Small,
+        FontId::new(10.0, FontFamily::Name(UI_SANS_FAMILY_NAME.into())),
+    );
+    style.text_styles.insert(
+        TextStyle::Body,
+        FontId::new(13.0, FontFamily::Name(UI_SANS_FAMILY_NAME.into())),
+    );
+    style.text_styles.insert(
+        TextStyle::Button,
+        FontId::new(13.0, FontFamily::Name(UI_SANS_FAMILY_NAME.into())),
+    );
+    style.text_styles.insert(
+        TextStyle::Monospace,
+        FontId::new(12.0, FontFamily::Name(UI_MONO_FAMILY_NAME.into())),
+    );
+    style.text_styles.insert(
+        TextStyle::Heading,
+        FontId::new(18.0, FontFamily::Name(UI_HEADING_FAMILY_NAME.into())),
+    );
+}
+
 fn build_studio_dark_style() -> egui::Style {
     let mut style = egui::Theme::Dark.default_style();
-    style.spacing.item_spacing = egui::vec2(10.0, 7.0);
-    style.spacing.button_padding = egui::vec2(11.0, 7.0);
-    style.spacing.window_margin = egui::Margin::same(14.0);
-    style.spacing.menu_margin = egui::Margin::same(10.0);
-    style.spacing.interact_size = egui::vec2(42.0, 28.0);
-    style.spacing.slider_width = 168.0;
-    style.spacing.combo_width = 148.0;
-    style.spacing.text_edit_width = 196.0;
-    style.spacing.tooltip_width = 420.0;
-    style.spacing.menu_width = 220.0;
-    style.spacing.menu_spacing = 4.0;
-    style.spacing.combo_height = 220.0;
+    style.spacing.item_spacing = egui::vec2(8.0, 6.0);
+    style.spacing.button_padding = egui::vec2(8.0, 5.0);
+    style.spacing.window_margin = egui::Margin::same(10.0);
+    style.spacing.menu_margin = egui::Margin::same(8.0);
+    style.spacing.interact_size = egui::vec2(36.0, 24.0);
+    style.spacing.slider_width = 160.0;
+    style.spacing.combo_width = 140.0;
+    style.spacing.text_edit_width = 184.0;
+    style.spacing.tooltip_width = 380.0;
+    style.spacing.menu_width = 200.0;
+    style.spacing.menu_spacing = 3.0;
+    style.spacing.combo_height = 200.0;
     style.spacing.scroll = ScrollStyle::floating();
 
     style.visuals.override_text_color = Some(Color32::from_rgb(232, 236, 243));
@@ -1125,9 +1148,9 @@ fn build_studio_dark_style() -> egui::Style {
     style.visuals.panel_fill = Color32::from_rgb(14, 18, 24);
     style.visuals.window_fill = Color32::from_rgb(17, 22, 30);
     style.visuals.window_stroke = egui::Stroke::new(1.0, Color32::from_rgb(54, 63, 79));
-    style.visuals.window_rounding = egui::Rounding::same(14.0);
-    style.visuals.menu_rounding = egui::Rounding::same(12.0);
-    style.visuals.resize_corner_size = 10.0;
+    style.visuals.window_rounding = egui::Rounding::same(8.0);
+    style.visuals.menu_rounding = egui::Rounding::same(6.0);
+    style.visuals.resize_corner_size = 8.0;
     style.visuals.clip_rect_margin = 4.0;
     style.visuals.button_frame = true;
     style.visuals.collapsing_header_frame = false;
@@ -1144,7 +1167,7 @@ fn build_studio_dark_style() -> egui::Style {
             Color32::from_rgb(16, 20, 27),
             Color32::from_rgb(53, 61, 76),
             Color32::from_rgb(232, 236, 243),
-            12.0,
+            6.0,
             0.0,
         ),
         inactive: widget_visuals(
@@ -1152,7 +1175,7 @@ fn build_studio_dark_style() -> egui::Style {
             Color32::from_rgb(24, 29, 38),
             Color32::from_rgb(67, 78, 96),
             Color32::from_rgb(233, 237, 244),
-            12.0,
+            6.0,
             0.0,
         ),
         hovered: widget_visuals(
@@ -1160,7 +1183,7 @@ fn build_studio_dark_style() -> egui::Style {
             Color32::from_rgb(31, 37, 48),
             Color32::from_rgb(96, 121, 169),
             Color32::from_rgb(245, 247, 250),
-            12.0,
+            6.0,
             1.0,
         ),
         active: widget_visuals(
@@ -1168,7 +1191,7 @@ fn build_studio_dark_style() -> egui::Style {
             Color32::from_rgb(36, 43, 56),
             Color32::from_rgb(129, 161, 228),
             Color32::from_rgb(255, 255, 255),
-            12.0,
+            6.0,
             1.0,
         ),
         open: widget_visuals(
@@ -1176,27 +1199,28 @@ fn build_studio_dark_style() -> egui::Style {
             Color32::from_rgb(28, 34, 45),
             Color32::from_rgb(102, 134, 194),
             Color32::from_rgb(246, 248, 251),
-            12.0,
+            6.0,
             0.0,
         ),
     };
+    apply_compact_desktop_text_sizes(&mut style);
     style
 }
 
 fn build_slate_light_style() -> egui::Style {
     let mut style = egui::Theme::Light.default_style();
-    style.spacing.item_spacing = egui::vec2(10.0, 7.0);
-    style.spacing.button_padding = egui::vec2(11.0, 7.0);
-    style.spacing.window_margin = egui::Margin::same(14.0);
-    style.spacing.menu_margin = egui::Margin::same(10.0);
-    style.spacing.interact_size = egui::vec2(42.0, 28.0);
-    style.spacing.slider_width = 168.0;
-    style.spacing.combo_width = 148.0;
-    style.spacing.text_edit_width = 196.0;
-    style.spacing.tooltip_width = 420.0;
-    style.spacing.menu_width = 220.0;
-    style.spacing.menu_spacing = 4.0;
-    style.spacing.combo_height = 220.0;
+    style.spacing.item_spacing = egui::vec2(8.0, 6.0);
+    style.spacing.button_padding = egui::vec2(8.0, 5.0);
+    style.spacing.window_margin = egui::Margin::same(10.0);
+    style.spacing.menu_margin = egui::Margin::same(8.0);
+    style.spacing.interact_size = egui::vec2(36.0, 24.0);
+    style.spacing.slider_width = 160.0;
+    style.spacing.combo_width = 140.0;
+    style.spacing.text_edit_width = 184.0;
+    style.spacing.tooltip_width = 380.0;
+    style.spacing.menu_width = 200.0;
+    style.spacing.menu_spacing = 3.0;
+    style.spacing.combo_height = 200.0;
     style.spacing.scroll = ScrollStyle::solid();
 
     style.visuals.override_text_color = Some(Color32::from_rgb(30, 41, 59));
@@ -1209,9 +1233,9 @@ fn build_slate_light_style() -> egui::Style {
     style.visuals.panel_fill = Color32::from_rgb(248, 250, 252);
     style.visuals.window_fill = Color32::from_rgb(255, 255, 255);
     style.visuals.window_stroke = egui::Stroke::new(1.0, Color32::from_rgb(194, 204, 216));
-    style.visuals.window_rounding = egui::Rounding::same(14.0);
-    style.visuals.menu_rounding = egui::Rounding::same(12.0);
-    style.visuals.resize_corner_size = 10.0;
+    style.visuals.window_rounding = egui::Rounding::same(8.0);
+    style.visuals.menu_rounding = egui::Rounding::same(6.0);
+    style.visuals.resize_corner_size = 8.0;
     style.visuals.clip_rect_margin = 4.0;
     style.visuals.button_frame = true;
     style.visuals.collapsing_header_frame = false;
@@ -1228,7 +1252,7 @@ fn build_slate_light_style() -> egui::Style {
             Color32::from_rgb(255, 255, 255),
             Color32::from_rgb(194, 204, 216),
             Color32::from_rgb(30, 41, 59),
-            12.0,
+            6.0,
             0.0,
         ),
         inactive: widget_visuals(
@@ -1236,7 +1260,7 @@ fn build_slate_light_style() -> egui::Style {
             Color32::from_rgb(237, 242, 247),
             Color32::from_rgb(184, 194, 208),
             Color32::from_rgb(30, 41, 59),
-            12.0,
+            6.0,
             0.0,
         ),
         hovered: widget_visuals(
@@ -1244,7 +1268,7 @@ fn build_slate_light_style() -> egui::Style {
             Color32::from_rgb(221, 231, 244),
             Color32::from_rgb(99, 127, 189),
             Color32::from_rgb(23, 33, 50),
-            12.0,
+            6.0,
             1.0,
         ),
         active: widget_visuals(
@@ -1252,7 +1276,7 @@ fn build_slate_light_style() -> egui::Style {
             Color32::from_rgb(205, 221, 242),
             Color32::from_rgb(59, 130, 246),
             Color32::from_rgb(24, 35, 47),
-            12.0,
+            6.0,
             1.0,
         ),
         open: widget_visuals(
@@ -1260,27 +1284,28 @@ fn build_slate_light_style() -> egui::Style {
             Color32::from_rgb(215, 226, 242),
             Color32::from_rgb(82, 112, 178),
             Color32::from_rgb(26, 38, 49),
-            12.0,
+            6.0,
             0.0,
         ),
     };
+    apply_compact_desktop_text_sizes(&mut style);
     style
 }
 
 fn build_high_contrast_dark_style() -> egui::Style {
     let mut style = egui::Theme::Dark.default_style();
-    style.spacing.item_spacing = egui::vec2(12.0, 9.0);
-    style.spacing.button_padding = egui::vec2(11.0, 7.0);
-    style.spacing.window_margin = egui::Margin::same(12.0);
-    style.spacing.menu_margin = egui::Margin::same(10.0);
-    style.spacing.interact_size = egui::vec2(42.0, 26.0);
-    style.spacing.slider_width = 164.0;
-    style.spacing.combo_width = 144.0;
-    style.spacing.text_edit_width = 186.0;
-    style.spacing.tooltip_width = 440.0;
-    style.spacing.menu_width = 188.0;
-    style.spacing.menu_spacing = 5.0;
-    style.spacing.combo_height = 240.0;
+    style.spacing.item_spacing = egui::vec2(8.0, 6.0);
+    style.spacing.button_padding = egui::vec2(8.0, 5.0);
+    style.spacing.window_margin = egui::Margin::same(10.0);
+    style.spacing.menu_margin = egui::Margin::same(8.0);
+    style.spacing.interact_size = egui::vec2(36.0, 24.0);
+    style.spacing.slider_width = 160.0;
+    style.spacing.combo_width = 140.0;
+    style.spacing.text_edit_width = 184.0;
+    style.spacing.tooltip_width = 400.0;
+    style.spacing.menu_width = 200.0;
+    style.spacing.menu_spacing = 3.0;
+    style.spacing.combo_height = 220.0;
     style.spacing.scroll = ScrollStyle::solid();
 
     style.visuals.override_text_color = Some(Color32::from_rgb(245, 247, 250));
@@ -1292,10 +1317,10 @@ fn build_high_contrast_dark_style() -> egui::Style {
     style.visuals.error_fg_color = Color32::from_rgb(255, 112, 112);
     style.visuals.panel_fill = Color32::from_rgb(10, 11, 13);
     style.visuals.window_fill = Color32::from_rgb(14, 16, 18);
-    style.visuals.window_stroke = egui::Stroke::new(1.5, Color32::from_rgb(184, 189, 199));
+    style.visuals.window_stroke = egui::Stroke::new(1.0, Color32::from_rgb(184, 189, 199));
     style.visuals.window_rounding = egui::Rounding::same(6.0);
-    style.visuals.menu_rounding = egui::Rounding::same(6.0);
-    style.visuals.resize_corner_size = 11.0;
+    style.visuals.menu_rounding = egui::Rounding::same(4.0);
+    style.visuals.resize_corner_size = 8.0;
     style.visuals.clip_rect_margin = 4.0;
     style.visuals.button_frame = true;
     style.visuals.collapsing_header_frame = true;
@@ -1312,7 +1337,7 @@ fn build_high_contrast_dark_style() -> egui::Style {
             Color32::from_rgb(14, 16, 18),
             Color32::from_rgb(176, 183, 193),
             Color32::from_rgb(245, 247, 250),
-            6.0,
+            4.0,
             0.0,
         ),
         inactive: widget_visuals(
@@ -1320,7 +1345,7 @@ fn build_high_contrast_dark_style() -> egui::Style {
             Color32::from_rgb(24, 27, 31),
             Color32::from_rgb(191, 198, 208),
             Color32::from_rgb(249, 250, 251),
-            6.0,
+            4.0,
             0.0,
         ),
         hovered: widget_visuals(
@@ -1328,7 +1353,7 @@ fn build_high_contrast_dark_style() -> egui::Style {
             Color32::from_rgb(36, 40, 45),
             Color32::from_rgb(136, 188, 255),
             Color32::from_rgb(255, 255, 255),
-            6.0,
+            4.0,
             1.0,
         ),
         active: widget_visuals(
@@ -1336,7 +1361,7 @@ fn build_high_contrast_dark_style() -> egui::Style {
             Color32::from_rgb(52, 58, 65),
             Color32::from_rgb(195, 224, 255),
             Color32::from_rgb(255, 255, 255),
-            6.0,
+            4.0,
             1.0,
         ),
         open: widget_visuals(
@@ -1344,10 +1369,11 @@ fn build_high_contrast_dark_style() -> egui::Style {
             Color32::from_rgb(43, 47, 53),
             Color32::from_rgb(160, 208, 255),
             Color32::from_rgb(255, 255, 255),
-            6.0,
+            4.0,
             0.0,
         ),
     };
+    apply_compact_desktop_text_sizes(&mut style);
     style
 }
 

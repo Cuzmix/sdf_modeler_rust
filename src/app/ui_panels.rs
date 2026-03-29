@@ -1,6 +1,6 @@
 use std::sync::atomic::Ordering;
 
-use eframe::egui::{self, RichText};
+use eframe::egui;
 
 use crate::app::actions::{Action, ActionSink, WorkspacePreset};
 use crate::sculpt::{ActiveTool, BrushMode, SculptState};
@@ -12,128 +12,15 @@ impl SdfApp {
     /// Draw the desktop app header and push any triggered actions into the action sink.
     pub(super) fn show_menu_bar(&mut self, ctx: &egui::Context, actions: &mut ActionSink) {
         let mut action_open_recent: Option<String> = None;
-        let current_file_label = self
-            .persistence
-            .current_file_path
-            .as_deref()
-            .and_then(|path| std::path::Path::new(path).file_name())
-            .and_then(|name| name.to_str())
-            .unwrap_or("Scratch Scene")
-            .to_string();
-        let selected_name = self
-            .ui
-            .node_graph_state
-            .selected
-            .and_then(|id| self.doc.scene.nodes.get(&id).map(|node| node.name.clone()));
         let tool_is_sculpt = matches!(self.doc.active_tool, ActiveTool::Sculpt);
 
         egui::TopBottomPanel::top("app_header")
             .frame(egui::Frame::none())
             .show(ctx, |ui| {
                 chrome::app_header_frame(ui).show(ui, |ui| {
-                    ui.spacing_mut().item_spacing = egui::vec2(10.0, 10.0);
+                    ui.spacing_mut().item_spacing = egui::vec2(8.0, 6.0);
 
                     ui.horizontal(|ui| {
-                        ui.vertical(|ui| {
-                            ui.label(RichText::new("SDF Modeler").size(20.0).strong());
-                            ui.label(
-                                RichText::new(
-                                    "Dark-first desktop workspace for signed-distance modeling",
-                                )
-                                .small()
-                                .color(chrome::tokens(ui).muted_text),
-                            );
-                        });
-
-                        ui.add_space(12.0);
-
-                        chrome::header_group(ui, |ui| {
-                            chrome::badge(ui, BadgeTone::Accent, "Workspace");
-                            ui.menu_button("Presets", |ui| {
-                                if ui
-                                    .button("Modeling")
-                                    .on_hover_text("Balanced layout with all panels")
-                                    .clicked()
-                                {
-                                    actions.push(Action::SetWorkspace(WorkspacePreset::Modeling));
-                                    ui.close_menu();
-                                }
-                                if ui
-                                    .button("Sculpting")
-                                    .on_hover_text("Large viewport with sculpt controls")
-                                    .clicked()
-                                {
-                                    actions.push(Action::SetWorkspace(WorkspacePreset::Sculpting));
-                                    ui.close_menu();
-                                }
-                                if ui
-                                    .button("Rendering")
-                                    .on_hover_text("Viewport-first lighting and render setup")
-                                    .clicked()
-                                {
-                                    actions.push(Action::SetWorkspace(WorkspacePreset::Rendering));
-                                    ui.close_menu();
-                                }
-                            });
-                        });
-
-                        chrome::badge(
-                            ui,
-                            if self.persistence.scene_dirty {
-                                BadgeTone::Warning
-                            } else {
-                                BadgeTone::Muted
-                            },
-                            current_file_label,
-                        );
-                        if self.persistence.scene_dirty {
-                            chrome::badge(ui, BadgeTone::Warning, "Unsaved");
-                        }
-                        if let Some(name) = selected_name.as_deref() {
-                            chrome::badge(ui, BadgeTone::Muted, format!("Selected: {name}"));
-                        }
-
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if let BakeStatus::InProgress {
-                                ref progress,
-                                total,
-                                ..
-                            } = self.async_state.bake_status
-                            {
-                                let done = progress.load(Ordering::Relaxed);
-                                let frac = done as f32 / total.max(1) as f32;
-                                ui.add(
-                                    egui::ProgressBar::new(frac)
-                                        .text(format!("Bake {:.0}%", frac * 100.0))
-                                        .desired_width(160.0),
-                                );
-                            }
-
-                            if ui
-                                .button(if self.ui.show_debug {
-                                    "Profiler On"
-                                } else {
-                                    "Profiler"
-                                })
-                                .clicked()
-                            {
-                                actions.push(Action::ToggleDebug);
-                            }
-                            if ui.button("Settings").clicked() {
-                                actions.push(Action::ToggleSettings);
-                            }
-                            if ui.button("Help").clicked() {
-                                actions.push(Action::ToggleHelp);
-                            }
-                            if ui.button("Command").clicked() {
-                                actions.push(Action::ToggleCommandPalette);
-                            }
-                        });
-                    });
-
-                    ui.add_space(10.0);
-
-                    ui.horizontal_wrapped(|ui| {
                         chrome::header_group(ui, |ui| {
                             ui.menu_button("File", |ui| {
                                 if ui.button("New Scene").clicked() {
@@ -289,6 +176,14 @@ impl SdfApp {
                                     actions.push(Action::FrameAll);
                                     ui.close_menu();
                                 }
+                                if ui.button("Toggle Isolation").clicked() {
+                                    actions.push(Action::ToggleIsolation);
+                                    ui.close_menu();
+                                }
+                                if ui.button("Toggle Turntable").clicked() {
+                                    actions.push(Action::ToggleTurntable);
+                                    ui.close_menu();
+                                }
                                 ui.separator();
                                 if ui.button("Toggle Profiler").clicked() {
                                     actions.push(Action::ToggleDebug);
@@ -376,37 +271,33 @@ impl SdfApp {
                         });
 
                         chrome::header_group(ui, |ui| {
-                            if ui.button("New").clicked() {
-                                actions.push(Action::NewScene);
-                            }
-                            if ui.button("Open").clicked() {
-                                actions.push(Action::OpenProject);
-                            }
-                            if ui.button("Save").clicked() {
-                                actions.push(Action::SaveProject);
-                            }
-
-                            let import_idle =
-                                matches!(self.async_state.import_status, ImportStatus::Idle);
-                            if ui
-                                .add_enabled(import_idle, egui::Button::new("Import"))
-                                .clicked()
-                            {
-                                actions.push(Action::ImportMesh);
-                            }
-
-                            let export_idle =
-                                matches!(self.async_state.export_status, ExportStatus::Idle);
-                            if ui
-                                .add_enabled(export_idle, egui::Button::new("Export"))
-                                .clicked()
-                            {
-                                actions.push(Action::ShowExportDialog);
-                            }
-
-                            if ui.button("Shot").clicked() {
-                                actions.push(Action::TakeScreenshot);
-                            }
+                            chrome::badge(ui, BadgeTone::Accent, "Workspace");
+                            ui.menu_button("Presets", |ui| {
+                                if ui
+                                    .button("Modeling")
+                                    .on_hover_text("Balanced layout with all panels")
+                                    .clicked()
+                                {
+                                    actions.push(Action::SetWorkspace(WorkspacePreset::Modeling));
+                                    ui.close_menu();
+                                }
+                                if ui
+                                    .button("Sculpting")
+                                    .on_hover_text("Large viewport with sculpt controls")
+                                    .clicked()
+                                {
+                                    actions.push(Action::SetWorkspace(WorkspacePreset::Sculpting));
+                                    ui.close_menu();
+                                }
+                                if ui
+                                    .button("Rendering")
+                                    .on_hover_text("Viewport-first lighting and render setup")
+                                    .clicked()
+                                {
+                                    actions.push(Action::SetWorkspace(WorkspacePreset::Rendering));
+                                    ui.close_menu();
+                                }
+                            });
                         });
 
                         chrome::header_group(ui, |ui| {
@@ -463,18 +354,39 @@ impl SdfApp {
                             }
                         });
 
-                        chrome::header_group(ui, |ui| {
-                            if ui.button("Focus").clicked() {
-                                actions.push(Action::FocusSelected);
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui
+                                .button(if self.ui.show_debug {
+                                    "Profiler On"
+                                } else {
+                                    "Profiler"
+                                })
+                                .clicked()
+                            {
+                                actions.push(Action::ToggleDebug);
                             }
-                            if ui.button("Frame").clicked() {
-                                actions.push(Action::FrameAll);
+                            if ui.button("Settings").clicked() {
+                                actions.push(Action::ToggleSettings);
                             }
-                            if ui.button("Isolate").clicked() {
-                                actions.push(Action::ToggleIsolation);
+                            if ui.button("Help").clicked() {
+                                actions.push(Action::ToggleHelp);
                             }
-                            if ui.button("Turntable").clicked() {
-                                actions.push(Action::ToggleTurntable);
+                            if ui.button("Command").clicked() {
+                                actions.push(Action::ToggleCommandPalette);
+                            }
+                            if let BakeStatus::InProgress {
+                                ref progress,
+                                total,
+                                ..
+                            } = self.async_state.bake_status
+                            {
+                                let done = progress.load(Ordering::Relaxed);
+                                let frac = done as f32 / total.max(1) as f32;
+                                ui.add(
+                                    egui::ProgressBar::new(frac)
+                                        .text(format!("Bake {:.0}%", frac * 100.0))
+                                        .desired_width(140.0),
+                                );
                             }
                         });
                     });
@@ -487,11 +399,41 @@ impl SdfApp {
     }
 
     pub(super) fn show_status_bar(&self, ctx: &egui::Context) {
+        let current_file_label = self
+            .persistence
+            .current_file_path
+            .as_deref()
+            .and_then(|path| std::path::Path::new(path).file_name())
+            .and_then(|name| name.to_str())
+            .unwrap_or("Scratch Scene")
+            .to_string();
+        let selected_name = self
+            .ui
+            .node_graph_state
+            .selected
+            .and_then(|id| self.doc.scene.nodes.get(&id).map(|node| node.name.clone()));
+
         egui::TopBottomPanel::bottom("status_ribbon")
             .frame(egui::Frame::none())
             .show(ctx, |ui| {
                 chrome::ribbon_frame(ui).show(ui, |ui| {
                     ui.horizontal_wrapped(|ui| {
+                        chrome::badge(
+                            ui,
+                            if self.persistence.scene_dirty {
+                                BadgeTone::Warning
+                            } else {
+                                BadgeTone::Muted
+                            },
+                            current_file_label,
+                        );
+                        if self.persistence.scene_dirty {
+                            chrome::badge(ui, BadgeTone::Warning, "Unsaved");
+                        }
+                        if let Some(name) = selected_name.as_deref() {
+                            chrome::badge(ui, BadgeTone::Muted, format!("Selected: {name}"));
+                        }
+
                         match &self.doc.sculpt_state {
                             SculptState::Active { session, .. } => {
                                 let mode_name = match session.selected_brush {
@@ -516,16 +458,6 @@ impl SdfApp {
                                 chrome::badge(ui, BadgeTone::Accent, self.gizmo.mode.label());
                                 chrome::badge(ui, BadgeTone::Muted, self.gizmo.space.label());
                             }
-                        }
-
-                        if let Some(sel) = self.ui.node_graph_state.selected {
-                            if let Some(node) = self.doc.scene.nodes.get(&sel) {
-                                chrome::badge(ui, BadgeTone::Muted, format!("Node {}", node.name));
-                            }
-                        }
-
-                        if self.persistence.scene_dirty {
-                            chrome::badge(ui, BadgeTone::Warning, "Unsaved changes");
                         }
 
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
