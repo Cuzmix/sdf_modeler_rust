@@ -83,6 +83,17 @@ fn apply_continuous_repaint(settings: &mut crate::settings::Settings, enabled: b
     true
 }
 
+fn apply_auto_switch_sculpt_target_during_brush(
+    settings: &mut crate::settings::Settings,
+    enabled: bool,
+) -> bool {
+    if settings.auto_switch_sculpt_target_during_brush == enabled {
+        return false;
+    }
+    settings.auto_switch_sculpt_target_during_brush = enabled;
+    true
+}
+
 fn resolve_sculpt_entry(scene: &Scene, selected: Option<NodeId>) -> SculptEntryDecision {
     let Some(selected_id) = selected else {
         return SculptEntryDecision::MissingSelection;
@@ -150,6 +161,16 @@ fn activate_sculpt_interaction_state(
     doc.active_tool = crate::sculpt::ActiveTool::Sculpt;
     doc.sculpt_state
         .activate_preserving_session(sculpt_id, Some(extent));
+    doc.sculpt_state.set_selected_brush(brush);
+}
+
+fn arm_sculpt_interaction_state(doc: &mut DocumentState, ui: &mut UiState, brush: BrushMode) {
+    ui.primary_shell.interaction_mode = InteractionMode::Sculpt(brush);
+    ui.primary_shell.tool_rail_visible = true;
+    ui.primary_shell.selection_context_strip_visible = true;
+    ui.measurement_mode = false;
+    ui.measurement_points.clear();
+    doc.active_tool = crate::sculpt::ActiveTool::Sculpt;
     doc.sculpt_state.set_selected_brush(brush);
 }
 
@@ -278,17 +299,15 @@ impl SdfApp {
     }
 
     fn request_sculpt_interaction(&mut self, brush: BrushMode) {
-        let decision = if self.ui.selection.selected.is_none() {
+        let decision = if let Some(selected_id) = self.ui.selection.selected {
+            resolve_sculpt_entry(&self.doc.scene, Some(selected_id))
+        } else {
             self.doc
                 .sculpt_state
                 .active_node()
                 .filter(|node_id| self.doc.scene.nodes.contains_key(node_id))
                 .map(SculptEntryDecision::Activate)
-                .unwrap_or_else(|| {
-                    resolve_sculpt_entry(&self.doc.scene, self.ui.selection.selected)
-                })
-        } else {
-            resolve_sculpt_entry(&self.doc.scene, self.ui.selection.selected)
+                .unwrap_or(SculptEntryDecision::MissingSelection)
         };
 
         match decision {
@@ -296,20 +315,14 @@ impl SdfApp {
                 self.activate_sculpt_interaction(sculpt_id, brush);
             }
             SculptEntryDecision::OpenConvert(target) => {
-                self.ui.primary_shell.interaction_mode = InteractionMode::Sculpt(brush);
-                self.ui.primary_shell.tool_rail_visible = true;
-                self.ui.primary_shell.selection_context_strip_visible = true;
-                self.ui.measurement_mode = false;
-                self.ui.measurement_points.clear();
+                arm_sculpt_interaction_state(&mut self.doc, &mut self.ui, brush);
+                self.clear_active_sculpt_target_for_switch();
+                self.ui.selection.select_single(target);
                 self.ui.sculpt_convert_dialog = Some(SculptConvertDialog::new(target));
             }
             SculptEntryDecision::MissingSelection => {
-                self.ui.toasts.push(super::Toast {
-                    message: "Select a node to sculpt".into(),
-                    is_error: true,
-                    created: crate::compat::Instant::now(),
-                    duration: crate::compat::Duration::from_secs(4),
-                });
+                arm_sculpt_interaction_state(&mut self.doc, &mut self.ui, brush);
+                self.ui.sculpt_convert_dialog = None;
             }
         }
     }
@@ -813,6 +826,8 @@ impl SdfApp {
                     self.request_sculpt_interaction(self.current_sculpt_brush_preference());
                 }
                 Action::ShowSculptConvertDialog { target } => {
+                    self.clear_active_sculpt_target_for_switch();
+                    self.ui.selection.select_single(target);
                     self.ui.sculpt_convert_dialog = Some(SculptConvertDialog::new(target));
                 }
                 Action::CommitSculptConvert {
@@ -1562,6 +1577,11 @@ impl SdfApp {
                         self.settings.save();
                     }
                 }
+                Action::SetAutoSwitchSculptTargetDuringBrush(enabled) => {
+                    if apply_auto_switch_sculpt_target_during_brush(&mut self.settings, enabled) {
+                        self.settings.save();
+                    }
+                }
                 Action::ExportSettings => {
                     #[cfg(not(target_arch = "wasm32"))]
                     {
@@ -1903,9 +1923,10 @@ mod tests {
     use glam::Vec3;
 
     use super::{
-        activate_sculpt_interaction_state, apply_auto_save_enabled, apply_continuous_repaint,
+        activate_sculpt_interaction_state, apply_auto_save_enabled,
+        apply_auto_switch_sculpt_target_during_brush, apply_continuous_repaint,
         apply_measure_interaction_state, apply_select_interaction_state,
-        apply_selection_behavior_settings, apply_show_fps_overlay,
+        apply_selection_behavior_settings, apply_show_fps_overlay, arm_sculpt_interaction_state,
         duplicate_presented_object_and_offset, replace_operation_input_with_primitive,
         resolve_sculpt_entry, sync_interaction_mode_after_sculpt_exit_state, SculptEntryDecision,
         SelectionBehaviorApplyResult,
@@ -2037,6 +2058,21 @@ mod tests {
         assert!(apply_continuous_repaint(&mut settings, true));
         assert!(settings.continuous_repaint);
         assert!(!apply_continuous_repaint(&mut settings, true));
+    }
+
+    #[test]
+    fn auto_switch_sculpt_target_setting_apply_is_targeted_and_idempotent() {
+        let mut settings = Settings::default();
+
+        assert!(apply_auto_switch_sculpt_target_during_brush(
+            &mut settings,
+            true
+        ));
+        assert!(settings.auto_switch_sculpt_target_during_brush);
+        assert!(!apply_auto_switch_sculpt_target_during_brush(
+            &mut settings,
+            true
+        ));
     }
 
     #[test]
@@ -2209,6 +2245,24 @@ mod tests {
         activate_sculpt_interaction_state(&mut doc, &mut ui, sculpt_id, BrushMode::Inflate, 1.0);
 
         assert!(ui.primary_shell.tool_rail_visible);
+    }
+
+    #[test]
+    fn arm_sculpt_interaction_without_target_keeps_tool_active() {
+        let mut doc = test_document_state();
+        let mut ui = test_ui_state();
+
+        arm_sculpt_interaction_state(&mut doc, &mut ui, BrushMode::Carve);
+
+        assert_eq!(
+            ui.primary_shell.interaction_mode,
+            super::InteractionMode::Sculpt(BrushMode::Carve)
+        );
+        assert_eq!(doc.active_tool, ActiveTool::Sculpt);
+        assert_eq!(doc.sculpt_state.active_node(), None);
+        assert_eq!(doc.sculpt_state.selected_brush(), BrushMode::Carve);
+        assert!(ui.primary_shell.tool_rail_visible);
+        assert!(!ui.measurement_mode);
     }
 
     #[test]

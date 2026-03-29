@@ -733,6 +733,7 @@ fn capture_egui_viewport_input(
             alt: input.modifiers.alt,
         }),
         pressure: egui_pointer_pressure(ui),
+        is_touch: ui.input(|input| input.any_touches()),
         double_clicked: response.double_clicked(),
     }
 }
@@ -1223,6 +1224,7 @@ pub fn draw(
                 camera,
                 scene,
                 sculpt_state,
+                sculpt_tool_armed: matches!(*active_tool, ActiveTool::Sculpt),
                 last_sculpt_hit,
                 render_config,
                 allow_selection_pick: !(measurement_click_consumed

@@ -31,6 +31,7 @@ pub(super) struct SlintViewportInputState {
     middle: PointerButtonSnapshot,
     modifiers: KeyboardModifiers,
     pressure: f32,
+    is_touch: bool,
     double_clicked: bool,
 }
 
@@ -48,6 +49,7 @@ impl Default for SlintViewportInputState {
             middle: PointerButtonSnapshot::default(),
             modifiers: KeyboardModifiers::default(),
             pressure: 0.0,
+            is_touch: false,
             double_clicked: false,
         }
     }
@@ -78,7 +80,8 @@ impl SlintViewportInputState {
         self.update_pointer_position(x, y);
         self.modifiers = modifiers;
         self.pressure = if is_touch { 1.0 } else { 0.0 };
-        match button {
+        self.is_touch = is_touch;
+        match remap_touch_primary_button(button, is_touch) {
             POINTER_BUTTON_PRIMARY => {
                 self.primary.down = true;
                 self.primary.pressed = true;
@@ -106,7 +109,8 @@ impl SlintViewportInputState {
         self.update_pointer_position(x, y);
         self.modifiers = modifiers;
         self.pressure = if is_touch { 1.0 } else { 0.0 };
-        match button {
+        self.is_touch = is_touch;
+        match remap_touch_primary_button(button, is_touch) {
             POINTER_BUTTON_PRIMARY => {
                 self.primary.down = false;
                 self.primary.released = true;
@@ -133,6 +137,7 @@ impl SlintViewportInputState {
         self.update_pointer_position(x, y);
         self.modifiers = modifiers;
         self.pressure = if is_touch { 1.0 } else { 0.0 };
+        self.is_touch = is_touch;
     }
 
     pub(super) fn handle_pointer_cancel(&mut self) {
@@ -146,6 +151,7 @@ impl SlintViewportInputState {
         self.middle.down = false;
         self.middle.released = true;
         self.pressure = 0.0;
+        self.is_touch = false;
     }
 
     pub(super) fn handle_pointer_exit(&mut self) {
@@ -202,6 +208,7 @@ impl SlintViewportInputState {
             middle: self.middle,
             modifiers: self.modifiers,
             pressure: self.pressure,
+            is_touch: self.is_touch,
             double_clicked: self.double_clicked,
         };
         self.pointer_delta_logical = [0.0, 0.0];
@@ -215,6 +222,7 @@ impl SlintViewportInputState {
         self.double_clicked = false;
         if !self.primary.down && !self.secondary.down && !self.middle.down {
             self.pressure = 0.0;
+            self.is_touch = false;
         }
         snapshot
     }
@@ -234,6 +242,14 @@ impl SlintViewportInputState {
             && position[1] >= 0.0
             && position[0] <= self.viewport_size_logical[0]
             && position[1] <= self.viewport_size_logical[1]
+    }
+}
+
+fn remap_touch_primary_button(button: i32, is_touch: bool) -> i32 {
+    if is_touch && button == POINTER_BUTTON_OTHER {
+        POINTER_BUTTON_PRIMARY
+    } else {
+        button
     }
 }
 
@@ -299,4 +315,42 @@ fn selected_scene_index(snapshot: &ShellSnapshot) -> Option<usize> {
         .rows
         .iter()
         .position(|row| row.host_id == selected_host)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        remap_touch_primary_button, KeyboardModifiers, SlintViewportInputState,
+        POINTER_BUTTON_OTHER, POINTER_BUTTON_PRIMARY,
+    };
+
+    #[test]
+    fn touch_other_button_remaps_to_primary() {
+        assert_eq!(
+            remap_touch_primary_button(POINTER_BUTTON_OTHER, true),
+            POINTER_BUTTON_PRIMARY
+        );
+        assert_eq!(
+            remap_touch_primary_button(POINTER_BUTTON_OTHER, false),
+            POINTER_BUTTON_OTHER
+        );
+    }
+
+    #[test]
+    fn touch_other_press_sets_primary_button_snapshot() {
+        let mut state = SlintViewportInputState::default();
+        state.set_viewport_geometry(800.0, 600.0, 1.0);
+        state.handle_pointer_down(
+            100.0,
+            120.0,
+            POINTER_BUTTON_OTHER,
+            KeyboardModifiers::default(),
+            true,
+        );
+
+        let snapshot = state.take_snapshot(1.0);
+        assert!(snapshot.primary.down);
+        assert!(snapshot.primary.pressed);
+        assert!(snapshot.is_touch);
+    }
 }

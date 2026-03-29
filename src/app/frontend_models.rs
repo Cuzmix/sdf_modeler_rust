@@ -352,6 +352,7 @@ pub struct SettingsCardModel {
     pub auto_save_enabled: bool,
     pub show_fps_overlay: bool,
     pub continuous_repaint: bool,
+    pub auto_switch_sculpt_target_during_brush: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -714,6 +715,7 @@ pub fn build_settings_card_model(menu_ui: &MenuUiState, settings: &Settings) -> 
         auto_save_enabled: settings.auto_save_enabled,
         show_fps_overlay: settings.show_fps_overlay,
         continuous_repaint: settings.continuous_repaint,
+        auto_switch_sculpt_target_during_brush: settings.auto_switch_sculpt_target_during_brush,
     }
 }
 
@@ -2747,6 +2749,7 @@ mod tests {
         settings.auto_save_enabled = false;
         settings.show_fps_overlay = false;
         settings.continuous_repaint = true;
+        settings.auto_switch_sculpt_target_during_brush = true;
 
         let model = build_settings_card_model(&menu_ui, &settings);
 
@@ -2760,6 +2763,16 @@ mod tests {
         assert!(!model.auto_save_enabled);
         assert!(!model.show_fps_overlay);
         assert!(model.continuous_repaint);
+        assert!(model.auto_switch_sculpt_target_during_brush);
+    }
+
+    #[test]
+    fn settings_card_model_defaults_auto_switch_toggle_off() {
+        let mut menu_ui = MenuUiState::default();
+        menu_ui.open_settings_card();
+
+        let model = build_settings_card_model(&menu_ui, &Settings::default());
+        assert!(!model.auto_switch_sculpt_target_during_brush);
     }
 
     #[test]

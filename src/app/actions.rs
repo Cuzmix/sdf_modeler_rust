@@ -309,6 +309,7 @@ pub enum Action {
     SetAutoSaveEnabled(bool),
     SetShowFpsOverlay(bool),
     SetContinuousRepaint(bool),
+    SetAutoSwitchSculptTargetDuringBrush(bool),
     ExportSettings,
     ImportSettings,
     SettingsChanged,

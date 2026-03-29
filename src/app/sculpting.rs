@@ -8,6 +8,7 @@ use crate::viewport::{BrushDispatch, BrushGpuParams};
 
 use super::{state::SculptRuntimeCache, PickRayInputs, PickState, SdfApp};
 
+#[cfg_attr(not(test), allow(dead_code))]
 fn resolve_sculpt_target_for_selection(scene: &Scene, selected: Option<NodeId>) -> Option<NodeId> {
     let selected_id = selected?;
     if let Some(presented) = resolve_presented_object(scene, selected_id) {
@@ -23,6 +24,46 @@ fn resolve_sculpt_target_for_selection(scene: &Scene, selected: Option<NodeId>) 
         .nodes
         .get(&selected_id)
         .and_then(|node| matches!(node.data, NodeData::Sculpt { .. }).then_some(selected_id))
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SculptSwitchTargetDecision {
+    Activate(NodeId),
+    OpenConvert(NodeId),
+    Ignore,
+}
+
+fn resolve_sculpt_switch_target_for_hit(
+    scene: &Scene,
+    hit_node_id: NodeId,
+) -> SculptSwitchTargetDecision {
+    let Some(hit_node) = scene.nodes.get(&hit_node_id) else {
+        return SculptSwitchTargetDecision::Ignore;
+    };
+
+    if let Some(presented) = resolve_presented_object(scene, hit_node_id) {
+        if let Some(sculpt_id) = presented.attached_sculpt_id {
+            return SculptSwitchTargetDecision::Activate(sculpt_id);
+        }
+        if matches!(presented.kind, PresentedObjectKind::Voxel) {
+            return SculptSwitchTargetDecision::Activate(presented.host_id);
+        }
+        let parent_map = scene.build_parent_map();
+        if let Some(sculpt_id) = scene.find_sculpt_parent(hit_node_id, &parent_map) {
+            return SculptSwitchTargetDecision::Activate(sculpt_id);
+        }
+        return SculptSwitchTargetDecision::OpenConvert(presented.object_root_id);
+    }
+
+    if matches!(hit_node.data, NodeData::Sculpt { .. }) {
+        return SculptSwitchTargetDecision::Activate(hit_node_id);
+    }
+
+    let parent_map = scene.build_parent_map();
+    if let Some(sculpt_id) = scene.find_sculpt_parent(hit_node_id, &parent_map) {
+        return SculptSwitchTargetDecision::Activate(sculpt_id);
+    }
+    SculptSwitchTargetDecision::OpenConvert(hit_node_id)
 }
 
 impl SdfApp {
@@ -72,6 +113,50 @@ impl SdfApp {
     }
     pub(super) fn clear_sculpt_runtime_cache(&mut self) {
         self.async_state.sculpt_runtime_cache = None;
+    }
+
+    fn reset_sculpt_runtime_after_target_change(&mut self) {
+        self.async_state.last_sculpt_hit = None;
+        self.async_state.lazy_brush_pos = None;
+        self.clear_sculpt_runtime_cache();
+        self.async_state.hover_world_pos = None;
+        self.async_state.cursor_over_geometry = false;
+        self.async_state.sculpt_dragging = false;
+        self.cancel_pending_pick_state();
+    }
+
+    pub(super) fn clear_active_sculpt_target_for_switch(&mut self) {
+        if self.doc.sculpt_state.is_active() {
+            self.finalize_pending_grab_repair();
+            self.doc.sculpt_state.deactivate();
+            self.doc.history.discard_pending_sculpt_stroke();
+        }
+        self.reset_sculpt_runtime_after_target_change();
+    }
+
+    pub(super) fn resolve_sculpt_target_switch_hit(&mut self, hit_node_id: NodeId) {
+        self.doc.active_tool = ActiveTool::Sculpt;
+
+        match resolve_sculpt_switch_target_for_hit(&self.doc.scene, hit_node_id) {
+            SculptSwitchTargetDecision::Activate(sculpt_id) => {
+                self.finalize_pending_grab_repair();
+                self.doc
+                    .sculpt_state
+                    .activate_preserving_session(sculpt_id, Some(self.scene_avg_extent()));
+                self.ui.selection.select_single(sculpt_id);
+                self.ui.sculpt_convert_dialog = None;
+                self.reset_sculpt_runtime_after_target_change();
+                self.gpu.buffer_dirty = true;
+            }
+            SculptSwitchTargetDecision::OpenConvert(target) => {
+                self.clear_active_sculpt_target_for_switch();
+                self.ui.selection.select_single(target);
+                self.ui.sculpt_convert_dialog =
+                    Some(crate::app::state::SculptConvertDialog::new(target));
+                self.gpu.buffer_dirty = true;
+            }
+            SculptSwitchTargetDecision::Ignore => {}
+        }
     }
 
     fn sculpt_stroke_label(
@@ -481,37 +566,8 @@ impl SdfApp {
             // on the sculpt itself and fall through to apply the brush.
             let is_child_of_active_sculpt = self.doc.scene.is_descendant(hit_node_id, node_id);
             if !is_child_of_active_sculpt {
-                // Hit a truly different node - handle navigation/conversion
-                if let Some(hit_node) = self.doc.scene.nodes.get(&hit_node_id) {
-                    if matches!(hit_node.data, NodeData::Sculpt { .. }) {
-                        // Hit another sculpt node - switch to it directly
-                        self.doc
-                            .sculpt_state
-                            .activate_preserving_session(hit_node_id, None);
-                        self.ui.selection.select_single(hit_node_id);
-                        self.async_state.last_sculpt_hit = None;
-                        self.async_state.lazy_brush_pos = None;
-                        self.clear_sculpt_runtime_cache();
-                    } else {
-                        // Check if the hit node has a sculpt parent
-                        let parent_map = self.doc.scene.build_parent_map();
-                        if let Some(sculpt_id) =
-                            self.doc.scene.find_sculpt_parent(hit_node_id, &parent_map)
-                        {
-                            // Switch to the sculpt parent
-                            self.doc
-                                .sculpt_state
-                                .activate_preserving_session(sculpt_id, None);
-                            self.ui.selection.select_single(sculpt_id);
-                            self.async_state.last_sculpt_hit = None;
-                            self.async_state.lazy_brush_pos = None;
-                            self.clear_sculpt_runtime_cache();
-                        } else {
-                            // Non-sculpt node with no sculpt parent - show convert dialog
-                            self.ui.sculpt_convert_dialog =
-                                Some(crate::app::state::SculptConvertDialog::new(hit_node_id));
-                        }
-                    }
+                if self.settings.auto_switch_sculpt_target_during_brush {
+                    self.resolve_sculpt_target_switch_hit(hit_node_id);
                 }
                 return;
             }
@@ -886,6 +942,10 @@ impl SdfApp {
         let Some(pending) = self.async_state.pending_pick.take() else {
             return;
         };
+        if !pending.intent.is_sculpt_intent() {
+            self.async_state.pending_pick = Some(pending);
+            return;
+        }
         let viewport_resources = self.gpu.viewport_resources.read();
         let rx = viewport_resources.submit_pick(
             &self.gpu.render_context.device,
@@ -943,27 +1003,16 @@ impl SdfApp {
                 }
             }
             ActiveTool::Sculpt => {
-                let sel = resolve_sculpt_target_for_selection(
-                    &self.doc.scene,
-                    self.ui.selection.selected,
-                );
-                let active = self.doc.sculpt_state.active_node();
-                if sel != active {
-                    // Selection changed - try to activate on new node
-                    if let Some(id) = sel {
-                        self.finalize_pending_grab_repair();
-                        self.doc
-                            .sculpt_state
-                            .activate_preserving_session(id, Some(self.scene_avg_extent()));
-                    } else {
-                        self.finalize_pending_grab_repair();
-                        self.doc.sculpt_state.deactivate();
-                        self.doc.history.discard_pending_sculpt_stroke();
+                if let Some(active_id) = self.doc.sculpt_state.active_node() {
+                    let active_is_valid = self
+                        .doc
+                        .scene
+                        .nodes
+                        .get(&active_id)
+                        .is_some_and(|node| matches!(node.data, NodeData::Sculpt { .. }));
+                    if !active_is_valid {
+                        self.clear_active_sculpt_target_for_switch();
                     }
-                    self.async_state.last_sculpt_hit = None;
-                    self.async_state.lazy_brush_pos = None;
-                    self.clear_sculpt_runtime_cache();
-                    self.cancel_pending_pick_state();
                 }
             }
         }

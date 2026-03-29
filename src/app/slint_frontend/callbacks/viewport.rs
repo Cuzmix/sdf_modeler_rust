@@ -64,14 +64,14 @@ fn handle_pointer_action(
         ViewportPointerPhase::Down => viewport_input.handle_pointer_down(
             action.x,
             action.y,
-            pointer_button_to_code(action.button),
+            pointer_button_to_code(action.button, action.is_touch),
             modifiers,
             action.is_touch,
         ),
         ViewportPointerPhase::Up => viewport_input.handle_pointer_up(
             action.x,
             action.y,
-            pointer_button_to_code(action.button),
+            pointer_button_to_code(action.button, action.is_touch),
             modifiers,
             action.is_touch,
         ),
@@ -86,11 +86,32 @@ fn keyboard_modifiers(ctrl: bool, shift: bool, alt: bool) -> KeyboardModifiers {
     KeyboardModifiers { ctrl, shift, alt }
 }
 
-fn pointer_button_to_code(button: ViewportPointerButton) -> i32 {
+fn pointer_button_to_code(button: ViewportPointerButton, is_touch: bool) -> i32 {
     match button {
         ViewportPointerButton::Primary => crate::app::slint_bridge::POINTER_BUTTON_PRIMARY,
         ViewportPointerButton::Secondary => crate::app::slint_bridge::POINTER_BUTTON_SECONDARY,
         ViewportPointerButton::Middle => crate::app::slint_bridge::POINTER_BUTTON_MIDDLE,
+        ViewportPointerButton::Other if is_touch => {
+            crate::app::slint_bridge::POINTER_BUTTON_PRIMARY
+        }
         ViewportPointerButton::Other => crate::app::slint_bridge::POINTER_BUTTON_OTHER,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::pointer_button_to_code;
+    use crate::app::slint_frontend::ViewportPointerButton;
+
+    #[test]
+    fn touch_other_button_maps_to_primary_code() {
+        assert_eq!(
+            pointer_button_to_code(ViewportPointerButton::Other, true),
+            crate::app::slint_bridge::POINTER_BUTTON_PRIMARY
+        );
+        assert_eq!(
+            pointer_button_to_code(ViewportPointerButton::Other, false),
+            crate::app::slint_bridge::POINTER_BUTTON_OTHER
+        );
     }
 }

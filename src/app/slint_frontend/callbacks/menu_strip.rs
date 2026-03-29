@@ -129,6 +129,11 @@ fn handle_settings_card_action(
     action: SettingsCardAction,
     value: f32,
 ) {
+    if let Some(mapped_action) = map_settings_card_toggle_action(action, value) {
+        host_state.queue_action(mapped_action);
+        return;
+    }
+
     match action {
         SettingsCardAction::SetMultiAxisOrientation => {
             let mut next = host_state.app.settings.selection_behavior;
@@ -157,15 +162,6 @@ fn handle_settings_card_action(
             };
             host_state.queue_action(Action::SetSelectionBehavior(next));
         }
-        SettingsCardAction::SetAutoSaveEnabled => {
-            host_state.queue_action(Action::SetAutoSaveEnabled(value >= 0.5));
-        }
-        SettingsCardAction::SetShowFpsOverlay => {
-            host_state.queue_action(Action::SetShowFpsOverlay(value >= 0.5));
-        }
-        SettingsCardAction::SetContinuousRepaint => {
-            host_state.queue_action(Action::SetContinuousRepaint(value >= 0.5));
-        }
         SettingsCardAction::ExportSettings => {
             host_state.queue_action(Action::ExportSettings);
         }
@@ -175,6 +171,23 @@ fn handle_settings_card_action(
         SettingsCardAction::ResetPrimaryShellLayout => {
             host_state.queue_action(Action::ResetPrimaryShellLayout);
         }
+        SettingsCardAction::SetAutoSaveEnabled
+        | SettingsCardAction::SetShowFpsOverlay
+        | SettingsCardAction::SetContinuousRepaint
+        | SettingsCardAction::SetAutoSwitchSculptTargetDuringBrush => {}
+    }
+}
+
+fn map_settings_card_toggle_action(action: SettingsCardAction, value: f32) -> Option<Action> {
+    let enabled = value >= 0.5;
+    match action {
+        SettingsCardAction::SetAutoSaveEnabled => Some(Action::SetAutoSaveEnabled(enabled)),
+        SettingsCardAction::SetShowFpsOverlay => Some(Action::SetShowFpsOverlay(enabled)),
+        SettingsCardAction::SetContinuousRepaint => Some(Action::SetContinuousRepaint(enabled)),
+        SettingsCardAction::SetAutoSwitchSculptTargetDuringBrush => {
+            Some(Action::SetAutoSwitchSculptTargetDuringBrush(enabled))
+        }
+        _ => None,
     }
 }
 
@@ -361,12 +374,13 @@ fn step_menu_kind(kind: MenuDropdownKind, forward: bool) -> MenuDropdownKind {
 #[cfg(test)]
 mod tests {
     use super::{
-        active_enabled_command, map_menu_command, map_menu_command_kind, menu_dropdown_kind,
-        step_enabled_index, step_menu_kind, MenuCommandDispatch,
+        active_enabled_command, map_menu_command, map_menu_command_kind,
+        map_settings_card_toggle_action, menu_dropdown_kind, step_enabled_index, step_menu_kind,
+        MenuCommandDispatch,
     };
     use crate::app::actions::Action;
     use crate::app::frontend_models::MenuCommandKind;
-    use crate::app::slint_frontend::{MenuCommandAction, MenuKindView};
+    use crate::app::slint_frontend::{MenuCommandAction, MenuKindView, SettingsCardAction};
     use crate::app::state::MenuDropdownKind;
 
     fn command_item(
@@ -492,5 +506,23 @@ mod tests {
             step_menu_kind(MenuDropdownKind::Edit, true),
             MenuDropdownKind::View
         );
+    }
+
+    #[test]
+    fn settings_card_toggle_mapping_emits_auto_switch_action() {
+        assert!(matches!(
+            map_settings_card_toggle_action(
+                SettingsCardAction::SetAutoSwitchSculptTargetDuringBrush,
+                1.0
+            ),
+            Some(Action::SetAutoSwitchSculptTargetDuringBrush(true))
+        ));
+        assert!(matches!(
+            map_settings_card_toggle_action(
+                SettingsCardAction::SetAutoSwitchSculptTargetDuringBrush,
+                0.0
+            ),
+            Some(Action::SetAutoSwitchSculptTargetDuringBrush(false))
+        ));
     }
 }

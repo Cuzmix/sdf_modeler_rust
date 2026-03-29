@@ -4,10 +4,10 @@ use crate::app::actions::{Action, ActionSink};
 use crate::app::state::{ViewportInteractionState, ViewportPrimaryDragMode};
 use crate::gizmo::GizmoInputSnapshot;
 use crate::gpu::camera::{Camera, CameraUniform};
-use crate::gpu::picking::PendingPick;
+use crate::gpu::picking::{PendingPick, PendingPickIntent};
 use crate::graph::scene::{NodeData, Scene};
 use crate::keymap::KeyboardModifiers;
-use crate::sculpt::{self, SculptState};
+use crate::sculpt::{self, ActiveTool, SculptState};
 use crate::settings::RenderConfig;
 
 use super::backend_frame::ViewportUiFeedback;
@@ -36,6 +36,7 @@ pub(crate) struct ViewportInputSnapshot {
     pub middle: PointerButtonSnapshot,
     pub modifiers: KeyboardModifiers,
     pub pressure: f32,
+    pub is_touch: bool,
     pub double_clicked: bool,
 }
 
@@ -54,6 +55,7 @@ impl Default for ViewportInputSnapshot {
             middle: PointerButtonSnapshot::default(),
             modifiers: KeyboardModifiers::default(),
             pressure: 0.0,
+            is_touch: false,
             double_clicked: false,
         }
     }
@@ -64,6 +66,7 @@ pub(crate) struct ViewportInteractionContext<'a> {
     pub camera: &'a mut Camera,
     pub scene: &'a Scene,
     pub sculpt_state: &'a SculptState,
+    pub sculpt_tool_armed: bool,
     pub last_sculpt_hit: Option<Vec3>,
     pub render_config: &'a RenderConfig,
     pub allow_selection_pick: bool,
@@ -128,6 +131,7 @@ impl SdfApp {
                 camera: &mut self.doc.camera,
                 scene: &self.doc.scene,
                 sculpt_state: &self.doc.sculpt_state,
+                sculpt_tool_armed: matches!(self.doc.active_tool, ActiveTool::Sculpt),
                 last_sculpt_hit: self.async_state.last_sculpt_hit,
                 render_config: &self.settings.render,
                 allow_selection_pick: true,
@@ -148,6 +152,7 @@ pub(crate) fn run_viewport_interaction_core(
         camera,
         scene,
         sculpt_state,
+        sculpt_tool_armed,
         last_sculpt_hit,
         render_config,
         allow_selection_pick,
@@ -164,7 +169,7 @@ pub(crate) fn run_viewport_interaction_core(
     if input.primary.pressed {
         state.primary_press_origin_physical = pointer_pos;
         state.primary_drag_distance = 0.0;
-        state.primary_drag_mode = if input.modifiers.alt {
+        state.primary_drag_mode = if input.modifiers.alt || (sculpt_active && input.is_touch) {
             ViewportPrimaryDragMode::Orbit
         } else if sculpt_active {
             let stroke_confirmed = last_sculpt_hit.is_some();
@@ -222,8 +227,8 @@ pub(crate) fn run_viewport_interaction_core(
         }
     }
 
-    if sculpt_active {
-        if input.double_clicked {
+    if sculpt_tool_armed {
+        if sculpt_active && input.double_clicked {
             if let Some(pos) = pointer_pos {
                 if in_safety_border(
                     pos,
@@ -259,6 +264,7 @@ pub(crate) fn run_viewport_interaction_core(
                         input.viewport_size_physical,
                         input.now_seconds as f32,
                     ),
+                    intent: PendingPickIntent::SculptStroke,
                     additive_select_held: false,
                 });
                 feedback.sculpt_ctrl_held = input.modifiers.ctrl;
@@ -275,9 +281,41 @@ pub(crate) fn run_viewport_interaction_core(
                         input.viewport_size_physical,
                         input.now_seconds as f32,
                     ),
+                    intent: PendingPickIntent::SculptHover,
                     additive_select_held: false,
                 });
                 feedback.is_hover_pick = true;
+            }
+        } else if !sculpt_active && input.primary.down && pointer_dragged {
+            apply_orbit_drag(
+                camera,
+                render_config,
+                pointer_delta_logical,
+                input.modifiers,
+            );
+            feedback.camera_changed = true;
+        }
+
+        if allow_selection_pick
+            && input.primary.released
+            && state.primary_drag_distance <= CLICK_DISTANCE_THRESHOLD
+            && input.pointer_inside
+        {
+            let should_switch_target = !sculpt_active || input.modifiers.alt || input.is_touch;
+            if should_switch_target {
+                if let Some(pos) = pointer_pos {
+                    feedback.pending_pick = Some(PendingPick {
+                        mouse_pos: pos,
+                        camera_uniform: build_pick_uniform(
+                            camera,
+                            scene,
+                            input.viewport_size_physical,
+                            input.now_seconds as f32,
+                        ),
+                        intent: PendingPickIntent::SculptTargetSwitch,
+                        additive_select_held: false,
+                    });
+                }
             }
         }
     } else {
@@ -305,6 +343,7 @@ pub(crate) fn run_viewport_interaction_core(
                         input.viewport_size_physical,
                         input.now_seconds as f32,
                     ),
+                    intent: PendingPickIntent::Selection,
                     additive_select_held: input.modifiers.shift,
                 });
             }
@@ -513,6 +552,7 @@ mod tests {
                 camera: &mut camera,
                 scene: &scene,
                 sculpt_state: &sculpt_state,
+                sculpt_tool_armed: false,
                 last_sculpt_hit: None,
                 render_config: &render_config,
                 allow_selection_pick: true,
@@ -546,6 +586,7 @@ mod tests {
                 camera: &mut camera,
                 scene: &scene,
                 sculpt_state: &sculpt_state,
+                sculpt_tool_armed: false,
                 last_sculpt_hit: None,
                 render_config: &render_config,
                 allow_selection_pick: true,
@@ -583,6 +624,7 @@ mod tests {
                 camera: &mut camera,
                 scene: &scene,
                 sculpt_state: &sculpt_state,
+                sculpt_tool_armed: true,
                 last_sculpt_hit: Some(Vec3::ZERO),
                 render_config: &render_config,
                 allow_selection_pick: true,
@@ -603,6 +645,10 @@ mod tests {
         assert_eq!(state.primary_drag_mode, ViewportPrimaryDragMode::Sculpt);
         assert!(!feedback.camera_changed);
         assert!(feedback.pending_pick.is_some());
+        assert_eq!(
+            feedback.pending_pick.as_ref().map(|pending| pending.intent),
+            Some(PendingPickIntent::SculptStroke)
+        );
         assert!((feedback.sculpt_pressure - 0.75).abs() < f32::EPSILON);
     }
 
@@ -623,6 +669,7 @@ mod tests {
                 camera: &mut camera,
                 scene: &scene,
                 sculpt_state: &sculpt_state,
+                sculpt_tool_armed: true,
                 last_sculpt_hit: Some(Vec3::ZERO),
                 render_config: &render_config,
                 allow_selection_pick: true,
@@ -647,5 +694,133 @@ mod tests {
         assert!(feedback.camera_changed);
         assert!(feedback.pending_pick.is_none());
         assert!(camera.yaw != before_yaw || camera.pitch != before_pitch);
+    }
+
+    #[test]
+    fn sculpt_alt_click_release_emits_target_switch_pick() {
+        let scene = Scene::new();
+        let sculpt_state = SculptState::new_active(0);
+        let render_config = RenderConfig::default();
+        let mut state = ViewportInteractionState::default();
+        let mut camera = Camera::default();
+        let mut actions = Vec::new();
+
+        let _ = run_viewport_interaction_core(
+            ViewportInteractionContext {
+                state: &mut state,
+                camera: &mut camera,
+                scene: &scene,
+                sculpt_state: &sculpt_state,
+                sculpt_tool_armed: true,
+                last_sculpt_hit: Some(Vec3::ZERO),
+                render_config: &render_config,
+                allow_selection_pick: true,
+            },
+            &ViewportInputSnapshot {
+                primary: PointerButtonSnapshot {
+                    down: true,
+                    pressed: true,
+                    released: false,
+                },
+                modifiers: KeyboardModifiers {
+                    alt: true,
+                    ..KeyboardModifiers::default()
+                },
+                ..base_input()
+            },
+            &mut actions,
+        );
+
+        let feedback = run_viewport_interaction_core(
+            ViewportInteractionContext {
+                state: &mut state,
+                camera: &mut camera,
+                scene: &scene,
+                sculpt_state: &sculpt_state,
+                sculpt_tool_armed: true,
+                last_sculpt_hit: Some(Vec3::ZERO),
+                render_config: &render_config,
+                allow_selection_pick: true,
+            },
+            &ViewportInputSnapshot {
+                primary: PointerButtonSnapshot {
+                    down: false,
+                    pressed: false,
+                    released: true,
+                },
+                modifiers: KeyboardModifiers {
+                    alt: true,
+                    ..KeyboardModifiers::default()
+                },
+                ..base_input()
+            },
+            &mut actions,
+        );
+
+        assert_eq!(
+            feedback.pending_pick.as_ref().map(|pending| pending.intent),
+            Some(PendingPickIntent::SculptTargetSwitch)
+        );
+    }
+
+    #[test]
+    fn sculpt_touch_tap_emits_target_switch_pick() {
+        let scene = Scene::new();
+        let sculpt_state = SculptState::new_active(0);
+        let render_config = RenderConfig::default();
+        let mut state = ViewportInteractionState::default();
+        let mut camera = Camera::default();
+        let mut actions = Vec::new();
+
+        let _ = run_viewport_interaction_core(
+            ViewportInteractionContext {
+                state: &mut state,
+                camera: &mut camera,
+                scene: &scene,
+                sculpt_state: &sculpt_state,
+                sculpt_tool_armed: true,
+                last_sculpt_hit: Some(Vec3::ZERO),
+                render_config: &render_config,
+                allow_selection_pick: true,
+            },
+            &ViewportInputSnapshot {
+                primary: PointerButtonSnapshot {
+                    down: true,
+                    pressed: true,
+                    released: false,
+                },
+                is_touch: true,
+                ..base_input()
+            },
+            &mut actions,
+        );
+
+        let feedback = run_viewport_interaction_core(
+            ViewportInteractionContext {
+                state: &mut state,
+                camera: &mut camera,
+                scene: &scene,
+                sculpt_state: &sculpt_state,
+                sculpt_tool_armed: true,
+                last_sculpt_hit: Some(Vec3::ZERO),
+                render_config: &render_config,
+                allow_selection_pick: true,
+            },
+            &ViewportInputSnapshot {
+                primary: PointerButtonSnapshot {
+                    down: false,
+                    pressed: false,
+                    released: true,
+                },
+                is_touch: true,
+                ..base_input()
+            },
+            &mut actions,
+        );
+
+        assert_eq!(
+            feedback.pending_pick.as_ref().map(|pending| pending.intent),
+            Some(PendingPickIntent::SculptTargetSwitch)
+        );
     }
 }

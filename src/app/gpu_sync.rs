@@ -2,8 +2,10 @@ use glam::Vec3;
 
 use crate::gpu::buffers;
 use crate::gpu::codegen;
+use crate::gpu::picking::PendingPickIntent;
 use crate::graph::presented_object::{collect_render_highlight_ids, resolve_host_selection};
 use crate::graph::scene::{NodeData, NodeId};
+use crate::sculpt::ActiveTool;
 
 use super::SdfApp;
 
@@ -244,36 +246,63 @@ impl SdfApp {
     }
 
     pub(super) fn process_pending_pick(&mut self) {
-        if self.doc.sculpt_state.is_active() {
-            return;
-        }
         let Some(pending) = self.async_state.pending_pick.take() else {
             return;
         };
+        if pending.intent.is_sculpt_intent() {
+            self.async_state.pending_pick = Some(pending);
+            return;
+        }
 
         self.cancel_pending_pick_state();
         let topo_order = self.doc.scene.visible_topo_order();
-        let resources = self.gpu.viewport_resources.read();
-        if let Some(result) = resources.execute_pick(
-            &self.gpu.render_context.device,
-            &self.gpu.render_context.queue,
-            &pending,
-        ) {
-            let idx = result.material_id as usize;
-            if idx < topo_order.len() {
-                let hit_node_id = topo_order[idx];
-                let selected_host = resolve_host_selection(&self.doc.scene, Some(hit_node_id))
-                    .unwrap_or(hit_node_id);
-                if pending.additive_select_held {
-                    self.ui.selection.toggle_select(selected_host);
-                } else {
-                    self.ui.selection.select_single(selected_host);
+        let pick_result = {
+            let resources = self.gpu.viewport_resources.read();
+            resources.execute_pick(
+                &self.gpu.render_context.device,
+                &self.gpu.render_context.queue,
+                &pending,
+            )
+        };
+
+        match pending.intent {
+            PendingPickIntent::Selection => {
+                let route_to_sculpt_switch = matches!(self.doc.active_tool, ActiveTool::Sculpt)
+                    && !self.doc.sculpt_state.is_active();
+                if let Some(result) = pick_result {
+                    let idx = result.material_id as usize;
+                    if idx < topo_order.len() {
+                        let hit_node_id = topo_order[idx];
+                        if route_to_sculpt_switch {
+                            self.resolve_sculpt_target_switch_hit(hit_node_id);
+                            self.gpu.buffer_dirty = true;
+                        } else {
+                            let selected_host =
+                                resolve_host_selection(&self.doc.scene, Some(hit_node_id))
+                                    .unwrap_or(hit_node_id);
+                            if pending.additive_select_held {
+                                self.ui.selection.toggle_select(selected_host);
+                            } else {
+                                self.ui.selection.select_single(selected_host);
+                            }
+                            self.gpu.buffer_dirty = true;
+                        }
+                    }
+                } else if !pending.additive_select_held && !route_to_sculpt_switch {
+                    self.ui.selection.clear_selection();
+                    self.gpu.buffer_dirty = true;
                 }
-                self.gpu.buffer_dirty = true;
             }
-        } else if !pending.additive_select_held {
-            self.ui.selection.clear_selection();
-            self.gpu.buffer_dirty = true;
+            PendingPickIntent::SculptTargetSwitch => {
+                if let Some(result) = pick_result {
+                    let idx = result.material_id as usize;
+                    if idx < topo_order.len() {
+                        self.resolve_sculpt_target_switch_hit(topo_order[idx]);
+                        self.gpu.buffer_dirty = true;
+                    }
+                }
+            }
+            PendingPickIntent::SculptStroke | PendingPickIntent::SculptHover => {}
         }
     }
 }

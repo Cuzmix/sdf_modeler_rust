@@ -376,6 +376,8 @@ pub struct Settings {
     #[serde(default)]
     pub selection_behavior: SelectionBehaviorSettings,
     #[serde(default)]
+    pub auto_switch_sculpt_target_during_brush: bool,
+    #[serde(default)]
     pub shell_chrome: ShellChromeSettings,
     #[serde(default = "default_true")]
     pub last_clean_exit: bool,
@@ -400,6 +402,7 @@ impl Default for Settings {
             export_presets: default_export_presets(),
             keymap: KeymapConfig::default(),
             selection_behavior: SelectionBehaviorSettings::default(),
+            auto_switch_sculpt_target_during_brush: false,
             shell_chrome: ShellChromeSettings::default(),
             last_clean_exit: true,
         }
@@ -1276,6 +1279,18 @@ mod tests {
             parsed.selection_behavior,
             SelectionBehaviorSettings::default()
         );
+    }
+
+    #[test]
+    fn settings_legacy_deserialize_defaults_auto_switch_sculpt_target_during_brush() {
+        let mut legacy = serde_json::to_value(Settings::default()).expect("serialize settings");
+        legacy
+            .as_object_mut()
+            .expect("settings object")
+            .remove("auto_switch_sculpt_target_during_brush");
+
+        let parsed: Settings = serde_json::from_value(legacy).expect("deserialize settings");
+        assert!(!parsed.auto_switch_sculpt_target_during_brush);
     }
 
     #[test]

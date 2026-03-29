@@ -114,12 +114,16 @@ impl SdfApp {
             }
         }
 
-        if ui_feedback.pending_pick.is_some() {
-            self.async_state.sculpt_dragging = !ui_feedback.is_hover_pick;
-            if !ui_feedback.is_hover_pick {
-                self.async_state.sculpt_ctrl_held = ui_feedback.sculpt_ctrl_held;
-                self.async_state.sculpt_shift_held = ui_feedback.sculpt_shift_held;
-                self.async_state.sculpt_pressure = ui_feedback.sculpt_pressure;
+        if let Some(ref pending_pick) = ui_feedback.pending_pick {
+            if pending_pick.intent.is_sculpt_intent() {
+                self.async_state.sculpt_dragging = !ui_feedback.is_hover_pick;
+                if !ui_feedback.is_hover_pick {
+                    self.async_state.sculpt_ctrl_held = ui_feedback.sculpt_ctrl_held;
+                    self.async_state.sculpt_shift_held = ui_feedback.sculpt_shift_held;
+                    self.async_state.sculpt_pressure = ui_feedback.sculpt_pressure;
+                }
+            } else {
+                self.async_state.sculpt_dragging = false;
             }
         }
 
@@ -134,7 +138,7 @@ impl SdfApp {
             );
 
         if let Some(ref pending_pick) = ui_feedback.pending_pick {
-            if !ui_feedback.is_hover_pick {
+            if pending_pick.intent.is_sculpt_intent() && !ui_feedback.is_hover_pick {
                 // During active Grab drags, keep sculpting from live cursor rays.
                 if live_grab_drag
                     || matches!(self.async_state.pick_state, PickState::Pending { .. })

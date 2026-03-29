@@ -114,6 +114,13 @@ export component SettingsCard inherits Rectangle {
                         root.perform_action(SettingsCardAction.set-continuous-repaint, self.checked ? 1.0 : 0.0);
                     }
                 }
+                CheckBox {
+                    text: "Auto-switch sculpt target while brushing";
+                    checked: root.state.auto_switch_sculpt_target_during_brush;
+                    toggled => {
+                        root.perform_action(SettingsCardAction.set-auto-switch-sculpt-target-during-brush, self.checked ? 1.0 : 0.0);
+                    }
+                }
 
                 Text { text: "Actions"; color: AppTheme.overlay_button_text; opacity: 0.8; }
                 HorizontalBox {

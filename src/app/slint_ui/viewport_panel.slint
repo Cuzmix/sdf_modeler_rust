@@ -60,7 +60,7 @@ export component ViewportPanel inherits Rectangle {
                     shift: event.modifiers.shift,
                     alt: event.modifiers.alt,
                 },
-                is_touch: false,
+                is_touch: event.button == PointerEventButton.other,
             });
         }
 

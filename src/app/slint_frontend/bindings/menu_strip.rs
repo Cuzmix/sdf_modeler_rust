@@ -55,6 +55,9 @@ pub(super) fn build_settings_card_state(snapshot: &ShellSnapshot) -> SettingsCar
         auto_save_enabled: snapshot.settings_card.auto_save_enabled,
         show_fps_overlay: snapshot.settings_card.show_fps_overlay,
         continuous_repaint: snapshot.settings_card.continuous_repaint,
+        auto_switch_sculpt_target_during_brush: snapshot
+            .settings_card
+            .auto_switch_sculpt_target_during_brush,
     }
 }
 
