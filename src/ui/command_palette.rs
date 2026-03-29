@@ -4,6 +4,7 @@ use crate::app::actions::{Action, ActionSink};
 use crate::graph::scene::{NodeId, Scene};
 use crate::keymap::{ActionBinding, KeymapConfig};
 use crate::sculpt::ActiveTool;
+use crate::ui::chrome::{self, BadgeTone};
 use crate::ui::gizmo::GizmoMode;
 
 /// A single entry in the command palette.
@@ -259,23 +260,48 @@ pub fn draw(
         .fixed_pos(palette_pos)
         .show(ctx, |ui| {
             ui.multiply_opacity(alpha);
-            crate::ui::motion::frame_with_alpha(egui::Frame::popup(ui.style()), surface_t, motion)
-                .inner_margin(8.0)
+            crate::ui::motion::frame_with_alpha(chrome::card_frame(ui), surface_t, motion)
+                .inner_margin(egui::Margin::same(12.0))
                 .show(ui, |ui| {
                     ui.set_min_width(palette_width);
+                    chrome::panel_header(
+                        ui,
+                        "Command Palette",
+                        "Search commands or jump directly to nodes with @name.",
+                    );
+                    ui.add_space(8.0);
 
                     // Search input
-                    let input_resp = ui.add(
-                        egui::TextEdit::singleline(query)
-                            .desired_width(palette_width - 16.0)
-                            .hint_text("Type a command or @node name..."),
+                    let input_resp = chrome::search_field(
+                        ui,
+                        "command_palette_query",
+                        query,
+                        "Type a command or @node name...",
                     );
                     // Auto-focus on open
                     if *open {
                         input_resp.request_focus();
                     }
 
-                    ui.separator();
+                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        chrome::badge(
+                            ui,
+                            if query.starts_with('@') {
+                                BadgeTone::Accent
+                            } else {
+                                BadgeTone::Muted
+                            },
+                            if query.starts_with('@') {
+                                "Node Jump"
+                            } else {
+                                "Commands"
+                            },
+                        );
+                        chrome::kbd_chip(ui, "Esc Close");
+                        chrome::kbd_chip(ui, "@ Nodes");
+                    });
+                    ui.add_space(8.0);
 
                     let is_node_search = query.starts_with('@');
                     let mut executed_action: Option<Action> = None;
@@ -302,14 +328,24 @@ pub fn draw(
                             .show(ui, |ui| {
                                 for (i, (name, id)) in filtered.iter().enumerate().take(max_show) {
                                     let is_selected = i == *selected_index;
-                                    let resp =
-                                        ui.selectable_label(is_selected, format!("  {}", name));
-                                    if resp.clicked() {
+                                    let row = chrome::item_frame(ui, is_selected).show(ui, |ui| {
+                                        ui.horizontal(|ui| {
+                                            chrome::badge(ui, BadgeTone::Muted, "@");
+                                            ui.selectable_label(is_selected, name.as_str())
+                                        })
+                                        .inner
+                                    });
+                                    if row.inner.clicked() {
                                         executed_select = Some(*id);
                                     }
+                                    ui.add_space(4.0);
                                 }
                                 if filtered.is_empty() {
-                                    ui.weak("No matching nodes");
+                                    chrome::empty_state(
+                                        ui,
+                                        "No matching nodes",
+                                        "Try a broader node name or clear the search.",
+                                    );
                                 }
                             });
 
@@ -352,13 +388,13 @@ pub fn draw(
                                     filtered.iter().enumerate().take(max_show)
                                 {
                                     let is_selected = display_idx == *selected_index;
-                                    let mut text = egui::RichText::new(&entry.label);
-                                    if is_selected {
-                                        text = text.strong();
-                                    }
-                                    let resp = ui.horizontal(|ui| {
+                                    let resp = chrome::item_frame(ui, is_selected).show(ui, |ui| {
+                                        ui.horizontal(|ui| {
+                                        let mut text = egui::RichText::new(&entry.label);
+                                        if is_selected {
+                                            text = text.strong();
+                                        }
                                         let r = ui.selectable_label(is_selected, text);
-                                        // Look up shortcut from keymap (single source of truth)
                                         if let Some(binding) = entry.binding {
                                             if let Some(shortcut) = keymap.format_shortcut(binding)
                                             {
@@ -367,19 +403,26 @@ pub fn draw(
                                                         egui::Align::Center,
                                                     ),
                                                     |ui| {
-                                                        ui.weak(&shortcut);
+                                                        chrome::kbd_chip(ui, shortcut);
                                                     },
                                                 );
                                             }
                                         }
                                         r
+                                        })
+                                        .inner
                                     });
                                     if resp.inner.clicked() {
                                         executed_action = Some(entry.action.clone());
                                     }
+                                    ui.add_space(4.0);
                                 }
                                 if filtered.is_empty() {
-                                    ui.weak("No matching commands");
+                                    chrome::empty_state(
+                                        ui,
+                                        "No matching commands",
+                                        "Try a shorter search term or browse commands without a filter.",
+                                    );
                                 }
                             });
 

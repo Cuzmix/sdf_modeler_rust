@@ -5,6 +5,7 @@ use eframe::egui;
 use crate::app::actions::{Action, ActionSink};
 use crate::egui_theme::{resolve_scaled_font_id, AppTextRole};
 use crate::graph::scene::{NodeData, NodeId, Scene, SceneNode};
+use crate::ui::chrome::{self, BadgeTone};
 
 const COLOR_SELECTED: egui::Color32 = egui::Color32::from_rgb(255, 200, 60);
 const COLOR_NORMAL: egui::Color32 = egui::Color32::from_rgb(200, 200, 210);
@@ -33,30 +34,45 @@ pub fn draw(
     active_light_ids: &std::collections::HashSet<NodeId>,
     soloed_light: Option<NodeId>,
 ) {
-    ui.heading("Scene Tree");
+    chrome::panel_header(
+        ui,
+        "Scene Tree",
+        "Filter, inspect, and reorganize the scene hierarchy from a cleaner docked view.",
+    );
+    ui.add_space(10.0);
 
-    // Search / filter field
-    ui.horizontal(|ui| {
-        ui.label("\u{1F50D}");
-        ui.add(
-            egui::TextEdit::singleline(search_filter)
-                .hint_text("Filter nodes...")
-                .desired_width(ui.available_width() - 24.0),
-        );
-        if !search_filter.is_empty() && ui.small_button("\u{2715}").clicked() {
-            search_filter.clear();
-        }
-    });
-    ui.separator();
+    chrome::section_card(
+        ui,
+        "Search",
+        "Find nodes by name across the current scene.",
+        |ui| {
+            ui.horizontal(|ui| {
+                chrome::search_field(ui, "scene_tree_filter", search_filter, "Filter nodes...");
+                if !search_filter.is_empty() && ui.button("Clear").clicked() {
+                    search_filter.clear();
+                }
+            });
+        },
+    );
+
+    ui.add_space(10.0);
 
     if scene.nodes.is_empty() {
-        ui.label("Empty scene");
+        chrome::empty_state(
+            ui,
+            "Scene is empty",
+            "Create a primitive, import geometry, or paste an existing node to begin.",
+        );
         return;
     }
 
     let tops = scene.top_level_nodes();
     if tops.is_empty() {
-        ui.label("Empty scene");
+        chrome::empty_state(
+            ui,
+            "No top-level nodes",
+            "Drag a node back to the root or create a new one to rebuild the hierarchy.",
+        );
         return;
     }
 
@@ -77,7 +93,11 @@ pub fn draw(
             .collect();
 
         if matching.is_empty() {
-            ui.weak("No matches");
+            chrome::empty_state(
+                ui,
+                "No matching nodes",
+                "Try a broader search term or clear the filter to browse the whole tree.",
+            );
             return;
         }
 
@@ -118,22 +138,34 @@ pub fn draw(
 
     // "Drop here to make top-level" area when dragging
     if drag_state.is_some() {
-        ui.add_space(4.0);
-        let drop_response =
-            ui.allocate_response(egui::vec2(ui.available_width(), 20.0), egui::Sense::hover());
+        ui.add_space(6.0);
+        let drop_response = chrome::inset_frame(ui)
+            .show(ui, |ui| {
+                ui.add_sized(
+                    [ui.available_width(), 24.0],
+                    egui::Label::new(
+                        egui::RichText::new("Drop here to move the node to the top level")
+                            .color(chrome::tokens(ui).muted_text),
+                    ),
+                )
+            })
+            .response;
         let is_hovered = drop_response.hovered();
         let rect = drop_response.rect;
         let color = if is_hovered {
             COLOR_DROP_TARGET
         } else {
-            egui::Color32::from_gray(60)
+            chrome::tokens(ui).border
         };
-        ui.painter()
-            .rect_stroke(rect, 2.0, egui::Stroke::new(1.5, color));
+        ui.painter().rect_stroke(
+            rect,
+            chrome::tokens(ui).radius_md,
+            egui::Stroke::new(1.5, color),
+        );
         ui.painter().text(
             rect.center(),
             egui::Align2::CENTER_CENTER,
-            "Drop here for top-level",
+            "Drop here to move the node to the top level",
             resolve_scaled_font_id(ui.style().as_ref(), AppTextRole::SceneLabel, 11.0),
             color,
         );
@@ -251,7 +283,7 @@ fn handle_drag_drop(
             // Visual highlight
             ui.painter().rect_stroke(
                 response.rect,
-                2.0,
+                chrome::tokens(ui).radius_md,
                 egui::Stroke::new(2.0, COLOR_DROP_TARGET),
             );
 
@@ -332,80 +364,89 @@ fn draw_node_recursive(
     };
 
     if info.is_leaf {
-        ui.horizontal(|ui| {
-            let mut visible = !info.is_hidden;
-            if ui.checkbox(&mut visible, "").changed() {
-                scene.toggle_visibility(id);
-            }
-            // Type dot
-            let (dot_rect, _) =
-                ui.allocate_exact_size(egui::vec2(10.0, 10.0), egui::Sense::hover());
-            ui.painter()
-                .circle_filled(dot_rect.center(), 4.0, type_dot_color);
+        let row = chrome::item_frame(ui, info.is_selected).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                let mut visible = !info.is_hidden;
+                if ui.checkbox(&mut visible, "").changed() {
+                    scene.toggle_visibility(id);
+                }
+                let (dot_rect, _) =
+                    ui.allocate_exact_size(egui::vec2(10.0, 10.0), egui::Sense::hover());
+                ui.painter()
+                    .circle_filled(dot_rect.center(), 4.0, type_dot_color);
 
-            let label = egui::Label::new(egui::RichText::new(&info.label).color(node_color))
-                .sense(egui::Sense::click_and_drag());
-            let response = ui.add(label);
-            if response.clicked() {
-                let ctrl = ui.input(|i| i.modifiers.ctrl);
-                if ctrl {
-                    // Ctrl+click: toggle in/out of selection
-                    if selected_set.remove(&id) {
-                        if *selected == Some(id) {
-                            *selected = selected_set.iter().copied().min();
-                        }
-                    } else {
-                        selected_set.insert(id);
-                        *selected = Some(id);
+                let label = egui::Label::new(egui::RichText::new(&info.label).color(node_color))
+                    .sense(egui::Sense::click_and_drag())
+                    .truncate();
+                let response = ui.add_sized([ui.available_width() - 72.0, 20.0], label);
+
+                if scene
+                    .nodes
+                    .get(&id)
+                    .is_some_and(|node| matches!(node.data, NodeData::Light { .. }))
+                {
+                    chrome::badge(
+                        ui,
+                        if active_light_ids.contains(&id) {
+                            BadgeTone::Success
+                        } else {
+                            BadgeTone::Muted
+                        },
+                        "Light",
+                    );
+                    let is_soloed = soloed_light == Some(id);
+                    if ui
+                        .small_button(if is_soloed { "Solo" } else { "S" })
+                        .clicked()
+                    {
+                        actions.push(Action::SoloLight(Some(id)));
+                    }
+                }
+
+                response
+            })
+            .inner
+        });
+        let response = row.inner;
+        if response.clicked() {
+            let ctrl = ui.input(|i| i.modifiers.ctrl);
+            if ctrl {
+                if selected_set.remove(&id) {
+                    if *selected == Some(id) {
+                        *selected = selected_set.iter().copied().min();
                     }
                 } else {
-                    *selected = Some(id);
-                    selected_set.clear();
                     selected_set.insert(id);
+                    *selected = Some(id);
                 }
+            } else {
+                *selected = Some(id);
+                selected_set.clear();
+                selected_set.insert(id);
             }
-            if response.double_clicked() {
-                if let Some(node) = scene.nodes.get(&id) {
-                    *rename_buf = node.name.clone();
-                    *renaming = Some(id);
-                }
+        }
+        if response.double_clicked() {
+            if let Some(node) = scene.nodes.get(&id) {
+                *rename_buf = node.name.clone();
+                *renaming = Some(id);
             }
-            // Solo button for Light nodes
-            if scene
-                .nodes
-                .get(&id)
-                .is_some_and(|n| matches!(n.data, NodeData::Light { .. }))
-            {
-                let is_soloed = soloed_light == Some(id);
-                let solo_text = egui::RichText::new("S").small();
-                let solo_text = if is_soloed {
-                    solo_text.color(egui::Color32::from_rgb(255, 220, 50))
-                } else {
-                    solo_text.color(egui::Color32::from_gray(120))
-                };
-                if ui.small_button(solo_text).clicked() {
-                    actions.push(Action::SoloLight(Some(id)));
-                }
-            }
-            handle_drag_drop(ui, &response, scene, id, drag_state);
-            node_context_menu(
-                &response, ui, scene, id, selected, renaming, rename_buf, actions,
-            );
-        });
+        }
+        handle_drag_drop(ui, &response, scene, id, drag_state);
+        node_context_menu(
+            &response, ui, scene, id, selected, renaming, rename_buf, actions,
+        );
     } else {
-        // Visibility checkbox before collapsing header
-        ui.horizontal(|ui| {
-            let mut visible = !info.is_hidden;
-            if ui.checkbox(&mut visible, "").changed() {
-                scene.toggle_visibility(id);
-            }
-            // Type dot
-            let (dot_rect, _) =
-                ui.allocate_exact_size(egui::vec2(10.0, 10.0), egui::Sense::hover());
-            ui.painter()
-                .circle_filled(dot_rect.center(), 4.0, type_dot_color);
+        let row = chrome::item_frame(ui, info.is_selected).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                let mut visible = !info.is_hidden;
+                if ui.checkbox(&mut visible, "").changed() {
+                    scene.toggle_visibility(id);
+                }
+                let (dot_rect, _) =
+                    ui.allocate_exact_size(egui::vec2(10.0, 10.0), egui::Sense::hover());
+                ui.painter()
+                    .circle_filled(dot_rect.center(), 4.0, type_dot_color);
 
-            let header =
                 egui::CollapsingHeader::new(egui::RichText::new(&info.label).color(node_color))
                     .default_open(true)
                     .id_salt(id)
@@ -430,43 +471,46 @@ fn draw_node_recursive(
                                 ui.label("  (empty)");
                             }
                         }
-                    });
+                    })
+            })
+            .inner
+        });
 
-            if header.header_response.clicked() {
-                let ctrl = ui.input(|i| i.modifiers.ctrl);
-                if ctrl {
-                    if selected_set.remove(&id) {
-                        if *selected == Some(id) {
-                            *selected = selected_set.iter().copied().min();
-                        }
-                    } else {
-                        selected_set.insert(id);
-                        *selected = Some(id);
+        let header = row.inner;
+        if header.header_response.clicked() {
+            let ctrl = ui.input(|i| i.modifiers.ctrl);
+            if ctrl {
+                if selected_set.remove(&id) {
+                    if *selected == Some(id) {
+                        *selected = selected_set.iter().copied().min();
                     }
                 } else {
-                    *selected = Some(id);
-                    selected_set.clear();
                     selected_set.insert(id);
+                    *selected = Some(id);
                 }
+            } else {
+                *selected = Some(id);
+                selected_set.clear();
+                selected_set.insert(id);
             }
-            if header.header_response.double_clicked() {
-                if let Some(node) = scene.nodes.get(&id) {
-                    *rename_buf = node.name.clone();
-                    *renaming = Some(id);
-                }
+        }
+        if header.header_response.double_clicked() {
+            if let Some(node) = scene.nodes.get(&id) {
+                *rename_buf = node.name.clone();
+                *renaming = Some(id);
             }
-            handle_drag_drop(ui, &header.header_response, scene, id, drag_state);
-            node_context_menu(
-                &header.header_response,
-                ui,
-                scene,
-                id,
-                selected,
-                renaming,
-                rename_buf,
-                actions,
-            );
-        });
+        }
+        handle_drag_drop(ui, &header.header_response, scene, id, drag_state);
+        node_context_menu(
+            &header.header_response,
+            ui,
+            scene,
+            id,
+            selected,
+            renaming,
+            rename_buf,
+            actions,
+        );
     }
 }
 
@@ -568,57 +612,68 @@ fn draw_flat_node(
         COLOR_NORMAL
     };
 
-    ui.horizontal(|ui| {
-        // Colored type dot
-        let (dot_rect, _) = ui.allocate_exact_size(egui::vec2(10.0, 10.0), egui::Sense::hover());
-        ui.painter()
-            .circle_filled(dot_rect.center(), 4.0, dot_color);
+    let row = chrome::item_frame(ui, info.is_selected).show(ui, |ui| {
+        ui.horizontal(|ui| {
+            let (dot_rect, _) =
+                ui.allocate_exact_size(egui::vec2(10.0, 10.0), egui::Sense::hover());
+            ui.painter()
+                .circle_filled(dot_rect.center(), 4.0, dot_color);
 
-        let label = egui::Label::new(egui::RichText::new(&info.label).color(node_color))
-            .sense(egui::Sense::click());
-        let response = ui.add(label);
-        if response.clicked() {
-            let ctrl = ui.input(|i| i.modifiers.ctrl);
-            if ctrl {
-                if selected_set.remove(&id) {
-                    if *selected == Some(id) {
-                        *selected = selected_set.iter().copied().min();
-                    }
-                } else {
-                    selected_set.insert(id);
-                    *selected = Some(id);
+            let label = egui::Label::new(egui::RichText::new(&info.label).color(node_color))
+                .sense(egui::Sense::click())
+                .truncate();
+            let response = ui.add_sized([ui.available_width() - 72.0, 20.0], label);
+            if scene
+                .nodes
+                .get(&id)
+                .is_some_and(|node| matches!(node.data, NodeData::Light { .. }))
+            {
+                chrome::badge(
+                    ui,
+                    if active_light_ids.contains(&id) {
+                        BadgeTone::Success
+                    } else {
+                        BadgeTone::Muted
+                    },
+                    "Light",
+                );
+                let is_soloed = soloed_light == Some(id);
+                if ui
+                    .small_button(if is_soloed { "Solo" } else { "S" })
+                    .clicked()
+                {
+                    actions.push(Action::SoloLight(Some(id)));
+                }
+            }
+            response
+        })
+        .inner
+    });
+    let response = row.inner;
+    if response.clicked() {
+        let ctrl = ui.input(|i| i.modifiers.ctrl);
+        if ctrl {
+            if selected_set.remove(&id) {
+                if *selected == Some(id) {
+                    *selected = selected_set.iter().copied().min();
                 }
             } else {
-                *selected = Some(id);
-                selected_set.clear();
                 selected_set.insert(id);
+                *selected = Some(id);
             }
+        } else {
+            *selected = Some(id);
+            selected_set.clear();
+            selected_set.insert(id);
         }
-        if response.double_clicked() {
-            if let Some(node) = scene.nodes.get(&id) {
-                *rename_buf = node.name.clone();
-                *renaming = Some(id);
-            }
+    }
+    if response.double_clicked() {
+        if let Some(node) = scene.nodes.get(&id) {
+            *rename_buf = node.name.clone();
+            *renaming = Some(id);
         }
-        // Solo button for Light nodes
-        if scene
-            .nodes
-            .get(&id)
-            .is_some_and(|n| matches!(n.data, NodeData::Light { .. }))
-        {
-            let is_soloed = soloed_light == Some(id);
-            let solo_text = egui::RichText::new("S").small();
-            let solo_text = if is_soloed {
-                solo_text.color(egui::Color32::from_rgb(255, 220, 50))
-            } else {
-                solo_text.color(egui::Color32::from_gray(120))
-            };
-            if ui.small_button(solo_text).clicked() {
-                actions.push(Action::SoloLight(Some(id)));
-            }
-        }
-        node_context_menu(
-            &response, ui, scene, id, selected, renaming, rename_buf, actions,
-        );
-    });
+    }
+    node_context_menu(
+        &response, ui, scene, id, selected, renaming, rename_buf, actions,
+    );
 }

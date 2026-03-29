@@ -1,6 +1,7 @@
 use eframe::egui;
 
 use crate::app::Toast;
+use crate::ui::chrome::{self, BadgeTone};
 
 /// Draw active toast notifications (bottom-right, auto-dismissing with fade-out).
 pub fn draw(ctx: &egui::Context, toasts: &mut Vec<Toast>) {
@@ -35,18 +36,6 @@ pub fn draw(ctx: &egui::Context, toasts: &mut Vec<Toast>) {
         let animated_y =
             ctx.animate_value_with_time(toast_id.with("stack_y"), target_y, toast_duration);
 
-        let (bg, text_color) = if toast.is_error {
-            (
-                egui::Color32::from_rgba_unmultiplied(120, 30, 30, (220.0 * alpha) as u8),
-                egui::Color32::from_rgba_unmultiplied(255, 180, 180, (255.0 * alpha) as u8),
-            )
-        } else {
-            (
-                egui::Color32::from_rgba_unmultiplied(30, 90, 50, (220.0 * alpha) as u8),
-                egui::Color32::from_rgba_unmultiplied(180, 255, 200, (255.0 * alpha) as u8),
-            )
-        };
-
         let area_response = egui::Area::new(toast_id)
             .anchor(
                 egui::Align2::RIGHT_BOTTOM,
@@ -55,12 +44,34 @@ pub fn draw(ctx: &egui::Context, toasts: &mut Vec<Toast>) {
             .order(egui::Order::Foreground)
             .show(ctx, |ui| {
                 ui.multiply_opacity(alpha);
-                egui::Frame::none()
-                    .fill(bg)
-                    .rounding(6.0)
-                    .inner_margin(egui::Margin::symmetric(12.0, 8.0))
+                let tokens = chrome::tokens(ui);
+                let fill = if toast.is_error {
+                    tokens.destructive.gamma_multiply(0.25)
+                } else {
+                    tokens.badge.gamma_multiply(0.22)
+                };
+                let stroke = if toast.is_error {
+                    tokens.destructive
+                } else {
+                    tokens.ring
+                };
+                chrome::card_frame(ui)
+                    .fill(fill)
+                    .stroke(egui::Stroke::new(1.0, stroke))
+                    .inner_margin(egui::Margin::symmetric(12.0, 10.0))
                     .show(ui, |ui| {
-                        ui.label(egui::RichText::new(&toast.message).color(text_color));
+                        ui.horizontal(|ui| {
+                            chrome::badge(
+                                ui,
+                                if toast.is_error {
+                                    BadgeTone::Destructive
+                                } else {
+                                    BadgeTone::Accent
+                                },
+                                if toast.is_error { "Alert" } else { "Notice" },
+                            );
+                            ui.label(egui::RichText::new(&toast.message).color(tokens.text));
+                        });
                     });
             });
         crate::ui::motion::apply_surface_transform(ctx, &area_response.response, surface_t, motion);

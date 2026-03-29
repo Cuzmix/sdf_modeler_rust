@@ -3,6 +3,7 @@ use eframe::egui;
 use crate::app::actions::{Action, ActionSink};
 use crate::keymap::{ActionBinding, KeyCombo, KeymapConfig, SerializableKey};
 use crate::settings::{GroupRotateDirection, MultiAxisOrientation, MultiPivotMode, Settings};
+use crate::ui::chrome::{self, BadgeTone};
 
 /// Draw the System Settings window. Pushes `Action::SettingsChanged` if a
 /// shader-affecting setting changed.
@@ -43,26 +44,34 @@ pub fn draw(
 
     if let Some(window_response) = window.show(ctx, |ui| {
             ui.multiply_opacity(alpha);
+            chrome::panel_header(
+                ui,
+                "Settings",
+                "Appearance, input, viewport, and performance controls for the full application.",
+            );
+            ui.add_space(10.0);
             // --- Top toolbar: Reset / Export / Import ---
-            ui.horizontal(|ui| {
-                if ui.button("Reset All").on_hover_text("Reset all settings to defaults").clicked() {
-                    let recent = std::mem::take(&mut settings.recent_files);
-                    *settings = Settings::default();
-                    settings.recent_files = recent;
-                    settings.save();
-                }
-                ui.separator();
-                #[cfg(all(not(target_arch = "wasm32"), not(target_os = "android")))]
-                {
-                    if ui.button("Export...").on_hover_text("Save settings to a file").clicked() {
-                        settings.export_dialog();
+            chrome::section_card(ui, "Toolbar", "Reset the app configuration or move settings between machines.", |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    chrome::badge(ui, BadgeTone::Muted, "System");
+                    if ui.button("Reset All").on_hover_text("Reset all settings to defaults").clicked() {
+                        let recent = std::mem::take(&mut settings.recent_files);
+                        *settings = Settings::default();
+                        settings.recent_files = recent;
+                        settings.save();
                     }
-                    if ui.button("Import...").on_hover_text("Load settings from a file").clicked() {
-                        settings.import_dialog();
+                    #[cfg(all(not(target_arch = "wasm32"), not(target_os = "android")))]
+                    {
+                        if ui.button("Export...").on_hover_text("Save settings to a file").clicked() {
+                            settings.export_dialog();
+                        }
+                        if ui.button("Import...").on_hover_text("Load settings from a file").clicked() {
+                            settings.import_dialog();
+                        }
                     }
-                }
+                });
             });
-            ui.separator();
+            ui.add_space(10.0);
 
             egui::ScrollArea::vertical().show(ui, |ui| {
                 crate::ui::appearance_editor::draw(

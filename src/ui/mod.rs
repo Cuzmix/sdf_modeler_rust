@@ -1,5 +1,6 @@
 pub mod appearance_editor;
 pub mod brush_settings;
+pub mod chrome;
 pub mod command_palette;
 pub mod dock;
 pub mod dock_style_editor;

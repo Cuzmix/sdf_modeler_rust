@@ -622,13 +622,13 @@ impl Default for UiMotionSettings {
         Self {
             enabled: true,
             reduced_motion: false,
-            surface_duration_s: 0.22,
-            micro_duration_s: 0.12,
-            toast_duration_s: 0.28,
-            dock_duration_s: 0.18,
-            surface_slide_px: 16.0,
-            overlay_scale_delta: 0.04,
-            dock_hover_emphasis: 1.0,
+            surface_duration_s: 0.17,
+            micro_duration_s: 0.09,
+            toast_duration_s: 0.22,
+            dock_duration_s: 0.14,
+            surface_slide_px: 10.0,
+            overlay_scale_delta: 0.02,
+            dock_hover_emphasis: 0.65,
         }
     }
 }
@@ -1101,82 +1101,82 @@ fn validate_font_bytes(bytes: &[u8]) -> Result<(), String> {
 
 fn build_studio_dark_style() -> egui::Style {
     let mut style = egui::Theme::Dark.default_style();
-    style.spacing.item_spacing = egui::vec2(10.0, 8.0);
-    style.spacing.button_padding = egui::vec2(10.0, 6.0);
-    style.spacing.window_margin = egui::Margin::same(12.0);
+    style.spacing.item_spacing = egui::vec2(10.0, 7.0);
+    style.spacing.button_padding = egui::vec2(11.0, 7.0);
+    style.spacing.window_margin = egui::Margin::same(14.0);
     style.spacing.menu_margin = egui::Margin::same(10.0);
-    style.spacing.interact_size = egui::vec2(40.0, 24.0);
-    style.spacing.slider_width = 160.0;
-    style.spacing.combo_width = 140.0;
-    style.spacing.text_edit_width = 180.0;
+    style.spacing.interact_size = egui::vec2(42.0, 28.0);
+    style.spacing.slider_width = 168.0;
+    style.spacing.combo_width = 148.0;
+    style.spacing.text_edit_width = 196.0;
     style.spacing.tooltip_width = 420.0;
-    style.spacing.menu_width = 180.0;
+    style.spacing.menu_width = 220.0;
     style.spacing.menu_spacing = 4.0;
     style.spacing.combo_height = 220.0;
     style.spacing.scroll = ScrollStyle::floating();
 
-    style.visuals.override_text_color = Some(Color32::from_rgb(225, 229, 235));
-    style.visuals.hyperlink_color = Color32::from_rgb(111, 179, 255);
-    style.visuals.faint_bg_color = Color32::from_rgb(31, 35, 42);
-    style.visuals.extreme_bg_color = Color32::from_rgb(18, 21, 27);
-    style.visuals.code_bg_color = Color32::from_rgb(24, 28, 34);
-    style.visuals.warn_fg_color = Color32::from_rgb(255, 191, 111);
-    style.visuals.error_fg_color = Color32::from_rgb(255, 122, 122);
-    style.visuals.panel_fill = Color32::from_rgb(19, 22, 28);
-    style.visuals.window_fill = Color32::from_rgb(24, 27, 34);
-    style.visuals.window_stroke = egui::Stroke::new(1.0, Color32::from_rgb(61, 68, 81));
-    style.visuals.window_rounding = egui::Rounding::same(10.0);
-    style.visuals.menu_rounding = egui::Rounding::same(8.0);
+    style.visuals.override_text_color = Some(Color32::from_rgb(232, 236, 243));
+    style.visuals.hyperlink_color = Color32::from_rgb(124, 162, 255);
+    style.visuals.faint_bg_color = Color32::from_rgb(28, 33, 43);
+    style.visuals.extreme_bg_color = Color32::from_rgb(10, 13, 18);
+    style.visuals.code_bg_color = Color32::from_rgb(18, 23, 31);
+    style.visuals.warn_fg_color = Color32::from_rgb(251, 191, 36);
+    style.visuals.error_fg_color = Color32::from_rgb(248, 113, 113);
+    style.visuals.panel_fill = Color32::from_rgb(14, 18, 24);
+    style.visuals.window_fill = Color32::from_rgb(17, 22, 30);
+    style.visuals.window_stroke = egui::Stroke::new(1.0, Color32::from_rgb(54, 63, 79));
+    style.visuals.window_rounding = egui::Rounding::same(14.0);
+    style.visuals.menu_rounding = egui::Rounding::same(12.0);
     style.visuals.resize_corner_size = 10.0;
     style.visuals.clip_rect_margin = 4.0;
     style.visuals.button_frame = true;
     style.visuals.collapsing_header_frame = false;
-    style.visuals.indent_has_left_vline = true;
-    style.visuals.striped = true;
+    style.visuals.indent_has_left_vline = false;
+    style.visuals.striped = false;
     style.visuals.slider_trailing_fill = true;
     style.visuals.selection = egui::style::Selection {
-        bg_fill: Color32::from_rgba_unmultiplied(78, 122, 186, 110),
-        stroke: egui::Stroke::new(1.0, Color32::from_rgb(140, 190, 255)),
+        bg_fill: Color32::from_rgba_unmultiplied(70, 103, 179, 92),
+        stroke: egui::Stroke::new(1.0, Color32::from_rgb(147, 197, 253)),
     };
     style.visuals.widgets = egui::style::Widgets {
         noninteractive: widget_visuals(
-            Color32::from_rgb(24, 27, 34),
-            Color32::from_rgb(24, 27, 34),
-            Color32::from_rgb(67, 73, 84),
-            Color32::from_rgb(224, 229, 235),
-            8.0,
+            Color32::from_rgb(16, 20, 27),
+            Color32::from_rgb(16, 20, 27),
+            Color32::from_rgb(53, 61, 76),
+            Color32::from_rgb(232, 236, 243),
+            12.0,
             0.0,
         ),
         inactive: widget_visuals(
-            Color32::from_rgb(41, 46, 55),
-            Color32::from_rgb(36, 40, 48),
-            Color32::from_rgb(78, 84, 96),
-            Color32::from_rgb(230, 233, 238),
-            8.0,
+            Color32::from_rgb(27, 33, 43),
+            Color32::from_rgb(24, 29, 38),
+            Color32::from_rgb(67, 78, 96),
+            Color32::from_rgb(233, 237, 244),
+            12.0,
             0.0,
         ),
         hovered: widget_visuals(
-            Color32::from_rgb(55, 62, 74),
-            Color32::from_rgb(48, 54, 65),
-            Color32::from_rgb(132, 158, 196),
-            Color32::from_rgb(244, 247, 250),
-            8.0,
+            Color32::from_rgb(35, 42, 54),
+            Color32::from_rgb(31, 37, 48),
+            Color32::from_rgb(96, 121, 169),
+            Color32::from_rgb(245, 247, 250),
+            12.0,
             1.0,
         ),
         active: widget_visuals(
-            Color32::from_rgb(68, 77, 92),
-            Color32::from_rgb(62, 70, 84),
-            Color32::from_rgb(157, 184, 224),
+            Color32::from_rgb(41, 49, 63),
+            Color32::from_rgb(36, 43, 56),
+            Color32::from_rgb(129, 161, 228),
             Color32::from_rgb(255, 255, 255),
-            8.0,
+            12.0,
             1.0,
         ),
         open: widget_visuals(
-            Color32::from_rgb(58, 66, 79),
-            Color32::from_rgb(50, 57, 68),
-            Color32::from_rgb(140, 168, 209),
-            Color32::from_rgb(247, 249, 251),
-            8.0,
+            Color32::from_rgb(32, 39, 51),
+            Color32::from_rgb(28, 34, 45),
+            Color32::from_rgb(102, 134, 194),
+            Color32::from_rgb(246, 248, 251),
+            12.0,
             0.0,
         ),
     };
@@ -1185,82 +1185,82 @@ fn build_studio_dark_style() -> egui::Style {
 
 fn build_slate_light_style() -> egui::Style {
     let mut style = egui::Theme::Light.default_style();
-    style.spacing.item_spacing = egui::vec2(10.0, 8.0);
-    style.spacing.button_padding = egui::vec2(10.0, 6.0);
-    style.spacing.window_margin = egui::Margin::same(12.0);
+    style.spacing.item_spacing = egui::vec2(10.0, 7.0);
+    style.spacing.button_padding = egui::vec2(11.0, 7.0);
+    style.spacing.window_margin = egui::Margin::same(14.0);
     style.spacing.menu_margin = egui::Margin::same(10.0);
-    style.spacing.interact_size = egui::vec2(40.0, 24.0);
-    style.spacing.slider_width = 160.0;
-    style.spacing.combo_width = 140.0;
-    style.spacing.text_edit_width = 180.0;
+    style.spacing.interact_size = egui::vec2(42.0, 28.0);
+    style.spacing.slider_width = 168.0;
+    style.spacing.combo_width = 148.0;
+    style.spacing.text_edit_width = 196.0;
     style.spacing.tooltip_width = 420.0;
-    style.spacing.menu_width = 180.0;
+    style.spacing.menu_width = 220.0;
     style.spacing.menu_spacing = 4.0;
     style.spacing.combo_height = 220.0;
     style.spacing.scroll = ScrollStyle::solid();
 
-    style.visuals.override_text_color = Some(Color32::from_rgb(37, 44, 53));
-    style.visuals.hyperlink_color = Color32::from_rgb(36, 106, 201);
-    style.visuals.faint_bg_color = Color32::from_rgb(241, 244, 248);
-    style.visuals.extreme_bg_color = Color32::from_rgb(225, 231, 237);
-    style.visuals.code_bg_color = Color32::from_rgb(238, 242, 246);
+    style.visuals.override_text_color = Some(Color32::from_rgb(30, 41, 59));
+    style.visuals.hyperlink_color = Color32::from_rgb(59, 130, 246);
+    style.visuals.faint_bg_color = Color32::from_rgb(240, 244, 249);
+    style.visuals.extreme_bg_color = Color32::from_rgb(226, 232, 240);
+    style.visuals.code_bg_color = Color32::from_rgb(232, 237, 244);
     style.visuals.warn_fg_color = Color32::from_rgb(166, 104, 31);
     style.visuals.error_fg_color = Color32::from_rgb(181, 55, 55);
-    style.visuals.panel_fill = Color32::from_rgb(246, 248, 251);
-    style.visuals.window_fill = Color32::from_rgb(252, 253, 255);
-    style.visuals.window_stroke = egui::Stroke::new(1.0, Color32::from_rgb(180, 189, 201));
-    style.visuals.window_rounding = egui::Rounding::same(10.0);
-    style.visuals.menu_rounding = egui::Rounding::same(8.0);
+    style.visuals.panel_fill = Color32::from_rgb(248, 250, 252);
+    style.visuals.window_fill = Color32::from_rgb(255, 255, 255);
+    style.visuals.window_stroke = egui::Stroke::new(1.0, Color32::from_rgb(194, 204, 216));
+    style.visuals.window_rounding = egui::Rounding::same(14.0);
+    style.visuals.menu_rounding = egui::Rounding::same(12.0);
     style.visuals.resize_corner_size = 10.0;
     style.visuals.clip_rect_margin = 4.0;
     style.visuals.button_frame = true;
     style.visuals.collapsing_header_frame = false;
-    style.visuals.indent_has_left_vline = true;
-    style.visuals.striped = true;
+    style.visuals.indent_has_left_vline = false;
+    style.visuals.striped = false;
     style.visuals.slider_trailing_fill = true;
     style.visuals.selection = egui::style::Selection {
-        bg_fill: Color32::from_rgba_unmultiplied(72, 132, 214, 64),
-        stroke: egui::Stroke::new(1.0, Color32::from_rgb(44, 101, 181)),
+        bg_fill: Color32::from_rgba_unmultiplied(96, 165, 250, 56),
+        stroke: egui::Stroke::new(1.0, Color32::from_rgb(59, 130, 246)),
     };
     style.visuals.widgets = egui::style::Widgets {
         noninteractive: widget_visuals(
-            Color32::from_rgb(252, 253, 255),
-            Color32::from_rgb(252, 253, 255),
-            Color32::from_rgb(192, 201, 212),
-            Color32::from_rgb(42, 48, 57),
-            8.0,
+            Color32::from_rgb(255, 255, 255),
+            Color32::from_rgb(255, 255, 255),
+            Color32::from_rgb(194, 204, 216),
+            Color32::from_rgb(30, 41, 59),
+            12.0,
             0.0,
         ),
         inactive: widget_visuals(
-            Color32::from_rgb(238, 242, 247),
-            Color32::from_rgb(234, 239, 245),
-            Color32::from_rgb(175, 185, 198),
-            Color32::from_rgb(35, 44, 54),
-            8.0,
+            Color32::from_rgb(241, 245, 249),
+            Color32::from_rgb(237, 242, 247),
+            Color32::from_rgb(184, 194, 208),
+            Color32::from_rgb(30, 41, 59),
+            12.0,
             0.0,
         ),
         hovered: widget_visuals(
-            Color32::from_rgb(228, 235, 244),
-            Color32::from_rgb(221, 230, 240),
-            Color32::from_rgb(104, 138, 191),
-            Color32::from_rgb(28, 39, 51),
-            8.0,
+            Color32::from_rgb(228, 236, 247),
+            Color32::from_rgb(221, 231, 244),
+            Color32::from_rgb(99, 127, 189),
+            Color32::from_rgb(23, 33, 50),
+            12.0,
             1.0,
         ),
         active: widget_visuals(
-            Color32::from_rgb(213, 225, 241),
-            Color32::from_rgb(206, 219, 237),
-            Color32::from_rgb(71, 115, 183),
+            Color32::from_rgb(214, 228, 247),
+            Color32::from_rgb(205, 221, 242),
+            Color32::from_rgb(59, 130, 246),
             Color32::from_rgb(24, 35, 47),
-            8.0,
+            12.0,
             1.0,
         ),
         open: widget_visuals(
-            Color32::from_rgb(225, 233, 244),
-            Color32::from_rgb(216, 226, 239),
-            Color32::from_rgb(95, 129, 184),
+            Color32::from_rgb(224, 233, 245),
+            Color32::from_rgb(215, 226, 242),
+            Color32::from_rgb(82, 112, 178),
             Color32::from_rgb(26, 38, 49),
-            8.0,
+            12.0,
             0.0,
         ),
     };

@@ -1,6 +1,7 @@
 use eframe::egui;
 
 use crate::keymap::{ActionBinding, KeymapConfig};
+use crate::ui::chrome::{self, BadgeTone};
 
 /// Draw the keyboard shortcuts help window.
 /// Shortcut strings are read from the configurable keymap (single source of truth).
@@ -38,17 +39,23 @@ pub fn draw(ctx: &egui::Context, open: &mut bool, keymap: &KeymapConfig) {
 
     if let Some(window_response) = window.show(ctx, |ui| {
         ui.multiply_opacity(alpha);
+        chrome::panel_header(
+            ui,
+            "Keyboard Shortcuts",
+            "Core navigation, sculpting, and workflow shortcuts for the current keymap.",
+        );
+        ui.add_space(10.0);
         egui::Grid::new("shortcuts_grid")
             .num_columns(2)
-            .spacing([40.0, 4.0])
-            .striped(true)
+            .spacing([24.0, 8.0])
             .show(ui, |ui| {
                 let section = |ui: &mut egui::Ui, title: &str| {
-                    ui.colored_label(egui::Color32::from_rgb(180, 200, 255), title);
+                    chrome::badge(ui, BadgeTone::Accent, title);
+                    ui.label("");
                     ui.end_row();
                 };
                 let row = |ui: &mut egui::Ui, key: &str, desc: &str| {
-                    ui.monospace(key);
+                    chrome::kbd_chip(ui, key);
                     ui.label(desc);
                     ui.end_row();
                 };
