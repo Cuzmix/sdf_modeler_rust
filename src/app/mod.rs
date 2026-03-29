@@ -498,6 +498,7 @@ impl SdfApp {
                 active_light_ids: std::collections::HashSet::new(),
                 total_light_count: 0,
                 last_light_warning_count: None,
+                hovered_dock_tabs: std::collections::HashSet::new(),
                 pending_egui_theme_fingerprint: None,
                 last_applied_egui_theme_fingerprint: None,
                 last_egui_theme_warning_fingerprint: None,
@@ -532,6 +533,7 @@ impl SdfApp {
 impl eframe::App for SdfApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.apply_egui_theme_if_needed(ctx);
+        crate::ui::motion::store_runtime_settings(ctx, self.settings.egui_theme.motion);
 
         let frame_start = Instant::now();
         let frame_input = frontend_bridge::capture_frame_input(ctx);

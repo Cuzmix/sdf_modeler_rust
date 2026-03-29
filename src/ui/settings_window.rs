@@ -17,12 +17,32 @@ pub fn draw(
 ) {
     let before = settings.clone();
     let before_render = settings.render.clone();
+    let motion = crate::ui::motion::settings(ctx);
+    let window_id = egui::Id::new("settings_window");
+    let t = crate::ui::motion::surface_open_t(ctx, window_id, *open, motion);
+    if !crate::ui::motion::should_draw_surface(*open, t) {
+        crate::ui::motion::clear_surface_layers(ctx, window_id);
+        return;
+    }
+    let alpha = crate::ui::motion::fade_alpha(t, motion.reduced_motion);
 
-    egui::Window::new("Settings")
-        .open(open)
+    let mut still_open = true;
+    let mut window = egui::Window::new("Settings")
+        .id(window_id)
+        .fade_in(false)
         .default_width(340.0)
         .resizable(true)
-        .show(ctx, |ui| {
+        .frame(crate::ui::motion::frame_with_alpha(
+            egui::Frame::window(&ctx.style()),
+            t,
+            motion,
+        ));
+    if *open {
+        window = window.open(&mut still_open);
+    }
+
+    if let Some(window_response) = window.show(ctx, |ui| {
+            ui.multiply_opacity(alpha);
             // --- Top toolbar: Reset / Export / Import ---
             ui.horizontal(|ui| {
                 if ui.button("Reset All").on_hover_text("Reset all settings to defaults").clicked() {
@@ -300,7 +320,13 @@ pub fn draw(
                 // --- Keybindings ---
                 draw_keybindings_section(ui, &mut settings.keymap, rebinding_action);
             });
-        });
+        }) {
+        crate::ui::motion::apply_surface_transform(ctx, &window_response.response, t, motion);
+    }
+
+    if *open && !still_open {
+        *open = false;
+    }
 
     if settings.render != before_render {
         actions.push(Action::SettingsChanged);

@@ -587,6 +587,7 @@ pub struct EguiThemeSettings {
     pub windows_panels: ThemeWindowsPanelsSettings,
     pub spacing: ThemeSpacingSettings,
     pub scrollbars: ThemeScrollbarsSettings,
+    pub motion: UiMotionSettings,
 }
 
 impl Default for EguiThemeSettings {
@@ -600,6 +601,94 @@ pub struct EguiThemeBuild {
     pub style: egui::Style,
     pub fonts: FontDefinitions,
     pub warnings: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
+#[serde(default)]
+pub struct UiMotionSettings {
+    pub enabled: bool,
+    pub reduced_motion: bool,
+    pub surface_duration_s: f32,
+    pub micro_duration_s: f32,
+    pub toast_duration_s: f32,
+    pub dock_duration_s: f32,
+    pub surface_slide_px: f32,
+    pub overlay_scale_delta: f32,
+    pub dock_hover_emphasis: f32,
+}
+
+impl Default for UiMotionSettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            reduced_motion: false,
+            surface_duration_s: 0.22,
+            micro_duration_s: 0.12,
+            toast_duration_s: 0.28,
+            dock_duration_s: 0.18,
+            surface_slide_px: 16.0,
+            overlay_scale_delta: 0.04,
+            dock_hover_emphasis: 1.0,
+        }
+    }
+}
+
+impl UiMotionSettings {
+    const REDUCED_MOTION_DURATION_FACTOR: f32 = 0.4;
+
+    pub fn reset(&mut self) {
+        *self = Self::default();
+    }
+
+    pub fn effective_duration(self, duration_s: f32) -> f32 {
+        if !self.enabled {
+            0.0
+        } else if self.reduced_motion {
+            (duration_s.max(0.0)) * Self::REDUCED_MOTION_DURATION_FACTOR
+        } else {
+            duration_s.max(0.0)
+        }
+    }
+
+    pub fn surface_duration(self) -> f32 {
+        self.effective_duration(self.surface_duration_s)
+    }
+
+    pub fn micro_duration(self) -> f32 {
+        self.effective_duration(self.micro_duration_s)
+    }
+
+    pub fn toast_duration(self) -> f32 {
+        self.effective_duration(self.toast_duration_s)
+    }
+
+    pub fn dock_duration(self) -> f32 {
+        self.effective_duration(self.dock_duration_s)
+    }
+
+    pub fn effective_slide_px(self) -> f32 {
+        if self.reduced_motion {
+            0.0
+        } else {
+            self.surface_slide_px.max(0.0)
+        }
+    }
+
+    pub fn effective_overlay_scale_delta(self) -> f32 {
+        if self.reduced_motion {
+            0.0
+        } else {
+            self.overlay_scale_delta.clamp(0.0, 0.25)
+        }
+    }
+
+    pub fn effective_dock_hover_emphasis(self) -> f32 {
+        if self.enabled {
+            self.dock_hover_emphasis.clamp(0.0, 2.0)
+        } else {
+            0.0
+        }
+    }
 }
 
 impl EguiThemeSettings {
@@ -622,6 +711,7 @@ impl EguiThemeSettings {
             windows_panels: ThemeWindowsPanelsSettings::from_egui(&style.visuals),
             spacing: ThemeSpacingSettings::from_egui(&style.spacing),
             scrollbars: ThemeScrollbarsSettings::from_egui(style.spacing.scroll),
+            motion: UiMotionSettings::default(),
         }
     }
 
@@ -682,6 +772,7 @@ impl EguiThemeSettings {
         self.windows_panels.apply_to_visuals(&mut style.visuals);
         self.spacing.apply_to_spacing(&mut style.spacing);
         style.spacing.scroll = self.scrollbars.to_egui();
+        style.animation_time = self.motion.micro_duration();
     }
 
     fn install_font_role(
@@ -1300,6 +1391,20 @@ mod tests {
     }
 
     #[test]
+    fn motion_settings_round_trip_through_serde() {
+        let motion = UiMotionSettings {
+            reduced_motion: true,
+            dock_hover_emphasis: 1.4,
+            surface_slide_px: 22.0,
+            ..Default::default()
+        };
+
+        let json = serde_json::to_string(&motion).expect("serialize motion");
+        let restored: UiMotionSettings = serde_json::from_str(&json).expect("deserialize motion");
+        assert_eq!(restored, motion);
+    }
+
+    #[test]
     fn theme_build_registers_custom_text_roles_and_dock_derives_from_style() {
         let theme = EguiThemeSettings::from_preset(ThemePreset::SlateLight);
         let build = theme.build();
@@ -1318,6 +1423,7 @@ mod tests {
         assert!(style
             .text_styles
             .contains_key(&TextStyle::Name(SCENE_LABEL_STYLE_NAME.into())));
+        assert_eq!(build.style.animation_time, theme.motion.micro_duration());
 
         let dock_style = DockStyleSettings::default().to_egui_dock_style(style.as_ref());
         let expected = egui_dock::Style::from_egui(style.as_ref());

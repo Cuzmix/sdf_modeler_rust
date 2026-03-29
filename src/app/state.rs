@@ -288,6 +288,8 @@ pub struct UiState {
     /// The last total light count that triggered a toast warning.
     /// Used to avoid spamming the same warning repeatedly.
     pub last_light_warning_count: Option<usize>,
+    /// Hover state cache for dock tab motion.
+    pub hovered_dock_tabs: HashSet<Tab>,
     /// Fingerprint queued for theme style application after egui has activated new font definitions.
     pub pending_egui_theme_fingerprint: Option<u64>,
     /// Fingerprint of the last egui theme settings applied to the live egui context.

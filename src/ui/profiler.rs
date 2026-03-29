@@ -19,14 +19,27 @@ pub fn draw(
     settings: &Settings,
     camera: &Camera,
 ) {
-    if !show {
+    let motion = crate::ui::motion::settings(ctx);
+    let window_id = egui::Id::new("profiler_window");
+    let surface_t = crate::ui::motion::surface_open_t(ctx, window_id, show, motion);
+    if !crate::ui::motion::should_draw_surface(show, surface_t) {
+        crate::ui::motion::clear_surface_layers(ctx, window_id);
         return;
     }
+    let alpha = crate::ui::motion::fade_alpha(surface_t, motion.reduced_motion);
     let t = timings;
-    egui::Window::new("Profiler")
+    if let Some(window_response) = egui::Window::new("Profiler")
+        .id(window_id)
+        .fade_in(false)
         .default_pos([10.0, 10.0])
         .default_size([280.0, 320.0])
+        .frame(crate::ui::motion::frame_with_alpha(
+            egui::Frame::window(&ctx.style()),
+            surface_t,
+            motion,
+        ))
         .show(ctx, |ui| {
+            ui.multiply_opacity(alpha);
             // --- FPS / Frame time ---
             let color = if t.avg_fps >= 55.0 {
                 egui::Color32::from_rgb(100, 255, 100)
@@ -172,5 +185,13 @@ pub fn draw(
                         camera.pitch.to_degrees(),
                     ));
                 });
-        });
+        })
+    {
+        crate::ui::motion::apply_surface_transform(
+            ctx,
+            &window_response.response,
+            surface_t,
+            motion,
+        );
+    }
 }

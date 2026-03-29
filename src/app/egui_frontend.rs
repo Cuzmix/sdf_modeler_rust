@@ -1,9 +1,10 @@
+use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 
 use eframe::egui;
 
 use crate::compat::Instant;
-use crate::ui::dock::{SceneTreeContext, SdfTabViewer, ViewportContext};
+use crate::ui::dock::{collect_active_tabs, SceneTreeContext, SdfTabViewer, Tab, ViewportContext};
 
 use super::actions::ActionSink;
 use super::backend_frame::UiFrameFeedback;
@@ -131,6 +132,23 @@ impl SdfApp {
             .settings
             .dock_style
             .to_egui_dock_style(ctx.style().as_ref());
+        let motion_settings = self.settings.egui_theme.motion;
+        let active_dock_tabs = collect_active_tabs(&self.ui.dock_state);
+        let dock_tab_emphasis: HashMap<Tab, f32> = Tab::ALL
+            .iter()
+            .cloned()
+            .map(|tab| {
+                let active_or_hovered =
+                    active_dock_tabs.contains(&tab) || self.ui.hovered_dock_tabs.contains(&tab);
+                let emphasis = crate::ui::motion::dock_t(
+                    ctx,
+                    egui::Id::new(("dock_tab_motion", tab.label())),
+                    active_or_hovered,
+                    motion_settings,
+                );
+                (tab, emphasis)
+            })
+            .collect();
         let mut tab_viewer = SdfTabViewer {
             camera: &mut self.doc.camera,
             scene: &mut self.doc.scene,
@@ -181,6 +199,8 @@ impl SdfApp {
             reference_images: &mut self.ui.reference_images,
             multi_transform_edit: &mut self.ui.multi_transform_edit,
             timings: &self.perf.timings,
+            dock_tab_emphasis,
+            hovered_dock_tabs: &mut self.ui.hovered_dock_tabs,
         };
 
         egui::CentralPanel::default()

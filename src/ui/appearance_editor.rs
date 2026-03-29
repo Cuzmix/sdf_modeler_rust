@@ -6,7 +6,7 @@ use crate::dock_style::DockStyleSettings;
 use crate::egui_theme::{
     EguiThemeSettings, ThemeFontRole, ThemeFontTweakSettings, ThemeOptionalColor, ThemePreset,
     ThemeScrollbarsSettings, ThemeSpacingSettings, ThemeWidgetStatesSettings,
-    ThemeWidgetVisualsSettings, ThemeWindowsPanelsSettings,
+    ThemeWidgetVisualsSettings, ThemeWindowsPanelsSettings, UiMotionSettings,
 };
 
 pub fn draw(
@@ -28,6 +28,7 @@ pub fn draw(
             draw_windows_panels_section(ui, &mut theme.windows_panels);
             draw_layout_spacing_section(ui, &mut theme.spacing);
             draw_scrollbars_section(ui, &mut theme.scrollbars);
+            draw_motion_section(ui, &mut theme.motion);
 
             egui::CollapsingHeader::new("Existing Dock Styling")
                 .default_open(false)
@@ -364,6 +365,61 @@ fn draw_scrollbars_section(ui: &mut egui::Ui, scrollbars: &mut ThemeScrollbarsSe
                 &mut scrollbars.interact_handle_opacity,
                 0.0..=1.0,
             );
+        });
+}
+
+fn draw_motion_section(ui: &mut egui::Ui, motion: &mut UiMotionSettings) {
+    egui::CollapsingHeader::new("Motion")
+        .default_open(false)
+        .show(ui, |ui| {
+            ui.checkbox(&mut motion.enabled, "Enable animations");
+            ui.checkbox(&mut motion.reduced_motion, "Reduced motion");
+            ui.separator();
+
+            draw_float_row(
+                ui,
+                "Surface duration",
+                &mut motion.surface_duration_s,
+                0.0..=0.8,
+            );
+            draw_float_row(
+                ui,
+                "Micro duration",
+                &mut motion.micro_duration_s,
+                0.0..=0.5,
+            );
+            draw_float_row(
+                ui,
+                "Toast duration",
+                &mut motion.toast_duration_s,
+                0.0..=0.8,
+            );
+            draw_float_row(ui, "Dock duration", &mut motion.dock_duration_s, 0.0..=0.6);
+            draw_float_row(
+                ui,
+                "Surface slide px",
+                &mut motion.surface_slide_px,
+                0.0..=40.0,
+            );
+            draw_float_row(
+                ui,
+                "Overlay scale delta",
+                &mut motion.overlay_scale_delta,
+                0.0..=0.16,
+            );
+            draw_float_row(
+                ui,
+                "Dock hover emphasis",
+                &mut motion.dock_hover_emphasis,
+                0.0..=2.0,
+            );
+
+            ui.horizontal_wrapped(|ui| {
+                if ui.button("Reset Motion").clicked() {
+                    motion.reset();
+                }
+                ui.weak("Reduced motion keeps fades and removes slide/scale motion.");
+            });
         });
 }
 

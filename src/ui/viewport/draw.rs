@@ -111,79 +111,98 @@ fn draw_selection_behavior_panel(
             selected_count += 1;
         }
     }
-    if selected_count <= 1 || *active_tool != ActiveTool::Select {
+    let is_visible = selected_count > 1 && *active_tool == ActiveTool::Select;
+    let motion = crate::ui::motion::settings(ui.ctx());
+    let panel_id = ui.id().with("selection_behavior_panel");
+    let surface_t = crate::ui::motion::surface_open_t(ui.ctx(), panel_id, is_visible, motion);
+    if !crate::ui::motion::should_draw_surface(is_visible, surface_t) {
         return;
     }
 
-    let overlay_frame = egui::Frame::window(&ui.ctx().style())
-        .fill(egui::Color32::from_rgba_premultiplied(30, 30, 38, 220));
-    let panel_id = ui.id().with("selection_behavior_panel");
+    let overlay_frame = crate::ui::motion::frame_with_alpha(
+        egui::Frame::window(&ui.ctx().style())
+            .fill(egui::Color32::from_rgba_premultiplied(30, 30, 38, 220)),
+        surface_t,
+        motion,
+    );
+    let alpha = crate::ui::motion::fade_alpha(surface_t, motion.reduced_motion);
     let mut edited = *selection_behavior;
     let mut changed = false;
 
-    egui::Window::new(egui::RichText::new("Selection Behaviour").size(11.0))
-        .id(panel_id)
-        .resizable(false)
-        .collapsible(false)
-        .frame(overlay_frame)
-        .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-8.0, -8.0))
-        .show(ui.ctx(), |ui| {
-            ui.small(format!("{selected_count} selected"));
+    if let Some(window_response) =
+        egui::Window::new(egui::RichText::new("Selection Behaviour").size(11.0))
+            .id(panel_id)
+            .fade_in(false)
+            .resizable(false)
+            .collapsible(false)
+            .frame(overlay_frame)
+            .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-8.0, -8.0))
+            .show(ui.ctx(), |ui| {
+                ui.multiply_opacity(alpha);
+                ui.small(format!("{selected_count} selected"));
 
-            ui.horizontal(|ui| {
-                ui.label("Axes");
-                changed |= ui
-                    .selectable_value(
-                        &mut edited.multi_axis_orientation,
-                        MultiAxisOrientation::WorldZero,
-                        MultiAxisOrientation::WorldZero.label(),
-                    )
-                    .changed();
-                changed |= ui
-                    .selectable_value(
-                        &mut edited.multi_axis_orientation,
-                        MultiAxisOrientation::ActiveObject,
-                        MultiAxisOrientation::ActiveObject.label(),
-                    )
-                    .changed();
-            });
+                ui.horizontal(|ui| {
+                    ui.label("Axes");
+                    changed |= ui
+                        .selectable_value(
+                            &mut edited.multi_axis_orientation,
+                            MultiAxisOrientation::WorldZero,
+                            MultiAxisOrientation::WorldZero.label(),
+                        )
+                        .changed();
+                    changed |= ui
+                        .selectable_value(
+                            &mut edited.multi_axis_orientation,
+                            MultiAxisOrientation::ActiveObject,
+                            MultiAxisOrientation::ActiveObject.label(),
+                        )
+                        .changed();
+                });
 
-            ui.horizontal(|ui| {
-                ui.label("Rotate");
-                changed |= ui
-                    .selectable_value(
-                        &mut edited.group_rotate_direction,
-                        GroupRotateDirection::Standard,
-                        GroupRotateDirection::Standard.label(),
-                    )
-                    .changed();
-                changed |= ui
-                    .selectable_value(
-                        &mut edited.group_rotate_direction,
-                        GroupRotateDirection::Inverted,
-                        GroupRotateDirection::Inverted.label(),
-                    )
-                    .changed();
-            });
+                ui.horizontal(|ui| {
+                    ui.label("Rotate");
+                    changed |= ui
+                        .selectable_value(
+                            &mut edited.group_rotate_direction,
+                            GroupRotateDirection::Standard,
+                            GroupRotateDirection::Standard.label(),
+                        )
+                        .changed();
+                    changed |= ui
+                        .selectable_value(
+                            &mut edited.group_rotate_direction,
+                            GroupRotateDirection::Inverted,
+                            GroupRotateDirection::Inverted.label(),
+                        )
+                        .changed();
+                });
 
-            ui.horizontal(|ui| {
-                ui.label("Pivot");
-                changed |= ui
-                    .selectable_value(
-                        &mut edited.multi_pivot_mode,
-                        MultiPivotMode::SelectionCenter,
-                        MultiPivotMode::SelectionCenter.label(),
-                    )
-                    .changed();
-                changed |= ui
-                    .selectable_value(
-                        &mut edited.multi_pivot_mode,
-                        MultiPivotMode::ActiveObject,
-                        MultiPivotMode::ActiveObject.label(),
-                    )
-                    .changed();
-            });
-        });
+                ui.horizontal(|ui| {
+                    ui.label("Pivot");
+                    changed |= ui
+                        .selectable_value(
+                            &mut edited.multi_pivot_mode,
+                            MultiPivotMode::SelectionCenter,
+                            MultiPivotMode::SelectionCenter.label(),
+                        )
+                        .changed();
+                    changed |= ui
+                        .selectable_value(
+                            &mut edited.multi_pivot_mode,
+                            MultiPivotMode::ActiveObject,
+                            MultiPivotMode::ActiveObject.label(),
+                        )
+                        .changed();
+                });
+            })
+    {
+        crate::ui::motion::apply_surface_transform(
+            ui.ctx(),
+            &window_response.response,
+            surface_t,
+            motion,
+        );
+    }
 
     if changed && edited != *selection_behavior {
         actions.push(Action::SetSelectionBehavior(edited));
@@ -1734,18 +1753,29 @@ pub fn draw(
         });
 
     // --- Shapes panel (hidden in sculpt mode) ---
-    if *active_tool != ActiveTool::Sculpt {
-        let shapes_id = ui.id().with("viewport_shapes");
-        let overlay_frame = egui::Frame::window(&ui.ctx().style())
-            .fill(egui::Color32::from_rgba_premultiplied(30, 30, 38, 220));
+    let shapes_visible = *active_tool != ActiveTool::Sculpt;
+    let shapes_id = ui.id().with("viewport_shapes");
+    let shapes_motion = crate::ui::motion::settings(ui.ctx());
+    let shapes_t =
+        crate::ui::motion::surface_open_t(ui.ctx(), shapes_id, shapes_visible, shapes_motion);
+    if crate::ui::motion::should_draw_surface(shapes_visible, shapes_t) {
+        let shapes_alpha = crate::ui::motion::fade_alpha(shapes_t, shapes_motion.reduced_motion);
+        let overlay_frame = crate::ui::motion::frame_with_alpha(
+            egui::Frame::window(&ui.ctx().style())
+                .fill(egui::Color32::from_rgba_premultiplied(30, 30, 38, 220)),
+            shapes_t,
+            shapes_motion,
+        );
 
-        egui::Window::new(egui::RichText::new("Shapes").size(11.0))
+        if let Some(window_response) = egui::Window::new(egui::RichText::new("Shapes").size(11.0))
             .id(shapes_id)
+            .fade_in(false)
             .default_pos(rect.min + egui::vec2(8.0, 130.0))
             .resizable(true)
             .collapsible(true)
             .frame(overlay_frame)
             .show(ui.ctx(), |ui| {
+                ui.multiply_opacity(shapes_alpha);
                 let btn_size = egui::vec2(72.0, 22.0);
 
                 // Primitives — flow layout wraps based on window width
@@ -1802,7 +1832,15 @@ pub fn draw(
                         }
                     });
                 }
-            });
+            })
+        {
+            crate::ui::motion::apply_surface_transform(
+                ui.ctx(),
+                &window_response.response,
+                shapes_t,
+                shapes_motion,
+            );
+        }
     }
 
     // --- Orientation Gizmo (top-right corner, interactive) ---

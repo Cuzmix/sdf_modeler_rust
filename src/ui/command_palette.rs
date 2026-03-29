@@ -225,9 +225,15 @@ pub fn draw(
     keymap: &KeymapConfig,
     actions: &mut ActionSink,
 ) {
-    if !*open {
+    let motion = crate::ui::motion::settings(ctx);
+    let surface_id = egui::Id::new("command_palette_surface");
+    let surface_t = crate::ui::motion::surface_open_t(ctx, surface_id, *open, motion);
+    if !crate::ui::motion::should_draw_surface(*open, surface_t) {
+        crate::ui::motion::clear_surface_layers(ctx, egui::Id::new("command_palette"));
         return;
     }
+    let alpha = crate::ui::motion::fade_alpha(surface_t, motion.reduced_motion);
+    let backdrop_t = crate::ui::motion::micro_t(ctx, surface_id.with("backdrop"), *open, motion);
 
     // Dim background
     let screen_rect = ctx.screen_rect();
@@ -238,7 +244,7 @@ pub fn draw(
     painter.rect_filled(
         screen_rect,
         0.0,
-        egui::Color32::from_rgba_premultiplied(0, 0, 0, 120),
+        egui::Color32::from_rgba_premultiplied(0, 0, 0, (120.0 * backdrop_t) as u8),
     );
 
     // Palette window
@@ -252,7 +258,8 @@ pub fn draw(
         .order(egui::Order::Foreground)
         .fixed_pos(palette_pos)
         .show(ctx, |ui| {
-            egui::Frame::popup(ui.style())
+            ui.multiply_opacity(alpha);
+            crate::ui::motion::frame_with_alpha(egui::Frame::popup(ui.style()), surface_t, motion)
                 .inner_margin(8.0)
                 .show(ui, |ui| {
                     ui.set_min_width(palette_width);
@@ -264,7 +271,9 @@ pub fn draw(
                             .hint_text("Type a command or @node name..."),
                     );
                     // Auto-focus on open
-                    input_resp.request_focus();
+                    if *open {
+                        input_resp.request_focus();
+                    }
 
                     ui.separator();
 
@@ -401,6 +410,7 @@ pub fn draw(
                     }
                 });
         });
+    crate::ui::motion::apply_surface_transform(ctx, &area_resp.response, surface_t, motion);
 
     // Close on Escape or click outside
     if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {

@@ -13,6 +13,7 @@ pub mod light_gizmo;
 pub mod light_graph;
 pub mod light_linking;
 pub mod lights_panel;
+pub mod motion;
 pub mod node_graph;
 pub mod profiler;
 pub mod properties;
