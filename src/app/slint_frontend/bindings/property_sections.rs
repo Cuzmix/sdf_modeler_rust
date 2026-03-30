@@ -158,7 +158,7 @@ fn blank_light_section() -> LightSectionState {
     }
 }
 
-fn scalar_field(field: &InspectorScalarFieldModel) -> PropertyScalarFieldView {
+pub(super) fn scalar_field(field: &InspectorScalarFieldModel) -> PropertyScalarFieldView {
     PropertyScalarFieldView {
         value: field.value,
         display_text: field.display_text.clone().into(),
@@ -170,7 +170,7 @@ fn scalar_field(field: &InspectorScalarFieldModel) -> PropertyScalarFieldView {
     }
 }
 
-fn bool_field(field: &InspectorBoolFieldModel) -> PropertyBoolFieldView {
+pub(super) fn bool_field(field: &InspectorBoolFieldModel) -> PropertyBoolFieldView {
     PropertyBoolFieldView {
         value: field.value,
         display_text: field.display_text.clone().into(),

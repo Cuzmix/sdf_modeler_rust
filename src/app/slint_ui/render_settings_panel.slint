@@ -1,49 +1,214 @@
-import { Button, CheckBox, HorizontalBox, Slider, SpinBox, VerticalBox } from "std-widgets.slint";
+import { Button, HorizontalBox, ScrollView, VerticalBox } from "std-widgets.slint";
 import { AppTheme } from "theme.slint";
-import { RenderSettingsAction, RenderSettingsState } from "view_models.slint";
+import { BoolFieldRow, ScalarFieldRow, SectionTitle } from "property_grid.slint";
+import {
+    RenderAoModeView,
+    RenderBackgroundModeView,
+    RenderEnvironmentBackgroundModeView,
+    RenderEnvironmentSourceView,
+    RenderLocalReflectionModeView,
+    RenderSettingsAction,
+    RenderSettingsState,
+    RenderShadingModeView,
+} from "view_models.slint";
 
-export component RenderSettingsPanel inherits VerticalBox {
+export component RenderSettingsPanel inherits Rectangle {
     in property <RenderSettingsState> state;
 
-    callback perform_render_action(action: RenderSettingsAction, value: float);
+    callback perform_render_action(action: RenderSettingsAction, axis: int, value: float);
 
-    spacing: AppTheme.section_spacing;
+    background: #00000000;
 
-    Text { text: "Render"; }
+    ScrollView {
+        width: parent.width;
+        height: parent.height;
 
-    Text { text: "Display"; }
-    CheckBox { text: "Show grid"; checked: root.state.show_grid; toggled => { root.perform_render_action(RenderSettingsAction.set-show-grid, self.checked ? 1.0 : 0.0); } }
-    CheckBox { text: "Node labels"; checked: root.state.show_node_labels; toggled => { root.perform_render_action(RenderSettingsAction.set-show-node-labels, self.checked ? 1.0 : 0.0); } }
-    CheckBox { text: "Bounding box"; checked: root.state.show_bounding_box; toggled => { root.perform_render_action(RenderSettingsAction.set-show-bounding-box, self.checked ? 1.0 : 0.0); } }
-    CheckBox { text: "Light gizmos"; checked: root.state.show_light_gizmos; toggled => { root.perform_render_action(RenderSettingsAction.set-show-light-gizmos, self.checked ? 1.0 : 0.0); } }
+        VerticalBox {
+            width: parent.width;
+            spacing: AppTheme.section_spacing;
 
-    Text { text: "Lighting"; }
-    CheckBox { text: "Shadows"; checked: root.state.shadows_enabled; toggled => { root.perform_render_action(RenderSettingsAction.set-shadows-enabled, self.checked ? 1.0 : 0.0); } }
-    CheckBox { text: "Ambient occlusion"; checked: root.state.ao_enabled; toggled => { root.perform_render_action(RenderSettingsAction.set-ao-enabled, self.checked ? 1.0 : 0.0); } }
+            SectionTitle {
+                title: "Display";
+                subtitle: "Viewport overlays, debug shading, and sculpt border controls.";
+            }
+            BoolFieldRow { label: "Show Grid"; field: root.state.show_grid; value_toggled(value) => { root.perform_render_action(RenderSettingsAction.set-show-grid, -1, value ? 1.0 : 0.0); } }
+            BoolFieldRow { label: "Show Node Labels"; field: root.state.show_node_labels; value_toggled(value) => { root.perform_render_action(RenderSettingsAction.set-show-node-labels, -1, value ? 1.0 : 0.0); } }
+            BoolFieldRow { label: "Show Bounding Box"; field: root.state.show_bounding_box; value_toggled(value) => { root.perform_render_action(RenderSettingsAction.set-show-bounding-box, -1, value ? 1.0 : 0.0); } }
+            BoolFieldRow { label: "Show Light Gizmos"; field: root.state.show_light_gizmos; value_toggled(value) => { root.perform_render_action(RenderSettingsAction.set-show-light-gizmos, -1, value ? 1.0 : 0.0); } }
 
-    Text { text: "Export"; }
-    SpinBox { minimum: 16; maximum: 2048; step-size: 16; value: root.state.export_resolution; edited => { root.perform_render_action(RenderSettingsAction.set-export-resolution, self.value); } }
-    CheckBox { text: "Adaptive export"; checked: root.state.adaptive_export; toggled => { root.perform_render_action(RenderSettingsAction.set-adaptive-export, self.checked ? 1.0 : 0.0); } }
+            Text { text: "Shading Mode"; }
+            HorizontalBox {
+                spacing: AppTheme.section_spacing;
+                Button { text: root.state.shading_mode == RenderShadingModeView.full ? "Full*" : "Full"; clicked => { root.perform_render_action(RenderSettingsAction.set-shading-mode, -1, 0.0); } }
+                Button { text: root.state.shading_mode == RenderShadingModeView.solid ? "Solid*" : "Solid"; clicked => { root.perform_render_action(RenderSettingsAction.set-shading-mode, -1, 1.0); } }
+                Button { text: root.state.shading_mode == RenderShadingModeView.clay ? "Clay*" : "Clay"; clicked => { root.perform_render_action(RenderSettingsAction.set-shading-mode, -1, 2.0); } }
+                Button { text: root.state.shading_mode == RenderShadingModeView.normals ? "Normals*" : "Normals"; clicked => { root.perform_render_action(RenderSettingsAction.set-shading-mode, -1, 3.0); } }
+            }
+            HorizontalBox {
+                spacing: AppTheme.section_spacing;
+                Button { text: root.state.shading_mode == RenderShadingModeView.matcap ? "Matcap*" : "Matcap"; clicked => { root.perform_render_action(RenderSettingsAction.set-shading-mode, -1, 4.0); } }
+                Button { text: root.state.shading_mode == RenderShadingModeView.step-heatmap ? "Step Heatmap*" : "Step Heatmap"; clicked => { root.perform_render_action(RenderSettingsAction.set-shading-mode, -1, 5.0); } }
+                Button { text: root.state.shading_mode == RenderShadingModeView.field-quality ? "Field Quality*" : "Field Quality"; clicked => { root.perform_render_action(RenderSettingsAction.set-shading-mode, -1, 6.0); } }
+                Button { text: root.state.shading_mode == RenderShadingModeView.cross-section ? "Cross-Section*" : "Cross-Section"; clicked => { root.perform_render_action(RenderSettingsAction.set-shading-mode, -1, 7.0); } }
+            }
+            ScalarFieldRow { label: "Cross-Section Axis"; field: root.state.cross_section_axis; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-cross-section-axis, -1, value); } }
+            ScalarFieldRow { label: "Cross-Section Position"; field: root.state.cross_section_position; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-cross-section-position, -1, value); } }
+            ScalarFieldRow { label: "Sculpt Safety Border"; field: root.state.sculpt_safety_border; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-sculpt-safety-border, -1, value); } }
 
-    Text { text: "Environment"; }
-    HorizontalBox {
-        spacing: AppTheme.section_spacing;
-        Button { text: root.state.environment_is_hdri ? "Procedural" : "Procedural*"; clicked => { root.perform_render_action(RenderSettingsAction.set-environment-source-procedural, 0.0); } }
-        Button { text: root.state.environment_is_hdri ? "HDRI*" : "HDRI"; clicked => { root.perform_render_action(RenderSettingsAction.set-environment-source-hdri, 0.0); } }
-        Button { text: "Pick HDRI"; clicked => { root.perform_render_action(RenderSettingsAction.pick-environment-hdri, 0.0); } }
+            SectionTitle {
+                title: "Shadows And AO";
+                subtitle: "Shadow tracing, contact softness, and ambient occlusion quality.";
+            }
+            BoolFieldRow { label: "Shadows"; field: root.state.shadows_enabled; value_toggled(value) => { root.perform_render_action(RenderSettingsAction.set-shadows-enabled, -1, value ? 1.0 : 0.0); } }
+            ScalarFieldRow { label: "Shadow Steps"; field: root.state.shadow_steps; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-shadow-steps, -1, value); } }
+            ScalarFieldRow { label: "Shadow Penumbra"; field: root.state.shadow_penumbra_k; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-shadow-penumbra-k, -1, value); } }
+            ScalarFieldRow { label: "Shadow Bias"; field: root.state.shadow_bias; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-shadow-bias, -1, value); } }
+            ScalarFieldRow { label: "Shadow Min T"; field: root.state.shadow_mint; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-shadow-mint, -1, value); } }
+            ScalarFieldRow { label: "Shadow Max T"; field: root.state.shadow_maxt; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-shadow-maxt, -1, value); } }
+            BoolFieldRow { label: "Ambient Occlusion"; field: root.state.ao_enabled; value_toggled(value) => { root.perform_render_action(RenderSettingsAction.set-ao-enabled, -1, value ? 1.0 : 0.0); } }
+            Text { text: "AO Mode"; }
+            HorizontalBox {
+                spacing: AppTheme.section_spacing;
+                Button { text: root.state.ao_mode == RenderAoModeView.fast ? "Fast*" : "Fast"; clicked => { root.perform_render_action(RenderSettingsAction.set-ao-mode, -1, 0.0); } }
+                Button { text: root.state.ao_mode == RenderAoModeView.balanced ? "Balanced*" : "Balanced"; clicked => { root.perform_render_action(RenderSettingsAction.set-ao-mode, -1, 1.0); } }
+                Button { text: root.state.ao_mode == RenderAoModeView.quality ? "Quality*" : "Quality"; clicked => { root.perform_render_action(RenderSettingsAction.set-ao-mode, -1, 2.0); } }
+            }
+            ScalarFieldRow { label: "AO Samples"; field: root.state.ao_samples; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-ao-samples, -1, value); } }
+            ScalarFieldRow { label: "AO Step"; field: root.state.ao_step; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-ao-step, -1, value); } }
+            ScalarFieldRow { label: "AO Decay"; field: root.state.ao_decay; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-ao-decay, -1, value); } }
+            ScalarFieldRow { label: "AO Intensity"; field: root.state.ao_intensity; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-ao-intensity, -1, value); } }
+
+            SectionTitle {
+                title: "Raymarching";
+                subtitle: "Core tracing limits and step behavior.";
+            }
+            ScalarFieldRow { label: "Max March Steps"; field: root.state.march_max_steps; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-march-max-steps, -1, value); } }
+            ScalarFieldRow { label: "March Epsilon"; field: root.state.march_epsilon; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-march-epsilon, -1, value); } }
+            ScalarFieldRow { label: "Step Multiplier"; field: root.state.march_step_multiplier; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-march-step-multiplier, -1, value); } }
+            ScalarFieldRow { label: "Max Distance"; field: root.state.march_max_distance; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-march-max-distance, -1, value); } }
+
+            SectionTitle {
+                title: "Lighting";
+                subtitle: "Key/fill light rigs and ambient response.";
+            }
+            ScalarFieldRow { label: "Key Dir X"; field: root.state.key_light_dir_x; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-key-light-dir, 0, value); } }
+            ScalarFieldRow { label: "Key Dir Y"; field: root.state.key_light_dir_y; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-key-light-dir, 1, value); } }
+            ScalarFieldRow { label: "Key Dir Z"; field: root.state.key_light_dir_z; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-key-light-dir, 2, value); } }
+            ScalarFieldRow { label: "Key Diffuse"; field: root.state.key_diffuse; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-key-diffuse, -1, value); } }
+            ScalarFieldRow { label: "Key Spec Power"; field: root.state.key_spec_power; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-key-spec-power, -1, value); } }
+            ScalarFieldRow { label: "Key Spec Intensity"; field: root.state.key_spec_intensity; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-key-spec-intensity, -1, value); } }
+            ScalarFieldRow { label: "Key Color R"; field: root.state.key_light_color_r; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-key-light-color, 0, value); } }
+            ScalarFieldRow { label: "Key Color G"; field: root.state.key_light_color_g; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-key-light-color, 1, value); } }
+            ScalarFieldRow { label: "Key Color B"; field: root.state.key_light_color_b; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-key-light-color, 2, value); } }
+            ScalarFieldRow { label: "Fill Dir X"; field: root.state.fill_light_dir_x; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-fill-light-dir, 0, value); } }
+            ScalarFieldRow { label: "Fill Dir Y"; field: root.state.fill_light_dir_y; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-fill-light-dir, 1, value); } }
+            ScalarFieldRow { label: "Fill Dir Z"; field: root.state.fill_light_dir_z; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-fill-light-dir, 2, value); } }
+            ScalarFieldRow { label: "Fill Intensity"; field: root.state.fill_intensity; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-fill-intensity, -1, value); } }
+            ScalarFieldRow { label: "Fill Color R"; field: root.state.fill_light_color_r; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-fill-light-color, 0, value); } }
+            ScalarFieldRow { label: "Fill Color G"; field: root.state.fill_light_color_g; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-fill-light-color, 1, value); } }
+            ScalarFieldRow { label: "Fill Color B"; field: root.state.fill_light_color_b; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-fill-light-color, 2, value); } }
+            ScalarFieldRow { label: "Ambient"; field: root.state.ambient; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-ambient, -1, value); } }
+
+            SectionTitle {
+                title: "Environment";
+                subtitle: "Reflections, HDRI/procedural lighting, and visible background.";
+            }
+            BoolFieldRow { label: "Environment Reflections"; field: root.state.env_reflection_enabled; value_toggled(value) => { root.perform_render_action(RenderSettingsAction.set-env-reflection-enabled, -1, value ? 1.0 : 0.0); } }
+            ScalarFieldRow { label: "Reflection Intensity"; field: root.state.env_reflection_intensity; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-env-reflection-intensity, -1, value); } }
+            BoolFieldRow { label: "Specular AA"; field: root.state.specular_aa_enabled; value_toggled(value) => { root.perform_render_action(RenderSettingsAction.set-specular-aa-enabled, -1, value ? 1.0 : 0.0); } }
+
+            Text { text: "Local Reflection Mode"; }
+            HorizontalBox {
+                spacing: AppTheme.section_spacing;
+                Button { text: root.state.local_reflection_mode == RenderLocalReflectionModeView.off ? "Off*" : "Off"; clicked => { root.perform_render_action(RenderSettingsAction.set-local-reflection-mode, -1, 0.0); } }
+                Button { text: root.state.local_reflection_mode == RenderLocalReflectionModeView.single ? "Single*" : "Single"; clicked => { root.perform_render_action(RenderSettingsAction.set-local-reflection-mode, -1, 1.0); } }
+            }
+
+            Text { text: "Environment Source"; }
+            HorizontalBox {
+                spacing: AppTheme.section_spacing;
+                Button { text: root.state.environment_source == RenderEnvironmentSourceView.procedural-sky ? "Procedural*" : "Procedural"; clicked => { root.perform_render_action(RenderSettingsAction.set-environment-source, -1, 0.0); } }
+                Button { text: root.state.environment_source == RenderEnvironmentSourceView.hdri ? "HDRI*" : "HDRI"; clicked => { root.perform_render_action(RenderSettingsAction.set-environment-source, -1, 1.0); } }
+                Button { text: "Pick HDRI"; clicked => { root.perform_render_action(RenderSettingsAction.pick-environment-hdri, -1, 0.0); } }
+            }
+            Text { text: root.state.hdri_path_display; wrap: word-wrap; }
+            ScalarFieldRow { label: "Environment Rotation"; field: root.state.environment_rotation_degrees; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-environment-rotation, -1, value); } }
+            ScalarFieldRow { label: "Environment Exposure"; field: root.state.environment_exposure; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-environment-exposure, -1, value); } }
+            ScalarFieldRow { label: "Environment Bake Resolution"; field: root.state.environment_bake_resolution; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-environment-bake-resolution, -1, value); } }
+
+            Text { text: "Visible Background"; }
+            HorizontalBox {
+                spacing: AppTheme.section_spacing;
+                Button { text: root.state.environment_background_mode == RenderEnvironmentBackgroundModeView.environment ? "Environment*" : "Environment"; clicked => { root.perform_render_action(RenderSettingsAction.set-environment-background-mode, -1, 0.0); } }
+                Button { text: root.state.environment_background_mode == RenderEnvironmentBackgroundModeView.procedural ? "Procedural*" : "Procedural"; clicked => { root.perform_render_action(RenderSettingsAction.set-environment-background-mode, -1, 1.0); } }
+            }
+            ScalarFieldRow { label: "Background Blur"; field: root.state.environment_background_blur; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-environment-background-blur, -1, value); } }
+
+            SectionTitle {
+                title: "Procedural Background";
+                subtitle: "Procedural sky colors and solid background fallback.";
+            }
+            ScalarFieldRow { label: "Sky Horizon R"; field: root.state.sky_horizon_r; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-sky-horizon, 0, value); } }
+            ScalarFieldRow { label: "Sky Horizon G"; field: root.state.sky_horizon_g; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-sky-horizon, 1, value); } }
+            ScalarFieldRow { label: "Sky Horizon B"; field: root.state.sky_horizon_b; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-sky-horizon, 2, value); } }
+            ScalarFieldRow { label: "Sky Zenith R"; field: root.state.sky_zenith_r; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-sky-zenith, 0, value); } }
+            ScalarFieldRow { label: "Sky Zenith G"; field: root.state.sky_zenith_g; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-sky-zenith, 1, value); } }
+            ScalarFieldRow { label: "Sky Zenith B"; field: root.state.sky_zenith_b; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-sky-zenith, 2, value); } }
+
+            Text { text: "Procedural Background Mode"; }
+            HorizontalBox {
+                spacing: AppTheme.section_spacing;
+                Button { text: root.state.background_mode == RenderBackgroundModeView.sky-gradient ? "Sky Gradient*" : "Sky Gradient"; clicked => { root.perform_render_action(RenderSettingsAction.set-background-mode, -1, 0.0); } }
+                Button { text: root.state.background_mode == RenderBackgroundModeView.solid-color ? "Solid*" : "Solid"; clicked => { root.perform_render_action(RenderSettingsAction.set-background-mode, -1, 1.0); } }
+            }
+            ScalarFieldRow { label: "Solid Color R"; field: root.state.bg_solid_color_r; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-bg-solid-color, 0, value); } }
+            ScalarFieldRow { label: "Solid Color G"; field: root.state.bg_solid_color_g; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-bg-solid-color, 1, value); } }
+            ScalarFieldRow { label: "Solid Color B"; field: root.state.bg_solid_color_b; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-bg-solid-color, 2, value); } }
+
+            SectionTitle {
+                title: "Atmosphere And Post";
+                subtitle: "Subsurface scattering, fog, bloom, gamma, tonemapping, and outlines.";
+            }
+            BoolFieldRow { label: "Subsurface Scattering"; field: root.state.sss_enabled; value_toggled(value) => { root.perform_render_action(RenderSettingsAction.set-sss-enabled, -1, value ? 1.0 : 0.0); } }
+            ScalarFieldRow { label: "SSS Strength"; field: root.state.sss_strength; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-sss-strength, -1, value); } }
+            ScalarFieldRow { label: "SSS Color R"; field: root.state.sss_color_r; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-sss-color, 0, value); } }
+            ScalarFieldRow { label: "SSS Color G"; field: root.state.sss_color_g; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-sss-color, 1, value); } }
+            ScalarFieldRow { label: "SSS Color B"; field: root.state.sss_color_b; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-sss-color, 2, value); } }
+            ScalarFieldRow { label: "Volumetric Steps"; field: root.state.volumetric_steps; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-volumetric-steps, -1, value); } }
+            BoolFieldRow { label: "Fog"; field: root.state.fog_enabled; value_toggled(value) => { root.perform_render_action(RenderSettingsAction.set-fog-enabled, -1, value ? 1.0 : 0.0); } }
+            ScalarFieldRow { label: "Fog Density"; field: root.state.fog_density; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-fog-density, -1, value); } }
+            ScalarFieldRow { label: "Fog Color R"; field: root.state.fog_color_r; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-fog-color, 0, value); } }
+            ScalarFieldRow { label: "Fog Color G"; field: root.state.fog_color_g; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-fog-color, 1, value); } }
+            ScalarFieldRow { label: "Fog Color B"; field: root.state.fog_color_b; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-fog-color, 2, value); } }
+            BoolFieldRow { label: "Bloom"; field: root.state.bloom_enabled; value_toggled(value) => { root.perform_render_action(RenderSettingsAction.set-bloom-enabled, -1, value ? 1.0 : 0.0); } }
+            ScalarFieldRow { label: "Bloom Threshold"; field: root.state.bloom_threshold; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-bloom-threshold, -1, value); } }
+            ScalarFieldRow { label: "Bloom Intensity"; field: root.state.bloom_intensity; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-bloom-intensity, -1, value); } }
+            ScalarFieldRow { label: "Bloom Radius"; field: root.state.bloom_radius; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-bloom-radius, -1, value); } }
+            ScalarFieldRow { label: "Gamma"; field: root.state.gamma; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-gamma, -1, value); } }
+            BoolFieldRow { label: "ACES Tonemapping"; field: root.state.tonemapping_aces; value_toggled(value) => { root.perform_render_action(RenderSettingsAction.set-tonemapping-aces, -1, value ? 1.0 : 0.0); } }
+            ScalarFieldRow { label: "Outline Color R"; field: root.state.outline_color_r; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-outline-color, 0, value); } }
+            ScalarFieldRow { label: "Outline Color G"; field: root.state.outline_color_g; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-outline-color, 1, value); } }
+            ScalarFieldRow { label: "Outline Color B"; field: root.state.outline_color_b; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-outline-color, 2, value); } }
+            ScalarFieldRow { label: "Outline Thickness"; field: root.state.outline_thickness; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-outline-thickness, -1, value); } }
+
+            SectionTitle {
+                title: "Performance";
+                subtitle: "Interaction quality, composite volume, and sculpt sampling diagnostics.";
+            }
+            BoolFieldRow { label: "Fast Sculpt Mode"; field: root.state.sculpt_fast_mode; value_toggled(value) => { root.perform_render_action(RenderSettingsAction.set-sculpt-fast-mode, -1, value ? 1.0 : 0.0); } }
+            BoolFieldRow { label: "Auto Reduce Steps"; field: root.state.auto_reduce_steps; value_toggled(value) => { root.perform_render_action(RenderSettingsAction.set-auto-reduce-steps, -1, value ? 1.0 : 0.0); } }
+            ScalarFieldRow { label: "Interaction Render Scale"; field: root.state.interaction_render_scale; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-interaction-render-scale, -1, value); } }
+            ScalarFieldRow { label: "Rest Render Scale"; field: root.state.rest_render_scale; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-rest-render-scale, -1, value); } }
+            BoolFieldRow { label: "Composite Volume"; field: root.state.composite_volume_enabled; value_toggled(value) => { root.perform_render_action(RenderSettingsAction.set-composite-volume-enabled, -1, value ? 1.0 : 0.0); } }
+            ScalarFieldRow { label: "Composite Resolution"; field: root.state.composite_volume_resolution; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-composite-volume-resolution, -1, value); } }
+            BoolFieldRow { label: "Force Manual Sculpt Sampling"; field: root.state.debug_force_manual_sculpt_sampling; value_toggled(value) => { root.perform_render_action(RenderSettingsAction.set-debug-force-manual-sculpt-sampling, -1, value ? 1.0 : 0.0); } }
+
+            SectionTitle {
+                title: "Export";
+                subtitle: "Mesh export resolution controls.";
+            }
+            ScalarFieldRow { label: "Export Resolution"; field: root.state.export_resolution; value_changed(value) => { root.perform_render_action(RenderSettingsAction.set-export-resolution, -1, value); } }
+            BoolFieldRow { label: "Adaptive Export"; field: root.state.adaptive_export; value_toggled(value) => { root.perform_render_action(RenderSettingsAction.set-adaptive-export, -1, value ? 1.0 : 0.0); } }
+        }
     }
-    Text { text: root.state.hdri_path_display; wrap: word-wrap; }
-    Text { text: "Rotation " + root.state.environment_rotation_degrees; }
-    Slider { minimum: -180; maximum: 180; step: 1; value: root.state.environment_rotation_degrees; changed(value) => { root.perform_render_action(RenderSettingsAction.set-environment-rotation, value); } }
-    Text { text: "Exposure " + root.state.environment_exposure; }
-    Slider { minimum: -8; maximum: 8; step: 0.05; value: root.state.environment_exposure; changed(value) => { root.perform_render_action(RenderSettingsAction.set-environment-exposure, value); } }
-    Text { text: "Bake Resolution"; }
-    SpinBox { minimum: 0; maximum: 4096; step-size: 16; value: root.state.environment_bake_resolution; edited => { root.perform_render_action(RenderSettingsAction.set-environment-bake-resolution, self.value); } }
-    HorizontalBox {
-        spacing: AppTheme.section_spacing;
-        Button { text: root.state.background_is_procedural ? "Environment" : "Environment*"; clicked => { root.perform_render_action(RenderSettingsAction.set-environment-background-environment, 0.0); } }
-        Button { text: root.state.background_is_procedural ? "Procedural*" : "Procedural"; clicked => { root.perform_render_action(RenderSettingsAction.set-environment-background-procedural, 0.0); } }
-    }
-    Text { text: "Background Blur " + root.state.environment_background_blur; }
-    Slider { minimum: 0; maximum: 1; step: 0.01; value: root.state.environment_background_blur; changed(value) => { root.perform_render_action(RenderSettingsAction.set-environment-background-blur, value); } }
 }

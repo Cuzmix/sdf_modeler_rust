@@ -116,7 +116,7 @@ export component SlintHostWindow inherits Window {
     callback light_edit(kind: LightEditKind, mode: InspectorEditMode, axis: int, value: float);
     callback history_action(action: HistoryAction, index: int);
     callback reference_image_action(action: ReferenceImageAction, index: int, value: float);
-    callback render_settings_action(action: RenderSettingsAction, value: float);
+    callback render_settings_action(action: RenderSettingsAction, axis: int, value: float);
     callback import_dialog_action(action: ImportDialogAction, value: float);
     callback workspace_action(action: WorkspaceAction);
     callback viewport_pointer_action(action: ViewportPointerAction);
@@ -320,7 +320,7 @@ export component SlintHostWindow inherits Window {
             light_edit(kind, mode, axis, value) => { root.light_edit(kind, mode, axis, value); }
             history_action(action, index) => { root.history_action(action, index); }
             reference_image_action(action, index, value) => { root.reference_image_action(action, index, value); }
-            render_settings_action(action, value) => { root.render_settings_action(action, value); }
+            render_settings_action(action, axis, value) => { root.render_settings_action(action, axis, value); }
         }
 
         transient_panel_host := PanelHost {
@@ -361,7 +361,7 @@ export component SlintHostWindow inherits Window {
             light_edit(kind, mode, axis, value) => { root.light_edit(kind, mode, axis, value); }
             history_action(action, index) => { root.history_action(action, index); }
             reference_image_action(action, index, value) => { root.reference_image_action(action, index, value); }
-            render_settings_action(action, value) => { root.render_settings_action(action, value); }
+            render_settings_action(action, axis, value) => { root.render_settings_action(action, axis, value); }
         }
 
         panel_bar := PanelBar {

@@ -2,7 +2,7 @@ use crate::graph::presented_object::{
     current_transform_owner, resolve_presented_object, PresentedObjectKind,
 };
 use crate::graph::scene::{NodeData, NodeId};
-use crate::settings::{EnvironmentBackgroundMode, EnvironmentSource};
+use crate::settings::{EnvironmentBackgroundMode, EnvironmentSource, RenderConfig};
 
 use super::SdfApp;
 
@@ -280,6 +280,14 @@ impl SdfApp {
     pub(super) fn set_adaptive_export(&mut self, value: bool) {
         self.settings.adaptive_export = value;
         self.settings.save();
+    }
+
+    pub(super) fn edit_render_config<F>(&mut self, edit: F)
+    where
+        F: FnOnce(&mut RenderConfig),
+    {
+        edit(&mut self.settings.render);
+        self.commit_render_settings_edit();
     }
 
     pub(super) fn toggle_reference_image_lock(&mut self, index: usize) {

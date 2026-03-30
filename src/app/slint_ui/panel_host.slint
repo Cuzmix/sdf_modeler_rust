@@ -59,7 +59,7 @@ export component PanelHost inherits Rectangle {
     callback light_edit(kind: LightEditKind, mode: InspectorEditMode, axis: int, value: float);
     callback history_action(action: HistoryAction, index: int);
     callback reference_image_action(action: ReferenceImageAction, index: int, value: float);
-    callback render_settings_action(action: RenderSettingsAction, value: float);
+    callback render_settings_action(action: RenderSettingsAction, axis: int, value: float);
 
     private property <length> panel_body_offset: AppTheme.overlay_panel_padding + 52px + AppTheme.section_spacing + 1px + AppTheme.section_spacing;
     private property <length> panel_body_width: root.panel.frame.width * 1px > AppTheme.overlay_panel_padding * 2 ? root.panel.frame.width * 1px - AppTheme.overlay_panel_padding * 2 : 0px;
@@ -144,7 +144,7 @@ export component PanelHost inherits Rectangle {
 
         if root.panel.kind == PanelKindView.render-settings : RenderSettingsPanel {
             state: root.utility_state.render_settings;
-            perform_render_action(action, value) => { root.render_settings_action(action, value); }
+            perform_render_action(action, axis, value) => { root.render_settings_action(action, axis, value); }
         }
     }
 
