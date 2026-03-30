@@ -71,6 +71,8 @@ export component NodeGraphPanel inherits Rectangle {
     for edge in root.state.edges : Path {
         width: parent.width;
         height: parent.height;
+        viewbox-width: root.width / 1px;
+        viewbox-height: root.height / 1px;
         commands: edge.path_commands;
         stroke: edge.selected ? #9dcbff : edge.slot == NodeGraphSlotView.left ? #6ea9ff : edge.slot == NodeGraphSlotView.right ? #ffb17d : #8fd3ab;
         stroke-width: edge.selected ? 3px : 2px;
@@ -93,6 +95,8 @@ export component NodeGraphPanel inherits Rectangle {
     if root.state.preview_visible : Path {
         width: parent.width;
         height: parent.height;
+        viewbox-width: root.width / 1px;
+        viewbox-height: root.height / 1px;
         commands: root.state.preview_path_commands;
         stroke: #8da7ce;
         stroke-width: 2px;

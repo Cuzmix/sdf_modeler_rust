@@ -156,10 +156,34 @@ pub fn edge_curve_screen(
     pan: [f32; 2],
     zoom: f32,
 ) -> CubicEdgeCurve {
-    let start_canvas = output_handle_position(child_canvas[0], child_canvas[1]);
-    let end_canvas = input_handle_position_for_slot(parent_canvas[0], parent_canvas[1], slot);
-    let start = screen_from_canvas(start_canvas, pan, zoom);
-    let end = screen_from_canvas(end_canvas, pan, zoom);
+    let parent_origin = screen_from_canvas(parent_canvas, pan, zoom);
+    let child_origin = screen_from_canvas(child_canvas, pan, zoom);
+    let size = [NODE_CARD_WIDTH * zoom, NODE_CARD_HEIGHT * zoom];
+    edge_curve_from_screen_frames(
+        parent_origin,
+        size,
+        child_origin,
+        size,
+        slot,
+    )
+}
+
+pub fn edge_curve_from_screen_frames(
+    parent_origin: [f32; 2],
+    parent_size: [f32; 2],
+    child_origin: [f32; 2],
+    child_size: [f32; 2],
+    slot: EdgeSlot,
+) -> CubicEdgeCurve {
+    let start = [
+        child_origin[0] + child_size[0],
+        child_origin[1] + child_size[1] * 0.5,
+    ];
+    let end = match slot {
+        EdgeSlot::Left => [parent_origin[0], parent_origin[1] + parent_size[1] * 0.34],
+        EdgeSlot::Right => [parent_origin[0], parent_origin[1] + parent_size[1] * 0.66],
+        EdgeSlot::Input => [parent_origin[0], parent_origin[1] + parent_size[1] * 0.5],
+    };
     CubicEdgeCurve::new(start, end)
 }
 
@@ -249,6 +273,22 @@ fn distance_to_segment(point: [f32; 2], start: [f32; 2], end: [f32; 2]) -> f32 {
 mod tests {
     use super::*;
 
+    fn assert_point_near(actual: [f32; 2], expected: [f32; 2]) {
+        let epsilon = 0.001;
+        assert!(
+            (actual[0] - expected[0]).abs() <= epsilon,
+            "x mismatch: actual={}, expected={}",
+            actual[0],
+            expected[0]
+        );
+        assert!(
+            (actual[1] - expected[1]).abs() <= epsilon,
+            "y mismatch: actual={}, expected={}",
+            actual[1],
+            expected[1]
+        );
+    }
+
     #[test]
     fn edge_curve_endpoints_match_handle_centers_for_each_slot() {
         let parent = [180.0, 60.0];
@@ -264,8 +304,8 @@ mod tests {
                 pan,
                 zoom,
             );
-            assert_eq!(curve.start, expected_start);
-            assert_eq!(curve.end, expected_end);
+            assert_point_near(curve.start, expected_start);
+            assert_point_near(curve.end, expected_end);
         }
     }
 }

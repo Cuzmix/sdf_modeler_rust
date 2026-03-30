@@ -300,6 +300,7 @@ impl SdfApp {
         match crate::io::load_project(&autosave_path) {
             Ok(project) => {
                 self.doc.scene = project.scene;
+                self.ui.node_graph_view = crate::app::state::NodeGraphViewState::default();
                 self.doc.camera = project.camera;
                 self.doc.sculpt_state = project
                     .sculpt_state

@@ -1939,6 +1939,7 @@ impl SdfApp {
         match restore.state {
             RestoreState::Scene(scene) => {
                 self.doc.scene = scene;
+                self.ui.node_graph_view = crate::app::state::NodeGraphViewState::default();
             }
             RestoreState::Sculpt {
                 node_id,
