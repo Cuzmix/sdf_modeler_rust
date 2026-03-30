@@ -192,6 +192,23 @@ impl WorkspaceRoute {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum GraphInputSlot {
+    Left,
+    Right,
+    Input,
+}
+
+impl GraphInputSlot {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Left => "Left",
+            Self::Right => "Right",
+            Self::Input => "Input",
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WorkspaceUiState {
     pub route: WorkspaceRoute,
@@ -414,16 +431,18 @@ pub enum PanelKind {
     ObjectProperties,
     RenderSettings,
     Scene,
+    NodeGraph,
     History,
     ReferenceImages,
 }
 
 impl PanelKind {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Tool,
         Self::ObjectProperties,
         Self::RenderSettings,
         Self::Scene,
+        Self::NodeGraph,
         Self::History,
         Self::ReferenceImages,
     ];
@@ -434,6 +453,7 @@ impl PanelKind {
             Self::ObjectProperties => "Object Properties",
             Self::RenderSettings => "Render Settings",
             Self::Scene => "Scene",
+            Self::NodeGraph => "Node Graph",
             Self::History => "History",
             Self::ReferenceImages => "Reference Images",
         }
@@ -445,6 +465,7 @@ impl PanelKind {
             Self::ObjectProperties => "Props",
             Self::RenderSettings => "Render",
             Self::Scene => "Scene",
+            Self::NodeGraph => "Graph",
             Self::History => "History",
             Self::ReferenceImages => "Refs",
         }
@@ -456,6 +477,7 @@ impl PanelKind {
             Self::ObjectProperties => "object-properties",
             Self::RenderSettings => "render-settings",
             Self::Scene => "scene",
+            Self::NodeGraph => "node-graph",
             Self::History => "history",
             Self::ReferenceImages => "reference-images",
         }
@@ -1484,6 +1506,55 @@ impl Default for SceneGraphViewState {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NodeGraphEdgeSelection {
+    pub parent: NodeId,
+    pub slot: GraphInputSlot,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct NodeGraphConnectionPreview {
+    pub source_node: NodeId,
+    pub pointer_screen: [f32; 2],
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct NodeGraphViewState {
+    pub pan: [f32; 2],
+    pub zoom: f32,
+    pub canvas_size: [f32; 2],
+    pub node_positions: HashMap<NodeId, [f32; 2]>,
+    pub grid_dots: Vec<[f32; 2]>,
+    pub grid_gap: f32,
+    pub grid_zoom_bucket: i32,
+    pub grid_canvas_bucket: [u32; 2],
+    pub selected_edge: Option<NodeGraphEdgeSelection>,
+    pub connection_preview: Option<NodeGraphConnectionPreview>,
+}
+
+impl Default for NodeGraphViewState {
+    fn default() -> Self {
+        let zoom = 1.0;
+        let canvas_size = [
+            crate::app::node_graph::DEFAULT_CANVAS_WIDTH,
+            crate::app::node_graph::DEFAULT_CANVAS_HEIGHT,
+        ];
+        let grid_gap = crate::app::node_graph::grid_gap_for_zoom(zoom);
+        Self {
+            pan: [36.0, 24.0],
+            zoom,
+            canvas_size,
+            node_positions: HashMap::new(),
+            grid_dots: crate::app::node_graph::build_grid_base_dots(canvas_size, grid_gap),
+            grid_gap,
+            grid_zoom_bucket: crate::app::node_graph::grid_zoom_bucket(zoom),
+            grid_canvas_bucket: crate::app::node_graph::grid_canvas_bucket(canvas_size),
+            selected_edge: None,
+            connection_preview: None,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ViewportPrimaryDragMode {
     #[default]
@@ -1520,6 +1591,7 @@ pub struct UiState {
     pub scene_panel: ScenePanelUiState,
     pub selection: SceneSelectionState,
     pub scene_graph_view: SceneGraphViewState,
+    pub node_graph_view: NodeGraphViewState,
     pub viewport_interaction: ViewportInteractionState,
     pub show_debug: bool,
     pub show_help: bool,
@@ -1851,6 +1923,35 @@ mod tests {
 
         assert!(state.needs_initial_rebuild);
         assert!(state.pending_center_node.is_none());
+    }
+
+    #[test]
+    fn node_graph_view_defaults_match_expected_canvas_state() {
+        let state = NodeGraphViewState::default();
+        let expected_canvas = [
+            crate::app::node_graph::DEFAULT_CANVAS_WIDTH,
+            crate::app::node_graph::DEFAULT_CANVAS_HEIGHT,
+        ];
+
+        assert_eq!(state.pan, [36.0, 24.0]);
+        assert!((state.zoom - 1.0).abs() < f32::EPSILON);
+        assert_eq!(state.canvas_size, expected_canvas);
+        assert!(state.node_positions.is_empty());
+        assert_eq!(
+            state.grid_gap,
+            crate::app::node_graph::grid_gap_for_zoom(state.zoom)
+        );
+        assert_eq!(
+            state.grid_zoom_bucket,
+            crate::app::node_graph::grid_zoom_bucket(state.zoom)
+        );
+        assert_eq!(
+            state.grid_canvas_bucket,
+            crate::app::node_graph::grid_canvas_bucket(expected_canvas)
+        );
+        assert!(!state.grid_dots.is_empty());
+        assert!(state.selected_edge.is_none());
+        assert!(state.connection_preview.is_none());
     }
 
     #[test]

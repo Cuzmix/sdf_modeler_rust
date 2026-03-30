@@ -1,9 +1,11 @@
 import { HistoryPanel } from "history_panel.slint";
 import { InspectorPanel } from "inspector_panel.slint";
+import { NodeGraphPanel } from "node_graph_panel.slint";
 import { PanelSheet } from "panel_sheet.slint";
 import { ReferenceImagesPanel } from "reference_images_panel.slint";
 import { RenderSettingsPanel } from "render_settings_panel.slint";
 import { ScenePanel } from "scene_panel.slint";
+import { AppTheme } from "theme.slint";
 import { ToolPanel } from "tool_panel.slint";
 import {
     HistoryAction,
@@ -11,6 +13,9 @@ import {
     InspectorPanelState,
     LightEditKind,
     MaterialEditKind,
+    NodeGraphAction,
+    NodeGraphPanelState,
+    NodeGraphPointerPayload,
     PanelPointerAction,
     PanelPointerInteractionKind,
     ReferenceImageAction,
@@ -36,12 +41,14 @@ export component PanelHost inherits Rectangle {
     in property <InspectorPanelState> inspector_state;
     in property <ToolPanelState> tool_state;
     in property <UtilityPanelState> utility_state;
+    in property <NodeGraphPanelState> node_graph_state;
     in property <bool> interaction_active;
     in property <PanelPointerInteractionKind> active_interaction_kind;
     in property <PanelResizeHandle> active_resize_handle;
 
     callback panel_header_action(kind: PanelKindView, action: PanelHeaderAction);
     callback panel_pointer_action(kind: PanelKindView, action: PanelPointerAction);
+    callback node_graph_action(action: NodeGraphAction, payload: NodeGraphPointerPayload);
     callback scene_toolbar_action(action: SceneToolbarAction);
     callback scene_row_action(action: SceneRowAction, index: int);
     callback scene_text_action(action: SceneTextAction, text: string);
@@ -53,6 +60,10 @@ export component PanelHost inherits Rectangle {
     callback history_action(action: HistoryAction, index: int);
     callback reference_image_action(action: ReferenceImageAction, index: int, value: float);
     callback render_settings_action(action: RenderSettingsAction, value: float);
+
+    private property <length> panel_body_offset: AppTheme.overlay_panel_padding + 52px + AppTheme.section_spacing + 1px + AppTheme.section_spacing;
+    private property <length> panel_body_width: root.panel.frame.width * 1px > AppTheme.overlay_panel_padding * 2 ? root.panel.frame.width * 1px - AppTheme.overlay_panel_padding * 2 : 0px;
+    private property <length> panel_body_height: root.panel.frame.height * 1px > root.panel_body_offset + AppTheme.overlay_panel_padding ? root.panel.frame.height * 1px - root.panel_body_offset - AppTheme.overlay_panel_padding : 0px;
 
     visible: panel.visible;
 
@@ -106,6 +117,15 @@ export component PanelHost inherits Rectangle {
             toolbar_action(action) => { root.scene_toolbar_action(action); }
             row_action(action, index) => { root.scene_row_action(action, index); }
             text_action(action, text) => { root.scene_text_action(action, text); }
+        }
+
+        if root.panel.kind == PanelKindView.node-graph : NodeGraphPanel {
+            state: root.node_graph_state;
+            width: root.panel_body_width;
+            height: root.panel_body_height;
+            perform_action(action, payload) => {
+                root.node_graph_action(action, payload);
+            }
         }
 
         if root.panel.kind == PanelKindView.history : HistoryPanel {

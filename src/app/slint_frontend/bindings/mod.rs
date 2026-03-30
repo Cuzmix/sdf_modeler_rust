@@ -1,6 +1,7 @@
 mod gizmo_overlay;
 mod inspector_panel;
 mod menu_strip;
+mod node_graph_panel;
 mod overlay_layout;
 mod panel_framework;
 mod property_sections;
@@ -32,6 +33,7 @@ pub(super) fn apply_shell_snapshot(window: &SlintHostWindow, snapshot: &ShellSna
     window.set_utility_panel_state(utility_panel::build_utility_panel_snapshot(
         window, snapshot,
     ));
+    window.set_node_graph_panel_state(node_graph_panel::build_node_graph_panel_state(snapshot));
     window.set_workspace_panel_state(workspace_panel::build_workspace_panel_state(snapshot));
 }
 

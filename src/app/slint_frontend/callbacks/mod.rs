@@ -11,6 +11,7 @@ mod inspector;
 mod keyboard;
 mod menu_strip;
 mod mutation;
+mod node_graph;
 mod panels;
 mod scene;
 mod scene_lookup;
@@ -32,6 +33,7 @@ pub(super) fn install_callbacks(
     scene::install(window, &context);
     tool_palette::install(window, &context);
     inspector::install(window, &context);
+    node_graph::install(window, &context);
     utilities::install(window, &context);
     workspace::install(window, &context);
     viewport::install(window, &context);

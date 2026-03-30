@@ -109,6 +109,7 @@ export enum PanelKindView {
     object-properties,
     render-settings,
     scene,
+    node-graph,
     history,
     reference-images,
 }
@@ -319,6 +320,53 @@ export struct UtilityPanelState {
     reference_rows: [ReferenceRowView],
     render_settings: RenderSettingsState,
     import_dialog: ImportDialogState,
+}
+
+export enum NodeGraphSlotView {
+    left,
+    right,
+    input,
+}
+
+export struct NodeGraphGridDotView {
+    x: float,
+    y: float,
+}
+
+export struct NodeGraphNodeView {
+    label: string,
+    kind_label: string,
+    x: float,
+    y: float,
+    width: float,
+    height: float,
+    selected: bool,
+    has_left_input: bool,
+    has_right_input: bool,
+    has_input: bool,
+    has_output: bool,
+}
+
+export struct NodeGraphEdgeView {
+    path_commands: string,
+    midpoint_x: float,
+    midpoint_y: float,
+    selected: bool,
+    slot: NodeGraphSlotView,
+}
+
+export struct NodeGraphPanelState {
+    pan_x: float,
+    pan_y: float,
+    zoom: float,
+    grid_offset_x: float,
+    grid_offset_y: float,
+    nodes: [NodeGraphNodeView],
+    edges: [NodeGraphEdgeView],
+    grid_dots: [NodeGraphGridDotView],
+    preview_path_commands: string,
+    preview_visible: bool,
+    can_disconnect_selected_edge: bool,
 }
 
 export struct WorkspacePanelState {

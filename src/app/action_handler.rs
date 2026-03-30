@@ -10,7 +10,8 @@ use crate::sculpt::{BrushMode, SculptState};
 
 use super::actions::{Action, LightingPreset, OperationInputSlot, SculptConvertMode};
 use super::state::{
-    DocumentState, ExpertPanelKind, InteractionMode, SculptConvertDialog, UiState, WorkspaceRoute,
+    DocumentState, ExpertPanelKind, GraphInputSlot, InteractionMode, SculptConvertDialog, UiState,
+    WorkspaceRoute,
 };
 use super::SdfApp;
 
@@ -42,6 +43,13 @@ enum SculptEntryDecision {
     MissingSelection,
     Activate(NodeId),
     OpenConvert(NodeId),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum GraphNodeFamily {
+    Geometry,
+    Light,
+    Unknown,
 }
 
 fn apply_selection_behavior_settings(
@@ -269,6 +277,188 @@ fn replace_operation_input_with_primitive(
     Some(new_operand_id)
 }
 
+fn graph_slot_child_in_scene(
+    scene: &Scene,
+    parent: NodeId,
+    slot: GraphInputSlot,
+) -> Option<Option<NodeId>> {
+    let node = scene.nodes.get(&parent)?;
+    match (&node.data, slot) {
+        (NodeData::Operation { left, .. }, GraphInputSlot::Left) => Some(*left),
+        (NodeData::Operation { right, .. }, GraphInputSlot::Right) => Some(*right),
+        (
+            NodeData::Sculpt { input, .. }
+            | NodeData::Transform { input, .. }
+            | NodeData::Modifier { input, .. },
+            GraphInputSlot::Input,
+        ) => Some(*input),
+        _ => None,
+    }
+}
+
+fn set_graph_slot_child_in_scene(
+    scene: &mut Scene,
+    parent: NodeId,
+    slot: GraphInputSlot,
+    child: Option<NodeId>,
+) -> bool {
+    let Some(node) = scene.nodes.get_mut(&parent) else {
+        return false;
+    };
+    match (&mut node.data, slot) {
+        (NodeData::Operation { left, .. }, GraphInputSlot::Left) => {
+            *left = child;
+            true
+        }
+        (NodeData::Operation { right, .. }, GraphInputSlot::Right) => {
+            *right = child;
+            true
+        }
+        (
+            NodeData::Sculpt { input, .. }
+            | NodeData::Transform { input, .. }
+            | NodeData::Modifier { input, .. },
+            GraphInputSlot::Input,
+        ) => {
+            *input = child;
+            true
+        }
+        _ => false,
+    }
+}
+
+fn node_output_family_in_scene(
+    scene: &Scene,
+    node_id: NodeId,
+    visiting: &mut std::collections::HashSet<NodeId>,
+) -> GraphNodeFamily {
+    if !visiting.insert(node_id) {
+        return GraphNodeFamily::Unknown;
+    }
+    let family = match scene.nodes.get(&node_id).map(|node| &node.data) {
+        Some(NodeData::Light { .. }) => GraphNodeFamily::Light,
+        Some(
+            NodeData::Primitive { .. }
+            | NodeData::Operation { .. }
+            | NodeData::Modifier { .. }
+            | NodeData::Sculpt { .. },
+        ) => GraphNodeFamily::Geometry,
+        Some(NodeData::Transform { input, .. }) => input
+            .map(|child_id| node_output_family_in_scene(scene, child_id, visiting))
+            .unwrap_or(GraphNodeFamily::Unknown),
+        None => GraphNodeFamily::Unknown,
+    };
+    visiting.remove(&node_id);
+    family
+}
+
+fn child_allowed_for_parent_in_scene(
+    scene: &Scene,
+    parent: NodeId,
+    child: NodeId,
+) -> Result<(), &'static str> {
+    let mut visiting = std::collections::HashSet::new();
+    let child_family = node_output_family_in_scene(scene, child, &mut visiting);
+    let Some(parent_node) = scene.nodes.get(&parent) else {
+        return Err("Target node no longer exists.");
+    };
+
+    match &parent_node.data {
+        NodeData::Operation { .. } | NodeData::Sculpt { .. } | NodeData::Modifier { .. } => {
+            if child_family != GraphNodeFamily::Geometry {
+                return Err("Target slot only accepts geometry inputs.");
+            }
+        }
+        NodeData::Transform { input, .. } => {
+            let expected_family = input.and_then(|existing_child| {
+                let mut expected_visiting = std::collections::HashSet::new();
+                let family =
+                    node_output_family_in_scene(scene, existing_child, &mut expected_visiting);
+                (family != GraphNodeFamily::Unknown).then_some(family)
+            });
+            if let Some(expected) = expected_family {
+                if expected != child_family {
+                    return Err("Input type does not match this transform chain.");
+                }
+            } else if child_family == GraphNodeFamily::Unknown {
+                return Err("Unable to resolve source output type.");
+            }
+        }
+        NodeData::Primitive { .. } | NodeData::Light { .. } => {
+            return Err("Target node does not expose input slots.");
+        }
+    }
+
+    Ok(())
+}
+
+fn connect_graph_input_in_scene(
+    scene: &mut Scene,
+    parent: NodeId,
+    slot: GraphInputSlot,
+    child: NodeId,
+) -> Result<(), String> {
+    if parent == child {
+        return Err("Cannot connect a node to itself.".to_string());
+    }
+    if !scene.nodes.contains_key(&parent) {
+        return Err("Target node no longer exists.".to_string());
+    }
+    if !scene.nodes.contains_key(&child) {
+        return Err("Source node no longer exists.".to_string());
+    }
+    if graph_slot_child_in_scene(scene, parent, slot).is_none() {
+        return Err(format!("Target does not expose a {} input slot.", slot.label()));
+    }
+    if scene.is_descendant(parent, child) {
+        return Err("Connection would create a cycle.".to_string());
+    }
+    if let Err(message) = child_allowed_for_parent_in_scene(scene, parent, child) {
+        return Err(message.to_string());
+    }
+
+    scene.detach_from_parent(child);
+    if !set_graph_slot_child_in_scene(scene, parent, slot, Some(child)) {
+        return Err("Failed to attach graph input.".to_string());
+    }
+    Ok(())
+}
+
+fn disconnect_graph_input_in_scene(
+    scene: &mut Scene,
+    parent: NodeId,
+    slot: GraphInputSlot,
+) -> Result<bool, String> {
+    let Some(current_child) = graph_slot_child_in_scene(scene, parent, slot) else {
+        return Err(format!("Target does not expose a {} input slot.", slot.label()));
+    };
+    if current_child.is_none() {
+        return Ok(false);
+    }
+    if !set_graph_slot_child_in_scene(scene, parent, slot, None) {
+        return Err("Failed to disconnect graph input.".to_string());
+    }
+    Ok(true)
+}
+
+fn refresh_node_graph_grid_cache(view: &mut crate::app::state::NodeGraphViewState) -> bool {
+    let zoom_bucket = crate::app::node_graph::grid_zoom_bucket(view.zoom);
+    let canvas_bucket = crate::app::node_graph::grid_canvas_bucket(view.canvas_size);
+    if !view.grid_dots.is_empty()
+        && view.grid_zoom_bucket == zoom_bucket
+        && view.grid_canvas_bucket == canvas_bucket
+    {
+        return false;
+    }
+
+    let grid_gap = crate::app::node_graph::grid_gap_for_zoom(view.zoom);
+    view.grid_dots = crate::app::node_graph::build_grid_base_dots(view.canvas_size, grid_gap);
+    view.grid_gap = grid_gap;
+    view.grid_zoom_bucket = zoom_bucket;
+    view.grid_canvas_bucket = canvas_bucket;
+    true
+}
+
 impl SdfApp {
     pub(super) fn sync_interaction_mode_after_sculpt_exit(&mut self) {
         sync_interaction_mode_after_sculpt_exit_state(&mut self.ui);
@@ -365,6 +555,107 @@ impl SdfApp {
         }
     }
 
+    fn push_node_graph_error_toast(&mut self, message: impl Into<String>) {
+        self.ui.toasts.push(super::Toast {
+            message: message.into(),
+            is_error: true,
+            created: crate::compat::Instant::now(),
+            duration: crate::compat::Duration::from_secs(4),
+        });
+    }
+
+    fn graph_slot_child(&self, parent: NodeId, slot: GraphInputSlot) -> Option<Option<NodeId>> {
+        graph_slot_child_in_scene(&self.doc.scene, parent, slot)
+    }
+
+    fn connect_graph_input(
+        &mut self,
+        parent: NodeId,
+        slot: GraphInputSlot,
+        child: NodeId,
+    ) -> Result<(), String> {
+        connect_graph_input_in_scene(&mut self.doc.scene, parent, slot, child)?;
+
+        self.ui.scene_graph_view.needs_initial_rebuild = true;
+        self.ui.node_graph_view.selected_edge = Some(crate::app::state::NodeGraphEdgeSelection {
+            parent,
+            slot,
+        });
+        self.gpu.buffer_dirty = true;
+        Ok(())
+    }
+
+    fn disconnect_graph_input(&mut self, parent: NodeId, slot: GraphInputSlot) -> Result<(), String> {
+        let disconnected = disconnect_graph_input_in_scene(&mut self.doc.scene, parent, slot)?;
+        if !disconnected {
+            return Ok(());
+        }
+        if self.ui.node_graph_view.selected_edge
+            == Some(crate::app::state::NodeGraphEdgeSelection { parent, slot })
+        {
+            self.ui.node_graph_view.selected_edge = None;
+        }
+        self.ui.scene_graph_view.needs_initial_rebuild = true;
+        self.gpu.buffer_dirty = true;
+        Ok(())
+    }
+
+    pub(super) fn sync_node_graph_projection_state(&mut self) {
+        let grid_cache_changed = refresh_node_graph_grid_cache(&mut self.ui.node_graph_view);
+        if !self.ui.scene_graph_view.needs_initial_rebuild
+            && self.ui.scene_graph_view.pending_center_node.is_none()
+            && !grid_cache_changed
+        {
+            return;
+        }
+
+        self.ui
+            .node_graph_view
+            .node_positions
+            .retain(|node_id, _| self.doc.scene.nodes.contains_key(node_id));
+
+        let default_positions = crate::app::node_graph::default_node_positions(&self.doc.scene);
+        for (node_id, position) in default_positions {
+            self.ui
+                .node_graph_view
+                .node_positions
+                .entry(node_id)
+                .or_insert(position);
+        }
+
+        if let Some(edge) = self.ui.node_graph_view.selected_edge {
+            let still_valid = self
+                .graph_slot_child(edge.parent, edge.slot)
+                .is_some_and(|child| child.is_some());
+            if !still_valid {
+                self.ui.node_graph_view.selected_edge = None;
+            }
+        }
+
+        if self
+            .ui
+            .node_graph_view
+            .connection_preview
+            .is_some_and(|preview| !self.doc.scene.nodes.contains_key(&preview.source_node))
+        {
+            self.ui.node_graph_view.connection_preview = None;
+        }
+
+        if let Some(center_node) = self.ui.scene_graph_view.pending_center_node.take() {
+            if let Some([node_x, node_y]) = self.ui.node_graph_view.node_positions.get(&center_node) {
+                let zoom = self.ui.node_graph_view.zoom;
+                let center_x = (node_x + crate::app::node_graph::NODE_CARD_WIDTH * 0.5) * zoom;
+                let center_y = (node_y + crate::app::node_graph::NODE_CARD_HEIGHT * 0.5) * zoom;
+                self.ui.node_graph_view.pan = [
+                    self.ui.node_graph_view.canvas_size[0] * 0.5 - center_x,
+                    self.ui.node_graph_view.canvas_size[1] * 0.5 - center_y,
+                ];
+            }
+        }
+
+        self.ui.scene_graph_view.needs_initial_rebuild = false;
+    }
+
     /// Process all collected actions. This is the single mutation point — the
     /// equivalent of a Redux reducer. All structural state changes flow through
     /// here, making the data flow explicit and easy to trace.
@@ -376,6 +667,7 @@ impl SdfApp {
                     self.doc.scene = Scene::new();
                     self.doc.history = History::new();
                     self.ui.selection.clear_selection();
+                    self.ui.node_graph_view = crate::app::state::NodeGraphViewState::default();
                     self.ui.scene_graph_view.needs_initial_rebuild = true;
                     self.doc.sculpt_state = SculptState::new_inactive();
                     self.ui.primary_shell.interaction_mode = InteractionMode::Select;
@@ -1082,6 +1374,20 @@ impl SdfApp {
                     self.ui.scene_graph_view.needs_initial_rebuild = true;
                     self.gpu.buffer_dirty = true;
                 }
+                Action::ConnectGraphInput {
+                    parent,
+                    slot,
+                    child,
+                } => {
+                    if let Err(message) = self.connect_graph_input(parent, slot, child) {
+                        self.push_node_graph_error_toast(message);
+                    }
+                }
+                Action::DisconnectGraphInput { parent, slot } => {
+                    if let Err(message) = self.disconnect_graph_input(parent, slot) {
+                        self.push_node_graph_error_toast(message);
+                    }
+                }
 
                 // ── Bake / Export ────────────────────────────────────
                 Action::RequestBake(req) => {
@@ -1625,6 +1931,7 @@ impl SdfApp {
                 }
             }
         }
+        self.sync_node_graph_projection_state();
     }
 
     /// Ensure the Brush Settings tab is visible in the dock when sculpt mode activates.
@@ -1720,6 +2027,7 @@ impl SdfApp {
                 }
                 self.doc.history = History::new();
                 self.ui.selection.clear_selection();
+                self.ui.node_graph_view = crate::app::state::NodeGraphViewState::default();
                 self.ui.scene_graph_view.needs_initial_rebuild = true;
                 self.gpu.current_structure_key = 0;
                 self.gpu.buffer_dirty = true;
@@ -1927,6 +2235,7 @@ mod tests {
         apply_auto_switch_sculpt_target_during_brush, apply_continuous_repaint,
         apply_measure_interaction_state, apply_select_interaction_state,
         apply_selection_behavior_settings, apply_show_fps_overlay, arm_sculpt_interaction_state,
+        connect_graph_input_in_scene, refresh_node_graph_grid_cache,
         duplicate_presented_object_and_offset, replace_operation_input_with_primitive,
         resolve_sculpt_entry, sync_interaction_mode_after_sculpt_exit_state, SculptEntryDecision,
         SelectionBehaviorApplyResult,
@@ -1934,8 +2243,10 @@ mod tests {
     use crate::app::actions::OperationInputSlot;
     use crate::app::reference_images::ReferenceImageStore;
     use crate::app::state::{
-        DocumentState, ExpertPanelKind, MultiTransformSessionState, PrimaryShellState,
-        SceneGraphViewState, ScenePanelUiState, SceneSelectionState, UiState, WorkspaceUiState,
+        DocumentState, ExpertPanelKind, GraphInputSlot, MultiTransformSessionState,
+        NodeGraphViewState, PrimaryShellState, SceneGraphViewState, ScenePanelUiState,
+        SceneSelectionState, UiState,
+        WorkspaceUiState,
     };
     use crate::gpu::camera::Camera;
     use crate::graph::history::History;
@@ -1970,6 +2281,7 @@ mod tests {
             scene_panel: ScenePanelUiState::default(),
             selection: SceneSelectionState::default(),
             scene_graph_view: SceneGraphViewState::default(),
+            node_graph_view: crate::app::state::NodeGraphViewState::default(),
             viewport_interaction: crate::app::state::ViewportInteractionState::default(),
             show_debug: false,
             show_help: false,
@@ -2073,6 +2385,43 @@ mod tests {
             &mut settings,
             true
         ));
+    }
+
+    #[test]
+    fn grid_cache_does_not_rebuild_when_only_pan_changes() {
+        let mut view = NodeGraphViewState::default();
+        let before = view.grid_dots.clone();
+        view.pan[0] += 40.0;
+        view.pan[1] -= 24.0;
+
+        let rebuilt = refresh_node_graph_grid_cache(&mut view);
+
+        assert!(!rebuilt);
+        assert_eq!(view.grid_dots, before);
+    }
+
+    #[test]
+    fn grid_cache_rebuilds_when_zoom_bucket_changes() {
+        let mut view = NodeGraphViewState::default();
+        let previous_bucket = view.grid_zoom_bucket;
+        view.zoom = 2.0;
+
+        let rebuilt = refresh_node_graph_grid_cache(&mut view);
+
+        assert!(rebuilt);
+        assert_ne!(view.grid_zoom_bucket, previous_bucket);
+    }
+
+    #[test]
+    fn grid_cache_rebuilds_when_canvas_bucket_changes() {
+        let mut view = NodeGraphViewState::default();
+        let previous_bucket = view.grid_canvas_bucket;
+        view.canvas_size = [view.canvas_size[0] + 120.0, view.canvas_size[1] + 80.0];
+
+        let rebuilt = refresh_node_graph_grid_cache(&mut view);
+
+        assert!(rebuilt);
+        assert_ne!(view.grid_canvas_bucket, previous_bucket);
     }
 
     #[test]
@@ -2365,5 +2714,75 @@ mod tests {
             panic!("expected primitive operand");
         };
         assert_eq!(*kind, SdfPrimitive::Cylinder);
+    }
+
+    #[test]
+    fn connect_graph_input_auto_rewire_replaces_occupied_slot() {
+        let mut scene = Scene::new();
+        let left = scene.create_primitive(SdfPrimitive::Sphere);
+        let replacement = scene.create_primitive(SdfPrimitive::Box);
+        let operation = scene.create_operation(CsgOp::Union, Some(left), None);
+
+        connect_graph_input_in_scene(&mut scene, operation, GraphInputSlot::Left, replacement)
+            .expect("connection should succeed");
+
+        let NodeData::Operation {
+            left: left_slot, ..
+        } = &scene.nodes[&operation].data
+        else {
+            panic!("expected operation node");
+        };
+        assert_eq!(*left_slot, Some(replacement));
+        assert!(!scene.build_parent_map().contains_key(&left));
+    }
+
+    #[test]
+    fn connect_graph_input_detaches_child_from_previous_parent() {
+        let mut scene = Scene::new();
+        let child = scene.create_primitive(SdfPrimitive::Sphere);
+        let old_parent = scene.create_operation(CsgOp::Union, Some(child), None);
+        let new_parent = scene.create_transform(None);
+
+        connect_graph_input_in_scene(&mut scene, new_parent, GraphInputSlot::Input, child)
+            .expect("reattach should succeed");
+
+        let NodeData::Operation {
+            left: left_slot, ..
+        } = &scene.nodes[&old_parent].data
+        else {
+            panic!("expected operation node");
+        };
+        assert_eq!(*left_slot, None);
+        let NodeData::Transform { input, .. } = &scene.nodes[&new_parent].data else {
+            panic!("expected transform node");
+        };
+        assert_eq!(*input, Some(child));
+    }
+
+    #[test]
+    fn connect_graph_input_rejects_self_link() {
+        let mut scene = Scene::new();
+        let parent = scene.create_transform(None);
+        let error = connect_graph_input_in_scene(&mut scene, parent, GraphInputSlot::Input, parent)
+            .expect_err("self-link should be rejected");
+        assert!(error.contains("itself"));
+    }
+
+    #[test]
+    fn connect_graph_input_rejects_cycle() {
+        let mut scene = Scene::new();
+        let left = scene.create_primitive(SdfPrimitive::Sphere);
+        let right = scene.create_primitive(SdfPrimitive::Box);
+        let operation = scene.create_operation(CsgOp::Union, Some(left), Some(right));
+        let parent_transform = scene.create_transform(Some(operation));
+
+        let error = connect_graph_input_in_scene(
+            &mut scene,
+            operation,
+            GraphInputSlot::Left,
+            parent_transform,
+        )
+        .expect_err("cycle-causing link should be rejected");
+        assert!(error.contains("cycle"));
     }
 }

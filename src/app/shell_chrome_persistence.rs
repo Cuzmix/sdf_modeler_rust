@@ -121,6 +121,7 @@ fn panel_kind_to_preference(kind: PanelKind) -> PanelKindPreference {
         PanelKind::ObjectProperties => PanelKindPreference::ObjectProperties,
         PanelKind::RenderSettings => PanelKindPreference::RenderSettings,
         PanelKind::Scene => PanelKindPreference::Scene,
+        PanelKind::NodeGraph => PanelKindPreference::NodeGraph,
         PanelKind::History => PanelKindPreference::History,
         PanelKind::ReferenceImages => PanelKindPreference::ReferenceImages,
     }
@@ -132,6 +133,7 @@ fn panel_kind_from_preference(kind: PanelKindPreference) -> PanelKind {
         PanelKindPreference::ObjectProperties => PanelKind::ObjectProperties,
         PanelKindPreference::RenderSettings => PanelKind::RenderSettings,
         PanelKindPreference::Scene => PanelKind::Scene,
+        PanelKindPreference::NodeGraph => PanelKind::NodeGraph,
         PanelKindPreference::History => PanelKind::History,
         PanelKindPreference::ReferenceImages => PanelKind::ReferenceImages,
     }
@@ -260,5 +262,17 @@ mod tests {
             PanelKindPreference::RenderSettings
         );
         assert_eq!(prefs.pinned_panels[1].kind, PanelKindPreference::Tool);
+    }
+
+    #[test]
+    fn panel_kind_preference_roundtrip_includes_node_graph() {
+        assert_eq!(
+            super::panel_kind_to_preference(PanelKind::NodeGraph),
+            PanelKindPreference::NodeGraph
+        );
+        assert_eq!(
+            super::panel_kind_from_preference(PanelKindPreference::NodeGraph),
+            PanelKind::NodeGraph
+        );
     }
 }

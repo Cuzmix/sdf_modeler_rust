@@ -12,6 +12,9 @@ import {
     OverlayLayoutViewState,
     MaterialEditKind,
     OperationEditKind,
+    NodeGraphAction,
+    NodeGraphPointerPayload,
+    NodeGraphPanelState,
     PanelFrameworkViewState,
     PanelPointerAction,
     PanelPointerInteractionKind,
@@ -72,6 +75,7 @@ export component SlintHostWindow inherits Window {
     in property <InspectorPanelState> inspector_panel_state;
     in property <ToolPanelState> tool_panel_state;
     in property <UtilityPanelState> utility_panel_state;
+    in property <NodeGraphPanelState> node_graph_panel_state;
     in property <WorkspacePanelState> workspace_panel_state;
 
     out property <float> viewport_width: viewport_panel.viewport_width;
@@ -101,6 +105,7 @@ export component SlintHostWindow inherits Window {
     callback panel_header_action(kind: PanelKindView, action: PanelHeaderAction);
     callback panel_pointer_action(kind: PanelKindView, action: PanelPointerAction);
     callback dismiss_transient_panels();
+    callback node_graph_action(action: NodeGraphAction, payload: NodeGraphPointerPayload);
     callback scene_toolbar_action(action: SceneToolbarAction);
     callback scene_row_action(action: SceneRowAction, index: int);
     callback scene_text_action(action: SceneTextAction, text: string);
@@ -285,6 +290,7 @@ export component SlintHostWindow inherits Window {
             inspector_state: root.inspector_panel_state;
             tool_state: root.tool_panel_state;
             utility_state: root.utility_panel_state;
+            node_graph_state: root.node_graph_panel_state;
             interaction_active: root.panel_framework_state.panel_interaction_active
                 && root.panel_framework_state.interaction_panel_kind == self.panel.kind;
             active_interaction_kind: root.panel_framework_state.active_interaction_kind;
@@ -294,6 +300,9 @@ export component SlintHostWindow inherits Window {
             }
             panel_pointer_action(kind, action) => {
                 root.panel_pointer_action(kind, action);
+            }
+            node_graph_action(action, payload) => {
+                root.node_graph_action(action, payload);
             }
             scene_toolbar_action(action) => {
                 root.scene_toolbar_action(action);
@@ -322,6 +331,7 @@ export component SlintHostWindow inherits Window {
             inspector_state: root.inspector_panel_state;
             tool_state: root.tool_panel_state;
             utility_state: root.utility_panel_state;
+            node_graph_state: root.node_graph_panel_state;
             interaction_active: root.panel_framework_state.panel_interaction_active
                 && root.panel_framework_state.interaction_panel_kind == self.panel.kind;
             active_interaction_kind: root.panel_framework_state.active_interaction_kind;
@@ -331,6 +341,9 @@ export component SlintHostWindow inherits Window {
             }
             panel_pointer_action(kind, action) => {
                 root.panel_pointer_action(kind, action);
+            }
+            node_graph_action(action, payload) => {
+                root.node_graph_action(action, payload);
             }
             scene_toolbar_action(action) => {
                 root.scene_toolbar_action(action);

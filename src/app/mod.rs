@@ -8,6 +8,7 @@ mod controllers;
 mod frontend_models;
 mod gpu_sync;
 mod input;
+pub(crate) mod node_graph;
 pub(crate) mod reference_images;
 pub(crate) mod runtime;
 mod sculpt_detail;
@@ -407,6 +408,7 @@ impl SdfApp {
             scene_panel: state::ScenePanelUiState::default(),
             selection: state::SceneSelectionState::default(),
             scene_graph_view: state::SceneGraphViewState::default(),
+            node_graph_view: state::NodeGraphViewState::default(),
             viewport_interaction: state::ViewportInteractionState::default(),
             show_debug: false,
             show_help: false,

@@ -246,6 +246,7 @@ pub enum PanelKindPreference {
     ObjectProperties,
     RenderSettings,
     Scene,
+    NodeGraph,
     History,
     ReferenceImages,
 }
@@ -1326,6 +1327,11 @@ mod tests {
                     width: 360.0,
                     height: 300.0,
                 }),
+            },
+            PinnedPanelPreference {
+                kind: PanelKindPreference::NodeGraph,
+                collapsed: false,
+                rect: None,
             }],
         };
 

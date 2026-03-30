@@ -57,6 +57,7 @@ impl SdfApp {
         self.poll_export();
         self.poll_import();
         self.poll_sculpt_pick();
+        self.sync_node_graph_projection_state();
 
         // Detect sculpt drag end before the draw phase fills pending picks again.
         if self.async_state.sculpt_dragging && !frame_input.pointer_primary_down {

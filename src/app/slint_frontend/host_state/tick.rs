@@ -72,6 +72,7 @@ impl SlintHostState {
             primary_shell: &self.app.ui.primary_shell,
             menu_ui: &self.app.ui.menu,
             panel_framework: &self.app.ui.panel_framework,
+            node_graph_view: &self.app.ui.node_graph_view,
             viewport_size_logical: [window.get_viewport_width(), window.get_viewport_height()],
             safe_area_insets_logical: [
                 window.get_safe_area_left(),

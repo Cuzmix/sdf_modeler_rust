@@ -89,6 +89,7 @@ fn panel_kind(kind: PanelKindView) -> PanelKind {
         PanelKindView::ObjectProperties => PanelKind::ObjectProperties,
         PanelKindView::RenderSettings => PanelKind::RenderSettings,
         PanelKindView::Scene => PanelKind::Scene,
+        PanelKindView::NodeGraph => PanelKind::NodeGraph,
         PanelKindView::History => PanelKind::History,
         PanelKindView::ReferenceImages => PanelKind::ReferenceImages,
     }

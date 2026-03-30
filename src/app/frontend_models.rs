@@ -1,11 +1,12 @@
+use std::collections::HashMap;
 use std::path::Path;
 
 use crate::app::reference_images::ReferenceImageStore;
 use crate::app::state::{
-    ExpertPanelKind, ExpertPanelRegistry, InteractionMode, MenuDropdownKind, MenuUiState,
-    PanelBarEdge, PanelBarOrientation, PanelFrameworkState, PanelKind, PanelPointerInteractionKind,
-    PanelResizeHandle, PanelSheetAnchor, PrimaryShellState, ScenePanelUiState, SceneSelectionState,
-    WorkspaceRoute, WorkspaceUiState,
+    ExpertPanelKind, ExpertPanelRegistry, GraphInputSlot, InteractionMode, MenuDropdownKind,
+    MenuUiState, NodeGraphViewState, PanelBarEdge, PanelBarOrientation, PanelFrameworkState,
+    PanelKind, PanelPointerInteractionKind, PanelResizeHandle, PanelSheetAnchor, PrimaryShellState,
+    ScenePanelUiState, SceneSelectionState, WorkspaceRoute, WorkspaceUiState,
 };
 use crate::gizmo::{GizmoMode, GizmoSpace};
 use crate::graph::history::History;
@@ -21,6 +22,11 @@ use crate::sculpt::SculptState;
 use crate::settings::{
     EnvironmentBackgroundMode, EnvironmentSource, GroupRotateDirection, MultiAxisOrientation,
     MultiPivotMode, Settings,
+};
+
+use crate::app::node_graph::{
+    clamp_zoom, edge_curve_screen, node_has_output_handle, output_handle_position, screen_from_canvas,
+    CubicEdgeCurve, EdgeSlot, NODE_CARD_HEIGHT, NODE_CARD_WIDTH,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -451,6 +457,61 @@ pub struct WorkspaceSummaryEntry {
     pub value: String,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NodeGraphSlotModel {
+    Left,
+    Right,
+    Input,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct NodeGraphGridDotModel {
+    pub x: f32,
+    pub y: f32,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct NodeGraphNodeModel {
+    pub id: NodeId,
+    pub label: String,
+    pub kind_label: String,
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+    pub selected: bool,
+    pub has_left_input: bool,
+    pub has_right_input: bool,
+    pub has_input: bool,
+    pub has_output: bool,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct NodeGraphEdgeModel {
+    pub parent: NodeId,
+    pub child: NodeId,
+    pub slot: NodeGraphSlotModel,
+    pub path_commands: String,
+    pub midpoint_x: f32,
+    pub midpoint_y: f32,
+    pub selected: bool,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct NodeGraphPanelModel {
+    pub pan_x: f32,
+    pub pan_y: f32,
+    pub zoom: f32,
+    pub grid_offset_x: f32,
+    pub grid_offset_y: f32,
+    pub nodes: Vec<NodeGraphNodeModel>,
+    pub edges: Vec<NodeGraphEdgeModel>,
+    pub grid_dots: Vec<NodeGraphGridDotModel>,
+    pub preview_path_commands: String,
+    pub preview_visible: bool,
+    pub can_disconnect_selected_edge: bool,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WorkspacePanelModel {
     pub visible: bool,
@@ -476,6 +537,7 @@ pub struct ShellSnapshot {
     pub inspector: InspectorModel,
     pub tool_panel: ToolPanelModel,
     pub utility: UtilityModel,
+    pub node_graph: NodeGraphPanelModel,
     pub viewport_status: ViewportStatusModel,
     pub workspace: WorkspacePanelModel,
 }
@@ -487,6 +549,7 @@ pub struct ShellSnapshotInputs<'a> {
     pub primary_shell: &'a PrimaryShellState,
     pub menu_ui: &'a MenuUiState,
     pub panel_framework: &'a PanelFrameworkState,
+    pub node_graph_view: &'a NodeGraphViewState,
     pub viewport_size_logical: [f32; 2],
     pub safe_area_insets_logical: [f32; 4],
     pub virtual_keyboard_position_logical: [f32; 2],
@@ -580,6 +643,11 @@ pub fn build_shell_snapshot(inputs: ShellSnapshotInputs<'_>) -> ShellSnapshot {
         },
     );
     let settings_card = build_settings_card_model(inputs.menu_ui, inputs.settings);
+    let node_graph = build_node_graph_panel_model(
+        inputs.scene,
+        inputs.selection,
+        inputs.node_graph_view,
+    );
 
     ShellSnapshot {
         overlay_layout: overlay_layout.clone(),
@@ -598,6 +666,7 @@ pub fn build_shell_snapshot(inputs: ShellSnapshotInputs<'_>) -> ShellSnapshot {
             inputs.expert_panels,
             inputs.settings,
         ),
+        node_graph,
         viewport_status: ViewportStatusModel {
             interaction_label: interaction_mode_label(inputs.interaction_mode).to_string(),
             transform_label: inputs.gizmo_mode.label().to_string(),
@@ -1529,6 +1598,234 @@ pub fn build_utility_model(
             environment_background_blur: settings.render.environment_background_blur,
         },
     }
+}
+
+pub fn build_node_graph_panel_model(
+    scene: &Scene,
+    selection: &SceneSelectionState,
+    node_graph_view: &NodeGraphViewState,
+) -> NodeGraphPanelModel {
+    let zoom = clamp_zoom(node_graph_view.zoom);
+    let mut node_ids = scene.nodes.keys().copied().collect::<Vec<_>>();
+    node_ids.sort_unstable();
+
+    let missing_positions = node_ids
+        .iter()
+        .any(|node_id| !node_graph_view.node_positions.contains_key(node_id));
+    let default_positions =
+        missing_positions.then(|| crate::app::node_graph::default_node_positions(scene));
+    let positions = node_ids
+        .iter()
+        .filter_map(|node_id| {
+            node_graph_view
+                .node_positions
+                .get(node_id)
+                .copied()
+                .or_else(|| {
+                    default_positions
+                        .as_ref()
+                        .and_then(|positions| positions.get(node_id).copied())
+                })
+                .map(|position| (*node_id, position))
+        })
+        .collect::<HashMap<_, _>>();
+
+    let mut nodes = Vec::with_capacity(node_ids.len());
+    for node_id in &node_ids {
+        let Some(node) = scene.nodes.get(node_id) else {
+            continue;
+        };
+        let Some(position) = positions.get(node_id).copied() else {
+            continue;
+        };
+        let screen_x = node_graph_view.pan[0] + position[0] * zoom;
+        let screen_y = node_graph_view.pan[1] + position[1] * zoom;
+        let (has_left_input, has_right_input, has_input) = node_input_flags(&node.data);
+        let title_budget = ((20.0 * zoom).round() as usize).clamp(6, 32);
+        let kind_budget = ((24.0 * zoom).round() as usize).clamp(5, 32);
+        nodes.push(NodeGraphNodeModel {
+            id: *node_id,
+            label: single_line_ellipsis(&node.name, title_budget),
+            kind_label: single_line_ellipsis(node_graph_kind_label(&node.data), kind_budget),
+            x: screen_x,
+            y: screen_y,
+            width: NODE_CARD_WIDTH * zoom,
+            height: NODE_CARD_HEIGHT * zoom,
+            selected: selection.selected_set.contains(node_id),
+            has_left_input,
+            has_right_input,
+            has_input,
+            has_output: node_has_output_handle(&node.data),
+        });
+    }
+
+    let mut edges = Vec::new();
+    for node_id in &node_ids {
+        let Some(node) = scene.nodes.get(node_id) else {
+            continue;
+        };
+        let Some(parent_position) = positions.get(node_id).copied() else {
+            continue;
+        };
+        match &node.data {
+            NodeData::Operation { left, right, .. } => {
+                if let Some(child_id) = *left {
+                    if let Some(child_position) = positions.get(&child_id) {
+                        edges.push(build_node_graph_edge(
+                            *node_id,
+                            child_id,
+                            NodeGraphSlotModel::Left,
+                            parent_position,
+                            *child_position,
+                            node_graph_view,
+                            zoom,
+                        ));
+                    }
+                }
+                if let Some(child_id) = *right {
+                    if let Some(child_position) = positions.get(&child_id) {
+                        edges.push(build_node_graph_edge(
+                            *node_id,
+                            child_id,
+                            NodeGraphSlotModel::Right,
+                            parent_position,
+                            *child_position,
+                            node_graph_view,
+                            zoom,
+                        ));
+                    }
+                }
+            }
+            NodeData::Sculpt { input, .. }
+            | NodeData::Transform { input, .. }
+            | NodeData::Modifier { input, .. } => {
+                if let Some(child_id) = *input {
+                    if let Some(child_position) = positions.get(&child_id) {
+                        edges.push(build_node_graph_edge(
+                            *node_id,
+                            child_id,
+                            NodeGraphSlotModel::Input,
+                            parent_position,
+                            *child_position,
+                            node_graph_view,
+                            zoom,
+                        ));
+                    }
+                }
+            }
+            NodeData::Primitive { .. } | NodeData::Light { .. } => {}
+        }
+    }
+
+    if let Some(selection) = node_graph_view.selected_edge {
+        for edge in &mut edges {
+            edge.selected = edge.parent == selection.parent
+                && edge.slot
+                    == match selection.slot {
+                        GraphInputSlot::Left => NodeGraphSlotModel::Left,
+                        GraphInputSlot::Right => NodeGraphSlotModel::Right,
+                        GraphInputSlot::Input => NodeGraphSlotModel::Input,
+                    };
+        }
+    }
+
+    let preview_path_commands = node_graph_view
+        .connection_preview
+        .and_then(|preview| positions.get(&preview.source_node).copied().map(|source| (preview, source)))
+        .map(|(preview, source)| {
+            let start_canvas = output_handle_position(source[0], source[1]);
+            let start = screen_from_canvas(start_canvas, node_graph_view.pan, zoom);
+            CubicEdgeCurve::new(start, preview.pointer_screen).to_path_commands()
+        })
+        .unwrap_or_default();
+
+    NodeGraphPanelModel {
+        pan_x: node_graph_view.pan[0],
+        pan_y: node_graph_view.pan[1],
+        zoom,
+        grid_offset_x: node_graph_view.pan[0].rem_euclid(node_graph_view.grid_gap.max(1.0)),
+        grid_offset_y: node_graph_view.pan[1].rem_euclid(node_graph_view.grid_gap.max(1.0)),
+        nodes,
+        can_disconnect_selected_edge: edges.iter().any(|edge| edge.selected),
+        edges,
+        grid_dots: node_graph_view
+            .grid_dots
+            .iter()
+            .map(|dot| NodeGraphGridDotModel {
+                x: dot[0],
+                y: dot[1],
+            })
+            .collect(),
+        preview_visible: !preview_path_commands.is_empty(),
+        preview_path_commands,
+    }
+}
+
+fn node_graph_kind_label(data: &NodeData) -> &'static str {
+    match data {
+        NodeData::Primitive { kind, .. } => kind.base_name(),
+        NodeData::Operation { op, .. } => op.base_name(),
+        NodeData::Sculpt { .. } => "Sculpt",
+        NodeData::Transform { .. } => "Transform",
+        NodeData::Modifier { kind, .. } => kind.base_name(),
+        NodeData::Light { light_type, .. } => light_type.label(),
+    }
+}
+
+fn node_input_flags(data: &NodeData) -> (bool, bool, bool) {
+    match data {
+        NodeData::Operation { .. } => (true, true, false),
+        NodeData::Sculpt { .. } | NodeData::Transform { .. } | NodeData::Modifier { .. } => {
+            (false, false, true)
+        }
+        NodeData::Primitive { .. } | NodeData::Light { .. } => (false, false, false),
+    }
+}
+
+fn build_node_graph_edge(
+    parent: NodeId,
+    child: NodeId,
+    slot: NodeGraphSlotModel,
+    parent_position: [f32; 2],
+    child_position: [f32; 2],
+    node_graph_view: &NodeGraphViewState,
+    zoom: f32,
+) -> NodeGraphEdgeModel {
+    let edge_slot = match slot {
+        NodeGraphSlotModel::Left => EdgeSlot::Left,
+        NodeGraphSlotModel::Right => EdgeSlot::Right,
+        NodeGraphSlotModel::Input => EdgeSlot::Input,
+    };
+    let curve = edge_curve_screen(
+        parent_position,
+        child_position,
+        edge_slot,
+        node_graph_view.pan,
+        zoom,
+    );
+    let midpoint = curve.point_at(0.5);
+    NodeGraphEdgeModel {
+        parent,
+        child,
+        slot,
+        path_commands: curve.to_path_commands(),
+        midpoint_x: midpoint[0],
+        midpoint_y: midpoint[1],
+        selected: false,
+    }
+}
+
+fn single_line_ellipsis(text: &str, max_chars: usize) -> String {
+    let normalized = text.replace('\n', " ");
+    if normalized.chars().count() <= max_chars {
+        return normalized;
+    }
+    if max_chars <= 1 {
+        return "…".to_string();
+    }
+    let mut truncated = normalized.chars().take(max_chars - 1).collect::<String>();
+    truncated.push('…');
+    truncated
 }
 
 pub fn build_workspace_panel_model(
@@ -2813,10 +3110,92 @@ mod tests {
                 PanelKind::ObjectProperties,
                 PanelKind::RenderSettings,
                 PanelKind::Scene,
+                PanelKind::NodeGraph,
                 PanelKind::History,
                 PanelKind::ReferenceImages,
             ]
         );
+    }
+
+    #[test]
+    fn node_graph_model_builds_expected_nodes_and_edges_for_mixed_scene() {
+        let mut scene = Scene::new();
+        let left = scene.create_primitive(SdfPrimitive::Sphere);
+        let right = scene.create_primitive(SdfPrimitive::Box);
+        let operation = scene.create_operation(crate::graph::scene::CsgOp::Union, Some(left), Some(right));
+        let transform = scene.create_transform(Some(operation));
+        let model = build_node_graph_panel_model(
+            &scene,
+            &SceneSelectionState::default(),
+            &NodeGraphViewState::default(),
+        );
+
+        let expected_edge_count = scene
+            .nodes
+            .values()
+            .map(|node| match node.data {
+                NodeData::Operation { left, right, .. } => {
+                    usize::from(left.is_some()) + usize::from(right.is_some())
+                }
+                NodeData::Sculpt { input, .. }
+                | NodeData::Transform { input, .. }
+                | NodeData::Modifier { input, .. } => usize::from(input.is_some()),
+                NodeData::Primitive { .. } | NodeData::Light { .. } => 0,
+            })
+            .sum::<usize>();
+
+        assert_eq!(model.nodes.len(), scene.nodes.len());
+        assert_eq!(model.edges.len(), expected_edge_count);
+        assert!(model.edges.iter().any(|edge| {
+            edge.parent == operation && edge.child == left && edge.slot == NodeGraphSlotModel::Left
+        }));
+        assert!(model.edges.iter().any(|edge| {
+            edge.parent == operation && edge.child == right && edge.slot == NodeGraphSlotModel::Right
+        }));
+        assert!(model.edges.iter().any(|edge| {
+            edge.parent == transform
+                && edge.child == operation
+                && edge.slot == NodeGraphSlotModel::Input
+        }));
+    }
+
+    #[test]
+    fn node_graph_model_cards_use_uniform_dimensions() {
+        let scene = Scene::new();
+        let model = build_node_graph_panel_model(
+            &scene,
+            &SceneSelectionState::default(),
+            &NodeGraphViewState::default(),
+        );
+        let first = model.nodes.first().expect("at least one node");
+        for node in &model.nodes {
+            assert!((node.width - first.width).abs() < f32::EPSILON);
+            assert!((node.height - first.height).abs() < f32::EPSILON);
+        }
+    }
+
+    #[test]
+    fn node_graph_model_exposes_output_handles_for_light_chain_sources() {
+        let scene = Scene::new();
+        let model = build_node_graph_panel_model(
+            &scene,
+            &SceneSelectionState::default(),
+            &NodeGraphViewState::default(),
+        );
+        let ambient_light = model
+            .nodes
+            .iter()
+            .find(|node| node.label.starts_with("Ambient"))
+            .expect("ambient light node present");
+        assert!(ambient_light.has_output);
+    }
+
+    #[test]
+    fn single_line_ellipsis_bounds_text_to_budget() {
+        let text = "Ambient Light Transform";
+        let clipped = single_line_ellipsis(text, 8);
+        assert_eq!(clipped, "Ambient…");
+        assert_eq!(single_line_ellipsis(text, 64), text);
     }
 
     #[test]

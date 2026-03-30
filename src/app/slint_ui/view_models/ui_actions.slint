@@ -120,6 +120,50 @@ export struct PanelPointerAction {
     y: float,
 }
 
+export enum NodeGraphAction {
+    canvas-pointer,
+    canvas-scroll,
+    zoom-in,
+    zoom-out,
+    fit-view,
+    disconnect-selected-edge,
+    quick-add-sphere,
+    quick-add-box,
+    quick-add-union,
+}
+
+export enum NodeGraphPointerPhase {
+    down,
+    move,
+    up,
+    cancel,
+}
+
+export enum NodeGraphPointerButton {
+    primary,
+    secondary,
+    middle,
+    other,
+}
+
+export struct NodeGraphModifiers {
+    ctrl: bool,
+    shift: bool,
+    alt: bool,
+}
+
+export struct NodeGraphPointerPayload {
+    phase: NodeGraphPointerPhase,
+    button: NodeGraphPointerButton,
+    x: float,
+    y: float,
+    canvas_width: float,
+    canvas_height: float,
+    delta_x: float,
+    delta_y: float,
+    modifiers: NodeGraphModifiers,
+}
+
 export enum SceneToolbarAction {
     create-sphere,
     create-box,

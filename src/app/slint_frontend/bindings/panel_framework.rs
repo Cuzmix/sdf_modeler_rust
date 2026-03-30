@@ -131,6 +131,7 @@ fn panel_kind_view(kind: crate::app::state::PanelKind) -> PanelKindView {
         crate::app::state::PanelKind::ObjectProperties => PanelKindView::ObjectProperties,
         crate::app::state::PanelKind::RenderSettings => PanelKindView::RenderSettings,
         crate::app::state::PanelKind::Scene => PanelKindView::Scene,
+        crate::app::state::PanelKind::NodeGraph => PanelKindView::NodeGraph,
         crate::app::state::PanelKind::History => PanelKindView::History,
         crate::app::state::PanelKind::ReferenceImages => PanelKindView::ReferenceImages,
     }
@@ -164,5 +165,17 @@ fn panel_resize_handle_view(
             PanelResizeHandleView::BottomRight
         }
         None => PanelResizeHandleView::None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::panel_kind_view;
+    use crate::app::state::PanelKind;
+    use crate::app::slint_frontend::PanelKindView;
+
+    #[test]
+    fn panel_kind_view_maps_node_graph_variant() {
+        assert_eq!(panel_kind_view(PanelKind::NodeGraph), PanelKindView::NodeGraph);
     }
 }

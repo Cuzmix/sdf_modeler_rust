@@ -1,0 +1,341 @@
+import { Button } from "std-widgets.slint";
+import {
+    NodeGraphAction,
+    NodeGraphPanelState,
+    NodeGraphPointerButton,
+    NodeGraphPointerPayload,
+    NodeGraphPointerPhase,
+    NodeGraphSlotView,
+} from "view_models.slint";
+
+export component NodeGraphPanel inherits Rectangle {
+    in property <NodeGraphPanelState> state;
+
+    callback perform_action(action: NodeGraphAction, payload: NodeGraphPointerPayload);
+
+    background: #0d1119;
+    border-radius: 12px;
+    clip: true;
+
+    TouchArea {
+        width: parent.width;
+        height: parent.height;
+        pointer-event(event) => {
+            root.perform_action(NodeGraphAction.canvas-pointer, {
+                phase: event.kind == PointerEventKind.down ? NodeGraphPointerPhase.down : event.kind == PointerEventKind.up ? NodeGraphPointerPhase.up : event.kind == PointerEventKind.cancel ? NodeGraphPointerPhase.cancel : NodeGraphPointerPhase.move,
+                button: event.button == PointerEventButton.left ? NodeGraphPointerButton.primary : event.button == PointerEventButton.right ? NodeGraphPointerButton.secondary : event.button == PointerEventButton.middle ? NodeGraphPointerButton.middle : NodeGraphPointerButton.other,
+                x: self.mouse_x / 1px,
+                y: self.mouse_y / 1px,
+                canvas_width: root.width / 1px,
+                canvas_height: root.height / 1px,
+                delta_x: 0,
+                delta_y: 0,
+                modifiers: {
+                    ctrl: event.modifiers.control,
+                    shift: event.modifiers.shift,
+                    alt: event.modifiers.alt,
+                },
+            });
+        }
+
+        scroll-event(event) => {
+            root.perform_action(NodeGraphAction.canvas-scroll, {
+                phase: NodeGraphPointerPhase.move,
+                button: NodeGraphPointerButton.other,
+                x: self.mouse_x / 1px,
+                y: self.mouse_y / 1px,
+                canvas_width: root.width / 1px,
+                canvas_height: root.height / 1px,
+                delta_x: event.delta_x / 1px,
+                delta_y: event.delta_y / 1px,
+                modifiers: {
+                    ctrl: event.modifiers.control,
+                    shift: event.modifiers.shift,
+                    alt: event.modifiers.alt,
+                },
+            });
+            accept
+        }
+    }
+
+    for dot in root.state.grid_dots : Rectangle {
+        x: (dot.x + root.state.grid_offset_x) * 1px - 1px;
+        y: (dot.y + root.state.grid_offset_y) * 1px - 1px;
+        width: 2px;
+        height: 2px;
+        border-radius: 1px;
+        background: #334158;
+        opacity: 0.55;
+    }
+
+    for edge in root.state.edges : Path {
+        width: parent.width;
+        height: parent.height;
+        commands: edge.path_commands;
+        stroke: edge.selected ? #9dcbff : edge.slot == NodeGraphSlotView.left ? #6ea9ff : edge.slot == NodeGraphSlotView.right ? #ffb17d : #8fd3ab;
+        stroke-width: edge.selected ? 3px : 2px;
+        fill: #00000000;
+        stroke-line-cap: round;
+        stroke-line-join: round;
+    }
+
+    for edge in root.state.edges : Rectangle {
+        if edge.selected : Rectangle {
+            x: edge.midpoint_x * 1px - 4px;
+            y: edge.midpoint_y * 1px - 4px;
+            width: 8px;
+            height: 8px;
+            border-radius: 4px;
+            background: #9dcbff;
+        }
+    }
+
+    if root.state.preview_visible : Path {
+        width: parent.width;
+        height: parent.height;
+        commands: root.state.preview_path_commands;
+        stroke: #8da7ce;
+        stroke-width: 2px;
+        fill: #00000000;
+        stroke-line-cap: round;
+        stroke-line-join: round;
+    }
+
+    for node in root.state.nodes : Rectangle {
+        x: node.x * 1px;
+        y: node.y * 1px;
+        width: node.width * 1px;
+        height: node.height * 1px;
+        border-width: node.selected ? 2px : 1px;
+        border-color: node.selected ? #7fb0f1 : #3a475f;
+        border-radius: 12px;
+        background: node.selected ? #1f293b : #1a2230;
+        clip: true;
+
+        if node.has_output : Rectangle {
+            x: parent.width - 6px;
+            y: parent.height / 2 - 6px;
+            width: 12px;
+            height: 12px;
+            border-radius: 6px;
+            background: #9fd1ad;
+            border-width: 1px;
+            border-color: #0f1725;
+        }
+
+        if node.has_input : Rectangle {
+            x: -6px;
+            y: parent.height / 2 - 6px;
+            width: 12px;
+            height: 12px;
+            border-radius: 6px;
+            background: #8fd3ab;
+            border-width: 1px;
+            border-color: #0f1725;
+        }
+
+        if node.has_left_input : Rectangle {
+            x: -6px;
+            y: parent.height * 0.34 - 6px;
+            width: 12px;
+            height: 12px;
+            border-radius: 6px;
+            background: #6ea9ff;
+            border-width: 1px;
+            border-color: #0f1725;
+        }
+
+        if node.has_right_input : Rectangle {
+            x: -6px;
+            y: parent.height * 0.66 - 6px;
+            width: 12px;
+            height: 12px;
+            border-radius: 6px;
+            background: #ffb17d;
+            border-width: 1px;
+            border-color: #0f1725;
+        }
+
+        text_stack := Rectangle {
+            x: 10px;
+            y: 8px;
+            width: parent.width - 20px;
+            height: parent.height - 16px;
+            clip: true;
+
+            VerticalLayout {
+                width: parent.width;
+                height: parent.height;
+                spacing: 4px;
+
+                Text {
+                    width: parent.width;
+                    text: node.label;
+                    color: #edf3ff;
+                    font-size: 13px;
+                    font-weight: 600;
+                    wrap: no-wrap;
+                }
+
+                Text {
+                    width: parent.width;
+                    text: node.kind_label;
+                    color: #b4c5de;
+                    font-size: 11px;
+                    wrap: no-wrap;
+                }
+            }
+        }
+    }
+
+    quick_add := Rectangle {
+        x: 12px;
+        y: 12px;
+        width: 272px;
+        height: 44px;
+        background: #121a27d9;
+        border-width: 1px;
+        border-color: #314057;
+        border-radius: 10px;
+
+        add_row := HorizontalLayout {
+            x: 8px;
+            y: 6px;
+            width: parent.width - 16px;
+            height: parent.height - 12px;
+            spacing: 6px;
+            Button {
+                text: "+ Sphere";
+                clicked => {
+                    root.perform_action(NodeGraphAction.quick-add-sphere, {
+                        phase: NodeGraphPointerPhase.down,
+                        button: NodeGraphPointerButton.primary,
+                        x: 0,
+                        y: 0,
+                        canvas_width: root.width / 1px,
+                        canvas_height: root.height / 1px,
+                        delta_x: 0,
+                        delta_y: 0,
+                        modifiers: { ctrl: false, shift: false, alt: false },
+                    });
+                }
+            }
+            Button {
+                text: "+ Box";
+                clicked => {
+                    root.perform_action(NodeGraphAction.quick-add-box, {
+                        phase: NodeGraphPointerPhase.down,
+                        button: NodeGraphPointerButton.primary,
+                        x: 0,
+                        y: 0,
+                        canvas_width: root.width / 1px,
+                        canvas_height: root.height / 1px,
+                        delta_x: 0,
+                        delta_y: 0,
+                        modifiers: { ctrl: false, shift: false, alt: false },
+                    });
+                }
+            }
+            Button {
+                text: "+ Union";
+                clicked => {
+                    root.perform_action(NodeGraphAction.quick-add-union, {
+                        phase: NodeGraphPointerPhase.down,
+                        button: NodeGraphPointerButton.primary,
+                        x: 0,
+                        y: 0,
+                        canvas_width: root.width / 1px,
+                        canvas_height: root.height / 1px,
+                        delta_x: 0,
+                        delta_y: 0,
+                        modifiers: { ctrl: false, shift: false, alt: false },
+                    });
+                }
+            }
+        }
+    }
+
+    controls := Rectangle {
+        y: 12px;
+        width: 378px;
+        height: 44px;
+        background: #121a27d9;
+        border-width: 1px;
+        border-color: #314057;
+        border-radius: 10px;
+
+        control_row := HorizontalLayout {
+            x: 8px;
+            y: 6px;
+            width: parent.width - 16px;
+            height: parent.height - 12px;
+            spacing: 6px;
+            Button {
+                text: "Zoom In";
+                clicked => {
+                    root.perform_action(NodeGraphAction.zoom-in, {
+                        phase: NodeGraphPointerPhase.down,
+                        button: NodeGraphPointerButton.primary,
+                        x: root.width / 2 / 1px,
+                        y: root.height / 2 / 1px,
+                        canvas_width: root.width / 1px,
+                        canvas_height: root.height / 1px,
+                        delta_x: 0,
+                        delta_y: 0,
+                        modifiers: { ctrl: false, shift: false, alt: false },
+                    });
+                }
+            }
+            Button {
+                text: "Zoom Out";
+                clicked => {
+                    root.perform_action(NodeGraphAction.zoom-out, {
+                        phase: NodeGraphPointerPhase.down,
+                        button: NodeGraphPointerButton.primary,
+                        x: root.width / 2 / 1px,
+                        y: root.height / 2 / 1px,
+                        canvas_width: root.width / 1px,
+                        canvas_height: root.height / 1px,
+                        delta_x: 0,
+                        delta_y: 0,
+                        modifiers: { ctrl: false, shift: false, alt: false },
+                    });
+                }
+            }
+            Button {
+                text: "Fit View";
+                clicked => {
+                    root.perform_action(NodeGraphAction.fit-view, {
+                        phase: NodeGraphPointerPhase.down,
+                        button: NodeGraphPointerButton.primary,
+                        x: root.width / 2 / 1px,
+                        y: root.height / 2 / 1px,
+                        canvas_width: root.width / 1px,
+                        canvas_height: root.height / 1px,
+                        delta_x: 0,
+                        delta_y: 0,
+                        modifiers: { ctrl: false, shift: false, alt: false },
+                    });
+                }
+            }
+            Button {
+                text: "Disconnect";
+                enabled: root.state.can_disconnect_selected_edge;
+                clicked => {
+                    root.perform_action(NodeGraphAction.disconnect-selected-edge, {
+                        phase: NodeGraphPointerPhase.down,
+                        button: NodeGraphPointerButton.primary,
+                        x: 0,
+                        y: 0,
+                        canvas_width: root.width / 1px,
+                        canvas_height: root.height / 1px,
+                        delta_x: 0,
+                        delta_y: 0,
+                        modifiers: { ctrl: false, shift: false, alt: false },
+                    });
+                }
+            }
+        }
+        x: root.width - self.width - 12px;
+    }
+}

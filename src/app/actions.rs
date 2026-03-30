@@ -4,7 +4,7 @@ use crate::sculpt::ActiveTool;
 use crate::settings::SelectionBehaviorSettings;
 
 use super::state::{
-    ExpertPanelKind, InteractionMode, MenuDropdownKind, PanelBarId, PanelKind,
+    ExpertPanelKind, GraphInputSlot, InteractionMode, MenuDropdownKind, PanelBarId, PanelKind,
     PanelPointerInteractionKind, ShellPanelKind,
 };
 use super::ui_geometry::FloatingPanelBounds;
@@ -187,6 +187,15 @@ pub enum Action {
     SetSculptInput {
         parent: NodeId,
         child: Option<NodeId>,
+    },
+    ConnectGraphInput {
+        parent: NodeId,
+        slot: GraphInputSlot,
+        child: NodeId,
+    },
+    DisconnectGraphInput {
+        parent: NodeId,
+        slot: GraphInputSlot,
     },
 
     // ── Bake / Export / Import ───────────────────────────────────────
