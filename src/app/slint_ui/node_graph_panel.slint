@@ -5,6 +5,7 @@ import {
     NodeGraphPointerButton,
     NodeGraphPointerPayload,
     NodeGraphPointerPhase,
+    NodeGraphSocketStateView,
     NodeGraphSlotView,
 } from "view_models.slint";
 
@@ -74,35 +75,13 @@ export component NodeGraphPanel inherits Rectangle {
         viewbox-width: root.width / 1px;
         viewbox-height: root.height / 1px;
         commands: edge.path_commands;
-        stroke: edge.selected ? #9dcbff : edge.slot == NodeGraphSlotView.left ? #6ea9ff : edge.slot == NodeGraphSlotView.right ? #ffb17d : #8fd3ab;
-        stroke-width: edge.selected ? 3px : 2px;
-        fill: #00000000;
-        stroke-line-cap: round;
-        stroke-line-join: round;
-    }
-
-    for edge in root.state.edges : Rectangle {
-        if edge.selected : Rectangle {
-            x: edge.midpoint_x * 1px - 4px;
-            y: edge.midpoint_y * 1px - 4px;
-            width: 8px;
-            height: 8px;
-            border-radius: 4px;
-            background: #9dcbff;
-        }
-    }
-
-    if root.state.preview_visible : Path {
-        width: parent.width;
-        height: parent.height;
-        viewbox-width: root.width / 1px;
-        viewbox-height: root.height / 1px;
-        commands: root.state.preview_path_commands;
-        stroke: #8da7ce;
+        stroke: edge.slot == NodeGraphSlotView.left ? #6ea9ff : edge.slot == NodeGraphSlotView.right ? #ffb17d : #8fd3ab;
         stroke-width: 2px;
         fill: #00000000;
         stroke-line-cap: round;
         stroke-line-join: round;
+        opacity: edge.deemphasized ? 0.25 : 0.9;
+        visible: !edge.selected && !edge.hovered;
     }
 
     for node in root.state.nodes : Rectangle {
@@ -116,48 +95,48 @@ export component NodeGraphPanel inherits Rectangle {
         background: node.selected ? #1f293b : #1a2230;
         clip: true;
 
-        if node.has_output : Rectangle {
+        if node.output_state != NodeGraphSocketStateView.hidden : Rectangle {
             x: parent.width - 6px;
             y: parent.height / 2 - 6px;
             width: 12px;
             height: 12px;
             border-radius: 6px;
-            background: #9fd1ad;
-            border-width: 1px;
-            border-color: #0f1725;
+            background: node.output_state == NodeGraphSocketStateView.source-active ? #b9f7cb : #9fd1ad;
+            border-width: node.output_state == NodeGraphSocketStateView.source-active ? 2px : 1px;
+            border-color: node.output_state == NodeGraphSocketStateView.source-active ? #65d28f : #0f1725;
         }
 
-        if node.has_input : Rectangle {
+        if node.input_state != NodeGraphSocketStateView.hidden : Rectangle {
             x: -6px;
             y: parent.height / 2 - 6px;
             width: 12px;
             height: 12px;
             border-radius: 6px;
-            background: #8fd3ab;
-            border-width: 1px;
-            border-color: #0f1725;
+            background: node.input_state == NodeGraphSocketStateView.target-valid ? #9cf5c2 : node.input_state == NodeGraphSocketStateView.target-invalid ? #ff8f8f : #8fd3ab;
+            border-width: node.input_state == NodeGraphSocketStateView.idle ? 1px : 2px;
+            border-color: node.input_state == NodeGraphSocketStateView.target-valid ? #63cd94 : node.input_state == NodeGraphSocketStateView.target-invalid ? #ff5f5f : #0f1725;
         }
 
-        if node.has_left_input : Rectangle {
+        if node.left_input_state != NodeGraphSocketStateView.hidden : Rectangle {
             x: -6px;
             y: parent.height * 0.34 - 6px;
             width: 12px;
             height: 12px;
             border-radius: 6px;
-            background: #6ea9ff;
-            border-width: 1px;
-            border-color: #0f1725;
+            background: node.left_input_state == NodeGraphSocketStateView.target-valid ? #9ac5ff : node.left_input_state == NodeGraphSocketStateView.target-invalid ? #ff8f8f : #6ea9ff;
+            border-width: node.left_input_state == NodeGraphSocketStateView.idle ? 1px : 2px;
+            border-color: node.left_input_state == NodeGraphSocketStateView.target-valid ? #6ea9ff : node.left_input_state == NodeGraphSocketStateView.target-invalid ? #ff5f5f : #0f1725;
         }
 
-        if node.has_right_input : Rectangle {
+        if node.right_input_state != NodeGraphSocketStateView.hidden : Rectangle {
             x: -6px;
             y: parent.height * 0.66 - 6px;
             width: 12px;
             height: 12px;
             border-radius: 6px;
-            background: #ffb17d;
-            border-width: 1px;
-            border-color: #0f1725;
+            background: node.right_input_state == NodeGraphSocketStateView.target-valid ? #ffd4b2 : node.right_input_state == NodeGraphSocketStateView.target-invalid ? #ff8f8f : #ffb17d;
+            border-width: node.right_input_state == NodeGraphSocketStateView.idle ? 1px : 2px;
+            border-color: node.right_input_state == NodeGraphSocketStateView.target-valid ? #ffb17d : node.right_input_state == NodeGraphSocketStateView.target-invalid ? #ff5f5f : #0f1725;
         }
 
         text_stack := Rectangle {
@@ -190,6 +169,71 @@ export component NodeGraphPanel inherits Rectangle {
                 }
             }
         }
+    }
+
+    for edge in root.state.edges : Path {
+        width: parent.width;
+        height: parent.height;
+        viewbox-width: root.width / 1px;
+        viewbox-height: root.height / 1px;
+        commands: edge.path_commands;
+        stroke: edge.slot == NodeGraphSlotView.left ? #8ab9ff : edge.slot == NodeGraphSlotView.right ? #ffc7a2 : #a8e6c3;
+        stroke-width: 3px;
+        fill: #00000000;
+        stroke-line-cap: round;
+        stroke-line-join: round;
+        opacity: 1.0;
+        visible: edge.hovered && !edge.selected;
+    }
+
+    for edge in root.state.edges : Path {
+        width: parent.width;
+        height: parent.height;
+        viewbox-width: root.width / 1px;
+        viewbox-height: root.height / 1px;
+        commands: edge.path_commands;
+        stroke: #9dcbff;
+        stroke-width: 3px;
+        fill: #00000000;
+        stroke-line-cap: round;
+        stroke-line-join: round;
+        opacity: 1.0;
+        visible: edge.selected;
+    }
+
+    for edge in root.state.edges : Rectangle {
+        x: edge.midpoint_x * 1px - 4px;
+        y: edge.midpoint_y * 1px - 4px;
+        width: 8px;
+        height: 8px;
+        border-radius: 4px;
+        background: #9dcbff;
+        visible: edge.selected;
+    }
+
+    if root.state.preview_visible : Path {
+        width: parent.width;
+        height: parent.height;
+        viewbox-width: root.width / 1px;
+        viewbox-height: root.height / 1px;
+        commands: root.state.preview_path_commands;
+        stroke: #8da7ce;
+        stroke-width: 2px;
+        fill: #00000000;
+        stroke-line-cap: round;
+        stroke-line-join: round;
+        opacity: 0.95;
+    }
+
+    if root.state.marquee_visible : Rectangle {
+        x: root.state.marquee_x * 1px;
+        y: root.state.marquee_y * 1px;
+        width: root.state.marquee_width * 1px;
+        height: root.state.marquee_height * 1px;
+        background: root.state.marquee_additive ? #6ea9ff24 : #9dcbff22;
+        border-width: 1px;
+        border-color: root.state.marquee_additive ? #6ea9ff : #9dcbff;
+        border-radius: 6px;
     }
 
     quick_add := Rectangle {

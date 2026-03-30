@@ -45,7 +45,11 @@ fn apply_viewport_input<F>(context: &CallbackContext, mutate: F)
 where
     F: FnOnce(&mut crate::app::slint_bridge::SlintViewportInputState),
 {
-    mutate(&mut context.host.borrow_mut().viewport_input);
+    {
+        let mut host_state = context.host.borrow_mut();
+        mutate(&mut host_state.viewport_input);
+        host_state.app.ui.node_graph_view.graph_keyboard_focus = false;
+    }
     if let Some(window) = context.window_weak.upgrade() {
         super::super::drive_host_tick(&window, &context.host, &context.active_timer);
     }

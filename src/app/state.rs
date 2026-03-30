@@ -1518,6 +1518,30 @@ pub struct NodeGraphConnectionPreview {
     pub pointer_screen: [f32; 2],
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NodeGraphSocketKind {
+    Output,
+    LeftInput,
+    RightInput,
+    Input,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NodeGraphSocketHover {
+    pub node: NodeId,
+    pub socket: NodeGraphSocketKind,
+    pub valid: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct NodeGraphMarqueeRect {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+    pub additive: bool,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct NodeGraphViewState {
     pub pan: [f32; 2],
@@ -1529,7 +1553,11 @@ pub struct NodeGraphViewState {
     pub grid_zoom_bucket: i32,
     pub grid_canvas_bucket: [u32; 2],
     pub selected_edge: Option<NodeGraphEdgeSelection>,
+    pub hovered_edge: Option<NodeGraphEdgeSelection>,
+    pub hovered_socket: Option<NodeGraphSocketHover>,
     pub connection_preview: Option<NodeGraphConnectionPreview>,
+    pub marquee_rect: Option<NodeGraphMarqueeRect>,
+    pub graph_keyboard_focus: bool,
 }
 
 impl Default for NodeGraphViewState {
@@ -1550,7 +1578,11 @@ impl Default for NodeGraphViewState {
             grid_zoom_bucket: crate::app::node_graph::grid_zoom_bucket(zoom),
             grid_canvas_bucket: crate::app::node_graph::grid_canvas_bucket(canvas_size),
             selected_edge: None,
+            hovered_edge: None,
+            hovered_socket: None,
             connection_preview: None,
+            marquee_rect: None,
+            graph_keyboard_focus: false,
         }
     }
 }
@@ -1951,7 +1983,11 @@ mod tests {
         );
         assert!(!state.grid_dots.is_empty());
         assert!(state.selected_edge.is_none());
+        assert!(state.hovered_edge.is_none());
+        assert!(state.hovered_socket.is_none());
         assert!(state.connection_preview.is_none());
+        assert!(state.marquee_rect.is_none());
+        assert!(!state.graph_keyboard_focus);
     }
 
     #[test]

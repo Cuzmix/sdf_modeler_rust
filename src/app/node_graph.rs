@@ -20,6 +20,29 @@ pub enum EdgeSlot {
     Input,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NodeSocketKind {
+    Output,
+    LeftInput,
+    RightInput,
+    Input,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct NodeScreenFrame {
+    pub origin: [f32; 2],
+    pub size: [f32; 2],
+}
+
+impl NodeScreenFrame {
+    pub fn contains(self, point: [f32; 2]) -> bool {
+        point[0] >= self.origin[0]
+            && point[0] <= self.origin[0] + self.size[0]
+            && point[1] >= self.origin[1]
+            && point[1] <= self.origin[1] + self.size[1]
+    }
+}
+
 pub fn clamp_zoom(zoom: f32) -> f32 {
     zoom.clamp(MIN_ZOOM, MAX_ZOOM)
 }
@@ -79,6 +102,27 @@ pub fn default_node_positions(scene: &Scene) -> HashMap<NodeId, [f32; 2]> {
     }
 
     positions
+}
+
+pub fn fill_missing_node_positions(
+    scene: &Scene,
+    node_positions: &mut HashMap<NodeId, [f32; 2]>,
+) -> bool {
+    let has_missing_positions = node_positions.len() < scene.nodes.len()
+        || scene
+            .nodes
+            .keys()
+            .any(|node_id| !node_positions.contains_key(node_id));
+    if !has_missing_positions {
+        return false;
+    }
+
+    let previous_len = node_positions.len();
+    let defaults = default_node_positions(scene);
+    for (node_id, position) in defaults {
+        node_positions.entry(node_id).or_insert(position);
+    }
+    node_positions.len() != previous_len
 }
 
 fn depth_for_node(
@@ -156,16 +200,40 @@ pub fn edge_curve_screen(
     pan: [f32; 2],
     zoom: f32,
 ) -> CubicEdgeCurve {
-    let parent_origin = screen_from_canvas(parent_canvas, pan, zoom);
-    let child_origin = screen_from_canvas(child_canvas, pan, zoom);
-    let size = [NODE_CARD_WIDTH * zoom, NODE_CARD_HEIGHT * zoom];
-    edge_curve_from_screen_frames(
-        parent_origin,
-        size,
-        child_origin,
-        size,
-        slot,
-    )
+    let parent_frame = project_node_screen_frame(parent_canvas, pan, zoom);
+    let child_frame = project_node_screen_frame(child_canvas, pan, zoom);
+    edge_curve_from_projected_frames(parent_frame, child_frame, slot)
+}
+
+pub fn project_node_screen_frame(node_canvas: [f32; 2], pan: [f32; 2], zoom: f32) -> NodeScreenFrame {
+    NodeScreenFrame {
+        origin: screen_from_canvas(node_canvas, pan, zoom),
+        size: [NODE_CARD_WIDTH * zoom, NODE_CARD_HEIGHT * zoom],
+    }
+}
+
+pub fn socket_screen_position(frame: NodeScreenFrame, socket: NodeSocketKind) -> [f32; 2] {
+    match socket {
+        NodeSocketKind::Output => [frame.origin[0] + frame.size[0], frame.origin[1] + frame.size[1] * 0.5],
+        NodeSocketKind::LeftInput => [frame.origin[0], frame.origin[1] + frame.size[1] * 0.34],
+        NodeSocketKind::RightInput => [frame.origin[0], frame.origin[1] + frame.size[1] * 0.66],
+        NodeSocketKind::Input => [frame.origin[0], frame.origin[1] + frame.size[1] * 0.5],
+    }
+}
+
+pub fn edge_curve_from_projected_frames(
+    parent_frame: NodeScreenFrame,
+    child_frame: NodeScreenFrame,
+    slot: EdgeSlot,
+) -> CubicEdgeCurve {
+    let input_socket = match slot {
+        EdgeSlot::Left => NodeSocketKind::LeftInput,
+        EdgeSlot::Right => NodeSocketKind::RightInput,
+        EdgeSlot::Input => NodeSocketKind::Input,
+    };
+    let start = socket_screen_position(child_frame, NodeSocketKind::Output);
+    let end = socket_screen_position(parent_frame, input_socket);
+    CubicEdgeCurve::new(start, end)
 }
 
 pub fn edge_curve_from_screen_frames(
@@ -175,16 +243,17 @@ pub fn edge_curve_from_screen_frames(
     child_size: [f32; 2],
     slot: EdgeSlot,
 ) -> CubicEdgeCurve {
-    let start = [
-        child_origin[0] + child_size[0],
-        child_origin[1] + child_size[1] * 0.5,
-    ];
-    let end = match slot {
-        EdgeSlot::Left => [parent_origin[0], parent_origin[1] + parent_size[1] * 0.34],
-        EdgeSlot::Right => [parent_origin[0], parent_origin[1] + parent_size[1] * 0.66],
-        EdgeSlot::Input => [parent_origin[0], parent_origin[1] + parent_size[1] * 0.5],
-    };
-    CubicEdgeCurve::new(start, end)
+    edge_curve_from_projected_frames(
+        NodeScreenFrame {
+            origin: parent_origin,
+            size: parent_size,
+        },
+        NodeScreenFrame {
+            origin: child_origin,
+            size: child_size,
+        },
+        slot,
+    )
 }
 
 pub fn node_has_output_handle(_data: &NodeData) -> bool {
@@ -201,8 +270,8 @@ pub struct CubicEdgeCurve {
 
 impl CubicEdgeCurve {
     pub fn new(start: [f32; 2], end: [f32; 2]) -> Self {
-        let span = (end[0] - start[0]).abs().max(64.0);
-        let control_offset = span * 0.45;
+        let x_span = (end[0] - start[0]).abs();
+        let control_offset = (x_span * 0.5).max(42.0);
         Self {
             start,
             control_a: [start[0] + control_offset, start[1]],
@@ -307,5 +376,46 @@ mod tests {
             assert_point_near(curve.start, expected_start);
             assert_point_near(curve.end, expected_end);
         }
+    }
+
+    #[test]
+    fn edge_curve_screen_and_projected_frame_paths_match() {
+        let parent = [240.0, -30.0];
+        let child = [45.0, 125.0];
+        let pan = [18.0, 44.0];
+        let zoom = 0.9;
+        let parent_frame = project_node_screen_frame(parent, pan, zoom);
+        let child_frame = project_node_screen_frame(child, pan, zoom);
+
+        for slot in [EdgeSlot::Left, EdgeSlot::Right, EdgeSlot::Input] {
+            let from_canvas = edge_curve_screen(parent, child, slot, pan, zoom);
+            let from_frames = edge_curve_from_projected_frames(parent_frame, child_frame, slot);
+            assert_eq!(from_canvas.to_path_commands(), from_frames.to_path_commands());
+        }
+    }
+
+    #[test]
+    fn fill_missing_node_positions_preserves_existing_manual_positions() {
+        let scene = Scene::new();
+        let mut ids = scene.nodes.keys().copied().collect::<Vec<_>>();
+        ids.sort_unstable();
+        let anchored = ids[0];
+
+        let mut positions = HashMap::new();
+        positions.insert(anchored, [512.0, -128.0]);
+
+        assert!(fill_missing_node_positions(&scene, &mut positions));
+        assert_eq!(positions[&anchored], [512.0, -128.0]);
+        assert_eq!(positions.len(), scene.nodes.len());
+    }
+
+    #[test]
+    fn fill_missing_node_positions_skips_when_scene_is_already_fully_positioned() {
+        let scene = Scene::new();
+        let mut positions = default_node_positions(&scene);
+        let snapshot = positions.clone();
+
+        assert!(!fill_missing_node_positions(&scene, &mut positions));
+        assert_eq!(positions, snapshot);
     }
 }

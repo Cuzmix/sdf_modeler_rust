@@ -614,14 +614,10 @@ impl SdfApp {
             .node_positions
             .retain(|node_id, _| self.doc.scene.nodes.contains_key(node_id));
 
-        let default_positions = crate::app::node_graph::default_node_positions(&self.doc.scene);
-        for (node_id, position) in default_positions {
-            self.ui
-                .node_graph_view
-                .node_positions
-                .entry(node_id)
-                .or_insert(position);
-        }
+        crate::app::node_graph::fill_missing_node_positions(
+            &self.doc.scene,
+            &mut self.ui.node_graph_view.node_positions,
+        );
 
         if let Some(edge) = self.ui.node_graph_view.selected_edge {
             let still_valid = self

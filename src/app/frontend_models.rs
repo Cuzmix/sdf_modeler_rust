@@ -4,9 +4,10 @@ use std::path::Path;
 use crate::app::reference_images::ReferenceImageStore;
 use crate::app::state::{
     ExpertPanelKind, ExpertPanelRegistry, GraphInputSlot, InteractionMode, MenuDropdownKind,
-    MenuUiState, NodeGraphViewState, PanelBarEdge, PanelBarOrientation, PanelFrameworkState,
-    PanelKind, PanelPointerInteractionKind, PanelResizeHandle, PanelSheetAnchor, PrimaryShellState,
-    ScenePanelUiState, SceneSelectionState, WorkspaceRoute, WorkspaceUiState,
+    MenuUiState, NodeGraphSocketKind, NodeGraphViewState, PanelBarEdge, PanelBarOrientation,
+    PanelFrameworkState, PanelKind, PanelPointerInteractionKind, PanelResizeHandle,
+    PanelSheetAnchor, PrimaryShellState, ScenePanelUiState, SceneSelectionState, WorkspaceRoute,
+    WorkspaceUiState,
 };
 use crate::gizmo::{GizmoMode, GizmoSpace};
 use crate::graph::history::History;
@@ -464,6 +465,15 @@ pub enum NodeGraphSlotModel {
     Input,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NodeGraphSocketStateModel {
+    Hidden,
+    Idle,
+    SourceActive,
+    TargetValid,
+    TargetInvalid,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct NodeGraphGridDotModel {
     pub x: f32,
@@ -484,6 +494,10 @@ pub struct NodeGraphNodeModel {
     pub has_right_input: bool,
     pub has_input: bool,
     pub has_output: bool,
+    pub output_state: NodeGraphSocketStateModel,
+    pub left_input_state: NodeGraphSocketStateModel,
+    pub right_input_state: NodeGraphSocketStateModel,
+    pub input_state: NodeGraphSocketStateModel,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -495,6 +509,8 @@ pub struct NodeGraphEdgeModel {
     pub midpoint_x: f32,
     pub midpoint_y: f32,
     pub selected: bool,
+    pub hovered: bool,
+    pub deemphasized: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -510,6 +526,12 @@ pub struct NodeGraphPanelModel {
     pub preview_path_commands: String,
     pub preview_visible: bool,
     pub can_disconnect_selected_edge: bool,
+    pub marquee_visible: bool,
+    pub marquee_x: f32,
+    pub marquee_y: f32,
+    pub marquee_width: f32,
+    pub marquee_height: f32,
+    pub marquee_additive: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1629,6 +1651,10 @@ pub fn build_node_graph_panel_model(
                 .map(|position| (*node_id, position))
         })
         .collect::<HashMap<_, _>>();
+    let selected_edge = node_graph_view.selected_edge;
+    let hovered_edge = node_graph_view.hovered_edge;
+    let hovered_socket = node_graph_view.hovered_socket;
+    let active_preview = node_graph_view.connection_preview;
 
     let mut nodes = Vec::with_capacity(node_ids.len());
     for node_id in &node_ids {
@@ -1656,6 +1682,29 @@ pub fn build_node_graph_panel_model(
             has_right_input,
             has_input,
             has_output: node_has_output_handle(&node.data),
+            output_state: output_socket_state_for_node(
+                *node_id,
+                node_has_output_handle(&node.data),
+                active_preview,
+            ),
+            left_input_state: input_socket_state_for_node(
+                *node_id,
+                has_left_input,
+                NodeGraphSocketKind::LeftInput,
+                hovered_socket,
+            ),
+            right_input_state: input_socket_state_for_node(
+                *node_id,
+                has_right_input,
+                NodeGraphSocketKind::RightInput,
+                hovered_socket,
+            ),
+            input_state: input_socket_state_for_node(
+                *node_id,
+                has_input,
+                NodeGraphSocketKind::Input,
+                hovered_socket,
+            ),
         });
     }
 
@@ -1717,15 +1766,23 @@ pub fn build_node_graph_panel_model(
         }
     }
 
-    if let Some(selection) = node_graph_view.selected_edge {
+    if let Some(selected) = selected_edge {
         for edge in &mut edges {
-            edge.selected = edge.parent == selection.parent
-                && edge.slot
-                    == match selection.slot {
-                        GraphInputSlot::Left => NodeGraphSlotModel::Left,
-                        GraphInputSlot::Right => NodeGraphSlotModel::Right,
-                        GraphInputSlot::Input => NodeGraphSlotModel::Input,
-                    };
+            edge.selected = edge_matches_selection(edge, selected);
+        }
+    }
+
+    if let Some(hovered) = hovered_edge {
+        for edge in &mut edges {
+            if !edge.selected && edge_matches_selection(edge, hovered) {
+                edge.hovered = true;
+            }
+        }
+    }
+
+    if let Some(preview) = active_preview {
+        for edge in &mut edges {
+            edge.deemphasized = edge.parent != preview.source_node && edge.child != preview.source_node;
         }
     }
 
@@ -1738,6 +1795,7 @@ pub fn build_node_graph_panel_model(
             CubicEdgeCurve::new(start, preview.pointer_screen).to_path_commands()
         })
         .unwrap_or_default();
+    let marquee = node_graph_view.marquee_rect;
 
     NodeGraphPanelModel {
         pan_x: node_graph_view.pan[0],
@@ -1758,6 +1816,12 @@ pub fn build_node_graph_panel_model(
             .collect(),
         preview_visible: !preview_path_commands.is_empty(),
         preview_path_commands,
+        marquee_visible: marquee.is_some(),
+        marquee_x: marquee.map(|rect| rect.x).unwrap_or_default(),
+        marquee_y: marquee.map(|rect| rect.y).unwrap_or_default(),
+        marquee_width: marquee.map(|rect| rect.width).unwrap_or_default(),
+        marquee_height: marquee.map(|rect| rect.height).unwrap_or_default(),
+        marquee_additive: marquee.map(|rect| rect.additive).unwrap_or(false),
     }
 }
 
@@ -1812,6 +1876,57 @@ fn build_node_graph_edge(
         midpoint_x: midpoint[0],
         midpoint_y: midpoint[1],
         selected: false,
+        hovered: false,
+        deemphasized: false,
+    }
+}
+
+fn edge_matches_selection(
+    edge: &NodeGraphEdgeModel,
+    selection: crate::app::state::NodeGraphEdgeSelection,
+) -> bool {
+    edge.parent == selection.parent
+        && edge.slot
+            == match selection.slot {
+                GraphInputSlot::Left => NodeGraphSlotModel::Left,
+                GraphInputSlot::Right => NodeGraphSlotModel::Right,
+                GraphInputSlot::Input => NodeGraphSlotModel::Input,
+            }
+}
+
+fn output_socket_state_for_node(
+    node_id: NodeId,
+    has_output: bool,
+    preview: Option<crate::app::state::NodeGraphConnectionPreview>,
+) -> NodeGraphSocketStateModel {
+    if !has_output {
+        return NodeGraphSocketStateModel::Hidden;
+    }
+    if preview.is_some_and(|active_preview| active_preview.source_node == node_id) {
+        return NodeGraphSocketStateModel::SourceActive;
+    }
+    NodeGraphSocketStateModel::Idle
+}
+
+fn input_socket_state_for_node(
+    node_id: NodeId,
+    has_input: bool,
+    socket: NodeGraphSocketKind,
+    hovered_socket: Option<crate::app::state::NodeGraphSocketHover>,
+) -> NodeGraphSocketStateModel {
+    if !has_input {
+        return NodeGraphSocketStateModel::Hidden;
+    }
+    let Some(hovered) = hovered_socket else {
+        return NodeGraphSocketStateModel::Idle;
+    };
+    if hovered.node != node_id || hovered.socket != socket {
+        return NodeGraphSocketStateModel::Idle;
+    }
+    if hovered.valid {
+        NodeGraphSocketStateModel::TargetValid
+    } else {
+        NodeGraphSocketStateModel::TargetInvalid
     }
 }
 
@@ -1820,14 +1935,13 @@ fn single_line_ellipsis(text: &str, max_chars: usize) -> String {
     if normalized.chars().count() <= max_chars {
         return normalized;
     }
-    if max_chars <= 1 {
-        return "…".to_string();
+    if max_chars <= 3 {
+        return ".".repeat(max_chars.max(1));
     }
-    let mut truncated = normalized.chars().take(max_chars - 1).collect::<String>();
-    truncated.push('…');
+    let mut truncated = normalized.chars().take(max_chars - 3).collect::<String>();
+    truncated.push_str("...");
     truncated
 }
-
 pub fn build_workspace_panel_model(
     scene: &Scene,
     selection: &SceneSelectionState,
@@ -3194,7 +3308,7 @@ mod tests {
     fn single_line_ellipsis_bounds_text_to_budget() {
         let text = "Ambient Light Transform";
         let clipped = single_line_ellipsis(text, 8);
-        assert_eq!(clipped, "Ambient…");
+        assert_eq!(clipped, "Ambie...");
         assert_eq!(single_line_ellipsis(text, 64), text);
     }
 

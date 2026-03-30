@@ -1,6 +1,7 @@
 use slint::SharedString;
 
 use super::context::CallbackContext;
+use super::node_graph::{apply_node_graph_shortcut, NodeGraphShortcutIntent};
 use crate::app::actions::Action;
 use crate::app::slint_frontend::SlintHostWindow;
 use crate::app::state::MenuDropdownKind;
@@ -59,6 +60,12 @@ fn dispatch_shortcut_binding(
         return true;
     }
 
+    if let Some(intent) = resolve_node_graph_shortcut(key_text, ctrl, shift, alt) {
+        if apply_node_graph_shortcut(host_state, intent) {
+            return true;
+        }
+    }
+
     if let Some(binding) =
         resolve_binding_for_shortcut(key_text, ctrl, shift, alt, &host_state.app.settings.keymap)
     {
@@ -80,6 +87,25 @@ fn dispatch_shortcut_binding(
     }
 
     false
+}
+
+fn resolve_node_graph_shortcut(
+    key_text: &str,
+    ctrl: bool,
+    shift: bool,
+    alt: bool,
+) -> Option<NodeGraphShortcutIntent> {
+    if ctrl || alt {
+        return None;
+    }
+    let key = parse_serializable_key(key_text)?;
+    match key {
+        SerializableKey::F if shift => Some(NodeGraphShortcutIntent::FitAll),
+        SerializableKey::F => Some(NodeGraphShortcutIntent::FitSelected),
+        SerializableKey::Delete if !shift => Some(NodeGraphShortcutIntent::DisconnectEdge),
+        SerializableKey::Escape if !shift => Some(NodeGraphShortcutIntent::CancelInteraction),
+        _ => None,
+    }
 }
 
 fn resolve_open_menu_shortcut_intent(
@@ -263,7 +289,8 @@ fn resolve_menu_launcher_shortcut(
 mod tests {
     use super::{
         parse_serializable_key, resolve_binding_for_shortcut, resolve_menu_launcher_shortcut,
-        resolve_open_menu_shortcut_intent, OpenMenuShortcutIntent,
+        resolve_node_graph_shortcut, resolve_open_menu_shortcut_intent, NodeGraphShortcutIntent,
+        OpenMenuShortcutIntent,
     };
     use crate::app::actions::Action;
     use crate::app::state::MenuDropdownKind;
@@ -360,5 +387,32 @@ mod tests {
             resolve_open_menu_shortcut_intent("z", true, false, false),
             OpenMenuShortcutIntent::Consume
         ));
+    }
+
+    #[test]
+    fn resolve_node_graph_shortcut_maps_expected_keys() {
+        assert_eq!(
+            resolve_node_graph_shortcut("f", false, false, false),
+            Some(NodeGraphShortcutIntent::FitSelected)
+        );
+        assert_eq!(
+            resolve_node_graph_shortcut("F", false, true, false),
+            Some(NodeGraphShortcutIntent::FitAll)
+        );
+        assert_eq!(
+            resolve_node_graph_shortcut("Delete", false, false, false),
+            Some(NodeGraphShortcutIntent::DisconnectEdge)
+        );
+        assert_eq!(
+            resolve_node_graph_shortcut("\u{1b}", false, false, false),
+            Some(NodeGraphShortcutIntent::CancelInteraction)
+        );
+    }
+
+    #[test]
+    fn resolve_node_graph_shortcut_ignores_ctrl_or_alt_modified_combos() {
+        assert_eq!(resolve_node_graph_shortcut("f", true, false, false), None);
+        assert_eq!(resolve_node_graph_shortcut("f", false, false, true), None);
+        assert_eq!(resolve_node_graph_shortcut("Delete", false, true, false), None);
     }
 }

@@ -124,6 +124,7 @@ fn handle_panel_pointer_action(
             if !is_visible {
                 return;
             }
+            host_state.app.ui.node_graph_view.graph_keyboard_focus = kind == PanelKind::NodeGraph;
             *drag_last_position.borrow_mut() = Some([action.x, action.y]);
             host_state.queue_action(Action::BeginPanelInteraction {
                 kind,

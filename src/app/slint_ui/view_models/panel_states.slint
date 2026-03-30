@@ -328,6 +328,14 @@ export enum NodeGraphSlotView {
     input,
 }
 
+export enum NodeGraphSocketStateView {
+    hidden,
+    idle,
+    source-active,
+    target-valid,
+    target-invalid,
+}
+
 export struct NodeGraphGridDotView {
     x: float,
     y: float,
@@ -345,6 +353,10 @@ export struct NodeGraphNodeView {
     has_right_input: bool,
     has_input: bool,
     has_output: bool,
+    output_state: NodeGraphSocketStateView,
+    left_input_state: NodeGraphSocketStateView,
+    right_input_state: NodeGraphSocketStateView,
+    input_state: NodeGraphSocketStateView,
 }
 
 export struct NodeGraphEdgeView {
@@ -352,6 +364,8 @@ export struct NodeGraphEdgeView {
     midpoint_x: float,
     midpoint_y: float,
     selected: bool,
+    hovered: bool,
+    deemphasized: bool,
     slot: NodeGraphSlotView,
 }
 
@@ -367,6 +381,12 @@ export struct NodeGraphPanelState {
     preview_path_commands: string,
     preview_visible: bool,
     can_disconnect_selected_edge: bool,
+    marquee_visible: bool,
+    marquee_x: float,
+    marquee_y: float,
+    marquee_width: float,
+    marquee_height: float,
+    marquee_additive: bool,
 }
 
 export struct WorkspacePanelState {
