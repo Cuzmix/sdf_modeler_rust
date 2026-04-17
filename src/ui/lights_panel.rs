@@ -129,6 +129,7 @@ pub fn draw(
                             if let Some(node) = scene.nodes.get_mut(light_id) {
                                 if let NodeData::Light { color: c, .. } = &mut node.data {
                                     *c = glam::Vec3::new(rgb[0], rgb[1], rgb[2]);
+                                    scene.mark_data_changed();
                                 }
                             }
                         }
@@ -161,6 +162,7 @@ pub fn draw(
                             if let Some(node) = scene.nodes.get_mut(light_id) {
                                 if let NodeData::Light { intensity: i, .. } = &mut node.data {
                                     *i = inten;
+                                    scene.mark_data_changed();
                                 }
                             }
                         }

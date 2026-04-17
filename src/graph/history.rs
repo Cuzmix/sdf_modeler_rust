@@ -79,6 +79,9 @@ pub struct History {
     redo_stack: Vec<Snapshot>,
     pending_snapshot: Option<Snapshot>,
     pending_sculpt_snapshot: Option<Snapshot>,
+    stable_scene_snapshot: Option<Snapshot>,
+    stable_scene_fingerprint: Option<u64>,
+    stable_selected: Option<NodeId>,
     was_dragging: bool,
 }
 
@@ -89,6 +92,9 @@ impl History {
             redo_stack: Vec::new(),
             pending_snapshot: None,
             pending_sculpt_snapshot: None,
+            stable_scene_snapshot: None,
+            stable_scene_fingerprint: None,
+            stable_selected: None,
             was_dragging: false,
         }
     }
@@ -114,10 +120,11 @@ impl History {
         self.redo_stack.len()
     }
 
-    /// Call at the START of each frame. Captures the "before" state.
+    /// Call at the START of each frame. Ensures there is a stable baseline
+    /// snapshot available without cloning the full scene every frame.
     pub fn begin_frame(&mut self, scene: &Scene, selected: Option<NodeId>) {
-        if self.pending_snapshot.is_none() {
-            self.pending_snapshot = Some(Snapshot::scene(scene, selected, String::new()));
+        if self.stable_scene_snapshot.is_none() {
+            self.set_stable_scene(scene, selected, scene.data_fingerprint());
         }
     }
 
@@ -157,6 +164,7 @@ impl History {
         }
         // Scene history should not also commit a full-scene snapshot for this stroke.
         self.pending_snapshot = None;
+        self.set_stable_scene(scene, self.stable_selected, scene.data_fingerprint());
     }
 
     pub fn discard_pending_sculpt_stroke(&mut self) {
@@ -165,10 +173,26 @@ impl History {
 
     /// Call at the END of each frame. If scene changed and user is not
     /// mid-drag, commit the pending snapshot to the undo stack.
+    #[cfg(test)]
     pub fn end_frame(
         &mut self,
         scene: &Scene,
         selected: Option<NodeId>,
+        is_anything_dragged: bool,
+    ) {
+        self.end_frame_with_fingerprint(
+            scene,
+            selected,
+            scene.data_fingerprint(),
+            is_anything_dragged,
+        );
+    }
+
+    pub fn end_frame_with_fingerprint(
+        &mut self,
+        scene: &Scene,
+        selected: Option<NodeId>,
+        data_fingerprint: u64,
         is_anything_dragged: bool,
     ) {
         let drag_just_ended = self.was_dragging && !is_anything_dragged;
@@ -178,11 +202,21 @@ impl History {
             return;
         }
 
-        if let Some(ref snapshot) = self.pending_snapshot {
+        if self.stable_scene_snapshot.is_none() {
+            self.set_stable_scene(scene, selected, data_fingerprint);
+        }
+
+        let changed = self.stable_scene_fingerprint != Some(data_fingerprint)
+            || selected != self.stable_selected;
+
+        if changed && self.pending_snapshot.is_none() {
+            self.pending_snapshot = self.stable_scene_snapshot.clone();
+        }
+
+        if let Some(snapshot) = self.pending_snapshot.take() {
             let SnapshotState::Scene(before_scene) = &snapshot.state else {
                 return;
             };
-            let changed = !scene.content_eq(before_scene) || selected != snapshot.selected;
 
             if changed && (!is_anything_dragged || drag_just_ended) {
                 // Auto-detect a label based on what changed
@@ -190,10 +224,9 @@ impl History {
                     Self::detect_change_label(before_scene, scene, snapshot.selected, selected);
                 self.push_undo(Snapshot::scene(before_scene, snapshot.selected, label));
                 self.redo_stack.clear();
-                self.pending_snapshot = None;
-            } else if !changed && !is_anything_dragged {
-                // No change, refresh snapshot for next mutation window
-                self.pending_snapshot = None;
+                self.set_stable_scene(scene, selected, data_fingerprint);
+            } else if changed {
+                self.pending_snapshot = Some(snapshot);
             }
         }
     }
@@ -203,6 +236,12 @@ impl History {
         if self.undo_stack.len() > MAX_UNDO_DEPTH {
             self.undo_stack.remove(0);
         }
+    }
+
+    pub fn reset_stable_scene(&mut self, scene: &Scene, selected: Option<NodeId>) {
+        self.pending_snapshot = None;
+        self.pending_sculpt_snapshot = None;
+        self.set_stable_scene(scene, selected, scene.data_fingerprint());
     }
 
     /// Undo: restore top of undo stack, push current state to redo.
@@ -261,6 +300,12 @@ impl History {
                 label,
             )),
         }
+    }
+
+    fn set_stable_scene(&mut self, scene: &Scene, selected: Option<NodeId>, data_fingerprint: u64) {
+        self.stable_scene_snapshot = Some(Snapshot::scene(scene, selected, String::new()));
+        self.stable_scene_fingerprint = Some(data_fingerprint);
+        self.stable_selected = selected;
     }
 
     fn capture_sculpt_snapshot(
@@ -360,6 +405,8 @@ mod tests {
             name_counters: std::collections::HashMap::new(),
             hidden_nodes: std::collections::HashSet::new(),
             light_masks: std::collections::HashMap::new(),
+            structure_version: 0,
+            data_version: 0,
         }
     }
 

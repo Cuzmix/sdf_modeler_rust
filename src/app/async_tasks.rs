@@ -94,6 +94,7 @@ impl SdfApp {
                 {
                     *vg = grid;
                     *p = center;
+                    self.doc.scene.mark_data_changed();
                 }
             }
         } else {
@@ -179,6 +180,7 @@ impl SdfApp {
                 {
                     *vg = grid;
                     *p = center;
+                    self.doc.scene.mark_data_changed();
                 }
             }
         } else {

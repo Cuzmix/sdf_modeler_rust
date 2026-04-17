@@ -152,15 +152,26 @@ impl SdfApp {
 
         self.reset_sculpt_stroke_if_idle();
 
-        // Detect scene data changes and schedule buffer upload.
-        let data_fingerprint = self.doc.scene.data_fingerprint();
-        if data_fingerprint != self.gpu.last_data_fingerprint {
-            self.gpu.last_data_fingerprint = data_fingerprint;
+        // Detect scene data changes and schedule buffer upload. Fingerprint
+        // is O(n) across all nodes, so only recompute when the scene has
+        // actually mutated since last frame; otherwise reuse the cached hash.
+        let data_version = self.doc.scene.data_version();
+        let data_fingerprint = if data_version != self.gpu.last_data_version {
+            let data_fingerprint_start = Instant::now();
+            let fingerprint = self.doc.scene.data_fingerprint();
+            self.perf.timings.data_fingerprint_s =
+                data_fingerprint_start.elapsed().as_secs_f64();
+            self.gpu.last_data_version = data_version;
+            self.gpu.cached_data_fingerprint = fingerprint;
             self.gpu.buffer_dirty = true;
-        }
+            fingerprint
+        } else {
+            self.perf.timings.data_fingerprint_s = 0.0;
+            self.gpu.cached_data_fingerprint
+        };
 
         let scene_dirty = data_fingerprint != self.persistence.saved_fingerprint
-            || self.doc.scene.structure_key() != 0
+            || self.doc.scene.structure_version() != 0
                 && self.persistence.saved_fingerprint == 0
                 && !self.doc.scene.nodes.is_empty();
         if scene_dirty != self.persistence.scene_dirty {
@@ -218,11 +229,14 @@ impl SdfApp {
         let is_anything_dragged = frame_input.is_dragging_ui
             || self.async_state.sculpt_dragging
             || ui_feedback.gizmo_drag_active;
-        self.doc.history.end_frame(
+        let history_start = Instant::now();
+        self.doc.history.end_frame_with_fingerprint(
             &self.doc.scene,
             self.ui.node_graph_state.selected,
+            data_fingerprint,
             is_anything_dragged,
         );
+        self.perf.timings.history_finalize_s = history_start.elapsed().as_secs_f64();
 
         if is_anything_dragged || self.doc.sculpt_state.is_active() {
             self.perf.resolution_upgrade_pending = true;
@@ -241,6 +255,12 @@ impl SdfApp {
             || !matches!(self.async_state.pick_state, PickState::Idle)
             || self.async_state.pending_pick.is_some()
             || self.gpu.buffer_dirty
+            // Keep running frames while an async pipeline compile is in
+            // flight so `sync_gpu_pipeline` can pick up the completed
+            // pipeline — otherwise egui goes idle between input events, the
+            // worker's result sits in its channel forever, and newly-added
+            // nodes never appear on screen.
+            || self.gpu.pipeline_compile.is_some()
             || self.settings.continuous_repaint
             || self.doc.scene.has_light_expressions();
         if needs_repaint {

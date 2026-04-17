@@ -1,10 +1,12 @@
 use glam::Vec3;
+use crate::compat::Instant;
 
 use crate::gpu::buffers;
 use crate::gpu::codegen;
 use crate::graph::scene::{NodeData, NodeId};
 use crate::ui::viewport::ViewportResources;
 
+use super::pipeline_compile::{self, PipelineCompileInputs};
 use super::SdfApp;
 
 impl SdfApp {
@@ -22,83 +24,239 @@ impl SdfApp {
             self.gpu.last_environment_fingerprint = new_environment_key;
         }
 
-        let new_key = self.doc.scene.structure_key();
-        if new_key != self.gpu.current_structure_key {
-            let shader_src = codegen::generate_shader(&self.doc.scene, &self.settings.render);
-            let pick_shader_src =
-                codegen::generate_pick_shader(&self.doc.scene, &self.settings.render);
-            let sculpt_count = buffers::collect_sculpt_tex_info(&self.doc.scene).len();
-            let mut renderer = self.gpu.render_state.renderer.write();
-            if let Some(res) = renderer.callback_resources.get_mut::<ViewportResources>() {
-                // Always rebuild the normal + pick pipelines
-                res.rebuild_pipeline(
-                    &self.gpu.render_state.device,
-                    &shader_src,
-                    &pick_shader_src,
-                    sculpt_count,
+        self.perf.timings.structure_key_s = 0.0;
+        self.perf.timings.shader_codegen_s = 0.0;
+        self.perf.timings.pipeline_rebuild_s = 0.0;
+        let structure_key_start = Instant::now();
+        let structure_version = self.doc.scene.structure_version();
+        self.perf.timings.structure_key_s = structure_key_start.elapsed().as_secs_f64();
+
+        // First, pick up any pipeline that finished compiling in the background.
+        // Applying a newer pipeline here means subsequent checks below will see
+        // `last_structure_version` already advanced, so we won't redundantly
+        // spawn another compile for the same version.
+        self.try_apply_compiled_pipeline();
+
+        let need_rebuild =
+            self.gpu.force_pipeline_resync || structure_version != self.gpu.last_structure_version;
+        if !need_rebuild {
+            return;
+        }
+
+        // Async compilation is only safe when the voxel texture bind-group
+        // layout doesn't need to change and we're not rebuilding the composite
+        // volume pipelines alongside the render pipeline (those require
+        // main-thread `ViewportResources` mutation tied to the same version).
+        let sculpt_count = buffers::collect_sculpt_tex_info(&self.doc.scene).len();
+        let current_sculpt_count = {
+            let renderer = self.gpu.render_state.renderer.read();
+            renderer
+                .callback_resources
+                .get::<ViewportResources>()
+                .map(|res| res.voxel_textures.len())
+                .unwrap_or(0)
+        };
+        let want_composite = !cfg!(target_arch = "wasm32")
+            && self.settings.render.composite_volume_enabled
+            && sculpt_count > 0;
+        let must_sync = sculpt_count != current_sculpt_count || want_composite;
+
+        if must_sync {
+            // Drop any in-flight async compile — its result would be stale
+            // compared to the synchronous rebuild we're about to perform.
+            self.gpu.pipeline_compile = None;
+            self.rebuild_pipeline_sync(structure_version, sculpt_count, want_composite);
+            return;
+        }
+
+        // If an async compile is already in flight, wait for it. When it
+        // lands we update `last_structure_version` to the compiled version;
+        // if the scene has advanced further the next frame's check picks
+        // that up and spawns a fresh compile.
+        if self.gpu.pipeline_compile.is_some() {
+            return;
+        }
+
+        self.spawn_async_pipeline_compile(structure_version, sculpt_count);
+    }
+
+    /// Synchronous pipeline rebuild — the fallback path used when the voxel
+    /// bind-group layout must change (sculpt added/removed) or the composite
+    /// volume cache needs rebuilding alongside the render pipeline.
+    fn rebuild_pipeline_sync(
+        &mut self,
+        structure_version: u64,
+        sculpt_count: usize,
+        want_composite: bool,
+    ) {
+        let shader_codegen_start = Instant::now();
+        let shader_src = codegen::generate_shader(&self.doc.scene, &self.settings.render);
+        let pick_shader_src =
+            codegen::generate_pick_shader(&self.doc.scene, &self.settings.render);
+        self.perf.timings.shader_codegen_s = shader_codegen_start.elapsed().as_secs_f64();
+
+        let pipeline_rebuild_start = Instant::now();
+        let mut renderer = self.gpu.render_state.renderer.write();
+        if let Some(res) = renderer.callback_resources.get_mut::<ViewportResources>() {
+            res.rebuild_pipeline(
+                &self.gpu.render_state.device,
+                &shader_src,
+                &pick_shader_src,
+                sculpt_count,
+            );
+
+            if want_composite {
+                let bounds = self.doc.scene.compute_bounds();
+                let padding = 1.5;
+                let bounds_min = [
+                    bounds.0[0] - padding,
+                    bounds.0[1] - padding,
+                    bounds.0[2] - padding,
+                ];
+                let bounds_max = [
+                    bounds.1[0] + padding,
+                    bounds.1[1] + padding,
+                    bounds.1[2] + padding,
+                ];
+                let resolution = self.settings.render.composite_volume_resolution;
+
+                log::info!(
+                    "Composite: building pipelines ({}^3, bounds=[{:.2},{:.2},{:.2}]-[{:.2},{:.2},{:.2}])",
+                    resolution,
+                    bounds_min[0], bounds_min[1], bounds_min[2],
+                    bounds_max[0], bounds_max[1], bounds_max[2],
                 );
 
-                // Rebuild composite pipelines if enabled and there are sculpt nodes.
-                // Composite uses 3D storage textures — not supported on WebGPU,
-                // so always disable on WASM.
-                let want_composite = !cfg!(target_arch = "wasm32")
-                    && self.settings.render.composite_volume_enabled
-                    && sculpt_count > 0;
+                let comp_compute_src =
+                    codegen::generate_composite_shader(&self.doc.scene, &self.settings.render);
+                let comp_render_src = codegen::generate_composite_render_shader(
+                    &self.settings.render,
+                    bounds_min,
+                    bounds_max,
+                );
 
-                if want_composite {
-                    let bounds = self.doc.scene.compute_bounds();
-                    let padding = 1.5;
-                    let bounds_min = [
-                        bounds.0[0] - padding,
-                        bounds.0[1] - padding,
-                        bounds.0[2] - padding,
-                    ];
-                    let bounds_max = [
-                        bounds.1[0] + padding,
-                        bounds.1[1] + padding,
-                        bounds.1[2] + padding,
-                    ];
-                    let resolution = self.settings.render.composite_volume_resolution;
-
-                    log::info!(
-                        "Composite: building pipelines ({}^3, bounds=[{:.2},{:.2},{:.2}]-[{:.2},{:.2},{:.2}])",
-                        resolution,
-                        bounds_min[0], bounds_min[1], bounds_min[2],
-                        bounds_max[0], bounds_max[1], bounds_max[2],
-                    );
-
-                    let comp_compute_src =
-                        codegen::generate_composite_shader(&self.doc.scene, &self.settings.render);
-                    let comp_render_src = codegen::generate_composite_render_shader(
-                        &self.settings.render,
-                        bounds_min,
-                        bounds_max,
-                    );
-
-                    res.rebuild_composite(
-                        &self.gpu.render_state.device,
-                        &comp_compute_src,
-                        &comp_render_src,
-                        resolution,
-                        bounds_min,
-                        bounds_max,
-                    );
-                    log::info!(
-                        "Composite: pipelines built, use_composite={}",
-                        res.use_composite
-                    );
-                    self.perf.composite_full_update_needed = true;
-                } else {
-                    res.use_composite = false;
-                    res.composite = None;
-                }
+                res.rebuild_composite(
+                    &self.gpu.render_state.device,
+                    &comp_compute_src,
+                    &comp_render_src,
+                    resolution,
+                    bounds_min,
+                    bounds_max,
+                );
+                log::info!(
+                    "Composite: pipelines built, use_composite={}",
+                    res.use_composite
+                );
+                self.perf.composite_full_update_needed = true;
+            } else {
+                res.use_composite = false;
+                res.composite = None;
             }
-            self.gpu.current_structure_key = new_key;
-            self.gpu.buffer_dirty = true; // new pipeline needs fresh buffer data
         }
+        self.perf.timings.pipeline_rebuild_s = pipeline_rebuild_start.elapsed().as_secs_f64();
+        self.gpu.last_structure_version = structure_version;
+        self.gpu.force_pipeline_resync = false;
+        self.gpu.buffer_dirty = true; // new pipeline needs fresh buffer data
+    }
+
+    /// Prepare compile inputs on the main thread (codegen + BGL cloning) and
+    /// hand them off to a worker thread to perform the expensive `wgpu`
+    /// calls. The old pipeline keeps rendering until the new one arrives.
+    fn spawn_async_pipeline_compile(&mut self, structure_version: u64, sculpt_count: usize) {
+        let shader_codegen_start = Instant::now();
+        let shader_src = codegen::generate_shader(&self.doc.scene, &self.settings.render);
+        let pick_shader_src =
+            codegen::generate_pick_shader(&self.doc.scene, &self.settings.render);
+        self.perf.timings.shader_codegen_s = shader_codegen_start.elapsed().as_secs_f64();
+
+        let renderer = self.gpu.render_state.renderer.read();
+        let Some(res) = renderer.callback_resources.get::<ViewportResources>() else {
+            return;
+        };
+
+        let inputs = PipelineCompileInputs {
+            device: self.gpu.render_state.device.clone(),
+            render_shader_src: shader_src,
+            pick_shader_src,
+            target_format: res.target_format,
+            camera_bgl: std::sync::Arc::clone(&res.camera_bgl),
+            scene_bgl: std::sync::Arc::clone(&res.scene_bgl),
+            voxel_tex_bgl: std::sync::Arc::clone(&res.voxel_tex_bgl),
+            environment_bgl: std::sync::Arc::clone(&res.environment.bind_group_layout),
+            pick_bgl: std::sync::Arc::clone(&res.pick_bgl),
+            structure_version,
+            sculpt_count,
+        };
+        drop(renderer);
+
+        self.gpu.pipeline_compile = Some(pipeline_compile::spawn_pipeline_compile(inputs));
+    }
+
+    /// Poll the in-flight compile. If the worker has produced a new pipeline
+    /// pair, swap it into `ViewportResources` and queue a fresh compile if
+    /// the scene has already advanced past the version we just applied.
+    fn try_apply_compiled_pipeline(&mut self) {
+        let Some(handle) = self.gpu.pipeline_compile.as_ref() else {
+            return;
+        };
+        let compiled = match handle.receiver.try_recv() {
+            Ok(compiled) => compiled,
+            Err(std::sync::mpsc::TryRecvError::Empty) => return,
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                // Worker panicked or was dropped; abandon this attempt.
+                self.gpu.pipeline_compile = None;
+                self.gpu.force_pipeline_resync = true;
+                return;
+            }
+        };
+        self.gpu.pipeline_compile = None;
+
+        // If the sculpt count drifted while compiling, the pipeline's
+        // voxel_tex_bgl no longer matches the live one and the pipeline is
+        // unusable. Drop it — the next sync call will take the sync path and
+        // rebuild everything together.
+        let current_sculpt_count = {
+            let renderer = self.gpu.render_state.renderer.read();
+            renderer
+                .callback_resources
+                .get::<ViewportResources>()
+                .map(|res| res.voxel_textures.len())
+                .unwrap_or(0)
+        };
+        if compiled.sculpt_count != current_sculpt_count {
+            self.gpu.force_pipeline_resync = true;
+            return;
+        }
+
+        {
+            let mut renderer = self.gpu.render_state.renderer.write();
+            if let Some(res) = renderer.callback_resources.get_mut::<ViewportResources>() {
+                res.pipeline = compiled.render_pipeline;
+                res.pick_pipeline = compiled.pick_pipeline;
+                // Composite is handled by the sync path only; disable it here
+                // to keep state consistent.
+                res.use_composite = false;
+                res.composite = None;
+            }
+        }
+
+        self.gpu.last_structure_version = compiled.structure_version;
+        self.gpu.force_pipeline_resync = false;
+        self.gpu.buffer_dirty = true;
+
+        // Surface the worker's compile time as `pipeline_rebuild_s` so the
+        // profiler keeps reporting how long the pipeline took to build —
+        // even though this cost was borne off the main thread.
+        self.perf.timings.pipeline_rebuild_s = compiled.worker_wall_ms / 1000.0;
+        log::debug!(
+            "Async pipeline compile applied: struct_version={}, worker_ms={:.2}",
+            compiled.structure_version,
+            compiled.worker_wall_ms,
+        );
     }
 
     pub(super) fn upload_scene_buffer(&mut self) {
+        let buffer_build_start = Instant::now();
         let (voxel_data, voxel_offsets) = buffers::build_voxel_buffer(&self.doc.scene);
         let node_data = buffers::build_node_buffer(
             &self.doc.scene,
@@ -106,11 +264,13 @@ impl SdfApp {
             &voxel_offsets,
         );
         let sculpt_infos = buffers::collect_sculpt_tex_info(&self.doc.scene);
+        self.perf.timings.scene_buffer_build_s = buffer_build_start.elapsed().as_secs_f64();
         self.gpu.voxel_gpu_offsets = voxel_offsets;
         self.gpu.sculpt_tex_indices = sculpt_infos
             .iter()
             .map(|i| (i.node_id, i.tex_idx))
             .collect();
+        let buffer_write_start = Instant::now();
         let mut renderer = self.gpu.render_state.renderer.write();
         if let Some(res) = renderer.callback_resources.get_mut::<ViewportResources>() {
             res.update_scene_buffer(
@@ -138,6 +298,7 @@ impl SdfApp {
                 }
             }
         }
+        self.perf.timings.scene_buffer_write_s = buffer_write_start.elapsed().as_secs_f64();
     }
 
     /// Dispatch a full composite volume update (all voxels).

@@ -328,6 +328,7 @@ fn draw_node_recursive(
             if te.lost_focus() || ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                 if let Some(node) = scene.nodes.get_mut(&id) {
                     node.name = rename_buf.clone();
+                    scene.mark_data_changed();
                 }
                 *renaming = None;
             }
@@ -366,10 +367,10 @@ fn draw_node_recursive(
     if info.is_leaf {
         let row = chrome::item_frame(ui, info.is_selected).show(ui, |ui| {
             ui.horizontal(|ui| {
-                let mut visible = !info.is_hidden;
-                if ui.checkbox(&mut visible, "").changed() {
-                    scene.toggle_visibility(id);
-                }
+            let mut visible = !info.is_hidden;
+            if ui.checkbox(&mut visible, "").changed() {
+                scene.toggle_visibility(id);
+            }
                 let (dot_rect, _) =
                     ui.allocate_exact_size(egui::vec2(10.0, 10.0), egui::Sense::hover());
                 ui.painter()
@@ -438,10 +439,10 @@ fn draw_node_recursive(
     } else {
         let row = chrome::item_frame(ui, info.is_selected).show(ui, |ui| {
             ui.horizontal(|ui| {
-                let mut visible = !info.is_hidden;
-                if ui.checkbox(&mut visible, "").changed() {
-                    scene.toggle_visibility(id);
-                }
+            let mut visible = !info.is_hidden;
+            if ui.checkbox(&mut visible, "").changed() {
+                scene.toggle_visibility(id);
+            }
                 let (dot_rect, _) =
                     ui.allocate_exact_size(egui::vec2(10.0, 10.0), egui::Sense::hover());
                 ui.painter()
@@ -593,6 +594,7 @@ fn draw_flat_node(
             if te.lost_focus() || ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                 if let Some(node) = scene.nodes.get_mut(&id) {
                     node.name = rename_buf.clone();
+                    scene.mark_data_changed();
                 }
                 *renaming = None;
             }

@@ -1169,18 +1169,31 @@ fn apply_rotation_delta(
 #[allow(dead_code)]
 fn apply_position_delta(scene: &mut Scene, node_id: NodeId, delta: Vec3) {
     if let Some(node) = scene.nodes.get_mut(&node_id) {
+        let mut changed = false;
         match &mut node.data {
             NodeData::Primitive {
                 ref mut position, ..
-            } => *position += delta,
+            } => {
+                *position += delta;
+                changed = true;
+            }
             NodeData::Sculpt {
                 ref mut position, ..
-            } => *position += delta,
+            } => {
+                *position += delta;
+                changed = true;
+            }
             NodeData::Transform {
                 ref mut translation,
                 ..
-            } => *translation += delta,
+            } => {
+                *translation += delta;
+                changed = true;
+            }
             _ => {}
+        }
+        if changed {
+            scene.mark_data_changed();
         }
     }
 }
@@ -1190,17 +1203,30 @@ fn set_node_position(scene: &mut Scene, node_id: NodeId, position: Vec3) {
     let Some(node) = scene.nodes.get_mut(&node_id) else {
         return;
     };
+    let mut changed = false;
     match &mut node.data {
         NodeData::Primitive {
             position: node_position,
             ..
-        } => *node_position = position,
+        } => {
+            changed = *node_position != position;
+            *node_position = position;
+        }
         NodeData::Sculpt {
             position: node_position,
             ..
-        } => *node_position = position,
-        NodeData::Transform { translation, .. } => *translation = position,
+        } => {
+            changed = *node_position != position;
+            *node_position = position;
+        }
+        NodeData::Transform { translation, .. } => {
+            changed = *translation != position;
+            *translation = position;
+        }
         _ => {}
+    }
+    if changed {
+        scene.mark_data_changed();
     }
 }
 
@@ -1209,20 +1235,33 @@ fn set_node_rotation(scene: &mut Scene, node_id: NodeId, rotation: Vec3) {
     let Some(node) = scene.nodes.get_mut(&node_id) else {
         return;
     };
+    let mut changed = false;
     match &mut node.data {
         NodeData::Primitive {
             rotation: node_rotation,
             ..
-        } => *node_rotation = rotation,
+        } => {
+            changed = *node_rotation != rotation;
+            *node_rotation = rotation;
+        }
         NodeData::Sculpt {
             rotation: node_rotation,
             ..
-        } => *node_rotation = rotation,
+        } => {
+            changed = *node_rotation != rotation;
+            *node_rotation = rotation;
+        }
         NodeData::Transform {
             rotation: node_rotation,
             ..
-        } => *node_rotation = rotation,
+        } => {
+            changed = *node_rotation != rotation;
+            *node_rotation = rotation;
+        }
         _ => {}
+    }
+    if changed {
+        scene.mark_data_changed();
     }
 }
 
@@ -1231,14 +1270,24 @@ fn set_node_scale(scene: &mut Scene, node_id: NodeId, scale: Vec3) {
     let Some(node) = scene.nodes.get_mut(&node_id) else {
         return;
     };
+    let mut changed = false;
     match &mut node.data {
         NodeData::Primitive {
             scale: node_scale, ..
-        } => *node_scale = scale,
+        } => {
+            changed = *node_scale != scale;
+            *node_scale = scale;
+        }
         NodeData::Transform {
             scale: node_scale, ..
-        } => *node_scale = scale,
+        } => {
+            changed = *node_scale != scale;
+            *node_scale = scale;
+        }
         _ => {}
+    }
+    if changed {
+        scene.mark_data_changed();
     }
 }
 
@@ -1881,6 +1930,7 @@ fn snap_position(scene: &mut Scene, node_id: NodeId, axis_idx: usize, snap: f32)
             1 => pos.y = snap_value(pos.y, snap),
             _ => pos.z = snap_value(pos.z, snap),
         }
+        scene.mark_data_changed();
     }
 }
 
@@ -1904,6 +1954,7 @@ fn snap_rotation(scene: &mut Scene, node_id: NodeId, axis_idx: usize, snap_rad: 
             1 => rot.y = snap_value(rot.y, snap_rad),
             _ => rot.z = snap_value(rot.z, snap_rad),
         }
+        scene.mark_data_changed();
     }
 }
 
@@ -1919,6 +1970,7 @@ fn snap_scale(scene: &mut Scene, node_id: NodeId, axis_idx: usize, snap: f32) {
             1 => scale.y = snap_value(scale.y, snap).max(0.01),
             _ => scale.z = snap_value(scale.z, snap).max(0.01),
         }
+        scene.mark_data_changed();
     }
 }
 
@@ -1936,6 +1988,8 @@ mod tests {
             name_counters: HashMap::new(),
             hidden_nodes: HashSet::new(),
             light_masks: HashMap::new(),
+            structure_version: 0,
+            data_version: 0,
         }
     }
 

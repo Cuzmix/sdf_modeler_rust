@@ -579,6 +579,7 @@ fn draw_multi_properties(ui: &mut egui::Ui, ctx: &mut MultiPropertiesContext<'_>
                             set_node_color(&mut node.data, new_color);
                         }
                     }
+                    scene.mark_data_changed();
                 }
 
                 // Roughness — use first node's value
@@ -602,6 +603,7 @@ fn draw_multi_properties(ui: &mut egui::Ui, ctx: &mut MultiPropertiesContext<'_>
                             set_node_roughness(&mut node.data, roughness);
                         }
                     }
+                    scene.mark_data_changed();
                 }
 
                 // Metallic — use first node's value
@@ -620,6 +622,7 @@ fn draw_multi_properties(ui: &mut egui::Ui, ctx: &mut MultiPropertiesContext<'_>
                             set_node_metallic(&mut node.data, metallic);
                         }
                     }
+                    scene.mark_data_changed();
                 }
 
                 // Reflectance F0 — use first node's value
@@ -643,6 +646,7 @@ fn draw_multi_properties(ui: &mut egui::Ui, ctx: &mut MultiPropertiesContext<'_>
                             set_node_reflectance_f0(&mut node.data, reflectance_f0);
                         }
                     }
+                    scene.mark_data_changed();
                 }
             });
     }
@@ -821,7 +825,10 @@ pub fn draw(
                             flatten: false,
                         }));
                         if let Some(node) = scene.nodes.get_mut(&id) {
-                            node.name = name.clone();
+                            if node.name != name {
+                                node.name = name.clone();
+                                scene.mark_data_changed();
+                            }
                         }
                         return;
                     }
@@ -849,11 +856,16 @@ pub fn draw(
                     ..
                 } = node.data
                 {
+                    let changed =
+                        *k != kind || *p != position || *r != rotation || *s != scale || *mat != material;
                     *k = kind;
                     *p = position;
                     *r = rotation;
                     *s = scale;
                     *mat = material;
+                    if changed {
+                        scene.mark_data_changed();
+                    }
                 }
             }
         }
@@ -992,10 +1004,15 @@ pub fn draw(
                     ..
                 } = node.data
                 {
+                    let changed =
+                        *o != op || *k != smooth_k || *s != steps || *cb != color_blend;
                     *o = op;
                     *k = smooth_k;
                     *s = steps;
                     *cb = color_blend;
+                    if changed {
+                        scene.mark_data_changed();
+                    }
                 }
             }
         }
@@ -1255,11 +1272,19 @@ pub fn draw(
                     ..
                 } = node.data
                 {
+                    let changed = *p != position
+                        || *r != rotation
+                        || *mat != material
+                        || *li != layer_intensity
+                        || *dr != desired_resolution;
                     *p = position;
                     *r = rotation;
                     *mat = material;
                     *li = layer_intensity;
                     *dr = desired_resolution;
+                    if changed {
+                        scene.mark_data_changed();
+                    }
                 }
             }
         }
@@ -1328,9 +1353,13 @@ pub fn draw(
                     ..
                 } = node.data
                 {
+                    let changed = *t != translation || *r != rotation || *s != scale;
                     *t = translation;
                     *r = rotation;
                     *s = scale;
+                    if changed {
+                        scene.mark_data_changed();
+                    }
                 }
             }
         }
@@ -1505,9 +1534,13 @@ pub fn draw(
                     ..
                 } = node.data
                 {
+                    let changed = *k != kind || *v != value || *e != extra;
                     *k = kind;
                     *v = value;
                     *e = extra;
+                    if changed {
+                        scene.mark_data_changed();
+                    }
                 }
             }
         }
@@ -1921,6 +1954,21 @@ pub fn draw(
                     ..
                 } = node.data
                 {
+                    let changed = *lt != light_type
+                        || *c != color
+                        || *int != intensity
+                        || *r != range
+                        || *sa != spot_angle
+                        || *cs != cast_shadows
+                        || *ss != shadow_softness
+                        || *sc != shadow_color
+                        || *vol != volumetric
+                        || *vd != volumetric_density
+                        || *pm != proximity_mode
+                        || *pr != proximity_range
+                        || *ac != array_config
+                        || *ie != intensity_expr
+                        || *ce != color_hue_expr;
                     *lt = light_type;
                     *c = color;
                     *int = intensity;
@@ -1936,6 +1984,9 @@ pub fn draw(
                     *ac = array_config;
                     *ie = intensity_expr;
                     *ce = color_hue_expr;
+                    if changed {
+                        scene.mark_data_changed();
+                    }
                 }
             }
         }
@@ -2042,7 +2093,10 @@ pub fn draw(
 
     // Write name back
     if let Some(node) = scene.nodes.get_mut(&id) {
-        node.name = name;
+        if node.name != name {
+            node.name = name;
+            scene.mark_data_changed();
+        }
     }
 }
 

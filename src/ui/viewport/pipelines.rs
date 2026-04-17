@@ -5,7 +5,7 @@ use eframe::wgpu;
 use super::{ViewportResources, BLIT_SHADER_SRC};
 
 impl ViewportResources {
-    pub(super) fn create_render_pipeline(
+    pub(crate) fn create_render_pipeline(
         device: &wgpu::Device,
         shader_src: &str,
         camera_bgl: &wgpu::BindGroupLayout,
@@ -55,7 +55,7 @@ impl ViewportResources {
         })
     }
 
-    pub(super) fn create_pick_pipeline(
+    pub(crate) fn create_pick_pipeline(
         device: &wgpu::Device,
         pick_shader_src: &str,
         camera_bgl: &wgpu::BindGroupLayout,

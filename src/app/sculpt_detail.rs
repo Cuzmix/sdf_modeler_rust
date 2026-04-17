@@ -240,6 +240,7 @@ impl SdfApp {
             {
                 *voxel_grid = new_grid;
                 *desired_resolution = resolution;
+                self.doc.scene.mark_data_changed();
             }
         }
 

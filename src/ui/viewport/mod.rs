@@ -11,6 +11,7 @@ pub use draw::draw;
 pub use environment::EnvironmentResources;
 
 use std::num::NonZeroU64;
+use std::sync::Arc;
 
 use bytemuck::{Pod, Zeroable};
 use eframe::wgpu;
@@ -65,11 +66,13 @@ pub struct ViewportResources {
     pub pipeline: wgpu::RenderPipeline,
     pub camera_buffer: wgpu::Buffer,
     pub camera_bind_group: wgpu::BindGroup,
-    pub camera_bgl: wgpu::BindGroupLayout,
+    // BGLs are `Arc`-wrapped so the async pipeline compile worker can hold
+    // its own reference while the main thread keeps rendering.
+    pub camera_bgl: Arc<wgpu::BindGroupLayout>,
     pub scene_buffer: wgpu::Buffer,
     pub voxel_buffer: wgpu::Buffer,
     pub scene_bind_group: wgpu::BindGroup,
-    pub scene_bgl: wgpu::BindGroupLayout,
+    pub scene_bgl: Arc<wgpu::BindGroupLayout>,
     pub scene_buffer_capacity: usize,
     pub voxel_buffer_capacity: usize, // in f32 elements
     pub target_format: wgpu::TextureFormat,
@@ -78,7 +81,7 @@ pub struct ViewportResources {
     pub voxel_textures: Vec<wgpu::Texture>,
     pub voxel_texture_views: Vec<wgpu::TextureView>,
     pub voxel_sampler: wgpu::Sampler,
-    pub voxel_tex_bgl: wgpu::BindGroupLayout,
+    pub voxel_tex_bgl: Arc<wgpu::BindGroupLayout>,
     pub voxel_tex_bind_group: wgpu::BindGroup,
 
     // --- Environment resources (IBL cubemaps + BRDF LUT) ---
@@ -90,7 +93,7 @@ pub struct ViewportResources {
     pub pick_output_buffer: wgpu::Buffer,
     pub pick_staging_buffer: wgpu::Buffer,
     pub pick_bind_group: wgpu::BindGroup,
-    pub pick_bgl: wgpu::BindGroupLayout,
+    pub pick_bgl: Arc<wgpu::BindGroupLayout>,
 
     // --- Brush compute pipeline ---
     pub brush_pipeline: wgpu::ComputePipeline,
@@ -146,7 +149,7 @@ impl ViewportResources {
             mapped_at_creation: false,
         });
 
-        let camera_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        let camera_bgl = Arc::new(device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Camera BGL"),
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
@@ -158,7 +161,7 @@ impl ViewportResources {
                 },
                 count: None,
             }],
-        });
+        }));
 
         let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Camera BG"),
@@ -183,7 +186,7 @@ impl ViewportResources {
             mapped_at_creation: false,
         });
 
-        let scene_bgl = Self::create_scene_bgl(device);
+        let scene_bgl = Arc::new(Self::create_scene_bgl(device));
 
         let scene_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Scene BG"),
@@ -211,7 +214,7 @@ impl ViewportResources {
             address_mode_w: wgpu::AddressMode::ClampToEdge,
             ..Default::default()
         });
-        let voxel_tex_bgl = Self::create_voxel_tex_bgl(device, 0);
+        let voxel_tex_bgl = Arc::new(Self::create_voxel_tex_bgl(device, 0));
         let voxel_tex_bind_group =
             Self::create_voxel_tex_bind_group(device, &voxel_tex_bgl, &voxel_sampler, &[]);
         let environment = EnvironmentResources::new(device, adapter);
@@ -248,7 +251,7 @@ impl ViewportResources {
             mapped_at_creation: false,
         });
 
-        let pick_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        let pick_bgl = Arc::new(device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Pick BGL"),
             entries: &[
                 wgpu::BindGroupLayoutEntry {
@@ -272,7 +275,7 @@ impl ViewportResources {
                     count: None,
                 },
             ],
-        });
+        }));
 
         let pick_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Pick BG"),

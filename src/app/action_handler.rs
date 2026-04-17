@@ -64,9 +64,13 @@ impl SdfApp {
                     self.doc.sculpt_state = SculptState::new_inactive();
                     self.ui.isolation_state = None;
                     self.doc.soloed_light = None;
-                    self.gpu.current_structure_key = 0;
+                    self.gpu.last_structure_version = self.doc.scene.structure_version();
+                    self.gpu.last_data_version = self.doc.scene.data_version();
+                    self.gpu.force_pipeline_resync = true;
                     self.gpu.buffer_dirty = true;
-                    self.persistence.saved_fingerprint = self.doc.scene.data_fingerprint();
+                    let fingerprint = self.doc.scene.data_fingerprint();
+                    self.gpu.cached_data_fingerprint = fingerprint;
+                    self.persistence.saved_fingerprint = fingerprint;
                     self.persistence.scene_dirty = false;
                     self.persistence.current_file_path = None;
                 }
@@ -669,6 +673,7 @@ impl SdfApp {
                 Action::ToggleLock(id) => {
                     if let Some(node) = self.doc.scene.nodes.get_mut(&id) {
                         node.locked = !node.locked;
+                        self.doc.scene.mark_data_changed();
                     }
                 }
                 Action::SwapChildren(id) => {
@@ -686,6 +691,7 @@ impl SdfApp {
                 Action::RenameNode { id, name } => {
                     if let Some(node) = self.doc.scene.nodes.get_mut(&id) {
                         node.name = name;
+                        self.doc.scene.mark_data_changed();
                     }
                 }
 
@@ -828,6 +834,7 @@ impl SdfApp {
                                     false
                                 };
                                 if applied {
+                                    self.doc.scene.mark_data_changed();
                                     self.gpu.buffer_dirty = true;
                                     self.ui.toasts.push(super::Toast {
                                         message: "Properties pasted".into(),
@@ -988,10 +995,11 @@ impl SdfApp {
                             } = node.data
                             {
                                 *cookie_node = cookie;
+                                self.doc.scene.mark_structure_changed();
                             }
                         }
                         // Cookie changes affect shader codegen (new cookie_sdf function)
-                        self.gpu.current_structure_key = 0;
+                        self.gpu.force_pipeline_resync = true;
                         self.gpu.buffer_dirty = true;
                     }
                 }
@@ -1017,7 +1025,7 @@ impl SdfApp {
                 }
                 Action::SettingsChanged => {
                     self.settings.save();
-                    self.gpu.current_structure_key = 0;
+                    self.gpu.force_pipeline_resync = true;
                     self.gpu.buffer_dirty = true;
                 }
                 Action::MarkBufferDirty => {
@@ -1044,6 +1052,7 @@ impl SdfApp {
                     return;
                 };
                 voxel_grid.data = voxel_data;
+                self.doc.scene.mark_data_changed();
             }
         }
 
@@ -1052,6 +1061,9 @@ impl SdfApp {
         } else {
             self.ui.node_graph_state.clear_selection();
         }
+        self.doc
+            .history
+            .reset_stable_scene(&self.doc.scene, self.ui.node_graph_state.selected);
         self.ui.node_graph_state.needs_initial_rebuild = true;
         self.ui.isolation_state = None;
         self.async_state.last_sculpt_hit = None;
@@ -1134,9 +1146,13 @@ impl SdfApp {
                 self.doc.history = History::new();
                 self.ui.node_graph_state.clear_selection();
                 self.ui.node_graph_state.needs_initial_rebuild = true;
-                self.gpu.current_structure_key = 0;
+                self.gpu.last_structure_version = self.doc.scene.structure_version();
+                self.gpu.last_data_version = self.doc.scene.data_version();
+                self.gpu.force_pipeline_resync = true;
                 self.gpu.buffer_dirty = true;
-                self.persistence.saved_fingerprint = self.doc.scene.data_fingerprint();
+                let fingerprint = self.doc.scene.data_fingerprint();
+                self.gpu.cached_data_fingerprint = fingerprint;
+                self.persistence.saved_fingerprint = fingerprint;
                 self.persistence.scene_dirty = false;
                 self.persistence.current_file_path = Some(path.to_path_buf());
                 self.settings.add_recent_file(&path.to_string_lossy());
@@ -1168,6 +1184,7 @@ impl SdfApp {
                     _ => {}
                 }
             }
+            self.doc.scene.mark_data_changed();
             self.ui.node_graph_state.select_single(new_id);
             self.ui.node_graph_state.needs_initial_rebuild = true;
             self.gpu.buffer_dirty = true;
@@ -1304,6 +1321,7 @@ fn apply_lighting_preset_to_scene(
             }
         }
     }
+    scene.mark_data_changed();
 }
 
 /// Find the Transform node that parents a given node (has `input = Some(child_id)`).

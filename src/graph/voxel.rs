@@ -270,6 +270,7 @@ impl VoxelGrid {
     }
 
     /// Bit-exact equality check for undo system.
+    #[cfg(test)]
     pub fn content_eq(&self, other: &VoxelGrid) -> bool {
         self.resolution == other.resolution
             && self.bounds_min == other.bounds_min
@@ -923,6 +924,8 @@ mod tests {
             name_counters: HashMap::new(),
             hidden_nodes: HashSet::new(),
             light_masks: HashMap::new(),
+            structure_version: 0,
+            data_version: 0,
         }
     }
 

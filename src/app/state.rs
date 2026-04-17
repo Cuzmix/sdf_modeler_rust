@@ -55,12 +55,23 @@ pub struct GizmoContext {
 
 pub struct GpuSyncState {
     pub render_state: RenderState,
-    pub current_structure_key: u64,
+    pub last_structure_version: u64,
+    pub force_pipeline_resync: bool,
     pub buffer_dirty: bool,
-    pub last_data_fingerprint: u64,
+    pub last_data_version: u64,
+    /// Cached `Scene::data_fingerprint()` — valid only when
+    /// `last_data_version == scene.data_version()`. Lets the per-frame dirty
+    /// check skip the O(n) hash when nothing has changed since last frame.
+    pub cached_data_fingerprint: u64,
     pub last_environment_fingerprint: u64,
     pub voxel_gpu_offsets: HashMap<NodeId, u32>,
     pub sculpt_tex_indices: HashMap<NodeId, usize>,
+    /// In-flight async pipeline compile. `None` when no compile is running.
+    /// On completion the main thread updates `last_structure_version` to the
+    /// compiled version; if the scene has advanced further, the natural
+    /// `structure_version != last_structure_version` check on the next frame
+    /// kicks off a fresh compile.
+    pub pipeline_compile: Option<super::pipeline_compile::PipelineCompileHandle>,
 }
 
 // ---------------------------------------------------------------------------
@@ -70,7 +81,7 @@ pub struct GpuSyncState {
 #[derive(Clone, Copy, Debug)]
 pub struct SculptRuntimeCache {
     pub node_id: NodeId,
-    pub structure_key: u64,
+    pub structure_version: u64,
     pub material_id: i32,
     pub position: Vec3,
     pub rotation: Vec3,

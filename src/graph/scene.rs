@@ -889,6 +889,10 @@ pub struct Scene {
     /// Default `0xFF` (all lights) for nodes not in the map.
     #[serde(default)]
     pub light_masks: HashMap<NodeId, u8>,
+    #[serde(default)]
+    pub(crate) structure_version: u64,
+    #[serde(default)]
+    pub(crate) data_version: u64,
 }
 
 impl Scene {
@@ -899,10 +903,36 @@ impl Scene {
             name_counters: HashMap::new(),
             hidden_nodes: HashSet::new(),
             light_masks: HashMap::new(),
+            structure_version: 0,
+            data_version: 0,
         };
         scene.create_primitive(SdfPrimitive::Sphere);
         scene.create_default_lights();
         scene
+    }
+
+    fn bump_version(counter: &mut u64) {
+        *counter = counter.wrapping_add(1);
+        if *counter == 0 {
+            *counter = 1;
+        }
+    }
+
+    pub fn structure_version(&self) -> u64 {
+        self.structure_version
+    }
+
+    pub fn data_version(&self) -> u64 {
+        self.data_version
+    }
+
+    pub fn mark_data_changed(&mut self) {
+        Self::bump_version(&mut self.data_version);
+    }
+
+    pub fn mark_structure_changed(&mut self) {
+        Self::bump_version(&mut self.structure_version);
+        self.mark_data_changed();
     }
 
     /// Get the light linking bitmask for a node. Returns `0xFF` (all lights)
@@ -919,6 +949,7 @@ impl Scene {
         } else {
             self.light_masks.insert(id, mask);
         }
+        self.mark_data_changed();
     }
 
     /// Returns true if any Light node in the scene has an active animation expression.
@@ -960,6 +991,7 @@ impl Scene {
                 locked: false,
             },
         );
+        self.mark_structure_changed();
         id
     }
 
@@ -971,6 +1003,7 @@ impl Scene {
         if !self.hidden_nodes.remove(&id) {
             self.hidden_nodes.insert(id);
         }
+        self.mark_structure_changed();
     }
 
     pub fn remove_node(&mut self, id: NodeId) -> Option<SceneNode> {
@@ -1024,6 +1057,9 @@ impl Scene {
                     _ => {}
                 }
             }
+        }
+        if node.is_some() {
+            self.mark_structure_changed();
         }
         node
     }
@@ -2333,6 +2369,7 @@ impl Scene {
     }
 
     /// Deep equality check (topology + parameters). Used by undo system.
+    #[cfg(test)]
     pub fn content_eq(&self, other: &Scene) -> bool {
         if self.hidden_nodes != other.hidden_nodes {
             return false;
@@ -2554,6 +2591,8 @@ mod tests {
             name_counters: HashMap::new(),
             hidden_nodes: HashSet::new(),
             light_masks: HashMap::new(),
+            structure_version: 0,
+            data_version: 0,
         }
     }
 

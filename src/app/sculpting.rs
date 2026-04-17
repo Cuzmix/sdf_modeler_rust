@@ -96,9 +96,9 @@ impl SdfApp {
     }
 
     fn sculpt_runtime_cache(&mut self, node_id: NodeId) -> Option<SculptRuntimeCache> {
-        let structure_key = self.doc.scene.structure_key();
+        let structure_version = self.doc.scene.structure_version();
         if let Some(cache) = self.async_state.sculpt_runtime_cache {
-            if cache.node_id == node_id && cache.structure_key == structure_key {
+            if cache.node_id == node_id && cache.structure_version == structure_version {
                 return Some(cache);
             }
         }
@@ -124,7 +124,7 @@ impl SdfApp {
 
         let cache = SculptRuntimeCache {
             node_id,
-            structure_key,
+            structure_version,
             material_id,
             position,
             rotation,
@@ -684,6 +684,7 @@ impl SdfApp {
                 };
 
                 if let Some(region) = dirty {
+                    self.doc.scene.mark_data_changed();
                     if let Some(stroke_state) = self.doc.sculpt_state.stroke_state_mut() {
                         stroke_state.pending_grab_repair_region =
                             Some(match stroke_state.pending_grab_repair_region {
@@ -806,6 +807,7 @@ impl SdfApp {
         if let Some(region) = dirty_region {
             let repaired = sculpt::repair_sdf_region_scene(&mut self.doc.scene, node_id, region, 2)
                 .unwrap_or(region);
+            self.doc.scene.mark_data_changed();
             let (z0, z1) = repaired.z_range();
             self.try_incremental_voxel_upload(node_id, z0, z1);
             self.upload_voxel_texture_region(node_id, z0, z1);

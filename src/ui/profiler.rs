@@ -117,12 +117,40 @@ pub fn draw(
                         t.pipeline_sync_s * 1000.0
                     ));
                     ui.monospace(format!(
+                        "  structure key: {:6.2} ms",
+                        t.structure_key_s * 1000.0
+                    ));
+                    ui.monospace(format!(
+                        "  shader codegen:{:6.2} ms",
+                        t.shader_codegen_s * 1000.0
+                    ));
+                    ui.monospace(format!(
+                        "  rebuild pipes: {:6.2} ms",
+                        t.pipeline_rebuild_s * 1000.0
+                    ));
+                    ui.monospace(format!(
                         "Buffer upload:  {:6.2} ms",
                         t.buffer_upload_s * 1000.0
                     ));
                     ui.monospace(format!(
+                        "  build buffers: {:6.2} ms",
+                        t.scene_buffer_build_s * 1000.0
+                    ));
+                    ui.monospace(format!(
+                        "  GPU writes:    {:6.2} ms",
+                        t.scene_buffer_write_s * 1000.0
+                    ));
+                    ui.monospace(format!(
                         "Comp dispatch:  {:6.2} ms",
                         t.composite_dispatch_s * 1000.0
+                    ));
+                    ui.monospace(format!(
+                        "Data hash:      {:6.2} ms",
+                        t.data_fingerprint_s * 1000.0
+                    ));
+                    ui.monospace(format!(
+                        "History commit: {:6.2} ms",
+                        t.history_finalize_s * 1000.0
                     ));
                     ui.monospace(format!("UI draw:        {:6.2} ms", t.ui_draw_s * 1000.0));
                     ui.monospace(format!("Total CPU:      {:6.2} ms", t.total_cpu_s * 1000.0));

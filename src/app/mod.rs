@@ -6,6 +6,7 @@ mod egui_frontend;
 mod frontend_bridge;
 mod gpu_sync;
 mod input;
+mod pipeline_compile;
 mod sculpt_detail;
 mod sculpting;
 pub(crate) mod state;
@@ -45,8 +46,15 @@ const TIMING_HISTORY_LEN: usize = 120;
 pub struct FrameTimings {
     /// Per-phase CPU timings (current frame), in seconds.
     pub pipeline_sync_s: f64,
+    pub structure_key_s: f64,
+    pub shader_codegen_s: f64,
+    pub pipeline_rebuild_s: f64,
     pub buffer_upload_s: f64,
+    pub scene_buffer_build_s: f64,
+    pub scene_buffer_write_s: f64,
     pub composite_dispatch_s: f64,
+    pub data_fingerprint_s: f64,
+    pub history_finalize_s: f64,
     pub ui_draw_s: f64,
     pub total_cpu_s: f64,
 
@@ -70,8 +78,15 @@ impl FrameTimings {
     fn new() -> Self {
         Self {
             pipeline_sync_s: 0.0,
+            structure_key_s: 0.0,
+            shader_codegen_s: 0.0,
+            pipeline_rebuild_s: 0.0,
             buffer_upload_s: 0.0,
+            scene_buffer_build_s: 0.0,
+            scene_buffer_write_s: 0.0,
             composite_dispatch_s: 0.0,
+            data_fingerprint_s: 0.0,
+            history_finalize_s: 0.0,
             ui_draw_s: 0.0,
             total_cpu_s: 0.0,
             sculpt_brush_samples: 0,
@@ -103,6 +118,13 @@ impl FrameTimings {
     }
 
     fn begin_frame(&mut self) {
+        self.structure_key_s = 0.0;
+        self.shader_codegen_s = 0.0;
+        self.pipeline_rebuild_s = 0.0;
+        self.scene_buffer_build_s = 0.0;
+        self.scene_buffer_write_s = 0.0;
+        self.data_fingerprint_s = 0.0;
+        self.history_finalize_s = 0.0;
         self.sculpt_brush_samples = 0;
         self.sculpt_gpu_dispatches = 0;
         self.sculpt_gpu_submits = 0;
@@ -308,7 +330,10 @@ impl SdfApp {
                 self.doc.history = crate::graph::history::History::new();
                 self.ui.node_graph_state.clear_selection();
                 self.ui.node_graph_state.needs_initial_rebuild = true;
-                self.gpu.current_structure_key = 0;
+                self.gpu.last_structure_version = self.doc.scene.structure_version();
+                self.gpu.last_data_version = self.doc.scene.data_version();
+                self.gpu.cached_data_fingerprint = self.doc.scene.data_fingerprint();
+                self.gpu.force_pipeline_resync = true;
                 self.gpu.buffer_dirty = true;
                 self.persistence.current_file_path = None;
                 self.persistence.saved_fingerprint = 0;
@@ -392,7 +417,9 @@ impl SdfApp {
         let scene = crate::graph::scene::Scene::new();
         let shader_src = codegen::generate_shader(&scene, &settings.render);
         let pick_shader_src = codegen::generate_pick_shader(&scene, &settings.render);
-        let structure_key = scene.structure_key();
+        let structure_version = scene.structure_version();
+        let data_version = scene.data_version();
+        let initial_data_fingerprint = scene.data_fingerprint();
 
         let resources = ViewportResources::new(
             &render_state.device,
@@ -449,12 +476,15 @@ impl SdfApp {
             },
             gpu: GpuSyncState {
                 render_state,
-                current_structure_key: structure_key,
+                last_structure_version: structure_version,
+                force_pipeline_resync: false,
                 buffer_dirty: false, // initial upload already done above
-                last_data_fingerprint: 0,
+                last_data_version: data_version,
+                cached_data_fingerprint: initial_data_fingerprint,
                 last_environment_fingerprint: settings.render.environment_fingerprint(),
                 voxel_gpu_offsets: voxel_offsets,
                 sculpt_tex_indices: HashMap::new(),
+                pipeline_compile: None,
             },
             async_state: AsyncState {
                 bake_status: BakeStatus::Idle,

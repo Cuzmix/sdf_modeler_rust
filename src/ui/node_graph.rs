@@ -1487,7 +1487,7 @@ fn try_auto_insert_candidates_on_hovered_connection(
 
         state.select_single(insert_scene_id);
         state.needs_initial_rebuild = true;
-        state.last_structure_key = scene.structure_key();
+        state.last_structure_version = scene.structure_version();
         return true;
     }
 
@@ -1672,7 +1672,7 @@ pub struct NodeGraphState {
     /// Full set of selected nodes (for multi-select). Always contains `selected` when non-empty.
     pub selected_set: std::collections::HashSet<SceneNodeId>,
     pub layout_dirty: bool,
-    pub last_structure_key: u64,
+    pub last_structure_version: u64,
     pub needs_initial_rebuild: bool,
     /// When set, the next frame will center the viewport on this node.
     pub pending_center_node: Option<SceneNodeId>,
@@ -1691,7 +1691,7 @@ impl NodeGraphState {
             selected: None,
             selected_set: std::collections::HashSet::new(),
             layout_dirty: true,
-            last_structure_key: 0,
+            last_structure_version: 0,
             needs_initial_rebuild: true,
             pending_center_node: None,
             pending_spawn_anchor: None,
@@ -2208,8 +2208,8 @@ fn draw_with_filter(
     let graph_rect = ui.available_rect_before_wrap();
 
     // Detect if scene changed externally (undo/redo, load, scene tree edit)
-    let structure_key = scene.structure_key();
-    if state.needs_initial_rebuild || structure_key != state.last_structure_key {
+    let structure_version = scene.structure_version();
+    if state.needs_initial_rebuild || structure_version != state.last_structure_version {
         match filter_mode {
             GraphFilterMode::SdfOnly => {
                 rebuild_graph_from_scene(scene, &mut state.graph_state, &mut state.id_map);
@@ -2223,7 +2223,7 @@ fn draw_with_filter(
                 );
             }
         }
-        state.last_structure_key = structure_key;
+        state.last_structure_version = structure_version;
         state.needs_initial_rebuild = false;
         state.layout_dirty = false;
 
@@ -2314,7 +2314,7 @@ fn draw_with_filter(
             }
         }
         state.select_single(scene_id);
-        state.last_structure_key = scene.structure_key();
+        state.last_structure_version = scene.structure_version();
     }
 
     // Write back dirty node data from inline editing
@@ -2324,6 +2324,9 @@ fn draw_with_filter(
                 node.data = data.clone();
             }
         }
+    }
+    if !state.user_state.dirty_nodes.is_empty() {
+        scene.mark_data_changed();
     }
 
     // Process graph events
@@ -2338,7 +2341,7 @@ fn draw_with_filter(
     );
     if layout_dirty {
         state.layout_dirty = true;
-        state.last_structure_key = scene.structure_key();
+        state.last_structure_version = scene.structure_version();
     }
 
     if matches!(filter_mode, GraphFilterMode::SdfOnly)
@@ -2450,7 +2453,7 @@ fn draw_with_filter(
                         if disconnect_node_with_bypass(scene, &state.id_map, scene_id) {
                             state.select_single(scene_id);
                             state.needs_initial_rebuild = true;
-                            state.last_structure_key = scene.structure_key();
+                        state.last_structure_version = scene.structure_version();
                         }
                     }
                 }

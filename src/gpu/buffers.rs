@@ -746,6 +746,8 @@ mod tests {
             name_counters: HashMap::new(),
             hidden_nodes: HashSet::new(),
             light_masks: HashMap::new(),
+            structure_version: 0,
+            data_version: 0,
         }
     }
 

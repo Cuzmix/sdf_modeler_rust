@@ -78,7 +78,9 @@ impl EnvironmentPipelineMode {
 
 pub struct EnvironmentResources {
     pub sampler: wgpu::Sampler,
-    pub bind_group_layout: wgpu::BindGroupLayout,
+    // Arc-wrapped so the async pipeline compile worker can hold a reference
+    // while the main thread continues rendering with the current pipeline.
+    pub bind_group_layout: std::sync::Arc<wgpu::BindGroupLayout>,
     pub bind_group: wgpu::BindGroup,
     pub source_texture: wgpu::Texture,
     pub source_view: wgpu::TextureView,
@@ -167,7 +169,7 @@ impl EnvironmentResources {
             address_mode_w: wgpu::AddressMode::ClampToEdge,
             ..Default::default()
         });
-        let bind_group_layout = Self::create_bind_group_layout(device);
+        let bind_group_layout = std::sync::Arc::new(Self::create_bind_group_layout(device));
         let bake_gpu = pipeline_mode.supports_baked_environment().then(|| {
             EnvironmentBakeGpu::new(device, texture_formats.cube, texture_formats.brdf_lut)
         });

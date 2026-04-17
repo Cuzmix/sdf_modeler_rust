@@ -81,7 +81,7 @@ impl ViewportResources {
         }
         self.voxel_textures = textures;
         self.voxel_texture_views = views;
-        self.voxel_tex_bgl = Self::create_voxel_tex_bgl(device, count);
+        self.voxel_tex_bgl = std::sync::Arc::new(Self::create_voxel_tex_bgl(device, count));
         self.voxel_tex_bind_group = Self::create_voxel_tex_bind_group(
             device,
             &self.voxel_tex_bgl,
