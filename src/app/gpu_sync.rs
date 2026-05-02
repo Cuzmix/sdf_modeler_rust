@@ -289,7 +289,15 @@ impl SdfApp {
                 .unwrap_or(0)
         };
         if compiled.sculpt_count != current_sculpt_count {
+            // Sculpt count drifted while compiling — pipeline is unusable.
+            // Force a resync so the next frame takes the sync rebuild path
+            // (which will pick the right voxel_tex_bgl). Don't leave the
+            // tape fallback flag dangling: if the drift was caused by
+            // adding a sculpt, the fallback can't render it either, and
+            // the user should be in the "frozen previous frame" state
+            // (G-stale) rather than seeing partial geometry.
             self.gpu.force_pipeline_resync = true;
+            self.set_fallback_active(false);
             return;
         }
 

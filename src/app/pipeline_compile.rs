@@ -86,31 +86,73 @@ pub(crate) fn spawn_pipeline_compile(inputs: PipelineCompileInputs) -> PipelineC
     thread::Builder::new()
         .name("sdf-pipeline-compile".into())
         .spawn(move || {
+            let target_version = inputs.structure_version;
             let work_start = Instant::now();
-            let render_pipeline = ViewportResources::create_render_pipeline(
-                &inputs.device,
-                &inputs.render_shader_src,
-                &inputs.camera_bgl,
-                &inputs.scene_bgl,
-                &inputs.voxel_tex_bgl,
-                &inputs.environment_bgl,
-                inputs.target_format,
-            );
-            let pick_pipeline = ViewportResources::create_pick_pipeline(
-                &inputs.device,
-                &inputs.pick_shader_src,
-                &inputs.camera_bgl,
-                &inputs.scene_bgl,
-                &inputs.pick_bgl,
-            );
-            let worker_wall_ms = work_start.elapsed().as_secs_f64() * 1000.0;
-            let _ = sender.send(CompiledPipelines {
-                render_pipeline,
-                pick_pipeline,
-                structure_version: inputs.structure_version,
-                sculpt_count: inputs.sculpt_count,
-                worker_wall_ms,
-            });
+            // Wrap the wgpu pipeline calls in `catch_unwind` so a wgpu
+            // validation panic in the worker doesn't kill the thread
+            // silently. Without this, a recurring shader bug would loop
+            // forever: worker panics -> receiver disconnects -> main
+            // thread sets force_pipeline_resync -> spawns another worker
+            // -> same panic -> ... and the user never sees the unrolled
+            // pipeline land. The fallback then runs steady-state, which
+            // is much slower per ray step than the unrolled (the FPS
+            // collapse the user notices at 5+ objects).
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let render_pipeline = ViewportResources::create_render_pipeline(
+                    &inputs.device,
+                    &inputs.render_shader_src,
+                    &inputs.camera_bgl,
+                    &inputs.scene_bgl,
+                    &inputs.voxel_tex_bgl,
+                    &inputs.environment_bgl,
+                    inputs.target_format,
+                );
+                let pick_pipeline = ViewportResources::create_pick_pipeline(
+                    &inputs.device,
+                    &inputs.pick_shader_src,
+                    &inputs.camera_bgl,
+                    &inputs.scene_bgl,
+                    &inputs.pick_bgl,
+                );
+                (render_pipeline, pick_pipeline)
+            }));
+
+            match result {
+                Ok((render_pipeline, pick_pipeline)) => {
+                    let worker_wall_ms = work_start.elapsed().as_secs_f64() * 1000.0;
+                    let _ = sender.send(CompiledPipelines {
+                        render_pipeline,
+                        pick_pipeline,
+                        structure_version: target_version,
+                        sculpt_count: inputs.sculpt_count,
+                        worker_wall_ms,
+                    });
+                }
+                Err(panic_payload) => {
+                    let msg = if let Some(s) = panic_payload.downcast_ref::<&'static str>() {
+                        (*s).to_string()
+                    } else if let Some(s) = panic_payload.downcast_ref::<String>() {
+                        s.clone()
+                    } else {
+                        "non-string panic payload".to_string()
+                    };
+                    log::error!(
+                        "Async pipeline compile worker PANICKED for structure_version={} ({:.2} ms in): {}. \
+                         Falling back to interpreted tape pipeline. \
+                         Inspect the WGSL above this line — the same panic was likely printed by wgpu.",
+                        target_version,
+                        work_start.elapsed().as_secs_f64() * 1000.0,
+                        msg,
+                    );
+                    // Sender drops here without sending — receiver gets
+                    // `Disconnected` and the main thread surfaces the
+                    // failure via `force_pipeline_resync` (which then
+                    // re-attempts the compile next frame). To avoid the
+                    // infinite-retry loop the LOG above tells us to fix
+                    // the root cause, but the retry itself is harmless
+                    // perf-wise (worker fails fast when shader is bad).
+                }
+            }
         })
         .expect("failed to spawn sdf-pipeline-compile worker thread");
 
