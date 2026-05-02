@@ -2145,6 +2145,14 @@ impl Scene {
             }
         }
 
+        // Duplicating adds new nodes — that's a topology change and must
+        // bump `structure_version`. Without this the tape interpreter and
+        // unrolled pipeline never get rebuilt: the new node's data lands
+        // in the buffer (because callers also flag `buffer_dirty`) but no
+        // shader knows about its slot. The duplicate then "appears" only
+        // when some unrelated structure change forces a rebuild later.
+        self.mark_structure_changed();
+
         id_map.get(&root_id).copied()
     }
 
@@ -3048,6 +3056,25 @@ mod tests {
     }
 
     // ── duplicate_subtree ───────────────────────────────────────────
+
+    #[test]
+    fn duplicate_subtree_bumps_structure_version() {
+        // Regression: duplicating a subtree adds nodes to the scene,
+        // which is a topology change and MUST bump structure_version so
+        // gpu_sync rebuilds the tape and pipeline. Forgetting to bump
+        // it causes the duplicate to live in the buffer but never be
+        // referenced by any shader — it appears only when some
+        // unrelated structure change forces a rebuild later.
+        let mut scene = empty_scene();
+        let leaf = scene.create_primitive(SdfPrimitive::Sphere);
+        let before = scene.structure_version();
+        let _new = scene.duplicate_subtree(leaf).expect("duplicate should succeed");
+        let after = scene.structure_version();
+        assert!(
+            after > before,
+            "duplicate_subtree must bump structure_version (was {before}, now {after})"
+        );
+    }
 
     #[test]
     fn duplicate_subtree_creates_independent_copy() {

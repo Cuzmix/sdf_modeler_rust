@@ -339,6 +339,13 @@ pub fn load_subtree_preset(scene: &mut Scene, path: &std::path::Path) -> Result<
         }
     }
 
+    // Loading a preset adds nodes — that's a topology change. Without
+    // bumping `structure_version`, gpu_sync sees no change and the
+    // pasted subtree never makes it into the unrolled pipeline (and
+    // never makes it into a freshly-built tape either). Same shape of
+    // bug as `Scene::duplicate_subtree` had before fix.
+    scene.mark_structure_changed();
+
     Ok(root_new_id)
 }
 
