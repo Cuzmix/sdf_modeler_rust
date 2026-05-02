@@ -197,6 +197,51 @@ pub fn draw(
                             res.render_width, res.render_height
                         ));
                         ui.label(format!("Composite active: {}", res.use_composite));
+
+                        // Which scene-SDF pipeline is the renderer binding
+                        // *right now*? "fallback" = tape interpreter (slower
+                        // but always current); "unrolled" = scene-specific
+                        // inlined (faster). The fallback should only be
+                        // active for ~hundreds of ms after a structure
+                        // change. If it stays active steady-state, FPS
+                        // suffers — that's the diagnostic signal.
+                        let pipeline_label = if res.use_composite {
+                            "composite"
+                        } else if res.use_fallback_render {
+                            "fallback (tape)"
+                        } else {
+                            "unrolled"
+                        };
+                        let pipeline_color = if res.use_fallback_render && !res.use_composite {
+                            egui::Color32::from_rgb(255, 200, 80) // amber
+                        } else {
+                            egui::Color32::from_rgb(160, 220, 160) // green
+                        };
+                        ui.colored_label(
+                            pipeline_color,
+                            format!("Render pipeline: {pipeline_label}"),
+                        );
+                        ui.label(format!(
+                            "Pick pipeline:   {}",
+                            if res.use_fallback_pick {
+                                "fallback (tape)"
+                            } else {
+                                "unrolled"
+                            }
+                        ));
+                        ui.label(format!(
+                            "Async compile in flight: {}",
+                            if gpu.pipeline_compile.is_some() {
+                                "yes"
+                            } else {
+                                "no"
+                            }
+                        ));
+                        ui.label(format!(
+                            "structure_version: scene={} pipeline={}",
+                            scene.structure_version(),
+                            gpu.last_structure_version,
+                        ));
                     }
                 });
 
