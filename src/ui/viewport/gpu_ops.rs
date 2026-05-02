@@ -124,10 +124,21 @@ impl ViewportResources {
                 label: Some("Pick Pass"),
                 timestamp_writes: None,
             });
-            pass.set_pipeline(&self.pick_pipeline);
-            pass.set_bind_group(0, &self.camera_bind_group, &[]);
-            pass.set_bind_group(1, &self.scene_bind_group, &[]);
-            pass.set_bind_group(2, &self.pick_bind_group, &[]);
+            match (self.use_fallback_pick, self.fallback_pick_pipeline.as_ref()) {
+                (true, Some(fb)) => {
+                    pass.set_pipeline(fb);
+                    pass.set_bind_group(0, &self.camera_bind_group, &[]);
+                    pass.set_bind_group(1, &self.scene_bind_group, &[]);
+                    pass.set_bind_group(2, &self.pick_bind_group, &[]);
+                    pass.set_bind_group(3, &self.tape_bind_group, &[]);
+                }
+                _ => {
+                    pass.set_pipeline(&self.pick_pipeline);
+                    pass.set_bind_group(0, &self.camera_bind_group, &[]);
+                    pass.set_bind_group(1, &self.scene_bind_group, &[]);
+                    pass.set_bind_group(2, &self.pick_bind_group, &[]);
+                }
+            }
             pass.dispatch_workgroups(1, 1, 1);
         }
 

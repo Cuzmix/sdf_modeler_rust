@@ -3,6 +3,7 @@ use crate::compat::Instant;
 
 use crate::gpu::buffers;
 use crate::gpu::codegen;
+use crate::gpu::tape::Tape;
 use crate::graph::scene::{NodeData, NodeId};
 use crate::ui::viewport::ViewportResources;
 
@@ -65,8 +66,37 @@ impl SdfApp {
             // Drop any in-flight async compile — its result would be stale
             // compared to the synchronous rebuild we're about to perform.
             self.gpu.pipeline_compile = None;
+            // Sculpt or composite scenes can't use the tape fallback (F2
+            // contract — see `gpu/tape.rs`), so disable the fallback flag
+            // and freeze on the prior frame until the sync rebuild lands
+            // (the "G-stale" UX path agreed during the design phase).
+            self.set_fallback_active(false);
             self.rebuild_pipeline_sync(structure_version, sculpt_count, want_composite);
             return;
+        }
+
+        // F2-eligible structure change. Try to build a tape — if it
+        // succeeds, the universal fallback pipeline can render the new
+        // scene the very next frame while the unrolled pipeline compiles
+        // in the background. If tape encoding fails (e.g. encoder hits
+        // a node type the fallback shader doesn't handle), we still kick
+        // off the async unrolled compile but the user falls back to the
+        // existing "stale unrolled until new one lands" behavior.
+        let tape_result = Tape::try_build(&self.doc.scene);
+        match tape_result {
+            Ok(tape) if !tape.is_empty() => {
+                self.upload_tape_and_activate_fallback(&tape.opcodes);
+            }
+            Ok(_) => {
+                // Empty scene — nothing to render anyway. Disable fallback.
+                self.set_fallback_active(false);
+            }
+            Err(_) => {
+                // Encoder rejected the scene (unsupported node). Fall
+                // through to today's behavior: keep showing the stale
+                // unrolled pipeline until the worker finishes.
+                self.set_fallback_active(false);
+            }
         }
 
         // If an async compile is already in flight, wait for it. When it
@@ -78,6 +108,41 @@ impl SdfApp {
         }
 
         self.spawn_async_pipeline_compile(structure_version, sculpt_count);
+    }
+
+    /// Upload the freshly-encoded tape to the GPU and flip the fallback
+    /// pipelines on. Both render and pick switch together — pick lookup
+    /// would otherwise miss objects the user can already see.
+    fn upload_tape_and_activate_fallback(&mut self, tape_words: &[u32]) {
+        let mut renderer = self.gpu.render_state.renderer.write();
+        let Some(res) = renderer.callback_resources.get_mut::<ViewportResources>() else {
+            return;
+        };
+        // Only activate fallback if the pipelines actually exist —
+        // they're compiled at app startup but a future flag (or a
+        // device-loss recovery path) could leave them None.
+        if res.fallback_pipeline.is_none() || res.fallback_pick_pipeline.is_none() {
+            return;
+        }
+        res.upload_tape(
+            &self.gpu.render_state.device,
+            &self.gpu.render_state.queue,
+            tape_words,
+        );
+        res.use_fallback_render = true;
+        res.use_fallback_pick = true;
+    }
+
+    /// Set both fallback-active flags atomically, without uploading a tape.
+    /// Used when the structure change isn't fallback-eligible (sculpts,
+    /// composite-volume) or when a freshly-compiled unrolled pipeline has
+    /// just landed and made the fallback unnecessary.
+    fn set_fallback_active(&mut self, active: bool) {
+        let mut renderer = self.gpu.render_state.renderer.write();
+        if let Some(res) = renderer.callback_resources.get_mut::<ViewportResources>() {
+            res.use_fallback_render = active;
+            res.use_fallback_pick = active;
+        }
     }
 
     /// Synchronous pipeline rebuild — the fallback path used when the voxel
@@ -237,6 +302,11 @@ impl SdfApp {
                 // to keep state consistent.
                 res.use_composite = false;
                 res.composite = None;
+                // The unrolled pipeline now matches the current scene — the
+                // tape fallback was only a stand-in until this moment. Flip
+                // back to the unrolled path so the user gets full perf.
+                res.use_fallback_render = false;
+                res.use_fallback_pick = false;
             }
         }
 

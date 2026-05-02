@@ -446,6 +446,32 @@ impl SdfApp {
             res.rebuild_environment(&render_state.device, &render_state.queue, &settings.render);
             res.update_scene_buffer(&render_state.device, &render_state.queue, &node_data);
             res.update_voxel_buffer(&render_state.device, &render_state.queue, &voxel_data);
+
+            // Universal fallback render + pick pipelines. Compiled once
+            // at startup so that subsequent structure changes can render
+            // with the fallback (instant) while the unrolled pipeline
+            // recompiles in the background. Same `target_format` and
+            // bind-group layouts as the unrolled pipeline so hot-swap is
+            // a single pointer flip in `gpu_sync::try_apply_compiled_pipeline`.
+            let fallback_render_src = codegen::generate_fallback_render_shader(&settings.render);
+            let fallback_pick_src = codegen::generate_fallback_pick_shader(&settings.render);
+            res.fallback_pipeline = Some(ViewportResources::create_fallback_render_pipeline(
+                &render_state.device,
+                &fallback_render_src,
+                &res.camera_bgl,
+                &res.scene_bgl,
+                &res.tape_bgl,
+                &res.environment.bind_group_layout,
+                res.target_format,
+            ));
+            res.fallback_pick_pipeline = Some(ViewportResources::create_fallback_pick_pipeline(
+                &render_state.device,
+                &fallback_pick_src,
+                &res.camera_bgl,
+                &res.scene_bgl,
+                &res.pick_bgl,
+                &res.tape_bgl,
+            ));
         }
 
         let mut settings = settings;

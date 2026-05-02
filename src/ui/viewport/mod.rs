@@ -21,6 +21,10 @@ use crate::gpu::camera::CameraUniform;
 
 const INITIAL_SCENE_CAPACITY: usize = 16;
 const INITIAL_VOXEL_CAPACITY: usize = 4; // in f32 elements (minimum valid buffer)
+/// Initial tape buffer capacity in u32 opcode words. Sized to comfortably
+/// hold the typical "few-leaf" scene without an immediate realloc on the
+/// first add. Grows in powers of two as scenes get larger.
+const INITIAL_TAPE_CAPACITY: usize = 64;
 
 /// GPU-side brush parameters. Matches the WGSL `BrushParams` struct layout (128 bytes).
 #[repr(C)]
@@ -117,6 +121,29 @@ pub struct ViewportResources {
     // --- Composite scene volume cache ---
     pub composite: Option<CompositeResources>,
     pub use_composite: bool,
+
+    // --- Universal fallback pipeline (tape interpreter) ---
+    // Compiled once at startup. Renders any F2-compatible scene
+    // (primitives + transforms + modifiers + CSG, no sculpts) by walking
+    // the tape buffer instead of inlining scene topology in WGSL. Lets
+    // the user see newly added objects the same frame, while the
+    // scene-specific unrolled pipeline recompiles in the background and
+    // hot-swaps in via `gpu_sync.rs::try_apply_compiled_pipeline`.
+    pub fallback_pipeline: Option<wgpu::RenderPipeline>,
+    pub fallback_pick_pipeline: Option<wgpu::ComputePipeline>,
+    /// True when the most recent structure change had a buildable tape
+    /// and the renderer should bind `fallback_pipeline` instead of
+    /// `pipeline` until the unrolled pipeline lands. Set/cleared by
+    /// `gpu_sync.rs`.
+    pub use_fallback_render: bool,
+    pub use_fallback_pick: bool,
+
+    // --- Tape buffer (bound at @group(4) for fallback pipelines only) ---
+    pub tape_buffer: wgpu::Buffer,
+    pub tape_bgl: Arc<wgpu::BindGroupLayout>,
+    pub tape_bind_group: wgpu::BindGroup,
+    /// Current allocated tape capacity in u32 words.
+    pub tape_capacity: usize,
 }
 
 pub(crate) const BLIT_SHADER_SRC: &str = include_str!("../../shaders/blit.wgsl");
@@ -325,6 +352,23 @@ impl ViewportResources {
         });
         let brush_pipeline = Self::create_brush_pipeline(device, &brush_bgl);
 
+        // --- Tape buffer for the universal fallback pipeline ---
+        let tape_bgl = Arc::new(Self::create_tape_bgl(device));
+        let tape_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Tape Storage"),
+            size: (INITIAL_TAPE_CAPACITY * std::mem::size_of::<u32>()) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let tape_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Tape BG"),
+            layout: &tape_bgl,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: tape_buffer.as_entire_binding(),
+            }],
+        });
+
         // --- Blit (resolution scaling) resources ---
         let blit_bgl = Self::create_blit_bgl(device);
         let blit_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -382,7 +426,49 @@ impl ViewportResources {
             render_height: 0,
             composite: None,
             use_composite: false,
+            fallback_pipeline: None,
+            fallback_pick_pipeline: None,
+            use_fallback_render: false,
+            use_fallback_pick: false,
+            tape_buffer,
+            tape_bgl,
+            tape_bind_group,
+            tape_capacity: INITIAL_TAPE_CAPACITY,
         }
+    }
+
+    /// Upload a tape (built by `crate::gpu::tape::Tape::try_build`) to the
+    /// GPU. Reallocates the tape buffer when the new tape exceeds current
+    /// capacity (rounded up to the next power of two so growth is rare).
+    /// Recreates the tape bind group when the buffer is reallocated.
+    pub fn upload_tape(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        tape_words: &[u32],
+    ) {
+        if tape_words.is_empty() {
+            return;
+        }
+        if tape_words.len() > self.tape_capacity {
+            let new_cap = tape_words.len().next_power_of_two().max(INITIAL_TAPE_CAPACITY);
+            self.tape_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Tape Storage"),
+                size: (new_cap * std::mem::size_of::<u32>()) as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            self.tape_capacity = new_cap;
+            self.tape_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("Tape BG"),
+                layout: &self.tape_bgl,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: self.tape_buffer.as_entire_binding(),
+                }],
+            });
+        }
+        queue.write_buffer(&self.tape_buffer, 0, bytemuck::cast_slice(tape_words));
     }
 
     pub fn rebuild_pipeline(

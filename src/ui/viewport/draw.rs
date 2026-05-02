@@ -480,6 +480,21 @@ impl egui_wgpu::CallbackTrait for ViewportCallback {
                     pass.set_bind_group(2, &comp.render_bg, &[]);
                     pass.set_bind_group(3, &resources.environment.bind_group, &[]);
                 }
+            } else if let (true, Some(fb)) = (
+                resources.use_fallback_render,
+                resources.fallback_pipeline.as_ref(),
+            ) {
+                // Universal fallback path — interprets the tape buffer
+                // (bound at @group(2) for the fallback layout, replacing
+                // the unrolled pipeline's voxel_tex slot) instead of
+                // inlining the scene tree. Active for the brief window
+                // after a structure change while the unrolled pipeline
+                // recompiles in the background.
+                pass.set_pipeline(fb);
+                pass.set_bind_group(0, &resources.camera_bind_group, &[]);
+                pass.set_bind_group(1, &resources.scene_bind_group, &[]);
+                pass.set_bind_group(2, &resources.tape_bind_group, &[]);
+                pass.set_bind_group(3, &resources.environment.bind_group, &[]);
             } else {
                 pass.set_pipeline(&resources.pipeline);
                 pass.set_bind_group(0, &resources.camera_bind_group, &[]);

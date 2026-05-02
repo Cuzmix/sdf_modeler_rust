@@ -9,6 +9,17 @@ use super::shader_templates::{
     render_prelude, COMPOSITE_COMPUTE_ENTRY, PICK,
 };
 
+/// Static body of the universal fallback render shader — the tape interpreter
+/// `scene_sdf` and its dispatcher functions. Concatenated with `render_prelude()`
+/// (which provides the SDF library + bindings) and `build_postlude(config)`
+/// (which provides the raymarcher + lighting). See `generate_fallback_render_shader`.
+const FALLBACK_RENDER: &str = include_str!("../shaders/fallback_render.wgsl");
+
+/// Static body of the universal fallback pick shader — same tape interpreter
+/// shape as `FALLBACK_RENDER` but with a compute entry point that writes the
+/// hovered material id to the pick output buffer. See `generate_fallback_pick_shader`.
+const FALLBACK_PICK: &str = include_str!("../shaders/fallback_pick.wgsl");
+
 // ---------------------------------------------------------------------------
 // Voxel texture declarations
 // ---------------------------------------------------------------------------
@@ -177,6 +188,24 @@ pub fn generate_pick_shader(scene: &Scene, config: &RenderConfig) -> String {
     let scene_sdf = generate_scene_sdf(scene, None);
     let pick_postlude = apply_march_placeholders(PICK, config);
     format!("{}\n{}\n{}", compute_prelude(), scene_sdf, pick_postlude)
+}
+
+/// Build the fallback render shader: scene-independent WGSL that walks
+/// the tape buffer (group 4) instead of inlining the scene tree. Used by
+/// the universal fallback pipeline that's compiled once at startup and
+/// renders newly added objects instantly while the unrolled pipeline
+/// recompiles in the background.
+pub fn generate_fallback_render_shader(config: &RenderConfig) -> String {
+    let postlude = build_postlude(config);
+    format!("{}\n{}\n{}", render_prelude(), FALLBACK_RENDER, postlude)
+}
+
+/// Build the fallback pick shader — same idea as `generate_fallback_render_shader`
+/// but for the GPU pick compute pass. Reuses the tape buffer; outputs the
+/// hovered node's material id to the pick output buffer.
+pub fn generate_fallback_pick_shader(config: &RenderConfig) -> String {
+    let pick_postlude = apply_march_placeholders(PICK, config);
+    format!("{}\n{}\n{}", compute_prelude(), FALLBACK_PICK, pick_postlude)
 }
 
 /// Generate the composite compute shader that pre-evaluates scene_sdf at every voxel
@@ -2463,6 +2492,24 @@ mod tests {
         let config = RenderConfig::default();
         let shader = generate_shader(&scene, &config);
         validate_wgsl(&shader, "empty scene render shader");
+    }
+
+    #[test]
+    fn naga_validates_fallback_render_shader() {
+        // The fallback render shader is scene-independent — it interprets
+        // the tape buffer at runtime — so it only needs to be validated
+        // once per RenderConfig shape. This is the test that catches
+        // dispatch-table typos before they hit the GPU.
+        let config = RenderConfig::default();
+        let shader = generate_fallback_render_shader(&config);
+        validate_wgsl(&shader, "fallback render shader");
+    }
+
+    #[test]
+    fn naga_validates_fallback_pick_shader() {
+        let config = RenderConfig::default();
+        let shader = generate_fallback_pick_shader(&config);
+        validate_wgsl(&shader, "fallback pick shader");
     }
 
     #[test]
