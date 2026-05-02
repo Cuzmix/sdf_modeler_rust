@@ -124,6 +124,12 @@ pub enum TapeOp {
     /// Pop the top distance, apply a distance-domain modifier (Round,
     /// Onion, Offset) at `nodes[idx]`, push the result. Stack net 0.
     ApplyDistMod = 5,
+    /// Pop the top two distances, hard-union them (no smin), push the
+    /// result. Used to fold multiple top-level scene roots into a single
+    /// distance — the unrolled codegen emits the equivalent
+    /// `result = op_union(result, n_top, 0.0)` chain over `top_level_nodes`.
+    /// Has no payload (idx field is unused; encoder writes 0).
+    UnionTop = 6,
 }
 
 impl TapeOp {
@@ -251,6 +257,27 @@ impl Tape {
                     // Lights aren't part of the scene SDF — they live in
                     // the lighting pass. Skip; no opcode, no stack change.
                 }
+            }
+        }
+
+        // Fold any leftover stack entries into one final distance.
+        //
+        // After the topo iteration, `current_depth` equals the number of
+        // independent distance values on the interpreter's stack — one
+        // per "top-level" subtree the codegen would have hard-unioned in
+        // its `let result = op_union(result, n_top, 0.0)` chain. Without
+        // this fold, a flat scene of N primitives leaves N values on the
+        // stack and the interpreter returns only the last one, making
+        // earlier primitives "disappear" until the unrolled pipeline
+        // lands.
+        //
+        // Using `current_depth` directly (vs. counting visible top-level
+        // nodes) handles light-only top-level chains and any future
+        // stack-neutral node types correctly — only nodes that actually
+        // push a distance contribute, by construction.
+        if current_depth >= 2 {
+            for _ in 0..(current_depth - 1) {
+                push_op(&mut opcodes, TapeOp::UnionTop, 0)?;
             }
         }
 
@@ -611,10 +638,109 @@ mod tests {
 
         let tape =
             Tape::try_build(&scene).expect("a Light next to a primitive must not block encoding");
-        // Sphere + (light contributes 0 ops) + End = 2.
+        // Sphere + (light contributes 0 ops) + End = 2. The light is a
+        // top-level node but doesn't push to the stack, so final depth
+        // is 1 and no UnionTop is emitted.
         assert_eq!(tape.opcodes.len(), 2);
         let (k0, _) = unpack(tape.opcodes[0]);
         assert_eq!(k0, TapeOp::EvalPrimitive as u32);
+        let (k1, _) = unpack(tape.opcodes[1]);
+        assert_eq!(k1, TapeOp::End as u32);
+    }
+
+    #[test]
+    fn multiple_top_level_primitives_emit_union_top_fold() {
+        // Two sibling top-level primitives — without a UnionTop fold, the
+        // interpreter would leave both on the stack and return only the
+        // second one's distance, making the first "disappear." This test
+        // is the regression guard for that exact bug.
+        let mut scene = empty_scene();
+        let _a = add_sphere(&mut scene, "A");
+        let _b = add_sphere(&mut scene, "B");
+
+        let tape = Tape::try_build(&scene).expect("two top-level spheres encodable");
+        let kinds: Vec<u32> = tape.opcodes.iter().map(|&w| unpack(w).0).collect();
+        assert_eq!(
+            kinds,
+            vec![
+                TapeOp::EvalPrimitive as u32,
+                TapeOp::EvalPrimitive as u32,
+                TapeOp::UnionTop as u32,
+                TapeOp::End as u32,
+            ]
+        );
+    }
+
+    #[test]
+    fn three_top_level_primitives_emit_two_union_tops() {
+        let mut scene = empty_scene();
+        let _a = add_sphere(&mut scene, "A");
+        let _b = add_sphere(&mut scene, "B");
+        let _c = add_box(&mut scene, "C");
+
+        let tape = Tape::try_build(&scene).expect("three top-level primitives encodable");
+        let kinds: Vec<u32> = tape.opcodes.iter().map(|&w| unpack(w).0).collect();
+        assert_eq!(
+            kinds,
+            vec![
+                TapeOp::EvalPrimitive as u32,
+                TapeOp::EvalPrimitive as u32,
+                TapeOp::EvalPrimitive as u32,
+                TapeOp::UnionTop as u32,
+                TapeOp::UnionTop as u32,
+                TapeOp::End as u32,
+            ]
+        );
+        // Stack: 1, 2, 3, 2 (after first UnionTop), 1 (after second). Peak = 3.
+        assert_eq!(tape.max_stack_depth, 3);
+    }
+
+    #[test]
+    fn single_top_level_csg_root_does_not_emit_union_top() {
+        // Scene with one top-level Operation tree should NOT get a stray
+        // UnionTop (which would underflow the stack).
+        let mut scene = empty_scene();
+        let a = add_sphere(&mut scene, "A");
+        let b = add_box(&mut scene, "B");
+        let _u = add_union(&mut scene, a, b, 0.0);
+
+        let tape = Tape::try_build(&scene).unwrap();
+        let kinds: Vec<u32> = tape.opcodes.iter().map(|&w| unpack(w).0).collect();
+        assert_eq!(
+            kinds,
+            vec![
+                TapeOp::EvalPrimitive as u32,
+                TapeOp::EvalPrimitive as u32,
+                TapeOp::Combine as u32,
+                TapeOp::End as u32,
+            ]
+        );
+    }
+
+    #[test]
+    fn csg_root_plus_sibling_primitive_emits_one_union_top() {
+        // Mixed: (sphere ∪ box) as top-level subtree #1, plus a top-level
+        // sibling cylinder. After the topo loop the stack has the union's
+        // result plus the cylinder — one UnionTop folds them.
+        let mut scene = empty_scene();
+        let a = add_sphere(&mut scene, "A");
+        let b = add_box(&mut scene, "B");
+        let _u = add_union(&mut scene, a, b, 0.0);
+        let _c = add_sphere(&mut scene, "C");
+
+        let tape = Tape::try_build(&scene).unwrap();
+        let kinds: Vec<u32> = tape.opcodes.iter().map(|&w| unpack(w).0).collect();
+        assert_eq!(
+            kinds,
+            vec![
+                TapeOp::EvalPrimitive as u32, // A
+                TapeOp::EvalPrimitive as u32, // B
+                TapeOp::Combine as u32,       // Union(A, B)
+                TapeOp::EvalPrimitive as u32, // C
+                TapeOp::UnionTop as u32,      // fold (A∪B) with C
+                TapeOp::End as u32,
+            ]
+        );
     }
 
     #[test]

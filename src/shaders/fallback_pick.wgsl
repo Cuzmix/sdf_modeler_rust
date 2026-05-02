@@ -28,6 +28,7 @@ const TAPE_OP_COMBINE: u32 = 2u;
 const TAPE_OP_APPLY_INV_XFORM: u32 = 3u;
 const TAPE_OP_APPLY_POINT_MOD: u32 = 4u;
 const TAPE_OP_APPLY_DIST_MOD: u32 = 5u;
+const TAPE_OP_UNION_TOP: u32 = 6u;
 
 const TAPE_PAYLOAD_MASK: u32 = 0x0FFFFFFFu;
 const TAPE_OP_SHIFT: u32 = 28u;
@@ -183,6 +184,13 @@ fn scene_sdf(p_world: vec3f) -> vec4f {
         } else if kind == TAPE_OP_APPLY_DIST_MOD {
             if sp > 0u {
                 stack[sp - 1u] = fbp_apply_dist_mod(stack[sp - 1u], idx);
+            }
+        } else if kind == TAPE_OP_UNION_TOP {
+            if sp >= 2u {
+                let a = stack[sp - 2u];
+                let b = stack[sp - 1u];
+                stack[sp - 2u] = op_union(a, b, 0.0);
+                sp = sp - 1u;
             }
         }
 
